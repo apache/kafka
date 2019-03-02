@@ -42,7 +42,6 @@ import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.internals.KeyValueStoreFacade;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
-import org.apache.kafka.streams.internals.SessionStoreFacade;
 import org.apache.kafka.streams.internals.WindowStoreFacade;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -66,7 +65,6 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.TimestampedSessionStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
@@ -580,7 +578,6 @@ public class TopologyTestDriver implements Closeable {
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
-     * @see #getTimestampedSessionStore(String)
      */
     @SuppressWarnings("WeakerAccess")
     public Map<String, StateStore> getAllStateStores() {
@@ -606,7 +603,6 @@ public class TopologyTestDriver implements Closeable {
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
-     * @see #getTimestampedSessionStore(String)
      */
     @SuppressWarnings("WeakerAccess")
     public StateStore getStateStore(final String name) {
@@ -648,7 +644,6 @@ public class TopologyTestDriver implements Closeable {
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
-     * @see #getTimestampedSessionStore(String)
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
@@ -675,7 +670,6 @@ public class TopologyTestDriver implements Closeable {
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
-     * @see #getTimestampedSessionStore(String)
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> KeyValueStore<K, ValueAndTimestamp<V>> getTimestampedKeyValueStore(final String name) {
@@ -703,7 +697,6 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedKeyValueStore(String)
      * @see #getTimestampedWindowStore(String)
      * @see #getSessionStore(String)
-     * @see #getTimestampedSessionStore(String)
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
@@ -730,7 +723,6 @@ public class TopologyTestDriver implements Closeable {
      * @see #getTimestampedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getSessionStore(String)
-     * @see #getTimestampedSessionStore(String)
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> WindowStore<K, ValueAndTimestamp<V>> getTimestampedWindowStore(final String name) {
@@ -739,58 +731,25 @@ public class TopologyTestDriver implements Closeable {
     }
 
     /**
-     * Get the {@link SessionStore} or {@link TimestampedSessionStore} with the given name.
+     * Get the {@link SessionStore} with the given name.
      * The store can be a "regular" or global store.
-     * <p>
-     * If the registered store is a {@link TimestampedSessionStore} this method will return a value-only query
-     * interface. <strong>It is highly recommended to update the code for this case to avoid bugs and to use
-     * {@link #getTimestampedSessionStore(String)} for full store access instead.</strong>
      * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link SessionStore} or {@link TimestampedSessionStore}
-     * has been registered with the given name
+     * @return the key value store, or {@code null} if no {@link SessionStore} has been registered with the given name
      * @see #getAllStateStores()
      * @see #getStateStore(String)
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
      * @see #getWindowStore(String)
      * @see #getTimestampedWindowStore(String)
-     * @see #getTimestampedSessionStore(String)
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
         final StateStore store = getStateStore(name);
-        if (store instanceof TimestampedSessionStore) {
-            log.info("Method #getTimestampedSessionStore() should be used to access a TimestampedSessionStore.");
-            return new SessionStoreFacade<>((TimestampedSessionStore<K, V>) store);
-        }
         return store instanceof SessionStore ? (SessionStore<K, V>) store : null;
-    }
-
-    /**
-     * Get the {@link TimestampedSessionStore} with the given name.
-     * The store can be a "regular" or global store.
-     * <p>
-     * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
-     * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
-     *
-     * @param name the name of the store
-     * @return the key value store, or {@code null} if no {@link TimestampedSessionStore} has been registered with the given name
-     * @see #getAllStateStores()
-     * @see #getStateStore(String)
-     * @see #getKeyValueStore(String)
-     * @see #getTimestampedKeyValueStore(String)
-     * @see #getWindowStore(String)
-     * @see #getTimestampedWindowStore(String)
-     * @see #getSessionStore(String)
-     */
-    @SuppressWarnings({"unchecked", "WeakerAccess"})
-    public <K, V> SessionStore<K, ValueAndTimestamp<V>> getTimestampedSessionStore(final String name) {
-        final StateStore store = getStateStore(name);
-        return store instanceof TimestampedSessionStore ? (TimestampedSessionStore<K, V>) store : null;
     }
 
     /**
