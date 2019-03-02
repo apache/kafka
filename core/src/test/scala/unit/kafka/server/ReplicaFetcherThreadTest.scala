@@ -86,7 +86,7 @@ class ReplicaFetcherThreadTest {
     val leaderEpoch = 5
 
     //Stubs
-    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(0)).anyTimes()
+    expect(replica.logEndOffset).andReturn(0).anyTimes()
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(0)).anyTimes()
     expect(replica.latestEpoch).andReturn(Some(leaderEpoch)).once()
     expect(replica.latestEpoch).andReturn(Some(leaderEpoch)).once()
@@ -216,7 +216,7 @@ class ReplicaFetcherThreadTest {
     val leaderEpoch = 5
 
     //Stubs
-    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(0)).anyTimes()
+    expect(replica.logEndOffset).andReturn(0).anyTimes()
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(0)).anyTimes()
     expect(replica.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
     expect(replica.endOffsetForEpoch(leaderEpoch)).andReturn(
@@ -278,7 +278,7 @@ class ReplicaFetcherThreadTest {
 
     //Stubs
     expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).anyTimes()
-    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
+    expect(replica.logEndOffset).andReturn(initialLEO).anyTimes()
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(initialLEO - 1)).anyTimes()
     expect(replica.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
     expect(replica.endOffsetForEpoch(leaderEpoch)).andReturn(
@@ -327,7 +327,7 @@ class ReplicaFetcherThreadTest {
 
     //Stubs
     expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).anyTimes()
-    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
+    expect(replica.logEndOffset).andReturn(initialLEO).anyTimes()
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(initialLEO - 3)).anyTimes()
     expect(replica.latestEpoch).andReturn(Some(leaderEpochAtFollower)).anyTimes()
     expect(replica.endOffsetForEpoch(leaderEpochAtLeader)).andReturn(None).anyTimes()
@@ -377,7 +377,7 @@ class ReplicaFetcherThreadTest {
 
     // Stubs
     expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).anyTimes()
-    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
+    expect(replica.logEndOffset).andReturn(initialLEO).anyTimes()
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(initialLEO - 2)).anyTimes()
     expect(replica.latestEpoch).andReturn(Some(5)).anyTimes()
     expect(replica.endOffsetForEpoch(4)).andReturn(
@@ -448,7 +448,7 @@ class ReplicaFetcherThreadTest {
 
     // Stubs
     expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).anyTimes()
-    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
+    expect(replica.logEndOffset).andReturn(initialLEO).anyTimes()
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(initialLEO - 2)).anyTimes()
     expect(replica.latestEpoch).andReturn(Some(5)).anyTimes()
     expect(replica.endOffsetForEpoch(4)).andReturn(
@@ -510,7 +510,7 @@ class ReplicaFetcherThreadTest {
 
     //Stubs
     expect(partition.truncateTo(capture(truncated), anyBoolean())).anyTimes()
-    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLeo)).anyTimes()
+    expect(replica.logEndOffset).andReturn(initialLeo).anyTimes()
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(initialFetchOffset)).anyTimes()
     expect(replica.latestEpoch).andReturn(Some(5))
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
@@ -555,7 +555,7 @@ class ReplicaFetcherThreadTest {
     //Stubs
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(highWaterMark)).anyTimes()
     expect(partition.truncateTo(capture(truncated), anyBoolean())).anyTimes()
-    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLeo)).anyTimes()
+    expect(replica.logEndOffset).andReturn(initialLeo).anyTimes()
     expect(replica.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
     // this is for the last reply with EpochEndOffset(5, 156)
     expect(replica.endOffsetForEpoch(leaderEpoch)).andReturn(
@@ -608,7 +608,7 @@ class ReplicaFetcherThreadTest {
     val leaderEpoch = 4
 
     //Stub return values
-    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(0)).anyTimes()
+    expect(replica.logEndOffset).andReturn(0).anyTimes()
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(0)).anyTimes()
     expect(replica.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
     expect(replica.endOffsetForEpoch(leaderEpoch)).andReturn(
@@ -659,7 +659,7 @@ class ReplicaFetcherThreadTest {
 
     //Stub return values
     expect(partition.truncateTo(capture(truncateToCapture), anyBoolean())).once
-    expect(replica.logEndOffset).andReturn(new LogOffsetMetadata(initialLEO)).anyTimes()
+    expect(replica.logEndOffset).andReturn(initialLEO).anyTimes()
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(initialLEO - 2)).anyTimes()
     expect(replica.latestEpoch).andReturn(Some(5)).anyTimes()
     expect(replica.endOffsetForEpoch(5)).andReturn(Some(OffsetAndEpoch(initialLEO, 5))).anyTimes()
