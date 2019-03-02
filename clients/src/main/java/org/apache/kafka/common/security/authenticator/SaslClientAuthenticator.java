@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
+import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.NetworkSend;
@@ -373,7 +374,9 @@ public class SaslClientAuthenticator implements Authenticator {
             if (saslToken != null) {
                 ByteBuffer tokenBuf = ByteBuffer.wrap(saslToken);
                 if (saslAuthenticateVersion != DISABLE_KAFKA_SASL_AUTHENTICATE_HEADER) {
-                    SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(tokenBuf).build(saslAuthenticateVersion);
+                    SaslAuthenticateRequestData data = new SaslAuthenticateRequestData()
+                            .setAuthBytes(tokenBuf.array());
+                    SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build(saslAuthenticateVersion);
                     tokenBuf = request.serialize(nextRequestHeader(ApiKeys.SASL_AUTHENTICATE, saslAuthenticateVersion));
                 }
                 send(new NetworkSend(node, tokenBuf));
@@ -445,7 +448,7 @@ public class SaslClientAuthenticator implements Authenticator {
                 long sessionLifetimeMs = response.sessionLifetimeMs();
                 if (sessionLifetimeMs > 0L)
                     reauthInfo.positiveSessionLifetimeMs = sessionLifetimeMs;
-                return Utils.readBytes(response.saslAuthBytes());
+                return Utils.copyArray(response.saslAuthBytes());
             } else
                 return null;
         }
