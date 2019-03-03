@@ -69,6 +69,7 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
           "/clients/" + Sanitizer.sanitize(producerClientId), emptyProps)
         adminZkClient.changeUserOrUserClientIdConfig(Sanitizer.sanitize(userPrincipal.getName) +
           "/clients/" + Sanitizer.sanitize(consumerClientId), emptyProps)
+        waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
       }
 
       private def updateQuotaOverride(userPrincipal: String, clientId: String, properties: Properties) {

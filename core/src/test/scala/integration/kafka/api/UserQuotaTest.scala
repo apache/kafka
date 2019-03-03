@@ -67,7 +67,7 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
       override def removeQuotaOverrides() {
         val emptyProps = new Properties
         updateQuotaOverride(emptyProps)
-        updateQuotaOverride(emptyProps)
+        waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, defaultRequestQuota)
       }
 
       private def updateQuotaOverride(properties: Properties) {
