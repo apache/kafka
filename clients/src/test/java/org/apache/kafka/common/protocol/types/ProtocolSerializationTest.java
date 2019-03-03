@@ -293,7 +293,29 @@ public class ProtocolSerializationTest {
     }
 
     @Test
-    public void testReadWhenDataIsMissingAtTheEnd() {
+    public void testReadWhenOptionalDataIsMissingAtTheEnd() {
+        Schema oldSchema = new Schema(new Field("field1", Type.NULLABLE_STRING));
+        Schema newSchema = new Schema(
+                new Field("field1", Type.NULLABLE_STRING),
+                new Field("field2", Type.NULLABLE_STRING, "", true, "default"),
+                new Field("field3", Type.NULLABLE_STRING, "", true, null),
+                new Field("field4", Type.NULLABLE_BYTES, "", true, ByteBuffer.allocate(0)),
+                new Field("field5", Type.INT64, "doc", true, Long.MAX_VALUE));
+        String value = "foo bar baz";
+        Struct oldFormat = new Struct(oldSchema).set("field1", value);
+        ByteBuffer buffer = ByteBuffer.allocate(oldSchema.sizeOf(oldFormat));
+        oldFormat.writeTo(buffer);
+        buffer.flip();
+        Struct newFormat = newSchema.read(buffer);
+        assertEquals(value, newFormat.get("field1"));
+        assertEquals("default", newFormat.get("field2"));
+        assertEquals(null, newFormat.get("field3"));
+        assertEquals(ByteBuffer.allocate(0), newFormat.get("field4"));
+        assertEquals(Long.MAX_VALUE, newFormat.get("field5"));
+    }
+
+    @Test(expected = SchemaException.class)
+    public void testReadWithMissingNonOptionalExtraDataAtTheEnd() {
         Schema oldSchema = new Schema(new Field("field1", Type.NULLABLE_STRING));
         Schema newSchema = new Schema(new Field("field1", Type.NULLABLE_STRING), new Field("field2", Type.NULLABLE_STRING));
         String value = "foo bar baz";
@@ -303,6 +325,6 @@ public class ProtocolSerializationTest {
         buffer.flip();
         Struct newFormat = newSchema.read(buffer);
         assertEquals(value, newFormat.get("field1"));
-        assertEquals(null, newFormat.get("field2"));
+        newFormat.get("field2");
     }
 }
