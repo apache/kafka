@@ -71,6 +71,9 @@ object TestUtils extends Logging {
   /* 0 gives a random port; you can then retrieve the assigned port from the Socket object. */
   val RandomPort = 0
 
+  /* Incorrect broker port which can used by kafka clients in tests. */
+  val incorrectBrokerPort = 225
+
   /** Port to use for unit tests that mock/don't require a real ZK server. */
   val MockZkPort = 1
   /** ZooKeeper connection string to use for unit tests that mock/don't require a real ZK server. */
