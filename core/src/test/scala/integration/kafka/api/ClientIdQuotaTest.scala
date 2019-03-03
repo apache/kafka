@@ -59,6 +59,7 @@ class ClientIdQuotaTest extends BaseQuotaTest {
         val emptyProps = new Properties
         updateQuotaOverride(producerClientId, emptyProps)
         updateQuotaOverride(consumerClientId, emptyProps)
+        waitForQuotaUpdate(defaultProducerQuota, defaultConsumerQuota, Long.MaxValue)
       }
 
       private def updateQuotaOverride(clientId: String, properties: Properties) {
