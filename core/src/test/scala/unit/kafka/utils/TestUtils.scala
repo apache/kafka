@@ -72,8 +72,8 @@ object TestUtils extends Logging {
   val RandomPort = 0
 
   /* Incorrect broker port which can used by kafka clients in tests. This port should not be used
-   by any other service and hence we use a reserved port(225) */
-  val incorrectBrokerPort = 225
+   by any other service and hence we use a reserved port. */
+  val IncorrectBrokerPort = 225
 
   /** Port to use for unit tests that mock/don't require a real ZK server. */
   val MockZkPort = 1
