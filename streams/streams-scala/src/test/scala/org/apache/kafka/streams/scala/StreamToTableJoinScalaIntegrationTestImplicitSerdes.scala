@@ -75,6 +75,9 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
 
     val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] =
       produceNConsume(userClicksTopic, userRegionsTopic, outputTopic)
+
+    Assert.assertTrue("Expected to process some data", !actualClicksPerRegion.isEmpty)
+
     streams.close()
   }
 
@@ -115,6 +118,9 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
 
     val actualClicksPerRegion: java.util.List[KeyValue[String, Long]] =
       produceNConsume(userClicksTopic, userRegionsTopic, outputTopic)
+
+    Assert.assertTrue("Expected to process some data", !actualClicksPerRegion.isEmpty)
+
     streams.close()
   }
 
@@ -152,19 +158,14 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
     // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
     val clicksByRegion: KStreamJ[String, JLong] = userClicksJoinRegion
       .map {
-        new KeyValueMapper[String, (String, JLong), KeyValue[String, JLong]] {
-          def apply(k: String, regionWithClicks: (String, JLong)) =
-            new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
-        }
+        (_: String, regionWithClicks: (String, JLong)) => new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
       }
 
     // Compute the total per region by summing the individual click counts per region.
     val clicksPerRegion: KTableJ[String, JLong] = clicksByRegion
       .groupByKey(Grouped.`with`[String, JLong](Serdes.String, Serdes.JavaLong))
       .reduce {
-        new Reducer[JLong] {
-          def apply(v1: JLong, v2: JLong) = v1 + v2
-        }
+        (v1: JLong, v2: JLong) => v1 + v2
       }
 
     // Write the (continuously updating) results to the output topic.
