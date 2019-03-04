@@ -36,9 +36,6 @@ import kafka.network.RequestChannel
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.server.validator.FetchRequestValidation
-import kafka.server.validator.RequestValidator
-import kafka.server.validator.errorResponse
 import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
@@ -93,7 +90,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   type FetchResponseStats = Map[TopicPartition, RecordConversionStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val adminZkClient = new AdminZkClient(zkClient)
-  val fetchRequestValidator = RequestValidator.fetch(metadataCache, authorizer)
+  val fetchRequestValidator = KafkaApis.fetchRequestValidator(metadataCache, authorizer)
 
   def close() {
     info("Shutdown complete.")
@@ -383,7 +380,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def authorize(session: RequestChannel.Session, operation: Operation, resource: Resource): Boolean =
-    authorizer.forall(_.authorize(session, operation, resource))
+    KafkaApis.authorize(authorizer, session, operation, resource)
 
   /**
    * Handle a produce request
@@ -524,9 +521,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       fetchRequest.toForget,
       fetchRequest.isFromFollower)
 
-    val FetchRequestValidation(erroneous, interesting) = fetchRequestValidator.validate(
+    val KafkaApis.FetchRequestValidation(erroneous, interesting) = fetchRequestValidator(
       request,
-      (fetchRequest, fetchContext.partitions)
+      fetchRequest,
+      fetchContext.partitions
     )
 
     def maybeConvertFetchedData(tp: TopicPartition,
@@ -535,7 +533,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
       if (logConfig.forall(_.compressionType == ZStdCompressionCodec.name) && versionId < 10) {
         trace(s"Fetching messages is disabled for ZStandard compressed partition $tp. Sending unsupported version response to $clientId.")
-        errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
+        KafkaApis.errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
       } else {
         // Down-conversion of the fetched records is needed when the stored magic version is
         // greater than that supported by the client (as indicated by the fetch request version). If the
@@ -560,7 +558,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             // For fetch requests from clients, check if down-conversion is disabled for the particular partition
             if (!fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
               trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
-              errorResponse(Errors.UNSUPPORTED_VERSION)
+              KafkaApis.errorResponse(Errors.UNSUPPORTED_VERSION)
             } else {
               try {
                 trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
@@ -574,7 +572,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               } catch {
                 case e: UnsupportedCompressionTypeException =>
                   trace("Received unsupported compression type error during down-conversion", e)
-                  errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
+                  KafkaApis.errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
               }
             }
           case None => new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
@@ -2338,5 +2336,153 @@ class KafkaApis(val requestChannel: RequestChannel,
       else throw new IllegalStateException(s"Epoch $brokerEpochInRequest larger than current broker epoch $curBrokerEpoch")
     }
   }
+}
 
+final object KafkaApis extends Logging {
+  type ErrorElem = (TopicPartition, FetchResponse.PartitionData[Records])
+  type ValidElem = (TopicPartition, FetchRequest.PartitionData)
+
+  type FetchPartitionValidator = (RequestChannel.Request, TopicPartition, FetchRequest.PartitionData) => Option[ErrorElem]
+  type FetchRequestValidator = (RequestChannel.Request, FetchRequest, mutable.Map[TopicPartition, FetchRequest.PartitionData]) => Vector[ErrorElem]
+
+  final case class FetchRequestValidation(
+    erroneous: Vector[ErrorElem],
+    interesting: Vector[ValidElem]
+  )
+
+  def fetchRequestValidator(
+    metadataCache: MetadataCache,
+    authorizer: Option[Authorizer]
+  ): (RequestChannel.Request, FetchRequest, mutable.Map[TopicPartition, FetchRequest.PartitionData]) => FetchRequestValidation = {
+    chainFetchRequestValidator(
+      List(
+        maxBytesFetchRequestValidator,
+        authorizeFetchRequestValidator(authorizer)
+      ),
+      List(
+        maxBytesFetchPartitionValidator,
+        authorizeFetchPartitionValidator(authorizer),
+        metadataCacheFetchPartitionValidator(metadataCache)
+      )
+    )
+  }
+
+  private[this] def chainFetchRequestValidator(
+    requestValidators: List[FetchRequestValidator],
+    partitionValidators: List[FetchPartitionValidator]
+  ): (RequestChannel.Request, FetchRequest, mutable.Map[TopicPartition, FetchRequest.PartitionData]) => FetchRequestValidation = {
+    (request, fetchRequest, partitions) => {
+      var errors = Vector.empty[ErrorElem]
+      requestValidators.foreach { requestValidator =>
+        if (errors.isEmpty) {
+          errors = requestValidator(request, fetchRequest, partitions)
+        }
+      }
+
+      if (errors.isEmpty) {
+        val erroneous = Vector.newBuilder[ErrorElem]
+        val interesting = Vector.newBuilder[ValidElem]
+
+        partitions.foreach { partition =>
+          var someError = Option.empty[ErrorElem]
+          partitionValidators.foreach { partitionValidator =>
+            if (someError.isEmpty) {
+              val (topic, data) = partition
+              someError = partitionValidator(request, topic, data)
+            }
+          }
+
+          someError match {
+            case Some(errorElem) => erroneous += errorElem
+            case None => interesting += partition
+          }
+        }
+
+        FetchRequestValidation(erroneous.result(), interesting.result())
+      } else {
+        FetchRequestValidation(errors, Vector.empty)
+      }
+    }
+  }
+
+  private[this] def maxBytesFetchRequestValidator: FetchRequestValidator = {
+    (request: RequestChannel.Request, fetchRequest: FetchRequest, partitions: mutable.Map[TopicPartition, FetchRequest.PartitionData]) => {
+      if (fetchRequest.maxBytes() < 0) {
+        // Invalidate the fetch request and all of the fetch partitions
+        // Log why we are returning INVALID_REQUEST; documentation ask the user to read the broker logs
+        warn(s"Invalid fetch from client `${request.header.clientId}` maximum bytes is negative: ${fetchRequest.maxBytes()}")
+
+        partitions.map { case (topic, _) =>
+          topic -> errorResponse[Records](Errors.INVALID_REQUEST)
+        }(breakOut)
+      } else {
+        Vector.empty
+      }
+    }
+  }
+
+  private[this] def authorizeFetchRequestValidator(authorizer: Option[Authorizer]): FetchRequestValidator = {
+    (request: RequestChannel.Request, fetchRequest: FetchRequest, partitions: mutable.Map[TopicPartition, FetchRequest.PartitionData]) => {
+      if (fetchRequest.isFromFollower) {
+        // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
+        if (authorize(authorizer, request.session, ClusterAction, Resource.ClusterResource)) {
+          Vector.empty
+        } else {
+          partitions.map { case (topic, _) =>
+            topic -> errorResponse[Records](Errors.TOPIC_AUTHORIZATION_FAILED)
+          }(breakOut)
+        }
+      } else {
+        Vector.empty
+      }
+    }
+  }
+
+  private[this] def maxBytesFetchPartitionValidator: FetchPartitionValidator = {
+    (request: RequestChannel.Request, topic: TopicPartition, data: FetchRequest.PartitionData) => {
+      if (data.maxBytes < 0) {
+        // Log why we are returning INVALID_REQUEST; documentation ask the user to read the broker logs
+        warn(s"Invalid fetch from client `${request.header.clientId}` maximum bytes is negative for ${topic}: ${data.maxBytes}")
+        Some(topic-> errorResponse(Errors.INVALID_REQUEST))
+      } else {
+        None
+      }
+    }
+  }
+
+  private[this] def authorizeFetchPartitionValidator(authorizer: Option[Authorizer]): FetchPartitionValidator = {
+    (request: RequestChannel.Request, topic: TopicPartition, data: FetchRequest.PartitionData) => {
+      if (!authorize(authorizer, request.session, Read, Resource(Topic, topic.topic, LITERAL))) {
+        Some(topic -> errorResponse(Errors.TOPIC_AUTHORIZATION_FAILED))
+      } else {
+        None
+      }
+    }
+  }
+
+  private[this] def metadataCacheFetchPartitionValidator(metadataCache: MetadataCache): FetchPartitionValidator = {
+    (request: RequestChannel.Request, topic: TopicPartition, data: FetchRequest.PartitionData) => {
+      if (!metadataCache.contains(topic)) {
+        Some(topic-> errorResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION))
+      } else {
+        None
+      }
+    }
+  }
+
+  def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
+    new FetchResponse.PartitionData[T](error,
+      FetchResponse.INVALID_HIGHWATERMARK,
+      FetchResponse.INVALID_LAST_STABLE_OFFSET,
+      FetchResponse.INVALID_LOG_START_OFFSET,
+      null,
+      MemoryRecords.EMPTY)
+  }
+
+  def authorize(authorizer: Option[Authorizer],
+                session: RequestChannel.Session,
+                operation: Operation,
+                resource: Resource): Boolean = {
+    authorizer.forall(_.authorize(session, operation, resource))
+  }
 }
