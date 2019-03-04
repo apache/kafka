@@ -42,7 +42,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -93,6 +95,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     private int consumedMessages = 0;
 
     private CountDownLatch shutdownLatch = new CountDownLatch(1);
+    private final Logger log;
 
     public VerifiableConsumer(KafkaConsumer<String, String> consumer,
                               PrintStream out,
@@ -108,6 +111,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         this.useAutoCommit = useAutoCommit;
         this.useAsyncCommit = useAsyncCommit;
         this.verbose = verbose;
+        this.log = (new LogContext("[VerifiableConsumer] ")).logger(VerifiableConsumer.class);
         addKafkaSerializerModule();
     }
 
@@ -233,6 +237,10 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
             }
         } catch (WakeupException e) {
             // ignore, we are closing
+            log.trace("Caught WakeupException because consumer is shutdown, ignore and terminate.", e);
+        } catch (Throwable t) {
+            // Log the error so it goes to the service log and not stdout
+            log.error("Error during processing, terminating consumer process: ", t);
         } finally {
             consumer.close();
             printJson(new ShutdownComplete());
