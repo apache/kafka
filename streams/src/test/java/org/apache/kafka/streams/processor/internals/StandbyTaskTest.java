@@ -366,6 +366,7 @@ public class StandbyTaskTest {
             singletonList(makeWindowedConsumerRecord(changelogName, 10, 1, 0L, 60_000L))
         );
 
+        task.suspend();
         task.closeStateManager(true);
 
         final File taskDir = stateDirectory.directoryForTask(taskId);
@@ -592,7 +593,7 @@ public class StandbyTaskTest {
             }
 
             @Override
-            void closeStateManager(final boolean writeCheckpoint) throws ProcessorStateException {
+            void closeStateManager(final boolean clean) throws ProcessorStateException {
                 closedStateManager.set(true);
             }
         };

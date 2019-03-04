@@ -35,7 +35,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
-import org.apache.kafka.streams.state.internals.WrappedStateStore.AbstractStateStore;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 import java.time.Duration;
 import java.util.List;
@@ -46,7 +46,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
     private final StreamTask task;
     private final RecordCollector collector;
-    private TimestampSupplier streamTimeSupplier;
     private final ToInternal toInternal = new ToInternal();
     private final static To SEND_TO_ALL = To.all();
 
@@ -153,24 +152,19 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
         final ProcessorNode previousNode = currentNode();
         try {
-            final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
             final String sendTo = toInternal.child();
-            if (sendTo != null) {
+            if (sendTo == null) {
+                final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
+                for (final ProcessorNode child : children) {
+                    forward(child, key, value);
+                }
+            } else {
                 final ProcessorNode child = currentNode().getChild(sendTo);
                 if (child == null) {
                     throw new StreamsException("Unknown downstream node: " + sendTo
                         + " either does not exist or is not connected to this processor.");
                 }
                 forward(child, key, value);
-            } else {
-                if (children.size() == 1) {
-                    final ProcessorNode child = children.get(0);
-                    forward(child, key, value);
-                } else {
-                    for (final ProcessorNode child : children) {
-                        forward(child, key, value);
-                    }
-                }
             }
         } finally {
             setCurrentNode(previousNode);
@@ -210,25 +204,13 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         return schedule(ApiUtils.validateMillisecondDuration(interval, msgPrefix), type, callback);
     }
 
-    void setStreamTimeSupplier(final TimestampSupplier streamTimeSupplier) {
-        this.streamTimeSupplier = streamTimeSupplier;
-    }
+    private abstract static class StateStoreReadOnlyDecorator<T extends StateStore, K, V>
+        extends WrappedStateStore<T, K, V> {
 
-    @Override
-    public long streamTime() {
-        return streamTimeSupplier.get();
-    }
-
-    private abstract static class StateStoreReadOnlyDecorator<T extends StateStore> extends AbstractStateStore {
         static final String ERROR_MESSAGE = "Global store is read only";
 
         private StateStoreReadOnlyDecorator(final T inner) {
             super(inner);
-        }
-
-        @SuppressWarnings("unchecked")
-        T getInner() {
-            return (T) wrappedStore();
         }
 
         @Override
@@ -249,7 +231,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class KeyValueStoreReadOnlyDecorator<K, V>
-        extends StateStoreReadOnlyDecorator<KeyValueStore<K, V>>
+        extends StateStoreReadOnlyDecorator<KeyValueStore<K, V>, K, V>
         implements KeyValueStore<K, V> {
 
         private KeyValueStoreReadOnlyDecorator(final KeyValueStore<K, V> inner) {
@@ -258,23 +240,23 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         @Override
         public V get(final K key) {
-            return getInner().get(key);
+            return wrapped().get(key);
         }
 
         @Override
         public KeyValueIterator<K, V> range(final K from,
                                             final K to) {
-            return getInner().range(from, to);
+            return wrapped().range(from, to);
         }
 
         @Override
         public KeyValueIterator<K, V> all() {
-            return getInner().all();
+            return wrapped().all();
         }
 
         @Override
         public long approximateNumEntries() {
-            return getInner().approximateNumEntries();
+            return wrapped().approximateNumEntries();
         }
 
         @Override
@@ -301,7 +283,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class WindowStoreReadOnlyDecorator<K, V>
-        extends StateStoreReadOnlyDecorator<WindowStore<K, V>>
+        extends StateStoreReadOnlyDecorator<WindowStore<K, V>, K, V>
         implements WindowStore<K, V> {
 
         private WindowStoreReadOnlyDecorator(final WindowStore<K, V> inner) {
@@ -324,7 +306,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public V fetch(final K key,
                        final long time) {
-            return getInner().fetch(key, time);
+            return wrapped().fetch(key, time);
         }
 
         @Deprecated
@@ -332,7 +314,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public WindowStoreIterator<V> fetch(final K key,
                                             final long timeFrom,
                                             final long timeTo) {
-            return getInner().fetch(key, timeFrom, timeTo);
+            return wrapped().fetch(key, timeFrom, timeTo);
         }
 
         @Deprecated
@@ -341,24 +323,24 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                                       final K to,
                                                       final long timeFrom,
                                                       final long timeTo) {
-            return getInner().fetch(from, to, timeFrom, timeTo);
+            return wrapped().fetch(from, to, timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, V> all() {
-            return getInner().all();
+            return wrapped().all();
         }
 
         @Deprecated
         @Override
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                          final long timeTo) {
-            return getInner().fetchAll(timeFrom, timeTo);
+            return wrapped().fetchAll(timeFrom, timeTo);
         }
     }
 
     private static class SessionStoreReadOnlyDecorator<K, AGG>
-        extends StateStoreReadOnlyDecorator<SessionStore<K, AGG>>
+        extends StateStoreReadOnlyDecorator<SessionStore<K, AGG>, K, AGG>
         implements SessionStore<K, AGG> {
 
         private SessionStoreReadOnlyDecorator(final SessionStore<K, AGG> inner) {
@@ -369,7 +351,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public KeyValueIterator<Windowed<K>, AGG> findSessions(final K key,
                                                                final long earliestSessionEndTime,
                                                                final long latestSessionStartTime) {
-            return getInner().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
+            return wrapped().findSessions(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
@@ -377,7 +359,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                                                final K keyTo,
                                                                final long earliestSessionEndTime,
                                                                final long latestSessionStartTime) {
-            return getInner().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+            return wrapped().findSessions(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
@@ -392,27 +374,29 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
+        public AGG fetchSession(final K key, final long startTime, final long endTime) {
+            return wrapped().fetchSession(key, startTime, endTime);
+        }
+
+        @Override
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K key) {
-            return getInner().fetch(key);
+            return wrapped().fetch(key);
         }
 
         @Override
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
                                                         final K to) {
-            return getInner().fetch(from, to);
+            return wrapped().fetch(from, to);
         }
     }
 
-    private abstract static class StateStoreReadWriteDecorator<T extends StateStore> extends AbstractStateStore {
+    private abstract static class StateStoreReadWriteDecorator<T extends StateStore, K, V>
+        extends WrappedStateStore<T, K, V> {
+
         static final String ERROR_MESSAGE = "This method may only be called by Kafka Streams";
 
         private StateStoreReadWriteDecorator(final T inner) {
             super(inner);
-        }
-
-        @SuppressWarnings("unchecked")
-        T wrapped() {
-            return (T) super.wrappedStore();
         }
 
         @Override
@@ -428,7 +412,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class KeyValueStoreReadWriteDecorator<K, V>
-        extends StateStoreReadWriteDecorator<KeyValueStore<K, V>>
+        extends StateStoreReadWriteDecorator<KeyValueStore<K, V>, K, V>
         implements KeyValueStore<K, V> {
 
         private KeyValueStoreReadWriteDecorator(final KeyValueStore<K, V> inner) {
@@ -480,7 +464,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class WindowStoreReadWriteDecorator<K, V>
-        extends StateStoreReadWriteDecorator<WindowStore<K, V>>
+        extends StateStoreReadWriteDecorator<WindowStore<K, V>, K, V>
         implements WindowStore<K, V> {
 
         private WindowStoreReadWriteDecorator(final WindowStore<K, V> inner) {
@@ -537,7 +521,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class SessionStoreReadWriteDecorator<K, AGG>
-        extends StateStoreReadWriteDecorator<SessionStore<K, AGG>>
+        extends StateStoreReadWriteDecorator<SessionStore<K, AGG>, K, AGG>
         implements SessionStore<K, AGG> {
 
         private SessionStoreReadWriteDecorator(final SessionStore<K, AGG> inner) {
@@ -567,6 +551,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public void put(final Windowed<K> sessionKey, final AGG aggregate) {
             wrapped().put(sessionKey, aggregate);
+        }
+
+        @Override
+        public AGG fetchSession(final K key, final long startTime, final long endTime) {
+            return wrapped().fetchSession(key, startTime, endTime);
         }
 
         @Override

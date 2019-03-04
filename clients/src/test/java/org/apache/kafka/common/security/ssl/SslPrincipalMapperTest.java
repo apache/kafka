@@ -36,6 +36,16 @@ public class SslPrincipalMapperTest {
         testValidRule(Arrays.asList("RULE:^cn=(.?),ou=(.?),dc=(.?),dc=(.?)$/$1@$2/U"));
     }
 
+    @Test
+    public void testValidSplitRules() {
+        testValidRule(Arrays.asList("DEFAULT"));
+        testValidRule(Arrays.asList("RULE:^CN=(.*?)", "OU=ServiceUsers.*$/$1/"));
+        testValidRule(Arrays.asList("RULE:^CN=(.*?)", "OU=ServiceUsers.*$/$1/L", "DEFAULT"));
+        testValidRule(Arrays.asList("RULE:^CN=(.*?)", "OU=(.*?),O=(.*?),L=(.*?)", "ST=(.*?)", "C=(.*?)$/$1@$2/"));
+        testValidRule(Arrays.asList("RULE:^.*[Cc][Nn]=([a-zA-Z0-9.]*).*$/$1/L"));
+        testValidRule(Arrays.asList("RULE:^cn=(.?)", "ou=(.?)", "dc=(.?)", "dc=(.?)$/$1@$2/U"));
+    }
+
     private void testValidRule(List<String> rules) {
         SslPrincipalMapper.fromRules(rules);
     }
@@ -53,6 +63,21 @@ public class SslPrincipalMapperTest {
         testInvalidRule(Arrays.asList("RULE:^CN=(.*?),OU=ServiceUsers.*$/L"));
         testInvalidRule(Arrays.asList("RULE:^CN=(.*?),OU=ServiceUsers.*$/U"));
         testInvalidRule(Arrays.asList("RULE:^CN=(.*?),OU=ServiceUsers.*$/LU"));
+    }
+
+    @Test
+    public void testInvalidSplitRules() {
+        testInvalidRule(Arrays.asList("default"));
+        testInvalidRule(Arrays.asList("DEFAUL"));
+        testInvalidRule(Arrays.asList("DEFAULT/L"));
+        testInvalidRule(Arrays.asList("DEFAULT/U"));
+
+        testInvalidRule(Arrays.asList("RULE:CN=(.*?)", "OU=ServiceUsers.*/$1"));
+        testInvalidRule(Arrays.asList("rule:^CN=(.*?)", "OU=ServiceUsers.*$/$1/"));
+        testInvalidRule(Arrays.asList("RULE:^CN=(.*?)", "OU=ServiceUsers.*$/$1/L/U"));
+        testInvalidRule(Arrays.asList("RULE:^CN=(.*?)", "OU=ServiceUsers.*$/L"));
+        testInvalidRule(Arrays.asList("RULE:^CN=(.*?)", "OU=ServiceUsers.*$/U"));
+        testInvalidRule(Arrays.asList("RULE:^CN=(.*?)", "OU=ServiceUsers.*$/LU"));
     }
 
     private void testInvalidRule(List<String> rules) {

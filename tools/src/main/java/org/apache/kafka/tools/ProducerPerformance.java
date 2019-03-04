@@ -247,7 +247,7 @@ public class ProducerPerformance {
                 .required(true)
                 .type(Integer.class)
                 .metavar("THROUGHPUT")
-                .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec");
+                .help("throttle maximum message throughput to *approximately* THROUGHPUT messages/sec. Set this to -1 to disable throttling.");
 
         parser.addArgument("--producer-props")
                  .nargs("+")

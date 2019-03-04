@@ -35,61 +35,26 @@ Let's confirm that all of the daemons are running:
     115420 Kafka
     115694 Agent
 
-Now, we can submit a test job to Trogdor.  Here's an example of a short bash script which makes it easier.
+Now, we can submit a test job to Trogdor.
 
-    > ./tests/bin/trogdor-run-produce-bench.sh
-    Sent CreateTaskRequest for task produce_bench_21634.$TASK_ID = produce_bench_21634
+    > ./bin/trogdor.sh client createTask -t localhost:8889 -i produce0 --spec ./tests/spec/simple_produce_bench.json
+    Sent CreateTaskRequest for task produce0.
 
-To get the test results, we run --show-tasks:
+We can run showTask to see what the task's status is:
 
-    ./bin/trogdor.sh client --show-tasks localhost:8889
-    Got coordinator tasks: {
-      "tasks" : {
-        "produce_bench_21634" : {
-          "state" : "DONE",
-          "spec" : {
-            "class" : "org.apache.kafka.trogdor.workload.ProduceBenchSpec",
-            "startMs" : 0,
-            "durationMs" : 10000000,
-            "producerNode" : "node0",
-            "bootstrapServers" : "localhost:9092",
-            "targetMessagesPerSec" : 10000,
-            "maxMessages" : 50000,
-            "keyGenerator" : {
-              "type" : "sequential",
-              "size" : 4,
-              "startOffset" : 0
-            },
-            "valueGenerator" : {
-              "type" : "constant",
-              "size" : 512,
-              "value" : "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
-            },
-            "activeTopics" : {
-              "foo[1-3]" : {
-                "numPartitions" : 10,
-                "replicationFactor" : 1
-              }
-            },
-            "inactiveTopics" : {
-              "foo[4-5]" : {
-                "numPartitions" : 10,
-                "replicationFactor" : 1
-              }
-            }
-          },
-          "startedMs" : 1541435949784,
-          "doneMs" : 1541435955803,
-          "cancelled" : false,
-          "status" : {
-            "totalSent" : 50000,
-            "averageLatencyMs" : 11.0293,
-            "p50LatencyMs" : 9,
-            "p95LatencyMs" : 27,
-            "p99LatencyMs" : 39
-          }
-        }
-      }
+    > ./bin/trogdor.sh client showTask -t localhost:8889 -i produce0
+    Task bar of type org.apache.kafka.trogdor.workload.ProduceBenchSpec is DONE. FINISHED at 2019-01-09T20:38:22.039-08:00 after 6s
+
+To see the results, we use showTask with --show-status:
+    > ./bin/trogdor.sh client showTask -t localhost:8889 -i produce0 --show-status
+    Task bar of type org.apache.kafka.trogdor.workload.ProduceBenchSpec is DONE. FINISHED at 2019-01-09T20:38:22.039-08:00 after 6s
+    Status: {
+      "totalSent" : 50000,
+      "averageLatencyMs" : 17.83388,
+      "p50LatencyMs" : 12,
+      "p95LatencyMs" : 75,
+      "p99LatencyMs" : 96,
+      "transactionsCommitted" : 0
     }
 
 Trogdor Architecture
@@ -157,3 +122,15 @@ ProcessStopFault stops a process by sending it a SIGSTOP signal.  When the fault
 
 ### NetworkPartitionFault
 NetworkPartitionFault sets up an artificial network partition between one or more sets of nodes.  Currently, this is implemented using iptables.  The iptables rules are set up on the outbound traffic from the affected nodes.  Therefore, the affected nodes should still be reachable from outside the cluster.
+
+Exec Mode
+========================================
+Sometimes, you just want to run a test quickly on a single node.  In this case, you can use "exec mode."  This mode allows you to run a single Trogdor Agent without a Coordinator.
+
+When using exec mode, you must pass in a Task specification to use.  The Agent will try to start this task.
+
+For example:
+
+    > ./bin/trogdor.sh agent -n node0 -c ./config/trogdor.conf --exec ./tests/spec/simple_produce_bench.json
+
+When using exec mode, the Agent will exit once the task is complete.

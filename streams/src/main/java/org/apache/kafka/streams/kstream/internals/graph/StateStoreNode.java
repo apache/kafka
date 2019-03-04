@@ -25,7 +25,7 @@ public class StateStoreNode extends StreamsGraphNode {
     protected final StoreBuilder storeBuilder;
 
     public StateStoreNode(final StoreBuilder storeBuilder) {
-        super(storeBuilder.name(), false);
+        super(storeBuilder.name());
 
         this.storeBuilder = storeBuilder;
     }

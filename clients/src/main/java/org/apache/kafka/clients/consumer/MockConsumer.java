@@ -26,6 +26,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.utils.LogContext;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -65,7 +66,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private boolean closed;
 
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
-        this.subscriptions = new SubscriptionState(offsetResetStrategy);
+        this.subscriptions = new SubscriptionState(new LogContext(), offsetResetStrategy);
         this.partitions = new HashMap<>();
         this.records = new HashMap<>();
         this.paused = new HashSet<>();
@@ -268,6 +269,12 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     public synchronized void seek(TopicPartition partition, long offset) {
         ensureNotClosed();
         subscriptions.seek(partition, offset);
+    }
+
+    @Override
+    public void seek(TopicPartition partition, OffsetAndMetadata offsetAndMetadata) {
+        ensureNotClosed();
+        subscriptions.seek(partition, offsetAndMetadata.offset());
     }
 
     @Override

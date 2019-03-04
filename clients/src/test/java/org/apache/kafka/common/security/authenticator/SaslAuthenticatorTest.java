@@ -45,6 +45,7 @@ import javax.security.auth.login.Configuration;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
+import javax.security.sasl.SaslException;
 
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.KafkaException;
@@ -52,6 +53,8 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.message.SaslAuthenticateRequestData;
+import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.ChannelBuilders;
@@ -256,6 +259,74 @@ public class SaslAuthenticatorTest {
             fail("SASL/PLAIN channel created without password");
         } catch (IOException e) {
             // Expected exception
+        }
+    }
+
+    /**
+     * Verify that messages from SaslExceptions thrown in the server during authentication are not
+     * propagated to the client since these may contain sensitive data.
+     */
+    @Test
+    public void testClientExceptionDoesNotContainSensitiveData() throws Exception {
+        InvalidScramServerCallbackHandler.reset();
+
+        SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
+        TestJaasConfig jaasConfig = configureMechanisms("SCRAM-SHA-256", Collections.singletonList("SCRAM-SHA-256"));
+        jaasConfig.createOrUpdateEntry(TestJaasConfig.LOGIN_CONTEXT_SERVER, PlainLoginModule.class.getName(), new HashMap<>());
+        String callbackPrefix = ListenerName.forSecurityProtocol(securityProtocol).saslMechanismConfigPrefix("SCRAM-SHA-256");
+        saslServerConfigs.put(callbackPrefix + BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS,
+                InvalidScramServerCallbackHandler.class.getName());
+        server = createEchoServer(securityProtocol);
+
+        try {
+            InvalidScramServerCallbackHandler.sensitiveException =
+                    new IOException("Could not connect to password database locahost:8000");
+            createAndCheckClientAuthenticationFailure(securityProtocol, "1", "SCRAM-SHA-256", null);
+
+            InvalidScramServerCallbackHandler.sensitiveException =
+                    new SaslException("Password for existing user " + TestServerCallbackHandler.USERNAME + " is invalid");
+            createAndCheckClientAuthenticationFailure(securityProtocol, "1", "SCRAM-SHA-256", null);
+
+            InvalidScramServerCallbackHandler.reset();
+            InvalidScramServerCallbackHandler.clientFriendlyException =
+                    new SaslAuthenticationException("Credential verification failed");
+            createAndCheckClientAuthenticationFailure(securityProtocol, "1", "SCRAM-SHA-256",
+                    InvalidScramServerCallbackHandler.clientFriendlyException.getMessage());
+        } finally {
+            InvalidScramServerCallbackHandler.reset();
+        }
+    }
+
+    public static class InvalidScramServerCallbackHandler implements AuthenticateCallbackHandler {
+        // We want to test three types of exceptions:
+        //   1) IOException since we can throw this from callback handlers. This may be sensitive.
+        //   2) SaslException (also an IOException) which may contain data from external (or JRE) servers and callbacks and may be sensitive
+        //   3) SaslAuthenticationException which is from our own code and is used only for client-friendly exceptions
+        // We use two different exceptions here since the only checked exception CallbackHandler can throw is IOException,
+        // covering case 1) and 2). For case 3), SaslAuthenticationException is a RuntimeExceptiom.
+        static volatile IOException sensitiveException;
+        static volatile SaslAuthenticationException clientFriendlyException;
+
+        @Override
+        public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        }
+
+        @Override
+        public void handle(Callback[] callbacks) throws IOException {
+            if (sensitiveException != null)
+                throw sensitiveException;
+            if (clientFriendlyException != null)
+                throw clientFriendlyException;
+        }
+
+        @Override
+        public void close() {
+            reset();
+        }
+
+        static void reset() {
+            sensitiveException = null;
+            clientFriendlyException = null;
         }
     }
 
@@ -639,8 +710,9 @@ public class SaslAuthenticatorTest {
         // Send SaslHandshakeRequest and validate that connection is closed by server.
         String node1 = "invalid1";
         createClientConnection(SecurityProtocol.PLAINTEXT, node1);
-        SaslHandshakeRequest request = new SaslHandshakeRequest("PLAIN");
+        SaslHandshakeRequest request = buildSaslHandshakeRequest("PLAIN", ApiKeys.SASL_HANDSHAKE.latestVersion());
         RequestHeader header = new RequestHeader(ApiKeys.SASL_HANDSHAKE, Short.MAX_VALUE, "someclient", 2);
+        
         selector.send(request.toSend(node1, header));
         // This test uses a non-SASL PLAINTEXT client in order to do manual handshake.
         // So the channel is in READY state.
@@ -1646,7 +1718,7 @@ public class SaslAuthenticatorTest {
                         servicePrincipal, serverHost, saslMechanism, true, transportLayer, time) {
                     @Override
                     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
-                        return new SaslHandshakeRequest.Builder(saslMechanism).build((short) 0);
+                        return buildSaslHandshakeRequest(saslMechanism, (short) 0);
                     }
                     @Override
                     protected void saslAuthenticateVersion(ApiVersionsResponse apiVersionsResponse) {
@@ -1725,7 +1797,8 @@ public class SaslAuthenticatorTest {
         String authString = "\u0000" + TestJaasConfig.USERNAME + "\u0000" + TestJaasConfig.PASSWORD;
         ByteBuffer authBuf = ByteBuffer.wrap(authString.getBytes("UTF-8"));
         if (enableSaslAuthenticateHeader) {
-            SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(authBuf).build();
+            SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(authBuf.array());
+            SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build();
             sendKafkaRequestReceiveResponse(node, ApiKeys.SASL_AUTHENTICATE, request);
         } else {
             selector.send(new NetworkSend(node, authBuf));
@@ -1814,17 +1887,9 @@ public class SaslAuthenticatorTest {
         ChannelState finalState = createAndCheckClientConnectionFailure(securityProtocol, node);
         Exception exception = finalState.exception();
         assertTrue("Invalid exception class " + exception.getClass(), exception instanceof SaslAuthenticationException);
-        if (expectedErrorMessage != null)
-            // check for full equality
-            assertEquals(expectedErrorMessage, exception.getMessage());
-        else {
-            String expectedErrorMessagePrefix = "Authentication failed during authentication due to invalid credentials with SASL mechanism "
-                    + mechanism + ": ";
-            if (exception.getMessage().startsWith(expectedErrorMessagePrefix))
-                return;
-            // we didn't match a recognized error message, so fail
-            fail("Incorrect failure message: " + exception.getMessage());
-        }
+        String expectedExceptionMessage = expectedErrorMessage != null ? expectedErrorMessage :
+                "Authentication failed during authentication due to invalid credentials with SASL mechanism " + mechanism;
+        assertEquals(expectedExceptionMessage, exception.getMessage());
     }
 
     private ChannelState createAndCheckClientConnectionFailure(SecurityProtocol securityProtocol, String node)
@@ -1866,7 +1931,7 @@ public class SaslAuthenticatorTest {
     }
 
     private SaslHandshakeResponse sendHandshakeRequestReceiveResponse(String node, short version) throws Exception {
-        SaslHandshakeRequest handshakeRequest = new SaslHandshakeRequest.Builder("PLAIN").build(version);
+        SaslHandshakeRequest handshakeRequest = buildSaslHandshakeRequest("PLAIN", version);
         SaslHandshakeResponse response = (SaslHandshakeResponse) sendKafkaRequestReceiveResponse(node, ApiKeys.SASL_HANDSHAKE, handshakeRequest);
         assertEquals(Errors.NONE, response.error());
         return response;
@@ -1908,6 +1973,11 @@ public class SaslAuthenticatorTest {
                 throw new IllegalStateException("Server callback handler not configured");
             return USERNAME.equals(username) && new String(password).equals(PASSWORD);
         }
+    }
+
+    private SaslHandshakeRequest buildSaslHandshakeRequest(String mechanism, short version) {
+        return new SaslHandshakeRequest.Builder(
+                new SaslHandshakeRequestData().setMechanism(mechanism)).build(version);
     }
 
     @SuppressWarnings("unchecked")
@@ -2167,7 +2237,8 @@ public class SaslAuthenticatorTest {
                         "PLAIN", true, transportLayer, time) {
                     @Override
                     protected SaslHandshakeRequest createSaslHandshakeRequest(short version) {
-                        return new SaslHandshakeRequest.Builder("PLAIN").build(version);
+                        return new SaslHandshakeRequest.Builder(
+                                new SaslHandshakeRequestData().setMechanism("PLAIN")).build(version);
                     }
                 };
         }

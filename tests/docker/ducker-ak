@@ -41,6 +41,9 @@ docker_run_memory_limit="2000m"
 # The default number of cluster nodes to bring up if a number is not specified.
 default_num_nodes=14
 
+# The default OpenJDK base image.
+default_jdk="openjdk:8"
+
 # The default ducker-ak image name.
 default_image_name="ducker-ak"
 
@@ -80,9 +83,10 @@ ssh [node-name|user-name@node-name] [command]
     is specified, we will run that command.  Otherwise, we will provide a login
     shell.
 
-down [-q|--quiet]
+down [-q|--quiet] [-f|--force]
     Tear down all the currently active ducker-ak nodes.  If --quiet is specified,
-    only error messages are printed.
+    only error messages are printed. If --force or -f is specified, "docker rm -f"
+    will be used to remove the nodes, which kills currently running ducker-ak test.
 
 purge [--f|--force]
     Purge Docker images created by ducker-ak.  This will free disk space.
@@ -215,7 +219,7 @@ ducker_build() {
 
     must_pushd "${ducker_dir}"
     must_do -v -o docker build --memory="${docker_build_memory_limit}" \
-        --build-arg "ducker_creator=${user_name}" -t "${image_name}" \
+        --build-arg "ducker_creator=${user_name}" --build-arg "jdk_version=${jdk_version}" -t "${image_name}" \
         -f "${ducker_dir}/Dockerfile" ${docker_args} -- .
     docker_status=$?
     must_popd
@@ -264,11 +268,13 @@ ducker_up() {
             -C|--custom-ducktape) set_once custom_ducktape "${2}" "the custom ducktape directory"; shift 2;;
             -f|--force) force=1; shift;;
             -n|--num-nodes) set_once num_nodes "${2}" "number of nodes"; shift 2;;
+            -j|--jdk) set_once jdk_version "${2}" "the OpenJDK base image"; shift 2;;
             *) set_once image_name "${1}" "docker image name"; shift;;
         esac
     done
     [[ -n "${num_nodes}" ]] || num_nodes="${default_num_nodes}"
-    [[ -n "${image_name}" ]] || image_name=ducker-ak
+    [[ -n "${jdk_version}" ]] || jdk_version="${default_jdk}"
+    [[ -n "${image_name}" ]] || image_name="${default_image_name}-${jdk_version/:/-}"
     [[ "${num_nodes}" =~ ^-?[0-9]+$ ]] || \
         die "ducker_up: the number of nodes must be an integer."
     [[ "${num_nodes}" -gt 0 ]] || die "ducker_up: the number of nodes must be greater than 0."
@@ -416,8 +422,8 @@ ducker_test() {
     (test -f ./gradlew || gradle) && ./gradlew systemTestLibs
     must_popd
     cmd="cd /opt/kafka-dev && ducktape --cluster-file /opt/kafka-dev/tests/docker/build/cluster.json $args"
-    echo "docker exec -it ducker01 bash -c \"${cmd}\""
-    exec docker exec --user=ducker -it ducker01 bash -c "${cmd}"
+    echo "docker exec ducker01 bash -c \"${cmd}\""
+    exec docker exec --user=ducker ducker01 bash -c "${cmd}"
 }
 
 ducker_ssh() {
@@ -471,9 +477,11 @@ echo_running_container_names() {
 ducker_down() {
     require_commands docker
     local verbose=1
+    local force_str=""
     while [[ $# -ge 1 ]]; do
         case "${1}" in
             -q|--quiet) verbose=0; shift;;
+            -f|--force) force_str="-f"; shift;;
             *) die "ducker_down: unexpected command-line argument ${1}";;
         esac
     done
@@ -494,7 +502,7 @@ ducker_down() {
     if [[ -n "${running_containers}" ]]; then
         must_do ${verbose_flag} docker kill "${running_containers}"
     fi
-    must_do ${verbose_flag} docker rm "${all_containers}"
+    must_do ${verbose_flag} docker rm ${force_str} "${all_containers}"
     must_do ${verbose_flag} -o rm -f -- "${ducker_dir}/build/node_hosts" "${ducker_dir}/build/cluster.json"
     if docker network inspect ducknet &>/dev/null; then
         must_do -v docker network rm ducknet

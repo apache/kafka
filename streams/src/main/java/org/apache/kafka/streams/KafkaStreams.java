@@ -368,20 +368,26 @@ public class KafkaStreams implements AutoCloseable {
 
     /**
      * Get read-only handle on global metrics registry, including streams client's own metrics plus
-     * its embedded consumer clients' metrics.
+     * its embedded producer, consumer and admin clients' metrics.
      *
      * @return Map of all metrics.
      */
     public Map<MetricName, ? extends Metric> metrics() {
         final Map<MetricName, Metric> result = new LinkedHashMap<>();
+        // producer and consumer clients are per-thread
         for (final StreamThread thread : threads) {
             result.putAll(thread.producerMetrics());
             result.putAll(thread.consumerMetrics());
+            // admin client is shared, so we can actually move it
+            // to result.putAll(adminClient.metrics()).
+            // we did it intentionally just for flexibility.
             result.putAll(thread.adminClientMetrics());
         }
+        // global thread's consumer client
         if (globalStreamThread != null) {
             result.putAll(globalStreamThread.consumerMetrics());
         }
+        // self streams metrics
         result.putAll(metrics.metrics());
         return Collections.unmodifiableMap(result);
     }
@@ -704,7 +710,7 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         // use client id instead of thread client id since this admin client may be shared among threads
-        adminClient = clientSupplier.getAdminClient(config.getAdminConfigs(clientId));
+        adminClient = clientSupplier.getAdminClient(config.getAdminConfigs(StreamThread.getSharedAdminClientId(clientId)));
 
         final Map<Long, StreamThread.State> threadState = new HashMap<>(threads.length);
         final ArrayList<StateStoreProvider> storeProviders = new ArrayList<>();

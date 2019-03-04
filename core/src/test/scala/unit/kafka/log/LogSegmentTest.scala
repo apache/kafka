@@ -279,12 +279,12 @@ class LogSegmentTest {
   def testChangeFileSuffixes() {
     val seg = createSegment(40)
     val logFile = seg.log.file
-    val indexFile = seg.offsetIndex.file
+    val indexFile = seg.lazyOffsetIndex.file
     seg.changeFileSuffixes("", ".deleted")
     assertEquals(logFile.getAbsolutePath + ".deleted", seg.log.file.getAbsolutePath)
-    assertEquals(indexFile.getAbsolutePath + ".deleted", seg.offsetIndex.file.getAbsolutePath)
+    assertEquals(indexFile.getAbsolutePath + ".deleted", seg.lazyOffsetIndex.file.getAbsolutePath)
     assertTrue(seg.log.file.exists)
-    assertTrue(seg.offsetIndex.file.exists)
+    assertTrue(seg.lazyOffsetIndex.file.exists)
   }
 
   /**
@@ -296,7 +296,7 @@ class LogSegmentTest {
     val seg = createSegment(0)
     for(i <- 0 until 100)
       seg.append(i, RecordBatch.NO_TIMESTAMP, -1L, records(i, i.toString))
-    val indexFile = seg.offsetIndex.file
+    val indexFile = seg.lazyOffsetIndex.file
     TestUtils.writeNonsenseToFile(indexFile, 5, indexFile.length.toInt)
     seg.recover(new ProducerStateManager(topicPartition, logDir))
     for(i <- 0 until 100)
@@ -385,7 +385,7 @@ class LogSegmentTest {
     val seg = createSegment(0)
     for(i <- 0 until 100)
       seg.append(i, i * 10, i, records(i, i.toString))
-    val timeIndexFile = seg.timeIndex.file
+    val timeIndexFile = seg.lazyTimeIndex.file
     TestUtils.writeNonsenseToFile(timeIndexFile, 5, timeIndexFile.length.toInt)
     seg.recover(new ProducerStateManager(topicPartition, logDir))
     for(i <- 0 until 100) {

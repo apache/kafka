@@ -27,15 +27,15 @@ import org.apache.kafka.common.config.ConfigDef.ValidString._
 import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException}
+import org.apache.kafka.common.message.{DescribeGroupsRequestData, DescribeGroupsResponseData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.ApiVersionsResponse.ApiVersion
-import org.apache.kafka.common.requests.DescribeGroupsResponse.GroupMetadata
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.utils.LogContext
-import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
+import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.JavaConverters._
@@ -233,20 +233,20 @@ class AdminClient(val time: Time,
                                   consumers: Option[List[ConsumerSummary]],
                                   coordinator: Node)
 
-  def describeConsumerGroupHandler(coordinator: Node, groupId: String): GroupMetadata = {
+  def describeConsumerGroupHandler(coordinator: Node, groupId: String): DescribeGroupsResponseData.DescribedGroup = {
     val responseBody = send(coordinator, ApiKeys.DESCRIBE_GROUPS,
-        new DescribeGroupsRequest.Builder(Collections.singletonList(groupId)))
+      new DescribeGroupsRequest.Builder(new DescribeGroupsRequestData().setGroups(Collections.singletonList(groupId))))
     val response = responseBody.asInstanceOf[DescribeGroupsResponse]
-    val metadata = response.groups.get(groupId)
-    if (metadata == null)
-      throw new KafkaException(s"Response from broker contained no metadata for group $groupId")
+    val metadata = response.data().groups().asScala.find(group => groupId.equals(group.groupId()))
+      .getOrElse(throw new KafkaException(s"Response from broker contained no metadata for group $groupId"))
     metadata
   }
 
   def describeConsumerGroup(groupId: String, timeoutMs: Long = 0): ConsumerGroupSummary = {
 
-    def isValidConsumerGroupResponse(metadata: DescribeGroupsResponse.GroupMetadata): Boolean =
-      metadata.error == Errors.NONE && (metadata.state == "Dead" || metadata.state == "Empty" || metadata.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
+    def isValidConsumerGroupResponse(metadata: DescribeGroupsResponseData.DescribedGroup): Boolean =
+      metadata.errorCode() == Errors.NONE.code() && (metadata.groupState() == "Dead" ||
+        metadata.groupState() == "Empty" || metadata.protocolType == ConsumerProtocol.PROTOCOL_TYPE)
 
     val startTime = time.milliseconds
     val coordinator = findCoordinator(groupId, timeoutMs)
@@ -262,16 +262,16 @@ class AdminClient(val time: Time,
       throw new TimeoutException("The consumer group command timed out while waiting for group to initialize")
 
     val consumers = metadata.members.asScala.map { consumer =>
-      ConsumerSummary(consumer.memberId, consumer.clientId, consumer.clientHost, metadata.state match {
+      ConsumerSummary(consumer.memberId, consumer.clientId, consumer.clientHost, metadata.groupState() match {
         case "Stable" =>
-          val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(Utils.readBytes(consumer.memberAssignment)))
+          val assignment = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(consumer.memberAssignment))
           assignment.partitions.asScala.toList
         case _ =>
           List()
       })
     }.toList
 
-    ConsumerGroupSummary(metadata.state, metadata.protocol, Some(consumers), coordinator)
+    ConsumerGroupSummary(metadata.groupState(), metadata.protocolData(), Some(consumers), coordinator)
   }
 
   def deleteConsumerGroups(groups: List[String]): Map[String, Errors] = {
