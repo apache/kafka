@@ -178,7 +178,8 @@ class TopologyTest extends JUnitSuite {
       // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
       val clicksByRegion: KStreamJ[String, JLong] = userClicksJoinRegion
         .map {
-          (_: String, regionWithClicks: (String, JLong)) => new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
+          (_: String, regionWithClicks: (String, JLong)) =>
+            new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
         }
 
       // Compute the total per region by summing the individual click counts per region.
