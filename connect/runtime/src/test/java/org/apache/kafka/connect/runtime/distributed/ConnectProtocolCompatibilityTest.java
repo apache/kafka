@@ -76,7 +76,29 @@ public class ConnectProtocolCompatibilityTest {
     }
 
     @Test
-    public void testNewToOldMetadata() {
+    public void testStrictToStrictMetadata() {
+        when(configStorage.snapshot()).thenReturn(configState1);
+        ExtendedWorkerState workerState = new ExtendedWorkerState(LEADER_URL, configStorage.snapshot().offset(), null);
+        ByteBuffer metadata = ConnectProtocol.serializeMetadata(workerState);
+        ConnectProtocol.WorkerState state = ConnectProtocol.deserializeMetadata(metadata);
+        assertEquals(LEADER_URL, state.url());
+        assertEquals(1, state.offset());
+        verify(configStorage).snapshot();
+    }
+
+    @Test
+    public void testCoopToCoopMetadata() {
+        when(configStorage.snapshot()).thenReturn(configState1);
+        ExtendedWorkerState workerState = new ExtendedWorkerState(LEADER_URL, configStorage.snapshot().offset(), null);
+        ByteBuffer metadata = IncrementalCooperativeConnectProtocol.serializeMetadata(workerState);
+        ExtendedWorkerState state = IncrementalCooperativeConnectProtocol.deserializeMetadata(metadata);
+        assertEquals(LEADER_URL, state.url());
+        assertEquals(1, state.offset());
+        verify(configStorage).snapshot();
+    }
+
+    @Test
+    public void testCoopToStrictMetadata() {
         when(configStorage.snapshot()).thenReturn(configState1);
         ExtendedWorkerState workerState = new ExtendedWorkerState(LEADER_URL, configStorage.snapshot().offset(), null);
         ByteBuffer metadata = IncrementalCooperativeConnectProtocol.serializeMetadata(workerState);
@@ -87,7 +109,7 @@ public class ConnectProtocolCompatibilityTest {
     }
 
     @Test
-    public void testOldToNewMetadata() {
+    public void testStrictToCoopMetadata() {
         when(configStorage.snapshot()).thenReturn(configState1);
         ConnectProtocol.WorkerState workerState = new ConnectProtocol.WorkerState(LEADER_URL, configStorage.snapshot().offset());
         ByteBuffer metadata = ConnectProtocol.serializeMetadata(workerState);
@@ -98,7 +120,62 @@ public class ConnectProtocolCompatibilityTest {
     }
 
     @Test
-    public void testOldToNewAssignment() {
+    public void testStrictToStrictAssignment() {
+        ConnectProtocol.Assignment assignment = new ConnectProtocol.Assignment(
+                ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
+                Arrays.asList(connectorId1, connectorId3), Arrays.asList(taskId2x0));
+
+        ByteBuffer leaderBuf = ConnectProtocol.serializeAssignment(assignment);
+        ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(leaderBuf);
+        assertEquals(false, leaderAssignment.failed());
+        assertEquals("leader", leaderAssignment.leader());
+        assertEquals(1, leaderAssignment.offset());
+        assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
+        assertEquals(Collections.singletonList(taskId2x0), leaderAssignment.tasks());
+
+        ConnectProtocol.Assignment assignment2 = new ConnectProtocol.Assignment(
+                ConnectProtocol.Assignment.NO_ERROR, "member", LEADER_URL, 1L,
+                Arrays.asList(connectorId2), Arrays.asList(taskId1x0, taskId3x0));
+
+        ByteBuffer memberBuf = ConnectProtocol.serializeAssignment(assignment2);
+        ConnectProtocol.Assignment memberAssignment = ConnectProtocol.deserializeAssignment(memberBuf);
+        assertEquals(false, memberAssignment.failed());
+        assertEquals("member", memberAssignment.leader());
+        assertEquals(1, memberAssignment.offset());
+        assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
+        assertEquals(Arrays.asList(taskId1x0, taskId3x0), memberAssignment.tasks());
+    }
+
+    @Test
+    public void testCoopToCoopAssignment() {
+        ExtendedAssignment assignment = new ExtendedAssignment(
+                ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
+                Arrays.asList(connectorId1, connectorId3), Arrays.asList(taskId2x0), null, null);
+
+        ByteBuffer leaderBuf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
+        ConnectProtocol.Assignment leaderAssignment = ConnectProtocol.deserializeAssignment(leaderBuf);
+        assertEquals(false, leaderAssignment.failed());
+        assertEquals("leader", leaderAssignment.leader());
+        assertEquals(1, leaderAssignment.offset());
+        assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
+        assertEquals(Collections.singletonList(taskId2x0), leaderAssignment.tasks());
+
+        ExtendedAssignment assignment2 = new ExtendedAssignment(
+                ConnectProtocol.Assignment.NO_ERROR, "member", LEADER_URL, 1L,
+                Arrays.asList(connectorId2), Arrays.asList(taskId1x0, taskId3x0), null, null);
+
+        ByteBuffer memberBuf = ConnectProtocol.serializeAssignment(assignment2);
+        ConnectProtocol.Assignment memberAssignment =
+                IncrementalCooperativeConnectProtocol.deserializeAssignment(memberBuf);
+        assertEquals(false, memberAssignment.failed());
+        assertEquals("member", memberAssignment.leader());
+        assertEquals(1, memberAssignment.offset());
+        assertEquals(Collections.singletonList(connectorId2), memberAssignment.connectors());
+        assertEquals(Arrays.asList(taskId1x0, taskId3x0), memberAssignment.tasks());
+    }
+
+    @Test
+    public void testStrictToCoopAssignment() {
         ConnectProtocol.Assignment assignment = new ConnectProtocol.Assignment(
                 ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
                 Arrays.asList(connectorId1, connectorId3), Arrays.asList(taskId2x0));
@@ -126,9 +203,8 @@ public class ConnectProtocolCompatibilityTest {
         assertEquals(Arrays.asList(taskId1x0, taskId3x0), memberAssignment.tasks());
     }
 
-
     @Test
-    public void testNewToOldAssignment() {
+    public void testCoopToStrictAssignment() {
         ExtendedAssignment assignment = new ExtendedAssignment(
                 ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
                 Arrays.asList(connectorId1, connectorId3), Arrays.asList(taskId2x0), null, null);

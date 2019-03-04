@@ -51,12 +51,15 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.URL_K
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.VERSION_KEY_NAME;
 
 /**
- * This class implements the protocol for Kafka Connect workers in a group. It includes the format of worker state used when
- * joining the group and distributing assignments, and the format of assignments of connectors and tasks to workers.
+ * This class implements a group protocol for Kafka Connect workers that support incremental and
+ * cooperative rebalancing of connectors and tasks. It includes the format of worker state used when
+ * joining the group and distributing assignments, and the format of assignments of connectors
+ * and tasks to workers.
  */
 public class IncrementalCooperativeConnectProtocol {
     public static final String ALLOCATION_KEY_NAME = "allocation";
     public static final String REVOKED_KEY_NAME = "revoked";
+    public static final String SCHEDULED_DELAY_KEY_NAME = "delay";
     public static final short CONNECT_PROTOCOL_V1 = 1;
 
     /**
@@ -74,15 +77,14 @@ public class IncrementalCooperativeConnectProtocol {
     public static final Schema CONFIG_STATE_V1 = CONFIG_STATE_V0;
 
     /**
-     * Subscription V1
-     *   Url                => [String]
-     *   ConfigOffset       => Int64
+     * Allocation V1
+     *   Current Assignment => [Byte]
      */
     public static final Schema ALLOCATION_V1 = new Schema(
-            new Field(ALLOCATION_KEY_NAME, NULLABLE_BYTES));
+            new Field(ALLOCATION_KEY_NAME, NULLABLE_BYTES, null, true, null));
 
     /**
-     * Connector Assignment V0:
+     * Connector Assignment V1:
      *   Connector          => [String]
      *   Tasks              => [Int32]
      */
@@ -92,21 +94,23 @@ public class IncrementalCooperativeConnectProtocol {
     public static final Schema CONNECTOR_ASSIGNMENT_V1 = CONNECTOR_ASSIGNMENT_V0;
 
     /**
-     * Assignment V1:
+     * Raw (non versioned) assignment V1:
      *   Error              => Int16
      *   Leader             => [String]
      *   LeaderUrl          => [String]
      *   ConfigOffset       => Int64
      *   Assignment         => [Connector Assignment]
      *   Revoked            => [Connector Assignment]
+     *   ScheduledDelay     => Int32
      */
     public static final Schema ASSIGNMENT_V1 = new Schema(
             new Field(ERROR_KEY_NAME, Type.INT16),
             new Field(LEADER_KEY_NAME, Type.STRING),
             new Field(LEADER_URL_KEY_NAME, Type.STRING),
             new Field(CONFIG_OFFSET_KEY_NAME, Type.INT64),
-            new Field(ASSIGNMENT_KEY_NAME, ArrayOf.nullable(CONNECTOR_ASSIGNMENT_V1)),
-            new Field(REVOKED_KEY_NAME, ArrayOf.nullable(CONNECTOR_ASSIGNMENT_V1)));
+            new Field(ASSIGNMENT_KEY_NAME, ArrayOf.nullable(CONNECTOR_ASSIGNMENT_V1), null, true, null),
+            new Field(REVOKED_KEY_NAME, ArrayOf.nullable(CONNECTOR_ASSIGNMENT_V1), null, true, null),
+            new Field(SCHEDULED_DELAY_KEY_NAME, Type.INT32, null, 0));
 
     /**
      * The fields are serialized in sequence as follows:
@@ -114,7 +118,7 @@ public class IncrementalCooperativeConnectProtocol {
      *   Version            => Int16
      *   Url                => [String]
      *   ConfigOffset       => Int64
-     *   Assignment         => [Byte]
+     *   Current Assignment => [Byte]
      */
     public static ByteBuffer serializeMetadata(ExtendedWorkerState workerState) {
         Struct configState = new Struct(CONFIG_STATE_V1)
@@ -133,6 +137,13 @@ public class IncrementalCooperativeConnectProtocol {
         return buffer;
     }
 
+    /**
+     * Given a byte buffer that contains protocol metadata return the deserialized form of the
+     * metadata.
+     *
+     * @param buffer A buffer containing the protocols metadata
+     * @return the deserialized metadata
+     */
     public static ExtendedWorkerState deserializeMetadata(ByteBuffer buffer) {
         Struct header = CONNECT_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
@@ -141,11 +152,23 @@ public class IncrementalCooperativeConnectProtocol {
         long configOffset = configState.getLong(CONFIG_OFFSET_KEY_NAME);
         String url = configState.getString(URL_KEY_NAME);
         Struct allocation = ALLOCATION_V1.read(buffer);
-        // Protocol version is embeded with the assignment in the metadata
+        // Protocol version is embedded with the assignment in the metadata
         ExtendedAssignment assignment = deserializeAssignment(allocation.getBytes(ALLOCATION_KEY_NAME));
         return new ExtendedWorkerState(url, configOffset, assignment);
     }
 
+    /**
+     * The fields are serialized in sequence as follows:
+     * Complete Assignment V1:
+     *   Version            => Int16
+     *   Error              => Int16
+     *   Leader             => [String]
+     *   LeaderUrl          => [String]
+     *   ConfigOffset       => Int64
+     *   Assignment         => [Connector Assignment]
+     *   Revoked            => [Connector Assignment]
+     *   ScheduledDelay     => Int32
+     */
     public static ByteBuffer serializeAssignment(ExtendedAssignment assignment) {
         if (assignment == null || ExtendedAssignment.EMPTY.equals(assignment)) {
             return null;
@@ -159,6 +182,13 @@ public class IncrementalCooperativeConnectProtocol {
         return buffer;
     }
 
+    /**
+     * Given a byte buffer that contains an assignment as defined by this protocol, return the
+     * deserialized form of the assignment.
+     *
+     * @param buffer the buffer containing a serialized assignment
+     * @return the deserialized assignment
+     */
     public static ExtendedAssignment deserializeAssignment(ByteBuffer buffer) {
         if (buffer == null) {
             return null;
@@ -220,6 +250,9 @@ public class IncrementalCooperativeConnectProtocol {
         return tasksIds;
     }
 
+    /**
+     * A class that captures the deserialized form of a worker's metadata.
+     */
     public static class ExtendedWorkerState extends ConnectProtocol.WorkerState {
         private final ExtendedAssignment assignment;
 
@@ -228,6 +261,12 @@ public class IncrementalCooperativeConnectProtocol {
             this.assignment = assignment != null ? assignment : ExtendedAssignment.EMPTY;
         }
 
+        /**
+         * This method returns which was the assignment of connectors and tasks on a worker at the
+         * moment that its state was captured by this class.
+         *
+         * @return the assignment of connectors and tasks
+         */
         public ExtendedAssignment assignment() {
             return assignment;
         }
@@ -242,9 +281,14 @@ public class IncrementalCooperativeConnectProtocol {
         }
     }
 
+    /**
+     * The extended assignment of connectors and tasks that includes revoked connectors and tasks
+     * as well as a scheduled rebalancing delay.
+     */
     public static class ExtendedAssignment extends ConnectProtocol.Assignment {
         private final Collection<String> revokedConnectorIds;
         private final Collection<ConnectorTaskId> revokedTaskIds;
+        private final int delay;
 
         private static final ExtendedAssignment EMPTY = new ExtendedAssignment(
                 ConnectProtocol.Assignment.NO_ERROR, null, null, -1, Collections.emptyList(),
@@ -252,15 +296,31 @@ public class IncrementalCooperativeConnectProtocol {
 
         /**
          * Create an assignment indicating responsibility for the given connector instances and task Ids.
-         * @param revokedConnectorIds list of connectors that the worker should instantiate and run
-         * @param revokedTaskIds list of task IDs that the worker should instantiate and run
+         *
+         * @param revokedConnectorIds list of connectors that the worker should stop running
+         * @param revokedTaskIds list of task IDs that the worker should stop running
          */
         public ExtendedAssignment(short error, String leader, String leaderUrl, long configOffset,
                                   Collection<String> connectorIds, Collection<ConnectorTaskId> taskIds,
                                   Collection<String> revokedConnectorIds, Collection<ConnectorTaskId> revokedTaskIds) {
+            this(error, leader, leaderUrl, configOffset, connectorIds, taskIds, revokedConnectorIds, revokedTaskIds, 0);
+        }
+
+        /**
+         * Create an assignment indicating responsibility for the given connector instances and task Ids.
+         *
+         * @param revokedConnectorIds list of connectors that the worker should stop running
+         * @param revokedTaskIds list of task IDs that the worker should stop running
+         * @param delay the scheduled delay after which the worker should rejoin the group
+         */
+        public ExtendedAssignment(short error, String leader, String leaderUrl, long configOffset,
+                                  Collection<String> connectorIds, Collection<ConnectorTaskId> taskIds,
+                                  Collection<String> revokedConnectorIds, Collection<ConnectorTaskId> revokedTaskIds,
+                                  int delay) {
             super(error, leader, leaderUrl, configOffset, connectorIds, taskIds);
             this.revokedConnectorIds = revokedConnectorIds;
             this.revokedTaskIds = revokedTaskIds;
+            this.delay = delay;
         }
 
         public ExtendedAssignment(
@@ -268,20 +328,43 @@ public class IncrementalCooperativeConnectProtocol {
                 Collection<String> revokedConnectorIds,
                 Collection<ConnectorTaskId> revokedTaskIds
         ) {
-            super(assignmentV0.error(), assignmentV0.leader(), assignmentV0.leaderUrl(),
-                  assignmentV0.offset(), assignmentV0.connectors(), assignmentV0.tasks());
-            this.revokedConnectorIds = revokedConnectorIds;
-            this.revokedTaskIds = revokedTaskIds;
+            this(assignmentV0.error(), assignmentV0.leader(), assignmentV0.leaderUrl(),
+                 assignmentV0.offset(), assignmentV0.connectors(), assignmentV0.tasks(),
+                 revokedConnectorIds, revokedTaskIds, 0);
         }
 
+        /**
+         * Return the IDs of the connectors that are revoked by this assignment.
+         *
+         * @return the revoked connector IDs
+         */
         public Collection<String> revokedConnectors() {
             return revokedConnectorIds;
         }
 
+        /**
+         * Return the IDs of the tasks that are revoked by this assignment.
+         *
+         * @return the revoked task IDs
+         */
         public Collection<ConnectorTaskId> revokedTasks() {
             return revokedTaskIds;
         }
 
+        /**
+         * Return the delay for the rebalance that is scheduled by this assignment.
+         *
+         * @return the scheduled delay
+         */
+        public int delay() {
+            return delay;
+        }
+
+        /**
+         * Return an empty assignment.
+         *
+         * @return an empty assignment
+         */
         public static ExtendedAssignment empty() {
             return EMPTY;
         }
@@ -297,6 +380,7 @@ public class IncrementalCooperativeConnectProtocol {
                     ", taskIds=" + tasks() +
                     ", revokedConnectorIds=" + revokedConnectorIds +
                     ", revokedTaskIds=" + revokedTaskIds +
+                    ", delay=" + delay +
                     '}';
         }
 
@@ -328,6 +412,11 @@ public class IncrementalCooperativeConnectProtocol {
             return taskMap;
         }
 
+        /**
+         * Return the {@code Struct} that corresponds to this assignment.
+         *
+         * @return the assignment struct
+         */
         public Struct toStruct() {
             Collection<Struct> assigned = taskAssignments(asMap());
             Collection<Struct> revoked = taskAssignments(revokedAsMap());
@@ -337,9 +426,16 @@ public class IncrementalCooperativeConnectProtocol {
                     .set(LEADER_URL_KEY_NAME, leaderUrl())
                     .set(CONFIG_OFFSET_KEY_NAME, offset())
                     .set(ASSIGNMENT_KEY_NAME, assigned != null ? assigned.toArray() : null)
-                    .set(REVOKED_KEY_NAME, revoked != null ? revoked.toArray() : null);
+                    .set(REVOKED_KEY_NAME, revoked != null ? revoked.toArray() : null)
+                    .set(SCHEDULED_DELAY_KEY_NAME, delay);
         }
 
+        /**
+         * Given a {@code Struct} that encodes an assignment return the assignment object.
+         *
+         * @param struct a struct representing an assignment
+         * @return the assignment
+         */
         public static ExtendedAssignment fromStruct(Struct struct) {
             return struct == null
                    ? null
@@ -351,7 +447,8 @@ public class IncrementalCooperativeConnectProtocol {
                            extractConnectors(struct, ASSIGNMENT_KEY_NAME),
                            extractTasks(struct, ASSIGNMENT_KEY_NAME),
                            extractConnectors(struct, REVOKED_KEY_NAME),
-                           extractTasks(struct, REVOKED_KEY_NAME));
+                           extractTasks(struct, REVOKED_KEY_NAME),
+                           struct.getInt(SCHEDULED_DELAY_KEY_NAME));
         }
     }
 
