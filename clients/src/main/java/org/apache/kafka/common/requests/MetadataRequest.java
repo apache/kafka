@@ -151,13 +151,12 @@ public class MetadataRequest extends AbstractRequest {
 
     public boolean isAllTopics() {
         return (data.topics() == null) ||
-            (data.topics().size() == 0 && version == 0); //In version 0, an empty topic list indicates
+            (data.topics().isEmpty() && version == 0); //In version 0, an empty topic list indicates
                                                          // "request metadata for all topics."
     }
 
     public List<String> topics() {
-        if ((data.topics() == null) ||
-            (data.topics().size() == 0 && version == 0)) //In version 0, we return null for empty topic list
+        if (isAllTopics()) //In version 0, we return null for empty topic list
             return null;
         else
             return data.topics()

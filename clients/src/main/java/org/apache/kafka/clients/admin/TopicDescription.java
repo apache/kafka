@@ -99,11 +99,7 @@ public class TopicDescription {
 
     @Override
     public String toString() {
-        return "TopicDescription{" +
-            "name='" + name + '\'' +
-            ", internal=" + internal +
-            ", partitions=" + Utils.join(partitions, ",")  +
-            ", authorizedOperations=" + authorizedOperations +
-            '}';
+        return "(name=" + name + ", internal=" + internal + ", partitions=" +
+            Utils.join(partitions, ",") + ", authorizedOperations=" + authorizedOperations + ")";
     }
 }
