@@ -93,7 +93,6 @@ public class MetricsIntegrationTest {
     private static final String PUT_IF_ABSENT_RATE = "put-if-absent-rate";
     private static final String PUT_IF_ABSENT_TOTAL = "put-if-absent-total";
     private static final String GET_RATE = "get-rate";
-    private static final String GET_RATE1 = "get-rate";
     private static final String DELETE_RATE = "delete-rate";
     private static final String DELETE_TOTAL = "delete-total";
     private static final String PUT_ALL_RATE = "put-all-rate";
