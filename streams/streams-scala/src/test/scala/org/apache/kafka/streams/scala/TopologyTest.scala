@@ -74,11 +74,11 @@ class TopologyTest extends JUnitSuite {
       val streamBuilder = new StreamsBuilderJ
       val textLines = streamBuilder.stream[String, String](inputTopic)
 
-      val _: KStreamJ[String, String] = textLines.flatMapValues {
+      val _: KStreamJ[String, String] = textLines.flatMapValues(
         new ValueMapper[String, java.lang.Iterable[String]] {
           def apply(s: String): java.lang.Iterable[String] = pattern.split(s.toLowerCase).toIterable.asJava
         }
-      }
+      )
       streamBuilder.build().describe()
     }
 
@@ -111,15 +111,13 @@ class TopologyTest extends JUnitSuite {
       val streamBuilder = new StreamsBuilderJ
       val textLines: KStreamJ[String, String] = streamBuilder.stream[String, String](inputTopic)
 
-      val splits: KStreamJ[String, String] = textLines.flatMapValues {
+      val splits: KStreamJ[String, String] = textLines.flatMapValues(
         new ValueMapper[String, java.lang.Iterable[String]] {
           def apply(s: String): java.lang.Iterable[String] = pattern.split(s.toLowerCase).toIterable.asJava
         }
-      }
+      )
 
-      val grouped: KGroupedStreamJ[String, String] = splits.groupBy {
-        (_: String, v: String) => v
-      }
+      val grouped: KGroupedStreamJ[String, String] = splits.groupBy((_: String, v: String) => v)
 
       grouped.count()
 
@@ -177,17 +175,15 @@ class TopologyTest extends JUnitSuite {
 
       // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
       val clicksByRegion: KStreamJ[String, JLong] = userClicksJoinRegion
-        .map {
+        .map(
           (_: String, regionWithClicks: (String, JLong)) =>
             new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
-        }
+        )
 
       // Compute the total per region by summing the individual click counts per region.
       clicksByRegion
         .groupByKey(Grouped.`with`[String, JLong])
-        .reduce {
-          (v1: JLong, v2: JLong) => v1 + v2
-        }
+        .reduce((v1: JLong, v2: JLong) => v1 + v2)
 
       builder.build().describe()
     }
@@ -245,9 +241,7 @@ class TopologyTest extends JUnitSuite {
             }
         })
 
-      val grouped: KGroupedStreamJ[String, String] = lowered.groupBy {
-        (_: String, v: String) => v
-      }
+      val grouped: KGroupedStreamJ[String, String] = lowered.groupBy((_: String, v: String) => v)
 
       grouped.count()
 
