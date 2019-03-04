@@ -138,16 +138,13 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     }
 
     public static <K, V1, V2, VR> KTableKTableJoinNodeBuilder<K, V1, V2, VR> kTableKTableJoinNodeBuilder(final InternalStreamsBuilder builder) {
-        return new KTableKTableJoinNodeBuilder<>(builder);
+        return new KTableKTableJoinNodeBuilder<>();
     }
 
     public static final class KTableKTableJoinNodeBuilder<K, V1, V2, VR> {
-
-        private final InternalStreamsBuilder builder;
         private String nodeName;
         private ProcessorParameters<K, Change<V1>> joinThisProcessorParameters;
         private ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters;
-        private ValueJoiner<? super Change<V1>, ? super Change<V2>, ? extends Change<VR>> valueJoiner;
         private String thisJoinSide;
         private String otherJoinSide;
         private Serde<K> keySerde;
@@ -157,17 +154,11 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         private String queryableStoreName;
         private StoreBuilder<KeyValueStore<K, VR>> storeBuilder;
 
-        private KTableKTableJoinNodeBuilder(final InternalStreamsBuilder builder) {
-            this.builder = builder;
+        private KTableKTableJoinNodeBuilder() {
         }
 
         public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withNodeName(final String nodeName) {
             this.nodeName = nodeName;
-            return this;
-        }
-
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withValueJoiner(final ValueJoiner<? super Change<V1>, ? super Change<V2>, ? extends Change<VR>> valueJoiner) {
-            this.valueJoiner = valueJoiner;
             return this;
         }
 
@@ -224,7 +215,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         @SuppressWarnings("unchecked")
         public KTableKTableJoinNode<K, V1, V2, VR> build() {
             return new KTableKTableJoinNode<>(nodeName,
-                valueJoiner,
+                null,
                 joinThisProcessorParameters,
                 joinOtherProcessorParameters,
                 new ProcessorParameters<>(
