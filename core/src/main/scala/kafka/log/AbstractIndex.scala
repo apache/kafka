@@ -239,8 +239,10 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
    *         not exist
    */
   def deleteIfExists(): Boolean = {
-    closeHandler()
-    Files.deleteIfExists(file.toPath)
+    maybeLock(lock) {
+      closeHandler()
+      Files.deleteIfExists(file.toPath)
+    };
   }
 
   /**

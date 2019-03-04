@@ -219,10 +219,19 @@ public class FileRecords extends AbstractRecords implements Closeable {
      *          because it did not exist
      */
     public boolean deleteIfExists() throws IOException {
-        if (channel != null) {
-            Utils.closeQuietly(channel, "FileChannel");
+        if (OperatingSystem.IS_WINDOWS) {
+            synchronized (mutex) {
+                if (channel != null) {
+                    Utils.closeQuietly(channel, "FileChannel");
+                }
+                return Files.deleteIfExists(file.toPath());
+            }
+        } else {
+            if (channel != null) {
+                Utils.closeQuietly(channel, "FileChannel");
+            }
+            return Files.deleteIfExists(file.toPath());
         }
-        return Files.deleteIfExists(file.toPath());
     }
 
     /**
