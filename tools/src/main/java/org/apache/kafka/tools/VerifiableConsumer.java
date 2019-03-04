@@ -45,6 +45,7 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -111,7 +112,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         this.useAutoCommit = useAutoCommit;
         this.useAsyncCommit = useAsyncCommit;
         this.verbose = verbose;
-        this.log = (new LogContext("[VerifiableConsumer] ")).logger(VerifiableConsumer.class);
+        this.log = LoggerFactory.getLogger(VerifiableConsumer.class);
         addKafkaSerializerModule();
     }
 
