@@ -21,6 +21,8 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.data.Schema;
@@ -79,6 +81,7 @@ import static org.junit.Assert.assertTrue;
 @RunWith(PowerMockRunner.class)
 public class WorkerSourceTaskTest extends ThreadedTest {
     private static final String TOPIC = "topic";
+    private static final Headers HEADERS = new RecordHeaders();
     private static final Map<String, byte[]> PARTITION = Collections.singletonMap("key", "partition".getBytes());
     private static final Map<String, Integer> OFFSET = Collections.singletonMap("key", 12);
 
@@ -764,12 +767,12 @@ public class WorkerSourceTaskTest extends ThreadedTest {
     }
 
     private void expectConvertKeyValue(boolean anyTimes) {
-        IExpectationSetters<byte[]> convertKeyExpect = EasyMock.expect(keyConverter.fromConnectData(TOPIC, KEY_SCHEMA, KEY));
+        IExpectationSetters<byte[]> convertKeyExpect = EasyMock.expect(keyConverter.fromConnectData(TOPIC, HEADERS, KEY_SCHEMA, KEY));
         if (anyTimes)
             convertKeyExpect.andStubReturn(SERIALIZED_KEY);
         else
             convertKeyExpect.andReturn(SERIALIZED_KEY);
-        IExpectationSetters<byte[]> convertValueExpect = EasyMock.expect(valueConverter.fromConnectData(TOPIC, RECORD_SCHEMA, RECORD));
+        IExpectationSetters<byte[]> convertValueExpect = EasyMock.expect(valueConverter.fromConnectData(TOPIC, HEADERS, RECORD_SCHEMA, RECORD));
         if (anyTimes)
             convertValueExpect.andStubReturn(SERIALIZED_RECORD);
         else
