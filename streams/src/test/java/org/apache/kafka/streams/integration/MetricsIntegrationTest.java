@@ -149,7 +149,7 @@ public class MetricsIntegrationTest {
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
 
-    // Stream names
+    // topic names
     private static final String STREAM_INPUT = "STREAM_INPUT";
     private static final String STREAM_OUTPUT_1 = "STREAM_OUTPUT_1";
     private static final String STREAM_OUTPUT_2 = "STREAM_OUTPUT_2";
