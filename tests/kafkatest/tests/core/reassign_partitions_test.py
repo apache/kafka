@@ -129,9 +129,9 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         time.sleep(6)
 
     @cluster(num_nodes=8)
-    @matrix(bounce_brokers=[True, False],
-            reassign_from_offset_zero=[True, False])
-    def test_reassign_partitions(self, bounce_brokers, reassign_from_offset_zero):
+    #@matrix(bounce_brokers=[True, False],
+    #        reassign_from_offset_zero=[True, False])
+    def test_reassign_partitions(self): #, bounce_brokers, reassign_from_offset_zero):
         """Reassign partitions tests.
         Setup: 1 zk, 4 kafka nodes, 1 topic with partitions=20, replication-factor=3,
         and min.insync.replicas=3
@@ -144,17 +144,17 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
             - Validate that every acked message was consumed
             """
         self.kafka.start()
-        if not reassign_from_offset_zero:
+        if not False:
             self.move_start_offset()
 
         self.producer = VerifiableProducer(self.test_context, self.num_producers,
                                            self.kafka, self.topic,
                                            throughput=self.producer_throughput,
-                                           enable_idempotence=True)
+                                           enable_idempotence=True, log_level="DEBUG")
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers,
                                         self.kafka, self.topic,
                                         consumer_timeout_ms=60000,
                                         message_validator=is_int)
 
         self.enable_idempotence=True
-        self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(bounce_brokers))
+        self.run_produce_consume_validate(core_test_action=lambda: self.reassign_partitions(False))
