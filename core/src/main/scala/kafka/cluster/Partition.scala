@@ -222,18 +222,26 @@ class Partition(val topic: String,
   // from its partitionStates if this method returns true
   def maybeReplaceCurrentWithFutureReplica(): Boolean = {
     val replica = getReplica().get
-    val futureReplica = getReplica(Request.FutureLocalReplicaId).get
-    if (replica.logEndOffset == futureReplica.logEndOffset) {
+    val futureReplicaLEO = getReplica(Request.FutureLocalReplicaId).map(_.logEndOffset.messageOffset)
+    if (futureReplicaLEO.contains(replica.logEndOffset.messageOffset)) {
       // The write lock is needed to make sure that while ReplicaAlterDirThread checks the LEO of the
       // current replica, no other thread can update LEO of the current replica via log truncation or log append operation.
       inWriteLock(leaderIsrUpdateLock) {
-        if (replica.logEndOffset == futureReplica.logEndOffset) {
-          logManager.replaceCurrentWithFutureLog(topicPartition)
-          replica.log = futureReplica.log
-          futureReplica.log = None
-          allReplicasMap.remove(Request.FutureLocalReplicaId)
-          true
-        } else false
+        getReplica(Request.FutureLocalReplicaId) match {
+          case Some(futureReplica) =>
+            if (replica.logEndOffset.messageOffset == futureReplica.logEndOffset.messageOffset) {
+              logManager.replaceCurrentWithFutureLog(topicPartition)
+              replica.log = futureReplica.log
+              futureReplica.log = None
+              allReplicasMap.remove(Request.FutureLocalReplicaId)
+              true
+            } else false
+          case None =>
+            // Future replica is removed by a non-ReplicaAlterLogDirsThread before this method is called
+            // In this case the partition should have been removed from state of the ReplicaAlterLogDirsThread
+            // Return false so that ReplicaAlterLogDirsThread does not have to remove this partition from the state again to avoid race condition
+            false
+        }
       }
     } else false
   }
