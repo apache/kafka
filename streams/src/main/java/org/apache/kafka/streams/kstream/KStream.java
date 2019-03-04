@@ -513,7 +513,9 @@ public interface KStream<K, V> {
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * The {@link Transformer} must return a {@link KeyValue} type in {@link Transformer#transform(Object, Object)
-     * transform(K, V)} and {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate(long)}.
+     * transform()} and {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}.
+     * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
+     * in which case no record is emitted.
      * <pre>{@code
      * new TransformerSupplier() {
      *     Transformer get() {
@@ -548,16 +550,16 @@ public interface KStream<K, V> {
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...)})
      * <p>
      * Note that it is possible to emit multiple records for each input record by using
-     * {@link ProcessorContext#forward(Object, Object) context#forward(K, V)} in {@link Transformer#transform(K, V)}
-     * and {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate(long)}.
+     * {@link ProcessorContext#forward(Object, Object) context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
      * detected at runtime.
-     * Not using {@link ProcessorContext#forward(Object, Object) context#forward(K, V)}
-     * in {@link Transformer#transform(K, V)} and {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)}
-     * ensures type-safety at compile-time.
-     * If in {@link Transformer#transform(K, V)} multiple records need to be emitted for each input record,
-     * it is recommended to use {@link #flatTransform(TransformerSupplier, String...)} to ensure type-safety at
-     * compile-time.
+     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
+     * for each input record, it is recommended to use {@link #flatTransform(TransformerSupplier, String...)
+     * flatTransform()}.
      *
      * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
      * @param stateStoreNames     the names of the state stores used by the processor
@@ -598,11 +600,11 @@ public interface KStream<K, V> {
      * }</pre>
      * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)
-     * punctuate(long)}, a schedule must be registered.
-     * The {@link Transformer} must return an {@link Iterable} type (e.g., any {@link java.util.Collection} type)
-     * in {@link Transformer#transform(K, V) transform(K, V)}.
-     * The return value of {@link Transformer#transform(K, V) transform(K, V)} may be {@code null}, which is equal to an
-     * empty {@link Iterable}, i.e., no records are emitted.
+     * punctuate()}, a schedule must be registered.
+     * The {@link Transformer} must return an {@link java.lang.Iterable} type (e.g., any {@link java.util.Collection}
+     * type) in {@link Transformer#transform(Object, Object) transform()}.
+     * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
+     * which is equal to returning an empty {@link java.lang.Iterable Iterable}, i.e., no records are emitted.
      * <pre>{@code
      * new TransformerSupplier() {
      *     Transformer get() {
@@ -642,13 +644,13 @@ public interface KStream<K, V> {
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...)})
      * <p>
      * Note that it is possible to emit records by using {@link ProcessorContext#forward(Object, Object)
-     * context#forward(K, V)} in {@link Transformer#transform(K, V)} and
-     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)}.
+     * context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
      * detected at runtime.
-     * Not using {@link ProcessorContext#forward(Object, Object) context#forward(K, V)}
-     * in {@link Transformer#transform(K, V)} and {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)}
-     * ensures type-safety at compile-time.
+     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      *
      * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
      * @param stateStoreNames     the names of the state stores used by the processor
