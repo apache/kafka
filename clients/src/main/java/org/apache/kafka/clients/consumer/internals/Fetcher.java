@@ -93,6 +93,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -708,15 +709,14 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> groupListOffsetRequests(
             Map<TopicPartition, Long> timestampsToSearch,
             Set<TopicPartition> partitionsToRetry) {
-        return groupOffsetLookupsByNode(timestampsToSearch, partitionsToRetry,
-            timestamp -> new ListOffsetRequest.PartitionData(timestamp, Optional.empty()));
+        return groupOffsetLookupsByNode(timestampsToSearch, partitionsToRetry, ListOffsetRequest.PartitionData::new);
     }
 
-    private <QueryType, PartitionData> Map<Node, Map<TopicPartition, PartitionData>> groupOffsetLookupsByNode(
+    private <QueryType> Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> groupOffsetLookupsByNode(
             Map<TopicPartition, QueryType> partitionsToSearch,
             Set<TopicPartition> partitionsToRetry,
-            Function<QueryType, PartitionData> buildPartitionData) {
-        final Map<Node, Map<TopicPartition, PartitionData>> groupedPartitions = new HashMap<>();
+            BiFunction<QueryType, Optional<Integer>, ListOffsetRequest.PartitionData> buildPartitionData) {
+        final Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> groupedPartitions = new HashMap<>();
         for (Map.Entry<TopicPartition, QueryType> entry: partitionsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
             Optional<MetadataCache.PartitionInfoAndEpoch> currentInfo = metadata.partitionInfoIfCurrent(tp);
@@ -741,9 +741,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 partitionsToRetry.add(tp);
             } else {
                 Node node = currentInfo.get().partitionInfo().leader();
-                Map<TopicPartition, PartitionData> topicData = groupedPartitions
+                Map<TopicPartition, ListOffsetRequest.PartitionData> topicData = groupedPartitions
                         .computeIfAbsent(node, n -> new HashMap<>());
-                PartitionData partitionData = buildPartitionData.apply(entry.getValue());
+                ListOffsetRequest.PartitionData partitionData = buildPartitionData.apply(
+                        entry.getValue(), Optional.of(currentInfo.get().epoch()));
                 topicData.put(entry.getKey(), partitionData);
             }
         }
