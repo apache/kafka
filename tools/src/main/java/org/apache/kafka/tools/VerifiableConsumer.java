@@ -84,6 +84,8 @@ import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
  */
 public class VerifiableConsumer implements Closeable, OffsetCommitCallback, ConsumerRebalanceListener {
 
+    private static final Logger log = LoggerFactory.getLogger(VerifiableConsumer.class);
+
     private final ObjectMapper mapper = new ObjectMapper();
     private final PrintStream out;
     private final KafkaConsumer<String, String> consumer;
@@ -95,7 +97,6 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     private int consumedMessages = 0;
 
     private CountDownLatch shutdownLatch = new CountDownLatch(1);
-    private final Logger log;
 
     public VerifiableConsumer(KafkaConsumer<String, String> consumer,
                               PrintStream out,
@@ -111,7 +112,6 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         this.useAutoCommit = useAutoCommit;
         this.useAsyncCommit = useAsyncCommit;
         this.verbose = verbose;
-        this.log = LoggerFactory.getLogger(VerifiableConsumer.class);
         addKafkaSerializerModule();
     }
 
