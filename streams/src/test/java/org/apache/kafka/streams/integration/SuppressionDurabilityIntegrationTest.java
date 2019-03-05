@@ -92,11 +92,6 @@ public class SuppressionDurabilityIntegrationTest {
         this.eosEnabled = eosEnabled;
     }
 
-    @Parameters(name = "{index}: eosEnabled={0}")
-    public static Collection<Object[]> parameters() {
-        return Arrays.asList(new Object[] {false}, new Object[] {true});
-    }
-
     private KTable<String, Long> buildCountsTable(final String input, final StreamsBuilder builder) {
         return builder
             .table(
