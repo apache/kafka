@@ -35,6 +35,7 @@ import org.junit.experimental.categories.Category
  * Note: In the current project settings SAM type conversion is turned off as it's experimental in Scala 2.11.
  * Hence the native Java API based version is more verbose.
  */
+//noinspection ConvertExpressionToSAM
 @Category(Array(classOf[IntegrationTest]))
 class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJoinScalaIntegrationTestBase {
 
@@ -169,7 +170,7 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
       .groupByKey(Grouped.`with`[String, JLong](Serdes.String, Serdes.JavaLong))
       .reduce {
         new Reducer[JLong] {
-          def apply(v1: JLong, v2: JLong) = v1 + v2
+          def apply(v1: JLong, v2: JLong): JLong = v1 + v2
         }
       }
 

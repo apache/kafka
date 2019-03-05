@@ -46,6 +46,7 @@ import _root_.scala.collection.JavaConverters._
 /**
  * Test suite that verifies that the topology built by the Java and Scala APIs match.
  */
+//noinspection ConvertExpressionToSAM due to 2.11 build
 class TopologyTest extends JUnitSuite {
 
   private val inputTopic = "input-topic"
@@ -193,7 +194,7 @@ class TopologyTest extends JUnitSuite {
         .groupByKey(Grouped.`with`[String, JLong])
         .reduce {
           new Reducer[JLong] {
-            def apply(v1: JLong, v2: JLong) = v1 + v2
+            def apply(v1: JLong, v2: JLong): JLong = v1 + v2
           }
         }
 
@@ -214,7 +215,6 @@ class TopologyTest extends JUnitSuite {
       val streamBuilder = new StreamsBuilder
       val textLines = streamBuilder.stream[String, String](inputTopic)
 
-      //noinspection ConvertExpressionToSAM due to 2.11 build
       val _: KTable[String, Long] =
         textLines
           .transform(new TransformerSupplier[String, String, KeyValue[String, String]] {
