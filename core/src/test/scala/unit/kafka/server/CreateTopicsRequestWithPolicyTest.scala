@@ -32,8 +32,8 @@ import scala.collection.JavaConverters._
 class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest {
   import CreateTopicsRequestWithPolicyTest._
 
-  override def propertyOverrides(properties: Properties): Unit = {
-    super.propertyOverrides(properties)
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
+    super.brokerPropertyOverrides(properties)
     properties.put(KafkaConfig.CreateTopicPolicyClassNameProp, classOf[Policy].getName)
   }
 

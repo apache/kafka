@@ -38,12 +38,12 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   override def serverCount: Int = 3
 
   // If required, override properties by mutating the passed Properties object
-  protected def propertyOverrides(properties: Properties) {}
+  protected def brokerPropertyOverrides(properties: Properties) {}
 
   override def modifyConfigs(props: Seq[Properties]): Unit = {
     props.foreach { p =>
       p.put(KafkaConfig.ControlledShutdownEnableProp, "false")
-      propertyOverrides(p)
+      brokerPropertyOverrides(p)
     }
   }
 

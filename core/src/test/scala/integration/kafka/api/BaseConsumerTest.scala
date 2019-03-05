@@ -59,7 +59,7 @@ abstract class BaseConsumerTest extends BaseRequestTest {
   this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
   this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
 
-  override protected def propertyOverrides(properties: Properties): Unit = {
+  override protected def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
     properties.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
     properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
