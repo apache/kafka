@@ -260,6 +260,7 @@ class TopologyTest extends JUnitSuite {
         }
       }
 
+      // word counts
       grouped.count()
 
       streamBuilder.build().describe()
