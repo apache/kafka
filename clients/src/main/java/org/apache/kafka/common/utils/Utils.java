@@ -1044,10 +1044,10 @@ public final class Utils {
             Function<K1, K2> keyMapper,
             Function<V1, V2> valueMapper) {
         return map.entrySet().stream().collect(
-                Collectors.toMap(
-                        entry -> keyMapper.apply(entry.getKey()),
-                        entry -> valueMapper.apply(entry.getValue())
-                )
+            Collectors.toMap(
+                entry -> keyMapper.apply(entry.getKey()),
+                entry -> valueMapper.apply(entry.getValue())
+            )
         );
     }
 }
