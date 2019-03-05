@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -214,6 +215,19 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
         }
 
+        // now that we've sent everything, we'll send some final records with a timestamp high enough to flush out
+        // all suppressed records.
+        final List<PartitionInfo> partitions = producer.partitionsFor("data");
+        for (final PartitionInfo partition : partitions) {
+            producer.send(new ProducerRecord<>(
+                partition.topic(),
+                partition.partition(),
+                System.currentTimeMillis() + Duration.ofDays(2).toMillis(),
+                stringSerde.serializer().serialize("", "flush"),
+                intSerde.serializer().serialize("", 0)
+            ));
+        }
+
         producer.close();
         return Collections.unmodifiableMap(allData);
     }
@@ -262,7 +276,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class);
 
         final KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props);
-        final List<TopicPartition> partitions = getAllPartitions(consumer, "echo", "max", "min", "dif", "sum", "cnt", "avg", "wcnt", "tagg");
+        final List<TopicPartition> partitions = getAllPartitions(consumer, "echo", "max", "min", "min-suppressed", "dif", "sum", "cnt", "avg", "wcnt", "tagg");
         consumer.assign(partitions);
         consumer.seekToBeginning(partitions);
 
@@ -271,6 +285,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
 
         final HashMap<String, Integer> max = new HashMap<>();
         final HashMap<String, Integer> min = new HashMap<>();
+        final HashMap<String, List<Integer>> minSuppressed = new HashMap<>();
         final HashMap<String, Integer> dif = new HashMap<>();
         final HashMap<String, Long> sum = new HashMap<>();
         final HashMap<String, Long> cnt = new HashMap<>();
@@ -290,6 +305,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
             final ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(500));
             if (records.isEmpty() && recordsProcessed >= recordsGenerated) {
                 if (verifyMin(min, allData, false)
+                    && verifyMinSuppressed(minSuppressed, allData, false)
                     && verifyMax(max, allData, false)
                     && verifyDif(dif, allData, false)
                     && verifySum(sum, allData, false)
@@ -315,6 +331,10 @@ public class SmokeTestDriver extends SmokeTestUtil {
                             break;
                         case "min":
                             min.put(key, intSerde.deserializer().deserialize("", record.value()));
+                            break;
+                        case "min-suppressed":
+                            minSuppressed.computeIfAbsent(key, k -> new LinkedList<>())
+                                         .add(intSerde.deserializer().deserialize("", record.value()));
                             break;
                         case "max":
                             max.put(key, intSerde.deserializer().deserialize("", record.value()));
@@ -372,6 +392,7 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
 
         success &= verifyMin(min, allData, true);
+        success &= verifyMinSuppressed(minSuppressed, allData, true);
         success &= verifyMax(max, allData, true);
         success &= verifyDif(dif, allData, true);
         success &= verifySum(sum, allData, true);
@@ -410,6 +431,41 @@ public class SmokeTestDriver extends SmokeTestUtil {
             }
         }
         return true;
+    }
+
+    private static boolean verifyMinSuppressed(final Map<String, List<Integer>> map,
+                                               final Map<String, Set<Integer>> allData,
+                                               final boolean print) {
+        if (map.isEmpty()) {
+            maybePrint(print, "min-suppressed is empty");
+            return false;
+        } else {
+            maybePrint(print, "verifying min-suppressed");
+
+            if (map.size() != allData.size()) {
+                maybePrint(print, "fail: resultCount=" + map.size() + " expectedCount=" + allData.size());
+                return false;
+            }
+            for (final Map.Entry<String, List<Integer>> entry : map.entrySet()) {
+                final String key = entry.getKey();
+                final String unwindowedKey = key.substring(1, key.length() - 1).replaceAll("@.*", "");
+                final int expected = getMin(unwindowedKey);
+                if (entry.getValue().size() != 1) {
+                    maybePrint(print, "fail: key=" + entry.getKey() + " non-unique value: " + entry.getValue());
+                    return false;
+                } else if (expected != entry.getValue().get(0)) {
+                    maybePrint(print, "fail: key=" + entry.getKey() + " min=" + entry.getValue().get(0) + " expected=" + expected);
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    private static void maybePrint(final boolean print, final String s) {
+        if (print) {
+            System.out.println(s);
+        }
     }
 
     private static boolean verifyMax(final Map<String, Integer> map, final Map<String, Set<Integer>> allData, final boolean print) {
