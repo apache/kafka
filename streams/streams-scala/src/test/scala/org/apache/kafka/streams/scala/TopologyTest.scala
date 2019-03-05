@@ -147,6 +147,7 @@ class TopologyTest extends JUnitSuite {
 
       val userRegionsTable: KTable[String, String] = builder.table(userRegionsTopic)
 
+      // clicks per region
       userClicksStream
         .leftJoin(userRegionsTable)((clicks, region) => (if (region == null) "UNKNOWN" else region, clicks))
         .map((_, regionWithClicks) => regionWithClicks)
