@@ -62,6 +62,9 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.Condition;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 
 public class RoundTripWorker implements TaskWorker {
     private static final int THROTTLE_PERIOD_MS = 100;
@@ -81,6 +84,10 @@ public class RoundTripWorker implements TaskWorker {
     private final RoundTripWorkloadSpec spec;
 
     private final AtomicBoolean running = new AtomicBoolean(false);
+
+    private final Lock lock = new ReentrantLock();
+
+    private final Condition unackedSendsAreZero = lock.newCondition();
 
     private ScheduledExecutorService executor;
 
@@ -248,7 +255,8 @@ public class RoundTripWorker implements TaskWorker {
                         spec.valueGenerator().generate(messageIndex));
                     producer.send(record, (metadata, exception) -> {
                         if (exception == null) {
-                            unackedSends.decrementAndGet();
+                            if (unackedSends.decrementAndGet() <= 0)
+                                unackedSendsAreZero.signalAll();
                         } else {
                             log.info("{}: Got exception when sending message {}: {}",
                                 id, messageIndex, exception.getMessage());
@@ -332,6 +340,7 @@ public class RoundTripWorker implements TaskWorker {
                 long lastLogTimeMs = Time.SYSTEM.milliseconds();
                 while (true) {
                     try {
+                        lock.lock();
                         pollInvoked++;
                         ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(50));
                         for (Iterator<ConsumerRecord<byte[], byte[]>> iter = records.iterator(); iter.hasNext(); ) {
@@ -344,7 +353,7 @@ public class RoundTripWorker implements TaskWorker {
                                     log.info("{}: Consumer received the full count of {} unique messages.  " +
                                         "Waiting for all sends to be acked...", id, spec.maxMessages());
                                     while (unackedSends.get() > 0)
-                                        Thread.sleep(100);
+                                        unackedSendsAreZero.await();
                                     log.info("{}: all sends have been acked.", id);
                                     new StatusUpdater().update();
                                     doneFuture.complete("");
@@ -361,6 +370,8 @@ public class RoundTripWorker implements TaskWorker {
                         log.debug("{}: Consumer got WakeupException", id, e);
                     } catch (TimeoutException e) {
                         log.debug("{}: Consumer got TimeoutException", id, e);
+                    } finally {
+                        lock.unlock();
                     }
                 }
             } catch (Throwable e) {
