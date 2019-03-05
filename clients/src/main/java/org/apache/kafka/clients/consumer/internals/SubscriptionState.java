@@ -320,8 +320,8 @@ public class SubscriptionState {
         assignedState(tp).position(position);
     }
 
-    public boolean validate(TopicPartition tp, Metadata.LeaderAndEpoch leaderAndEpoch) {
-        return assignedState(tp).validate(leaderAndEpoch);
+    public boolean needsValidation(TopicPartition tp, Metadata.LeaderAndEpoch leaderAndEpoch) {
+        return assignedState(tp).needsValidation(leaderAndEpoch);
     }
 
     public void validate(TopicPartition tp) {
@@ -524,7 +524,7 @@ public class SubscriptionState {
             this.nextRetryTimeMs = null;
         }
 
-        private boolean validate(Metadata.LeaderAndEpoch currentLeader) {
+        private boolean needsValidation(Metadata.LeaderAndEpoch currentLeader) {
             if (!hasPosition())
                 throw new IllegalStateException("Cannot validate offset while partition is in state " + state);
 

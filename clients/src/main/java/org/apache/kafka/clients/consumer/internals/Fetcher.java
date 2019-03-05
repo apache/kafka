@@ -720,7 +720,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (Map.Entry<TopicPartition, QueryType> entry: partitionsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
             Optional<MetadataCache.PartitionInfoAndEpoch> currentInfo = metadata.partitionInfoIfCurrent(tp);
-            if (currentInfo.isPresent()) {
+            if (!currentInfo.isPresent()) {
                 metadata.add(tp.topic());
                 log.debug("Leader for partition {} is unknown for fetching offset", tp);
                 metadata.requestUpdate();
@@ -918,9 +918,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> partitionsToValidate = new LinkedHashMap<>();
 
         for (TopicPartition partition : fetchablePartitions()) {
-            Optional<MetadataCache.PartitionInfoAndEpoch> partitionInfoAndEpoch =
-                    metadata.partitionInfoIfCurrent(partition);
-            Node node = partitionInfoAndEpoch
+            Node node = metadata.partitionInfoIfCurrent(partition)
                     .map(MetadataCache.PartitionInfoAndEpoch::partitionInfo)
                     .map(PartitionInfo::leader)
                     .orElse(null);
@@ -939,7 +937,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 Metadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
                 SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
                 if (!position.safeToFetchFrom(leaderAndEpoch)) {
-                    if (!subscriptions.validate(partition, leaderAndEpoch)) {
+                    if (!subscriptions.needsValidation(partition, leaderAndEpoch)) {
                         partitionsToValidate.put(partition, new OffsetsForLeaderEpochRequest.PartitionData(
                                 position.currentLeader.epoch, position.lastFetchEpoch.get())); // TODO clean this up
                         continue;
@@ -969,49 +967,14 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
 
         if (!partitionsToValidate.isEmpty()) {
+            // Send off the OFFSETS_FOR_LEADER requests asynchronously
             Map<Node, Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData>> regrouped =
-                    partitionsToValidate.entrySet()
-                            .stream()
-                            .collect(Collectors.groupingBy(entry -> metadata.fetch().leaderFor(entry.getKey()),
-                                    Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+                    groupOffsetForLeaderRequestByNode(partitionsToValidate);
 
             regrouped.forEach((node, dataMap) -> {
-                // Batch requests per node
                 OffsetsForLeaderEpochRequest.Builder builder = new OffsetsForLeaderEpochRequest.Builder(
                         ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), dataMap);
-                client.send(node, builder).compose(new RequestFutureAdapter<ClientResponse, OffsetsForLeaderEpochResponse>() {
-                    @Override
-                    public void onSuccess(ClientResponse response, RequestFuture<OffsetsForLeaderEpochResponse> future) {
-                        OffsetsForLeaderEpochResponse ofler = (OffsetsForLeaderEpochResponse) response.responseBody();
-                        log.trace("Received OffsetsForLeaderEpochResponse {} from broker {}", ofler, node);
-
-                        Map<TopicPartition, OffsetAndMetadata> truncatedPartitions = new HashMap<>();
-                        ofler.responses().forEach((topicPartition, epochEndOffset) -> {
-                            Metadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
-                            Metadata.LeaderAndEpoch newLeaderAndEpoch = new Metadata.LeaderAndEpoch(
-                                    leaderAndEpoch.leader, Optional.of(epochEndOffset.leaderEpoch()));
-                            if (leaderAndEpoch.isObsoletedBy(newLeaderAndEpoch)) {
-                                // The epoch has changed, check for truncation
-                                SubscriptionState.FetchPosition currentPosition = subscriptions.position(topicPartition);
-                                if (epochEndOffset.endOffset() >= currentPosition.offset) {
-                                    // Nothing wrong here, just mark the partition as valid
-                                    subscriptions.validate(topicPartition);
-                                } else {
-                                    // Try to reset the offset
-                                    if (subscriptions.hasDefaultOffsetResetPolicy()) {
-                                        log.info("Truncation detected for partition {}, resetting offset", topicPartition);
-                                        subscriptions.requestOffsetReset(topicPartition);
-                                    } else {
-                                        truncatedPartitions.put(topicPartition, new OffsetAndMetadata(currentPosition.offset, currentPosition.currentLeader.epoch, null));
-                                    }
-                                }
-                            }
-                        });
-                        if (!truncatedPartitions.isEmpty()) {
-                            throw new LogTruncationException(truncatedPartitions);
-                        }
-                    }
-                });
+                sendOffsetForLeaderRequest(node, builder);
             });
         }
 
@@ -1020,6 +983,53 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             reqs.put(entry.getKey(), entry.getValue().build());
         }
         return reqs;
+    }
+
+    private Map<Node, Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData>> groupOffsetForLeaderRequestByNode(
+            Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> requestsByPartition) {
+        return requestsByPartition.entrySet()
+                .stream()
+                .collect(Collectors.groupingBy(entry -> metadata.fetch().leaderFor(entry.getKey()),
+                        Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+
+    }
+
+    private RequestFuture<OffsetsForLeaderEpochResponse> sendOffsetForLeaderRequest(
+            Node node, OffsetsForLeaderEpochRequest.Builder builder) {
+
+        return client.send(node, builder).compose(new RequestFutureAdapter<ClientResponse, OffsetsForLeaderEpochResponse>() {
+            @Override
+            public void onSuccess(ClientResponse response, RequestFuture<OffsetsForLeaderEpochResponse> future) {
+                OffsetsForLeaderEpochResponse ofler = (OffsetsForLeaderEpochResponse) response.responseBody();
+                log.trace("Received OffsetsForLeaderEpochResponse {} from broker {}", ofler, node);
+
+                Map<TopicPartition, OffsetAndMetadata> truncatedPartitions = new HashMap<>();
+                ofler.responses().forEach((topicPartition, epochEndOffset) -> {
+                    Metadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
+                    Metadata.LeaderAndEpoch newLeaderAndEpoch = new Metadata.LeaderAndEpoch(
+                            leaderAndEpoch.leader, Optional.of(epochEndOffset.leaderEpoch()));
+                    if (leaderAndEpoch.isObsoletedBy(newLeaderAndEpoch)) {
+                        // The epoch has changed, check for truncation
+                        SubscriptionState.FetchPosition currentPosition = subscriptions.position(topicPartition);
+                        if (epochEndOffset.endOffset() >= currentPosition.offset) {
+                            // Nothing wrong here, just mark the partition as valid
+                            subscriptions.validate(topicPartition);
+                        } else {
+                            // Try to reset the offset
+                            if (subscriptions.hasDefaultOffsetResetPolicy()) {
+                                log.info("Truncation detected for partition {}, resetting offset", topicPartition);
+                                subscriptions.requestOffsetReset(topicPartition);
+                            } else {
+                                truncatedPartitions.put(topicPartition, new OffsetAndMetadata(currentPosition.offset, currentPosition.currentLeader.epoch, null));
+                            }
+                        }
+                    }
+                });
+                if (!truncatedPartitions.isEmpty()) {
+                    throw new LogTruncationException(truncatedPartitions);
+                }
+            }
+        });
     }
 
     /**
