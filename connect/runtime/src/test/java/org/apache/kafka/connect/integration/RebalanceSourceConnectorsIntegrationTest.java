@@ -57,9 +57,9 @@ import static org.junit.Assert.assertTrue;
  * the source topic-partitions, and demonstrates how to check the overall behavior of the pipeline.
  */
 @Category(IntegrationTest.class)
-public class RebalanceSourceConnectors {
+public class RebalanceSourceConnectorsIntegrationTest {
 
-    private static final Logger log = LoggerFactory.getLogger(RebalanceSourceConnectors.class);
+    private static final Logger log = LoggerFactory.getLogger(RebalanceSourceConnectorsIntegrationTest.class);
 
     private static final int NUM_RECORDS_PRODUCED = 2000;
     private static final int NUM_TOPIC_PARTITIONS = 3;
