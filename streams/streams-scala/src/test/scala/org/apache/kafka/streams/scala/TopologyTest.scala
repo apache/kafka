@@ -19,9 +19,18 @@
  */
 package org.apache.kafka.streams.scala
 
+import java.time.Duration
+import java.util
+import java.util.{Locale, Properties}
 import java.util.regex.Pattern
 
+import org.apache.kafka.common.serialization.{Serdes => SerdesJ}
+import org.apache.kafka.common.utils.Bytes
+import org.apache.kafka.streams.kstream.{Joined => JoinedJ, Materialized => MaterializedJ}
 import org.apache.kafka.streams.kstream.{
+  Aggregator,
+  Initializer,
+  JoinWindows,
   KeyValueMapper,
   Reducer,
   Transformer,
@@ -32,10 +41,11 @@ import org.apache.kafka.streams.kstream.{
   KStream => KStreamJ,
   KTable => KTableJ
 }
-import org.apache.kafka.streams.processor.ProcessorContext
+import org.apache.kafka.streams.processor.{AbstractProcessor, ProcessorContext, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala.kstream._
+import org.apache.kafka.streams.state.KeyValueStore
 import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, _}
 import org.junit.Assert._
 import org.junit._
@@ -267,5 +277,127 @@ class TopologyTest extends JUnitSuite {
 
     // should match
     assertEquals(getTopologyScala, getTopologyJava)
+  }
+
+  @Test def shouldBuildIdenticalTopologyInJavaNScalaProperties(): Unit = {
+
+    val props = new Properties()
+    props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION, StreamsConfig.OPTIMIZE)
+
+    val COUNT_TOPIC = "countTopic"
+    val AGGREGATION_TOPIC = "aggregationTopic"
+    val REDUCE_TOPIC = "reduceTopic"
+    val JOINED_TOPIC = "joinedTopic"
+
+    // build the Scala topology
+    def getTopologyScala: TopologyDescription = {
+
+      val aggregator = (_: String, v: String, agg: Int) => agg + v.length
+      val reducer = (v1: String, v2: String) => v1 + ":" + v2
+      val processorValueCollector: util.List[String] = new util.ArrayList[String]
+
+      val builder: StreamsBuilder = new StreamsBuilder
+
+      val sourceStream: KStream[String, String] =
+        builder.stream(inputTopic)(Consumed.`with`(Serdes.String, Serdes.String))
+
+      val mappedStream: KStream[String, String] =
+        sourceStream.map((k: String, v: String) => (k.toUpperCase(Locale.getDefault), v))
+      mappedStream
+        .filter((k: String, _: String) => k == "B")
+        .mapValues((v: String) => v.toUpperCase(Locale.getDefault))
+        .process(() => new SimpleProcessor(processorValueCollector))
+
+      val countStream: KStream[String, Long] =
+        mappedStream.groupByKey.count()(Materialized.`with`(Serdes.String, Serdes.Long)).toStream
+      countStream.to(COUNT_TOPIC)(Produced.`with`(Serdes.String, Serdes.Long))
+
+      mappedStream.groupByKey
+        .aggregate(0)(aggregator)(Materialized.`with`(Serdes.String, Serdes.Integer))
+        .toStream
+        .to(AGGREGATION_TOPIC)(Produced.`with`(Serdes.String, Serdes.Integer))
+
+      // adding operators for case where the repartition node is further downstream
+      mappedStream
+        .filter((_: String, _: String) => true)
+        .peek((k: String, v: String) => System.out.println(k + ":" + v))
+        .groupByKey
+        .reduce(reducer)(Materialized.`with`(Serdes.String, Serdes.String))
+        .toStream
+        .to(REDUCE_TOPIC)(Produced.`with`(Serdes.String, Serdes.String))
+
+      mappedStream
+        .filter((k: String, _: String) => k == "A")
+        .join(countStream)((v1: String, v2: Long) => v1 + ":" + v2.toString, JoinWindows.of(Duration.ofMillis(5000)))(
+          Joined.`with`(Serdes.String, Serdes.String, Serdes.Long)
+        )
+        .to(JOINED_TOPIC)
+
+      builder.build(props).describe()
+    }
+
+    // build the Java topology
+    def getTopologyJava: TopologyDescription = {
+
+      val initializer: Initializer[Integer] = () => 0
+      val aggregator: Aggregator[String, String, Integer] = (_: String, v: String, agg: Integer) => agg + v.length
+      val reducer: Reducer[String] = (v1: String, v2: String) => v1 + ":" + v2
+      val valueMapper: ValueMapper[String, String] = (v: String) => v.toUpperCase(Locale.getDefault)
+      val processorValueCollector = new util.ArrayList[String]
+      val processorSupplier: ProcessorSupplier[String, String] = () => new SimpleProcessor(processorValueCollector)
+      val valueJoiner: ValueJoiner[String, java.lang.Long, String] = (v1: String, v2: java.lang.Long) =>
+        v1 + ":" + v2.toString
+
+      val builder = new StreamsBuilderJ
+
+      val sourceStream = builder.stream(inputTopic, Consumed.`with`(Serdes.String, Serdes.String))
+
+      val mappedStream: KStreamJ[String, String] =
+        sourceStream.map((k: String, v: String) => KeyValue.pair(k.toUpperCase(Locale.getDefault), v))
+      mappedStream
+        .filter((k: String, _: String) => k == "B")
+        .mapValues[String](valueMapper)
+        .process(processorSupplier)
+
+      val countStream = mappedStream.groupByKey
+        .count(
+          MaterializedJ.`with`[String, java.lang.Long, KeyValueStore[Bytes, Array[Byte]]](Serdes.String, SerdesJ.Long)
+        )
+        .toStream
+      countStream.to(COUNT_TOPIC, Produced.`with`(Serdes.String, SerdesJ.Long))
+
+      mappedStream.groupByKey
+        .aggregate(initializer, aggregator, MaterializedJ.`with`(Serdes.String, SerdesJ.Integer))
+        .toStream
+        .to(AGGREGATION_TOPIC, Produced.`with`(Serdes.String, SerdesJ.Integer))
+
+      // adding operators for case where the repartition node is further downstream
+      mappedStream
+        .filter((_: String, _: String) => true)
+        .peek((k: String, v: String) => System.out.println(k + ":" + v))
+        .groupByKey
+        .reduce(reducer, MaterializedJ.`with`(Serdes.String, Serdes.String))
+        .toStream
+        .to(REDUCE_TOPIC, Produced.`with`(Serdes.String, Serdes.String))
+
+      mappedStream
+        .filter((k: String, _: String) => k == "A")
+        .join(countStream,
+              valueJoiner,
+              JoinWindows.of(Duration.ofMillis(5000)),
+              JoinedJ.`with`(Serdes.String, Serdes.String, SerdesJ.Long))
+        .to(JOINED_TOPIC)
+
+      builder.build(props).describe()
+    }
+
+    // should match
+    assertEquals(getTopologyScala, getTopologyJava)
+  }
+
+  private class SimpleProcessor private[TopologyTest] (val valueList: util.List[String])
+      extends AbstractProcessor[String, String] {
+    override def process(key: String, value: String): Unit =
+      valueList.add(value)
   }
 }
