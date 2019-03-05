@@ -493,9 +493,9 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or one output record.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper)}).
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)}, the processing progress
-     * can be observed and additional periodic actions can be performed.
+     * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
+     * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
@@ -543,11 +543,12 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code transform()}.
      * <p>
      * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
      * or join) is applied to the result {@code KStream}.
-     * (cf. {@link #transformValues(ValueTransformerSupplier, String...)})
+     * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()} )
      * <p>
      * Note that it is possible to emit multiple records for each input record by using
      * {@link ProcessorContext#forward(Object, Object) context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
@@ -581,10 +582,10 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper)} for stateless record
-     * transformation).
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
-     * can be observed and additional periodic actions can be performed.
+     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()} for stateless
+     * record transformation).
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
+     * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
      * In order to assign a state, the state must be created and registered beforehand:
      * <pre>{@code
@@ -636,12 +637,12 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String)} should be performed before
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
      * {@code flatTransform()}.
      * <p>
      * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
      * or join) is applied to the result {@code KStream}.
-     * (cf. {@link #transformValues(ValueTransformerSupplier, String...)})
+     * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()})
      * <p>
      * Note that it is possible to emit records by using {@link ProcessorContext#forward(Object, Object)
      * context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
