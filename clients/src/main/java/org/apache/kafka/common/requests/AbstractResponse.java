@@ -101,7 +101,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case LEADER_AND_ISR:
                 return new LeaderAndIsrResponse(struct);
             case DESCRIBE_GROUPS:
-                return new DescribeGroupsResponse(struct);
+                return new DescribeGroupsResponse(struct, version);
             case LIST_GROUPS:
                 return new ListGroupsResponse(struct);
             case SASL_HANDSHAKE:
@@ -143,7 +143,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case DESCRIBE_LOG_DIRS:
                 return new DescribeLogDirsResponse(struct);
             case SASL_AUTHENTICATE:
-                return new SaslAuthenticateResponse(struct);
+                return new SaslAuthenticateResponse(struct, version);
             case CREATE_PARTITIONS:
                 return new CreatePartitionsResponse(struct);
             case CREATE_DELEGATION_TOKEN:

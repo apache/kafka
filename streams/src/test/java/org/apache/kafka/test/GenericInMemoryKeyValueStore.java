@@ -16,30 +16,38 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.CacheFlushListener;
+import org.apache.kafka.streams.state.internals.DelegatingPeekingKeyValueIterator;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
+
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NavigableMap;
 import java.util.TreeMap;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.internals.DelegatingPeekingKeyValueIterator;
 
 /**
  * This class is a generic version of the in-memory key-value store that is useful for testing when you
  *  need a basic KeyValueStore for arbitrary types and don't have/want to write a serde
  */
-public class GenericInMemoryKeyValueStore<K extends Comparable, V> implements KeyValueStore<K, V> {
+public class GenericInMemoryKeyValueStore<K extends Comparable, V>
+    extends WrappedStateStore<StateStore, K, V>
+    implements KeyValueStore<K, V> {
 
     private final String name;
     private final NavigableMap<K, V> map;
     private volatile boolean open = false;
 
     public GenericInMemoryKeyValueStore(final String name) {
+        // it's not really a `WrappedStateStore` so we pass `null`
+        // however, we need to implement `WrappedStateStore` to make the store usable
+        super(null);
         this.name = name;
 
         this.map = new TreeMap<>();
@@ -52,13 +60,20 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V> implements Ke
 
     @Override
     @SuppressWarnings("unchecked")
-    /* This is a "dummy" store used for testing and does not support restoring from changelog since we allow it to be serde-ignorant */
+    /* This is a "dummy" store used for testing;
+       it does not support restoring from changelog since we allow it to be serde-ignorant */
     public void init(final ProcessorContext context, final StateStore root) {
         if (root != null) {
             context.register(root, null);
         }
 
         this.open = true;
+    }
+
+    @Override
+    public boolean setFlushListener(final CacheFlushListener<K, V> listener,
+                                    final boolean sendOldValues) {
+        return false;
     }
 
     @Override

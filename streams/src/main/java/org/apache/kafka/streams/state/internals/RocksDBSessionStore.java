@@ -22,7 +22,9 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
 
-public class RocksDBSessionStore extends WrappedStateStore<SegmentedBytesStore> implements SessionStore<Bytes, byte[]> {
+public class RocksDBSessionStore
+    extends WrappedStateStore<SegmentedBytesStore, Object, Object>
+    implements SessionStore<Bytes, byte[]> {
 
     RocksDBSessionStore(final SegmentedBytesStore bytesStore) {
         super(bytesStore);

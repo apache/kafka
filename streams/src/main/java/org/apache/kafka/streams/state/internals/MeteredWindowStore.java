@@ -36,8 +36,11 @@ import java.util.Map;
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
 import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTaskAndStoreLatencyAndThroughputSensors;
 
-public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Bytes, byte[]>> implements WindowStore<K, V> {
+public class MeteredWindowStore<K, V>
+    extends WrappedStateStore<WindowStore<Bytes, byte[]>, Windowed<K>, V>
+    implements WindowStore<K, V> {
 
+    private final long windowSizeMs;
     private final String metricScope;
     private final Time time;
     private final Serde<K> keySerde;
@@ -51,11 +54,13 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Byte
     private String taskName;
 
     MeteredWindowStore(final WindowStore<Bytes, byte[]> inner,
+                       final long windowSizeMs,
                        final String metricScope,
                        final Time time,
                        final Serde<K> keySerde,
                        final Serde<V> valueSerde) {
         super(inner);
+        this.windowSizeMs = windowSizeMs;
         this.metricScope = metricScope;
         this.time = time;
         this.keySerde = keySerde;
@@ -96,10 +101,22 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Byte
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void close() {
-        super.close();
-        metrics.removeAllStoreLevelSensors(taskName, name());
+    public boolean setFlushListener(final CacheFlushListener<Windowed<K>, V> listener,
+                                    final boolean sendOldValues) {
+        final WindowStore<Bytes, byte[]> wrapped = wrapped();
+        if (wrapped instanceof CachedStateStore) {
+            return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
+                (key, newValue, oldValue, timestamp) -> listener.apply(
+                    WindowKeySchema.fromStoreKey(key, windowSizeMs, serdes.keyDeserializer(), serdes.topic()),
+                    newValue != null ? serdes.valueFrom(newValue) : null,
+                    oldValue != null ? serdes.valueFrom(oldValue) : null,
+                    timestamp
+                ),
+                sendOldValues);
+        }
+        return false;
     }
 
     @Override
@@ -121,10 +138,6 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Byte
         } finally {
             metrics.recordLatency(putTime, startNs, time.nanoseconds());
         }
-    }
-
-    private Bytes keyBytes(final K key) {
-        return Bytes.wrap(serdes.rawKey(key));
     }
 
     @Override
@@ -154,23 +167,6 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Byte
                                                 time);
     }
 
-    @Override
-    public KeyValueIterator<Windowed<K>, V> all() {
-        return new MeteredWindowedKeyValueIterator<>(wrapped().all(), fetchTime, metrics, serdes, time);
-    }
-
-    @SuppressWarnings("deprecation")
-    @Override
-    public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
-                                                     final long timeTo) {
-        return new MeteredWindowedKeyValueIterator<>(
-            wrapped().fetchAll(timeFrom, timeTo),
-            fetchTime,
-            metrics,
-            serdes,
-            time);
-    }
-
     @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from,
@@ -185,6 +181,23 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Byte
             time);
     }
 
+    @SuppressWarnings("deprecation")
+    @Override
+    public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
+                                                     final long timeTo) {
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().fetchAll(timeFrom, timeTo),
+            fetchTime,
+            metrics,
+            serdes,
+            time);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> all() {
+        return new MeteredWindowedKeyValueIterator<>(wrapped().all(), fetchTime, metrics, serdes, time);
+    }
+
     @Override
     public void flush() {
         final long startNs = time.nanoseconds();
@@ -195,4 +208,13 @@ public class MeteredWindowStore<K, V> extends WrappedStateStore<WindowStore<Byte
         }
     }
 
+    @Override
+    public void close() {
+        super.close();
+        metrics.removeAllStoreLevelSensors(taskName, name());
+    }
+
+    private Bytes keyBytes(final K key) {
+        return Bytes.wrap(serdes.rawKey(key));
+    }
 }

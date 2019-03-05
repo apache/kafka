@@ -38,6 +38,8 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DescribeGroupsRequestData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersRequestData;
 import org.apache.kafka.common.message.ElectPreferredLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
@@ -45,6 +47,8 @@ import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.Partiti
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.SaslAuthenticateRequestData;
+import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.network.ListenerName;
@@ -767,18 +771,21 @@ public class RequestResponseTest {
     }
 
     private DescribeGroupsRequest createDescribeGroupRequest() {
-        return new DescribeGroupsRequest.Builder(singletonList("test-group")).build();
+        return new DescribeGroupsRequest.Builder(
+            new DescribeGroupsRequestData().
+                setGroups(Collections.singletonList("test-group"))).build();
     }
 
     private DescribeGroupsResponse createDescribeGroupResponse() {
         String clientId = "consumer-1";
         String clientHost = "localhost";
-        ByteBuffer empty = ByteBuffer.allocate(0);
-        DescribeGroupsResponse.GroupMember member = new DescribeGroupsResponse.GroupMember("memberId",
-                clientId, clientHost, empty, empty);
-        DescribeGroupsResponse.GroupMetadata metadata = new DescribeGroupsResponse.GroupMetadata(Errors.NONE,
-                "STABLE", "consumer", "roundrobin", asList(member));
-        return new DescribeGroupsResponse(Collections.singletonMap("test-group", metadata));
+        DescribeGroupsResponseData describeGroupsResponseData = new DescribeGroupsResponseData();
+        DescribeGroupsResponseData.DescribedGroupMember member = DescribeGroupsResponse.groupMember("memberId",
+                clientId, clientHost, new byte[0], new byte[0]);
+        DescribeGroupsResponseData.DescribedGroup metadata = DescribeGroupsResponse.groupMetadata("test-group", Errors.NONE,
+                "STABLE", "consumer", "roundrobin", asList(member), Collections.emptySet());
+        describeGroupsResponseData.groups().add(metadata);
+        return new DescribeGroupsResponse(describeGroupsResponseData);
     }
 
     private LeaveGroupRequest createLeaveGroupRequest() {
@@ -1024,11 +1031,16 @@ public class RequestResponseTest {
     }
 
     private SaslAuthenticateRequest createSaslAuthenticateRequest() {
-        return new SaslAuthenticateRequest(ByteBuffer.wrap(new byte[0]));
+        SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(new byte[0]);
+        return new SaslAuthenticateRequest(data);
     }
 
     private SaslAuthenticateResponse createSaslAuthenticateResponse() {
-        return new SaslAuthenticateResponse(Errors.NONE, null, ByteBuffer.wrap(new byte[0]), Long.MAX_VALUE);
+        SaslAuthenticateResponseData data = new SaslAuthenticateResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setAuthBytes(new byte[0])
+                .setSessionLifetimeMs(Long.MAX_VALUE);
+        return new SaslAuthenticateResponse(data);
     }
 
     private ApiVersionsRequest createApiVersionRequest() {

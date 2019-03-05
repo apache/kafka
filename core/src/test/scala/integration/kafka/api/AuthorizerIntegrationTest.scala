@@ -33,9 +33,8 @@ import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
-import org.apache.kafka.common.message.CreateTopicsRequestData
+import org.apache.kafka.common.message.{CreateTopicsRequestData, DescribeGroupsRequestData, LeaveGroupRequestData}
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicSet}
-import org.apache.kafka.common.message.LeaveGroupRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
@@ -163,7 +162,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.UPDATE_METADATA -> ((resp: requests.UpdateMetadataResponse) => resp.error),
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.error),
     ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => resp.error),
-    ApiKeys.DESCRIBE_GROUPS -> ((resp: DescribeGroupsResponse) => resp.groups.get(group).error),
+    ApiKeys.DESCRIBE_GROUPS -> ((resp: DescribeGroupsResponse) => {
+      val errorCode = resp.data().groups().asScala.find(g => group.equals(g.groupId())).head.errorCode()
+      Errors.forCode(errorCode)
+    }),
     ApiKeys.HEARTBEAT -> ((resp: HeartbeatResponse) => resp.error),
     ApiKeys.LEAVE_GROUP -> ((resp: LeaveGroupResponse) => resp.error),
     ApiKeys.DELETE_GROUPS -> ((resp: DeleteGroupsResponse) => resp.get(group)),
@@ -318,7 +320,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createDescribeGroupsRequest = {
-    new DescribeGroupsRequest.Builder(List(group).asJava).build()
+    new DescribeGroupsRequest.Builder(new DescribeGroupsRequestData().setGroups(List(group).asJava)).build()
   }
 
   private def createOffsetCommitRequest = {

@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.lang.{Long => JLong}
+import java.lang.{Byte => JByte}
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ConcurrentHashMap
@@ -44,10 +45,11 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
-import org.apache.kafka.common.message.CreateTopicsResponseData
+import org.apache.kafka.common.message.{CreateTopicsResponseData, DescribeGroupsResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultSet}
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData
 import org.apache.kafka.common.message.LeaveGroupResponseData
+import org.apache.kafka.common.message.SaslAuthenticateResponseData
 import org.apache.kafka.common.message.SaslHandshakeResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
@@ -1186,24 +1188,65 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeGroupRequest(request: RequestChannel.Request) {
-    val describeRequest = request.body[DescribeGroupsRequest]
 
-    val groups = describeRequest.groupIds.asScala.map { groupId =>
-      if (!authorize(request.session, Describe, Resource(Group, groupId, LITERAL))) {
-        groupId -> DescribeGroupsResponse.GroupMetadata.forError(Errors.GROUP_AUTHORIZATION_FAILED)
+    def sendResponseCallback(describeGroupsResponseData: DescribeGroupsResponseData): Unit = {
+      def createResponse(requestThrottleMs: Int): AbstractResponse = {
+        describeGroupsResponseData.setThrottleTimeMs(requestThrottleMs)
+        new DescribeGroupsResponse(describeGroupsResponseData)
+      }
+      sendResponseMaybeThrottle(request, createResponse)
+    }
+
+    val describeRequest = request.body[DescribeGroupsRequest]
+    val describeGroupsResponseData = new DescribeGroupsResponseData()
+
+    describeRequest.data().groups().asScala.foreach { groupId =>
+      val resource = Resource(Group, groupId, LITERAL)
+      if (!authorize(request.session, Describe, resource)) {
+        describeGroupsResponseData.groups().add(DescribeGroupsResponse.forError(groupId, Errors.GROUP_AUTHORIZATION_FAILED))
       } else {
         val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
         val members = summary.members.map { member =>
-          val metadata = ByteBuffer.wrap(member.metadata)
-          val assignment = ByteBuffer.wrap(member.assignment)
-          new DescribeGroupsResponse.GroupMember(member.memberId, member.clientId, member.clientHost, metadata, assignment)
+          new DescribeGroupsResponseData.DescribedGroupMember()
+            .setMemberId(member.memberId)
+            .setClientId(member.clientId)
+            .setClientHost(member.clientHost)
+            .setMemberAssignment(member.assignment)
+            .setMemberMetadata(member.assignment)
         }
-        groupId -> new DescribeGroupsResponse.GroupMetadata(error, summary.state, summary.protocolType,
-          summary.protocol, members.asJava)
-      }
-    }.toMap
 
-    sendResponseMaybeThrottle(request, requestThrottleMs => new DescribeGroupsResponse(requestThrottleMs, groups.asJava))
+        val describedGroup = new DescribeGroupsResponseData.DescribedGroup()
+          .setErrorCode(error.code())
+          .setGroupId(groupId)
+          .setGroupState(summary.state)
+          .setProtocolType(summary.protocolType)
+          .setProtocolData(summary.protocol)
+          .setMembers(members.asJava)
+
+        if (request.header.apiVersion >= 3) {
+          if (error == Errors.NONE && describeRequest.data().includeAuthorizedOperations()) {
+            describedGroup.setAuthorizedOperations(authorizedOperations(request.session, resource))
+          } else {
+            describedGroup.setAuthorizedOperations(0)
+          }
+        }
+
+        describeGroupsResponseData.groups().add(describedGroup)
+      }
+    }
+
+    sendResponseCallback(describeGroupsResponseData)
+  }
+
+
+  private def authorizedOperations(session: RequestChannel.Session, resource: Resource): Int = {
+    val authorizedOps = authorizer match {
+      case None => resource.resourceType.supportedOperations
+      case Some(auth) => resource.resourceType.supportedOperations
+        .filter(operation => authorize(session, operation, resource))
+    }
+
+    Utils.to32BitField(authorizedOps.map(operation => operation.toJava.code().asInstanceOf[JByte]).asJava)
   }
 
   def handleListGroupsRequest(request: RequestChannel.Request) {
@@ -1360,13 +1403,15 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleSaslHandshakeRequest(request: RequestChannel.Request) {
-    val responseData = new SaslHandshakeResponseData().setErrorCode(Errors.ILLEGAL_SASL_STATE.code())
+    val responseData = new SaslHandshakeResponseData().setErrorCode(Errors.ILLEGAL_SASL_STATE.code)
     sendResponseMaybeThrottle(request, _ => new SaslHandshakeResponse(responseData))
   }
 
   def handleSaslAuthenticateRequest(request: RequestChannel.Request) {
-    sendResponseMaybeThrottle(request, _ => new SaslAuthenticateResponse(Errors.ILLEGAL_SASL_STATE,
-      "SaslAuthenticate request received after successful authentication"))
+    val responseData = new SaslAuthenticateResponseData()
+      .setErrorCode(Errors.ILLEGAL_SASL_STATE.code)
+      .setErrorMessage("SaslAuthenticate request received after successful authentication")
+    sendResponseMaybeThrottle(request, _ => new SaslAuthenticateResponse(responseData))
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request) {

@@ -31,7 +31,9 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
  * Simple wrapper around a {@link WindowStore} to support writing
  * updates to a changelog
  */
-class ChangeLoggingWindowBytesStore extends WrappedStateStore<WindowStore<Bytes, byte[]>> implements WindowStore<Bytes, byte[]> {
+class ChangeLoggingWindowBytesStore
+    extends WrappedStateStore<WindowStore<Bytes, byte[]>, byte[], byte[]>
+    implements WindowStore<Bytes, byte[]> {
 
     private final boolean retainDuplicates;
     private StoreChangeLogger<Bytes, byte[]> changeLogger;
