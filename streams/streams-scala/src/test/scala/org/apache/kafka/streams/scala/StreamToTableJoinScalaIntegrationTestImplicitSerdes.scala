@@ -157,15 +157,21 @@ class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJ
 
     // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
     val clicksByRegion: KStreamJ[String, JLong] = userClicksJoinRegion
-      .map(
-        (_: String, regionWithClicks: (String, JLong)) =>
-          new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
-      )
+      .map {
+        new KeyValueMapper[String, (String, JLong), KeyValue[String, JLong]] {
+          def apply(k: String, regionWithClicks: (String, JLong)) =
+            new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
+        }
+      }
 
     // Compute the total per region by summing the individual click counts per region.
     val clicksPerRegion: KTableJ[String, JLong] = clicksByRegion
       .groupByKey(Grouped.`with`[String, JLong](Serdes.String, Serdes.JavaLong))
-      .reduce((v1: JLong, v2: JLong) => v1 + v2)
+      .reduce {
+        new Reducer[JLong] {
+          def apply(v1: JLong, v2: JLong) = v1 + v2
+        }
+      }
 
     // Write the (continuously updating) results to the output topic.
     clicksPerRegion.toStream.to(outputTopicJ, Produced.`with`(Serdes.String, Serdes.JavaLong))

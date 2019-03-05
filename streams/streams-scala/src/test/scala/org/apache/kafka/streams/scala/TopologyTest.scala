@@ -22,6 +22,8 @@ package org.apache.kafka.streams.scala
 import java.util.regex.Pattern
 
 import org.apache.kafka.streams.kstream.{
+  KeyValueMapper,
+  Reducer,
   Transformer,
   TransformerSupplier,
   ValueJoiner,
@@ -117,7 +119,11 @@ class TopologyTest extends JUnitSuite {
         }
       )
 
-      val grouped: KGroupedStreamJ[String, String] = splits.groupBy((_: String, v: String) => v)
+      val grouped: KGroupedStreamJ[String, String] = splits.groupBy {
+        new KeyValueMapper[String, String, String] {
+          def apply(k: String, v: String): String = v
+        }
+      }
 
       grouped.count()
 
@@ -175,15 +181,21 @@ class TopologyTest extends JUnitSuite {
 
       // Change the stream from <user> -> <region, clicks> to <region> -> <clicks>
       val clicksByRegion: KStreamJ[String, JLong] = userClicksJoinRegion
-        .map(
-          (_: String, regionWithClicks: (String, JLong)) =>
-            new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
-        )
+        .map {
+          new KeyValueMapper[String, (String, JLong), KeyValue[String, JLong]] {
+            def apply(k: String, regionWithClicks: (String, JLong)) =
+              new KeyValue[String, JLong](regionWithClicks._1, regionWithClicks._2)
+          }
+        }
 
       // Compute the total per region by summing the individual click counts per region.
       clicksByRegion
         .groupByKey(Grouped.`with`[String, JLong])
-        .reduce((v1: JLong, v2: JLong) => v1 + v2)
+        .reduce {
+          new Reducer[JLong] {
+            def apply(v1: JLong, v2: JLong) = v1 + v2
+          }
+        }
 
       builder.build().describe()
     }
@@ -241,7 +253,11 @@ class TopologyTest extends JUnitSuite {
             }
         })
 
-      val grouped: KGroupedStreamJ[String, String] = lowered.groupBy((_: String, v: String) => v)
+      val grouped: KGroupedStreamJ[String, String] = lowered.groupBy {
+        new KeyValueMapper[String, String, String] {
+          def apply(k: String, v: String): String = v
+        }
+      }
 
       grouped.count()
 
