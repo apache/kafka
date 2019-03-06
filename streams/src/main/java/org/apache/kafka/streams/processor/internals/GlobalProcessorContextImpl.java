@@ -23,7 +23,13 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.KeyValueStoreReadWriteDecorator;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.SessionStoreReadWriteDecorator;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl.WindowStoreReadWriteDecorator;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.time.Duration;
@@ -39,9 +45,20 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
         super(new TaskId(-1, -1), config, metrics, stateMgr, cache);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public StateStore getStateStore(final String name) {
-        return stateManager.getGlobalStore(name);
+        final StateStore store = stateManager.getGlobalStore(name);
+
+        if (store instanceof KeyValueStore) {
+            return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
+        } else if (store instanceof WindowStore) {
+            return new WindowStoreReadWriteDecorator((WindowStore) store);
+        } else if (store instanceof SessionStore) {
+            return new SessionStoreReadWriteDecorator((SessionStore) store);
+        }
+
+        return store;
     }
 
     @SuppressWarnings("unchecked")
