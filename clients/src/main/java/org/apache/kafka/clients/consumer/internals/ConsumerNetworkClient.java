@@ -474,6 +474,9 @@ public class ConsumerNetworkClient implements Closeable {
                 if (client.ready(node, now)) {
                     client.send(request, now);
                     iterator.remove();
+                } else {
+                    // try next node when current node is not ready
+                    break;
                 }
             }
         }

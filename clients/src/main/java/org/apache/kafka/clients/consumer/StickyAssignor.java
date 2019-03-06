@@ -219,13 +219,13 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         for (Entry<String, Subscription> entry: subscriptions.entrySet()) {
             String consumer = entry.getKey();
             consumer2AllPotentialPartitions.put(consumer, new ArrayList<TopicPartition>());
-            for (String topic: entry.getValue().topics()) {
+            entry.getValue().topics().stream().filter(topic -> partitionsPerTopic.get(topic) != null).forEach(topic -> {
                 for (int i = 0; i < partitionsPerTopic.get(topic); ++i) {
                     TopicPartition topicPartition = new TopicPartition(topic, i);
                     consumer2AllPotentialPartitions.get(consumer).add(topicPartition);
                     partition2AllPotentialConsumers.get(topicPartition).add(consumer);
                 }
-            }
+            });
 
             // add this consumer to currentAssignment (with an empty topic partition assignment) if it does not already exist
             if (!currentAssignment.containsKey(consumer))
@@ -705,6 +705,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
      */
     private <T> boolean hasIdenticalListElements(Collection<List<T>> col) {
         Iterator<List<T>> it = col.iterator();
+        if (!it.hasNext())
+            return true;
         List<T> cur = it.next();
         while (it.hasNext()) {
             List<T> next = it.next();

@@ -41,14 +41,6 @@ object AclCommand extends Logging {
 
   private val Newline = scala.util.Properties.lineSeparator
 
-  val ResourceTypeToValidOperations: Map[JResourceType, Set[Operation]] = Map[JResourceType, Set[Operation]](
-    JResourceType.TOPIC -> Set(Read, Write, Create, Describe, Delete, Alter, DescribeConfigs, AlterConfigs, All),
-    JResourceType.GROUP -> Set(Read, Describe, Delete, All),
-    JResourceType.CLUSTER -> Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe, All),
-    JResourceType.TRANSACTIONAL_ID -> Set(Describe, Write, All),
-    JResourceType.DELEGATION_TOKEN -> Set(Describe, All)
-  )
-
   def main(args: Array[String]) {
 
     val opts = new AclCommandOptions(args)
@@ -454,7 +446,7 @@ object AclCommand extends Logging {
 
   private def validateOperation(opts: AclCommandOptions, resourceToAcls: Map[ResourcePatternFilter, Set[Acl]]): Unit = {
     for ((resource, acls) <- resourceToAcls) {
-      val validOps = ResourceTypeToValidOperations(resource.resourceType)
+      val validOps = ResourceType.fromJava(resource.resourceType).supportedOperations + All
       if ((acls.map(_.operation) -- validOps).nonEmpty)
         CommandLineUtils.printUsageAndDie(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.mkString(",")}")
     }

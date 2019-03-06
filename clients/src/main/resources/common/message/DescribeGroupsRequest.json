@@ -18,9 +18,12 @@
   "type": "request",
   "name": "DescribeGroupsRequest",
   // Versions 1 and 2 are the same as version 0.
-  "validVersions": "0-2",
+  // Starting in version 3, authorized operations can be requested.
+  "validVersions": "0-3",
   "fields": [
     { "name": "Groups", "type": "[]string", "versions": "0+",
-      "about": "The names of the groups to describe" }
+      "about": "The names of the groups to describe" },
+    { "name": "IncludeAuthorizedOperations", "type": "bool", "versions": "3+",
+      "about": "Whether to include authorized operations." }
   ]
 }
