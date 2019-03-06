@@ -860,6 +860,8 @@ public class SslTransportLayerTest {
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
         NetworkTestUtils.waitForChannelReady(selector, node);
+        TestUtils.waitForCondition(() -> server.selector().channels().stream().allMatch(KafkaChannel::ready),
+                "Channel not ready");
 
         final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
         server.outputChannel(Channels.newChannel(bytesOut));
