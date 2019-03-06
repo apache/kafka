@@ -323,8 +323,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * record value and computes a new value for it.
    * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
    * to the `ValueTransformer`.
-    * It's not required to connect global state stores that are added via `addGlobalStore`;
-    * read-only access to global state stores is available by default.
+   * It's not required to connect global state stores that are added via `addGlobalStore`;
+   * read-only access to global state stores is available by default.
    *
    * @param valueTransformerSupplier a instance of `ValueTransformerWithKeySupplier` that generates a `ValueTransformerWithKey`
    * @param stateStoreNames          the names of the state stores used by the processor
@@ -340,8 +340,8 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
    * `processorSupplier`).
    * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
    * to the `Processor`.
-    * It's not required to connect global state stores that are added via `addGlobalStore`;
-    * read-only access to global state stores is available by default.
+   * It's not required to connect global state stores that are added via `addGlobalStore`;
+   * read-only access to global state stores is available by default.
    *
    * @param processorSupplier a function that generates a [[org.apache.kafka.streams.processor.Processor]]
    * @param stateStoreNames   the names of the state store used by the processor
