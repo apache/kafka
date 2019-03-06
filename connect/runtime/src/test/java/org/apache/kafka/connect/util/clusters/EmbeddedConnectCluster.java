@@ -154,6 +154,8 @@ public class EmbeddedConnectCluster {
 
     /**
      * Provision and start an additional worker to the Connect cluster.
+     *
+     * @return the worker handle of the worker that was provisioned
      */
     public WorkerHandle addWorker() {
         WorkerHandle worker = WorkerHandle.start(workerNamePrefix + nextWorkerId.getAndIncrement(), workerProps);
@@ -166,6 +168,8 @@ public class EmbeddedConnectCluster {
      * Decommission one of the workers from this Connect cluster. Which worker is removed is
      * implementation dependent and selection is not guaranteed to be consistent. Use this method
      * when you don't care which worker stops.
+     *
+     * @see #removeWorker(WorkerHandle)
      */
     public void removeWorker() {
         WorkerHandle toRemove = null;
