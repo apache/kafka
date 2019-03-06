@@ -193,7 +193,7 @@ object TopicCommand extends Logging {
     override def alterTopic(opts: TopicCommandOptions): Unit = {
       val topic = new CommandTopicPartition(opts)
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
-      ensureTopicExists(topics)
+      ensureTopicExists(opts.topic, topics)
       val topicsInfo = adminClient.describeTopics(topics.asJavaCollection).values()
       adminClient.createPartitions(topics.map {topicName =>
         if (topic.hasReplicaAssignment) {
@@ -252,7 +252,7 @@ object TopicCommand extends Logging {
 
     override def deleteTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
-      ensureTopicExists(topics)
+      ensureTopicExists(opts.topic, topics)
       adminClient.deleteTopics(topics.asJavaCollection).all().get()
     }
 
@@ -302,7 +302,7 @@ object TopicCommand extends Logging {
     override def alterTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       val tp = new CommandTopicPartition(opts)
-      ensureTopicExists(topics, opts.ifExists)
+      ensureTopicExists(opts.topic, topics, opts.ifExists)
       val adminZkClient = new AdminZkClient(zkClient)
       topics.foreach { topic =>
         val configs = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
@@ -340,7 +340,7 @@ object TopicCommand extends Logging {
     override def describeTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
       val topicOptWithExits = opts.topic.isDefined && opts.ifExists
-      ensureTopicExists(topics, topicOptWithExits)
+      ensureTopicExists(opts.topic, topics, topicOptWithExits)
       val liveBrokers = zkClient.getAllBrokersInCluster.map(_.id).toSet
       val describeOptions = new DescribeOptions(opts, liveBrokers)
       val adminZkClient = new AdminZkClient(zkClient)
@@ -386,7 +386,7 @@ object TopicCommand extends Logging {
 
     override def deleteTopic(opts: TopicCommandOptions): Unit = {
       val topics = getTopics(opts.topic, opts.excludeInternalTopics)
-      ensureTopicExists(topics, opts.ifExists)
+      ensureTopicExists(opts.topic, topics, opts.ifExists)
       topics.foreach { topic =>
         try {
           if (Topic.isInternal(topic)) {
@@ -418,14 +418,18 @@ object TopicCommand extends Logging {
   /**
     * ensures topic existence and throws exception if topic doesn't exist
     *
-    * @param opts
-    * @param topics
+    * @param desiredTopic
+    * @param actualTopics
     * @param topicOptWithExists
     */
-  private def ensureTopicExists(topics: Seq[String], topicOptWithExists: Boolean = false) = {
-    if (topics.isEmpty && !topicOptWithExists) {
+  private def ensureTopicExists(desiredTopic: Option[String], actualTopics: Seq[String], topicOptWithExists: Boolean = false) = {
+    if (actualTopics.isEmpty && !topicOptWithExists) {
       // If given topic doesn't exist then throw exception
-      throw new IllegalArgumentException(s"Topics in [${topics.mkString(",")}] does not exist")
+      if (desiredTopic.isDefined) {
+        throw new IllegalArgumentException(s"No topic matching '${desiredTopic.get}' found")
+      } else {
+        throw new IllegalArgumentException("No topics exist")
+      }
     }
   }
 
