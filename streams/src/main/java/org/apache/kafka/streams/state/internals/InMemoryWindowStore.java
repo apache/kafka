@@ -42,6 +42,7 @@ import java.util.NavigableMap;
 import java.util.NoSuchElementException;
 import java.util.TreeMap;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.EXPIRED_WINDOW_RECORD_DROP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreKeyBytes;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreTimestamp;
@@ -95,14 +96,14 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         expiredRecordSensor = metrics.storeLevelSensor(
             taskName,
             name(),
-            "expired-window-record-drop",
+            EXPIRED_WINDOW_RECORD_DROP,
             Sensor.RecordingLevel.INFO
         );
         addInvocationRateAndCount(
             expiredRecordSensor,
             "stream-" + metricScope + "-metrics",
             metrics.tagMap("task-id", taskName, metricScope + "-id", name()),
-            "expired-window-record-drop"
+            EXPIRED_WINDOW_RECORD_DROP
         );
 
         if (root != null) {
