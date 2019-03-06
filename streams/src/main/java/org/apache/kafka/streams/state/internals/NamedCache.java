@@ -22,6 +22,8 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
@@ -31,9 +33,11 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Stack;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import java.util.HashSet;
 import java.util.TreeSet;
 
 class NamedCache {
@@ -309,49 +313,6 @@ class NamedCache {
         namedCacheMetrics.removeAllSensors();
     }
 
-    /**
-     * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
-     */
-    static class LRUNode {
-        private final Bytes key;
-        private LRUCacheEntry entry;
-        private LRUNode previous;
-        private LRUNode next;
-
-        LRUNode(final Bytes key, final LRUCacheEntry entry) {
-            this.key = key;
-            this.entry = entry;
-        }
-
-        LRUCacheEntry entry() {
-            return entry;
-        }
-
-        Bytes key() {
-            return key;
-        }
-
-        long size() {
-            return key.get().length +
-                8 + // entry
-                8 + // previous
-                8 + // next
-                entry.size();
-        }
-
-        LRUNode next() {
-            return next;
-        }
-
-        LRUNode previous() {
-            return previous;
-        }
-
-        private void update(final LRUCacheEntry entry) {
-            this.entry = entry;
-        }
-    }
-
     private static class NamedCacheMetrics {
         private final StreamsMetricsImpl metrics;
 
@@ -414,6 +375,49 @@ class NamedCache {
 
         private void removeAllSensors() {
             metrics.removeAllCacheLevelSensors(taskName, cacheName);
+        }
+    }
+    
+    /**
+     * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
+     */
+    static class LRUNode {
+        private final Bytes key;
+        private LRUCacheEntry entry;
+        private LRUNode previous;
+        private LRUNode next;
+
+        LRUNode(final Bytes key, final LRUCacheEntry entry) {
+            this.key = key;
+            this.entry = entry;
+        }
+
+        LRUCacheEntry entry() {
+            return entry;
+        }
+
+        Bytes key() {
+            return key;
+        }
+
+        long size() {
+            return key.get().length +
+                8 + // entry
+                8 + // previous
+                8 + // next
+                entry.size();
+        }
+
+        LRUNode next() {
+            return next;
+        }
+
+        LRUNode previous() {
+            return previous;
+        }
+
+        private void update(final LRUCacheEntry entry) {
+            this.entry = entry;
         }
     }
 }
