@@ -361,7 +361,7 @@ public class InMemoryWindowStoreTest {
         setCurrentTime(currentTime);
         windowStore.put(1, "five");
 
-        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetchAll(0L, currentTime);
+        KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetchAll(0L, currentTime);
 
         // effect of this put (expires next oldest record, adds new one) should not be reflected in the already fetched results
         currentTime = currentTime + retentionPeriod / 4;
@@ -374,6 +374,15 @@ public class InMemoryWindowStoreTest {
         assertEquals(windowedPair(1, "three", retentionPeriod / 2), iterator.next());
         assertEquals(windowedPair(1, "four", 3 * (retentionPeriod / 4)), iterator.next());
         assertEquals(windowedPair(1, "five", retentionPeriod), iterator.next());
+        assertFalse(iterator.hasNext());
+
+        iterator = windowStore.fetchAll(0L, currentTime);
+
+        // If we fetch again after the last put, the second oldest record should have expired and newest should appear in results
+        assertEquals(windowedPair(1, "three", retentionPeriod / 2), iterator.next());
+        assertEquals(windowedPair(1, "four", 3 * (retentionPeriod / 4)), iterator.next());
+        assertEquals(windowedPair(1, "five", retentionPeriod), iterator.next());
+        assertEquals(windowedPair(1, "six", 5 * (retentionPeriod / 4)), iterator.next());
         assertFalse(iterator.hasNext());
     }
 
@@ -472,5 +481,102 @@ public class InMemoryWindowStoreTest {
         assertNotEquals(0.0, dropRate.metricValue());
         final List<String> messages = appender.getMessages();
         assertThat(messages, hasItem("Skipping record for expired segment."));
+    }
+
+    @Test
+    public void testIteratorMultiplePeekAndHasNext() {
+        windowStore = createInMemoryWindowStore(context, false);
+
+        long currentTime = 0;
+        setCurrentTime(currentTime);
+        windowStore.put(1, "one");
+
+        currentTime += windowSize * 10;
+        setCurrentTime(currentTime);
+        windowStore.put(2, "two");
+
+        currentTime += windowSize * 10;
+        setCurrentTime(currentTime);
+        windowStore.put(3, "three");
+
+        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetch(1, 4, 0L, currentTime);
+
+        assertFalse(!iterator.hasNext());
+        assertFalse(!iterator.hasNext());
+        assertEquals(new Windowed<>(1, WindowKeySchema.timeWindowForSize(0L, windowSize)), iterator.peekNextKey());
+        assertEquals(new Windowed<>(1, WindowKeySchema.timeWindowForSize(0L, windowSize)), iterator.peekNextKey());
+
+        assertEquals(windowedPair(1, "one", 0), iterator.next());
+        assertEquals(windowedPair(2, "two", windowSize * 10), iterator.next());
+        assertEquals(windowedPair(3, "three", windowSize * 20), iterator.next());
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldNotThrowConcurrentModificationException() {
+        windowStore = createInMemoryWindowStore(context, false);
+
+        long currentTime = 0;
+        setCurrentTime(currentTime);
+        windowStore.put(1, "one");
+
+        currentTime += windowSize * 10;
+        setCurrentTime(currentTime);
+        windowStore.put(1, "two");
+
+        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.all();
+
+        currentTime += windowSize * 10;
+        setCurrentTime(currentTime);
+        windowStore.put(1, "three");
+
+        currentTime += windowSize * 10;
+        setCurrentTime(currentTime);
+        windowStore.put(2, "four");
+
+        // Iterator should return all records in store and not throw exception b/c some were added after fetch
+        assertEquals(windowedPair(1, "one", 0), iterator.next());
+        assertEquals(windowedPair(1, "two", windowSize * 10), iterator.next());
+        assertEquals(windowedPair(1, "three", windowSize * 20), iterator.next());
+        assertEquals(windowedPair(2, "four", windowSize * 30), iterator.next());
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldNotExpireFromOpenIterator() {
+        windowStore = createInMemoryWindowStore(context, false);
+
+        windowStore.put(1, "one", 0L);
+        windowStore.put(1, "two", 10L);
+
+        windowStore.put(2, "one", 5L);
+        windowStore.put(2, "two", 15L);
+
+        final WindowStoreIterator<String> iterator1 = windowStore.fetch(1, 0L, 50L);
+        final WindowStoreIterator<String> iterator2 = windowStore.fetch(2, 0L, 50L);
+
+        // This put expires all four previous records, but they should still be returned from already open iterators
+        windowStore.put(1, "four", retentionPeriod + 50L);
+
+        assertEquals(new KeyValue<>(0L, "one"), iterator1.next());
+        assertEquals(new KeyValue<>(5L, "one"), iterator2.next());
+
+        assertEquals(new KeyValue<>(15L, "two"), iterator2.next());
+        assertEquals(new KeyValue<>(10L, "two"), iterator1.next());
+
+        assertFalse(iterator1.hasNext());
+        assertFalse(iterator2.hasNext());
+    }
+
+    @Test
+    public void shouldNotThrowExceptionWhenFetchRangeIsExpired() {
+        windowStore = createInMemoryWindowStore(context, false);
+
+        windowStore.put(1, "one", 0L);
+        windowStore.put(1, "two", retentionPeriod);
+
+        final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0L, 10L);
+
+        assertFalse(iterator.hasNext());
     }
 }
