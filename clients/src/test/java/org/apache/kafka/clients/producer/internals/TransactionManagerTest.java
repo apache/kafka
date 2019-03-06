@@ -563,12 +563,6 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void testInvalidSequenceIncrement() {
-        TransactionManager transactionManager = new TransactionManager();
-        transactionManager.incrementSequenceNumber(tp0, 3333);
-    }
-
     @Test
     public void testDefaultSequenceNumber() {
         TransactionManager transactionManager = new TransactionManager();
