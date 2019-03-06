@@ -93,8 +93,6 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
-import java.util.function.BiFunction;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyList;
@@ -709,15 +707,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> groupListOffsetRequests(
             Map<TopicPartition, Long> timestampsToSearch,
             Set<TopicPartition> partitionsToRetry) {
-        return groupOffsetLookupsByNode(timestampsToSearch, partitionsToRetry, ListOffsetRequest.PartitionData::new);
-    }
-
-    private <QueryType> Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> groupOffsetLookupsByNode(
-            Map<TopicPartition, QueryType> partitionsToSearch,
-            Set<TopicPartition> partitionsToRetry,
-            BiFunction<QueryType, Optional<Integer>, ListOffsetRequest.PartitionData> buildPartitionData) {
-        final Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> groupedPartitions = new HashMap<>();
-        for (Map.Entry<TopicPartition, QueryType> entry: partitionsToSearch.entrySet()) {
+        final Map<TopicPartition, ListOffsetRequest.PartitionData> partitionDataMap = new HashMap<>();
+        for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
             Optional<MetadataCache.PartitionInfoAndEpoch> currentInfo = metadata.partitionInfoIfCurrent(tp);
             if (!currentInfo.isPresent()) {
@@ -740,15 +731,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         currentInfo.get().partitionInfo().leader(), tp);
                 partitionsToRetry.add(tp);
             } else {
-                Node node = currentInfo.get().partitionInfo().leader();
-                Map<TopicPartition, ListOffsetRequest.PartitionData> topicData = groupedPartitions
-                        .computeIfAbsent(node, n -> new HashMap<>());
-                ListOffsetRequest.PartitionData partitionData = buildPartitionData.apply(
-                        entry.getValue(), Optional.of(currentInfo.get().epoch()));
-                topicData.put(entry.getKey(), partitionData);
+                partitionDataMap.put(tp,
+                        new ListOffsetRequest.PartitionData(entry.getValue(), Optional.of(currentInfo.get().epoch())));
             }
         }
-        return groupedPartitions;
+        return regroupPartitionMapByNode(partitionDataMap);
     }
 
     /**
@@ -970,7 +957,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         if (!partitionsToValidate.isEmpty()) {
             // Send off the OFFSETS_FOR_LEADER requests asynchronously
             Map<Node, Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData>> regrouped =
-                    groupOffsetForLeaderRequestByNode(partitionsToValidate);
+                    regroupPartitionMapByNode(partitionsToValidate);
 
             regrouped.forEach((node, dataMap) -> {
                 OffsetsForLeaderEpochRequest.Builder builder = new OffsetsForLeaderEpochRequest.Builder(
@@ -986,13 +973,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         return reqs;
     }
 
-    private Map<Node, Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData>> groupOffsetForLeaderRequestByNode(
-            Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> requestsByPartition) {
-        return requestsByPartition.entrySet()
+    private <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(Map<TopicPartition, T> partitionMap) {
+        return partitionMap.entrySet()
                 .stream()
                 .collect(Collectors.groupingBy(entry -> metadata.fetch().leaderFor(entry.getKey()),
                         Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
-
     }
 
     private RequestFuture<OffsetsForLeaderEpochResponse> sendOffsetForLeaderRequest(
