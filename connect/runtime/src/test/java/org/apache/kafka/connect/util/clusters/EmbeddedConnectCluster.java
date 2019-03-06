@@ -19,7 +19,6 @@ package org.apache.kafka.connect.util.clusters;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -191,7 +190,7 @@ public class EmbeddedConnectCluster {
     private void stopWorker(WorkerHandle worker) {
         try {
             log.info("Stopping worker {}", worker);
-            worker.process().stop();
+            worker.stop();
         } catch (UngracefulShutdownException e) {
             log.warn("Worker {} did not shutdown gracefully", worker);
         } catch (Exception e) {
@@ -235,7 +234,7 @@ public class EmbeddedConnectCluster {
                 .filter(w -> {
                     try {
                         mapper.readerFor(ServerInfo.class)
-                                .readValue(executeGet(w.process().restUrl().toString()));
+                                .readValue(executeGet(w.url().toString()));
                         return true;
                     } catch (IOException e) {
                         // Worker failed to respond. Consider it's offline
@@ -332,8 +331,7 @@ public class EmbeddedConnectCluster {
 
     private String endpointForResource(String resource) throws IOException {
         String url = connectCluster.stream()
-                .map(WorkerHandle::process)
-                .map(Connect::restUrl)
+                .map(WorkerHandle::url)
                 .filter(Objects::nonNull)
                 .findFirst()
                 .orElseThrow(() -> new IOException("Connect workers have not been provisioned"))

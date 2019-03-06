@@ -21,6 +21,7 @@ import org.apache.kafka.connect.runtime.Connect;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.net.URI;
 import java.util.Map;
 import java.util.Objects;
 
@@ -53,6 +54,7 @@ public class WorkerHandle {
      * Stop this worker.
      */
     public void stop() {
+        worker.stop();
     }
 
     /**
@@ -65,12 +67,12 @@ public class WorkerHandle {
     }
 
     /**
-     * Get the workers's process corresponding to this handle.
+     * Get the workers's url that accepts requests to its REST endpoint.
      *
-     * @return the worker's process class
+     * @return the worker's url
      */
-    public Connect process() {
-        return worker;
+    public URI url() {
+        return worker.restUrl();
     }
 
     @Override
