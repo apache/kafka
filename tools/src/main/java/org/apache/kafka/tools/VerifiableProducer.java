@@ -39,6 +39,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.Properties;
 
 import static net.sourceforge.argparse4j.impl.Arguments.store;
@@ -288,10 +289,14 @@ public class VerifiableProducer implements AutoCloseable {
         return key;
     }
 
+    public void close(Duration timeout) {
+        producer.close(timeout);
+        printJson(new ShutdownComplete());
+    }
+
     /** Close the producer to flush any remaining messages. */
     public void close() {
-        producer.close();
-        printJson(new ShutdownComplete());
+        close(Duration.ofSeconds(30));
     }
 
     @JsonPropertyOrder({ "timestamp", "name" })
