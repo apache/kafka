@@ -79,7 +79,6 @@ public final class TimeWindows extends Windows<TimeWindow> {
     }
 
     /** Private constructor for preserving segments. Can be removed along with Windows.segments. **/
-    @SuppressWarnings("DeprecatedIsStillUsed")
     @Deprecated
     private TimeWindows(final long sizeMs,
                         final long advanceMs,
@@ -106,7 +105,6 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @throws IllegalArgumentException if the specified window size is zero or negative
      * @deprecated Use {@link #of(Duration)} instead
      */
-    @SuppressWarnings("DeprecatedIsStillUsed")
     @Deprecated
     public static TimeWindows of(final long sizeMs) throws IllegalArgumentException {
         if (sizeMs <= 0) {
@@ -146,7 +144,6 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @throws IllegalArgumentException if the advance interval is negative, zero, or larger than the window size
      * @deprecated Use {@link #advanceBy(Duration)} instead
      */
-    @SuppressWarnings("DeprecatedIsStillUsed")
     @Deprecated
     public TimeWindows advanceBy(final long advanceMs) {
         if (advanceMs <= 0 || advanceMs > sizeMs) {
@@ -228,7 +225,6 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @deprecated since 2.1. Use {@link Materialized#retention} or directly configure the retention in a store supplier
      *             and use {@link Materialized#as(WindowBytesStoreSupplier)}.
      */
-    @SuppressWarnings("deprecation")
     @Override
     @Deprecated
     public TimeWindows until(final long durationMs) throws IllegalArgumentException {
@@ -246,14 +242,13 @@ public final class TimeWindows extends Windows<TimeWindow> {
      * @return the window maintain duration
      * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
-    @SuppressWarnings({"DeprecatedIsStillUsed", "deprecation"})
     @Override
     @Deprecated
     public long maintainMs() {
         return Math.max(maintainDurationMs, sizeMs);
     }
 
-    @SuppressWarnings({"deprecation", "NonFinalFieldReferenceInEquals"}) // removing segments from Windows will fix this
+    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -270,13 +265,13 @@ public final class TimeWindows extends Windows<TimeWindow> {
             graceMs == that.graceMs;
     }
 
-    @SuppressWarnings({"deprecation", "NonFinalFieldReferencedInHashCode"}) // removing segments from Windows will fix this
+    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public int hashCode() {
         return Objects.hash(maintainDurationMs, segments, sizeMs, advanceMs, graceMs);
     }
 
-    @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
+    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public String toString() {
         return "TimeWindows{" +

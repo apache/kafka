@@ -196,8 +196,7 @@ public class Stores {
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @deprecated since 2.1 Use {@link Stores#persistentWindowStore(String, Duration, Duration, boolean)} instead
      */
-    @SuppressWarnings("DeprecatedIsStillUsed") // continuing to support Windows#maintainMs/segmentInterval in fallback mode
-    @Deprecated
+    @Deprecated // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                  final long retentionPeriod,
                                                                  final int numSegments,
@@ -279,8 +278,7 @@ public class Stores {
      * @return an instance of a {@link  SessionBytesStoreSupplier}
      * @deprecated since 2.1 Use {@link Stores#persistentSessionStore(String, Duration)} instead
      */
-    @SuppressWarnings("DeprecatedIsStillUsed")
-    @Deprecated
+    @Deprecated // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final long retentionPeriodMs) {
         Objects.requireNonNull(name, "name cannot be null");

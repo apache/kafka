@@ -77,7 +77,6 @@ public abstract class Windows<W extends Window> {
      * @return the window maintain duration
      * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
-    @SuppressWarnings("DeprecatedIsStillUsed")
     @Deprecated
     public long maintainMs() {
         return maintainDurationMs;

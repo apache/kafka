@@ -92,7 +92,6 @@ public final class SessionWindows {
      * @throws IllegalArgumentException if {@code inactivityGapMs} is zero or negative
      * @deprecated Use {@link #with(Duration)} instead.
      */
-    @SuppressWarnings("DeprecatedIsStillUsed")
     @Deprecated
     public static SessionWindows with(final long inactivityGapMs) {
         if (inactivityGapMs <= 0) {
@@ -109,7 +108,6 @@ public final class SessionWindows {
      *
      * @throws IllegalArgumentException if {@code inactivityGap} is zero or negative or can't be represented as {@code long milliseconds}
      */
-    @SuppressWarnings("deprecation") // removing #with(long inactivityGapMs) will fix this
     public static SessionWindows with(final Duration inactivityGap) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(inactivityGap, "inactivityGap");
         return with(ApiUtils.validateMillisecondDuration(inactivityGap, msgPrefix));
