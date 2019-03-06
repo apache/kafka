@@ -20,28 +20,44 @@ import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 
+/**
+ * An enumeration of the modes available to the worker to signal which Connect protocols are
+ * enabled at any time.
+ *
+ * {@code EAGER} signifies that this worker only supports prompt release of assigned connectors
+ * and tasks in every rebalance. Corresponds to Connect protocol V0.
+ *
+ * {@code COOPERATIVE} signifies that this worker only supports release and acquisition of
+ * connectors and tasks based on policy that applies incremental and cooperative rebalancing.
+ * Corresponds to Connect protocol V1 or greater.
+ *
+ * {@code COMPATIBLE} signifies that this worker supports both eager and cooperative Connect
+ * protocols and will use the version that is elected by the Kafka broker coordinator during
+ * rebalancing.
+ */
 public enum ConnectProtocolCompatibility {
-    STRICT {
+    EAGER {
         @Override
         String protocol() {
             return "default";
         }
     },
 
-    COMPAT {
+    COMPATIBLE {
         @Override
         String protocol() {
-            return "compat";
+            return "compatible";
         }
     },
 
-    COOP {
+    COOPERATIVE {
         @Override
         String protocol() {
-            return "coop";
+            return "cooperative";
         }
     };
 
+    // Support both lower case and upper case values
     private static final Map<String, ConnectProtocolCompatibility> REVERSE = new HashMap<>(values().length * 2);
 
     static {
@@ -59,9 +75,15 @@ public enum ConnectProtocolCompatibility {
         return compat;
     }
 
+    @Override
     public String toString() {
         return name().toLowerCase(Locale.ROOT);
     }
 
+    /**
+     * Return the name of the protocol that this mode will use in {@code ProtocolMetadata}.
+     *
+     * @return the protocol name
+     */
     abstract String protocol();
 }

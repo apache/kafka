@@ -35,14 +35,34 @@ import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.Lea
 
 
 /**
- * This class manages the coordination process with the Kafka group coordinator on the broker for managing assignments
- * to workers.
+ * An assignor that computes a unweighted round-robin distribution of connectors and tasks. The
+ * connectors are assigned to the workers first, followed by the tasks. This is to avoid
+ * load imbalance when several 1-task connectors are running, given that a connector is usually
+ * more lightweight than a task.
  */
-public class StrictAssignor implements ConnectAssignor {
+public class EagerAssignor implements ConnectAssignor {
     private final Logger log;
 
-    public StrictAssignor(LogContext logContext) {
-        this.log = logContext.logger(IncrementalCooperativeAssignor.class);
+    public EagerAssignor(LogContext logContext) {
+        this.log = logContext.logger(EagerAssignor.class);
+    }
+
+    @Override
+    public Map<String, ByteBuffer> performAssignment(String leaderId, String protocol,
+                                                     Map<String, ByteBuffer> allMemberMetadata,
+                                                     WorkerCoordinator coordinator) {
+        log.debug("Performing task assignment");
+        Map<String, ExtendedWorkerState> memberConfigs = new HashMap<>();
+        for (Map.Entry<String, ByteBuffer> entry : allMemberMetadata.entrySet())
+            memberConfigs.put(entry.getKey(), IncrementalCooperativeConnectProtocol.deserializeMetadata(entry.getValue()));
+
+        long maxOffset = findMaxMemberConfigOffset(memberConfigs, coordinator);
+        Long leaderOffset = ensureLeaderConfig(maxOffset, coordinator);
+        if (leaderOffset == null)
+            return fillAssignmentsAndSerialize(memberConfigs.keySet(), Assignment.CONFIG_MISMATCH,
+                    leaderId, memberConfigs.get(leaderId).url(), maxOffset,
+                    new HashMap<>(), new HashMap<>());
+        return performTaskAssignment(leaderId, leaderOffset, memberConfigs, coordinator);
     }
 
     private Long ensureLeaderConfig(long maxOffset, WorkerCoordinator coordinator) {
@@ -130,23 +150,6 @@ public class StrictAssignor implements ConnectAssignor {
         }
         log.debug("Finished assignment");
         return groupAssignment;
-    }
-
-    public Map<String, ByteBuffer> performAssignment(String leaderId, String protocol,
-                                                     Map<String, ByteBuffer> allMemberMetadata,
-                                                     WorkerCoordinator coordinator) {
-        log.debug("Performing task assignment");
-        Map<String, ExtendedWorkerState> memberConfigs = new HashMap<>();
-        for (Map.Entry<String, ByteBuffer> entry : allMemberMetadata.entrySet())
-            memberConfigs.put(entry.getKey(), IncrementalCooperativeConnectProtocol.deserializeMetadata(entry.getValue()));
-
-        long maxOffset = findMaxMemberConfigOffset(memberConfigs, coordinator);
-        Long leaderOffset = ensureLeaderConfig(maxOffset, coordinator);
-        if (leaderOffset == null)
-            return fillAssignmentsAndSerialize(memberConfigs.keySet(), Assignment.CONFIG_MISMATCH,
-                    leaderId, memberConfigs.get(leaderId).url(), maxOffset,
-                    new HashMap<>(), new HashMap<>());
-        return performTaskAssignment(leaderId, leaderOffset, memberConfigs, coordinator);
     }
 
     private long findMaxMemberConfigOffset(Map<String, ExtendedWorkerState> memberConfigs,

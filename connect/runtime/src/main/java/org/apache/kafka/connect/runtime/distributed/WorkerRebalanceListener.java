@@ -20,20 +20,19 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.Collection;
 
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedAssignment;
-
 /**
  * Listener for rebalance events in the worker group.
  */
 public interface WorkerRebalanceListener {
     /**
-     * Invoked when a new assignment is created by joining the Connect worker group. This is invoked for both successful
-     * and unsuccessful assignments.
+     * Invoked when a new assignment is created by joining the Connect worker group. This is
+     * invoked for both successful and unsuccessful assignments.
      */
-    void onAssigned(ExtendedAssignment assignment, int generation);
+    void onAssigned(ConnectAssignment assignment, int generation);
 
     /**
-     * Invoked when a rebalance operation starts, revoking ownership for the set of connectors and tasks.
+     * Invoked when a rebalance operation starts, revoking ownership for the set of connectors
+     * and tasks.
      */
     void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks);
 }

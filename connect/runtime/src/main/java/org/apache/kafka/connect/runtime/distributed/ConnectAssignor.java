@@ -20,7 +20,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
- * An assignor that computes a distribution of connectors and tasks among the workers of group
+ * An assignor that computes a distribution of connectors and tasks among the workers of the group
  * that performs rebalancing.
  */
 public interface ConnectAssignor {
@@ -32,7 +32,6 @@ public interface ConnectAssignor {
      * @param protocol the protocol type; for Connect assignors this is normally "connect"
      * @param allMemberMetadata the metadata of all the active workers of the group
      * @param coordinator the worker coordinator that runs this assignor
-     *
      * @return the assignment of connectors and tasks to workers
      */
     Map<String, ByteBuffer> performAssignment(String leaderId, String protocol,

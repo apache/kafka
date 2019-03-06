@@ -45,8 +45,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COOP;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedAssignment;
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COOPERATIVE;
+import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedWorkerState;
 
 /**
@@ -60,14 +61,16 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     private final Logger log;
     private final String restUrl;
     private final ConfigBackingStore configStorage;
-    private ExtendedAssignment assignmentSnapshot;
+    private ConnectAssignment assignmentSnapshot;
     private ClusterConfigState configSnapshot;
     private final WorkerRebalanceListener listener;
     private final ConnectProtocolCompatibility protocolCompatibility;
     private LeaderState leaderState;
 
     private boolean rejoinRequested;
-    private final ConnectAssignor assignor;
+    private volatile short currentConnectProtocol;
+    private final ConnectAssignor eagerAssignor;
+    private final ConnectAssignor incrementalAssignor;
 
     /**
      * Initialize the coordination manager.
@@ -85,7 +88,8 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                              String restUrl,
                              ConfigBackingStore configStorage,
                              WorkerRebalanceListener listener,
-                             ConnectProtocolCompatibility protocolCompatibility) {
+                             ConnectProtocolCompatibility protocolCompatibility,
+                             int maxDelay) {
         super(logContext,
               client,
               groupId,
@@ -105,9 +109,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         this.listener = listener;
         this.rejoinRequested = false;
         this.protocolCompatibility = protocolCompatibility;
-        this.assignor = protocolCompatibility == COOP
-                        ? new IncrementalCooperativeAssignor(logContext)
-                        : new StrictAssignor(logContext);
+        this.incrementalAssignor = new IncrementalCooperativeAssignor(logContext, maxDelay);
+        this.eagerAssignor = new EagerAssignor(logContext);
+        this.currentConnectProtocol = protocolCompatibility == COOPERATIVE
+                                      ? CONNECT_PROTOCOL_V1
+                                      : CONNECT_PROTOCOL_V0;
     }
 
     @Override
@@ -165,14 +171,14 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         ExtendedWorkerState workerState = new ExtendedWorkerState(restUrl, configSnapshot.offset(), assignmentSnapshot);
         ByteBuffer metadata;
         switch (protocolCompatibility) {
-            case STRICT:
+            case EAGER:
                 metadata = ConnectProtocol.serializeMetadata(workerState);
                 return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(Collections.singleton(
                         new JoinGroupRequestData.JoinGroupRequestProtocol()
                                 .setName(protocolCompatibility.protocol())
                                 .setMetadata(metadata.array()))
                         .iterator());
-            case COMPAT:
+            case COMPATIBLE:
                 return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(Arrays.asList(
                         new JoinGroupRequestData.JoinGroupRequestProtocol()
                                 .setName(protocolCompatibility.protocol())
@@ -181,7 +187,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                                 .setName(protocolCompatibility.protocol())
                                 .setMetadata(ConnectProtocol.serializeMetadata(workerState).array()))
                         .iterator());
-            case COOP:
+            case COOPERATIVE:
                 return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(Collections.singleton(
                         new JoinGroupRequestData.JoinGroupRequestProtocol()
                                 .setName(protocolCompatibility.protocol())
@@ -194,22 +200,19 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
     @Override
     protected void onJoinComplete(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
-        ExtendedAssignment newAssignment = protocolCompatibility == COOP
-                ? IncrementalCooperativeConnectProtocol.deserializeAssignment(memberAssignment)
-                : new ExtendedAssignment(ConnectProtocol.deserializeAssignment(memberAssignment),
-                                         Collections.emptyList(),
-                                         Collections.emptyList());
+        ConnectAssignment newAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(memberAssignment);
+        currentConnectProtocol = newAssignment.version();
         // At this point we always consider ourselves to be a member of the cluster, even if there was an assignment
         // error (the leader couldn't make the assignment) or we are behind the config and cannot yet work on our assigned
         // tasks. It's the responsibility of the code driving this process to decide how to react (e.g. trying to get
         // up to date, try to rejoin again, leaving the group and backing off, etc.).
         rejoinRequested = false;
-        if (!newAssignment.revokedConnectors().isEmpty() || !newAssignment.revokedTasks().isEmpty()) {
-            listener.onRevoked(newAssignment.leader(), newAssignment.revokedConnectors(), newAssignment.revokedTasks());
-        }
+        if (currentConnectProtocol > CONNECT_PROTOCOL_V0) {
+            if (!newAssignment.revokedConnectors().isEmpty() || !newAssignment.revokedTasks().isEmpty()) {
+                listener.onRevoked(newAssignment.leader(), newAssignment.revokedConnectors(), newAssignment.revokedTasks());
+            }
 
-        log.debug("Deserialized new assignment: {}", newAssignment);
-        if (protocolCompatibility == COOP) {
+            log.debug("Deserialized new assignment: {}", newAssignment);
             if (assignmentSnapshot != null) {
                 assignmentSnapshot.connectors().removeAll(newAssignment.revokedConnectors());
                 assignmentSnapshot.tasks().removeAll(newAssignment.revokedTasks());
@@ -225,20 +228,22 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
 
     @Override
     protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata) {
-        return assignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
+        return currentConnectProtocol == CONNECT_PROTOCOL_V0
+               ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
+               : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
     }
 
     @Override
     protected void onJoinPrepare(int generation, String memberId) {
         log.info("Rebalance started");
         leaderState(null);
-        if (protocolCompatibility == COOP) {
-            log.debug("Cooperative rebalance triggered. Keeping assignment {} until it's "
-                      + "explicitly revoked.", assignmentSnapshot);
-        } else {
+        if (currentConnectProtocol == CONNECT_PROTOCOL_V0) {
             log.debug("Revoking previous assignment {}", assignmentSnapshot);
             if (assignmentSnapshot != null && !assignmentSnapshot.failed())
                 listener.onRevoked(assignmentSnapshot.leader(), assignmentSnapshot.connectors(), assignmentSnapshot.tasks());
+        } else {
+            log.debug("Cooperative rebalance triggered. Keeping assignment {} until it's "
+                      + "explicitly revoked.", assignmentSnapshot);
         }
     }
 
@@ -315,6 +320,15 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         leaderState = update;
     }
 
+    /**
+     * Get the version of the connect protocol that is currently active in the group of workers.
+     *
+     * @return the current connect protocol version
+     */
+    public short currentProtocolVersion() {
+        return currentConnectProtocol;
+    }
+
     private class WorkerCoordinatorMetrics {
         public final String metricGrpName;
 
@@ -344,7 +358,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         }
     }
 
-    private static <K, V> Map<V, K> invertAssignment(Map<K, Collection<V>> assignment) {
+    public static <K, V> Map<V, K> invertAssignment(Map<K, Collection<V>> assignment) {
         Map<V, K> inverted = new HashMap<>();
         for (Map.Entry<K, Collection<V>> assignmentEntry : assignment.entrySet()) {
             K key = assignmentEntry.getKey();

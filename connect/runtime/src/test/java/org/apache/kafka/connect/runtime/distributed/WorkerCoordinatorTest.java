@@ -57,7 +57,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedAssignment;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -103,8 +102,8 @@ public class WorkerCoordinatorTest {
     @Parameters
     public static Iterable<?> mode() {
         return Arrays.asList(new Object[][]{
-                {ConnectProtocolCompatibility.STRICT, 1},
-                {ConnectProtocolCompatibility.COMPAT, 2}});
+                {ConnectProtocolCompatibility.EAGER, 1},
+                {ConnectProtocolCompatibility.COMPATIBLE, 2}});
     }
 
     @Parameter
@@ -141,7 +140,8 @@ public class WorkerCoordinatorTest {
                 LEADER_URL,
                 configStorage,
                 rebalanceListener,
-                compatibility);
+                compatibility,
+                0);
 
         configState1 = new ClusterConfigState(
                 1L,
@@ -558,7 +558,7 @@ public class WorkerCoordinatorTest {
     }
 
     private static class MockRebalanceListener implements WorkerRebalanceListener {
-        public ExtendedAssignment assignment = null;
+        public ConnectAssignment assignment = null;
 
         public String revokedLeader;
         public Collection<String> revokedConnectors;
@@ -568,7 +568,7 @@ public class WorkerCoordinatorTest {
         public int assignedCount = 0;
 
         @Override
-        public void onAssigned(ExtendedAssignment assignment, int generation) {
+        public void onAssigned(ConnectAssignment assignment, int generation) {
             this.assignment = assignment;
             assignedCount++;
         }

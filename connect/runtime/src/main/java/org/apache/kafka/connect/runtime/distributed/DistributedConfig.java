@@ -132,9 +132,19 @@ public class DistributedConfig extends WorkerConfig {
     public static final String STATUS_STORAGE_REPLICATION_FACTOR_CONFIG = "status.storage.replication.factor";
     private static final String STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC = "Replication factor used when creating the status storage topic";
 
-    public static final String CONNECT_PROTOCOL_COMPATIBILITY = "connect.protocol.compatibility";
-    public static final String CONNECT_PROTOCOL_COMPATIBILITY_DOC = "Compatibility mode for Kafka Connect's Protocol";
-    public static final String CONNECT_PROTOCOL_COMPATIBILITY_DEFAULT = ConnectProtocolCompatibility.STRICT.toString();
+    /**
+     * <code>connect.protocol</code>
+     */
+    public static final String CONNECT_PROTOCOL_CONFIG = "connect.protocol";
+    public static final String CONNECT_PROTOCOL_DOC = "Compatibility mode for Kafka Connect Protocol";
+    public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.EAGER.toString();
+
+    /**
+     * <code>connect.protocol</code>
+     */
+    public static final String SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG = "scheduled.rebalance.max.delay.ms";
+    public static final String SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC = "Compatibility mode for Kafka Connect Protocol";
+    public static final int SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT = 300_000;
 
     static {
         CONFIG = baseConfigDef()
@@ -270,11 +280,16 @@ public class DistributedConfig extends WorkerConfig {
                         atLeast(1),
                         ConfigDef.Importance.LOW,
                         STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC)
-                .define(CONNECT_PROTOCOL_COMPATIBILITY,
+                .define(CONNECT_PROTOCOL_CONFIG,
                         ConfigDef.Type.STRING,
-                        CONNECT_PROTOCOL_COMPATIBILITY_DEFAULT,
+                        CONNECT_PROTOCOL_DEFAULT,
                         ConfigDef.Importance.LOW,
-                        CONNECT_PROTOCOL_COMPATIBILITY_DOC);
+                        CONNECT_PROTOCOL_DOC)
+                .define(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG,
+                        ConfigDef.Type.INT,
+                        SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT,
+                        ConfigDef.Importance.LOW,
+                        SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC);
     }
 
     @Override

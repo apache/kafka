@@ -137,7 +137,8 @@ public class WorkerGroupMember {
                     restUrl,
                     configStorage,
                     listener,
-                    ConnectProtocolCompatibility.compatibility(config.getString(DistributedConfig.CONNECT_PROTOCOL_COMPATIBILITY)));
+                    ConnectProtocolCompatibility.compatibility(config.getString(DistributedConfig.CONNECT_PROTOCOL_CONFIG)),
+                    config.getInt(DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG));
 
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Connect group member created");
@@ -207,6 +208,15 @@ public class WorkerGroupMember {
 
     public String ownerUrl(ConnectorTaskId task) {
         return coordinator.ownerUrl(task);
+    }
+
+    /**
+     * Get the version of the connect protocol that is currently active in the group of workers.
+     *
+     * @return the current connect protocol version
+     */
+    public short currentProtocolVersion() {
+        return coordinator.currentProtocolVersion();
     }
 
     private void stop(boolean swallowException) {

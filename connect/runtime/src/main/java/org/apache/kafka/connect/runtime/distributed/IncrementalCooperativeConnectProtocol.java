@@ -22,31 +22,19 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.SchemaException;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_BYTES;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.ASSIGNMENT_KEY_NAME;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONFIG_OFFSET_KEY_NAME;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONFIG_STATE_V0;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECTOR_ASSIGNMENT_V0;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECTOR_KEY_NAME;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECTOR_TASK;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_HEADER_SCHEMA;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.ERROR_KEY_NAME;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.LEADER_KEY_NAME;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.LEADER_URL_KEY_NAME;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.TASKS_KEY_NAME;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.URL_KEY_NAME;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.VERSION_KEY_NAME;
 
@@ -153,7 +141,7 @@ public class IncrementalCooperativeConnectProtocol {
         String url = configState.getString(URL_KEY_NAME);
         Struct allocation = ALLOCATION_V1.read(buffer);
         // Protocol version is embedded with the assignment in the metadata
-        ExtendedAssignment assignment = deserializeAssignment(allocation.getBytes(ALLOCATION_KEY_NAME));
+        ConnectAssignment assignment = deserializeAssignment(allocation.getBytes(ALLOCATION_KEY_NAME));
         return new ExtendedWorkerState(url, configOffset, assignment);
     }
 
@@ -169,8 +157,8 @@ public class IncrementalCooperativeConnectProtocol {
      *   Revoked            => [Connector Assignment]
      *   ScheduledDelay     => Int32
      */
-    public static ByteBuffer serializeAssignment(ExtendedAssignment assignment) {
-        if (assignment == null || ExtendedAssignment.EMPTY.equals(assignment)) {
+    public static ByteBuffer serializeAssignment(ConnectAssignment assignment) {
+        if (assignment == null || ConnectAssignment.empty().equals(assignment)) {
             return null;
         }
         Struct struct = assignment.toStruct();
@@ -189,7 +177,7 @@ public class IncrementalCooperativeConnectProtocol {
      * @param buffer the buffer containing a serialized assignment
      * @return the deserialized assignment
      */
-    public static ExtendedAssignment deserializeAssignment(ByteBuffer buffer) {
+    public static ConnectAssignment deserializeAssignment(ByteBuffer buffer) {
         if (buffer == null) {
             return null;
         }
@@ -197,68 +185,18 @@ public class IncrementalCooperativeConnectProtocol {
         Short version = header.getShort(VERSION_KEY_NAME);
         checkVersionCompatibility(version);
         Struct struct = ASSIGNMENT_V1.read(buffer);
-        return ExtendedAssignment.fromStruct(struct);
-    }
-
-    private static Collection<Struct> taskAssignments(Map<String, Collection<Integer>> assignments) {
-        return assignments == null
-               ? null
-               : assignments.entrySet().stream()
-                       .map(connectorEntry -> {
-                           Struct taskAssignment = new Struct(CONNECTOR_ASSIGNMENT_V1);
-                           taskAssignment.set(CONNECTOR_KEY_NAME, connectorEntry.getKey());
-                           taskAssignment.set(TASKS_KEY_NAME, connectorEntry.getValue().toArray());
-                           return taskAssignment;
-                       }).collect(Collectors.toList());
-    }
-
-    private static Collection<String> extractConnectors(Struct struct, String key) {
-        Object[] connectors = struct.getArray(key);
-        if (connectors == null) {
-            return Collections.emptyList();
-        }
-        List<String> connectorIds = new ArrayList<>();
-        for (Object structObj : struct.getArray(key)) {
-            Struct assignment = (Struct) structObj;
-            String connector = assignment.getString(CONNECTOR_KEY_NAME);
-            for (Object taskIdObj : assignment.getArray(TASKS_KEY_NAME)) {
-                Integer taskId = (Integer) taskIdObj;
-                if (taskId == CONNECTOR_TASK) {
-                    connectorIds.add(connector);
-                }
-            }
-        }
-        return connectorIds;
-    }
-
-    private static Collection<ConnectorTaskId> extractTasks(Struct struct, String key) {
-        Object[] tasks = struct.getArray(key);
-        if (tasks == null) {
-            return Collections.emptyList();
-        }
-        List<ConnectorTaskId> tasksIds = new ArrayList<>();
-        for (Object structObj : struct.getArray(key)) {
-            Struct assignment = (Struct) structObj;
-            String connector = assignment.getString(CONNECTOR_KEY_NAME);
-            for (Object taskIdObj : assignment.getArray(TASKS_KEY_NAME)) {
-                Integer taskId = (Integer) taskIdObj;
-                if (taskId != CONNECTOR_TASK) {
-                    tasksIds.add(new ConnectorTaskId(connector, taskId));
-                }
-            }
-        }
-        return tasksIds;
+        return ConnectAssignment.fromStruct(version, struct);
     }
 
     /**
      * A class that captures the deserialized form of a worker's metadata.
      */
     public static class ExtendedWorkerState extends ConnectProtocol.WorkerState {
-        private final ExtendedAssignment assignment;
+        private final ConnectAssignment assignment;
 
-        public ExtendedWorkerState(String url, long offset, ExtendedAssignment assignment) {
+        public ExtendedWorkerState(String url, long offset, ConnectAssignment assignment) {
             super(url, offset);
-            this.assignment = assignment != null ? assignment : ExtendedAssignment.EMPTY;
+            this.assignment = assignment != null ? assignment : ConnectAssignment.empty();
         }
 
         /**
@@ -267,7 +205,7 @@ public class IncrementalCooperativeConnectProtocol {
          *
          * @return the assignment of connectors and tasks
          */
-        public ExtendedAssignment assignment() {
+        public ConnectAssignment assignment() {
             return assignment;
         }
 
@@ -278,177 +216,6 @@ public class IncrementalCooperativeConnectProtocol {
                     ", offset=" + offset() +
                     ", " + assignment +
                     '}';
-        }
-    }
-
-    /**
-     * The extended assignment of connectors and tasks that includes revoked connectors and tasks
-     * as well as a scheduled rebalancing delay.
-     */
-    public static class ExtendedAssignment extends ConnectProtocol.Assignment {
-        private final Collection<String> revokedConnectorIds;
-        private final Collection<ConnectorTaskId> revokedTaskIds;
-        private final int delay;
-
-        private static final ExtendedAssignment EMPTY = new ExtendedAssignment(
-                ConnectProtocol.Assignment.NO_ERROR, null, null, -1, Collections.emptyList(),
-                Collections.emptyList(), Collections.emptyList(), Collections.emptyList());
-
-        /**
-         * Create an assignment indicating responsibility for the given connector instances and task Ids.
-         *
-         * @param revokedConnectorIds list of connectors that the worker should stop running
-         * @param revokedTaskIds list of task IDs that the worker should stop running
-         */
-        public ExtendedAssignment(short error, String leader, String leaderUrl, long configOffset,
-                                  Collection<String> connectorIds, Collection<ConnectorTaskId> taskIds,
-                                  Collection<String> revokedConnectorIds, Collection<ConnectorTaskId> revokedTaskIds) {
-            this(error, leader, leaderUrl, configOffset, connectorIds, taskIds, revokedConnectorIds, revokedTaskIds, 0);
-        }
-
-        /**
-         * Create an assignment indicating responsibility for the given connector instances and task Ids.
-         *
-         * @param revokedConnectorIds list of connectors that the worker should stop running
-         * @param revokedTaskIds list of task IDs that the worker should stop running
-         * @param delay the scheduled delay after which the worker should rejoin the group
-         */
-        public ExtendedAssignment(short error, String leader, String leaderUrl, long configOffset,
-                                  Collection<String> connectorIds, Collection<ConnectorTaskId> taskIds,
-                                  Collection<String> revokedConnectorIds, Collection<ConnectorTaskId> revokedTaskIds,
-                                  int delay) {
-            super(error, leader, leaderUrl, configOffset, connectorIds, taskIds);
-            this.revokedConnectorIds = revokedConnectorIds;
-            this.revokedTaskIds = revokedTaskIds;
-            this.delay = delay;
-        }
-
-        public ExtendedAssignment(
-                ConnectProtocol.Assignment assignmentV0,
-                Collection<String> revokedConnectorIds,
-                Collection<ConnectorTaskId> revokedTaskIds
-        ) {
-            this(assignmentV0.error(), assignmentV0.leader(), assignmentV0.leaderUrl(),
-                 assignmentV0.offset(), assignmentV0.connectors(), assignmentV0.tasks(),
-                 revokedConnectorIds, revokedTaskIds, 0);
-        }
-
-        /**
-         * Return the IDs of the connectors that are revoked by this assignment.
-         *
-         * @return the revoked connector IDs
-         */
-        public Collection<String> revokedConnectors() {
-            return revokedConnectorIds;
-        }
-
-        /**
-         * Return the IDs of the tasks that are revoked by this assignment.
-         *
-         * @return the revoked task IDs
-         */
-        public Collection<ConnectorTaskId> revokedTasks() {
-            return revokedTaskIds;
-        }
-
-        /**
-         * Return the delay for the rebalance that is scheduled by this assignment.
-         *
-         * @return the scheduled delay
-         */
-        public int delay() {
-            return delay;
-        }
-
-        /**
-         * Return an empty assignment.
-         *
-         * @return an empty assignment
-         */
-        public static ExtendedAssignment empty() {
-            return EMPTY;
-        }
-
-        @Override
-        public String toString() {
-            return "Assignment{" +
-                    "error=" + error() +
-                    ", leader='" + leader() + '\'' +
-                    ", leaderUrl='" + leaderUrl() + '\'' +
-                    ", offset=" + offset() +
-                    ", connectorIds=" + connectors() +
-                    ", taskIds=" + tasks() +
-                    ", revokedConnectorIds=" + revokedConnectorIds +
-                    ", revokedTaskIds=" + revokedTaskIds +
-                    ", delay=" + delay +
-                    '}';
-        }
-
-        private Map<String, Collection<Integer>> revokedAsMap() {
-            if (revokedConnectorIds == null && revokedTaskIds == null) {
-                return null;
-            }
-            // Using LinkedHashMap preserves the ordering, which is helpful for tests and debugging
-            Map<String, Collection<Integer>> taskMap = new LinkedHashMap<>();
-            Optional.ofNullable(revokedConnectorIds)
-                    .orElseGet(Collections::emptyList)
-                    .stream()
-                    .distinct()
-                    .forEachOrdered(connectorId -> {
-                        Collection<Integer> connectorTasks =
-                                taskMap.computeIfAbsent(connectorId, v -> new ArrayList<>());
-                        connectorTasks.add(CONNECTOR_TASK);
-                    });
-
-            Optional.ofNullable(revokedTaskIds)
-                    .orElseGet(Collections::emptyList)
-                    .stream()
-                    .forEachOrdered(taskId -> {
-                        String connectorId = taskId.connector();
-                        Collection<Integer> connectorTasks =
-                                taskMap.computeIfAbsent(connectorId, v -> new ArrayList<>());
-                        connectorTasks.add(taskId.task());
-                    });
-            return taskMap;
-        }
-
-        /**
-         * Return the {@code Struct} that corresponds to this assignment.
-         *
-         * @return the assignment struct
-         */
-        public Struct toStruct() {
-            Collection<Struct> assigned = taskAssignments(asMap());
-            Collection<Struct> revoked = taskAssignments(revokedAsMap());
-            return new Struct(ASSIGNMENT_V1)
-                    .set(ERROR_KEY_NAME, error())
-                    .set(LEADER_KEY_NAME, leader())
-                    .set(LEADER_URL_KEY_NAME, leaderUrl())
-                    .set(CONFIG_OFFSET_KEY_NAME, offset())
-                    .set(ASSIGNMENT_KEY_NAME, assigned != null ? assigned.toArray() : null)
-                    .set(REVOKED_KEY_NAME, revoked != null ? revoked.toArray() : null)
-                    .set(SCHEDULED_DELAY_KEY_NAME, delay);
-        }
-
-        /**
-         * Given a {@code Struct} that encodes an assignment return the assignment object.
-         *
-         * @param struct a struct representing an assignment
-         * @return the assignment
-         */
-        public static ExtendedAssignment fromStruct(Struct struct) {
-            return struct == null
-                   ? null
-                   : new ExtendedAssignment(
-                           struct.getShort(ERROR_KEY_NAME),
-                           struct.getString(LEADER_KEY_NAME),
-                           struct.getString(LEADER_URL_KEY_NAME),
-                           struct.getLong(CONFIG_OFFSET_KEY_NAME),
-                           extractConnectors(struct, ASSIGNMENT_KEY_NAME),
-                           extractTasks(struct, ASSIGNMENT_KEY_NAME),
-                           extractConnectors(struct, REVOKED_KEY_NAME),
-                           extractTasks(struct, REVOKED_KEY_NAME),
-                           struct.getInt(SCHEDULED_DELAY_KEY_NAME));
         }
     }
 
