@@ -717,6 +717,7 @@ public class JsonConverter implements Converter, HeaderConverter {
 
     private static Object convertToConnect(Schema schema, JsonNode jsonValue) {
         final Schema.Type schemaType;
+        jsonValue = jsonValue == null ? JsonNodeFactory.instance.nullNode() : jsonValue;
         if (schema != null) {
             schemaType = schema.type();
             if (jsonValue == null || jsonValue.isNull()) {
