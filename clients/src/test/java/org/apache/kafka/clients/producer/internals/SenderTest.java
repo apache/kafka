@@ -1268,6 +1268,7 @@ public class SenderTest {
         sender.run(time.milliseconds()); // this should not block
         sender.run(); // run main loop to test forceClose flag
         assertTrue("Pending batches are not aborted.", !accumulator.hasUndrained());
+        assertTrue(successfulResponse.isDone());
     }
 
     @Test
