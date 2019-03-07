@@ -125,13 +125,12 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         final List<StateStore> stateStores = topology.globalStateStores();
         for (final StateStore stateStore : stateStores) {
             globalStoreNames.add(stateStore.name());
-            stateStore.init(processorContext, stateStore);
 
             final Map<String, String> storeNameToTopic = topology.storeToChangelogTopic();
             final String sourceTopic = storeNameToTopic.get(stateStore.name());
             final SourceNode source = topology.source(sourceTopic);
             if (source != null) {
-                log.info("Found sourceNode %s for topic %s", sourceTopic, source.toString());
+                log.info("Found sourceNode {} for topic {}", source.toString(), sourceTopic);
                 deserializers.put(
                         sourceTopic,
                         new RecordDeserializer(
@@ -142,6 +141,8 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                         )
                 );
             }
+
+            stateStore.init(processorContext, stateStore);
         }
         return Collections.unmodifiableSet(globalStoreNames);
     }
