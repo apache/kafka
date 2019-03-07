@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime.health;
 
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectClusterState;
 import org.apache.kafka.connect.health.ConnectorHealth;
 import org.apache.kafka.connect.health.ConnectorState;
@@ -31,6 +32,8 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 public class ConnectClusterStateImpl implements ConnectClusterState {
 
@@ -42,13 +45,22 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
 
     @Override
     public Collection<String> connectors() {
+        final CountDownLatch connectorsLatch = new CountDownLatch(1);
         final Collection<String> connectors = new ArrayList<>();
         herderProvider.get().connectors(new Callback<java.util.Collection<String>>() {
             @Override
             public void onCompletion(Throwable error, Collection<String> result) {
                 connectors.addAll(result);
+                connectorsLatch.countDown();
             }
         });
+        try {
+            // Should take no more than 10 seconds to get a list of connectors. Any longer than this
+            // and it's very likely something is wrong.
+            connectorsLatch.await(10, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            throw new ConnectException("Interrupted while retrieving list of connectors", e);
+        }
         return connectors;
     }
 
