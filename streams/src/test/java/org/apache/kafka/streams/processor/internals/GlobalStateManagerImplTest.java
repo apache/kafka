@@ -23,6 +23,8 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Utils;
@@ -32,10 +34,12 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.MockSourceNode;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.apache.kafka.test.TestUtils;
@@ -46,6 +50,8 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -58,6 +64,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Arrays.asList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
@@ -78,14 +86,17 @@ public class GlobalStateManagerImplTest {
     private final String storeName2 = "t2-store";
     private final String storeName3 = "t3-store";
     private final String storeName4 = "t4-store";
+    private final String storeName5 = "t5-store";
     private final TopicPartition t1 = new TopicPartition("t1", 1);
     private final TopicPartition t2 = new TopicPartition("t2", 1);
     private final TopicPartition t3 = new TopicPartition("t3", 1);
     private final TopicPartition t4 = new TopicPartition("t4", 1);
+    private final TopicPartition t5 = new TopicPartition("t5", 1);
     private GlobalStateManagerImpl stateManager;
     private StateDirectory stateDirectory;
     private StreamsConfig streamsConfig;
     private NoOpReadOnlyStore<Object, Object> store1, store2, store3, store4;
+    private NoOpReadOnlyStore<Long, Long> store5;
     private MockConsumer<byte[], byte[]> consumer;
     private File checkpointFile;
     private ProcessorTopology topology;
@@ -99,13 +110,24 @@ public class GlobalStateManagerImplTest {
         storeToTopic.put(storeName2, t2.topic());
         storeToTopic.put(storeName3, t3.topic());
         storeToTopic.put(storeName4, t4.topic());
+        storeToTopic.put(storeName5, t5.topic());
 
         store1 = new NoOpReadOnlyStore<>(storeName1, true);
         store2 = new ConverterStore<>(storeName2, true);
         store3 = new NoOpReadOnlyStore<>(storeName3);
         store4 = new NoOpReadOnlyStore<>(storeName4);
+        store5 = new NoOpReadOnlyStore<>(storeName5, true);
 
-        topology = ProcessorTopology.withGlobalStores(asList(store1, store2, store3, store4), storeToTopic);
+        final Deserializer<Long> longDeserializer = Serdes.Long().deserializer();
+        final MockSourceNode<Long, Long> source1 = new MockSourceNode<>(new String[]{t5.topic()}, longDeserializer, longDeserializer);
+
+        topology = new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
+                mkMap(mkEntry(t5.topic(), source1)),
+                Collections.<String, SinkNode>emptyMap(),
+                Collections.<StateStore>emptyList(),
+                asList(store1, store2, store3, store4, store5),
+                storeToTopic,
+                Collections.emptySet());
 
         streamsConfig = new StreamsConfig(new Properties() {
             {
@@ -117,12 +139,12 @@ public class GlobalStateManagerImplTest {
         stateDirectory = new StateDirectory(streamsConfig, time, true);
         consumer = new MockConsumer<>(OffsetResetStrategy.NONE);
         stateManager = new GlobalStateManagerImpl(
-            new LogContext("test"),
-            topology,
-            consumer,
-            stateDirectory,
-            stateRestoreListener,
-            streamsConfig);
+                new LogContext("test"),
+                topology,
+                consumer,
+                stateDirectory,
+                stateRestoreListener,
+                streamsConfig);
         processorContext = new InternalMockProcessorContext(stateDirectory.globalStateDir(), streamsConfig);
         stateManager.setGlobalProcessorContext(processorContext);
         checkpointFile = new File(stateManager.baseDir(), ProcessorStateManager.CHECKPOINT_FILE_NAME);
@@ -131,6 +153,36 @@ public class GlobalStateManagerImplTest {
     @After
     public void after() throws IOException {
         stateDirectory.unlockGlobalState();
+    }
+
+    public byte[] longToBytes(final long x) {
+        final ByteBuffer buffer = ByteBuffer.allocate(Long.BYTES);
+        buffer.putLong(x);
+        return buffer.array();
+    }
+
+    @Test(expected = StreamsException.class)//only works with LogAndFailExceptionHandler.class
+    public void shouldThrowStreamsExceptionWhenRestoringWithLogAndFailExceptionHandler() {
+        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
+        startOffsets.put(t5, 1L);
+        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(t5, 3L);
+        consumer.updatePartitions(t5.topic(), Collections.singletonList(new PartitionInfo(t5.topic(), t5.partition(), null, null, null)));
+        consumer.assign(Collections.singletonList(t5));
+        consumer.updateEndOffsets(endOffsets);
+        consumer.updateBeginningOffsets(startOffsets);
+        final byte[] specialString = "specialKey".getBytes(StandardCharsets.UTF_8);
+        final byte[] longValue = longToBytes(1);
+
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 1, longValue, longValue));
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 2, specialString, specialString));
+        consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 3, longValue, longValue));
+
+        stateManager.initialize();
+        stateManager.register(store5, stateRestoreCallback);
+
+        assertEquals(2, stateRestoreCallback.restored.size());
+
     }
 
     @Test
@@ -182,7 +234,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldReturnInitializedStoreNames() {
         final Set<String> storeNames = stateManager.initialize();
-        assertEquals(Utils.mkSet(storeName1, storeName2, storeName3, storeName4), storeNames);
+        assertEquals(Utils.mkSet(storeName1, storeName2, storeName3, storeName4, storeName5), storeNames);
     }
 
     @Test
@@ -239,9 +291,9 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
         stateManager.register(
-            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>, Object, Object>(store1) {
-            },
-            stateRestoreCallback
+                new WrappedStateStore<NoOpReadOnlyStore<Object, Object>, Object, Object>(store1) {
+                },
+                stateRestoreCallback
         );
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
@@ -267,9 +319,9 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
         stateManager.register(
-            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>, Object, Object>(store2) {
-            },
-            stateRestoreCallback
+                new WrappedStateStore<NoOpReadOnlyStore<Object, Object>, Object, Object>(store2) {
+                },
+                stateRestoreCallback
         );
 
         final KeyValue<byte[], byte[]> restoredRecord = stateRestoreCallback.restored.get(0);
@@ -324,7 +376,7 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(5, 5, t1);
 
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
-                                                                                ProcessorStateManager.CHECKPOINT_FILE_NAME));
+                ProcessorStateManager.CHECKPOINT_FILE_NAME));
         offsetCheckpoint.write(Collections.singletonMap(t1, 5L));
 
         stateManager.initialize();
@@ -548,24 +600,24 @@ public class GlobalStateManagerImplTest {
 
     private Map<TopicPartition, Long> readOffsetsCheckpoint() throws IOException {
         final OffsetCheckpoint offsetCheckpoint = new OffsetCheckpoint(new File(stateManager.baseDir(),
-                                                                                ProcessorStateManager.CHECKPOINT_FILE_NAME));
+                ProcessorStateManager.CHECKPOINT_FILE_NAME));
         return offsetCheckpoint.read();
     }
 
     @Test
     public void shouldThrowLockExceptionIfIOExceptionCaughtWhenTryingToLockStateDir() {
         stateManager = new GlobalStateManagerImpl(
-            new LogContext("mock"),
-            topology,
-            consumer,
-            new StateDirectory(streamsConfig, time, true) {
-                @Override
-                public boolean lockGlobalState() throws IOException {
-                    throw new IOException("KABOOM!");
-                }
-            },
-            stateRestoreListener,
-            streamsConfig
+                new LogContext("mock"),
+                topology,
+                consumer,
+                new StateDirectory(streamsConfig, time, true) {
+                    @Override
+                    public boolean lockGlobalState() throws IOException {
+                        throw new IOException("KABOOM!");
+                    }
+                },
+                stateRestoreListener,
+                streamsConfig
         );
 
         try {
@@ -598,12 +650,12 @@ public class GlobalStateManagerImplTest {
 
         try {
             new GlobalStateManagerImpl(
-                new LogContext("mock"),
-                topology,
-                consumer,
-                stateDirectory,
-                stateRestoreListener,
-                streamsConfig);
+                    new LogContext("mock"),
+                    topology,
+                    consumer,
+                    stateDirectory,
+                    stateRestoreListener,
+                    streamsConfig);
         } catch (final StreamsException expected) {
             assertEquals(numberOfCalls.get(), retries);
         }
@@ -631,12 +683,12 @@ public class GlobalStateManagerImplTest {
 
         try {
             new GlobalStateManagerImpl(
-                new LogContext("mock"),
-                topology,
-                consumer,
-                stateDirectory,
-                stateRestoreListener,
-                streamsConfig);
+                    new LogContext("mock"),
+                    topology,
+                    consumer,
+                    stateDirectory,
+                    stateRestoreListener,
+                    streamsConfig);
         } catch (final StreamsException expected) {
             assertEquals(numberOfCalls.get(), retries);
         }
@@ -645,15 +697,15 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldDeleteAndRecreateStoreDirectoryOnReinitialize() throws IOException {
         final File storeDirectory1 = new File(stateDirectory.globalStateDir().getAbsolutePath()
-                                                  + File.separator + "rocksdb"
-                                                  + File.separator + storeName1);
+                + File.separator + "rocksdb"
+                + File.separator + storeName1);
         final File storeDirectory2 = new File(stateDirectory.globalStateDir().getAbsolutePath()
-                                                  + File.separator + "rocksdb"
-                                                  + File.separator + storeName2);
+                + File.separator + "rocksdb"
+                + File.separator + storeName2);
         final File storeDirectory3 = new File(stateDirectory.globalStateDir().getAbsolutePath()
-                                                  + File.separator + storeName3);
+                + File.separator + storeName3);
         final File storeDirectory4 = new File(stateDirectory.globalStateDir().getAbsolutePath()
-                                                  + File.separator + storeName4);
+                + File.separator + storeName4);
         final File testFile1 = new File(storeDirectory1.getAbsolutePath() + File.separator + "testFile");
         final File testFile2 = new File(storeDirectory2.getAbsolutePath() + File.separator + "testFile");
         final File testFile3 = new File(storeDirectory3.getAbsolutePath() + File.separator + "testFile");
