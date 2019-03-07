@@ -46,7 +46,7 @@ object GetOffsetShell {
                            .describedAs("partition ids")
                            .ofType(classOf[String])
                            .defaultsTo("")
-    val timeOpt = parser.accepts("time", "timestamp of the offsets before that")
+    val timeOpt = parser.accepts("time", "timestamp of the offsets before that. [Note: No offset is returned, if the timestamp greater than recently commited record timestamp is given.]")
                            .withRequiredArg
                            .describedAs("timestamp/-1(latest)/-2(earliest)")
                            .ofType(classOf[java.lang.Long])
