@@ -35,7 +35,6 @@ import org.junit.experimental.categories.Category
  * Note: In the current project settings SAM type conversion is turned off as it's experimental in Scala 2.11.
  * Hence the native Java API based version is more verbose.
  */
-//noinspection ConvertExpressionToSAM
 @Category(Array(classOf[IntegrationTest]))
 class StreamToTableJoinScalaIntegrationTestImplicitSerdes extends StreamToTableJoinScalaIntegrationTestBase {
 
