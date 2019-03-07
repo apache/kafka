@@ -172,12 +172,38 @@ public class JsonConverterTest {
     }
 
     @Test
+    public void structToJsonStringOptionalDefaultNull() {
+        Schema schema = SchemaBuilder.struct().field("foo", SchemaBuilder.string().optional().defaultValue(null).schema()).build();
+        Struct input = new Struct(schema);
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, input));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"struct\", \"fields\" : [ { \"type\": \"string\", \"optional\": true, \"field\": \"foo\" } ], \"optional\": false }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(JsonNodeFactory.instance.objectNode()
+                        .putNull("foo"),
+                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
+    }
+
+    @Test
     public void structToConnectStringOptionalDefaultValue() {
         Schema schema = SchemaBuilder.struct().field("foo", SchemaBuilder.string().optional().defaultValue("bar").schema()).build();
         String msg = "{ \"schema\": { \"type\": \"struct\", \"fields\" : [ { \"field\": \"foo\", \"type\": \"string\", \"optional\": true, \"default\": \"bar\" } ] }, \"payload\": { } }";
         SchemaAndValue schemaAndValue = converter.toConnectData(TOPIC, msg.getBytes());
         assertEquals(schema, schemaAndValue.schema());
         assertEquals(((Struct) schemaAndValue.value()).getString("foo"), "bar");
+    }
+
+    @Test
+    public void structToJsonStringOptionalDefaultValue() {
+        Schema schema = SchemaBuilder.struct().field("foo", SchemaBuilder.string().optional().defaultValue("bar").schema()).build();
+        Struct input = new Struct(schema);
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, input));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"struct\", \"fields\" : [ { \"type\": \"string\", \"optional\": true, \"default\": \"bar\", \"field\": \"foo\" } ], \"optional\": false }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(JsonNodeFactory.instance.objectNode()
+                        .put("foo", "bar"),
+                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 
     @Test
@@ -191,6 +217,23 @@ public class JsonConverterTest {
         assertEquals(schema, schemaAndValue.schema());
         assertEquals(((Struct) schemaAndValue.value()).getString("foo"), "bar");
         assertEquals(((Struct) schemaAndValue.value()).getString("for"), "baz");
+    }
+
+    @Test
+    public void structToJsonRequiredWithStringOptionalDefaultValue() {
+        Schema schema = SchemaBuilder.struct()
+                .field("foo", SchemaBuilder.string().optional().defaultValue("bar").schema())
+                .field("for", Schema.STRING_SCHEMA)
+                .build();
+        Struct input = new Struct(schema).put("for", "baz");
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, input));
+        validateEnvelope(converted);
+        assertEquals(parse("{ \"type\": \"struct\", \"fields\" : [ { \"type\": \"string\", \"optional\": true, \"default\": \"bar\", \"field\": \"foo\" }, { \"type\": \"string\", \"optional\": false, \"field\": \"for\" } ], \"optional\": false }"),
+                converted.get(JsonSchema.ENVELOPE_SCHEMA_FIELD_NAME));
+        assertEquals(JsonNodeFactory.instance.objectNode()
+                        .put("foo", "bar")
+                        .put("for", "baz"),
+                converted.get(JsonSchema.ENVELOPE_PAYLOAD_FIELD_NAME));
     }
 
     @Test
