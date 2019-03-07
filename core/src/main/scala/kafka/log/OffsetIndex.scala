@@ -141,7 +141,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
     inLock(lock) {
       require(!isFull, "Attempt to append to a full index (size = " + _entries + ").")
       if (_entries == 0 || offset > _lastOffset) {
-        debug("Adding index entry %d => %d to %s.".format(offset, position, file.getName))
+        trace("Adding index entry %d => %d to %s.".format(offset, position, file.getName))
         mmap.putInt(relativeOffset(offset))
         mmap.putInt(position)
         _entries += 1
@@ -185,6 +185,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
       _entries = entries
       mmap.position(_entries * entrySize)
       _lastOffset = lastEntry.offset
+      debug(s"Truncated index ${file.getAbsolutePath} to $entries entries; position is now ${mmap.position} and last offset is now ${_lastOffset}")
     }
   }
 

@@ -58,6 +58,9 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
 
   override def entrySize = 12
 
+  debug("Loaded index file %s with maxEntries = %d, maxIndexSize = %d, entries = %d, lastEntry = %s, file position = %d"
+    .format(file.getAbsolutePath, maxEntries, maxIndexSize, _entries, _lastEntry, mmap.position()))
+
   // We override the full check to reserve the last time index entry slot for the on roll call.
   override def isFull: Boolean = entries >= maxEntries - 1
 
@@ -126,7 +129,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       // If all the messages are in message format v0, the timestamp will always be NoTimestamp. In that case, the time
       // index will be empty.
       if (timestamp > lastEntry.timestamp) {
-        debug("Adding index entry %d => %d to %s.".format(timestamp, offset, file.getName))
+        trace("Adding index entry %d => %d to %s.".format(timestamp, offset, file.getName))
         mmap.putLong(timestamp)
         mmap.putInt(relativeOffset(offset))
         _entries += 1
@@ -200,6 +203,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       _entries = entries
       mmap.position(_entries * entrySize)
       _lastEntry = lastEntryFromIndexFile
+      debug(s"Truncated index ${file.getAbsolutePath} to $entries entries; position is now ${mmap.position} and last entry is now ${_lastEntry}")
     }
   }
 
