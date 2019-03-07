@@ -149,13 +149,20 @@ build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory an
 to avoid known issues with this configuration.
 
 ### Publishing the jar for all version of Scala and for all projects to maven ###
-    ./gradlew uploadArchivesAll
+    ./gradlew -Pversion=<release version> uploadArchivesAll
 
-Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`) and assign the following variables
+By default, this command will publish artifacts to a Bintray repository named "kafka" under an account specified by the BINTRAY_USER environment variable. The BINTRAY_KEY
+environment variable is used for the password for that account.
+
+If you want to override this to use a different maven repository, you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`)
+and assign the following variables
 
     mavenUrl=
     mavenUsername=
     mavenPassword=
+
+Signing is disabled by default. If you need signing, please set the following variables in `gradle.properties` as well:
+
     signing.keyId=
     signing.password=
     signing.secretKeyRingFile=

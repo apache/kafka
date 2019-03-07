@@ -54,7 +54,7 @@ allprojects {
   repositories {
     mavenCentral()
   }
-  
+
   apply plugin: 'idea'
   apply plugin: 'org.owasp.dependencycheck'
   apply plugin: 'com.github.ben-manes.versions'
@@ -100,9 +100,14 @@ ext {
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
   shouldSign = !skipSigning && !version.endsWith("SNAPSHOT") && project.gradle.startParameter.taskNames.any { it.contains("upload") }
 
-  mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
-  mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
-  mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+  bintrayUsername = System.getenv('BINTRAY_USER')
+  bintrayKey=System.getenv('BINTRAY_KEY')
+  bintrayUrl = bintrayApiBaseUrl + '/maven/linkedin/' + bintrayRepo + '/' + bintrayPackage + '/;publish=1'
+
+  // By default, publish to Bintray.
+  mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : bintrayUrl
+  mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : bintrayUsername
+  mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : bintrayKey
 
   userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
 
@@ -196,9 +201,9 @@ subprojects {
               afterEvaluate {
                   pom.artifactId = "${archivesBaseName}"
                   pom.project {
-                      name 'Apache Kafka'
+                      name 'LinkedIn fork of Apache Kafka'
                       packaging 'jar'
-                      url 'https://kafka.apache.org'
+                      url 'http://github.com/linkedin/kafka'
                       licenses {
                           license {
                               name 'The Apache Software License, Version 2.0'
@@ -533,8 +538,8 @@ def fineTuneEclipseClasspathFile(eclipse, project) {
       if (project.name.equals('core')) {
         cp.entries.findAll { it.kind == "src" && it.path.equals("src/test/scala") }*.excludes = ["integration/", "other/", "unit/"]
       }
-      /* 
-       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different 
+      /*
+       * Set all eclipse build output to go to 'build_eclipse' directory. This is to ensure that gradle and eclipse use different
        * build output directories, and also avoid using the eclpise default of 'bin' which clashes with some of our script directories.
        * https://discuss.gradle.org/t/eclipse-generated-files-should-be-put-in-the-same-place-as-the-gradle-generated-files/6986/2
        */
@@ -643,7 +648,6 @@ def pkgs = [
     'log4j-appender',
     'streams',
     'streams:examples',
-    'streams:streams-scala',
     'streams:test-utils',
     'tools'
 ] + connectPkgs
@@ -727,7 +731,7 @@ project(':core') {
     scoverage libs.scoveragePlugin
     scoverage libs.scoverageRuntime
   }
-  
+
   scoverage {
     reportDir = file("${rootProject.buildDir}/scoverage")
     highlighting = false

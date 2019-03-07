@@ -14,41 +14,38 @@ sudo: required
 dist: trusty
 language: java
 
-env:
-  - _DUCKTAPE_OPTIONS="--subset 0  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 1  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 2  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 3  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 4  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 5  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 6  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 7  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 8  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 9  --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 10 --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 11 --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 12 --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 13 --subsets 15"
-  - _DUCKTAPE_OPTIONS="--subset 14 --subsets 15"
-
 jdk:
   - oraclejdk8
-
+  
 before_install:
   - gradle wrapper
 
-script:
-  - ./gradlew rat
-  - ./gradlew systemTestLibs && /bin/bash ./tests/docker/run_tests.sh
+# By default, the install step will run ./gradlew assemble, which actually builds. Skip this step and do the actual
+# build during the build step.
+install: true
 
-services:
-  - docker
+# Excluded integration tests for now because Travis will hit build timeout (50 minutes) when including them.
+# Also excluded streams unitTest because they often fail with "pure virtual method called" error (KAFKA-3502).
+# TODO: re-enable these tests when the mentioned issues are resolved.
+script:
+  - ./gradlew clean compileJava compileScala compileTestJava compileTestScala checkstyleMain checkstyleTest findbugsMain unitTest -x :streams:unitTest rat --no-daemon -PxmlFindBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed 
 
 before_cache:
   - rm -f  $HOME/.gradle/caches/modules-2/modules-2.lock
   - rm -fr $HOME/.gradle/caches/*/plugin-resolution/
+
 cache:
   directories:
     - "$HOME/.m2/repository"
     - "$HOME/.gradle/caches/"
     - "$HOME/.gradle/wrapper/"
+
+# This will triger publishing artifacts to bintray upon the creation of a new tag in the "x.y.z.w" format.
+deploy:
+  provider: script
+  script: ./gradlew -Pversion=$TRAVIS_TAG uploadArchivesAll
+  skip_cleanup: true
+  on:
+    tags: true
+    all_branches: true
+    condition: $TRAVIS_TAG =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$
