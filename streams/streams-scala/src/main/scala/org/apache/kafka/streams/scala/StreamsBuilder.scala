@@ -27,6 +27,7 @@ import org.apache.kafka.streams.state.StoreBuilder
 import org.apache.kafka.streams.{Topology, StreamsBuilder => StreamsBuilderJ}
 import org.apache.kafka.streams.scala.kstream._
 import ImplicitConversions._
+import org.apache.kafka.streams.errors.TopologyException
 
 import scala.collection.JavaConverters._
 
@@ -77,7 +78,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
   /**
    * Create a [[kstream.KStream]] from the specified topic pattern.
    *
-   * @param topics the topic name pattern
+   * @param topicPattern the topic name pattern
    * @return a [[kstream.KStream]] for the specified topics
    * @see #stream(String)
    * @see `org.apache.kafka.streams.StreamsBuilder#stream`
@@ -157,6 +158,8 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
   /**
    * Adds a state store to the underlying `Topology`. The store must still be "connected" to a `Processor`,
    * `Transformer`, or `ValueTransformer` before it can be used.
+   * <p>
+   * It is required to connect state stores to `Processor`, `Transformer`, or `ValueTransformer` before they can be used.
    *
    * @param builder the builder used to obtain this state store `StateStore` instance
    * @return the underlying Java abstraction `StreamsBuilder` after adding the `StateStore`
@@ -166,8 +169,11 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
   def addStateStore(builder: StoreBuilder[_ <: StateStore]): StreamsBuilderJ = inner.addStateStore(builder)
 
   /**
-   * Adds a global `StateStore` to the topology. Global stores should not be added to `Processor, `Transformer`,
+   * Adds a global `StateStore` to the topology. Global stores should not be added to `Processor`, `Transformer`,
    * or `ValueTransformer` (in contrast to regular stores).
+   * <p>
+   * It is not required to connect a global store to `Processor`, `Transformer`, or `ValueTransformer`;
+   * those have read-only access to all global stores by default.
    *
    * @see `org.apache.kafka.streams.StreamsBuilder#addGlobalStore`
    */
