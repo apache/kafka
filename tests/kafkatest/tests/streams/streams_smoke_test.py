@@ -81,13 +81,13 @@ class StreamsSmokeTest(KafkaTest):
 
             processor1.stop_nodes(not crash)
 
-        with processor2.node.account.monitor_log(processor2.STDOUT_FILE) as monitor3:
+        with processor2.node.account.monitor_log(processor2.STDOUT_FILE) as monitor2:
             processor2.start()
-            monitor3.wait_until('REBALANCING -> RUNNING',
+            monitor2.wait_until('REBALANCING -> RUNNING',
                                 timeout_sec=120,
                                 err_msg="Never saw 'REBALANCING -> RUNNING' message " + str(processor2.node.account)
                                 )
-            monitor3.wait_until('processed',
+            monitor2.wait_until('processed',
                                 timeout_sec=30,
                                 err_msg="Didn't see any processing messages " + str(processor2.node.account)
                                 )
@@ -97,7 +97,17 @@ class StreamsSmokeTest(KafkaTest):
 
         processor2.stop_nodes(not crash)
 
-        processor3.start()
+        with processor3.node.account.monitor_log(processor3.STDOUT_FILE) as monitor3:
+            processor3.start()
+            monitor3.wait_until('REBALANCING -> RUNNING',
+                                timeout_sec=120,
+                                err_msg="Never saw 'REBALANCING -> RUNNING' message " + str(processor3.node.account)
+                                )
+            # there should still be some data left for this processor to work on.
+            monitor3.wait_until('processed',
+                                timeout_sec=30,
+                                err_msg="Didn't see any processing messages " + str(processor3.node.account)
+                                )
 
         self.driver.wait()
         self.driver.stop()
