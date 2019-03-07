@@ -104,19 +104,50 @@ public class SmokeTestDriver extends SmokeTestUtil {
         return Arrays.copyOf(TOPICS, TOPICS.length);
     }
 
+    static void generatePerpetually(final String kafka,
+                                    final int numKeys,
+                                    final int maxRecordsPerKey) {
+        final Properties producerProps = generatorProperties(kafka);
+
+        int numRecordsProduced = 0;
+
+        final ValueList[] data = new ValueList[numKeys];
+        for (int i = 0; i < numKeys; i++) {
+            data[i] = new ValueList(i, i + maxRecordsPerKey - 1);
+        }
+
+        final Random rand = new Random();
+
+        try (final KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps)) {
+            while (true) {
+                final int index = rand.nextInt(numKeys);
+                final String key = data[index].key;
+                final int value = data[index].next();
+
+                final ProducerRecord<byte[], byte[]> record =
+                    new ProducerRecord<>(
+                        "data",
+                        stringSerde.serializer().serialize("", key),
+                        intSerde.serializer().serialize("", value)
+                    );
+
+                producer.send(record);
+
+                numRecordsProduced++;
+                if (numRecordsProduced % 100 == 0) {
+                    System.out.println(Instant.now() + " " + numRecordsProduced + " records produced");
+                }
+                Utils.sleep(2);
+            }
+        }
+    }
+
     public static Map<String, Set<Integer>> generate(final String kafka,
                                                      final int numKeys,
                                                      final int maxRecordsPerKey,
-                                                     final Duration timeToSpend,
-                                                     final boolean autoTerminate) {
-        final Properties producerProps = new Properties();
-        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");
-        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
+                                                     final Duration timeToSpend) {
+        final Properties producerProps = generatorProperties(kafka);
 
-        final KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
         int numRecordsProduced = 0;
 
@@ -128,75 +159,82 @@ public class SmokeTestDriver extends SmokeTestUtil {
         }
         final Random rand = new Random();
 
-        int remaining = 1; // dummy value must be positive if <autoTerminate> is false
-        if (autoTerminate) {
-            remaining = data.length;
-        }
+        int remaining = data.length;
 
         final long recordPauseTime = timeToSpend.toMillis() / numKeys / maxRecordsPerKey;
 
         List<ProducerRecord<byte[], byte[]>> needRetry = new ArrayList<>();
 
-        while (remaining > 0) {
-            final int index = autoTerminate ? rand.nextInt(remaining) : rand.nextInt(numKeys);
-            final String key = data[index].key;
-            final int value = data[index].next();
+        try (final KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps)) {
+            while (remaining > 0) {
+                final int index = rand.nextInt(remaining);
+                final String key = data[index].key;
+                final int value = data[index].next();
 
-            if (autoTerminate && value < 0) {
-                remaining--;
-                data[index] = data[remaining];
-            } else {
+                if (value < 0) {
+                    remaining--;
+                    data[index] = data[remaining];
+                } else {
 
-                final ProducerRecord<byte[], byte[]> record =
-                    new ProducerRecord<>(
-                        "data",
-                        stringSerde.serializer().serialize("", key),
-                        intSerde.serializer().serialize("", value)
-                    );
+                    final ProducerRecord<byte[], byte[]> record =
+                        new ProducerRecord<>(
+                            "data",
+                            stringSerde.serializer().serialize("", key),
+                            intSerde.serializer().serialize("", value)
+                        );
 
-                producer.send(record, new TestCallback(record, needRetry));
+                    producer.send(record, new TestCallback(record, needRetry));
 
-                numRecordsProduced++;
-                allData.get(key).add(value);
-                if (numRecordsProduced % 100 == 0) {
-                    System.out.println(Instant.now() + " " + numRecordsProduced + " records produced");
+                    numRecordsProduced++;
+                    allData.get(key).add(value);
+                    if (numRecordsProduced % 100 == 0) {
+                        System.out.println(Instant.now() + " " + numRecordsProduced + " records produced");
+                    }
+                    Utils.sleep(Math.max(recordPauseTime, 2));
                 }
-                Utils.sleep(Math.max(recordPauseTime, 2));
-            }
-        }
-        producer.flush();
-
-        int remainingRetries = 5;
-        while (!needRetry.isEmpty()) {
-            final List<ProducerRecord<byte[], byte[]>> needRetry2 = new ArrayList<>();
-            for (final ProducerRecord<byte[], byte[]> record : needRetry) {
-                System.out.println("retry producing " + stringSerde.deserializer().deserialize("", record.key()));
-                producer.send(record, new TestCallback(record, needRetry2));
             }
             producer.flush();
-            needRetry = needRetry2;
 
-            if (--remainingRetries == 0 && !needRetry.isEmpty()) {
-                System.err.println("Failed to produce all records after multiple retries");
-                Exit.exit(1);
+            int remainingRetries = 5;
+            while (!needRetry.isEmpty()) {
+                final List<ProducerRecord<byte[], byte[]>> needRetry2 = new ArrayList<>();
+                for (final ProducerRecord<byte[], byte[]> record : needRetry) {
+                    System.out.println("retry producing " + stringSerde.deserializer().deserialize("", record.key()));
+                    producer.send(record, new TestCallback(record, needRetry2));
+                }
+                producer.flush();
+                needRetry = needRetry2;
+
+                if (--remainingRetries == 0 && !needRetry.isEmpty()) {
+                    System.err.println("Failed to produce all records after multiple retries");
+                    Exit.exit(1);
+                }
+            }
+
+            // now that we've sent everything, we'll send some final records with a timestamp high enough to flush out
+            // all suppressed records.
+            final List<PartitionInfo> partitions = producer.partitionsFor("data");
+            for (final PartitionInfo partition : partitions) {
+                producer.send(new ProducerRecord<>(
+                    partition.topic(),
+                    partition.partition(),
+                    System.currentTimeMillis() + Duration.ofDays(2).toMillis(),
+                    stringSerde.serializer().serialize("", "flush"),
+                    intSerde.serializer().serialize("", 0)
+                ));
             }
         }
-
-        // now that we've sent everything, we'll send some final records with a timestamp high enough to flush out
-        // all suppressed records.
-        final List<PartitionInfo> partitions = producer.partitionsFor("data");
-        for (final PartitionInfo partition : partitions) {
-            producer.send(new ProducerRecord<>(
-                partition.topic(),
-                partition.partition(),
-                System.currentTimeMillis() + Duration.ofDays(2).toMillis(),
-                stringSerde.serializer().serialize("", "flush"),
-                intSerde.serializer().serialize("", 0)
-            ));
-        }
-
-        producer.close();
         return Collections.unmodifiableMap(allData);
+    }
+
+    private static Properties generatorProperties(final String kafka) {
+        final Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, "SmokeTest");
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, kafka);
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
+        producerProps.put(ProducerConfig.ACKS_CONFIG, "all");
+        return producerProps;
     }
 
     private static class TestCallback implements Callback {

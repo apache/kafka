@@ -27,6 +27,7 @@ import java.util.Set;
 import java.util.UUID;
 
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
+import static org.apache.kafka.streams.tests.SmokeTestDriver.generatePerpetually;
 
 public class StreamsSmokeTest {
 
@@ -65,12 +66,12 @@ public class StreamsSmokeTest {
                 final int numKeys = 10;
                 final int maxRecordsPerKey = 500;
                 if (disableAutoTerminate) {
-                    generate(kafka, numKeys, maxRecordsPerKey, Duration.ZERO, false);
+                    generatePerpetually(kafka, numKeys, maxRecordsPerKey);
                 } else {
                     // slow down data production to span 30 seconds so that system tests have time to
                     // do their bounces, etc.
                     final Map<String, Set<Integer>> allData =
-                        generate(kafka, numKeys, maxRecordsPerKey, Duration.ofSeconds(30), true);
+                        generate(kafka, numKeys, maxRecordsPerKey, Duration.ofSeconds(30));
                     SmokeTestDriver.verify(kafka, allData, maxRecordsPerKey);
                 }
                 break;
