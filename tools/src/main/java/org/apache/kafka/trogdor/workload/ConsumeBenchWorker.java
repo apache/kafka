@@ -105,7 +105,7 @@ public class ConsumeBenchWorker implements TaskWorker {
                 }
                 executor.submit(new CloseStatusUpdater(consumeTasks));
             } catch (Throwable e) {
-                WorkerUtils.abort(log, "Prepare", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "Prepare", e, doneFuture);
             }
         }
 
@@ -262,7 +262,8 @@ public class ConsumeBenchWorker implements TaskWorker {
                     startBatchMs = Time.SYSTEM.milliseconds();
                 }
             } catch (Exception e) {
-                WorkerUtils.abort(log, "ConsumeRecords", e, doneFuture);
+                consumer.close();
+                WorkerUtils.abortAndThrow(log, "ConsumeRecords", e, doneFuture);
             } finally {
                 statusUpdaterFuture.cancel(false);
                 StatusData statusData =
@@ -271,8 +272,8 @@ public class ConsumeBenchWorker implements TaskWorker {
                 log.info("{} Consumed total number of messages={}, bytes={} in {} ms.  status: {}",
                          clientId, messagesConsumed, bytesConsumed, curTimeMs - startTimeMs, statusData);
             }
-            doneFuture.complete("");
             consumer.close();
+            doneFuture.complete("");
             return null;
         }
     }
@@ -311,7 +312,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             try {
                 update();
             } catch (Exception e) {
-                WorkerUtils.abort(log, "ConsumeStatusUpdater", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "ConsumeStatusUpdater", e, doneFuture);
             }
         }
 
@@ -343,7 +344,7 @@ public class ConsumeBenchWorker implements TaskWorker {
             try {
                 update();
             } catch (Exception e) {
-                WorkerUtils.abort(log, "ConsumeStatusUpdater", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "ConsumeStatusUpdater", e, doneFuture);
             }
         }
 

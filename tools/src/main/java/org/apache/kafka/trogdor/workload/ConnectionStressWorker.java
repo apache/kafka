@@ -160,7 +160,7 @@ public class ConnectionStressWorker implements TaskWorker {
                     }
                 }
             } catch (Exception e) {
-                WorkerUtils.abort(log, "ConnectionStressRunnable", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "ConnectionStressRunnable", e, doneFuture);
             }
         }
 

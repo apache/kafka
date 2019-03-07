@@ -151,7 +151,7 @@ public class RoundTripWorker implements TaskWorker {
                 executor.scheduleWithFixedDelay(
                     new StatusUpdater(), 30, 30, TimeUnit.SECONDS);
             } catch (Throwable e) {
-                WorkerUtils.abort(log, "Prepare", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "Prepare", e, doneFuture);
             }
         }
     }
@@ -257,7 +257,7 @@ public class RoundTripWorker implements TaskWorker {
                     });
                 }
             } catch (Throwable e) {
-                WorkerUtils.abort(log, "ProducerRunnable", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "ProducerRunnable", e, doneFuture);
             } finally {
                 log.info("{}: ProducerRunnable is exiting.  messagesSent={}; uniqueMessagesSent={}; " +
                         "ackedSends={}.", id, messagesSent, uniqueMessagesSent,
@@ -363,7 +363,7 @@ public class RoundTripWorker implements TaskWorker {
                     }
                 }
             } catch (Throwable e) {
-                WorkerUtils.abort(log, "ConsumerRunnable", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "ConsumerRunnable", e, doneFuture);
             } finally {
                 log.info("{}: ConsumerRunnable is exiting.  Invoked poll {} time(s).  " +
                     "messagesReceived = {}; uniqueMessagesReceived = {}.",
@@ -378,7 +378,7 @@ public class RoundTripWorker implements TaskWorker {
             try {
                 update();
             } catch (Exception e) {
-                WorkerUtils.abort(log, "StatusUpdater", e, doneFuture);
+                WorkerUtils.abortAndThrow(log, "StatusUpdater", e, doneFuture);
             }
         }
 

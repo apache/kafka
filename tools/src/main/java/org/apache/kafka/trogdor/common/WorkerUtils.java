@@ -60,7 +60,7 @@ public final class WorkerUtils {
      * @param doneFuture        The TaskWorker's doneFuture
      * @throws KafkaException   A wrapped version of the exception.
      */
-    public static void abort(Logger log, String what, Throwable exception,
+    public static void abortAndThrow(Logger log, String what, Throwable exception,
             KafkaFutureImpl<String> doneFuture) throws KafkaException {
         log.warn("{} caught an exception: ", what, exception);
         doneFuture.complete(exception.getMessage());
