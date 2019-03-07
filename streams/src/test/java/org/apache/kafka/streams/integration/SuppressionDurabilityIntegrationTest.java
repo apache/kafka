@@ -47,7 +47,9 @@ import org.junit.Test;
 import org.junit.experimental.categories.Category;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
+import org.junit.runners.Parameterized.Parameters;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import java.util.Properties;
@@ -84,6 +86,14 @@ public class SuppressionDurabilityIntegrationTest {
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private static final int COMMIT_INTERVAL = 100;
     private final boolean eosEnabled;
+
+    @Parameters(name = "{index}: eosEnabled={0}")
+    public static Collection<Object[]> parameters() {
+        return asList(
+            new Object[] {false},
+            new Object[] {true}
+        );
+    }
 
     public SuppressionDurabilityIntegrationTest(final boolean eosEnabled) {
         this.eosEnabled = eosEnabled;
