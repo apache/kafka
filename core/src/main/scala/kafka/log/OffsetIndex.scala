@@ -185,7 +185,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
       _entries = entries
       mmap.position(_entries * entrySize)
       _lastOffset = lastEntry.offset
-      debug(s"Truncated index ${file.getAbsolutePath} to $entries entries; position is now ${mmap.position} and last offset is now ${_lastOffset}")
+      debug(s"Truncated index ${file.getAbsolutePath} to $entries entries; position is now ${mmap.position()} and last offset is now ${_lastOffset}")
     }
   }
 

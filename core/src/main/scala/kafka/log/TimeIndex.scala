@@ -203,7 +203,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
       _entries = entries
       mmap.position(_entries * entrySize)
       _lastEntry = lastEntryFromIndexFile
-      debug(s"Truncated index ${file.getAbsolutePath} to $entries entries; position is now ${mmap.position} and last entry is now ${_lastEntry}")
+      debug(s"Truncated index ${file.getAbsolutePath} to $entries entries; position is now ${mmap.position()} and last entry is now ${_lastEntry}")
     }
   }
 
