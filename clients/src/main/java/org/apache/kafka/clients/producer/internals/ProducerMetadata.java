@@ -95,7 +95,7 @@ public class ProducerMetadata extends Metadata {
     public synchronized void awaitUpdate(final int lastVersion, final long timeoutMs) throws InterruptedException {
         long currentTimeMs = time.milliseconds();
         long deadlineMs = currentTimeMs + timeoutMs < 0 ? Long.MAX_VALUE : currentTimeMs + timeoutMs;
-        time.waitObject(this, none -> {
+        time.waitObject(this, () -> {
             maybeThrowException();
             return updateVersion() > lastVersion || isClosed();
         }, deadlineMs);

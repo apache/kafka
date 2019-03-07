@@ -90,7 +90,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -809,7 +809,7 @@ public class TopologyTestDriver implements Closeable {
         }
 
         @Override
-        public void waitObject(final Object obj, final Predicate<Void> condition, final long timeoutMs) {
+        public void waitObject(final Object obj, final Supplier<Boolean> condition, final long timeoutMs) {
             throw new UnsupportedOperationException();
         }
 

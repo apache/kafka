@@ -102,7 +102,7 @@ public class SubscriptionState {
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = Collections.emptySet();
         this.assignment = new PartitionStates<>();
-        this.groupSubscription = Collections.newSetFromMap(new ConcurrentHashMap<>());
+        this.groupSubscription = ConcurrentHashMap.newKeySet();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
     }

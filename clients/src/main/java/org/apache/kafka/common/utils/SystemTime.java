@@ -18,7 +18,7 @@ package org.apache.kafka.common.utils;
 
 import org.apache.kafka.common.errors.TimeoutException;
 
-import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /**
  * A time implementation that uses the system clock and sleep call. Use `Time.SYSTEM` instead of creating an instance
@@ -47,10 +47,10 @@ public class SystemTime implements Time {
     }
 
     @Override
-    public void waitObject(Object obj, Predicate<Void> condition, long deadlineMs) throws InterruptedException {
+    public void waitObject(Object obj, Supplier<Boolean> condition, long deadlineMs) throws InterruptedException {
         synchronized (obj) {
             while (true) {
-                if (condition.test(null))
+                if (condition.get())
                     return;
 
                 long currentTimeMs = milliseconds();

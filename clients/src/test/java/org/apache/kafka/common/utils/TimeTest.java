@@ -39,7 +39,7 @@ public abstract class TimeTest {
         AtomicReference<Exception> caughtException = new AtomicReference<>();
         Thread t = new Thread(() -> {
             try {
-                time.waitObject(obj, none -> false, deadlineMs);
+                time.waitObject(obj, () -> false, deadlineMs);
             } catch (Exception e) {
                 caughtException.set(e);
             }
@@ -62,7 +62,7 @@ public abstract class TimeTest {
         AtomicReference<Exception> caughtException = new AtomicReference<>();
         Thread t = new Thread(() -> {
             try {
-                time.waitObject(obj, none -> condition.get(), deadlineMs);
+                time.waitObject(obj, condition::get, deadlineMs);
             } catch (Exception e) {
                 caughtException.set(e);
             }
