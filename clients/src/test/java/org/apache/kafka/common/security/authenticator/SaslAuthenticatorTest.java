@@ -1473,7 +1473,7 @@ public class SaslAuthenticatorTest {
      * Second re-authentication must fail if it is sooner than one second after the first
      */
     @Test
-    public void testCannotReauthenticateAgainFasterThanMaxReauth() throws Exception {
+    public void testCannotReauthenticateAgainFasterThanOneSecond() throws Exception {
         String node = "0";
         time = new MockTime();
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
