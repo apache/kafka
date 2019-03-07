@@ -114,9 +114,13 @@ ext {
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
   shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
 
-  mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : ''
-  mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : ''
-  mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : ''
+  jfrogUsername = System.getenv('JFROG_USERNAME')
+  jfrogApiKey = System.getenv('JFROG_API_KEY')
+
+  // By default, publish to JFrog.
+  mavenUrl = project.hasProperty('mavenUrl') ? project.mavenUrl : jfrogRepoUrl
+  mavenUsername = project.hasProperty('mavenUsername') ? project.mavenUsername : jfrogUsername
+  mavenPassword = project.hasProperty('mavenPassword') ? project.mavenPassword : jfrogApiKey
 
   userShowStandardStreams = project.hasProperty("showStandardStreams") ? showStandardStreams : null
 
@@ -260,8 +264,8 @@ subprojects {
 
             artifactId = archivesBaseName
             pom {
-              name = 'Apache Kafka'
-              url = 'https://kafka.apache.org'
+              name = 'LinkedIn fork of Apache Kafka'
+              url = 'https://github.com/linkedin/kafka'
               licenses {
                 license {
                   name = 'The Apache License, Version 2.0'

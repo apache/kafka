@@ -52,5 +52,8 @@ jobs:
         # Set maxTestRetries for flaky tests.  This is the setup in upstream Jenkinsfile
         run: ./gradlew -PmaxTestRetries=3 cleanTest rat checkstyleMain checkstyleTest spotbugsMain spotbugsTest :clients:test :core:test --no-daemon -PxmlFindBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed
       - name: Upload archive
+        env:
+          JFROG_USERNAME: ${{ secrets.JFROG_USERNAME }}
+          JFROG_API_KEY: ${{ secrets.JFROG_API_KEY }}
         run: |
           ./gradlew -Pversion=${{ env.RELEASE_VERSION }} :clients:uploadArchives :core:uploadArchives --no-daemon

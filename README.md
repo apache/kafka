@@ -181,20 +181,29 @@ The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as 
 build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
 to avoid known issues with this configuration.
 
-### Publishing the jar for all version of Scala and for all projects to maven ###
+### Publishing the jar for all projects to maven ###
 The recommended command is:
 
-    ./gradlewAll publish
+    ./gradlew -Pversion=<RELEASE_VERSION_NUMBER> publish
 
 For backwards compatibility, the following also works:
 
-    ./gradlewAll uploadArchives
+    ./gradlew -Pversion=<RELEASE_VERSION_NUMBER> uploadArchives
 
-Please note for this to work you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`) and assign the following variables
+By default, this command will publish artifacts to a JFrog repository named "kafka" under an account specified by the `JFROG_USERNAME` environment variable; 
+and the `JFROG_API_KEY` environment variable is used for the API key for that account.
+
+If you want to publish for all supported Scala version, change `./gradlew` to `./gradlewAll`.
+
+If you want to override this to use a different maven repository, you should create/update `${GRADLE_USER_HOME}/gradle.properties` (typically, `~/.gradle/gradle.properties`)
+and assign the following variables
 
     mavenUrl=
     mavenUsername=
     mavenPassword=
+
+Signing is disabled by default. If you need signing, please set the following variables in `gradle.properties` as well:
+
     signing.keyId=
     signing.password=
     signing.secretKeyRingFile=
