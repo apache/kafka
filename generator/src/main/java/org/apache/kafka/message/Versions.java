@@ -126,7 +126,7 @@ public final class Versions {
         if (other.empty()) {
             return true;
         }
-        return (!((lowest > other.lowest) || (highest < other.highest)));
+        return !((lowest > other.lowest) || (highest < other.highest));
     }
 
     @Override
