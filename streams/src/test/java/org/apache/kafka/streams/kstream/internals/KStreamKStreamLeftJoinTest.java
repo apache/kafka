@@ -80,7 +80,7 @@ public class KStreamKStreamLeftJoinTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
-            // push two items to the primary stream. the other window is empty
+            // push two items to the primary stream; the other window is empty
             // w1 {}
             // w2 {}
             // --> w1 = { 0:X0, 1:X1 }
@@ -90,7 +90,7 @@ public class KStreamKStreamLeftJoinTest {
             }
             processor.checkAndClearProcessResult("0:X0+null (ts: 0)", "1:X1+null (ts: 0)");
 
-            // push two items to the other stream. this should produce two items.
+            // push two items to the other stream; this should produce two items
             // w1 = { 0:X0, 1:X1 }
             // w2 {}
             // --> w1 = { 0:X0, 1:X1 }
@@ -100,7 +100,7 @@ public class KStreamKStreamLeftJoinTest {
             }
             processor.checkAndClearProcessResult("0:X0+Y0 (ts: 0)", "1:X1+Y1 (ts: 0)");
 
-            // push three items to the primary stream. this should produce four items.
+            // push three items to the primary stream; this should produce four items
             // w1 = { 0:X0, 1:X1 }
             // w2 = { 0:Y0, 1:Y1 }
             // --> w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2 }
@@ -110,7 +110,7 @@ public class KStreamKStreamLeftJoinTest {
             }
             processor.checkAndClearProcessResult("0:X0+Y0 (ts: 0)", "1:X1+Y1 (ts: 0)", "2:X2+null (ts: 0)");
 
-            // push all items to the other stream. this should produce 5 items
+            // push all items to the other stream; this should produce five items
             // w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2 }
             // w2 = { 0:Y0, 1:Y1 }
             // --> w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2 }
@@ -120,7 +120,7 @@ public class KStreamKStreamLeftJoinTest {
             }
             processor.checkAndClearProcessResult("0:X0+YY0 (ts: 0)", "0:X0+YY0 (ts: 0)", "1:X1+YY1 (ts: 0)", "1:X1+YY1 (ts: 0)", "2:X2+YY2 (ts: 0)");
 
-            // push all four items to the primary stream. this should produce six items.
+            // push all four items to the primary stream; this should produce six items
             // w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2 }
             // w2 = { 0:Y0, 1:Y1, 0:YY0, 1:YY1, 2:YY2, 3:YY3}
             // --> w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 0:XX0, 1:XX1, 2:XX2, 3:XX3 }
@@ -159,107 +159,284 @@ public class KStreamKStreamLeftJoinTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
-            long time = 0L;
+            final long time = 0L;
 
-            // push two items to the primary stream. the other window is empty. this should produce two items
+            // push two items to the primary stream; the other window is empty; this should produce two left-join items
             // w1 = {}
             // w2 = {}
-            // --> w1 = { 0:X0, 1:X1 }
+            // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0) }
             // --> w2 = {}
             for (int i = 0; i < 2; i++) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], time));
             }
             processor.checkAndClearProcessResult("0:X0+null (ts: 0)", "1:X1+null (ts: 0)");
 
-            // push two items to the other stream. this should produce no items.
-            // w1 = { 0:X0, 1:X1 }
+            // push four items to the other stream; this should produce two full-join items
+            // w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0) }
             // w2 = {}
-            // --> w1 = { 0:X0, 1:X1 }
-            // --> w2 = { 0:Y0, 1:Y1 }
-            for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i], time));
+            // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0) }
+            // --> w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0) }
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "Y" + expectedKey, time));
             }
             processor.checkAndClearProcessResult("0:X0+Y0 (ts: 0)", "1:X1+Y1 (ts: 0)");
 
-            // clear logically
-            time = 1000L;
-
-            // push all items to the other stream. this should produce no items.
-            // w1 = {}
-            // w2 = {}
-            // --> w1 = {}
-            // --> w2 = { 0:Y0, 1:Y1, 2:Y2, 3:Y3 }
-            for (int i = 0; i < expectedKeys.length; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i], time + i));
-            }
-            processor.checkAndClearProcessResult();
-
-            // gradually expire items in window 2.
-            // w1 = {}
-            // w2 = {}
-            // --> w1 = {}
-            // --> w2 = { 0:Y0, 1:Y1, 2:Y2, 3:Y3 }
-            time = 1000L + 100L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-            processor.checkAndClearProcessResult("0:XX0+Y0 (ts: 1100)", "1:XX1+Y1 (ts: 1100)", "2:XX2+Y2 (ts: 1100)", "3:XX3+Y3 (ts: 1100)");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-            processor.checkAndClearProcessResult("0:XX0+null (ts: 1101)", "1:XX1+Y1 (ts: 1101)", "2:XX2+Y2 (ts: 1101)", "3:XX3+Y3 (ts: 1101)");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-            processor.checkAndClearProcessResult("0:XX0+null (ts: 1102)", "1:XX1+null (ts: 1102)", "2:XX2+Y2 (ts: 1102)", "3:XX3+Y3 (ts: 1102)");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-            processor.checkAndClearProcessResult("0:XX0+null (ts: 1103)", "1:XX1+null (ts: 1103)", "2:XX2+null (ts: 1103)", "3:XX3+Y3 (ts: 1103)");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-            processor.checkAndClearProcessResult("0:XX0+null (ts: 1104)", "1:XX1+null (ts: 1104)", "2:XX2+null (ts: 1104)", "3:XX3+null (ts: 1104)");
-
-            // go back to the time before expiration
-
-            time = 1000L - 100L - 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-            processor.checkAndClearProcessResult("0:XX0+null (ts: 899)", "1:XX1+null (ts: 899)", "2:XX2+null (ts: 899)", "3:XX3+null (ts: 899)");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-            processor.checkAndClearProcessResult("0:XX0+Y0 (ts: 900)", "1:XX1+null (ts: 900)", "2:XX2+null (ts: 900)", "3:XX3+null (ts: 900)");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-            processor.checkAndClearProcessResult("0:XX0+Y0 (ts: 901)", "1:XX1+Y1 (ts: 901)", "2:XX2+null (ts: 901)", "3:XX3+null (ts: 901)");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-            processor.checkAndClearProcessResult("0:XX0+Y0 (ts: 902)", "1:XX1+Y1 (ts: 902)", "2:XX2+Y2 (ts: 902)", "3:XX3+null (ts: 902)");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-            processor.checkAndClearProcessResult("0:XX0+Y0 (ts: 903)", "1:XX1+Y1 (ts: 903)", "2:XX2+Y2 (ts: 903)", "3:XX3+Y3 (ts: 903)");
+            testUpperWindowBound(expectedKeys, driver, processor);
+            testLowerWindowBound(expectedKeys, driver, processor);
         }
+    }
+
+    private void testUpperWindowBound(final int[] expectedKeys,
+                                      final TopologyTestDriver driver,
+                                      final MockProcessor<Integer, String> processor) {
+        long time;
+
+        // push four items with larger and increasing timestamp (out of window) to the other stream; this should produce no items
+        // w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0) }
+        // w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0) }
+        // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0) }
+        // --> w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //            0:YY0 (ts: 1000), 1:YY1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        time = 1000L;
+        for (int i = 0; i < expectedKeys.length; i++) {
+            driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "YY" + expectedKeys[i], time + i));
+        }
+        processor.checkAndClearProcessResult();
+
+        // push four items with larger timestamp to the primary stream; this should produce four full-join items
+        // w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0) }
+        // w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //        0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //            0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100) }
+        // --> w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //            0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        time = 1000L + 100L;
+        for (final int expectedKey : expectedKeys) {
+            driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
+        }
+        processor.checkAndClearProcessResult("0:XX0+YY0 (ts: 1100)", "1:XX1+YY1 (ts: 1100)", "2:XX2+YY2 (ts: 1100)", "3:XX3+YY3 (ts: 1100)");
+
+        // push four items with increased timestamp to the primary stream; this should produce one left-join and three full-join items
+        // w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //        0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100) }
+        // w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //        0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //            0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //            0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101) }
+        // --> w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //            0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        time += 1L;
+        for (final int expectedKey : expectedKeys) {
+            driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXX" + expectedKey, time));
+        }
+        processor.checkAndClearProcessResult("0:XXX0+null (ts: 1101)", "1:XXX1+YY1 (ts: 1101)", "2:XXX2+YY2 (ts: 1101)", "3:XXX3+YY3 (ts: 1101)");
+
+        // push four items with increased timestamp to the primary stream; this should produce two left-join and two full-join items
+        // w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //        0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //        0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101) }
+        // w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //        0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //            0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //            0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //            0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102) }
+        // --> w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //            0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        time += 1L;
+        for (final int expectedKey : expectedKeys) {
+            driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXX" + expectedKey, time));
+        }
+        processor.checkAndClearProcessResult("0:XXXX0+null (ts: 1102)", "1:XXXX1+null (ts: 1102)", "2:XXXX2+YY2 (ts: 1102)", "3:XXXX3+YY3 (ts: 1102)");
+
+        // push four items with increased timestamp to the primary stream; this should produce three left-join and one full-join items
+        // w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //        0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //        0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //        0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102) }
+        // w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //        0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //            0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //            0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //            0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //            0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103) }
+        // --> w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //            0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        time += 1L;
+        for (final int expectedKey : expectedKeys) {
+            driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXXX" + expectedKey, time));
+        }
+        processor.checkAndClearProcessResult("0:XXXXX0+null (ts: 1103)", "1:XXXXX1+null (ts: 1103)", "2:XXXXX2+null (ts: 1103)", "3:XXXXX3+YY3 (ts: 1103)");
+
+        // push four items with increased timestamp to the primary stream; this should produce four left-join and no full-join items
+        // w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //        0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //        0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //        0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //        0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103) }
+        // w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //        0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //            0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //            0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //            0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //            0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103),
+        //            0:XXXXXX0 (ts: 1104), 1:XXXXXX1 (ts: 1104), 2:XXXXXX2 (ts: 1104), 3:XXXXXX3 (ts: 1104) }
+        // --> w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //            0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        time += 1L;
+        for (final int expectedKey : expectedKeys) {
+            driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXXXX" + expectedKey, time));
+        }
+        processor.checkAndClearProcessResult("0:XXXXXX0+null (ts: 1104)", "1:XXXXXX1+null (ts: 1104)", "2:XXXXXX2+null (ts: 1104)", "3:XXXXXX3+null (ts: 1104)");
+    }
+
+    private void testLowerWindowBound(final int[] expectedKeys,
+                                      final TopologyTestDriver driver,
+                                      final MockProcessor<Integer, String> processor) {
+        long time;
+
+        // push four items with smaller timestamp (before the window) to the primary stream; this should produce four left-join and no full-join items
+        // w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //        0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //        0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //        0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //        0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103),
+        //        0:XXXXXX0 (ts: 1104), 1:XXXXXX1 (ts: 1104), 2:XXXXXX2 (ts: 1104), 3:XXXXXX3 (ts: 1104) }
+        // w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //        0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //            0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //            0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //            0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //            0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103),
+        //            0:XXXXXX0 (ts: 1104), 1:XXXXXX1 (ts: 1104), 2:XXXXXX2 (ts: 1104), 3:XXXXXX3 (ts: 1104),
+        //            0:XXXXXXX0 (ts: 899), 1:XXXXXXX1 (ts: 899), 2:XXXXXXX2 (ts: 899), 3:XXXXXXX3 (ts: 899) }
+        // --> w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //            0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        time = 1000L - 100L - 1L;
+        for (final int expectedKey : expectedKeys) {
+            driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXXXXX" + expectedKey, time));
+        }
+        processor.checkAndClearProcessResult("0:XXXXXXX0+null (ts: 899)", "1:XXXXXXX1+null (ts: 899)", "2:XXXXXXX2+null (ts: 899)", "3:XXXXXXX3+null (ts: 899)");
+
+        // push four items with increase timestamp to the primary stream; this should produce three left-join and one full-join items
+        // w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //        0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //        0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //        0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //        0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103),
+        //        0:XXXXXX0 (ts: 1104), 1:XXXXXX1 (ts: 1104), 2:XXXXXX2 (ts: 1104), 3:XXXXXX3 (ts: 1104),
+        //        0:XXXXXXX0 (ts: 899), 1:XXXXXXX1 (ts: 899), 2:XXXXXXX2 (ts: 899), 3:XXXXXXX3 (ts: 899) }
+        // w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //        0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //            0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //            0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //            0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //            0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103),
+        //            0:XXXXXX0 (ts: 1104), 1:XXXXXX1 (ts: 1104), 2:XXXXXX2 (ts: 1104), 3:XXXXXX3 (ts: 1104),
+        //            0:XXXXXXX0 (ts: 899), 1:XXXXXXX1 (ts: 899), 2:XXXXXXX2 (ts: 899), 3:XXXXXXX3 (ts: 899),
+        //            0:XXXXXXXX0 (ts: 900), 1:XXXXXXXX1 (ts: 900), 2:XXXXXXXX2 (ts: 900), 3:XXXXXXXX3 (ts: 900) }
+        // --> w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //            0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        time += 1L;
+        for (final int expectedKey : expectedKeys) {
+            driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXXXXXX" + expectedKey, time));
+        }
+        processor.checkAndClearProcessResult("0:XXXXXXXX0+YY0 (ts: 1000)", "1:XXXXXXXX1+null (ts: 900)", "2:XXXXXXXX2+null (ts: 900)", "3:XXXXXXXX3+null (ts: 900)");
+
+        // push four items with increase timestamp to the primary stream; this should produce two left-join and two full-join items
+        // w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //        0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //        0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //        0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //        0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103),
+        //        0:XXXXXX0 (ts: 1104), 1:XXXXXX1 (ts: 1104), 2:XXXXXX2 (ts: 1104), 3:XXXXXX3 (ts: 1104),
+        //        0:XXXXXXX0 (ts: 899), 1:XXXXXXX1 (ts: 899), 2:XXXXXXX2 (ts: 899), 3:XXXXXXX3 (ts: 899),
+        //        0:XXXXXXXX0 (ts: 900), 1:XXXXXXXX1 (ts: 900), 2:XXXXXXXX2 (ts: 900), 3:XXXXXXXX3 (ts: 900) }
+        // w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //        0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //            0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //            0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //            0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //            0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103),
+        //            0:XXXXXX0 (ts: 1104), 1:XXXXXX1 (ts: 1104), 2:XXXXXX2 (ts: 1104), 3:XXXXXX3 (ts: 1104),
+        //            0:XXXXXXX0 (ts: 899), 1:XXXXXXX1 (ts: 899), 2:XXXXXXX2 (ts: 899), 3:XXXXXXX3 (ts: 899),
+        //            0:XXXXXXXX0 (ts: 900), 1:XXXXXXXX1 (ts: 900), 2:XXXXXXXX2 (ts: 900), 3:XXXXXXXX3 (ts: 900),
+        //            0:XXXXXXXXX0 (ts: 901), 1:XXXXXXXXX1 (ts: 901), 2:XXXXXXXXX2 (ts: 901), 3:XXXXXXXXX3 (ts: 901) }
+        // --> w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //            0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        time += 1L;
+        for (final int expectedKey : expectedKeys) {
+            driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXXXXXXX" + expectedKey, time));
+        }
+        processor.checkAndClearProcessResult("0:XXXXXXXXX0+YY0 (ts: 1000)", "1:XXXXXXXXX1+YY1 (ts: 1001)", "2:XXXXXXXXX2+null (ts: 901)", "3:XXXXXXXXX3+null (ts: 901)");
+
+        // push four items with increase timestamp to the primary stream; this should produce one left-join and three full-join items
+        // w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //        0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //        0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //        0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //        0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103),
+        //        0:XXXXXX0 (ts: 1104), 1:XXXXXX1 (ts: 1104), 2:XXXXXX2 (ts: 1104), 3:XXXXXX3 (ts: 1104),
+        //        0:XXXXXXX0 (ts: 899), 1:XXXXXXX1 (ts: 899), 2:XXXXXXX2 (ts: 899), 3:XXXXXXX3 (ts: 899),
+        //        0:XXXXXXXX0 (ts: 900), 1:XXXXXXXX1 (ts: 900), 2:XXXXXXXX2 (ts: 900), 3:XXXXXXXX3 (ts: 900),
+        //        0:XXXXXXXXX0 (ts: 901), 1:XXXXXXXXX1 (ts: 901), 2:XXXXXXXXX2 (ts: 901), 3:XXXXXXXXX3 (ts: 901) }
+        // w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //        0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //            0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //            0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //            0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //            0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103),
+        //            0:XXXXXX0 (ts: 1104), 1:XXXXXX1 (ts: 1104), 2:XXXXXX2 (ts: 1104), 3:XXXXXX3 (ts: 1104),
+        //            0:XXXXXXX0 (ts: 899), 1:XXXXXXX1 (ts: 899), 2:XXXXXXX2 (ts: 899), 3:XXXXXXX3 (ts: 899),
+        //            0:XXXXXXXX0 (ts: 900), 1:XXXXXXXX1 (ts: 900), 2:XXXXXXXX2 (ts: 900), 3:XXXXXXXX3 (ts: 900),
+        //            0:XXXXXXXXX0 (ts: 901), 1:XXXXXXXXX1 (ts: 901), 2:XXXXXXXXX2 (ts: 901), 3:XXXXXXXXX3 (ts: 901),
+        //            0:XXXXXXXXXX0 (ts: 902), 1:XXXXXXXXXX1 (ts: 902), 2:XXXXXXXXXX2 (ts: 902), 3:XXXXXXXXXX3 (ts: 902) }
+        // --> w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //            0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        time += 1L;
+        for (final int expectedKey : expectedKeys) {
+            driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXXXXXXXX" + expectedKey, time));
+        }
+        processor.checkAndClearProcessResult("0:XXXXXXXXXX0+YY0 (ts: 1000)", "1:XXXXXXXXXX1+YY1 (ts: 1001)", "2:XXXXXXXXXX2+YY2 (ts: 1002)", "3:XXXXXXXXXX3+null (ts: 902)");
+
+        // push four items with increase timestamp to the primary stream; this should produce one left-join and three full-join items
+        // w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //        0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //        0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //        0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //        0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103),
+        //        0:XXXXXX0 (ts: 1104), 1:XXXXXX1 (ts: 1104), 2:XXXXXX2 (ts: 1104), 3:XXXXXX3 (ts: 1104),
+        //        0:XXXXXXX0 (ts: 899), 1:XXXXXXX1 (ts: 899), 2:XXXXXXX2 (ts: 899), 3:XXXXXXX3 (ts: 899),
+        //        0:XXXXXXXX0 (ts: 900), 1:XXXXXXXX1 (ts: 900), 2:XXXXXXXX2 (ts: 900), 3:XXXXXXXX3 (ts: 900),
+        //        0:XXXXXXXXX0 (ts: 901), 1:XXXXXXXXX1 (ts: 901), 2:XXXXXXXXX2 (ts: 901), 3:XXXXXXXXX3 (ts: 901),
+        //        0:XXXXXXXXXX0 (ts: 902), 1:XXXXXXXXXX1 (ts: 902), 2:XXXXXXXXXX2 (ts: 902), 3:XXXXXXXXXX3 (ts: 902) }
+        // w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //        0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        // --> w1 = { 0:X0 (ts: 0), 1:X1 (ts: 0),
+        //            0:XX0 (ts: 1100), 1:XX1 (ts: 1100), 2:XX2 (ts: 1100), 3:XX3 (ts: 1100),
+        //            0:XXX0 (ts: 1101), 1:XXX1 (ts: 1101), 2:XXX2 (ts: 1101), 3:XXX3 (ts: 1101),
+        //            0:XXXX0 (ts: 1102), 1:XXXX1 (ts: 1102), 2:XXXX2 (ts: 1102), 3:XXXX3 (ts: 1102),
+        //            0:XXXXX0 (ts: 1103), 1:XXXXX1 (ts: 1103), 2:XXXXX2 (ts: 1103), 3:XXXXX3 (ts: 1103),
+        //            0:XXXXXX0 (ts: 1104), 1:XXXXXX1 (ts: 1104), 2:XXXXXX2 (ts: 1104), 3:XXXXXX3 (ts: 1104),
+        //            0:XXXXXXX0 (ts: 899), 1:XXXXXXX1 (ts: 899), 2:XXXXXXX2 (ts: 899), 3:XXXXXXX3 (ts: 899),
+        //            0:XXXXXXXX0 (ts: 900), 1:XXXXXXXX1 (ts: 900), 2:XXXXXXXX2 (ts: 900), 3:XXXXXXXX3 (ts: 900),
+        //            0:XXXXXXXXX0 (ts: 901), 1:XXXXXXXXX1 (ts: 901), 2:XXXXXXXXX2 (ts: 901), 3:XXXXXXXXX3 (ts: 901),
+        //            0:XXXXXXXXXX0 (ts: 902), 1:XXXXXXXXXX1 (ts: 902), 2:XXXXXXXXXX2 (ts: 902), 3:XXXXXXXXXX3 (ts: 902),
+        //            0:XXXXXXXXXXX0 (ts: 903), 1:XXXXXXXXXXX1 (ts: 903), 2:XXXXXXXXXXX2 (ts: 903), 3:XXXXXXXXXXX3 (ts: 903) }
+        // --> w2 = { 0:Y0 (ts: 0), 1:Y1 (ts: 0), 2:Y2 (ts: 0), 3:Y3 (ts: 0),
+        //            0:YY0 (ts: 1000), 1Y:Y1 (ts: 1001), 2:YY2 (ts: 1002), 3:YY3 (ts: 1003) }
+        time += 1L;
+        for (final int expectedKey : expectedKeys) {
+            driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXXXXXXXXX" + expectedKey, time));
+        }
+        processor.checkAndClearProcessResult("0:XXXXXXXXXXX0+YY0 (ts: 1000)", "1:XXXXXXXXXXX1+YY1 (ts: 1001)", "2:XXXXXXXXXXX2+YY2 (ts: 1002)", "3:XXXXXXXXXXX3+YY3 (ts: 1003)");
     }
 }
