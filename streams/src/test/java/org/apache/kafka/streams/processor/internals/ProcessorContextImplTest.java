@@ -74,8 +74,7 @@ public class ProcessorContextImplTest {
 
     private final List<KeyValueIterator<Windowed<String>, Long>> iters = new ArrayList<>(7);
     private final List<KeyValueIterator<Windowed<String>, ValueAndTimestamp<Long>>> timestampedIters = new ArrayList<>(7);
-    private WindowStoreIterator<Long> windowStoreIter;
-    private WindowStoreIterator<ValueAndTimestamp<Long>> timestampedWindowStoreIter;
+    private WindowStoreIterator windowStoreIter;
 
     @Before
     public void setup() {
@@ -175,11 +174,11 @@ public class ProcessorContextImplTest {
             verifyStoreCannotBeInitializedOrClosed(store);
 
             checkThrowsUnsupportedOperation(store::flush, "flush()");
-            checkThrowsUnsupportedOperation(() -> store.put("1", ValueAndTimestamp.make(1L, 1L), 1L), "put()");
-            checkThrowsUnsupportedOperation(() -> store.put("1", ValueAndTimestamp.make(1L, 1L)), "put()");
+            checkThrowsUnsupportedOperation(() -> store.put("1", ValueAndTimestamp.make(1L, 1L), 1L), "put() [with timestamp]");
+            checkThrowsUnsupportedOperation(() -> store.put("1", ValueAndTimestamp.make(1L, 1L)), "put() [no timestamp]");
 
             assertEquals(timestampedIters.get(0), store.fetchAll(0L, 0L));
-            assertEquals(timestampedWindowStoreIter, store.fetch(KEY, 0L, 1L));
+            assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
             assertEquals(timestampedIters.get(1), store.fetch(KEY, KEY, 0L, 1L));
             assertEquals(VALUE_AND_TIMESTAMP, store.fetch(KEY, 1L));
             assertEquals(timestampedIters.get(2), store.all());
@@ -263,7 +262,7 @@ public class ProcessorContextImplTest {
             assertTrue(putWithTimestampExecuted);
 
             assertEquals(timestampedIters.get(0), store.fetchAll(0L, 0L));
-            assertEquals(timestampedWindowStoreIter, store.fetch(KEY, 0L, 1L));
+            assertEquals(windowStoreIter, store.fetch(KEY, 0L, 1L));
             assertEquals(timestampedIters.get(1), store.fetch(KEY, KEY, 0L, 1L));
             assertEquals(VALUE_AND_TIMESTAMP, store.fetch(KEY, 1L));
             assertEquals(timestampedIters.get(2), store.all());
@@ -333,6 +332,7 @@ public class ProcessorContextImplTest {
         return keyValueStoreMock;
     }
 
+    @SuppressWarnings("unchecked")
     private WindowStore<String, Long> windowStoreMock() {
         final WindowStore<String, Long> windowStore = mock(WindowStore.class);
 
@@ -363,7 +363,7 @@ public class ProcessorContextImplTest {
 
         expect(windowStore.fetchAll(anyLong(), anyLong())).andReturn(timestampedIters.get(0));
         expect(windowStore.fetch(anyString(), anyString(), anyLong(), anyLong())).andReturn(timestampedIters.get(1));
-        expect(windowStore.fetch(anyString(), anyLong(), anyLong())).andReturn(timestampedWindowStoreIter);
+        expect(windowStore.fetch(anyString(), anyLong(), anyLong())).andReturn(windowStoreIter);
         expect(windowStore.fetch(anyString(), anyLong())).andReturn(VALUE_AND_TIMESTAMP);
         expect(windowStore.all()).andReturn(timestampedIters.get(2));
 
