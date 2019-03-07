@@ -38,7 +38,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
@@ -61,10 +60,8 @@ import java.util.stream.Collectors;
  * Note that pause state as well as fetch/consumed positions are not preserved when partition
  * assignment is changed whether directly by the user or through a group rebalance.
  *
- * Thread Safety: this class is generally not thread-safe. It should only be accessed in the
- * consumer's calling thread. The only exception is {@link ConsumerMetadata} which accesses
- * the subscription state needed to build and handle Metadata requests. The thread-safe methods
- * are documented below.
+ * Thread Safety: this class is generally thread-safe. The only exception is the consumer rebalance
+ * listener which is guaranteed to be executed without holding any locks.
  */
 public class SubscriptionState {
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
@@ -77,10 +74,10 @@ public class SubscriptionState {
     }
 
     /* the type of subscription */
-    private volatile SubscriptionType subscriptionType;
+    private SubscriptionType subscriptionType;
 
     /* the pattern user has requested */
-    private volatile Pattern subscribedPattern;
+    private Pattern subscribedPattern;
 
     /* the list of topics the user has requested */
     private Set<String> subscription;
@@ -88,7 +85,7 @@ public class SubscriptionState {
     /* The list of topics the group has subscribed to. This may include some topics which are not part
      * of `subscription` for the leader of a group since it is responsible for detecting metadata changes
      * which require a group rebalance. */
-    private final Set<String> groupSubscription;
+    private Set<String> groupSubscription;
 
     /* the partitions that are currently assigned, note that the order of partition matters (see FetchBuilder for more details) */
     private final PartitionStates<TopicPartitionState> assignment;
@@ -130,9 +127,9 @@ public class SubscriptionState {
     public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
-        this.subscription = Collections.emptySet();
+        this.subscription = new HashSet<>();
         this.assignment = new PartitionStates<>();
-        this.groupSubscription = ConcurrentHashMap.newKeySet();
+        this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
     }
@@ -143,7 +140,7 @@ public class SubscriptionState {
      *
      * @return The current assignment Id
      */
-    public int assignmentId() {
+    synchronized int assignmentId() {
         return assignmentId;
     }
 
@@ -161,17 +158,15 @@ public class SubscriptionState {
     }
 
     public boolean subscribe(Set<String> topics, ConsumerRebalanceListener listener) {
-        if (listener == null)
-            throw new IllegalArgumentException("RebalanceListener cannot be null");
+        registerRebalanceListener(listener);
 
-        setSubscriptionType(SubscriptionType.AUTO_TOPICS);
-
-        this.rebalanceListener = listener;
-
-        return changeSubscription(topics);
+        synchronized (this) {
+            setSubscriptionType(SubscriptionType.AUTO_TOPICS);
+            return changeSubscription(topics);
+        }
     }
 
-    public boolean subscribeFromPattern(Set<String> topics) {
+    public synchronized boolean subscribeFromPattern(Set<String> topics) {
         if (subscriptionType != SubscriptionType.AUTO_PATTERN)
             throw new IllegalArgumentException("Attempt to subscribe from pattern while subscription type set to " +
                     subscriptionType);
@@ -183,8 +178,8 @@ public class SubscriptionState {
         if (subscription.equals(topicsToSubscribe))
             return false;
 
-        this.subscription = topicsToSubscribe;
-        this.groupSubscription.addAll(topicsToSubscribe);
+        subscription = topicsToSubscribe;
+        groupSubscription = topicsToSubscribe;
         return true;
     }
 
@@ -193,17 +188,19 @@ public class SubscriptionState {
      * that it receives metadata updates for all topics that the group is interested in.
      * @param topics The topics to add to the group subscription
      */
-    public boolean groupSubscribe(Collection<String> topics) {
+    synchronized boolean groupSubscribe(Collection<String> topics) {
         if (!partitionsAutoAssigned())
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
-        return this.groupSubscription.addAll(topics);
+        groupSubscription = new HashSet<>(groupSubscription);
+        return groupSubscription.addAll(topics);
     }
 
     /**
      * Reset the group's subscription to only contain topics subscribed by this consumer.
      */
-    public void resetGroupSubscription() {
-        this.groupSubscription.retainAll(subscription);
+    synchronized void resetGroupSubscription() {
+        groupSubscription = new HashSet<>(groupSubscription);
+        groupSubscription.retainAll(subscription);
     }
 
     /**
@@ -211,7 +208,7 @@ public class SubscriptionState {
      * note this is different from {@link #assignFromSubscribed(Collection)}
      * whose input partitions are provided from the subscribed topics.
      */
-    public boolean assignFromUser(Set<TopicPartition> partitions) {
+    public synchronized boolean assignFromUser(Set<TopicPartition> partitions) {
         setSubscriptionType(SubscriptionType.USER_ASSIGNED);
 
         if (this.assignment.partitionSet().equals(partitions))
@@ -238,7 +235,7 @@ public class SubscriptionState {
      *
      * @return true if assignments matches subscription, otherwise false
      */
-    public boolean assignFromSubscribed(Collection<TopicPartition> assignments) {
+    public synchronized boolean assignFromSubscribed(Collection<TopicPartition> assignments) {
         if (!this.partitionsAutoAssigned())
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
 
@@ -273,30 +270,35 @@ public class SubscriptionState {
     }
 
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
+        registerRebalanceListener(listener);
+
+        synchronized (this) {
+            setSubscriptionType(SubscriptionType.AUTO_PATTERN);
+            this.subscribedPattern = pattern;
+        }
+    }
+
+    private void registerRebalanceListener(ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
-
-        setSubscriptionType(SubscriptionType.AUTO_PATTERN);
-
         this.rebalanceListener = listener;
-        this.subscribedPattern = pattern;
     }
 
     /**
-     * Check whether pattern subscription is in use. This is thread-safe.
+     * Check whether pattern subscription is in use.
      *
      */
-    public boolean hasPatternSubscription() {
+    synchronized boolean hasPatternSubscription() {
         return this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
 
-    public boolean hasNoSubscriptionOrUserAssignment() {
+    public synchronized boolean hasNoSubscriptionOrUserAssignment() {
         return this.subscriptionType == SubscriptionType.NONE;
     }
 
-    public void unsubscribe() {
+    public synchronized void unsubscribe() {
         this.subscription = Collections.emptySet();
-        this.groupSubscription.clear();
+        this.groupSubscription = Collections.emptySet();
         this.assignment.clear();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
@@ -306,18 +308,16 @@ public class SubscriptionState {
     /**
      * Check whether a topic matches a subscribed pattern.
      *
-     * This is thread-safe, but it may not always reflect the most recent subscription pattern.
-     *
      * @return true if pattern subscription is in use and the topic matches the subscribed pattern, false otherwise
      */
-    public boolean matchesSubscribedPattern(String topic) {
+    synchronized boolean matchesSubscribedPattern(String topic) {
         Pattern pattern = this.subscribedPattern;
         if (hasPatternSubscription() && pattern != null)
             return pattern.matcher(topic).matches();
         return false;
     }
 
-    public Set<String> subscription() {
+    public synchronized Set<String> subscription() {
         if (partitionsAutoAssigned())
             return this.subscription;
         return Collections.emptySet();
@@ -335,27 +335,30 @@ public class SubscriptionState {
      * can do the partition assignment (which requires at least partition counts for all topics
      * to be assigned).
      *
-     * Note this is thread-safe since the Set is backed by a ConcurrentMap.
-     *
      * @return The union of all subscribed topics in the group if this member is the leader
      *   of the current generation; otherwise it returns the same set as {@link #subscription()}
      */
-    public Set<String> groupSubscription() {
+    synchronized Set<String> groupSubscription() {
         return this.groupSubscription;
     }
 
-    /**
-     * Note this is thread-safe since the Set is backed by a ConcurrentMap.
-     */
-    public boolean isGroupSubscribed(String topic) {
+    synchronized boolean isGroupSubscribed(String topic) {
         return groupSubscription.contains(topic);
     }
 
-    private TopicPartitionState assignedState(TopicPartition tp) {
+    private synchronized TopicPartitionState assignedState(TopicPartition tp) {
+        return assignedStateWithoutLock(tp);
+    }
+
+    private TopicPartitionState assignedStateWithoutLock(TopicPartition tp) {
         TopicPartitionState state = this.assignment.stateValue(tp);
         if (state == null)
             throw new IllegalStateException("No current assignment for partition " + tp);
         return state;
+    }
+
+    private synchronized TopicPartitionState assignedStateOrNull(TopicPartition tp) {
+        return this.assignment.stateValue(tp);
     }
 
     public void seek(TopicPartition tp, FetchPosition position) {
@@ -370,29 +373,37 @@ public class SubscriptionState {
         seek(tp, new FetchPosition(offset, Optional.empty(), new Metadata.LeaderAndEpoch(Node.noNode(), Optional.empty())));
     }
 
+    void maybeSeek(TopicPartition tp, long offset, OffsetResetStrategy requestedResetStrategy) {
+        if (!assignedState(tp).maybeSeek(new FetchPosition(offset, Optional.empty(), new Metadata.LeaderAndEpoch(Node.noNode(), Optional.empty())), requestedResetStrategy))
+            log.debug("Skipping reset of partition {} to offset {} " +
+                    "since it is no longer needed or an alternative reset has been requested", tp, offset);
+        else
+            log.info("Resetting offset for partition {} to offset {}.", tp, offset);
+    }
+
     /**
-     * @return an unmodifiable view of the currently assigned partitions
+     * @return a modifiable copy of the currently assigned partitions
      */
-    public Set<TopicPartition> assignedPartitions() {
-        return this.assignment.partitionSet();
+    public synchronized Set<TopicPartition> assignedPartitions() {
+        return new HashSet<>(this.assignment.partitionSet());
     }
 
     /**
      * Provides the number of assigned partitions in a thread safe manner.
      * @return the number of assigned partitions.
      */
-    public int numAssignedPartitions() {
+    synchronized int numAssignedPartitions() {
         return this.assignment.size();
     }
 
-    public List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
+    List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
         return assignment.stream()
                 .filter(tpState -> isAvailable.test(tpState.topicPartition()) && tpState.value().isFetchable())
                 .map(PartitionStates.PartitionState::topicPartition)
                 .collect(Collectors.toList());
     }
 
-    public boolean partitionsAutoAssigned() {
+    synchronized boolean partitionsAutoAssigned() {
         return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
 
@@ -417,10 +428,10 @@ public class SubscriptionState {
     }
 
     public FetchPosition position(TopicPartition tp) {
-        return assignedState(tp).position();
+        return assignedState(tp).position;
     }
 
-    public Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
+    Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
         TopicPartitionState topicPartitionState = assignedState(tp);
         if (isolationLevel == IsolationLevel.READ_COMMITTED)
             return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset - topicPartitionState.position.offset;
@@ -433,16 +444,16 @@ public class SubscriptionState {
         return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position.offset - topicPartitionState.logStartOffset;
     }
 
-    public void updateHighWatermark(TopicPartition tp, long highWatermark) {
-        assignedState(tp).highWatermark = highWatermark;
+    void updateHighWatermark(TopicPartition tp, long highWatermark) {
+        assignedState(tp).highWatermark(highWatermark);
     }
 
-    public void updateLogStartOffset(TopicPartition tp, long logStartOffset) {
-        assignedState(tp).logStartOffset = logStartOffset;
+    void updateLogStartOffset(TopicPartition tp, long logStartOffset) {
+        assignedState(tp).logStartOffset(logStartOffset);
     }
 
-    public void updateLastStableOffset(TopicPartition tp, long lastStableOffset) {
-        assignedState(tp).lastStableOffset = lastStableOffset;
+    void updateLastStableOffset(TopicPartition tp, long lastStableOffset) {
+        assignedState(tp).lastStableOffset(lastStableOffset);
     }
 
     /**
@@ -478,7 +489,7 @@ public class SubscriptionState {
         return assignedState(tp).clearPreferredReadReplica();
     }
 
-    public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
+    public synchronized Map<TopicPartition, OffsetAndMetadata> allConsumed() {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
         assignment.stream().forEach(state -> {
             TopicPartitionState partitionState = state.value();
@@ -493,17 +504,24 @@ public class SubscriptionState {
         assignedState(partition).reset(offsetResetStrategy);
     }
 
+    public synchronized void requestOffsetReset(Collection<TopicPartition> partitions, OffsetResetStrategy offsetResetStrategy) {
+        partitions.forEach(tp -> {
+            log.info("Seeking to {} offset of partition {}", offsetResetStrategy, tp);
+            assignedStateWithoutLock(tp).reset(offsetResetStrategy);
+        });
+    }
+
     public void requestOffsetReset(TopicPartition partition) {
         requestOffsetReset(partition, defaultResetStrategy);
     }
 
-    public void setNextAllowedRetry(Set<TopicPartition> partitions, long nextAllowResetTimeMs) {
+    synchronized void setNextAllowedRetry(Set<TopicPartition> partitions, long nextAllowResetTimeMs) {
         for (TopicPartition partition : partitions) {
-            assignedState(partition).setNextAllowedRetry(nextAllowResetTimeMs);
+            assignedStateWithoutLock(partition).setNextAllowedRetry(nextAllowResetTimeMs);
         }
     }
 
-    public boolean hasDefaultOffsetResetPolicy() {
+    boolean hasDefaultOffsetResetPolicy() {
         return defaultResetStrategy != OffsetResetStrategy.NONE;
     }
 
@@ -512,18 +530,18 @@ public class SubscriptionState {
     }
 
     public OffsetResetStrategy resetStrategy(TopicPartition partition) {
-        return assignedState(partition).resetStrategy;
+        return assignedState(partition).resetStrategy();
     }
 
-    public boolean hasAllFetchPositions() {
+    public synchronized boolean hasAllFetchPositions() {
         return assignment.stream().allMatch(state -> state.value().hasValidPosition());
     }
 
-    public Set<TopicPartition> missingFetchPositions() {
+    Set<TopicPartition> missingFetchPositions() {
         return collectPartitions(state -> !state.hasPosition(), Collectors.toSet());
     }
 
-    private <T extends Collection<TopicPartition>> T collectPartitions(Predicate<TopicPartitionState> filter, Collector<TopicPartition, ?, T> collector) {
+    private synchronized <T extends Collection<TopicPartition>> T collectPartitions(Predicate<TopicPartitionState> filter, Collector<TopicPartition, ?, T> collector) {
         return assignment.stream()
                 .filter(state -> filter.test(state.value()))
                 .map(PartitionStates.PartitionState::topicPartition)
@@ -531,7 +549,7 @@ public class SubscriptionState {
     }
 
 
-    public void resetMissingPositions() {
+    public synchronized void resetMissingPositions() {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
         assignment.stream().forEach(state -> {
             TopicPartition tp = state.topicPartition();
@@ -540,7 +558,7 @@ public class SubscriptionState {
                 if (defaultResetStrategy == OffsetResetStrategy.NONE)
                     partitionsWithNoOffsets.add(tp);
                 else
-                    partitionState.reset(defaultResetStrategy);
+                    requestOffsetReset(tp);
             }
         });
 
@@ -548,7 +566,7 @@ public class SubscriptionState {
             throw new NoOffsetForPartitionException(partitionsWithNoOffsets);
     }
 
-    public Set<TopicPartition> partitionsNeedingReset(long nowMs) {
+    Set<TopicPartition> partitionsNeedingReset(long nowMs) {
         return collectPartitions(state -> state.awaitingReset() && !state.awaitingRetryBackoff(nowMs),
                 Collectors.toSet());
     }
@@ -558,20 +576,23 @@ public class SubscriptionState {
                 Collectors.toSet());
     }
 
-    public boolean isAssigned(TopicPartition tp) {
+    public synchronized boolean isAssigned(TopicPartition tp) {
         return assignment.contains(tp);
     }
 
     public boolean isPaused(TopicPartition tp) {
-        return isAssigned(tp) && assignedState(tp).paused;
+        TopicPartitionState assignedOrNull = assignedStateOrNull(tp);
+        return assignedOrNull != null && assignedOrNull.isPaused();
     }
 
-    public boolean isFetchable(TopicPartition tp) {
-        return isAssigned(tp) && assignedState(tp).isFetchable();
+    boolean isFetchable(TopicPartition tp) {
+        TopicPartitionState assignedOrNull = assignedStateOrNull(tp);
+        return assignedOrNull != null && assignedOrNull.isFetchable();
     }
 
     public boolean hasValidPosition(TopicPartition tp) {
-        return isAssigned(tp) && assignedState(tp).hasValidPosition();
+        TopicPartitionState assignedOrNull = assignedStateOrNull(tp);
+        return assignedOrNull != null && assignedOrNull.hasValidPosition();
     }
 
     public void pause(TopicPartition tp) {
@@ -582,12 +603,12 @@ public class SubscriptionState {
         assignedState(tp).resume();
     }
 
-    public void requestFailed(Set<TopicPartition> partitions, long nextRetryTimeMs) {
+    synchronized void requestFailed(Set<TopicPartition> partitions, long nextRetryTimeMs) {
         for (TopicPartition partition : partitions)
-            assignedState(partition).requestFailed(nextRetryTimeMs);
+            assignedStateWithoutLock(partition).requestFailed(nextRetryTimeMs);
     }
 
-    public void movePartitionToEnd(TopicPartition tp) {
+    synchronized void movePartitionToEnd(TopicPartition tp) {
         assignment.moveToEnd(tp);
     }
 
@@ -670,6 +691,10 @@ public class SubscriptionState {
             });
         }
 
+        private synchronized boolean isResetAllowed(long nowMs) {
+            return nextRetryTimeMs == null || nowMs >= nextRetryTimeMs;
+        }
+
         private boolean maybeValidatePosition(Metadata.LeaderAndEpoch currentLeaderAndEpoch) {
             if (this.fetchState.equals(FetchStates.AWAIT_RESET)) {
                 return false;
@@ -722,27 +747,27 @@ public class SubscriptionState {
             return nextRetryTimeMs != null && nowMs < nextRetryTimeMs;
         }
 
-        private boolean awaitingReset() {
+        private synchronized boolean awaitingReset() {
             return fetchState.equals(FetchStates.AWAIT_RESET);
         }
 
-        private void setNextAllowedRetry(long nextAllowedRetryTimeMs) {
+        private synchronized void setNextAllowedRetry(long nextAllowedRetryTimeMs) {
             this.nextRetryTimeMs = nextAllowedRetryTimeMs;
         }
 
-        private void requestFailed(long nextAllowedRetryTimeMs) {
+        private synchronized void requestFailed(long nextAllowedRetryTimeMs) {
             this.nextRetryTimeMs = nextAllowedRetryTimeMs;
         }
 
-        private boolean hasValidPosition() {
+        private synchronized boolean hasValidPosition() {
             return fetchState.hasValidPosition();
         }
 
-        private boolean hasPosition() {
+        private synchronized boolean hasPosition() {
             return fetchState.hasPosition();
         }
 
-        private boolean isPaused() {
+        private synchronized boolean isPaused() {
             return paused;
         }
 
@@ -759,7 +784,15 @@ public class SubscriptionState {
             validatePosition(fetchPosition);
         }
 
-        private void position(FetchPosition position) {
+        private synchronized boolean maybeSeek(FetchPosition fetchPosition, OffsetResetStrategy requestedResetStrategy) {
+            if (this.resetStrategy == null || this.resetStrategy != requestedResetStrategy)
+                return false;
+
+            seek(fetchPosition);
+            return true;
+        }
+
+        private synchronized void position(FetchPosition position) {
             if (!hasValidPosition())
                 throw new IllegalStateException("Cannot set a new position without a valid current position");
             this.position = position;
@@ -777,18 +810,33 @@ public class SubscriptionState {
             return position;
         }
 
-        private void pause() {
+        private synchronized void pause() {
             this.paused = true;
         }
 
-        private void resume() {
+        private synchronized void resume() {
             this.paused = false;
         }
 
-        private boolean isFetchable() {
+        private synchronized boolean isFetchable() {
             return !paused && hasValidPosition();
         }
 
+        private synchronized void highWatermark(Long highWatermark) {
+            this.highWatermark = highWatermark;
+        }
+
+        private synchronized void logStartOffset(Long logStartOffset) {
+            this.logStartOffset = logStartOffset;
+        }
+
+        private synchronized void lastStableOffset(Long lastStableOffset) {
+            this.lastStableOffset = lastStableOffset;
+        }
+
+        private synchronized OffsetResetStrategy resetStrategy() {
+            return resetStrategy;
+        }
     }
 
     /**

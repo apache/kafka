@@ -109,6 +109,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -130,6 +131,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.spy;
 
 @SuppressWarnings("deprecation")
 public class FetcherTest {
@@ -1481,6 +1484,50 @@ public class FetcherTest {
         assertFalse(client.hasPendingResponses());
         assertFalse(client.hasInFlightRequests());
         assertEquals(237L, subscriptions.position(tp0).offset);
+    }
+
+    @Test(timeout = 10000)
+    public void testEarlierOffsetResetArrivesLate() throws InterruptedException {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+
+        ExecutorService es = Executors.newSingleThreadExecutor();
+        CountDownLatch latchLatestStart = new CountDownLatch(1);
+        CountDownLatch latchEarliestStart = new CountDownLatch(1);
+        CountDownLatch latchEarliestDone = new CountDownLatch(1);
+        CountDownLatch latchEarliestFinish = new CountDownLatch(1);
+        try {
+            doAnswer(invocation -> {
+                latchLatestStart.countDown();
+                latchEarliestStart.await();
+                Object result = invocation.callRealMethod();
+                latchEarliestDone.countDown();
+                return result;
+            }).when(subscriptions).maybeSeek(tp0, 0L, OffsetResetStrategy.EARLIEST);
+
+            es.submit(() -> {
+                subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+                fetcher.resetOffsetsIfNeeded();
+                consumerClient.pollNoWakeup();
+                client.respond(listOffsetResponse(Errors.NONE, 1L, 0L));
+                consumerClient.pollNoWakeup();
+                latchEarliestFinish.countDown();
+            }, Void.class);
+
+            latchLatestStart.await();
+            subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+            fetcher.resetOffsetsIfNeeded();
+            consumerClient.pollNoWakeup();
+            client.respond(listOffsetResponse(Errors.NONE, 1L, 10L));
+            latchEarliestStart.countDown();
+            latchEarliestDone.await();
+            consumerClient.pollNoWakeup();
+            latchEarliestFinish.await();
+            assertEquals(new Long(10), subscriptions.position(tp0));
+        } finally {
+            es.shutdown();
+            es.awaitTermination(10000, TimeUnit.MILLISECONDS);
+        }
     }
 
     @Test
@@ -3602,7 +3649,7 @@ public class FetcherTest {
     private void buildDependencies(MetricConfig metricConfig, OffsetResetStrategy offsetResetStrategy, long metadataExpireMs) {
         LogContext logContext = new LogContext();
         time = new MockTime(1);
-        subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
+        subscriptions = spy(new SubscriptionState(logContext, offsetResetStrategy));
         metadata = new ConsumerMetadata(0, metadataExpireMs, false, false,
                 subscriptions, logContext, new ClusterResourceListeners());
         client = new MockClient(time, metadata);

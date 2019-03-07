@@ -273,6 +273,14 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
+        <!-- Suppresses inconsistent synchronization errors on subscription and subscribedPattern fields.
+             They are used in a predicate in assignFromSubscribed not locked but the method where the predicate
+             is used is synchronized properly. The predicates are used only locally in the method, therefore safe. -->
+        <Class name="org.apache.kafka.clients.consumer.internals.SubscriptionState" />
+        <Bug pattern="IS2_INCONSISTENT_SYNC" />
+    </Match>
+
+    <Match>
         <!-- Suppress a spurious warning about an unreleased lock. -->
         <Class name="kafka.utils.timer.SystemTimer"/>
         <Method name="add"/>
