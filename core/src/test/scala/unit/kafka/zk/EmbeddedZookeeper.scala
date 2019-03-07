@@ -38,7 +38,9 @@ class EmbeddedZookeeper() extends Logging {
 
   val snapshotDir = TestUtils.tempDir()
   val logDir = TestUtils.tempDir()
-  val tickTime = 500
+  val tickTime = 800 // allow a maxSessionTimeout of 20 * 800ms = 16 secs
+
+  System.setProperty("zookeeper.forceSync", "no")  //disable fsync to ZK txn log in tests to avoid timeout
   val zookeeper = new ZooKeeperServer(snapshotDir, logDir, tickTime)
   val factory = new NIOServerCnxnFactory()
   private val addr = new InetSocketAddress("127.0.0.1", TestUtils.RandomPort)
