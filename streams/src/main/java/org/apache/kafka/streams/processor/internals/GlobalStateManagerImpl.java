@@ -64,6 +64,9 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     private final long retryBackoffMs;
     private final Duration pollTime;
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
+    private final Map<String, RecordDeserializer> deserializers = new HashMap<>();
+    private final LogContext logContext;
+    private final DeserializationExceptionHandler deserializationExceptionHandler;
 
     public GlobalStateManagerImpl(final LogContext logContext,
                                   final ProcessorTopology topology,
@@ -89,6 +92,8 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         this.retries = config.getInt(StreamsConfig.RETRIES_CONFIG);
         this.retryBackoffMs = config.getLong(StreamsConfig.RETRY_BACKOFF_MS_CONFIG);
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
+        this.deserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
+        this.logContext = logContext;
     }
 
     @Override
@@ -121,6 +126,22 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
         for (final StateStore stateStore : stateStores) {
             globalStoreNames.add(stateStore.name());
             stateStore.init(processorContext, stateStore);
+
+            final Map<String, String> storeNameToTopic = topology.storeToChangelogTopic();
+            final String sourceTopic = storeNameToTopic.get(stateStore.name());
+            final SourceNode source = topology.source(sourceTopic);
+            if (source != null) {
+                log.info("Found sourceNode %s for topic %s", sourceTopic, source.toString());
+                deserializers.put(
+                        sourceTopic,
+                        new RecordDeserializer(
+                                source,
+                                deserializationExceptionHandler,
+                                logContext,
+                                processorContext.metrics().skippedRecordsSensor()
+                        )
+                );
+            }
         }
         return Collections.unmodifiableSet(globalStoreNames);
     }
@@ -276,11 +297,16 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
             stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
             long restoreCount = 0L;
 
+            final RecordDeserializer recordDeserializer = deserializers.get(topicPartition.topic());
+
             while (offset < highWatermark) {
                 try {
                     final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollTime);
                     final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
                     for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
+                        if (recordDeserializer != null && recordDeserializer.deserialize(processorContext, record) == null) {
+                            continue;
+                        }
                         if (record.key() != null) {
                             restoreRecords.add(recordConverter.convert(record));
                         }
@@ -291,8 +317,8 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                     restoreCount += restoreRecords.size();
                 } catch (final InvalidOffsetException recoverableException) {
                     log.warn("Restoring GlobalStore {} failed due to: {}. Deleting global store to recreate from scratch.",
-                        storeName,
-                        recoverableException.toString());
+                            storeName,
+                            recoverableException.toString());
                     reinitializeStateStoresForPartitions(recoverableException.partitions(), processorContext);
 
                     stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
