@@ -97,8 +97,7 @@ public final class StreamsTestUtils {
         return results;
     }
 
-    public static <K> void verifyKeyValueList(final List<KeyValue<K, byte[]>> expected,
-                                              final List<KeyValue<K, byte[]>> actual) {
+    public static <K> void verifyKeyValueList(final List<KeyValue<K, byte[]>> expected, final List<KeyValue<K, byte[]>> actual) {
         assertThat(actual.size(), equalTo(expected.size()));
         for (int i = 0; i < actual.size(); i++) {
             final KeyValue<K, byte[]> expectedKv = expected.get(i);
@@ -110,10 +109,10 @@ public final class StreamsTestUtils {
 
     public static void verifyWindowedKeyValue(final KeyValue<Windowed<Bytes>, byte[]> actual,
                                               final Windowed<Bytes> expectedKey,
-                                              final byte[] expectedValue) {
+                                              final String expectedValue) {
         assertThat(actual.key.window(), equalTo(expectedKey.window()));
         assertThat(actual.key.key(), equalTo(expectedKey.key()));
-        assertThat(actual.value, equalTo(expectedValue));
+        assertThat(actual.value, equalTo(expectedValue.getBytes()));
     }
 
     public static Metric getMetricByName(final Map<MetricName, ? extends Metric> metrics,

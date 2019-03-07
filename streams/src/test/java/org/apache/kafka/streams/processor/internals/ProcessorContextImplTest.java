@@ -430,7 +430,6 @@ public class ProcessorContextImplTest {
             @SuppressWarnings("unchecked")
             public void init(final ProcessorContext context) {
                 final T store = (T) context.getStateStore(name);
-
                 checker.accept(store);
             }
 

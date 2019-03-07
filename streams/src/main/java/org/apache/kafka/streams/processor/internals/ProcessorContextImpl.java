@@ -346,59 +346,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class TimestampedWindowStoreReadOnlyDecorator<K, V>
-        extends StateStoreReadOnlyDecorator<TimestampedWindowStore<K, V>, K, V>
+        extends WindowStoreReadOnlyDecorator<K, ValueAndTimestamp<V>>
         implements TimestampedWindowStore<K, V> {
 
         private TimestampedWindowStoreReadOnlyDecorator(final TimestampedWindowStore<K, V> inner) {
             super(inner);
-        }
-
-        @Override
-        public void put(final K key,
-                        final ValueAndTimestamp<V> valueAndTimestamp) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public void put(final K key,
-                        final ValueAndTimestamp<V> valueAndTimestamp,
-                        final long windowStartTimestamp) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public ValueAndTimestamp<V> fetch(final K key,
-                                          final long time) {
-            return wrapped().fetch(key, time);
-        }
-
-        @Deprecated
-        @Override
-        public WindowStoreIterator<ValueAndTimestamp<V>> fetch(final K key,
-                                                               final long timeFrom,
-                                                               final long timeTo) {
-            return wrapped().fetch(key, timeFrom, timeTo);
-        }
-
-        @Deprecated
-        @Override
-        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> fetch(final K from,
-                                                                         final K to,
-                                                                         final long timeFrom,
-                                                                         final long timeTo) {
-            return wrapped().fetch(from, to, timeFrom, timeTo);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> all() {
-            return wrapped().all();
-        }
-
-        @Deprecated
-        @Override
-        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> fetchAll(final long timeFrom,
-                                                                            final long timeTo) {
-            return wrapped().fetchAll(timeFrom, timeTo);
         }
     }
 
@@ -584,59 +536,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     }
 
     private static class TimestampedWindowStoreReadWriteDecorator<K, V>
-        extends StateStoreReadWriteDecorator<TimestampedWindowStore<K, V>, K, V>
+        extends WindowStoreReadWriteDecorator<K, ValueAndTimestamp<V>>
         implements TimestampedWindowStore<K, V> {
 
         TimestampedWindowStoreReadWriteDecorator(final TimestampedWindowStore<K, V> inner) {
             super(inner);
-        }
-
-        @Override
-        public void put(final K key,
-                        final ValueAndTimestamp<V> valueAndTimestamp) {
-            wrapped().put(key, valueAndTimestamp);
-        }
-
-        @Override
-        public void put(final K key,
-                        final ValueAndTimestamp<V> valueAndTimestamp,
-                        final long windowStartTimestamp) {
-            wrapped().put(key, valueAndTimestamp, windowStartTimestamp);
-        }
-
-        @Override
-        public ValueAndTimestamp<V> fetch(final K key,
-                                          final long time) {
-            return wrapped().fetch(key, time);
-        }
-
-        @Deprecated
-        @Override
-        public WindowStoreIterator<ValueAndTimestamp<V>> fetch(final K key,
-                                                               final long timeFrom,
-                                                               final long timeTo) {
-            return wrapped().fetch(key, timeFrom, timeTo);
-        }
-
-        @Deprecated
-        @Override
-        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> fetch(final K from,
-                                                                         final K to,
-                                                                         final long timeFrom,
-                                                                         final long timeTo) {
-            return wrapped().fetch(from, to, timeFrom, timeTo);
-        }
-
-        @Override
-        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> all() {
-            return wrapped().all();
-        }
-
-        @Deprecated
-        @Override
-        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> fetchAll(final long timeFrom,
-                                                                            final long timeTo) {
-            return wrapped().fetchAll(timeFrom, timeTo);
         }
     }
 
