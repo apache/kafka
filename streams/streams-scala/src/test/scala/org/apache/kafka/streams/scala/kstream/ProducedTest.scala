@@ -29,6 +29,8 @@ import org.scalatest.{FlatSpec, Matchers}
 @RunWith(classOf[JUnitRunner])
 class ProducedTest extends FlatSpec with Matchers {
 
+  import KeyValueAgnostic._
+
   "Create a Produced" should "create a Produced with Serdes" in {
     val produced: Produced[String, Long] = Produced.`with`[String, Long]
 

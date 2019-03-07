@@ -27,6 +27,8 @@ import org.scalatest.{FlatSpec, Matchers}
 @RunWith(classOf[JUnitRunner])
 class GroupedTest extends FlatSpec with Matchers {
 
+  import KeyValueAgnostic._
+
   "Create a Grouped" should "create a Grouped with Serdes" in {
     val grouped: Grouped[String, Long] = Grouped.`with`[String, Long]
 

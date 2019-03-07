@@ -16,37 +16,37 @@
  */
 package org.apache.kafka.streams.scala.kstream
 
-import org.apache.kafka.common.serialization.Serde
 import org.apache.kafka.streams.kstream.{Joined => JoinedJ}
+import org.apache.kafka.streams.scala.{KeySerde, ValueSerde}
 
 object Joined {
 
   /**
-   * Create an instance of [[org.apache.kafka.streams.kstream.Joined]] with key, value, and otherValue [[Serde]]
+   * Create an instance of [[org.apache.kafka.streams.kstream.Joined]] with key, value, and otherValue [[ValueSerde]]
    * instances.
    * `null` values are accepted and will be replaced by the default serdes as defined in config.
    *
-   * @tparam K              key type
-   * @tparam V              value type
-   * @tparam VO             other value type
+   * @tparam K  key type
+   * @tparam V  value type
+   * @tparam VO other value type
    * @param keySerde        the key serde to use.
    * @param valueSerde      the value serde to use.
    * @param otherValueSerde the otherValue serde to use. If `null` the default value serde from config will be used
    * @return new [[org.apache.kafka.streams.kstream.Joined]] instance with the provided serdes
    */
-  def `with`[K, V, VO](implicit keySerde: Serde[K],
-                       valueSerde: Serde[V],
-                       otherValueSerde: Serde[VO]): JoinedJ[K, V, VO] =
-    JoinedJ.`with`(keySerde, valueSerde, otherValueSerde)
+  def `with`[K, V, VO](implicit keySerde: KeySerde[K],
+                       valueSerde: ValueSerde[V],
+                       otherValueSerde: ValueSerde[VO]): JoinedJ[K, V, VO] =
+    JoinedJ.`with`(keySerde.serde, valueSerde.serde, otherValueSerde.serde)
 
   /**
-   * Create an instance of [[org.apache.kafka.streams.kstream.Joined]] with key, value, and otherValue [[Serde]]
-   * instances.
+   * Create an instance of [[org.apache.kafka.streams.kstream.Joined]] with
+   * key [[KeySerde]], value [[ValueSerde]], and otherValue [[ValueSerde]] instances.
    * `null` values are accepted and will be replaced by the default serdes as defined in config.
    *
-   * @tparam K              key type
-   * @tparam V              value type
-   * @tparam VO             other value type
+   * @tparam K  key type
+   * @tparam V  value type
+   * @tparam VO other value type
    * @param name            name of possible repartition topic
    * @param keySerde        the key serde to use.
    * @param valueSerde      the value serde to use.
@@ -56,9 +56,10 @@ object Joined {
   // disable spotless scala, which wants to make a mess of the argument lists
   // format: off
   def `with`[K, V, VO](name: String)
-                      (implicit keySerde: Serde[K],
-                       valueSerde: Serde[V],
-                       otherValueSerde: Serde[VO]): JoinedJ[K, V, VO] =
-    JoinedJ.`with`(keySerde, valueSerde, otherValueSerde, name)
+                      (implicit keySerde: KeySerde[K],
+                       valueSerde: ValueSerde[V],
+                       otherValueSerde: ValueSerde[VO]): JoinedJ[K, V, VO] =
+    JoinedJ.`with`(keySerde.serde, valueSerde.serde, otherValueSerde.serde, name)
+
   // format:on
 }

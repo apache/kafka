@@ -27,6 +27,8 @@ import org.scalatest.{FlatSpec, Matchers}
 @RunWith(classOf[JUnitRunner])
 class JoinedTest extends FlatSpec with Matchers {
 
+  import KeyValueAgnostic._
+
   "Create a Joined" should "create a Joined with Serdes" in {
     val joined: Joined[String, Long, Int] = Joined.`with`[String, Long, Int]
 

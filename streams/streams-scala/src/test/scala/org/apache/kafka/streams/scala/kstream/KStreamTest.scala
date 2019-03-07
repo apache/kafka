@@ -32,6 +32,8 @@ import org.scalatest.{FlatSpec, Matchers}
 @RunWith(classOf[JUnitRunner])
 class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
+  import KeyValueAgnostic._
+
   "filter a KStream" should "filter records satisfying the predicate" in {
     val builder = new StreamsBuilder()
     val sourceTopic = "source"

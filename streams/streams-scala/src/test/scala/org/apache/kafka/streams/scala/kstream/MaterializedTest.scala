@@ -31,6 +31,8 @@ import org.scalatest.{FlatSpec, Matchers}
 @RunWith(classOf[JUnitRunner])
 class MaterializedTest extends FlatSpec with Matchers {
 
+  import KeyValueAgnostic._
+
   "Create a Materialized" should "create a Materialized with Serdes" in {
     val materialized: Materialized[String, Long, ByteArrayKeyValueStore] =
       Materialized.`with`[String, Long, ByteArrayKeyValueStore]
