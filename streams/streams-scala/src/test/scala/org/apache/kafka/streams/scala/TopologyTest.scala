@@ -46,7 +46,6 @@ import _root_.scala.collection.JavaConverters._
 /**
  * Test suite that verifies that the topology built by the Java and Scala APIs match.
  */
-//noinspection ConvertExpressionToSAM due to 2.11 build
 class TopologyTest extends JUnitSuite {
 
   private val inputTopic = "input-topic"
