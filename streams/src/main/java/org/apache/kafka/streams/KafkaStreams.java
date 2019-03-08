@@ -637,6 +637,16 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     @SuppressWarnings("unchecked")
+    private void configureSerDe(final Set<SinkNode> sinks, final Set<SourceNode> sources) {
+        for (final SinkNode sn : sinks) {
+            sn.getKeySer().configure(config.originals(), true);
+            sn.getValueSer().configure(config.originals(), false);
+        }
+        for (final SourceNode sn : sources) {
+            sn.getKeyDeSer().configure(config.originals(), true);
+            sn.getValueDeSer().configure(config.originals(), false);
+        }
+    }
     private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
                          final StreamsConfig config,
                          final KafkaClientSupplier clientSupplier,
@@ -673,14 +683,7 @@ public class KafkaStreams implements AutoCloseable {
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
         final ProcessorTopology taskTopology = internalTopologyBuilder.build();
 
-        for (final SinkNode sn : taskTopology.sinks()) {
-            sn.getKeySer().configure(config.originals(), true);
-            sn.getValueSer().configure(config.originals(), false);
-        }
-        for (final SourceNode sn : taskTopology.sources()) {
-            sn.getKeyDeSer().configure(config.originals(), true);
-            sn.getValueDeSer().configure(config.originals(), false);
-        }
+        configureSerDe(taskTopology.sinks(), taskTopology.sources());
         streamsMetadataState = new StreamsMetadataState(
                 internalTopologyBuilder,
                 parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
@@ -694,14 +697,6 @@ public class KafkaStreams implements AutoCloseable {
             log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
         }
         final ProcessorTopology globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
-        for (final SinkNode sn : globalTaskTopology.sinks()) {
-            sn.getKeySer().configure(config.originals(), true);
-            sn.getValueSer().configure(config.originals(), false);
-        }
-        for (final SourceNode sn : globalTaskTopology.sources()) {
-            sn.getKeyDeSer().configure(config.originals(), true);
-            sn.getValueDeSer().configure(config.originals(), false);
-        }
 
         final long cacheSizePerThread = totalCacheSize / (threads.length + (globalTaskTopology == null ? 0 : 1));
         final boolean createStateDirectory = taskTopology.hasPersistentLocalStore() ||
@@ -716,6 +711,8 @@ public class KafkaStreams implements AutoCloseable {
         final StateRestoreListener delegatingStateRestoreListener = new DelegatingStateRestoreListener();
         GlobalStreamThread.State globalThreadState = null;
         if (globalTaskTopology != null) {
+            configureSerDe(globalTaskTopology.sinks(), globalTaskTopology.sources());
+
             final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
                                                         config,
