@@ -168,7 +168,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                String metricGrpPrefix,
                                Time time,
                                long retryBackoffMs) {
-        this(logContext, client, groupId, groupInstanceId, rebalanceTimeoutMs, sessionTimeoutMs,
+        this(lKafkaAdminClientTestogContext, client, groupId, groupInstanceId, rebalanceTimeoutMs, sessionTimeoutMs,
                 new Heartbeat(time, sessionTimeoutMs, heartbeatIntervalMs, rebalanceTimeoutMs, retryBackoffMs),
                 metrics, metricGrpPrefix, time, retryBackoffMs);
     }
