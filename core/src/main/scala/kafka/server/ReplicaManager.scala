@@ -1121,8 +1121,16 @@ class ReplicaManager(val config: KafkaConfig,
           hwThreadInitialized = true
         }
 
+        // from existing partitions for which we have become the leader, select those with a future replica
+        val invalidatedPartitionsWithFutureReplicas = partitionsBecomeLeader.filter(_.futureLocalReplica.isDefined)
+
+        // remove selected partitions from alter log dirs fetching; they will be re-added below
+        // this avoids a scenario where the local replica becomes fenced when fetching from the future replica as leader
+        replicaAlterLogDirsManager.removeFetcherForPartitions(
+          invalidatedPartitionsWithFutureReplicas.map(_.topicPartition).toSet)
+
         val futureReplicasAndInitialOffset = new mutable.HashMap[TopicPartition, InitialFetchState]
-        for (partition <- newPartitions) {
+        for (partition <- newPartitions ++ invalidatedPartitionsWithFutureReplicas) {
           val topicPartition = partition.topicPartition
           if (logManager.getLog(topicPartition, isFuture = true).isDefined) {
             partition.localReplica.foreach { replica =>

@@ -25,7 +25,8 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import TestUtils.createBroker
-import kafka.cluster.BrokerEndPoint
+import kafka.api.Request
+import kafka.cluster.{BrokerEndPoint, Replica}
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.timer.MockTimer
 import kafka.zk.KafkaZkClient
@@ -138,6 +139,85 @@ class ReplicaManagerTest {
     }
 
     TestUtils.verifyNonDaemonThreadsStatus(this.getClass.getName)
+  }
+
+  @Test
+  def testResetFutureReplicaFetcherWhenLocalLogElectedLeader() {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    val logDir1 = TestUtils.tempRelativeDir("data").getAbsolutePath
+    val logDir2 = TestUtils.tempRelativeDir("data").getAbsolutePath
+    props.put("log.dir", s"$logDir1,$logDir2")
+    val config = KafkaConfig.fromProps(props)
+    val logProps = new Properties()
+
+    val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), LogConfig(logProps))
+    val aliveBrokers = Seq(createBroker(0, "host0", 0), createBroker(1, "host1", 1), createBroker(2, "host2", 2))
+    val metadataCache: MetadataCache = EasyMock.createMock(classOf[MetadataCache])
+    EasyMock.expect(metadataCache.getAliveBrokers).andReturn(aliveBrokers).anyTimes()
+    EasyMock.replay(metadataCache)
+
+    val logDirsManagerAddedOffsetsByPartition = collection.mutable.HashMap.empty[TopicPartition, InitialFetchState]
+
+    val replicaManager = new ReplicaManager(config, metrics, time, kafkaZkClient, new MockScheduler(time), logManager,
+      new AtomicBoolean(false), QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
+      metadataCache, new LogDirFailureChannel(config.logDirs.size)) {
+      override def createReplicaAlterLogDirsManager(quotaManager: ReplicationQuotaManager, brokerTopicStats: BrokerTopicStats): ReplicaAlterLogDirsManager = {
+        new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats) {
+          override def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]): Unit = {
+            logDirsManagerAddedOffsetsByPartition ++= partitionAndOffsets
+            super.addFetcherForPartitions(partitionAndOffsets)
+          }
+        }
+      }
+    }
+
+    try {
+      val brokerList = Seq[Integer](0, 1, 2).asJava
+      val tp0 = new TopicPartition(topic, 0)
+      val initialLeader = 1
+      val initialLeaderEpoch = 0
+      val nextLeader = 0
+      val nextLeaderEpoch = 1
+
+      val partition = replicaManager.getOrCreatePartition(tp0)
+      partition.getOrCreateReplica(0)
+
+      // make 1 the leader
+      val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        collection.immutable.Map(tp0 ->
+          new LeaderAndIsrRequest.PartitionState(0, initialLeader, initialLeaderEpoch, brokerList, 0, brokerList, false)).asJava,
+        Set(new Node(0, "host0", 0), new Node(1, "host1", 1), new Node(2, "host2", 2)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
+      replicaManager.getPartitionOrException(tp0, expectLeader = false)
+        .localReplicaOrException
+
+      // create future replica
+      logManager.maybeUpdatePreferredLogDir(tp0, logDir2)
+      val log2 = logManager.getOrCreateLog(tp0, LogConfig(), isFuture = true)
+      val futureReplica = new Replica(Request.FutureLocalReplicaId, tp0, time, log = Some(log2))
+      partition.addReplicaIfNotExists(futureReplica)
+
+      // write records
+      val records = TestUtils.records(Seq("v1", "v2").map(s => new SimpleRecord(s.getBytes)))
+      appendRecords(replicaManager, tp0, records)
+
+      // make 0 the leader
+      val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        collection.immutable.Map(tp0 ->
+          new LeaderAndIsrRequest.PartitionState(0, nextLeader, nextLeaderEpoch, brokerList, 0, brokerList, false)).asJava,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1), new Node(2, "host3", 2)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
+
+      // ensure the alter log dirs fetcher corresponding to the futureReplica was reset when 0 became leader
+      logDirsManagerAddedOffsetsByPartition.foreach {
+        case (tp, fetchState) if tp == tp0 =>
+          assertEquals(nextLeaderEpoch, fetchState.currentLeaderEpoch)
+        case unexpected =>
+          fail(s"Unexpected replicaAlterLogDirsManager entry $unexpected")
+      }
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
   }
 
   @Test
