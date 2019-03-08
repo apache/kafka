@@ -91,11 +91,13 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if the given key is {@code null}
      */
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     WindowStoreIterator<V> fetch(K key, long timeFrom, long timeTo);
 
     @Override
-    default WindowStoreIterator<V> fetch(final K key, final Instant from, final Instant to) {
+    default WindowStoreIterator<V> fetch(final K key,
+                                         final Instant from,
+                                         final Instant to) {
         return fetch(
             key,
             ApiUtils.validateMillisecondInstant(from, prepareMillisCheckFailMsgPrefix(from, "from")),
@@ -115,11 +117,14 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @throws InvalidStateStoreException if the store is not initialized
      * @throws NullPointerException if one of the given keys is {@code null}
      */
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     KeyValueIterator<Windowed<K>, V> fetch(K from, K to, long timeFrom, long timeTo);
 
     @Override
-    default KeyValueIterator<Windowed<K>, V> fetch(final K from, final K to, final Instant fromTime, final Instant toTime) {
+    default KeyValueIterator<Windowed<K>, V> fetch(final K from,
+                                                   final K to,
+                                                   final Instant fromTime,
+                                                   final Instant toTime) {
         return fetch(
             from,
             to,
@@ -135,7 +140,7 @@ public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V>
      * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
      * @throws InvalidStateStoreException if the store is not initialized
      */
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     KeyValueIterator<Windowed<K>, V> fetchAll(long timeFrom, long timeTo);
 
     @Override
