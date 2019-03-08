@@ -90,6 +90,7 @@ import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -806,6 +807,12 @@ public class TopologyTestDriver implements Closeable {
             timeMs.addAndGet(ms);
             highResTimeNs.addAndGet(TimeUnit.MILLISECONDS.toNanos(ms));
         }
+
+        @Override
+        public void waitObject(final Object obj, final Supplier<Boolean> condition, final long timeoutMs) {
+            throw new UnsupportedOperationException();
+        }
+
     }
 
     private MockConsumer<byte[], byte[]> createRestoreConsumer(final Map<String, String> storeToChangelogTopic) {
