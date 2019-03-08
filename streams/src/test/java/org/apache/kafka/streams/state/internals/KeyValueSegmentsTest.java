@@ -41,13 +41,13 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-public class SegmentsTest {
+public class KeyValueSegmentsTest {
 
     private static final int NUM_SEGMENTS = 5;
     private static final long SEGMENT_INTERVAL = 100L;
     private static final long RETENTION_PERIOD = 4 * SEGMENT_INTERVAL;
     private InternalMockProcessorContext context;
-    private Segments segments;
+    private KeyValueSegments segments;
     private File stateDirectory;
     private final String storeName = "test";
 
@@ -61,7 +61,7 @@ public class SegmentsTest {
             new NoOpRecordCollector(),
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
         );
-        segments = new Segments(storeName, RETENTION_PERIOD, SEGMENT_INTERVAL);
+        segments = new KeyValueSegments(storeName, RETENTION_PERIOD, SEGMENT_INTERVAL);
     }
 
     @After
@@ -79,7 +79,7 @@ public class SegmentsTest {
 
     @Test
     public void shouldBaseSegmentIntervalOnRetentionAndNumSegments() {
-        final Segments segments = new Segments("test", 8 * SEGMENT_INTERVAL, 2 * SEGMENT_INTERVAL);
+        final KeyValueSegments segments = new KeyValueSegments("test", 8 * SEGMENT_INTERVAL, 2 * SEGMENT_INTERVAL);
         assertEquals(0, segments.segmentId(0));
         assertEquals(0, segments.segmentId(SEGMENT_INTERVAL));
         assertEquals(1, segments.segmentId(2 * SEGMENT_INTERVAL));
@@ -94,9 +94,9 @@ public class SegmentsTest {
 
     @Test
     public void shouldCreateSegments() {
-        final Segment segment1 = segments.getOrCreateSegmentIfLive(0, context);
-        final Segment segment2 = segments.getOrCreateSegmentIfLive(1, context);
-        final Segment segment3 = segments.getOrCreateSegmentIfLive(2, context);
+        final KeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, -1L);
+        final KeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(1, context, -1L);
+        final KeyValueSegment segment3 = segments.getOrCreateSegmentIfLive(2, context, -1L);
         assertTrue(new File(context.stateDir(), "test/test.0").isDirectory());
         assertTrue(new File(context.stateDir(), "test/test." + SEGMENT_INTERVAL).isDirectory());
         assertTrue(new File(context.stateDir(), "test/test." + 2 * SEGMENT_INTERVAL).isDirectory());
@@ -107,17 +107,16 @@ public class SegmentsTest {
 
     @Test
     public void shouldNotCreateSegmentThatIsAlreadyExpired() {
-        updateStreamTimeAndCreateSegment(7);
-        assertNull(segments.getOrCreateSegmentIfLive(0, context));
+        final long streamTime = updateStreamTimeAndCreateSegment(7);
+        assertNull(segments.getOrCreateSegmentIfLive(0, context, streamTime));
         assertFalse(new File(context.stateDir(), "test/test.0").exists());
     }
 
     @Test
     public void shouldCleanupSegmentsThatHaveExpired() {
-        final Segment segment1 = segments.getOrCreateSegmentIfLive(0, context);
-        final Segment segment2 = segments.getOrCreateSegmentIfLive(1, context);
-        context.setStreamTime(SEGMENT_INTERVAL * 7);
-        final Segment segment3 = segments.getOrCreateSegmentIfLive(7, context);
+        final KeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, -1L);
+        final KeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(1, context, -1L);
+        final KeyValueSegment segment3 = segments.getOrCreateSegmentIfLive(7, context, SEGMENT_INTERVAL * 7L);
         assertFalse(segment1.isOpen());
         assertFalse(segment2.isOpen());
         assertTrue(segment3.isOpen());
@@ -128,22 +127,22 @@ public class SegmentsTest {
 
     @Test
     public void shouldGetSegmentForTimestamp() {
-        final Segment segment = segments.getOrCreateSegmentIfLive(0, context);
-        segments.getOrCreateSegmentIfLive(1, context);
+        final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(0, context, -1L);
+        segments.getOrCreateSegmentIfLive(1, context, -1L);
         assertEquals(segment, segments.getSegmentForTimestamp(0L));
     }
 
     @Test
     public void shouldGetCorrectSegmentString() {
-        final Segment segment = segments.getOrCreateSegmentIfLive(0, context);
-        assertEquals("Segment(id=0, name=test.0)", segment.toString());
+        final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(0, context, -1L);
+        assertEquals("KeyValueSegment(id=0, name=test.0)", segment.toString());
     }
 
     @Test
     public void shouldCloseAllOpenSegments() {
-        final Segment first = segments.getOrCreateSegmentIfLive(0, context);
-        final Segment second = segments.getOrCreateSegmentIfLive(1, context);
-        final Segment third = segments.getOrCreateSegmentIfLive(2, context);
+        final KeyValueSegment first = segments.getOrCreateSegmentIfLive(0, context, -1L);
+        final KeyValueSegment second = segments.getOrCreateSegmentIfLive(1, context, -1L);
+        final KeyValueSegment third = segments.getOrCreateSegmentIfLive(2, context, -1L);
         segments.close();
 
         assertFalse(first.isOpen());
@@ -153,17 +152,17 @@ public class SegmentsTest {
 
     @Test
     public void shouldOpenExistingSegments() {
-        segments = new Segments("test", 4, 1);
-        segments.getOrCreateSegmentIfLive(0, context);
-        segments.getOrCreateSegmentIfLive(1, context);
-        segments.getOrCreateSegmentIfLive(2, context);
-        segments.getOrCreateSegmentIfLive(3, context);
-        segments.getOrCreateSegmentIfLive(4, context);
+        segments = new KeyValueSegments("test", 4, 1);
+        segments.getOrCreateSegmentIfLive(0, context, -1L);
+        segments.getOrCreateSegmentIfLive(1, context, -1L);
+        segments.getOrCreateSegmentIfLive(2, context, -1L);
+        segments.getOrCreateSegmentIfLive(3, context, -1L);
+        segments.getOrCreateSegmentIfLive(4, context, -1L);
         // close existing.
         segments.close();
 
-        segments = new Segments("test", 4, 1);
-        segments.openExisting(context);
+        segments = new KeyValueSegments("test", 4, 1);
+        segments.openExisting(context, -1L);
 
         assertTrue(segments.getSegmentForTimestamp(0).isOpen());
         assertTrue(segments.getSegmentForTimestamp(1).isOpen());
@@ -178,14 +177,14 @@ public class SegmentsTest {
         updateStreamTimeAndCreateSegment(1);
         updateStreamTimeAndCreateSegment(2);
         updateStreamTimeAndCreateSegment(3);
-        updateStreamTimeAndCreateSegment(4);
-        segments.getOrCreateSegmentIfLive(0, context);
-        segments.getOrCreateSegmentIfLive(1, context);
-        segments.getOrCreateSegmentIfLive(2, context);
-        segments.getOrCreateSegmentIfLive(3, context);
-        segments.getOrCreateSegmentIfLive(4, context);
+        final long streamTime = updateStreamTimeAndCreateSegment(4);
+        segments.getOrCreateSegmentIfLive(0, context, streamTime);
+        segments.getOrCreateSegmentIfLive(1, context, streamTime);
+        segments.getOrCreateSegmentIfLive(2, context, streamTime);
+        segments.getOrCreateSegmentIfLive(3, context, streamTime);
+        segments.getOrCreateSegmentIfLive(4, context, streamTime);
 
-        final List<Segment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL);
+        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL);
         assertEquals(3, segments.size());
         assertEquals(0, segments.get(0).id);
         assertEquals(1, segments.get(1).id);
@@ -200,7 +199,7 @@ public class SegmentsTest {
         updateStreamTimeAndCreateSegment(1);
         updateStreamTimeAndCreateSegment(3);
 
-        final List<Segment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL);
+        final List<KeyValueSegment> segments = this.segments.segments(0, 2 * SEGMENT_INTERVAL);
         assertEquals(3, segments.size());
         assertEquals(0, segments.get(0).id);
         assertEquals(1, segments.get(1).id);
@@ -235,24 +234,25 @@ public class SegmentsTest {
         verifyCorrectSegments(0, 3);
         updateStreamTimeAndCreateSegment(3);
         verifyCorrectSegments(0, 4);
-        updateStreamTimeAndCreateSegment(4);
+        final long streamTime = updateStreamTimeAndCreateSegment(4);
         verifyCorrectSegments(0, 5);
-        segments.getOrCreateSegmentIfLive(5, context);
+        segments.getOrCreateSegmentIfLive(5, context, streamTime);
         verifyCorrectSegments(0, 6);
-        segments.getOrCreateSegmentIfLive(6, context);
+        segments.getOrCreateSegmentIfLive(6, context, streamTime);
         verifyCorrectSegments(0, 7);
     }
 
-    private void updateStreamTimeAndCreateSegment(final int segment) {
-        context.setStreamTime(SEGMENT_INTERVAL * segment);
-        segments.getOrCreateSegmentIfLive(segment, context);
+    private long updateStreamTimeAndCreateSegment(final int segment) {
+        final long streamTime = SEGMENT_INTERVAL * segment;
+        segments.getOrCreateSegmentIfLive(segment, context, streamTime);
+        return streamTime;
     }
 
     @Test
     public void shouldUpdateSegmentFileNameFromOldDateFormatToNewFormat() throws Exception {
         final long segmentInterval = 60_000L; // the old segment file's naming system maxes out at 1 minute granularity.
 
-        segments = new Segments(storeName, NUM_SEGMENTS * segmentInterval, segmentInterval);
+        segments = new KeyValueSegments(storeName, NUM_SEGMENTS * segmentInterval, segmentInterval);
 
         final String storeDirectoryPath = stateDirectory.getAbsolutePath() + File.separator + storeName;
         final File storeDirectory = new File(storeDirectoryPath);
@@ -268,7 +268,7 @@ public class SegmentsTest {
             oldSegment.createNewFile();
         }
 
-        segments.openExisting(context);
+        segments.openExisting(context, -1L);
 
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
             final String segmentName = storeName + "." + (long) segmentId * segmentInterval;
@@ -290,7 +290,7 @@ public class SegmentsTest {
             oldSegment.createNewFile();
         }
 
-        segments.openExisting(context);
+        segments.openExisting(context, -1L);
 
         for (int segmentId = 0; segmentId < NUM_SEGMENTS; ++segmentId) {
             final File newSegment = new File(storeDirectoryPath + File.separator + storeName + "." + segmentId * (RETENTION_PERIOD / (NUM_SEGMENTS - 1)));
@@ -300,13 +300,13 @@ public class SegmentsTest {
 
     @Test
     public void shouldClearSegmentsOnClose() {
-        segments.getOrCreateSegmentIfLive(0, context);
+        segments.getOrCreateSegmentIfLive(0, context, -1L);
         segments.close();
         assertThat(segments.getSegmentForTimestamp(0), is(nullValue()));
     }
 
     private void verifyCorrectSegments(final long first, final int numSegments) {
-        final List<Segment> result = this.segments.segments(0, Long.MAX_VALUE);
+        final List<KeyValueSegment> result = this.segments.segments(0, Long.MAX_VALUE);
         assertEquals(numSegments, result.size());
         for (int i = 0; i < numSegments; i++) {
             assertEquals(i + first, result.get(i).id);

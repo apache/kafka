@@ -14,8 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.common.errors;
 
-public interface TimestampSupplier {
-    long get();
+public class PreferredLeaderNotAvailableException extends InvalidMetadataException {
+
+    public PreferredLeaderNotAvailableException(String message) {
+        super(message);
+    }
+
+    public PreferredLeaderNotAvailableException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

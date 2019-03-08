@@ -89,13 +89,14 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.processor.internals.AbstractStateManager.CHECKPOINT_FILE_NAME;
+import static org.apache.kafka.streams.processor.internals.StreamThread.getSharedAdminClientId;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertSame;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -621,7 +622,7 @@ public class StreamThreadTest {
             clientId,
             new LogContext(""),
             new AtomicInteger()
-        );
+        ).updateThreadMetadata(getSharedAdminClientId(clientId));
         thread.setStateListener(
             (t, newState, oldState) -> {
                 if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.STARTING) {
@@ -655,7 +656,7 @@ public class StreamThreadTest {
             clientId,
             new LogContext(""),
             new AtomicInteger()
-        );
+        ).updateThreadMetadata(getSharedAdminClientId(clientId));
         thread.shutdown();
         EasyMock.verify(taskManager);
     }
@@ -683,7 +684,7 @@ public class StreamThreadTest {
             clientId,
             new LogContext(""),
             new AtomicInteger()
-        );
+        ).updateThreadMetadata(getSharedAdminClientId(clientId));
         thread.shutdown();
         // Execute the run method. Verification of the mock will check that shutdown was only done once
         thread.run();
@@ -1508,7 +1509,6 @@ public class StreamThreadTest {
             (Measurable) (config, now) -> 0,
             null,
             new MockTime());
-
 
         EasyMock.expect(taskManager.getAdminClient()).andReturn(adminClient);
         EasyMock.expectLastCall();

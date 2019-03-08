@@ -19,12 +19,14 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * A detailed description of a single consumer group in the cluster.
@@ -36,13 +38,15 @@ public class ConsumerGroupDescription {
     private final String partitionAssignor;
     private final ConsumerGroupState state;
     private final Node coordinator;
+    private Set<AclOperation> authorizedOperations;
 
     public ConsumerGroupDescription(String groupId,
                                     boolean isSimpleConsumerGroup,
                                     Collection<MemberDescription> members,
                                     String partitionAssignor,
                                     ConsumerGroupState state,
-                                    Node coordinator) {
+                                    Node coordinator,
+                                    Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.members = members == null ? Collections.emptyList() :
@@ -50,23 +54,26 @@ public class ConsumerGroupDescription {
         this.partitionAssignor = partitionAssignor == null ? "" : partitionAssignor;
         this.state = state;
         this.coordinator = coordinator;
+        this.authorizedOperations = authorizedOperations;
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(final Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
-        ConsumerGroupDescription that = (ConsumerGroupDescription) o;
+        final ConsumerGroupDescription that = (ConsumerGroupDescription) o;
         return isSimpleConsumerGroup == that.isSimpleConsumerGroup &&
-            groupId.equals(that.groupId) &&
-            members.equals(that.members) &&
-            partitionAssignor.equals(that.partitionAssignor) &&
-            state.equals(that.state);
+            Objects.equals(groupId, that.groupId) &&
+            Objects.equals(members, that.members) &&
+            Objects.equals(partitionAssignor, that.partitionAssignor) &&
+            state == that.state &&
+            Objects.equals(coordinator, that.coordinator) &&
+            Objects.equals(authorizedOperations, that.authorizedOperations);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(isSimpleConsumerGroup, groupId, members, partitionAssignor, state);
+        return Objects.hash(groupId, isSimpleConsumerGroup, members, partitionAssignor, state, coordinator, authorizedOperations);
     }
 
     /**
@@ -111,6 +118,13 @@ public class ConsumerGroupDescription {
         return coordinator;
     }
 
+    /**
+     * authorizedOperations for this group
+     */
+    public  Set<AclOperation> authorizedOperations() {
+        return authorizedOperations;
+    }
+
     @Override
     public String toString() {
         return "(groupId=" + groupId +
@@ -119,6 +133,7 @@ public class ConsumerGroupDescription {
             ", partitionAssignor=" + partitionAssignor +
             ", state=" + state +
             ", coordinator=" + coordinator +
+            ", authorizedOperations=" + authorizedOperations +
             ")";
     }
 }

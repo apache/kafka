@@ -26,7 +26,9 @@ import java.time.Instant;
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
- * A windowed store interface extending {@link StateStore}.
+ * Interface for storing the aggregated values of fixed-size time windows.
+ * <p>
+ * Note, that the stores's physical key type is {@link Windowed Windowed&lt;K&gt;}.
  *
  * @param <K> Type of keys
  * @param <V> Type of values

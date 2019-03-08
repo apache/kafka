@@ -48,10 +48,9 @@ public class SessionStoreBuilder<K, V> extends AbstractStoreBuilder<K, V, Sessio
         if (!enableCaching) {
             return inner;
         }
-        return new CachingSessionStore<>(inner,
-                                         keySerde,
-                                         valueSerde,
-                                         storeSupplier.segmentIntervalMs());
+        return new CachingSessionStore(
+            inner,
+            storeSupplier.segmentIntervalMs());
     }
 
     private SessionStore<Bytes, byte[]> maybeWrapLogging(final SessionStore<Bytes, byte[]> inner) {

@@ -137,6 +137,12 @@ class MetadataCache(brokerId: Int) extends Logging {
     getAllTopics(metadataSnapshot)
   }
 
+  def getAllPartitions(): Set[TopicPartition] = {
+    metadataSnapshot.partitionStates.flatMap { case (topicName, partitionsAndStates) =>
+      partitionsAndStates.keys.map(partitionId => new TopicPartition(topicName, partitionId.toInt))
+    }.toSet
+  }
+
   private def getAllTopics(snapshot: MetadataSnapshot): Set[String] = {
     snapshot.partitionStates.keySet
   }

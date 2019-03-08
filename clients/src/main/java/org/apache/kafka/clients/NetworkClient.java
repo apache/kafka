@@ -251,7 +251,7 @@ public class NetworkClient implements KafkaClient {
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax);
+        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, logContext);
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
@@ -676,7 +676,8 @@ public class NetworkClient implements KafkaClient {
 
     public static AbstractResponse parseResponse(ByteBuffer responseBuffer, RequestHeader requestHeader) {
         Struct responseStruct = parseStructMaybeUpdateThrottleTimeMetrics(responseBuffer, requestHeader, null, 0);
-        return AbstractResponse.parseResponse(requestHeader.apiKey(), responseStruct);
+        return AbstractResponse.parseResponse(requestHeader.apiKey(), responseStruct,
+                requestHeader.apiVersion());
     }
 
     private static Struct parseStructMaybeUpdateThrottleTimeMetrics(ByteBuffer responseBuffer, RequestHeader requestHeader,
@@ -696,7 +697,7 @@ public class NetworkClient implements KafkaClient {
      * @param responses The list of responses to update
      * @param nodeId Id of the node to be disconnected
      * @param now The current time
-     * @param disconnectState The state of the disconnected channel           
+     * @param disconnectState The state of the disconnected channel
      */
     private void processDisconnection(List<ClientResponse> responses,
                                       String nodeId,
@@ -710,12 +711,15 @@ public class NetworkClient implements KafkaClient {
                 AuthenticationException exception = disconnectState.exception();
                 connectionStates.authenticationFailed(nodeId, now, exception);
                 metadataUpdater.handleAuthenticationFailure(exception);
-                log.error("Connection to node {} ({}) failed authentication due to: {}", nodeId, disconnectState.remoteAddress(), exception.getMessage());
+                log.error("Connection to node {} ({}) failed authentication due to: {}", nodeId,
+                    disconnectState.remoteAddress(), exception.getMessage());
                 break;
             case AUTHENTICATE:
-                // This warning applies to older brokers which don't provide feedback on authentication failures
-                log.warn("Connection to node {} ({}) terminated during authentication. This may indicate " +
-                        "that authentication failed due to invalid credentials.", nodeId, disconnectState.remoteAddress());
+                log.warn("Connection to node {} ({}) terminated during authentication. This may happen " +
+                    "due to any of the following reasons: (1) Authentication failed due to invalid " +
+                    "credentials with brokers older than 1.0.0, (2) Firewall blocking Kafka TLS " +
+                    "traffic (eg it may only allow HTTPS traffic), (3) Transient network issue.",
+                    nodeId, disconnectState.remoteAddress());
                 break;
             case NOT_CONNECTED:
                 log.warn("Connection to node {} ({}) could not be established. Broker may not be available.", nodeId, disconnectState.remoteAddress());
@@ -811,7 +815,8 @@ public class NetworkClient implements KafkaClient {
                     req.header.apiKey(), req.header.correlationId(), responseStruct);
             }
             // If the received response includes a throttle delay, throttle the connection.
-            AbstractResponse body = AbstractResponse.parseResponse(req.header.apiKey(), responseStruct);
+            AbstractResponse body = AbstractResponse.
+                    parseResponse(req.header.apiKey(), responseStruct, req.header.apiVersion());
             maybeThrottle(body, req.header.apiVersion(), req.destination, now);
             if (req.isInternalRequest && body instanceof MetadataResponse)
                 metadataUpdater.handleCompletedMetadataResponse(req.header, now, (MetadataResponse) body);
@@ -905,23 +910,25 @@ public class NetworkClient implements KafkaClient {
 
     /**
      * Initiate a connection to the given node
+     * @param node the node to connect to
+     * @param now current time in epoch milliseconds
      */
     private void initiateConnect(Node node, long now) {
         String nodeConnectionId = node.idString();
         try {
-            this.connectionStates.connecting(nodeConnectionId, now, node.host(), clientDnsLookup);
-            InetAddress address = this.connectionStates.currentAddress(nodeConnectionId);
+            connectionStates.connecting(nodeConnectionId, now, node.host(), clientDnsLookup);
+            InetAddress address = connectionStates.currentAddress(nodeConnectionId);
             log.debug("Initiating connection to node {} using address {}", node, address);
             selector.connect(nodeConnectionId,
                     new InetSocketAddress(address, node.port()),
                     this.socketSendBuffer,
                     this.socketReceiveBuffer);
         } catch (IOException e) {
+            log.warn("Error connecting to node {}", node, e);
             /* attempt failed, we'll try again after the backoff */
             connectionStates.disconnected(nodeConnectionId, now);
             /* maybe the problem is our metadata, update it */
             metadataUpdater.requestUpdate();
-            log.warn("Error connecting to node {}", node, e);
         }
     }
 
@@ -930,12 +937,12 @@ public class NetworkClient implements KafkaClient {
         /* the current cluster metadata */
         private final Metadata metadata;
 
-        /* true iff there is a metadata request that has been sent and for which we have not yet received a response */
-        private boolean metadataFetchInProgress;
+        // Defined if there is a request in progress, null otherwise
+        private Integer inProgressRequestVersion;
 
         DefaultMetadataUpdater(Metadata metadata) {
             this.metadata = metadata;
-            this.metadataFetchInProgress = false;
+            this.inProgressRequestVersion = null;
         }
 
         @Override
@@ -945,14 +952,18 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public boolean isUpdateDue(long now) {
-            return !this.metadataFetchInProgress && this.metadata.timeToNextUpdate(now) == 0;
+            return !hasFetchInProgress() && this.metadata.timeToNextUpdate(now) == 0;
+        }
+
+        private boolean hasFetchInProgress() {
+            return inProgressRequestVersion != null;
         }
 
         @Override
         public long maybeUpdate(long now) {
             // should we update our metadata?
             long timeToNextMetadataUpdate = metadata.timeToNextUpdate(now);
-            long waitForMetadataFetch = this.metadataFetchInProgress ? defaultRequestTimeoutMs : 0;
+            long waitForMetadataFetch = hasFetchInProgress() ? defaultRequestTimeoutMs : 0;
 
             long metadataTimeout = Math.max(timeToNextMetadataUpdate, waitForMetadataFetch);
 
@@ -985,20 +996,18 @@ public class NetworkClient implements KafkaClient {
                     log.warn("Bootstrap broker {} disconnected", node);
             }
 
-            metadataFetchInProgress = false;
+            inProgressRequestVersion = null;
         }
 
         @Override
         public void handleAuthenticationFailure(AuthenticationException exception) {
-            metadataFetchInProgress = false;
             if (metadata.updateRequested())
                 metadata.failedUpdate(time.milliseconds(), exception);
+            inProgressRequestVersion = null;
         }
 
         @Override
         public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
-            this.metadataFetchInProgress = false;
-
             // If any partition has leader with missing listeners, log a few for diagnosing broker configuration
             // issues. This could be a transient issue if listeners were added dynamically to brokers.
             List<TopicPartition> missingListenerPartitions = response.topicMetadata().stream().flatMap(topicMetadata ->
@@ -1023,8 +1032,10 @@ public class NetworkClient implements KafkaClient {
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
                 this.metadata.failedUpdate(now, null);
             } else {
-                this.metadata.update(response, now);
+                this.metadata.update(inProgressRequestVersion, response, now);
             }
+
+            inProgressRequestVersion = null;
         }
 
         @Override
@@ -1056,15 +1067,9 @@ public class NetworkClient implements KafkaClient {
             String nodeConnectionId = node.idString();
 
             if (canSendRequest(nodeConnectionId, now)) {
-                this.metadataFetchInProgress = true;
-                MetadataRequest.Builder metadataRequest;
-                if (metadata.needMetadataForAllTopics())
-                    metadataRequest = MetadataRequest.Builder.allTopics();
-                else
-                    metadataRequest = new MetadataRequest.Builder(new ArrayList<>(metadata.topics()),
-                            metadata.allowAutoTopicCreation());
-
-
+                Metadata.MetadataRequestAndVersion requestAndVersion = metadata.newMetadataRequestAndVersion();
+                this.inProgressRequestVersion = requestAndVersion.requestVersion;
+                MetadataRequest.Builder metadataRequest = requestAndVersion.requestBuilder;
                 log.debug("Sending metadata request {} to node {}", metadataRequest, node);
                 sendInternalMetadataRequest(metadataRequest, nodeConnectionId, now);
                 return defaultRequestTimeoutMs;

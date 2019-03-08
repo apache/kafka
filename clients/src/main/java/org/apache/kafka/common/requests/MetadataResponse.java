@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
-import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Field;
@@ -338,29 +337,6 @@ public class MetadataResponse extends AbstractResponse {
                 errorTopics.add(metadata.topic());
         }
         return errorTopics;
-    }
-
-    /**
-     * Returns the set of topics with an error indicating invalid metadata
-     * and topics with any partition whose error indicates invalid metadata.
-     * This includes all non-existent topics specified in the metadata request
-     * and any topic returned with one or more partitions whose leader is not known.
-     */
-    public Set<String> unavailableTopics() {
-        Set<String> invalidMetadataTopics = new HashSet<>();
-        for (TopicMetadata topicMetadata : this.topicMetadata) {
-            if (topicMetadata.error.exception() instanceof InvalidMetadataException)
-                invalidMetadataTopics.add(topicMetadata.topic);
-            else {
-                for (PartitionMetadata partitionMetadata : topicMetadata.partitionMetadata) {
-                    if (partitionMetadata.error.exception() instanceof InvalidMetadataException) {
-                        invalidMetadataTopics.add(topicMetadata.topic);
-                        break;
-                    }
-                }
-            }
-        }
-        return invalidMetadataTopics;
     }
 
     /**

@@ -141,6 +141,16 @@ def replace(path, pattern, replacement):
         for line in updated:
             f.write(line)
 
+def regexReplace(path, pattern, replacement):
+    updated = []
+    with open(path, 'r') as f:
+        for line in f:
+            updated.append(re.sub(pattern, replacement, line))
+
+    with open(path, 'w') as f:
+        for line in updated:
+            f.write(line)
+
 def user_ok(msg):
     ok = raw_input(msg)
     return ok.lower() == 'y'
@@ -465,7 +475,7 @@ release_version_parts = get_release_version_parts(release_version)
 rc = raw_input("Release candidate number: ")
 
 dev_branch = '.'.join(release_version_parts[:2])
-docs_release_version = docs_version(release_version[:2])
+docs_release_version = docs_version(release_version)
 
 # Validate that the release doesn't already exist and that the
 cmd("Fetching tags from upstream", 'git fetch --tags %s' % PUSH_REMOTE_NAME)
@@ -522,12 +532,17 @@ cmd("Checking out current development branch", "git checkout -b %s %s" % (releas
 print("Updating version numbers")
 replace("gradle.properties", "version", "version=%s" % release_version)
 replace("tests/kafkatest/__init__.py", "__version__", "__version__ = '%s'" % release_version)
-cmd("update streams quickstart pom", ["sed", "-i", ".orig"," s/-SNAPSHOT//", "streams/quickstart/pom.xml"])
-cmd("update streams quickstart java pom", ["sed", "-i", ".orig", "s/-SNAPSHOT//", "streams/quickstart/java/pom.xml"])
-cmd("update streams quickstart java pom", ["sed", "-i", ".orig", "s/-SNAPSHOT//", "streams/quickstart/java/src/main/resources/archetype-resources/pom.xml"])
-cmd("remove backup pom.xml", "rm streams/quickstart/pom.xml.orig")
-cmd("remove backup java pom.xml", "rm streams/quickstart/java/pom.xml.orig")
-cmd("remove backup java pom.xml", "rm streams/quickstart/java/src/main/resources/archetype-resources/pom.xml.orig")
+print("updating streams quickstart pom")
+regexReplace("streams/quickstart/pom.xml", "-SNAPSHOT", "")
+print("updating streams quickstart java pom")
+regexReplace("streams/quickstart/java/pom.xml", "-SNAPSHOT", "")
+print("updating streams quickstart archetype pom")
+regexReplace("streams/quickstart/java/src/main/resources/archetype-resources/pom.xml", "-SNAPSHOT", "")
+print("updating ducktape version.py")
+regexReplace("./tests/kafkatest/version.py", "^DEV_VERSION =.*",
+    "DEV_VERSION = KafkaVersion(\"%s-SNAPSHOT\")" % release_version)
+print("updating ducktape __init__.py")
+regexReplace("./tests/kafkatest/__init__.py", ".dev.*", "")
 # Command in explicit list due to messages with spaces
 cmd("Committing version number updates", ["git", "commit", "-a", "-m", "Bump version to %s" % release_version])
 # Command in explicit list due to messages with spaces
@@ -555,7 +570,7 @@ cmd("Verifying the correct year in NOTICE", "grep %s NOTICE" % current_year, cwd
 with open(os.path.join(artifacts_dir, "RELEASE_NOTES.html"), 'w') as f:
     print("Generating release notes")
     try:
-        subprocess.check_call(["./release_notes.py", release_version], stdout=f)
+        subprocess.check_call([sys.executable, "./release_notes.py", release_version], stdout=f)
     except subprocess.CalledProcessError as e:
         print_output(e.output)
 
@@ -640,23 +655,23 @@ Now you should sanity check it before proceeding. All subsequent steps start mak
 
 Some suggested steps:
 
- * Grab the source archive and make sure it compiles: http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz
- * Grab one of the binary distros and run the quickstarts against them: http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka_2.12-%(release_version)s.tgz
- * Extract and verify one of the site docs jars: http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka_2.12-%(release_version)s-site-docs.tgz
+ * Grab the source archive and make sure it compiles: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz
+ * Grab one of the binary distros and run the quickstarts against them: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka_2.12-%(release_version)s.tgz
+ * Extract and verify one of the site docs jars: https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka_2.12-%(release_version)s-site-docs.tgz
  * Build a sample against jars in the staging repo: (TODO: Can we get a temporary URL before "closing" the staged artifacts?)
  * Validate GPG signatures on at least one file:
-      wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz &&
-      wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.asc &&
-      wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.md5 &&
-      wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.sha1 &&
-      wget http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.sha512 &&
+      wget https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz &&
+      wget https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.asc &&
+      wget https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.md5 &&
+      wget https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.sha1 &&
+      wget https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/kafka-%(release_version)s-src.tgz.sha512 &&
       gpg --verify kafka-%(release_version)s-src.tgz.asc kafka-%(release_version)s-src.tgz &&
       gpg --print-md md5 kafka-%(release_version)s-src.tgz | diff - kafka-%(release_version)s-src.tgz.md5 &&
       gpg --print-md sha1 kafka-%(release_version)s-src.tgz | diff - kafka-%(release_version)s-src.tgz.sha1 &&
       gpg --print-md sha512 kafka-%(release_version)s-src.tgz | diff - kafka-%(release_version)s-src.tgz.sha512 &&
       rm kafka-%(release_version)s-src.tgz* &&
       echo "OK" || echo "Failed"
- * Validate the javadocs look ok. They are at http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/javadoc/
+ * Validate the javadocs look ok. They are at https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/javadoc/
 
 *******************************************************************************************************************************************************
 """ % release_notification_props)
@@ -688,30 +703,30 @@ This is the first candidate for release of Apache Kafka %(release_version)s.
 <DESCRIPTION OF MAJOR CHANGES, INCLUDE INDICATION OF MAJOR/MINOR RELEASE>
 
 Release notes for the %(release_version)s release:
-http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/RELEASE_NOTES.html
+https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/RELEASE_NOTES.html
 
 *** Please download, test and vote by <VOTING DEADLINE, e.g. Monday, March 28, 9am PT>
 
 Kafka's KEYS file containing PGP keys we use to sign the release:
-http://kafka.apache.org/KEYS
+https://kafka.apache.org/KEYS
 
 * Release artifacts to be voted upon (source and binary):
-http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/
+https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/
 
 * Maven artifacts to be voted upon:
 https://repository.apache.org/content/groups/staging/org/apache/kafka/
 
 * Javadoc:
-http://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/javadoc/
+https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/javadoc/
 
 * Tag to be voted upon (off %(dev_branch)s branch) is the %(release_version)s tag:
 https://github.com/apache/kafka/releases/tag/%(rc_tag)s
 
 * Documentation:
-http://kafka.apache.org/%(docs_version)s/documentation.html
+https://kafka.apache.org/%(docs_version)s/documentation.html
 
 * Protocol:
-http://kafka.apache.org/%(docs_version)s/protocol.html
+https://kafka.apache.org/%(docs_version)s/protocol.html
 
 * Successful Jenkins builds for the %(dev_branch)s branch:
 Unit/integration tests: https://builds.apache.org/job/kafka-%(dev_branch)s-jdk8/<BUILD NUMBER>/

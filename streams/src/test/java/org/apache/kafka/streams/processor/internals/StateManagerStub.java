@@ -45,7 +45,7 @@ public class StateManagerStub implements StateManager {
     public void flush() {}
 
     @Override
-    public void close(final Map<TopicPartition, Long> offsets) throws IOException {}
+    public void close(final boolean clean) throws IOException {}
 
     @Override
     public StateStore getGlobalStore(final String name) {

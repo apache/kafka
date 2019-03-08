@@ -16,97 +16,65 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.List;
 
-import static org.apache.kafka.common.protocol.types.Type.STRING;
+import static org.apache.kafka.common.requests.AbstractResponse.DEFAULT_THROTTLE_TIME;
 
 public class DescribeGroupsRequest extends AbstractRequest {
-    private static final String GROUP_IDS_KEY_NAME = "group_ids";
-
-    /* Describe group api */
-    private static final Schema DESCRIBE_GROUPS_REQUEST_V0 = new Schema(
-            new Field(GROUP_IDS_KEY_NAME, new ArrayOf(STRING), "List of groupIds to request metadata for (an " +
-                    "empty groupId array will return empty group metadata)."));
-
-    /* v1 request is the same as v0. Throttle time has been added to response */
-    private static final Schema DESCRIBE_GROUPS_REQUEST_V1 = DESCRIBE_GROUPS_REQUEST_V0;
-
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema DESCRIBE_GROUPS_REQUEST_V2 = DESCRIBE_GROUPS_REQUEST_V1;
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{DESCRIBE_GROUPS_REQUEST_V0, DESCRIBE_GROUPS_REQUEST_V1, DESCRIBE_GROUPS_REQUEST_V2};
-    }
-
     public static class Builder extends AbstractRequest.Builder<DescribeGroupsRequest> {
-        private final List<String> groupIds;
+        private final DescribeGroupsRequestData data;
 
-        public Builder(List<String> groupIds) {
+        public Builder(DescribeGroupsRequestData data) {
             super(ApiKeys.DESCRIBE_GROUPS);
-            this.groupIds = groupIds;
+            this.data = data;
         }
 
         @Override
         public DescribeGroupsRequest build(short version) {
-            return new DescribeGroupsRequest(this.groupIds, version);
+            return new DescribeGroupsRequest(data, version);
         }
 
         @Override
         public String toString() {
-            return "(type=DescribeGroupsRequest, groupIds=(" + Utils.join(groupIds, ",") + "))";
+            return data.toString();
         }
     }
 
-    private final List<String> groupIds;
+    private final DescribeGroupsRequestData data;
+    private final short version;
 
-    private DescribeGroupsRequest(List<String> groupIds, short version) {
+    private DescribeGroupsRequest(DescribeGroupsRequestData data, short version) {
         super(ApiKeys.DESCRIBE_GROUPS, version);
-        this.groupIds = groupIds;
+        this.data = data;
+        this.version = version;
     }
 
     public DescribeGroupsRequest(Struct struct, short version) {
         super(ApiKeys.DESCRIBE_GROUPS, version);
-        this.groupIds = new ArrayList<>();
-        for (Object groupId : struct.getArray(GROUP_IDS_KEY_NAME))
-            this.groupIds.add((String) groupId);
+        this.data = new DescribeGroupsRequestData(struct, version);
+        this.version = version;
     }
 
-    public List<String> groupIds() {
-        return groupIds;
+    public DescribeGroupsRequestData data() {
+        return data;
     }
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.DESCRIBE_GROUPS.requestSchema(version()));
-        struct.set(GROUP_IDS_KEY_NAME, groupIds.toArray());
-        return struct;
+        return data.toStruct(version);
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        short version = version();
-        switch (version) {
-            case 0:
-                return DescribeGroupsResponse.fromError(Errors.forException(e), groupIds);
-            case 1:
-            case 2:
-                return DescribeGroupsResponse.fromError(throttleTimeMs, Errors.forException(e), groupIds);
-
-            default:
-                throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
-                        version, this.getClass().getSimpleName(), ApiKeys.DESCRIBE_GROUPS.latestVersion()));
+        if (version == 0) {
+            return DescribeGroupsResponse.fromError(DEFAULT_THROTTLE_TIME, Errors.forException(e), data.groups());
+        } else {
+            return DescribeGroupsResponse.fromError(throttleTimeMs, Errors.forException(e), data.groups());
         }
     }
 

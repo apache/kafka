@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python
 # Licensed to the Apache Software Foundation (ASF) under one or more
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
@@ -14,26 +14,25 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-COORDINATOR_ENDPOINT="localhost:8889"
-TASK_ID="consume_bench_$RANDOM"
-TASK_SPEC=$(
-cat <<EOF
-{
-    "id": "$TASK_ID",
-    "spec": {
-        "class": "org.apache.kafka.trogdor.workload.ConsumeBenchSpec",
-        "durationMs": 10000000,
-        "consumerNode": "node0",
-        "bootstrapServers": "localhost:9092",
-        "targetMessagesPerSec": 1000,
-        "threadsPerWorker": 5,
-        "consumerGroup": "cg",
-        "maxMessages": 10000,
-        "activeTopics": ["foo[1-3]"]
-    }
-}
-EOF
-)
+import json
+import sys
+import time
 
-./bin/trogdor.sh client --create-task "${TASK_SPEC}" "${COORDINATOR_ENDPOINT}"
-echo "\$TASK_ID = $TASK_ID"
+#
+# This is an example of an external script which can be run through Trogdor's
+# ExternalCommandWorker.
+#
+
+if __name__ == '__main__':
+    # Read the ExternalCommandWorker start message.
+    line = sys.stdin.readline()
+    start_message = json.loads(line)
+    workload = start_message["workload"]
+    print("Starting external_trogdor_command_example with task id %s, workload %s" \
+        % (start_message["id"], workload))
+    sys.stdout.flush()
+   `print(json.dumps({"status": "running"}))`
+    sys.stdout.flush()
+    time.sleep(0.001 * workload["delayMs"])
+   `print(json.dumps({"status": "exiting after %s delayMs" % workload["delayMs"]}))`
+    sys.stdout.flush()

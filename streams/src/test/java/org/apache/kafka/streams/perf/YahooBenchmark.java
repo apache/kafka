@@ -189,9 +189,6 @@ public class YahooBenchmark {
         public JsonPOJOSerializer() {}
 
         @Override
-        public void configure(final Map<String, ?> props, final boolean isKey) {}
-
-        @Override
         public byte[] serialize(final String topic, final T data) {
             if (data == null) {
                 return null;
@@ -203,10 +200,6 @@ public class YahooBenchmark {
                 throw new SerializationException("Error serializing JSON message", e);
             }
         }
-
-        @Override
-        public void close() {}
-
     }
 
     // Note: these are also in the streams example package, eventuall use 1 file
@@ -241,11 +234,6 @@ public class YahooBenchmark {
             }
 
             return data;
-        }
-
-        @Override
-        public void close() {
-
         }
     }
 

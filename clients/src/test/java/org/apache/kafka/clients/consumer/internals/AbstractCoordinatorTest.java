@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -86,11 +87,14 @@ public class AbstractCoordinatorTest {
     }
 
     private void setupCoordinator(int retryBackoffMs, int rebalanceTimeoutMs) {
+        LogContext logContext = new LogContext();
         this.mockTime = new MockTime();
-        Metadata metadata = new Metadata(retryBackoffMs, 60 * 60 * 1000L, true);
+        ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, 60 * 60 * 1000L,
+                false, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST),
+                logContext, new ClusterResourceListeners());
 
         this.mockClient = new MockClient(mockTime, metadata);
-        this.consumerClient = new ConsumerNetworkClient(new LogContext(), mockClient, metadata, mockTime,
+        this.consumerClient = new ConsumerNetworkClient(logContext, mockClient, metadata, mockTime,
                 retryBackoffMs, REQUEST_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS);
         Metrics metrics = new Metrics();
 
@@ -144,6 +148,23 @@ public class AbstractCoordinatorTest {
             executor.shutdownNow();
             executor.awaitTermination(1000, TimeUnit.MILLISECONDS);
         }
+    }
+
+    @Test
+    public void testGroupMaxSizeExceptionIsFatal() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        final String memberId = "memberId";
+        final int generation = -1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED));
+
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
+        assertTrue(future.exception().getClass().isInstance(Errors.GROUP_MAX_SIZE_REACHED.exception()));
+        assertFalse(future.isRetriable());
     }
 
     @Test
@@ -205,6 +226,7 @@ public class AbstractCoordinatorTest {
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
         assertEquals(Errors.MEMBER_ID_REQUIRED.message(), future.exception().getMessage());
         assertTrue(coordinator.rejoinNeededOrPending());
+        assertTrue(coordinator.hasValidMemberId());
         assertTrue(coordinator.hasMatchingGenerationId(generation));
         future = coordinator.sendJoinGroupRequest();
         assertTrue(consumerClient.poll(future, mockTime.timer(REBALANCE_TIMEOUT_MS)));

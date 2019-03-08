@@ -14,22 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state;
-
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.KeyValue;
+package org.apache.kafka.common.errors;
 
 /**
- * {@code RecordConverter} translates a {@link ConsumerRecord} into a {@link KeyValue} pair.
+ * Indicates that a consumer group is already at its configured maximum capacity and cannot accommodate more members
  */
-public interface RecordConverter {
+public class GroupMaxSizeReachedException extends ApiException {
+    private static final long serialVersionUID = 1L;
 
-    /**
-     * Convert a given record into a key-value pair.
-     *
-     * @param record the consumer record
-     * @return the record as key-value pair
-     */
-    ConsumerRecord<byte[], byte[]> convert(final ConsumerRecord<byte[], byte[]> record);
-
+    public GroupMaxSizeReachedException(String groupId) {
+        super("Consumer group " + groupId + " already has the configured maximum number of members.");
+    }
 }

@@ -144,7 +144,9 @@ been set:
 
 * Array fields default to empty.
 
-Null is never used as a default for any field.
+You can specify "null" as a default value for a string field by specifing the
+literal string "null".  Note that you can only specify null as a default if all
+versions of the field are nullable.
 
 Custom Default Values
 ---------------------
@@ -187,7 +189,7 @@ One very common pattern in Kafka is to load array elements from a message into
 a Map or Set for easier access.  The message protocol makes this easier with
 the "mapKey" concept.  
 
-If some of the elemements of an array are annotated with "mapKey": true, the
+If some of the elements of an array are annotated with "mapKey": true, the
 entire array will be treated as a linked hash set rather than a list.  Elements
 in this set will be accessible in O(1) time with an automatically generated
 "find" function.  The order of elements in the set will still be preserved,
