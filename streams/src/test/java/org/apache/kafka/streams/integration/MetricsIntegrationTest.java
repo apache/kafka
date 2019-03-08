@@ -36,7 +36,7 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
-import org.junit.Assert;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -45,6 +45,7 @@ import org.junit.experimental.categories.Category;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
@@ -179,24 +180,26 @@ public class MetricsIntegrationTest {
         CLUSTER.deleteTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
     }
 
-    private void startApplication() throws Exception {
-
+    private void startApplication() {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
-
-        Thread.sleep(10000);
     }
 
     private void closeApplication() throws Exception {
-        Thread.sleep(10000);
         kafkaStreams.close();
         kafkaStreams.cleanUp();
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
+    private void checkMetricDeregistration() throws InterruptedException {
+        TestUtils.waitForCondition(() -> {
+            final List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().contains(STREAM_STRING)).collect(Collectors.toList());
+            return listMetricAfterClosingApp.size() == 0;
+        }, 10000, "de-registration of metrics");
+    }
+
     @Test
     public void testStreamMetric() throws Exception {
-
         stream = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.to(STREAM_OUTPUT_1, Produced.with(Serdes.Integer(), Serdes.String()));
         builder.table(STREAM_OUTPUT_1, Materialized.as(Stores.inMemoryKeyValueStore("myStoreInMemory")).withCachingEnabled())
@@ -212,28 +215,26 @@ public class MetricsIntegrationTest {
         startApplication();
 
         // metric level : Thread
-        testThreadMetric();
+        TestUtils.waitForCondition(this::testThreadMetric, 10000, "testThreadMetric");
 
         // metric level : Task
-        testTaskMetric();
+        TestUtils.waitForCondition(this::testTaskMetric, 10000, "testTaskMetric");
 
         // metric level : Processor
-        testProcessorMetric();
+        TestUtils.waitForCondition(this::testProcessorMetric, 10000, "testProcessorMetric");
 
         // metric level : Store (in-memory-state, in-memory-lru-state, rocksdb-state)
-        testStoreMetricByType(STREAM_STORE_IN_MEMORY_STATE_METRICS);
-        testStoreMetricByType(STREAM_STORE_IN_MEMORY_LRU_STATE_METRICS);
-        testStoreMetricByType(STREAM_STORE_ROCKSDB_STATE_METRICS);
+        TestUtils.waitForCondition(() -> testStoreMetricByType(STREAM_STORE_IN_MEMORY_STATE_METRICS), 10000, "testStoreMetricByType:" + STREAM_STORE_IN_MEMORY_STATE_METRICS);
+        TestUtils.waitForCondition(() -> testStoreMetricByType(STREAM_STORE_IN_MEMORY_LRU_STATE_METRICS), 10000, "testStoreMetricByType:" + STREAM_STORE_IN_MEMORY_LRU_STATE_METRICS);
+        TestUtils.waitForCondition(() -> testStoreMetricByType(STREAM_STORE_ROCKSDB_STATE_METRICS), 10000, "testStoreMetricByType:" + STREAM_STORE_ROCKSDB_STATE_METRICS);
 
         //metric level : Cache
-        testCacheMetric();
+        TestUtils.waitForCondition(this::testCacheMetric, 10000, "testCacheMetric");
 
         closeApplication();
 
         // check all metrics de-registered
-        final List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().contains(STREAM_STRING)).collect(Collectors.toList());
-        Assert.assertEquals(0, listMetricAfterClosingApp.size());
-
+        checkMetricDeregistration();
     }
 
     @Test
@@ -248,14 +249,14 @@ public class MetricsIntegrationTest {
 
         startApplication();
 
-        // metric level : Store (session, window)
-        testStoreMetricWindow();
+        // metric level : Store (window)
+        TestUtils.waitForCondition(this::testStoreMetricWindow, 10000, "testStoreMetricWindow");
+
 
         closeApplication();
 
         // check all metrics de-registered
-        final List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().contains(STREAM_STRING)).collect(Collectors.toList());
-        Assert.assertEquals(0, listMetricAfterClosingApp.size());
+        checkMetricDeregistration();
 
     }
 
@@ -271,209 +272,248 @@ public class MetricsIntegrationTest {
 
         startApplication();
 
-        // metric level : Store (session, window)
-        testStoreMetricSession();
+        // metric level : Store (session)
+        TestUtils.waitForCondition(this::testStoreMetricSession, 10000, "testStoreMetricSession");
 
         closeApplication();
 
         // check all metrics de-registered
-        final List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().contains(STREAM_STRING)).collect(Collectors.toList());
-        Assert.assertEquals(0, listMetricAfterClosingApp.size());
+        checkMetricDeregistration();
 
     }
 
-    private void testThreadMetric() {
-        final List<Metric> listMetricThread = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().equals(STREAM_THREAD_NODE_METRICS)).collect(Collectors.toList());
-        testMetricByName(listMetricThread, COMMIT_LATENCY_AVG, 1);
-        testMetricByName(listMetricThread, COMMIT_LATENCY_MAX, 1);
-        testMetricByName(listMetricThread, POLL_LATENCY_AVG, 1);
-        testMetricByName(listMetricThread, POLL_LATENCY_MAX, 1);
-        testMetricByName(listMetricThread, PROCESS_LATENCY_AVG, 1);
-        testMetricByName(listMetricThread, PROCESS_LATENCY_MAX, 1);
-        testMetricByName(listMetricThread, PUNCTUATE_LATENCY_AVG, 1);
-        testMetricByName(listMetricThread, PUNCTUATE_LATENCY_MAX, 1);
-        testMetricByName(listMetricThread, COMMIT_RATE, 1);
-        testMetricByName(listMetricThread, COMMIT_TOTAL, 1);
-        testMetricByName(listMetricThread, POLL_RATE, 1);
-        testMetricByName(listMetricThread, POLL_TOTAL, 1);
-        testMetricByName(listMetricThread, PROCESS_RATE, 1);
-        testMetricByName(listMetricThread, PROCESS_TOTAL, 1);
-        testMetricByName(listMetricThread, PUNCTUATE_RATE, 1);
-        testMetricByName(listMetricThread, PUNCTUATE_TOTAL, 1);
-        testMetricByName(listMetricThread, TASK_CREATED_RATE, 1);
-        testMetricByName(listMetricThread, TASK_CREATED_TOTAL, 1);
-        testMetricByName(listMetricThread, TASK_CLOSED_RATE, 1);
-        testMetricByName(listMetricThread, TASK_CLOSED_TOTAL, 1);
-        testMetricByName(listMetricThread, SKIPPED_RECORDS_RATE, 1);
-        testMetricByName(listMetricThread, SKIPPED_RECORDS_TOTAL, 1);
+    private boolean testThreadMetric() {
+        try {
+            final List<Metric> listMetricThread = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().equals(STREAM_THREAD_NODE_METRICS)).collect(Collectors.toList());
+            testMetricByName(listMetricThread, COMMIT_LATENCY_AVG, 1);
+            testMetricByName(listMetricThread, COMMIT_LATENCY_MAX, 1);
+            testMetricByName(listMetricThread, POLL_LATENCY_AVG, 1);
+            testMetricByName(listMetricThread, POLL_LATENCY_MAX, 1);
+            testMetricByName(listMetricThread, PROCESS_LATENCY_AVG, 1);
+            testMetricByName(listMetricThread, PROCESS_LATENCY_MAX, 1);
+            testMetricByName(listMetricThread, PUNCTUATE_LATENCY_AVG, 1);
+            testMetricByName(listMetricThread, PUNCTUATE_LATENCY_MAX, 1);
+            testMetricByName(listMetricThread, COMMIT_RATE, 1);
+            testMetricByName(listMetricThread, COMMIT_TOTAL, 1);
+            testMetricByName(listMetricThread, POLL_RATE, 1);
+            testMetricByName(listMetricThread, POLL_TOTAL, 1);
+            testMetricByName(listMetricThread, PROCESS_RATE, 1);
+            testMetricByName(listMetricThread, PROCESS_TOTAL, 1);
+            testMetricByName(listMetricThread, PUNCTUATE_RATE, 1);
+            testMetricByName(listMetricThread, PUNCTUATE_TOTAL, 1);
+            testMetricByName(listMetricThread, TASK_CREATED_RATE, 1);
+            testMetricByName(listMetricThread, TASK_CREATED_TOTAL, 1);
+            testMetricByName(listMetricThread, TASK_CLOSED_RATE, 1);
+            testMetricByName(listMetricThread, TASK_CLOSED_TOTAL, 1);
+            testMetricByName(listMetricThread, SKIPPED_RECORDS_RATE, 1);
+            testMetricByName(listMetricThread, SKIPPED_RECORDS_TOTAL, 1);
+            return true;
+        } catch (final Throwable e) {
+            return false;
+        }
     }
 
-    private void testTaskMetric() {
-        final List<Metric> listMetricTask = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().equals(STREAM_TASK_NODE_METRICS)).collect(Collectors.toList());
-        testMetricByName(listMetricTask, COMMIT_LATENCY_AVG, 5);
-        testMetricByName(listMetricTask, COMMIT_LATENCY_MAX, 5);
-        testMetricByName(listMetricTask, COMMIT_RATE, 5);
-        testMetricByName(listMetricTask, COMMIT_TOTAL, 5);
-        testMetricByName(listMetricTask, RECORD_LATENESS_AVG, 4);
-        testMetricByName(listMetricTask, RECORD_LATENESS_MAX, 4);
+    private boolean testTaskMetric() {
+        try {
+            final List<Metric> listMetricTask = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().equals(STREAM_TASK_NODE_METRICS)).collect(Collectors.toList());
+            testMetricByName(listMetricTask, COMMIT_LATENCY_AVG, 5);
+            testMetricByName(listMetricTask, COMMIT_LATENCY_MAX, 5);
+            testMetricByName(listMetricTask, COMMIT_RATE, 5);
+            testMetricByName(listMetricTask, COMMIT_TOTAL, 5);
+            testMetricByName(listMetricTask, RECORD_LATENESS_AVG, 4);
+            testMetricByName(listMetricTask, RECORD_LATENESS_MAX, 4);
+            return true;
+        } catch (final Throwable e) {
+            return false;
+        }
     }
 
-    private void testProcessorMetric() {
-        final List<Metric> listMetricProcessor = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().equals(STREAM_PROCESSOR_NODE_METRICS)).collect(Collectors.toList());
-        testMetricByName(listMetricProcessor, PROCESS_LATENCY_AVG, 18);
-        testMetricByName(listMetricProcessor, PROCESS_LATENCY_MAX, 18);
-        testMetricByName(listMetricProcessor, PUNCTUATE_LATENCY_AVG, 18);
-        testMetricByName(listMetricProcessor, PUNCTUATE_LATENCY_MAX, 18);
-        testMetricByName(listMetricProcessor, CREATE_LATENCY_AVG, 18);
-        testMetricByName(listMetricProcessor, CREATE_LATENCY_MAX, 18);
-        testMetricByName(listMetricProcessor, DESTROY_LATENCY_AVG, 18);
-        testMetricByName(listMetricProcessor, DESTROY_LATENCY_MAX, 18);
-        testMetricByName(listMetricProcessor, PROCESS_RATE, 18);
-        testMetricByName(listMetricProcessor, PROCESS_TOTAL, 18);
-        testMetricByName(listMetricProcessor, PUNCTUATE_RATE, 18);
-        testMetricByName(listMetricProcessor, PUNCTUATE_TOTAL, 18);
-        testMetricByName(listMetricProcessor, CREATE_RATE, 18);
-        testMetricByName(listMetricProcessor, CREATE_TOTAL, 18);
-        testMetricByName(listMetricProcessor, DESTROY_RATE, 18);
-        testMetricByName(listMetricProcessor, DESTROY_TOTAL, 18);
-        testMetricByName(listMetricProcessor, FORWARD_TOTAL, 18);
+    private boolean testProcessorMetric() {
+        try {
+            final List<Metric> listMetricProcessor = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().equals(STREAM_PROCESSOR_NODE_METRICS)).collect(Collectors.toList());
+            testMetricByName(listMetricProcessor, PROCESS_LATENCY_AVG, 18);
+            testMetricByName(listMetricProcessor, PROCESS_LATENCY_MAX, 18);
+            testMetricByName(listMetricProcessor, PUNCTUATE_LATENCY_AVG, 18);
+            testMetricByName(listMetricProcessor, PUNCTUATE_LATENCY_MAX, 18);
+            testMetricByName(listMetricProcessor, CREATE_LATENCY_AVG, 18);
+            testMetricByName(listMetricProcessor, CREATE_LATENCY_MAX, 18);
+            testMetricByName(listMetricProcessor, DESTROY_LATENCY_AVG, 18);
+            testMetricByName(listMetricProcessor, DESTROY_LATENCY_MAX, 18);
+            testMetricByName(listMetricProcessor, PROCESS_RATE, 18);
+            testMetricByName(listMetricProcessor, PROCESS_TOTAL, 18);
+            testMetricByName(listMetricProcessor, PUNCTUATE_RATE, 18);
+            testMetricByName(listMetricProcessor, PUNCTUATE_TOTAL, 18);
+            testMetricByName(listMetricProcessor, CREATE_RATE, 18);
+            testMetricByName(listMetricProcessor, CREATE_TOTAL, 18);
+            testMetricByName(listMetricProcessor, DESTROY_RATE, 18);
+            testMetricByName(listMetricProcessor, DESTROY_TOTAL, 18);
+            testMetricByName(listMetricProcessor, FORWARD_TOTAL, 18);
+            return true;
+        } catch (final Throwable e) {
+            return false;
+        }
     }
 
-    private void testStoreMetricWindow() {
-        final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-                .filter(m -> m.metricName().group().equals(STREAM_STORE_WINDOW_ROCKSDB_STATE_METRICS))
-                .collect(Collectors.toList());
-        testMetricByName(listMetricStore, PUT_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, PUT_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, 0);
-        testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_MAX, 0);
-        testMetricByName(listMetricStore, GET_LATENCY_AVG, 0);
-        testMetricByName(listMetricStore, GET_LATENCY_MAX, 0);
-        testMetricByName(listMetricStore, DELETE_LATENCY_AVG, 0);
-        testMetricByName(listMetricStore, DELETE_LATENCY_MAX, 0);
-        testMetricByName(listMetricStore, PUT_ALL_LATENCY_AVG, 0);
-        testMetricByName(listMetricStore, PUT_ALL_LATENCY_MAX, 0);
-        testMetricByName(listMetricStore, ALL_LATENCY_AVG, 0);
-        testMetricByName(listMetricStore, ALL_LATENCY_MAX, 0);
-        testMetricByName(listMetricStore, RANGE_LATENCY_AVG, 0);
-        testMetricByName(listMetricStore, RANGE_LATENCY_MAX, 0);
-        testMetricByName(listMetricStore, FLUSH_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, FLUSH_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, RESTORE_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, RESTORE_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, PUT_RATE, 2);
-        testMetricByName(listMetricStore, PUT_TOTAL, 2);
-        testMetricByName(listMetricStore, PUT_IF_ABSENT_RATE, 0);
-        testMetricByName(listMetricStore, PUT_IF_ABSENT_TOTAL, 0);
-        testMetricByName(listMetricStore, GET_RATE, 0);
-        testMetricByName(listMetricStore, DELETE_RATE, 0);
-        testMetricByName(listMetricStore, DELETE_TOTAL, 0);
-        testMetricByName(listMetricStore, PUT_ALL_RATE, 0);
-        testMetricByName(listMetricStore, PUT_ALL_TOTAL, 0);
-        testMetricByName(listMetricStore, ALL_RATE, 0);
-        testMetricByName(listMetricStore, ALL_TOTAL, 0);
-        testMetricByName(listMetricStore, RANGE_RATE, 0);
-        testMetricByName(listMetricStore, RANGE_TOTAL, 0);
-        testMetricByName(listMetricStore, FLUSH_RATE, 2);
-        testMetricByName(listMetricStore, FLUSH_TOTAL, 2);
-        testMetricByName(listMetricStore, RESTORE_RATE, 2);
-        testMetricByName(listMetricStore, RESTORE_TOTAL, 2);
+    private boolean testStoreMetricWindow() {
+        try {
+            final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+                    .filter(m -> m.metricName().group().equals(STREAM_STORE_WINDOW_ROCKSDB_STATE_METRICS))
+                    .collect(Collectors.toList());
+            testMetricByName(listMetricStore, PUT_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, PUT_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, 0);
+            testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_MAX, 0);
+            testMetricByName(listMetricStore, GET_LATENCY_AVG, 0);
+            testMetricByName(listMetricStore, GET_LATENCY_MAX, 0);
+            testMetricByName(listMetricStore, DELETE_LATENCY_AVG, 0);
+            testMetricByName(listMetricStore, DELETE_LATENCY_MAX, 0);
+            testMetricByName(listMetricStore, PUT_ALL_LATENCY_AVG, 0);
+            testMetricByName(listMetricStore, PUT_ALL_LATENCY_MAX, 0);
+            testMetricByName(listMetricStore, ALL_LATENCY_AVG, 0);
+            testMetricByName(listMetricStore, ALL_LATENCY_MAX, 0);
+            testMetricByName(listMetricStore, RANGE_LATENCY_AVG, 0);
+            testMetricByName(listMetricStore, RANGE_LATENCY_MAX, 0);
+            testMetricByName(listMetricStore, FLUSH_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, FLUSH_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, RESTORE_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, RESTORE_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, PUT_RATE, 2);
+            testMetricByName(listMetricStore, PUT_TOTAL, 2);
+            testMetricByName(listMetricStore, PUT_IF_ABSENT_RATE, 0);
+            testMetricByName(listMetricStore, PUT_IF_ABSENT_TOTAL, 0);
+            testMetricByName(listMetricStore, GET_RATE, 0);
+            testMetricByName(listMetricStore, DELETE_RATE, 0);
+            testMetricByName(listMetricStore, DELETE_TOTAL, 0);
+            testMetricByName(listMetricStore, PUT_ALL_RATE, 0);
+            testMetricByName(listMetricStore, PUT_ALL_TOTAL, 0);
+            testMetricByName(listMetricStore, ALL_RATE, 0);
+            testMetricByName(listMetricStore, ALL_TOTAL, 0);
+            testMetricByName(listMetricStore, RANGE_RATE, 0);
+            testMetricByName(listMetricStore, RANGE_TOTAL, 0);
+            testMetricByName(listMetricStore, FLUSH_RATE, 2);
+            testMetricByName(listMetricStore, FLUSH_TOTAL, 2);
+            testMetricByName(listMetricStore, RESTORE_RATE, 2);
+            testMetricByName(listMetricStore, RESTORE_TOTAL, 2);
+            return true;
+        } catch (final Throwable e) {
+            return false;
+        }
     }
 
-    private void testStoreMetricSession() {
-        final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-                .filter(m -> m.metricName().group().equals(STREAM_STORE_SESSION_ROCKSDB_STATE_METRICS))
-                .collect(Collectors.toList());
-        testMetricByName(listMetricStore, PUT_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, PUT_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, 0);
-        testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_MAX, 0);
-        testMetricByName(listMetricStore, GET_LATENCY_AVG, 0);
-        testMetricByName(listMetricStore, GET_LATENCY_MAX, 0);
-        testMetricByName(listMetricStore, DELETE_LATENCY_AVG, 0);
-        testMetricByName(listMetricStore, DELETE_LATENCY_MAX, 0);
-        testMetricByName(listMetricStore, PUT_ALL_LATENCY_AVG, 0);
-        testMetricByName(listMetricStore, PUT_ALL_LATENCY_MAX, 0);
-        testMetricByName(listMetricStore, ALL_LATENCY_AVG, 0);
-        testMetricByName(listMetricStore, ALL_LATENCY_MAX, 0);
-        testMetricByName(listMetricStore, RANGE_LATENCY_AVG, 0);
-        testMetricByName(listMetricStore, RANGE_LATENCY_MAX, 0);
-        testMetricByName(listMetricStore, FLUSH_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, FLUSH_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, RESTORE_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, RESTORE_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, PUT_RATE, 2);
-        testMetricByName(listMetricStore, PUT_TOTAL, 2);
-        testMetricByName(listMetricStore, PUT_IF_ABSENT_RATE, 0);
-        testMetricByName(listMetricStore, PUT_IF_ABSENT_TOTAL, 0);
-        testMetricByName(listMetricStore, GET_RATE, 0);
-        testMetricByName(listMetricStore, DELETE_RATE, 0);
-        testMetricByName(listMetricStore, DELETE_TOTAL, 0);
-        testMetricByName(listMetricStore, PUT_ALL_RATE, 0);
-        testMetricByName(listMetricStore, PUT_ALL_TOTAL, 0);
-        testMetricByName(listMetricStore, ALL_RATE, 0);
-        testMetricByName(listMetricStore, ALL_TOTAL, 0);
-        testMetricByName(listMetricStore, RANGE_RATE, 0);
-        testMetricByName(listMetricStore, RANGE_TOTAL, 0);
-        testMetricByName(listMetricStore, FLUSH_RATE, 2);
-        testMetricByName(listMetricStore, FLUSH_TOTAL, 2);
-        testMetricByName(listMetricStore, RESTORE_RATE, 2);
-        testMetricByName(listMetricStore, RESTORE_TOTAL, 2);
+    private boolean testStoreMetricSession() {
+        try {
+            final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+                    .filter(m -> m.metricName().group().equals(STREAM_STORE_SESSION_ROCKSDB_STATE_METRICS))
+                    .collect(Collectors.toList());
+            testMetricByName(listMetricStore, PUT_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, PUT_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, 0);
+            testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_MAX, 0);
+            testMetricByName(listMetricStore, GET_LATENCY_AVG, 0);
+            testMetricByName(listMetricStore, GET_LATENCY_MAX, 0);
+            testMetricByName(listMetricStore, DELETE_LATENCY_AVG, 0);
+            testMetricByName(listMetricStore, DELETE_LATENCY_MAX, 0);
+            testMetricByName(listMetricStore, PUT_ALL_LATENCY_AVG, 0);
+            testMetricByName(listMetricStore, PUT_ALL_LATENCY_MAX, 0);
+            testMetricByName(listMetricStore, ALL_LATENCY_AVG, 0);
+            testMetricByName(listMetricStore, ALL_LATENCY_MAX, 0);
+            testMetricByName(listMetricStore, RANGE_LATENCY_AVG, 0);
+            testMetricByName(listMetricStore, RANGE_LATENCY_MAX, 0);
+            testMetricByName(listMetricStore, FLUSH_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, FLUSH_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, RESTORE_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, RESTORE_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, PUT_RATE, 2);
+            testMetricByName(listMetricStore, PUT_TOTAL, 2);
+            testMetricByName(listMetricStore, PUT_IF_ABSENT_RATE, 0);
+            testMetricByName(listMetricStore, PUT_IF_ABSENT_TOTAL, 0);
+            testMetricByName(listMetricStore, GET_RATE, 0);
+            testMetricByName(listMetricStore, DELETE_RATE, 0);
+            testMetricByName(listMetricStore, DELETE_TOTAL, 0);
+            testMetricByName(listMetricStore, PUT_ALL_RATE, 0);
+            testMetricByName(listMetricStore, PUT_ALL_TOTAL, 0);
+            testMetricByName(listMetricStore, ALL_RATE, 0);
+            testMetricByName(listMetricStore, ALL_TOTAL, 0);
+            testMetricByName(listMetricStore, RANGE_RATE, 0);
+            testMetricByName(listMetricStore, RANGE_TOTAL, 0);
+            testMetricByName(listMetricStore, FLUSH_RATE, 2);
+            testMetricByName(listMetricStore, FLUSH_TOTAL, 2);
+            testMetricByName(listMetricStore, RESTORE_RATE, 2);
+            testMetricByName(listMetricStore, RESTORE_TOTAL, 2);
+            return true;
+        } catch (final Throwable e) {
+            return false;
+        }
     }
 
-    private void testStoreMetricByType(final String storeType) {
-        final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-                .filter(m -> m.metricName().group().equals(storeType))
-                .collect(Collectors.toList());
-        testMetricByName(listMetricStore, PUT_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, PUT_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, GET_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, GET_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, DELETE_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, DELETE_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, PUT_ALL_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, PUT_ALL_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, ALL_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, ALL_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, RANGE_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, RANGE_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, FLUSH_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, FLUSH_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, RESTORE_LATENCY_AVG, 2);
-        testMetricByName(listMetricStore, RESTORE_LATENCY_MAX, 2);
-        testMetricByName(listMetricStore, PUT_RATE, 2);
-        testMetricByName(listMetricStore, PUT_TOTAL, 2);
-        testMetricByName(listMetricStore, PUT_IF_ABSENT_RATE, 2);
-        testMetricByName(listMetricStore, PUT_IF_ABSENT_TOTAL, 2);
-        testMetricByName(listMetricStore, GET_RATE, 2);
-        testMetricByName(listMetricStore, DELETE_RATE, 2);
-        testMetricByName(listMetricStore, DELETE_TOTAL, 2);
-        testMetricByName(listMetricStore, PUT_ALL_RATE, 2);
-        testMetricByName(listMetricStore, PUT_ALL_TOTAL, 2);
-        testMetricByName(listMetricStore, ALL_RATE, 2);
-        testMetricByName(listMetricStore, ALL_TOTAL, 2);
-        testMetricByName(listMetricStore, RANGE_RATE, 2);
-        testMetricByName(listMetricStore, RANGE_TOTAL, 2);
-        testMetricByName(listMetricStore, FLUSH_RATE, 2);
-        testMetricByName(listMetricStore, FLUSH_TOTAL, 2);
-        testMetricByName(listMetricStore, RESTORE_RATE, 2);
-        testMetricByName(listMetricStore, RESTORE_TOTAL, 2);
+    private boolean testStoreMetricByType(final String storeType) {
+        try {
+            final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
+                    .filter(m -> m.metricName().group().equals(storeType))
+                    .collect(Collectors.toList());
+            testMetricByName(listMetricStore, PUT_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, PUT_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, PUT_IF_ABSENT_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, GET_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, GET_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, DELETE_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, DELETE_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, PUT_ALL_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, PUT_ALL_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, ALL_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, ALL_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, RANGE_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, RANGE_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, FLUSH_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, FLUSH_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, RESTORE_LATENCY_AVG, 2);
+            testMetricByName(listMetricStore, RESTORE_LATENCY_MAX, 2);
+            testMetricByName(listMetricStore, PUT_RATE, 2);
+            testMetricByName(listMetricStore, PUT_TOTAL, 2);
+            testMetricByName(listMetricStore, PUT_IF_ABSENT_RATE, 2);
+            testMetricByName(listMetricStore, PUT_IF_ABSENT_TOTAL, 2);
+            testMetricByName(listMetricStore, GET_RATE, 2);
+            testMetricByName(listMetricStore, DELETE_RATE, 2);
+            testMetricByName(listMetricStore, DELETE_TOTAL, 2);
+            testMetricByName(listMetricStore, PUT_ALL_RATE, 2);
+            testMetricByName(listMetricStore, PUT_ALL_TOTAL, 2);
+            testMetricByName(listMetricStore, ALL_RATE, 2);
+            testMetricByName(listMetricStore, ALL_TOTAL, 2);
+            testMetricByName(listMetricStore, RANGE_RATE, 2);
+            testMetricByName(listMetricStore, RANGE_TOTAL, 2);
+            testMetricByName(listMetricStore, FLUSH_RATE, 2);
+            testMetricByName(listMetricStore, FLUSH_TOTAL, 2);
+            testMetricByName(listMetricStore, RESTORE_RATE, 2);
+            testMetricByName(listMetricStore, RESTORE_TOTAL, 2);
+            return true;
+        } catch (final Throwable e) {
+            return false;
+        }
     }
 
-    private void testCacheMetric() {
-        final List<Metric> listMetricCache = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().equals(STREAM_CACHE_NODE_METRICS)).collect(Collectors.toList());
-        testMetricByName(listMetricCache, HIT_RATIO_AVG, 6);
-        testMetricByName(listMetricCache, HIT_RATIO_MIN, 6);
-        testMetricByName(listMetricCache, HIT_RATIO_MAX, 6);
+    private boolean testCacheMetric() {
+        try {
+            final List<Metric> listMetricCache = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().equals(STREAM_CACHE_NODE_METRICS)).collect(Collectors.toList());
+            testMetricByName(listMetricCache, HIT_RATIO_AVG, 6);
+            testMetricByName(listMetricCache, HIT_RATIO_MIN, 6);
+            testMetricByName(listMetricCache, HIT_RATIO_MAX, 6);
+            return true;
+        } catch (final Throwable e) {
+            return false;
+        }
     }
 
-    private void testMetricByName(final List<Metric> listMetric, final String metricName, final int numMetric) {
-        final List<Metric> metrics = listMetric.stream().filter(m -> m.metricName().name().equals(metricName)).collect(Collectors.toList());
-        Assert.assertEquals(numMetric, metrics.size());
-        for (final Metric m : metrics) {
-            Assert.assertNotNull(m.metricValue());
+    private boolean testMetricByName(final List<Metric> listMetric, final String metricName, final int numMetric) {
+        try {
+            final List<Metric> metrics = listMetric.stream().filter(m -> m.metricName().name().equals(metricName)).collect(Collectors.toList());
+            boolean b = numMetric == metrics.size();
+            for (final Metric m : metrics) {
+                b = b && !Objects.isNull(m.metricValue());
+            }
+            return b;
+        } catch (final Throwable e) {
+            return false;
         }
     }
 }
