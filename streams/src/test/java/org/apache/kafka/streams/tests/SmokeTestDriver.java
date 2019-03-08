@@ -494,7 +494,6 @@ public class SmokeTestDriver extends SmokeTestUtil {
     }
 
 
-    @SuppressWarnings("DynamicRegexReplaceableByCompiledPattern")
     private static boolean verifySuppressed(final PrintStream resultStream,
                                             @SuppressWarnings("SameParameterValue") final String topic,
                                             final Map<String, Map<String, LinkedList<ConsumerRecord<String, Number>>>> events) {
