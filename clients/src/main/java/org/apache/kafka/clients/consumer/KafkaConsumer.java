@@ -19,13 +19,13 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
-import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
+import org.apache.kafka.clients.consumer.internals.FetcherMetricsRegistry;
 import org.apache.kafka.clients.consumer.internals.Heartbeat;
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
@@ -553,6 +553,7 @@ import java.util.regex.Pattern;
  */
 public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
+    private static final String CLIENT_ID_METRIC_TAG = "client-id";
     private static final long NO_CURRENT_THREAD = -1L;
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
     private static final String JMX_PREFIX = "kafka.consumer";
@@ -573,7 +574,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Time time;
     private final ConsumerNetworkClient client;
     private final SubscriptionState subscriptions;
-    private final Metadata metadata;
+    private final ConsumerMetadata metadata;
     private final long retryBackoffMs;
     private final long requestTimeoutMs;
     private final int defaultApiTimeoutMs;
@@ -683,16 +684,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = Time.SYSTEM;
-
-            Map<String, String> metricsTags = Collections.singletonMap("client-id", clientId);
-            MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
-                    .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
-                    .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
-                    .tags(metricsTags);
-            List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
-                    MetricsReporter.class, Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
-            reporters.add(new JmxReporter(JMX_PREFIX));
-            this.metrics = new Metrics(metricConfig, reporters, time);
+            this.metrics = buildMetrics(config, time, clientId);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
             // load interceptors and make sure they get clientId
@@ -715,18 +707,24 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 config.ignore(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG);
                 this.valueDeserializer = valueDeserializer;
             }
-            ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer, valueDeserializer, reporters, interceptorList);
-            this.metadata = new Metadata(retryBackoffMs, config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
-                    true, false, clusterResourceListeners);
+            OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
+            this.subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
+            ClusterResourceListeners clusterResourceListeners = configureClusterResourceListeners(keyDeserializer,
+                    valueDeserializer, metrics.reporters(), interceptorList);
+            this.metadata = new ConsumerMetadata(retryBackoffMs,
+                    config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
+                    !config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
+                    subscriptions, logContext, clusterResourceListeners);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG), config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG));
             this.metadata.bootstrap(addresses, time.milliseconds());
             String metricGrpPrefix = "consumer";
-            ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricsTags.keySet(), "consumer");
+
+            FetcherMetricsRegistry metricsRegistry = new FetcherMetricsRegistry(Collections.singleton(CLIENT_ID_METRIC_TAG), metricGrpPrefix);
             ChannelBuilder channelBuilder = ClientUtils.createChannelBuilder(config, time);
             IsolationLevel isolationLevel = IsolationLevel.valueOf(
                     config.getString(ConsumerConfig.ISOLATION_LEVEL_CONFIG).toUpperCase(Locale.ROOT));
-            Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry.fetcherMetrics);
+            Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry);
             int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
 
             NetworkClient netClient = new NetworkClient(
@@ -753,8 +751,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     retryBackoffMs,
                     config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG),
                     heartbeatIntervalMs); //Will avoid blocking an extended period of time to prevent heartbeat thread starvation
-            OffsetResetStrategy offsetResetStrategy = OffsetResetStrategy.valueOf(config.getString(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG).toUpperCase(Locale.ROOT));
-            this.subscriptions = new SubscriptionState(logContext, offsetResetStrategy);
             this.assignors = config.getConfiguredInstances(
                     ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
                     PartitionAssignor.class);
@@ -779,7 +775,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         enableAutoCommit,
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                         this.interceptors,
-                        config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
                         config.getBoolean(ConsumerConfig.LEAVE_GROUP_ON_CLOSE_CONFIG));
             this.fetcher = new Fetcher<>(
                     logContext,
@@ -795,7 +790,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.metadata,
                     this.subscriptions,
                     metrics,
-                    metricsRegistry.fetcherMetrics,
+                    metricsRegistry,
                     this.time,
                     this.retryBackoffMs,
                     this.requestTimeoutMs,
@@ -824,7 +819,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                   ConsumerNetworkClient client,
                   Metrics metrics,
                   SubscriptionState subscriptions,
-                  Metadata metadata,
+                  ConsumerMetadata metadata,
                   long retryBackoffMs,
                   long requestTimeoutMs,
                   int defaultApiTimeoutMs,
@@ -847,6 +842,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.assignors = assignors;
         this.groupId = groupId;
+    }
+
+    private static Metrics buildMetrics(ConsumerConfig config, Time time, String clientId) {
+        Map<String, String> metricsTags = Collections.singletonMap(CLIENT_ID_METRIC_TAG, clientId);
+        MetricConfig metricConfig = new MetricConfig().samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
+                .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
+                .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
+                .tags(metricsTags);
+        List<MetricsReporter> reporters = config.getConfiguredInstances(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG,
+                MetricsReporter.class, Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId));
+        reporters.add(new JmxReporter(JMX_PREFIX));
+        return new Metrics(metricConfig, reporters, time);
     }
 
     /**
@@ -934,8 +941,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 throwIfNoAssignorsConfigured();
                 fetcher.clearBufferedDataForUnassignedTopics(topics);
                 log.info("Subscribed to topic(s): {}", Utils.join(topics, ", "));
-                this.subscriptions.subscribe(new HashSet<>(topics), listener);
-                metadata.setTopics(subscriptions.groupSubscription());
+                if (this.subscriptions.subscribe(new HashSet<>(topics), listener))
+                    metadata.requestUpdateForNewTopics();
             }
         } finally {
             release();
@@ -998,9 +1005,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             throwIfNoAssignorsConfigured();
             log.info("Subscribed to pattern: '{}'", pattern);
             this.subscriptions.subscribe(pattern, listener);
-            this.metadata.needMetadataForAllTopics(true);
             this.coordinator.updatePatternSubscription(metadata.fetch());
-            this.metadata.requestUpdate();
+            this.metadata.requestUpdateForNewTopics();
         } finally {
             release();
         }
@@ -1038,7 +1044,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.subscriptions.unsubscribe();
             if (this.coordinator != null)
                 this.coordinator.maybeLeaveGroup();
-            this.metadata.needMetadataForAllTopics(false);
             log.info("Unsubscribed all topics or patterns and assigned partitions");
         } finally {
             release();
@@ -1073,12 +1078,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } else if (partitions.isEmpty()) {
                 this.unsubscribe();
             } else {
-                Set<String> topics = new HashSet<>();
                 for (TopicPartition tp : partitions) {
                     String topic = (tp != null) ? tp.topic() : null;
                     if (topic == null || topic.trim().isEmpty())
                         throw new IllegalArgumentException("Topic partitions to assign to cannot have null or empty topic");
-                    topics.add(topic);
                 }
                 fetcher.clearBufferedDataForUnassignedPartitions(partitions);
 
@@ -1088,8 +1091,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
 
                 log.info("Subscribed to partition(s): {}", Utils.join(partitions, ", "));
-                this.subscriptions.assignFromUser(new HashSet<>(partitions));
-                metadata.setTopics(topics);
+                if (this.subscriptions.assignFromUser(new HashSet<>(partitions)))
+                    metadata.requestUpdateForNewTopics();
             }
         } finally {
             release();
@@ -1962,7 +1965,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
                             entry.getValue() + ". The target time cannot be negative.");
             }
-            return fetcher.offsetsByTimes(timestampsToSearch, time.timer(timeout));
+            return fetcher.offsetsForTimes(timestampsToSearch, time.timer(timeout));
         } finally {
             release();
         }

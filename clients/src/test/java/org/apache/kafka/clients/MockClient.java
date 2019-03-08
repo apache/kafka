@@ -23,6 +23,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestCondition;
@@ -661,13 +662,26 @@ public class MockClient implements KafkaClient {
             update(time, lastUpdate);
         }
 
+        private void maybeCheckExpectedTopics(MetadataUpdate update, MetadataRequest.Builder builder) {
+            if (update.expectMatchRefreshTopics) {
+                if (builder.topics() == null)
+                    throw new IllegalStateException("The metadata topics does not match expectation. "
+                            + "Expected topics: " + update.topics()
+                            + ", asked topics: ALL");
+
+                Set<String> requestedTopics = new HashSet<>(builder.topics());
+                if (!requestedTopics.equals(update.topics())) {
+                    throw new IllegalStateException("The metadata topics does not match expectation. "
+                            + "Expected topics: " + update.topics()
+                            + ", asked topics: " + requestedTopics);
+                }
+            }
+        }
+
         @Override
         public void update(Time time, MetadataUpdate update) {
-            if (update.expectMatchRefreshTopics && !metadata.topics().equals(update.topics())) {
-                throw new IllegalStateException("The metadata topics does not match expectation. "
-                        + "Expected topics: " + update.topics()
-                        + ", asked topics: " + metadata.topics());
-            }
+            MetadataRequest.Builder builder = metadata.newMetadataRequestBuilder();
+            maybeCheckExpectedTopics(update, builder);
             metadata.update(update.updateResponse, time.milliseconds());
             this.lastUpdate = update;
         }

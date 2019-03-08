@@ -44,7 +44,7 @@
         "about": "The broker hostname." },
       { "name": "Port", "type": "int32", "versions": "0+",
         "about": "The broker port." },
-      { "name": "Rack", "type": "string", "versions": "1+", "nullableVersions": "1+", "ignorable": true,
+      { "name": "Rack", "type": "string", "versions": "1+", "nullableVersions": "1+", "ignorable": true, "default": "null",
         "about": "The rack of the broker, or null if it has not been assigned to a rack." }
     ]},
     { "name": "ClusterId", "type": "string", "nullableVersions": "2+", "versions": "2+", "ignorable": true,

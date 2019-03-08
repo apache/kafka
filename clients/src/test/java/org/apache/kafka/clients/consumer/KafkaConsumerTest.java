@@ -18,10 +18,10 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
@@ -235,7 +236,7 @@ public class KafkaConsumerTest {
     @Test(expected = IllegalArgumentException.class)
     public void testSubscriptionOnNullTopic() {
         try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupId)) {
-            consumer.subscribe(singletonList((String) null));
+            consumer.subscribe(singletonList(null));
         }
     }
 
@@ -371,7 +372,8 @@ public class KafkaConsumerTest {
     @Test
     public void verifyHeartbeatSent() throws Exception {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -379,7 +381,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -404,14 +406,15 @@ public class KafkaConsumerTest {
     @Test
     public void verifyHeartbeatSentWhenFetchedDataReady() throws Exception {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -437,7 +440,8 @@ public class KafkaConsumerTest {
     @Test
     public void verifyPollTimesOutDuringMetadataUpdate() {
         final Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -445,7 +449,7 @@ public class KafkaConsumerTest {
 
         final PartitionAssignor assignor = new RoundRobinAssignor();
 
-        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -460,7 +464,8 @@ public class KafkaConsumerTest {
     @Test
     public void verifyDeprecatedPollDoesNotTimeOutDuringMetadataUpdate() {
         final Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -468,7 +473,7 @@ public class KafkaConsumerTest {
 
         final PartitionAssignor assignor = new RoundRobinAssignor();
 
-        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -484,13 +489,14 @@ public class KafkaConsumerTest {
     @Test
     public void verifyNoCoordinatorLookupForManualAssignmentWithSeek() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
         consumer.assign(singleton(tp0));
         consumer.seekToBeginning(singleton(tp0));
 
@@ -511,11 +517,12 @@ public class KafkaConsumerTest {
         // a reset on another partition.
 
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 2));
 
-        KafkaConsumer<String, String> consumer = newConsumerNoAutoCommit(time, client, metadata);
+        KafkaConsumer<String, String> consumer = newConsumerNoAutoCommit(time, client, subscription, metadata);
         consumer.assign(Arrays.asList(tp0, tp1));
         consumer.seekToEnd(singleton(tp0));
         consumer.seekToBeginning(singleton(tp1));
@@ -555,7 +562,8 @@ public class KafkaConsumerTest {
     @Test(expected = NoOffsetForPartitionException.class)
     public void testMissingOffsetNoResetPolicy() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -563,8 +571,8 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
-                OffsetResetStrategy.NONE, true, groupId);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
+                true, groupId);
         consumer.assign(singletonList(tp0));
 
         client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
@@ -578,7 +586,8 @@ public class KafkaConsumerTest {
     @Test
     public void testResetToCommittedOffset() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -586,8 +595,8 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
-                OffsetResetStrategy.NONE, true, groupId);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
+                true, groupId);
         consumer.assign(singletonList(tp0));
 
         client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
@@ -602,7 +611,8 @@ public class KafkaConsumerTest {
     @Test
     public void testResetUsingAutoResetPolicy() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.LATEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -610,8 +620,8 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor,
-                OffsetResetStrategy.LATEST, true, groupId);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
+                true, groupId);
         consumer.assign(singletonList(tp0));
 
         client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
@@ -631,7 +641,8 @@ public class KafkaConsumerTest {
         long offset2 = 20000;
 
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 2));
@@ -639,7 +650,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
         consumer.assign(singletonList(tp0));
 
         // lookup coordinator
@@ -668,7 +679,8 @@ public class KafkaConsumerTest {
     @Test
     public void testAutoCommitSentBeforePositionUpdate() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -676,7 +688,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -704,7 +716,8 @@ public class KafkaConsumerTest {
     public void testRegexSubscription() {
         String unmatchedTopic = "unmatched";
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         Map<String, Integer> partitionCounts = new HashMap<>();
@@ -715,7 +728,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
         prepareRebalance(client, node, singleton(topic), assignor, singletonList(tp0), null);
 
         consumer.subscribe(Pattern.compile(topic), getConsumerRebalanceListener(consumer));
@@ -737,7 +750,8 @@ public class KafkaConsumerTest {
         TopicPartition otherTopicPartition = new TopicPartition(otherTopic, 0);
 
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         Map<String, Integer> partitionCounts = new HashMap<>();
@@ -746,7 +760,7 @@ public class KafkaConsumerTest {
         initMetadata(client, partitionCounts);
         Node node = metadata.fetch().nodes().get(0);
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false);
 
         Node coordinator = prepareRebalance(client, node, singleton(topic), assignor, singletonList(tp0), null);
         consumer.subscribe(Pattern.compile(topic), getConsumerRebalanceListener(consumer));
@@ -769,7 +783,8 @@ public class KafkaConsumerTest {
     @Test
     public void testWakeupWithFetchDataAvailable() throws Exception {
         final Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -777,7 +792,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -818,7 +833,8 @@ public class KafkaConsumerTest {
     @Test
     public void testPollThrowsInterruptExceptionIfInterrupted() {
         final Time time = new MockTime();
-        final Metadata metadata = createMetadata();
+        final SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -826,7 +842,7 @@ public class KafkaConsumerTest {
 
         final PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -847,7 +863,8 @@ public class KafkaConsumerTest {
     @Test
     public void fetchResponseWithUnexpectedPartitionIsIgnored() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -855,7 +872,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RangeAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
         consumer.subscribe(singletonList(topic), getConsumerRebalanceListener(consumer));
 
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
@@ -882,7 +899,8 @@ public class KafkaConsumerTest {
     @Test
     public void testSubscriptionChangesWithAutoCommitEnabled() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         Map<String, Integer> tpCounts = new HashMap<>();
@@ -894,7 +912,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RangeAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
 
         // initial subscription
         consumer.subscribe(Arrays.asList(topic, topic2), getConsumerRebalanceListener(consumer));
@@ -996,7 +1014,8 @@ public class KafkaConsumerTest {
     @Test
     public void testSubscriptionChangesWithAutoCommitDisabled() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         Map<String, Integer> tpCounts = new HashMap<>();
@@ -1007,7 +1026,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RangeAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false);
 
         // initial subscription
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
@@ -1057,7 +1076,8 @@ public class KafkaConsumerTest {
     @Test
     public void testManualAssignmentChangeWithAutoCommitEnabled() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         Map<String, Integer> tpCounts = new HashMap<>();
@@ -1068,7 +1088,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RangeAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
 
         // lookup coordinator
         client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
@@ -1112,7 +1132,8 @@ public class KafkaConsumerTest {
     @Test
     public void testManualAssignmentChangeWithAutoCommitDisabled() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         Map<String, Integer> tpCounts = new HashMap<>();
@@ -1123,7 +1144,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RangeAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false);
 
         // lookup coordinator
         client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
@@ -1168,7 +1189,8 @@ public class KafkaConsumerTest {
     @Test
     public void testOffsetOfPausedPartitions() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 2));
@@ -1176,7 +1198,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RangeAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
 
         // lookup coordinator
         client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
@@ -1362,7 +1384,8 @@ public class KafkaConsumerTest {
     @Test
     public void shouldAttemptToRejoinGroupAfterSyncGroupFailed() throws Exception {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -1370,7 +1393,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         client.prepareResponseFrom(new FindCoordinatorResponse(Errors.NONE, node), node);
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
@@ -1430,7 +1453,8 @@ public class KafkaConsumerTest {
                                    long waitMs,
                                    boolean interrupt) throws Exception {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -1438,7 +1462,7 @@ public class KafkaConsumerTest {
 
         PartitionAssignor assignor = new RoundRobinAssignor();
 
-        final KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, false);
+        final KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -1521,38 +1545,38 @@ public class KafkaConsumerTest {
 
     @Test(expected = AuthenticationException.class)
     public void testPartitionsForAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
         consumer.partitionsFor("some other topic");
     }
 
     @Test(expected = AuthenticationException.class)
     public void testBeginningOffsetsAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
         consumer.beginningOffsets(Collections.singleton(tp0));
     }
 
     @Test(expected = AuthenticationException.class)
     public void testEndOffsetsAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
         consumer.endOffsets(Collections.singleton(tp0));
     }
 
     @Test(expected = AuthenticationException.class)
     public void testPollAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
         consumer.subscribe(singleton(topic));
         consumer.poll(Duration.ZERO);
     }
 
     @Test(expected = AuthenticationException.class)
     public void testOffsetsForTimesAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
         consumer.offsetsForTimes(singletonMap(tp0, 0L));
     }
 
     @Test(expected = AuthenticationException.class)
     public void testCommitSyncAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(tp0, new OffsetAndMetadata(10L));
         consumer.commitSync(offsets);
@@ -1560,13 +1584,14 @@ public class KafkaConsumerTest {
 
     @Test(expected = AuthenticationException.class)
     public void testCommittedAuthenticationFaiure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthentication();
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
         consumer.committed(tp0);
     }
 
-    private KafkaConsumer<String, String> consumerWithPendingAuthentication() {
+    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, singletonMap(topic, 1));
@@ -1575,7 +1600,7 @@ public class KafkaConsumerTest {
         PartitionAssignor assignor = new RangeAssignor();
 
         client.createPendingAuthenticationError(node, 0);
-        return newConsumer(time, client, metadata, assignor, false);
+        return newConsumer(time, client, subscription, metadata, assignor, false);
     }
 
     private ConsumerRebalanceListener getConsumerRebalanceListener(final KafkaConsumer<String, String> consumer) {
@@ -1593,8 +1618,9 @@ public class KafkaConsumerTest {
         };
     }
 
-    private Metadata createMetadata() {
-        return new Metadata(0, Long.MAX_VALUE, true);
+    private ConsumerMetadata createMetadata(SubscriptionState subscription) {
+        return new ConsumerMetadata(0, Long.MAX_VALUE, false, subscription,
+                new LogContext(), new ClusterResourceListeners());
     }
 
     private Node prepareRebalance(MockClient client, Node node, final Set<String> subscribedTopics, PartitionAssignor assignor, List<TopicPartition> partitions, Node coordinator) {
@@ -1752,30 +1778,25 @@ public class KafkaConsumerTest {
 
     private KafkaConsumer<String, String> newConsumer(Time time,
                                                       KafkaClient client,
-                                                      Metadata metadata,
+                                                      SubscriptionState subscription,
+                                                      ConsumerMetadata metadata,
                                                       PartitionAssignor assignor,
                                                       boolean autoCommitEnabled) {
-        return newConsumer(time, client, metadata, assignor, OffsetResetStrategy.EARLIEST, autoCommitEnabled, groupId);
+        return newConsumer(time, client, subscription, metadata, assignor, autoCommitEnabled, groupId);
     }
 
     private KafkaConsumer<String, String> newConsumerNoAutoCommit(Time time,
                                                                   KafkaClient client,
-                                                                  Metadata metadata) {
-        return newConsumer(time, client, metadata, new RangeAssignor(), OffsetResetStrategy.EARLIEST, false, groupId);
+                                                                  SubscriptionState subscription,
+                                                                  ConsumerMetadata metadata) {
+        return newConsumer(time, client, subscription, metadata, new RangeAssignor(), false, groupId);
     }
 
     private KafkaConsumer<String, String> newConsumer(Time time,
                                                       KafkaClient client,
-                                                      Metadata metadata,
-                                                      String groupId) {
-        return newConsumer(time, client, metadata, new RangeAssignor(), OffsetResetStrategy.LATEST, true, groupId);
-    }
-
-    private KafkaConsumer<String, String> newConsumer(Time time,
-                                                      KafkaClient client,
-                                                      Metadata metadata,
+                                                      SubscriptionState subscription,
+                                                      ConsumerMetadata metadata,
                                                       PartitionAssignor assignor,
-                                                      OffsetResetStrategy resetStrategy,
                                                       boolean autoCommitEnabled,
                                                       String groupId) {
         String clientId = "mock-consumer";
@@ -1783,7 +1804,6 @@ public class KafkaConsumerTest {
         long retryBackoffMs = 100;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 30000;
-        boolean excludeInternalTopics = true;
         int minBytes = 1;
         int maxBytes = Integer.MAX_VALUE;
         int maxWaitMs = 500;
@@ -1802,7 +1822,6 @@ public class KafkaConsumerTest {
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);
 
         LogContext loggerFactory = new LogContext();
-        SubscriptionState subscriptions = new SubscriptionState(loggerFactory, resetStrategy);
         ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
                 retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
 
@@ -1816,7 +1835,7 @@ public class KafkaConsumerTest {
                 heartbeat,
                 assignors,
                 metadata,
-                subscriptions,
+                subscription,
                 metrics,
                 metricGroupPrefix,
                 time,
@@ -1824,7 +1843,6 @@ public class KafkaConsumerTest {
                 autoCommitEnabled,
                 autoCommitIntervalMs,
                 interceptors,
-                excludeInternalTopics,
                 true);
 
         Fetcher<String, String> fetcher = new Fetcher<>(
@@ -1839,7 +1857,7 @@ public class KafkaConsumerTest {
                 keyDeserializer,
                 valueDeserializer,
                 metadata,
-                subscriptions,
+                subscription,
                 metrics,
                 metricsRegistry.fetcherMetrics,
                 time,
@@ -1858,7 +1876,7 @@ public class KafkaConsumerTest {
                 time,
                 consumerClient,
                 metrics,
-                subscriptions,
+                subscription,
                 metadata,
                 retryBackoffMs,
                 requestTimeoutMs,
@@ -1889,7 +1907,8 @@ public class KafkaConsumerTest {
     @Test(expected = InvalidTopicException.class)
     public void testSubscriptionOnInvalidTopic() {
         Time time = new MockTime();
-        Metadata metadata = createMetadata();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
@@ -1908,7 +1927,7 @@ public class KafkaConsumerTest {
                 topicMetadata);
         client.prepareMetadataUpdate(updateResponse);
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, metadata, assignor, true);
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true);
         consumer.subscribe(singleton(invalidTopicName), getConsumerRebalanceListener(consumer));
 
         consumer.poll(Duration.ZERO);

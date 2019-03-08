@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataCache;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -88,6 +87,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyList;
 
@@ -121,7 +122,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final long requestTimeoutMs;
     private final int maxPollRecords;
     private final boolean checkCrcs;
-    private final Metadata metadata;
+    private final ConsumerMetadata metadata;
     private final FetchManagerMetrics sensors;
     private final SubscriptionState subscriptions;
     private final ConcurrentLinkedQueue<CompletedFetch> completedFetches;
@@ -144,7 +145,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                    boolean checkCrcs,
                    Deserializer<K> keyDeserializer,
                    Deserializer<V> valueDeserializer,
-                   Metadata metadata,
+                   ConsumerMetadata metadata,
                    SubscriptionState subscriptions,
                    Metrics metrics,
                    FetcherMetricsRegistry metricsRegistry,
@@ -391,24 +392,30 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         resetOffsetsAsync(offsetResetTimestamps);
     }
 
-    public Map<TopicPartition, OffsetAndTimestamp> offsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
-                                                                  Timer timer) {
-        Map<TopicPartition, OffsetData> fetchedOffsets = fetchOffsetsByTimes(timestampsToSearch,
-                timer, true).fetchedOffsets;
+    public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
+                                                                   Timer timer) {
+        metadata.addTransientTopics(topicsForPartitions(timestampsToSearch.keySet()));
 
-        HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
-        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
-            offsetsByTimes.put(entry.getKey(), null);
+        try {
+            Map<TopicPartition, OffsetData> fetchedOffsets = fetchOffsetsByTimes(timestampsToSearch,
+                    timer, true).fetchedOffsets;
 
-        for (Map.Entry<TopicPartition, OffsetData> entry : fetchedOffsets.entrySet()) {
-            // 'entry.getValue().timestamp' will not be null since we are guaranteed
-            // to work with a v1 (or later) ListOffset request
-            OffsetData offsetData = entry.getValue();
-            offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(offsetData.offset, offsetData.timestamp,
-                    offsetData.leaderEpoch));
+            HashMap<TopicPartition, OffsetAndTimestamp> offsetsByTimes = new HashMap<>(timestampsToSearch.size());
+            for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
+                offsetsByTimes.put(entry.getKey(), null);
+
+            for (Map.Entry<TopicPartition, OffsetData> entry : fetchedOffsets.entrySet()) {
+                // 'entry.getValue().timestamp' will not be null since we are guaranteed
+                // to work with a v1 (or later) ListOffset request
+                OffsetData offsetData = entry.getValue();
+                offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(offsetData.offset, offsetData.timestamp,
+                        offsetData.leaderEpoch));
+            }
+
+            return offsetsByTimes;
+        } finally {
+            metadata.clearTransientTopics();
         }
-
-        return offsetsByTimes;
     }
 
     private ListOffsetResult fetchOffsetsByTimes(Map<TopicPartition, Long> timestampsToSearch,
@@ -457,15 +464,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private Map<TopicPartition, Long> beginningOrEndOffset(Collection<TopicPartition> partitions,
                                                            long timestamp,
                                                            Timer timer) {
-        Map<TopicPartition, Long> timestampsToSearch = new HashMap<>();
-        for (TopicPartition tp : partitions)
-            timestampsToSearch.put(tp, timestamp);
-        Map<TopicPartition, Long> offsets = new HashMap<>();
-        ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false);
-        for (Map.Entry<TopicPartition, OffsetData> entry : result.fetchedOffsets.entrySet()) {
-            offsets.put(entry.getKey(), entry.getValue().offset);
+        metadata.addTransientTopics(topicsForPartitions(partitions));
+        try {
+            Map<TopicPartition, Long> timestampsToSearch = partitions.stream()
+                    .collect(Collectors.toMap(Function.identity(), tp -> timestamp));
+
+            ListOffsetResult result = fetchOffsetsByTimes(timestampsToSearch, timer, false);
+
+            return result.fetchedOffsets.entrySet().stream()
+                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().offset));
+        } finally {
+            metadata.clearTransientTopics();
         }
-        return offsets;
     }
 
     /**
@@ -589,10 +599,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     }
 
     private void resetOffsetsAsync(Map<TopicPartition, Long> partitionResetTimestamps) {
-        // Add the topics to the metadata to do a single metadata fetch.
-        for (TopicPartition tp : partitionResetTimestamps.keySet())
-            metadata.add(tp.topic());
-
         Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode =
                 groupListOffsetRequests(partitionResetTimestamps, new HashSet<>());
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry : timestampsToSearchByNode.entrySet()) {
@@ -639,10 +645,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      */
     private RequestFuture<ListOffsetResult> sendListOffsetsRequests(final Map<TopicPartition, Long> timestampsToSearch,
                                                                     final boolean requireTimestamps) {
-        // Add the topics to the metadata to do a single metadata fetch.
-        for (TopicPartition tp : timestampsToSearch.keySet())
-            metadata.add(tp.topic());
-
         final Set<TopicPartition> partitionsToRetry = new HashSet<>();
         Map<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> timestampsToSearchByNode =
                 groupListOffsetRequests(timestampsToSearch, partitionsToRetry);
@@ -697,7 +699,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             TopicPartition tp  = entry.getKey();
             Optional<MetadataCache.PartitionInfoAndEpoch> currentInfo = metadata.partitionInfoIfCurrent(tp);
             if (!currentInfo.isPresent()) {
-                metadata.add(tp.topic());
                 log.debug("Leader for partition {} is unknown for fetching offset", tp);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
@@ -1537,6 +1538,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         if (nextInLineRecords != null)
             nextInLineRecords.drain();
         decompressionBufferSupplier.close();
+    }
+
+    private Set<String> topicsForPartitions(Collection<TopicPartition> partitions) {
+        return partitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
     }
 
 }

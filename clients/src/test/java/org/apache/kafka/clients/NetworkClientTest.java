@@ -26,7 +26,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
-import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.LogContext;
@@ -55,10 +54,7 @@ public class NetworkClientTest {
     protected final int defaultRequestTimeoutMs = 1000;
     protected final MockTime time = new MockTime();
     protected final MockSelector selector = new MockSelector(time);
-    protected final Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
-    protected final MetadataResponse initialMetadataResponse = TestUtils.metadataUpdateWith(1,
-            Collections.singletonMap("test", 1));
-    protected final Node node = initialMetadataResponse.brokers().iterator().next();
+    protected final Node node = TestUtils.singletonCluster().nodes().iterator().next();
     protected final long reconnectBackoffMsTest = 10 * 1000;
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
 
@@ -68,19 +64,19 @@ public class NetworkClientTest {
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
-        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+        return new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)), "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
-        return new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
+        return new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)),
                 "mock-static", Integer.MAX_VALUE, 0, 0, 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
-        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+        return new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)), "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
                 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
@@ -89,7 +85,6 @@ public class NetworkClientTest {
     @Before
     public void setup() {
         selector.reset();
-        metadata.update(initialMetadataResponse, time.milliseconds());
     }
 
     @Test(expected = IllegalStateException.class)
