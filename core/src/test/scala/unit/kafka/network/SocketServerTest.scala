@@ -1119,7 +1119,7 @@ class SocketServerTest extends JUnitSuite {
       assertEquals(Set.empty, errors)
       testableSelector.waitForOperations(SelectorOperation.Register, numConnections)
 
-      // In each iteration, SocketServer processes atmost connectionQueueSize (1 in this test)
+      // In each iteration, SocketServer processes at most connectionQueueSize (1 in this test)
       // new connections and then does poll() to process data from existing connections. So for
       // 5 connections, we expect 5 iterations. Since we stop when the 5th connection is processed,
       // we can safely check that there were atleast 4 polls prior to the 5th connection.
