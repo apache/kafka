@@ -44,7 +44,6 @@ class MetadataRequestTest extends BaseRequestTest {
     doSetup(createOffsetsTopic = false)
   }
 
-  //FIX ME
   @Test
   def testClusterIdWithRequestVersion1() {
     val v1MetadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
