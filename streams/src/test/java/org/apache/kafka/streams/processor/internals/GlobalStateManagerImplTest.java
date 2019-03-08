@@ -79,28 +79,28 @@ import static org.junit.Assert.fail;
 public class GlobalStateManagerImplTest {
 
 
-    private final MockTime time = new MockTime();
-    private final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
-    private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    private final String storeName1 = "t1-store";
-    private final String storeName2 = "t2-store";
-    private final String storeName3 = "t3-store";
-    private final String storeName4 = "t4-store";
-    private final String storeName5 = "t5-store";
-    private final TopicPartition t1 = new TopicPartition("t1", 1);
-    private final TopicPartition t2 = new TopicPartition("t2", 1);
-    private final TopicPartition t3 = new TopicPartition("t3", 1);
-    private final TopicPartition t4 = new TopicPartition("t4", 1);
-    private final TopicPartition t5 = new TopicPartition("t5", 1);
-    private GlobalStateManagerImpl stateManager;
-    private StateDirectory stateDirectory;
-    private StreamsConfig streamsConfig;
-    private NoOpReadOnlyStore<Object, Object> store1, store2, store3, store4;
-    private NoOpReadOnlyStore<Long, Long> store5;
-    private MockConsumer<byte[], byte[]> consumer;
-    private File checkpointFile;
-    private ProcessorTopology topology;
-    private InternalMockProcessorContext processorContext;
+    final MockTime time = new MockTime();
+    final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
+    final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
+    final String storeName1 = "t1-store";
+    final String storeName2 = "t2-store";
+    final String storeName3 = "t3-store";
+    final String storeName4 = "t4-store";
+    final String storeName5 = "t5-store";
+    final TopicPartition t1 = new TopicPartition("t1", 1);
+    final TopicPartition t2 = new TopicPartition("t2", 1);
+    final TopicPartition t3 = new TopicPartition("t3", 1);
+    final TopicPartition t4 = new TopicPartition("t4", 1);
+    final TopicPartition t5 = new TopicPartition("t5", 1);
+    GlobalStateManagerImpl stateManager;
+    StateDirectory stateDirectory;
+    StreamsConfig streamsConfig;
+    NoOpReadOnlyStore<Object, Object> store1, store2, store3, store4;
+    NoOpReadOnlyStore<Long, Long> store5;
+    MockConsumer<byte[], byte[]> consumer;
+    File checkpointFile;
+    ProcessorTopology topology;
+    InternalMockProcessorContext processorContext;
 
     @Before
     public void before() {
@@ -152,7 +152,9 @@ public class GlobalStateManagerImplTest {
 
     @After
     public void after() throws IOException {
-        stateDirectory.unlockGlobalState();
+        if (stateDirectory != null) {
+            stateDirectory.unlockGlobalState();
+        }
     }
 
     public byte[] longToBytes(final long x) {
@@ -161,7 +163,7 @@ public class GlobalStateManagerImplTest {
         return buffer.array();
     }
 
-    @Test(expected = StreamsException.class)//only works with LogAndFailExceptionHandler.class
+    @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionWhenRestoringWithLogAndFailExceptionHandler() {
         final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
         startOffsets.put(t5, 1L);
@@ -785,8 +787,8 @@ public class GlobalStateManagerImplTest {
         return expected;
     }
 
-    private static class TheStateRestoreCallback implements StateRestoreCallback {
-        private final List<KeyValue<byte[], byte[]>> restored = new ArrayList<>();
+    static class TheStateRestoreCallback implements StateRestoreCallback {
+        final List<KeyValue<byte[], byte[]>> restored = new ArrayList<>();
 
         @Override
         public void restore(final byte[] key, final byte[] value) {
@@ -794,7 +796,7 @@ public class GlobalStateManagerImplTest {
         }
     }
 
-    private class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements TimestampedBytesStore {
+    class ConverterStore<K, V> extends NoOpReadOnlyStore<K, V> implements TimestampedBytesStore {
         ConverterStore(final String name,
                        final boolean rocksdbStore) {
             super(name, rocksdbStore);
