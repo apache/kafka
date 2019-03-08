@@ -673,11 +673,11 @@ public class KafkaStreams implements AutoCloseable {
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
         final ProcessorTopology taskTopology = internalTopologyBuilder.build();
 
-        for (SinkNode sn : taskTopology.sinks()) {
+        for (final SinkNode sn : taskTopology.sinks()) {
             sn.getKeySer().configure(config.originals(), true);
             sn.getValueSer().configure(config.originals(), false);
         }
-        for (SourceNode sn : taskTopology.sources()) {
+        for (final SourceNode sn : taskTopology.sources()) {
             sn.getKeyDeSer().configure(config.originals(), true);
             sn.getValueDeSer().configure(config.originals(), false);
         }
@@ -694,11 +694,11 @@ public class KafkaStreams implements AutoCloseable {
             log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
         }
         final ProcessorTopology globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
-        for (SinkNode sn : globalTaskTopology.sinks()) {
+        for (final SinkNode sn : globalTaskTopology.sinks()) {
             sn.getKeySer().configure(config.originals(), true);
             sn.getValueSer().configure(config.originals(), false);
         }
-        for (SourceNode sn : globalTaskTopology.sources()) {
+        for (final SourceNode sn : globalTaskTopology.sources()) {
             sn.getKeyDeSer().configure(config.originals(), true);
             sn.getValueDeSer().configure(config.originals(), false);
         }
