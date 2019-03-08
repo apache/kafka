@@ -639,12 +639,20 @@ public class KafkaStreams implements AutoCloseable {
     @SuppressWarnings("unchecked")
     private void configureSerDe(final Set<SinkNode> sinks, final Set<SourceNode> sources) {
         for (final SinkNode sn : sinks) {
-            sn.getKeySer().configure(config.originals(), true);
-            sn.getValueSer().configure(config.originals(), false);
+            if (sn.getKeySer() != null) {
+                sn.getKeySer().configure(config.originals(), true);
+            }
+            if (sn.getValueSer() != null) {
+                sn.getValueSer().configure(config.originals(), false);
+            }
         }
         for (final SourceNode sn : sources) {
-            sn.getKeyDeSer().configure(config.originals(), true);
-            sn.getValueDeSer().configure(config.originals(), false);
+            if (sn.getKeyDeSer() != null) {
+                sn.getKeyDeSer().configure(config.originals(), true);
+            }
+            if (sn.getValueDeSer() != null) {
+                sn.getValueDeSer().configure(config.originals(), false);
+            }
         }
     }
     private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
