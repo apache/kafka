@@ -32,6 +32,8 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
@@ -84,6 +86,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         if (global != null) {
             if (global instanceof KeyValueStore) {
                 return new KeyValueStoreReadOnlyDecorator((KeyValueStore) global);
+            } else if (global instanceof TimestampedWindowStore) {
+                return new TimestampedWindowStoreReadOnlyDecorator((TimestampedWindowStore) global);
             } else if (global instanceof WindowStore) {
                 return new WindowStoreReadOnlyDecorator((WindowStore) global);
             } else if (global instanceof SessionStore) {
@@ -106,6 +110,8 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         final StateStore store = stateManager.getStore(name);
         if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
+        } else if (store instanceof TimestampedWindowStore) {
+            return new TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store);
         } else if (store instanceof WindowStore) {
             return new WindowStoreReadWriteDecorator((WindowStore) store);
         } else if (store instanceof SessionStore) {
@@ -339,6 +345,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
+    private static class TimestampedWindowStoreReadOnlyDecorator<K, V>
+        extends WindowStoreReadOnlyDecorator<K, ValueAndTimestamp<V>>
+        implements TimestampedWindowStore<K, V> {
+
+        private TimestampedWindowStoreReadOnlyDecorator(final TimestampedWindowStore<K, V> inner) {
+            super(inner);
+        }
+    }
+
     private static class SessionStoreReadOnlyDecorator<K, AGG>
         extends StateStoreReadOnlyDecorator<SessionStore<K, AGG>, K, AGG>
         implements SessionStore<K, AGG> {
@@ -520,6 +535,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
+    private static class TimestampedWindowStoreReadWriteDecorator<K, V>
+        extends WindowStoreReadWriteDecorator<K, ValueAndTimestamp<V>>
+        implements TimestampedWindowStore<K, V> {
+
+        TimestampedWindowStoreReadWriteDecorator(final TimestampedWindowStore<K, V> inner) {
+            super(inner);
+        }
+    }
+
     static class SessionStoreReadWriteDecorator<K, AGG>
         extends StateStoreReadWriteDecorator<SessionStore<K, AGG>, K, AGG>
         implements SessionStore<K, AGG> {
@@ -549,12 +573,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
-        public void put(final Windowed<K> sessionKey, final AGG aggregate) {
+        public void put(final Windowed<K> sessionKey,
+                        final AGG aggregate) {
             wrapped().put(sessionKey, aggregate);
         }
 
         @Override
-        public AGG fetchSession(final K key, final long startTime, final long endTime) {
+        public AGG fetchSession(final K key,
+                                final long startTime,
+                                final long endTime) {
             return wrapped().fetchSession(key, startTime, endTime);
         }
 

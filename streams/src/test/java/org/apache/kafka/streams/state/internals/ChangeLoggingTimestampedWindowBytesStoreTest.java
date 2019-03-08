@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.easymock.EasyMock;
@@ -37,12 +38,13 @@ import java.util.Map;
 
 import static java.time.Instant.ofEpochMilli;
 import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 @RunWith(EasyMockRunner.class)
-public class ChangeLoggingWindowBytesStoreTest {
+public class ChangeLoggingTimestampedWindowBytesStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);
-    private final Map<Object, Object> sent = new HashMap<>();
+    private final Map<Object, ValueAndTimestamp<Object>> sent = new HashMap<>();
     private final NoOpRecordCollector collector = new NoOpRecordCollector() {
         @Override
         public <K, V> void send(final String topic,
@@ -53,23 +55,24 @@ public class ChangeLoggingWindowBytesStoreTest {
                                 final Long timestamp,
                                 final Serializer<K> keySerializer,
                                 final Serializer<V> valueSerializer) {
-            sent.put(key, value);
+            sent.put(key, ValueAndTimestamp.make(value, timestamp));
         }
     };
 
     private final byte[] value = {0};
+    private final byte[] valueAndTimestamp = {0, 0, 0, 0, 0, 0, 0, 42, 0};
     private final Bytes bytesKey = Bytes.wrap(value);
 
     @Mock(type = MockType.NICE)
     private WindowStore<Bytes, byte[]> inner;
     @Mock(type = MockType.NICE)
     private ProcessorContextImpl context;
-    private ChangeLoggingWindowBytesStore store;
+    private ChangeLoggingTimestampedWindowBytesStore store;
 
 
     @Before
     public void setUp() {
-        store = new ChangeLoggingWindowBytesStore(inner, false);
+        store = new ChangeLoggingTimestampedWindowBytesStore(inner, false);
     }
 
     private void init() {
@@ -84,16 +87,19 @@ public class ChangeLoggingWindowBytesStoreTest {
 
     @Test
     public void shouldLogPuts() {
-        inner.put(bytesKey, value, 0);
+        inner.put(bytesKey, valueAndTimestamp, 0);
         EasyMock.expectLastCall();
 
         init();
 
-        store.put(bytesKey, value);
+        store.put(bytesKey, valueAndTimestamp);
 
         assertArrayEquals(
             value,
-            (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0)));
+            (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0)).value());
+        assertEquals(
+            42L,
+            sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 0)).timestamp());
         EasyMock.verify(inner);
     }
 
@@ -123,16 +129,26 @@ public class ChangeLoggingWindowBytesStoreTest {
 
     @Test
     public void shouldRetainDuplicatesWhenSet() {
-        store = new ChangeLoggingWindowBytesStore(inner, true);
-        inner.put(bytesKey, value, 0);
+        store = new ChangeLoggingTimestampedWindowBytesStore(inner, true);
+        inner.put(bytesKey, valueAndTimestamp, 0);
         EasyMock.expectLastCall().times(2);
 
         init();
-        store.put(bytesKey, value);
-        store.put(bytesKey, value);
+        store.put(bytesKey, valueAndTimestamp);
+        store.put(bytesKey, valueAndTimestamp);
 
-        assertArrayEquals(value, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1)));
-        assertArrayEquals(value, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2)));
+        assertArrayEquals(
+            value,
+            (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1)).value());
+        assertEquals(
+            42L,
+            sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1)).timestamp());
+        assertArrayEquals(
+            value,
+            (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2)).value());
+        assertEquals(
+            42L,
+            sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2)).timestamp());
 
         EasyMock.verify(inner);
     }
