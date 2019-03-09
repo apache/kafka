@@ -27,7 +27,6 @@ import org.apache.kafka.streams.state.StoreBuilder
 import org.apache.kafka.streams.{Topology, StreamsBuilder => StreamsBuilderJ}
 import org.apache.kafka.streams.scala.kstream._
 import ImplicitConversions._
-import org.apache.kafka.streams.errors.TopologyException
 
 import scala.collection.JavaConverters._
 
@@ -163,7 +162,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    *
    * @param builder the builder used to obtain this state store `StateStore` instance
    * @return the underlying Java abstraction `StreamsBuilder` after adding the `StateStore`
-   * @throws TopologyException if state store supplier is already added
+   * @throws org.apache.kafka.streams.errors.TopologyException if state store supplier is already added
    * @see `org.apache.kafka.streams.StreamsBuilder#addStateStore`
    */
   def addStateStore(builder: StoreBuilder[_ <: StateStore]): StreamsBuilderJ = inner.addStateStore(builder)
