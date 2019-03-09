@@ -427,6 +427,7 @@ public class ProcessorContextImplTest {
         return timestampedKeyValueStoreMock;
     }
 
+    @SuppressWarnings("unchecked")
     private WindowStore<String, Long> windowStoreMock() {
         final WindowStore<String, Long> windowStore = mock(WindowStore.class);
 
