@@ -1261,6 +1261,11 @@ public class KafkaAdminClient extends AdminClient {
         return groupId == null;
     }
 
+    //for testing
+    int noOfPendingCalls() {
+        return runnable.pendingCalls.size();
+    }
+
     @Override
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
