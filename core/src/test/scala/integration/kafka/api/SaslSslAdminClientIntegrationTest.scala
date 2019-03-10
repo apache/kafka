@@ -19,8 +19,7 @@ import kafka.security.auth.{All, Allow, Alter, AlterConfigs, Authorizer, Cluster
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
 import kafka.utils.TestUtils._
-
-import org.apache.kafka.clients.admin.{AdminClient, CreateAclsOptions, DeleteAclsOptions}
+import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, InvalidRequestException}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType}
@@ -276,6 +275,11 @@ class SaslSslAdminClientIntegrationTest extends AdminClientIntegrationTest with 
     assertEquals(Set(clusterAcl, emptyResourceNameAcl), results.values.keySet().asScala)
     assertFutureExceptionTypeEquals(results.values.get(clusterAcl), classOf[InvalidRequestException])
     assertFutureExceptionTypeEquals(results.values.get(emptyResourceNameAcl), classOf[InvalidRequestException])
+  }
+
+  override def configuredClusterPermissions(): Set[AclOperation] = {
+    Set(AclOperation.ALTER, AclOperation.CREATE, AclOperation.CLUSTER_ACTION, AclOperation.ALTER_CONFIGS,
+      AclOperation.DESCRIBE, AclOperation.DESCRIBE_CONFIGS)
   }
 
   private def verifyCauseIsClusterAuth(e: Throwable): Unit = {

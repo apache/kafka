@@ -73,12 +73,12 @@ class CachingKeyValueStore
     private void putAndMaybeForward(final ThreadCache.DirtyEntry entry,
                                     final InternalProcessorContext context) {
         if (flushListener != null) {
-            final byte[] newValueBytes = entry.newValue();
-            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? wrapped().get(entry.key()) : null;
+            final byte[] rawNewValue = entry.newValue();
+            final byte[] rawOldValue = rawNewValue == null || sendOldValues ? wrapped().get(entry.key()) : null;
 
             // this is an optimization: if this key did not exist in underlying store and also not in the cache,
             // we can skip flushing to downstream as well as writing to underlying store
-            if (newValueBytes != null || oldValueBytes != null) {
+            if (rawNewValue != null || rawOldValue != null) {
                 // we need to get the old values if needed, and then put to store, and then flush
                 wrapped().put(entry.key(), entry.newValue());
 
@@ -87,8 +87,8 @@ class CachingKeyValueStore
                 try {
                     flushListener.apply(
                         entry.key().get(),
-                        newValueBytes,
-                        sendOldValues ? oldValueBytes : null,
+                        rawNewValue,
+                        sendOldValues ? rawOldValue : null,
                         entry.entry().context().timestamp());
                 } finally {
                     context.setRecordContext(current);
@@ -237,7 +237,8 @@ class CachingKeyValueStore
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
         validateStoreOpen();
-        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().all());
+        final KeyValueIterator<Bytes, byte[]> storeIterator =
+            new DelegatingPeekingKeyValueIterator<>(this.name(), wrapped().all());
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(cacheName);
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }

@@ -39,7 +39,7 @@ class ForwardingCacheFlushListener<K, V> implements CacheFlushListener<K, V> {
         final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            context.forward(key, new Change<>(newValue, oldValue),  To.all().withTimestamp(timestamp));
+            context.forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(timestamp));
         } finally {
             context.setCurrentNode(prev);
         }

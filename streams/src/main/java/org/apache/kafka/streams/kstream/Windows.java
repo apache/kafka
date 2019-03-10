@@ -46,7 +46,7 @@ public abstract class Windows<W extends Window> {
 
     protected Windows() {}
 
-    @SuppressWarnings("deprecation") // remove this constructor when we remove segments.
+    @Deprecated // remove this constructor when we remove segments.
     Windows(final int segments) {
         this.segments = segments;
     }
@@ -77,7 +77,6 @@ public abstract class Windows<W extends Window> {
      * @return the window maintain duration
      * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
-    @SuppressWarnings("DeprecatedIsStillUsed")
     @Deprecated
     public long maintainMs() {
         return maintainDurationMs;
