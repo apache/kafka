@@ -374,8 +374,8 @@ public class TaskManager {
         this.cluster = cluster;
     }
 
-    public void setTasksByHostState(final Map<HostInfo, Set<TaskId>> tasksByHosts, final int version) {
-        this.streamsMetadataState.onChange(tasksByHosts, cluster, version);
+    public void setPartitionsByHostState(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
+        this.streamsMetadataState.onChange(partitionsByHostState, cluster);
     }
 
     public void setAssignmentMetadata(final Map<TaskId, Set<TopicPartition>> activeTasks,

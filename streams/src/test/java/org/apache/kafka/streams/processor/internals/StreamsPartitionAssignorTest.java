@@ -632,6 +632,43 @@ public class StreamsPartitionAssignorTest {
         assertEquals(allTasks, allStandbyTasks);
     }
 
+    /*
+    @Test
+    public void testOnAssignment() {
+        configurePartitionAssignor(Collections.emptyMap());
+
+        final List<TaskId> activeTaskList = asList(task0, task3);
+        final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+        final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
+        final Map<HostInfo, Set<TopicPartition>> hostState = Collections.singletonMap(
+                new HostInfo("localhost", 9090),
+                Utils.mkSet(t3p0, t3p3));
+        activeTasks.put(task0, Utils.mkSet(t3p0));
+        activeTasks.put(task3, Utils.mkSet(t3p3));
+        standbyTasks.put(task1, Utils.mkSet(t3p1));
+        standbyTasks.put(task2, Utils.mkSet(t3p2));
+
+        final AssignmentInfo info = new AssignmentInfo(activeTaskList, standbyTasks, hostState);
+        final PartitionAssignor.Assignment assignment = new PartitionAssignor.Assignment(asList(t3p0, t3p3), info.encode());
+
+        final Capture<Cluster> capturedCluster = EasyMock.newCapture();
+        taskManager.setPartitionsByHostState(hostState);
+        EasyMock.expectLastCall();
+        taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
+        EasyMock.expectLastCall();
+        taskManager.setClusterMetadata(EasyMock.capture(capturedCluster));
+        EasyMock.expectLastCall();
+        EasyMock.replay(taskManager);
+
+        partitionAssignor.onAssignment(assignment);
+
+        EasyMock.verify(taskManager);
+
+        assertEquals(Collections.singleton(t3p0.topic()), capturedCluster.getValue().topics());
+        assertEquals(2, capturedCluster.getValue().partitionsForTopic(t3p0.topic()).size());
+    }
+    */
+
     @Test
     public void testOnNewAssignment() {
         configurePartitionAssignor(Collections.<String, Object>emptyMap());
@@ -639,6 +676,9 @@ public class StreamsPartitionAssignorTest {
         final List<TaskId> activeTaskList = asList(task0, task3);
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
+        final Map<HostInfo, Set<TopicPartition>> hostStatePartitions = Collections.singletonMap(
+                new HostInfo("localhost", 9090),
+                Utils.mkSet(t3p0, t3p3));
         final Map<HostInfo, Set<TaskId>> hostState = Collections.singletonMap(
                 new HostInfo("localhost", 9090),
                 Utils.mkSet(task0, task3));
@@ -657,7 +697,7 @@ public class StreamsPartitionAssignorTest {
         EasyMock.expect(taskManager.builder()).andReturn(builder).anyTimes();
 
         final Capture<Cluster> capturedCluster = EasyMock.newCapture();
-        taskManager.setTasksByHostState(hostState, 4);
+        taskManager.setPartitionsByHostState(hostStatePartitions);
         EasyMock.expectLastCall();
         taskManager.setAssignmentMetadata(activeTasks, standbyTasks);
         EasyMock.expectLastCall();
@@ -975,6 +1015,11 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldUpdateClusterMetadataAndHostInfoOnAssignment() {
+        final TopicPartition partitionOne = new TopicPartition("topic", 1);
+        final TopicPartition partitionTwo = new TopicPartition("topic", 2);
+        final Map<HostInfo, Set<TopicPartition>> hostStatePartitions = Collections.singletonMap(
+                new HostInfo("localhost", 9090), Utils.mkSet(partitionOne, partitionTwo));
+
         final TaskId taskOne = new TaskId(0, 1);
         final TaskId taskTwo = new TaskId(0, 2);
         final Map<HostInfo, Set<TaskId>> hostState = Collections.singletonMap(
@@ -985,7 +1030,7 @@ public class StreamsPartitionAssignorTest {
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         EasyMock.expect(taskManager.builder()).andReturn(builder).anyTimes();
-        taskManager.setTasksByHostState(hostState, 4);
+        taskManager.setPartitionsByHostState(hostStatePartitions);
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager);
 
