@@ -99,11 +99,13 @@ public class MockWindowStore implements WindowStore {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public WindowStoreIterator fetch(final Object key, final long timeFrom, final long timeTo) {
         return null;
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public KeyValueIterator fetch(final Object from, final Object to, final long timeFrom, final long timeTo) {
         return null;
     }
@@ -114,6 +116,7 @@ public class MockWindowStore implements WindowStore {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public KeyValueIterator fetchAll(final long timeFrom, final long timeTo) {
         return null;
     }
