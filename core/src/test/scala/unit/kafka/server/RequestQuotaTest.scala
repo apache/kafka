@@ -24,7 +24,7 @@ import kafka.security.auth._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.message.{CreateTopicsRequestData, DescribeGroupsRequestData, ElectPreferredLeadersRequestData, LeaveGroupRequestData}
+import org.apache.kafka.common.message.{CreateTopicsRequestData, DescribeGroupsRequestData, ElectPreferredLeadersRequestData, LeaveGroupRequestData, JoinGroupRequestData}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicSet}
@@ -254,9 +254,21 @@ class RequestQuotaTest extends BaseRequestTest {
           new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, "test-group")
 
         case ApiKeys.JOIN_GROUP =>
-          new JoinGroupRequest.Builder("test-join-group", 200, "", "consumer",
-            List(new JoinGroupRequest.ProtocolMetadata("consumer-range", ByteBuffer.wrap("test".getBytes()))).asJava)
-           .setRebalanceTimeout(100)
+          new JoinGroupRequest.Builder(
+            new JoinGroupRequestData()
+              .setGroupId("test-join-group")
+              .setSessionTimeoutMs(200)
+              .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+              .setProtocolType("consumer")
+              .setProtocols(
+                new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+                  Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
+                    .setName("consumer-range")
+                    .setMetadata("test".getBytes())).iterator()
+                )
+              )
+              .setRebalanceTimeoutMs(100)
+          )
 
         case ApiKeys.HEARTBEAT =>
           new HeartbeatRequest.Builder("test-group", 1, "")
