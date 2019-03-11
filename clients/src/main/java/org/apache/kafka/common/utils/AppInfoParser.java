@@ -36,6 +36,8 @@ public class AppInfoParser {
     private static final String VERSION;
     private static final String COMMIT_ID;
 
+    protected static final String DEFAULT_VALUE = "unknown";
+
     static {
         Properties props = new Properties();
         try (InputStream resourceStream = AppInfoParser.class.getResourceAsStream("/kafka/kafka-version.properties")) {
@@ -43,8 +45,8 @@ public class AppInfoParser {
         } catch (Exception e) {
             log.warn("Error while loading kafka-version.properties: {}", e.getMessage());
         }
-        VERSION = props.getProperty("version", "unknown").trim();
-        COMMIT_ID = props.getProperty("commitId", "unknown").trim();
+        VERSION = props.getProperty("version", DEFAULT_VALUE).trim();
+        COMMIT_ID = props.getProperty("commitId", DEFAULT_VALUE).trim();
     }
 
     public static String getVersion() {
