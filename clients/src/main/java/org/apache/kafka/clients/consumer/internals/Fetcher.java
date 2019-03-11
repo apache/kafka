@@ -241,13 +241,19 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                                 for (Map.Entry<TopicPartition, FetchResponse.PartitionData<Records>> entry : response.responseData().entrySet()) {
                                     TopicPartition partition = entry.getKey();
-                                    long fetchOffset = data.sessionPartitions().get(partition).fetchOffset;
-                                    FetchResponse.PartitionData<Records> fetchData = entry.getValue();
+                                    FetchRequest.PartitionData requestData = data.sessionPartitions().get(partition);
+                                    if (requestData == null) {
+                                        // Received fetch response for missing session partition
+                                        throw new IllegalStateException("Received response for partition " + partition + " which is not part of the session");
+                                    } else {
+                                        long fetchOffset = requestData.fetchOffset;
+                                        FetchResponse.PartitionData<Records> fetchData = entry.getValue();
 
-                                    log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
-                                            isolationLevel, fetchOffset, partition, fetchData);
-                                    completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
-                                            resp.requestHeader().apiVersion()));
+                                        log.debug("Fetch {} at offset {} for partition {} returned fetch data {}",
+                                                isolationLevel, fetchOffset, partition, fetchData);
+                                        completedFetches.add(new CompletedFetch(partition, fetchOffset, fetchData, metricAggregator,
+                                                    resp.requestHeader().apiVersion()));
+                                    }
                                 }
 
                                 sensors.fetchLatency.record(resp.requestLatencyMs());
