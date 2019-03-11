@@ -30,7 +30,6 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 
 class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements RestoringTasks {
     private final Map<TaskId, StreamTask> restoring = new HashMap<>();
@@ -44,6 +43,52 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
     @Override
     public StreamTask restoringTaskFor(final TopicPartition partition) {
         return restoringByPartition.get(partition);
+    }
+
+    @Override
+    List<StreamTask> allTasks() {
+        final List<StreamTask> tasks = super.allTasks();
+        tasks.addAll(restoring.values());
+        return tasks;
+    }
+
+    @Override
+    Set<TaskId> allAssignedTaskIds() {
+        final Set<TaskId> taskIds = super.allAssignedTaskIds();
+        taskIds.addAll(restoring.keySet());
+        return taskIds;
+    }
+
+    @Override
+    boolean allTasksRunning() {
+        return super.allTasksRunning() && restoring.isEmpty();
+    }
+
+    RuntimeException closeAllRestoringTasks() {
+        RuntimeException exception = null;
+
+        log.trace("Closing all restoring stream tasks {}", restoring.keySet());
+        final Iterator<StreamTask> restoringTaskIterator = restoring.values().iterator();
+        while (restoringTaskIterator.hasNext()) {
+            final StreamTask task = restoringTaskIterator.next();
+            log.debug("Closing restoring task {}", task.id());
+            try {
+                task.closeStateManager(true);
+            } catch (final RuntimeException e) {
+                log.error("Failed to remove restoring task {} due to the following error:", task.id(), e);
+                if (exception == null) {
+                    exception = e;
+                }
+            } finally {
+                restoringTaskIterator.remove();
+            }
+        }
+
+        restoring.clear();
+        restoredPartitions.clear();
+        restoringByPartition.clear();
+
+        return exception;
     }
 
     void updateRestored(final Collection<TopicPartition> restored) {
@@ -84,20 +129,6 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         for (final TopicPartition topicPartition : task.changelogPartitions()) {
             restoringByPartition.put(topicPartition, task);
         }
-    }
-
-    @Override
-    boolean allTasksRunning() {
-        return super.allTasksRunning() && restoring.isEmpty();
-    }
-
-    RuntimeException suspend() {
-        final AtomicReference<RuntimeException> firstException = new AtomicReference<>(super.suspend());
-        log.trace("Close restoring stream task {}", restoring.keySet());
-        firstException.compareAndSet(null, closeNonRunningTasks(restoring.values()));
-        restoring.clear();
-        restoringByPartition.clear();
-        return firstException.get();
     }
 
     /**
@@ -218,32 +249,18 @@ class AssignedStreamsTasks extends AssignedTasks<StreamTask> implements Restorin
         return punctuated;
     }
 
-    public String toString(final String indent) {
-        final StringBuilder builder = new StringBuilder();
-        builder.append(super.toString(indent));
-        describe(builder, restoring.values(), indent, "Restoring:");
-        return builder.toString();
-    }
-
-    @Override
-    List<StreamTask> allTasks() {
-        final List<StreamTask> tasks = super.allTasks();
-        tasks.addAll(restoring.values());
-        return tasks;
-    }
-
-    @Override
-    Set<TaskId> allAssignedTaskIds() {
-        final Set<TaskId> taskIds = super.allAssignedTaskIds();
-        taskIds.addAll(restoring.keySet());
-        return taskIds;
-    }
-
     void clear() {
         super.clear();
         restoring.clear();
         restoringByPartition.clear();
         restoredPartitions.clear();
+    }
+
+    public String toString(final String indent) {
+        final StringBuilder builder = new StringBuilder();
+        builder.append(super.toString(indent));
+        describe(builder, restoring.values(), indent, "Restoring:");
+        return builder.toString();
     }
 
     // for testing only

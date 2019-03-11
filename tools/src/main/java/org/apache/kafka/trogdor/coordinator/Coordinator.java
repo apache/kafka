@@ -23,6 +23,7 @@ import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Scheduler;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.trogdor.common.Node;
 import org.apache.kafka.trogdor.common.Platform;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
@@ -31,9 +32,10 @@ import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
 import org.apache.kafka.trogdor.rest.TaskRequest;
-import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TaskState;
+import org.apache.kafka.trogdor.rest.TasksRequest;
 import org.apache.kafka.trogdor.rest.TasksResponse;
+import org.apache.kafka.trogdor.rest.UptimeResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -66,6 +68,8 @@ public final class Coordinator {
      */
     private final JsonRestServer restServer;
 
+    private final Time time;
+
     /**
      * Create a new Coordinator.
      *
@@ -76,7 +80,8 @@ public final class Coordinator {
      */
     public Coordinator(Platform platform, Scheduler scheduler, JsonRestServer restServer,
                        CoordinatorRestResource resource, long firstWorkerId) {
-        this.startTimeMs = scheduler.time().milliseconds();
+        this.time = scheduler.time();
+        this.startTimeMs = time.milliseconds();
         this.taskManager = new TaskManager(platform, scheduler, firstWorkerId);
         this.restServer = restServer;
         resource.setCoordinator(this);
@@ -88,6 +93,10 @@ public final class Coordinator {
 
     public CoordinatorStatusResponse status() throws Exception {
         return new CoordinatorStatusResponse(startTimeMs);
+    }
+
+    public UptimeResponse uptime() {
+        return new UptimeResponse(startTimeMs, time.milliseconds());
     }
 
     public void createTask(CreateTaskRequest request) throws Throwable {

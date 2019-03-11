@@ -25,9 +25,12 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
+import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -63,35 +66,35 @@ public class StreamsBuilder {
     private final InternalStreamsBuilder internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
 
     /**
-     * Create a {@link KStream} from the specified topics.
+     * Create a {@link KStream} from the specified topic.
      * The default {@code "auto.offset.reset"} strategy, default {@link TimestampExtractor}, and default key and value
      * deserializers as specified in the {@link StreamsConfig config} are used.
      * <p>
      * If multiple topics are specified there is no ordering guarantee for records from different topics.
      * <p>
-     * Note that the specified input topics must be partitioned by key.
+     * Note that the specified input topic must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param topic the topic name; cannot be {@code null}
-     * @return a {@link KStream} for the specified topics
+     * @return a {@link KStream} for the specified topic
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic) {
         return stream(Collections.singleton(topic));
     }
 
     /**
-     * Create a {@link KStream} from the specified topics.
+     * Create a {@link KStream} from the specified topic.
      * The {@code "auto.offset.reset"} strategy, {@link TimestampExtractor}, key and value deserializers
      * are defined by the options in {@link Consumed} are used.
      * <p>
-     * Note that the specified input topics must be partitioned by key.
+     * Note that the specified input topic must be partitioned by key.
      * If this is not the case it is the user's responsibility to repartition the data before any key based operation
      * (like aggregation or join) is applied to the returned {@link KStream}.
      *
      * @param topic the topic names; cannot be {@code null}
      * @param consumed      the instance of {@link Consumed} used to define optional parameters
-     * @return a {@link KStream} for the specified topics
+     * @return a {@link KStream} for the specified topic
      */
     public synchronized <K, V> KStream<K, V> stream(final String topic,
                                                     final Consumed<K, V> consumed) {
@@ -199,7 +202,7 @@ public class StreamsBuilder {
      * You should only specify serdes in the {@link Consumed} instance as these will also be used to overwrite the
      * serdes in {@link Materialized}, i.e.,
      * <pre> {@code
-     * streamBuilder.table(topic, Consumed.with(Serde.String(), Serde.String(), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
+     * streamBuilder.table(topic, Consumed.with(Serde.String(), Serde.String()), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
      * }
      * </pre>
      * To query the local {@link KeyValueStore} it must be obtained via
@@ -372,7 +375,7 @@ public class StreamsBuilder {
      * You should only specify serdes in the {@link Consumed} instance as these will also be used to overwrite the
      * serdes in {@link Materialized}, i.e.,
      * <pre> {@code
-     * streamBuilder.globalTable(topic, Consumed.with(Serde.String(), Serde.String(), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
+     * streamBuilder.globalTable(topic, Consumed.with(Serde.String(), Serde.String()), Materialized.<String, String, KeyValueStore<Bytes, byte[]>as(storeName))
      * }
      * </pre>
      * To query the local {@link KeyValueStore} it must be obtained via
@@ -447,6 +450,9 @@ public class StreamsBuilder {
 
     /**
      * Adds a state store to the underlying {@link Topology}.
+     * <p>
+     * It is required to connect state stores to {@link Processor Processors}, {@link Transformer Transformers},
+     * or {@link ValueTransformer ValueTransformers} before they can be used.
      *
      * @param builder the builder used to obtain this state store {@link StateStore} instance
      * @return itself
@@ -492,6 +498,9 @@ public class StreamsBuilder {
      * records forwarded from the {@link SourceNode}.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
+     * <p>
+     * It is not required to connect a global store to {@link Processor Processors}, {@link Transformer Transformers},
+     * or {@link ValueTransformer ValueTransformer}; those have read-only access to all global stores by default.
      *
      * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
      * @param topic                 the topic to source the data from

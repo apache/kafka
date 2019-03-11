@@ -25,8 +25,9 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
-import org.apache.kafka.common.errors.{ApiException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, UnknownTopicOrPartitionException, InvalidConfigurationException}
+import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -37,7 +38,7 @@ import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, Describe
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 
-import scala.collection._
+import scala.collection.{mutable, _}
 import scala.collection.JavaConverters._
 
 class AdminManager(val config: KafkaConfig,
@@ -73,72 +74,89 @@ class AdminManager(val config: KafkaConfig,
     */
   def createTopics(timeout: Int,
                    validateOnly: Boolean,
-                   createInfo: Map[String, TopicDetails],
+                   toCreate: Map[String, CreatableTopic],
                    responseCallback: Map[String, ApiError] => Unit) {
 
     // 1. map over topics creating assignment and calling zookeeper
     val brokers = metadataCache.getAliveBrokers.map { b => kafka.admin.BrokerMetadata(b.id, b.rack) }
-    val metadata = createInfo.map { case (topic, arguments) =>
+    val metadata = toCreate.values.map(topic =>
       try {
         val configs = new Properties()
-        arguments.configs.asScala.foreach { case (key, value) =>
-          configs.setProperty(key, value)
+        topic.configs().asScala.foreach { case entry =>
+          configs.setProperty(entry.name(), entry.value())
         }
         LogConfig.validate(configs)
 
-        val assignments = {
-          if ((arguments.numPartitions != NO_NUM_PARTITIONS || arguments.replicationFactor != NO_REPLICATION_FACTOR)
-            && !arguments.replicasAssignments.isEmpty)
-            throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
-              "Both cannot be used at the same time.")
-          else if (!arguments.replicasAssignments.isEmpty) {
-            // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
-            // this follows the existing logic in TopicCommand
-            arguments.replicasAssignments.asScala.map { case (partitionId, replicas) =>
-              (partitionId.intValue, replicas.asScala.map(_.intValue))
-            }
-          } else
-            AdminUtils.assignReplicasToBrokers(brokers, arguments.numPartitions, arguments.replicationFactor)
+        if ((topic.numPartitions != NO_NUM_PARTITIONS || topic.replicationFactor != NO_REPLICATION_FACTOR)
+            && !topic.assignments().isEmpty) {
+          throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
+            "Both cannot be used at the same time.")
+        }
+        val assignments = if (topic.assignments().isEmpty) {
+          AdminUtils.assignReplicasToBrokers(brokers, topic.numPartitions, topic.replicationFactor)
+        } else {
+          val assignments = new mutable.HashMap[Int, Seq[Int]]
+          // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
+          // this follows the existing logic in TopicCommand
+          topic.assignments.asScala.foreach {
+            case assignment => assignments(assignment.partitionIndex()) =
+              assignment.brokerIds().asScala.map(a => a: Int)
+          }
+          assignments
         }
         trace(s"Assignments for topic $topic are $assignments ")
 
         createTopicPolicy match {
           case Some(policy) =>
-            adminZkClient.validateTopicCreate(topic, assignments, configs)
+            adminZkClient.validateTopicCreate(topic.name(), assignments, configs)
 
             // Use `null` for unset fields in the public API
             val numPartitions: java.lang.Integer =
-              if (arguments.numPartitions == NO_NUM_PARTITIONS) null else arguments.numPartitions
+              if (topic.numPartitions == NO_NUM_PARTITIONS) null else topic.numPartitions
             val replicationFactor: java.lang.Short =
-              if (arguments.replicationFactor == NO_REPLICATION_FACTOR) null else arguments.replicationFactor
-            val replicaAssignments = if (arguments.replicasAssignments.isEmpty) null else arguments.replicasAssignments
-
-            policy.validate(new RequestMetadata(topic, numPartitions, replicationFactor, replicaAssignments,
-              arguments.configs))
+              if (topic.replicationFactor == NO_REPLICATION_FACTOR) null else topic.replicationFactor
+            val javaAssignments = if (topic.assignments().isEmpty) {
+              null
+            } else {
+              val map = new java.util.HashMap[Integer, java.util.List[Integer]]
+              assignments.foreach {
+                case (k, v) => {
+                  val list = new java.util.ArrayList[Integer]
+                  v.foreach {
+                    case i => list.add(Integer.valueOf(i))
+                  }
+                  map.put(k, list)
+                }
+              }
+              map
+            }
+            val javaConfigs = new java.util.HashMap[String, String]
+            topic.configs().asScala.foreach(config => javaConfigs.put(config.name(), config.value()))
+            policy.validate(new RequestMetadata(topic.name, numPartitions, replicationFactor,
+              javaAssignments, javaConfigs))
 
             if (!validateOnly)
-              adminZkClient.createTopicWithAssignment(topic, configs, assignments)
+              adminZkClient.createTopicWithAssignment(topic.name, configs, assignments)
 
           case None =>
             if (validateOnly)
-              adminZkClient.validateTopicCreate(topic, assignments, configs)
+              adminZkClient.validateTopicCreate(topic.name, assignments, configs)
             else
-              adminZkClient.createTopicWithAssignment(topic, configs, assignments)
+              adminZkClient.createTopicWithAssignment(topic.name, configs, assignments)
         }
-        CreatePartitionsMetadata(topic, assignments, ApiError.NONE)
+        CreatePartitionsMetadata(topic.name, assignments, ApiError.NONE)
       } catch {
         // Log client errors at a lower level than unexpected exceptions
         case e: ApiException =>
-          info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
-          CreatePartitionsMetadata(topic, Map(), ApiError.fromThrowable(e))
+          info(s"Error processing create topic request $topic", e)
+          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
         case e: ConfigException =>
-          info(s"Error processing create topic request for topic $topic with arguments $arguments", e)
-          CreatePartitionsMetadata(topic, Map(), ApiError.fromThrowable(new InvalidConfigurationException(e.getMessage, e.getCause)))
+          info(s"Error processing create topic request $topic", e)
+          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(new InvalidConfigurationException(e.getMessage, e.getCause)))
         case e: Throwable =>
-          error(s"Error processing create topic request for topic $topic with arguments $arguments", e)
-          CreatePartitionsMetadata(topic, Map(), ApiError.fromThrowable(e))
-      }
-    }
+          error(s"Error processing create topic request $topic", e)
+          CreatePartitionsMetadata(topic.name, Map(), ApiError.fromThrowable(e))
+      })
 
     // 2. if timeout <= 0, validateOnly or no topics can proceed return immediately
     if (timeout <= 0 || validateOnly || !metadata.exists(_.error.is(Errors.NONE))) {
@@ -154,7 +172,8 @@ class AdminManager(val config: KafkaConfig,
     } else {
       // 3. else pass the assignments and errors to the delayed operation and set the keys
       val delayedCreate = new DelayedCreatePartitions(timeout, metadata.toSeq, this, responseCallback)
-      val delayedCreateKeys = createInfo.keys.map(new TopicKey(_)).toSeq
+      val delayedCreateKeys = toCreate.values.map(
+        topic => new TopicKey(topic.name())).toSeq
       // try to complete the request immediately, otherwise put it into the purgatory
       topicPurgatory.tryCompleteElseWatch(delayedCreate, delayedCreateKeys)
     }

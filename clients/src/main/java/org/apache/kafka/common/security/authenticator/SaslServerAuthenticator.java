@@ -25,6 +25,8 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.SaslAuthenticateResponseData;
+import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.network.Authenticator;
 import org.apache.kafka.common.network.ChannelBuilders;
 import org.apache.kafka.common.network.ListenerName;
@@ -35,7 +37,6 @@ import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.network.TransportLayer;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
@@ -50,6 +51,7 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.SaslAuthenticationContext;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.kerberos.KerberosError;
 import org.apache.kafka.common.security.kerberos.KerberosName;
 import org.apache.kafka.common.security.kerberos.KerberosShortNamer;
@@ -77,18 +79,17 @@ import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
 import java.security.PrivilegedActionException;
 import java.security.PrivilegedExceptionAction;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Set;
 
 public class SaslServerAuthenticator implements Authenticator {
     // GSSAPI limits requests to 64K, but we allow a bit extra for custom SASL mechanisms
     static final int MAX_RECEIVE_SIZE = 524288;
     private static final Logger LOG = LoggerFactory.getLogger(SaslServerAuthenticator.class);
-    private static final ByteBuffer EMPTY_BUFFER = ByteBuffer.allocate(0);
 
     /**
      * The internal state transitions for initial authentication of a channel on the
@@ -118,7 +119,7 @@ public class SaslServerAuthenticator implements Authenticator {
     private final String connectionId;
     private final Map<String, Subject> subjects;
     private final TransportLayer transportLayer;
-    private final Set<String> enabledMechanisms;
+    private final List<String> enabledMechanisms;
     private final Map<String, ?> configs;
     private final KafkaPrincipalBuilder principalBuilder;
     private final Map<String, AuthenticateCallbackHandler> callbackHandlers;
@@ -168,8 +169,8 @@ public class SaslServerAuthenticator implements Authenticator {
         List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
         if (enabledMechanisms == null || enabledMechanisms.isEmpty())
             throw new IllegalArgumentException("No SASL mechanisms are enabled");
-        this.enabledMechanisms = new HashSet<>(enabledMechanisms);
-        for (String mechanism : enabledMechanisms) {
+        this.enabledMechanisms = new ArrayList<String>(new HashSet<String>(enabledMechanisms));
+        for (String mechanism : this.enabledMechanisms) {
             if (!callbackHandlers.containsKey(mechanism))
                 throw new IllegalArgumentException("Callback handler not specified for SASL mechanism " + mechanism);
             if (!subjects.containsKey(mechanism))
@@ -447,17 +448,25 @@ public class SaslServerAuthenticator implements Authenticator {
             SaslAuthenticateRequest saslAuthenticateRequest = (SaslAuthenticateRequest) requestAndSize.request;
 
             try {
-                byte[] responseToken = saslServer.evaluateResponse(Utils.readBytes(saslAuthenticateRequest.saslAuthBytes()));
+                byte[] responseToken = saslServer.evaluateResponse(
+                        Utils.copyArray(saslAuthenticateRequest.data().authBytes()));
                 if (reauthInfo.reauthenticating() && saslServer.isComplete())
                     reauthInfo.ensurePrincipalUnchanged(principal());
                 // For versions with SASL_AUTHENTICATE header, send a response to SASL_AUTHENTICATE request even if token is empty.
-                ByteBuffer responseBuf = responseToken == null ? EMPTY_BUFFER : ByteBuffer.wrap(responseToken);
+                byte[] responseBytes = responseToken == null ? new byte[0] : responseToken;
                 long sessionLifetimeMs = !saslServer.isComplete() ? 0L
                         : reauthInfo.calcCompletionTimesAndReturnSessionLifetimeMs();
-                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.NONE, null, responseBuf, sessionLifetimeMs));
+                sendKafkaResponse(requestContext, new SaslAuthenticateResponse(
+                        new SaslAuthenticateResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setAuthBytes(responseBytes)
+                        .setSessionLifetimeMs(sessionLifetimeMs)));
             } catch (SaslAuthenticationException e) {
                 buildResponseOnAuthenticateFailure(requestContext,
-                        new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED, e.getMessage()));
+                        new SaslAuthenticateResponse(
+                                new SaslAuthenticateResponseData()
+                                .setErrorCode(Errors.SASL_AUTHENTICATION_FAILED.code())
+                                .setErrorMessage(e.getMessage())));
                 throw e;
             } catch (SaslException e) {
                 KerberosError kerberosError = KerberosError.fromException(e);
@@ -465,12 +474,15 @@ public class SaslServerAuthenticator implements Authenticator {
                     // Handle retriable Kerberos exceptions as I/O exceptions rather than authentication exceptions
                     throw e;
                 } else {
+                    // DO NOT include error message from the `SaslException` in the client response since it may
+                    // contain sensitive data like the existence of the user.
                     String errorMessage = "Authentication failed during "
                             + reauthInfo.authenticationOrReauthenticationText()
-                            + " due to invalid credentials with SASL mechanism " + saslMechanism + ": "
-                            + e.getMessage();
-                    sendKafkaResponse(requestContext, new SaslAuthenticateResponse(Errors.SASL_AUTHENTICATION_FAILED,
-                            errorMessage));
+                            + " due to invalid credentials with SASL mechanism " + saslMechanism;
+                    sendKafkaResponse(requestContext, new SaslAuthenticateResponse(
+                            new SaslAuthenticateResponseData()
+                            .setErrorCode(Errors.SASL_AUTHENTICATION_FAILED.code())
+                            .setErrorMessage(errorMessage)));
                     throw new SaslAuthenticationException(errorMessage, e);
                 }
             }
@@ -537,17 +549,19 @@ public class SaslServerAuthenticator implements Authenticator {
     }
 
     private String handleHandshakeRequest(RequestContext context, SaslHandshakeRequest handshakeRequest) throws IOException, UnsupportedSaslMechanismException {
-        String clientMechanism = handshakeRequest.mechanism();
+        String clientMechanism = handshakeRequest.data().mechanism();
         short version = context.header.apiVersion();
         if (version >= 1)
             this.enableKafkaSaslAuthenticateHeaders(true);
         if (enabledMechanisms.contains(clientMechanism)) {
             LOG.debug("Using SASL mechanism '{}' provided by client", clientMechanism);
-            sendKafkaResponse(context, new SaslHandshakeResponse(Errors.NONE, enabledMechanisms));
+            sendKafkaResponse(context, new SaslHandshakeResponse(
+                    new SaslHandshakeResponseData().setErrorCode(Errors.NONE.code()).setMechanisms(enabledMechanisms)));
             return clientMechanism;
         } else {
             LOG.debug("SASL mechanism '{}' requested by client is not supported", clientMechanism);
-            buildResponseOnAuthenticateFailure(context, new SaslHandshakeResponse(Errors.UNSUPPORTED_SASL_MECHANISM, enabledMechanisms));
+            buildResponseOnAuthenticateFailure(context, new SaslHandshakeResponse(
+                    new SaslHandshakeResponseData().setErrorCode(Errors.UNSUPPORTED_SASL_MECHANISM.code()).setMechanisms(enabledMechanisms)));
             throw new UnsupportedSaslMechanismException("Unsupported SASL mechanism " + clientMechanism);
         }
     }

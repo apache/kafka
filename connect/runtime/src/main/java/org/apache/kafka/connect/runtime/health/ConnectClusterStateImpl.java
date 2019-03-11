@@ -22,7 +22,7 @@ import org.apache.kafka.connect.health.ConnectorHealth;
 import org.apache.kafka.connect.health.ConnectorState;
 import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.health.TaskState;
-import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.util.Callback;
 
@@ -34,16 +34,16 @@ import java.util.Map;
 
 public class ConnectClusterStateImpl implements ConnectClusterState {
 
-    private Herder herder;
+    private HerderProvider herderProvider;
 
-    public ConnectClusterStateImpl(Herder herder) {
-        this.herder = herder;
+    public ConnectClusterStateImpl(HerderProvider herderProvider) {
+        this.herderProvider = herderProvider;
     }
 
     @Override
     public Collection<String> connectors() {
         final Collection<String> connectors = new ArrayList<>();
-        herder.connectors(new Callback<java.util.Collection<String>>() {
+        herderProvider.get().connectors(new Callback<java.util.Collection<String>>() {
             @Override
             public void onCompletion(Throwable error, Collection<String> result) {
                 connectors.addAll(result);
@@ -55,7 +55,7 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
     @Override
     public ConnectorHealth connectorHealth(String connName) {
 
-        ConnectorStateInfo state = herder.connectorStatus(connName);
+        ConnectorStateInfo state = herderProvider.get().connectorStatus(connName);
         ConnectorState connectorState = new ConnectorState(
             state.connector().state(),
             state.connector().workerId(),

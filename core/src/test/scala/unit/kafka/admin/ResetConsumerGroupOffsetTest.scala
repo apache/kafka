@@ -87,6 +87,10 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     val args = Array("--bootstrap-server", brokerList, "--reset-offsets", "--group", group, "--all-topics",
       "--to-current", "--execute")
     val consumerGroupCommand = getConsumerGroupService(args)
+    // Make sure we got a coordinator
+    TestUtils.waitUntilTrue(() => {
+      consumerGroupCommand.collectGroupState().coordinator.host() == "localhost"
+    }, "Can't find a coordinator
     val resetOffsets = consumerGroupCommand.resetOffsets()(group)
     assertEquals(Map.empty, resetOffsets)
     assertEquals(resetOffsets, committedOffsets(group = group))

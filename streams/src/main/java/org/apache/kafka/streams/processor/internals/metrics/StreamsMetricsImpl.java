@@ -55,6 +55,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
 
+    public static final String EXPIRED_WINDOW_RECORD_DROP = "expired-window-record-drop";
+    public static final String LATE_RECORD_DROP = "late-record-drop";
+
     public StreamsMetricsImpl(final Metrics metrics, final String threadName) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
         this.threadName = threadName;

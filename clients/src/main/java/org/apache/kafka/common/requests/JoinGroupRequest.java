@@ -76,9 +76,15 @@ public class JoinGroupRequest extends AbstractRequest {
      */
     private static final Schema JOIN_GROUP_REQUEST_V3 = JOIN_GROUP_REQUEST_V2;
 
+    /**
+     * The version number is bumped to indicate that client needs to issue a second join group request under first try
+     * with UNKNOWN_MEMBER_ID.
+     */
+    private static final Schema JOIN_GROUP_REQUEST_V4 = JOIN_GROUP_REQUEST_V3;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {JOIN_GROUP_REQUEST_V0, JOIN_GROUP_REQUEST_V1, JOIN_GROUP_REQUEST_V2,
-            JOIN_GROUP_REQUEST_V3};
+            JOIN_GROUP_REQUEST_V3, JOIN_GROUP_REQUEST_V4};
     }
 
     public static final String UNKNOWN_MEMBER_ID = "";
@@ -209,6 +215,7 @@ public class JoinGroupRequest extends AbstractRequest {
                     Collections.emptyMap());
             case 2:
             case 3:
+            case 4:
                 return new JoinGroupResponse(
                     throttleTimeMs,
                     Errors.forException(e),

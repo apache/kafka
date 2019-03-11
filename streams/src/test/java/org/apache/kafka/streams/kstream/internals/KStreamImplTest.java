@@ -69,9 +69,10 @@ import static java.util.Arrays.asList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.notNullValue;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -459,9 +460,8 @@ public class KStreamImplTest {
         final String match = matcher.group();
         assertThat(match, notNullValue());
         assertTrue(match.endsWith("repartition"));
-
     }
-    
+
     @Test
     public void testToWithNullValueSerdeDoesntNPE() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -541,9 +541,16 @@ public class KStreamImplTest {
         testStream.to((TopicNameExtractor<String, String>) null);
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldNotAllowNullTransformSupplierOnTransform() {
-        testStream.transform(null);
+        final Exception e = assertThrows(NullPointerException.class, () -> testStream.transform(null));
+        assertEquals("transformerSupplier can't be null", e.getMessage());
+    }
+
+    @Test
+    public void shouldNotAllowNullTransformSupplierOnFlatTransform() {
+        final Exception e = assertThrows(NullPointerException.class, () -> testStream.flatTransform(null));
+        assertEquals("transformerSupplier can't be null", e.getMessage());
     }
 
     @Test(expected = NullPointerException.class)
@@ -688,7 +695,7 @@ public class KStreamImplTest {
     public void shouldThrowNullPointerOnOuterJoinJoinedIsNull() {
         testStream.outerJoin(testStream, MockValueJoiner.TOSTRING_JOINER, JoinWindows.of(ofMillis(10)), null);
     }
-    
+
     @Test
     public void shouldMergeTwoStreams() {
         final String topic1 = "topic-1";
@@ -709,7 +716,7 @@ public class KStreamImplTest {
 
         assertEquals(asList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.theCapturedProcessor().processed);
     }
-    
+
     @Test
     public void shouldMergeMultipleStreams() {
         final String topic1 = "topic-1";

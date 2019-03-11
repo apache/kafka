@@ -110,7 +110,7 @@ public class CompositeReadOnlySessionStoreTest {
         final CompositeReadOnlySessionStore<String, String> store =
             new CompositeReadOnlySessionStore<>(
                 new StateStoreProviderStub(true),
-                QueryableStoreTypes.<String, String>sessionStore(),
+                QueryableStoreTypes.sessionStore(),
                 "whateva");
 
         store.fetch("a");

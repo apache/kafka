@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import java.io.File;
-import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
@@ -57,6 +55,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
+import java.io.File;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -74,10 +74,10 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -118,8 +118,6 @@ public class TopologyTestDriverTest {
         new StringSerializer(),
         new LongSerializer());
 
-    private final boolean eosEnabled;
-
     @Parameterized.Parameters(name = "Eos enabled = {0}")
     public static Collection<Object[]> data() {
         final List<Object[]> values = new ArrayList<>();
@@ -130,7 +128,6 @@ public class TopologyTestDriverTest {
     }
 
     public TopologyTestDriverTest(final boolean eosEnabled) {
-        this.eosEnabled = eosEnabled;
         if (eosEnabled) {
             config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
         }
@@ -476,10 +473,6 @@ public class TopologyTestDriverTest {
                     }
                     return Serdes.Integer().serializer().serialize(topic, (Integer) data);
                 }
-                @Override
-                public void close() {}
-                @Override
-                public void configure(final Map configs, final boolean isKey) {}
             },
             new Serializer<Object>() {
                 @Override
@@ -489,10 +482,6 @@ public class TopologyTestDriverTest {
                     }
                     return Serdes.Double().serializer().serialize(topic, (Double) data);
                 }
-                @Override
-                public void close() {}
-                @Override
-                public void configure(final Map configs, final boolean isKey) {}
             },
             processor);
 
@@ -811,7 +800,7 @@ public class TopologyTestDriverTest {
     public void shouldNotUpdateStoreForSmallerValue() {
         setup();
         testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-        Assert.assertThat(store.get("a"), equalTo(21L));
+        assertThat(store.get("a"), equalTo(21L));
         OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
         Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
     }
@@ -820,7 +809,7 @@ public class TopologyTestDriverTest {
     public void shouldNotUpdateStoreForLargerValue() {
         setup();
         testDriver.pipeInput(recordFactory.create("input-topic", "a", 42L, 9999L));
-        Assert.assertThat(store.get("a"), equalTo(42L));
+        assertThat(store.get("a"), equalTo(42L));
         OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 42L);
         Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
     }
@@ -829,7 +818,7 @@ public class TopologyTestDriverTest {
     public void shouldUpdateStoreForNewKey() {
         setup();
         testDriver.pipeInput(recordFactory.create("input-topic", "b", 21L, 9999L));
-        Assert.assertThat(store.get("b"), equalTo(21L));
+        assertThat(store.get("b"), equalTo(21L));
         OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
         OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "b", 21L);
         Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));

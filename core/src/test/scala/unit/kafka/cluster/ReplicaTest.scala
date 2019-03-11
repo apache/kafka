@@ -102,7 +102,7 @@ class ReplicaTest {
     assertTrue(log.numberOfSegments > 5)
     assertEquals(0L, replica.highWatermark.messageOffset)
     assertEquals(0L, replica.logStartOffset)
-    assertEquals(100L, replica.logEndOffset.messageOffset)
+    assertEquals(100L, replica.logEndOffset)
 
     for (hw <- 0 to 100) {
       replica.highWatermark = new LogOffsetMetadata(hw)

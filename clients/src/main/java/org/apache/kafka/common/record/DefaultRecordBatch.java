@@ -522,10 +522,16 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
-    static int incrementSequence(int baseSequence, int increment) {
+    public static int incrementSequence(int baseSequence, int increment) {
         if (baseSequence > Integer.MAX_VALUE - increment)
             return increment - (Integer.MAX_VALUE - baseSequence) - 1;
         return baseSequence + increment;
+    }
+
+    public static int decrementSequence(int baseSequence, int decrement) {
+        if (baseSequence < decrement)
+            return Integer.MAX_VALUE - (decrement - baseSequence) + 1;
+        return baseSequence - decrement;
     }
 
     private abstract class RecordIterator implements CloseableIterator<Record> {

@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -75,6 +74,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -101,7 +101,8 @@ public class TransactionManagerTest {
     private TopicPartition tp0 = new TopicPartition(topic, 0);
     private TopicPartition tp1 = new TopicPartition(topic, 1);
     private MockTime time = new MockTime();
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true, true, new ClusterResourceListeners());
+    private ProducerMetadata metadata = new ProducerMetadata(0, Long.MAX_VALUE, new LogContext(),
+            new ClusterResourceListeners(), time);
     private MockClient client = new MockClient(time, metadata);
 
     private ApiVersions apiVersions = new ApiVersions();
@@ -131,6 +132,7 @@ public class TransactionManagerTest {
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL,
                 MAX_RETRIES, senderMetrics, this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
+        this.metadata.add("test");
         this.client.updateMetadata(TestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
     }
 
@@ -562,18 +564,24 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void testInvalidSequenceIncrement() {
-        TransactionManager transactionManager = new TransactionManager();
-        transactionManager.incrementSequenceNumber(tp0, 3333);
-    }
-
     @Test
     public void testDefaultSequenceNumber() {
         TransactionManager transactionManager = new TransactionManager();
         assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
         transactionManager.incrementSequenceNumber(tp0, 3);
         assertEquals((int) transactionManager.sequenceNumber(tp0), 3);
+    }
+
+    @Test
+    public void testSequenceNumberOverflow() {
+        TransactionManager transactionManager = new TransactionManager();
+        assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
+        transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
+        assertEquals((int) transactionManager.sequenceNumber(tp0), Integer.MAX_VALUE);
+        transactionManager.incrementSequenceNumber(tp0, 100);
+        assertEquals((int) transactionManager.sequenceNumber(tp0), 99);
+        transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
+        assertEquals((int) transactionManager.sequenceNumber(tp0), 98);
     }
 
     @Test
@@ -2269,6 +2277,69 @@ public class TransactionManagerTest {
         assertTrue(manager.shouldResetProducerStateAfterResolvingSequences());
     }
 
+    @Test
+    public void testRetryAbortTransaction() throws InterruptedException {
+        verifyCommitOrAbortTranscationRetriable(TransactionResult.ABORT, TransactionResult.ABORT);
+    }
+
+    @Test
+    public void testRetryCommitTransaction() throws InterruptedException {
+        verifyCommitOrAbortTranscationRetriable(TransactionResult.COMMIT, TransactionResult.COMMIT);
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testRetryAbortTransactionAfterCommitTimeout() throws InterruptedException {
+        verifyCommitOrAbortTranscationRetriable(TransactionResult.COMMIT, TransactionResult.ABORT);
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testRetryCommitTransactionAfterAbortTimeout() throws InterruptedException {
+        verifyCommitOrAbortTranscationRetriable(TransactionResult.ABORT, TransactionResult.COMMIT);
+    }
+
+    private void verifyCommitOrAbortTranscationRetriable(TransactionResult firstTransactionResult,
+                                                         TransactionResult retryTransactionResult)
+            throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+        sender.run(time.milliseconds());  // send addPartitions.
+        sender.run(time.milliseconds());  // send produce request.
+
+        TransactionalRequestResult result = firstTransactionResult == TransactionResult.COMMIT ?
+                transactionManager.beginCommit() : transactionManager.beginAbort();
+        prepareEndTxnResponse(Errors.NONE, firstTransactionResult, pid, epoch, true);
+        sender.run(time.milliseconds());
+        assertFalse(result.isCompleted());
+
+        try {
+            result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS);
+            fail("Should have raised TimeoutException");
+        } catch (TimeoutException e) {
+        }
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        sender.run(time.milliseconds());
+        TransactionalRequestResult retryResult = retryTransactionResult == TransactionResult.COMMIT ?
+                transactionManager.beginCommit() : transactionManager.beginAbort();
+        assertEquals(retryResult, result); // check if cached result is reused.
+        prepareEndTxnResponse(Errors.NONE, retryTransactionResult, pid, epoch, false);
+        sender.run(time.milliseconds());
+        assertTrue(retryResult.isCompleted());
+        assertFalse(transactionManager.hasOngoingTransaction());
+    }
+
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
         final long pid = 1L;
         final short epoch = 1;
@@ -2368,7 +2439,15 @@ public class TransactionManagerTest {
     }
 
     private void prepareEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {
-        client.prepareResponse(endTxnMatcher(result, pid, epoch), new EndTxnResponse(0, error));
+        this.prepareEndTxnResponse(error, result, pid, epoch, false);
+    }
+
+    private void prepareEndTxnResponse(Errors error,
+                                       final TransactionResult result,
+                                       final long pid,
+                                       final short epoch,
+                                       final boolean shouldDisconnect) {
+        client.prepareResponse(endTxnMatcher(result, pid, epoch), new EndTxnResponse(0, error), shouldDisconnect);
     }
 
     private void sendEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {

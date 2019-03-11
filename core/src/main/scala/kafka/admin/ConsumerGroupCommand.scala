@@ -18,8 +18,9 @@
 package kafka.admin
 
 import java.text.{ParseException, SimpleDateFormat}
+import java.time.{Duration, Instant}
 import java.util
-import java.util.{Date, Properties}
+import java.util.Properties
 
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
@@ -678,10 +679,10 @@ object ConsumerGroupCommand extends Logging {
         }.toMap
       } else if (opts.options.has(opts.resetByDurationOpt)) {
         val duration = opts.options.valueOf(opts.resetByDurationOpt)
-        val durationParsed = DatatypeFactory.newInstance().newDuration(duration)
-        val now = new Date()
+        val durationParsed = Duration.parse(duration)
+        val now = Instant.now()
         durationParsed.negate().addTo(now)
-        val timestamp = now.getTime
+        val timestamp = now.minus(durationParsed).toEpochMilli
         val logTimestampOffsets = getLogTimestampOffsets(groupId, partitionsToReset, timestamp)
         partitionsToReset.map { topicPartition =>
           val logTimestampOffset = logTimestampOffsets.get(topicPartition)
