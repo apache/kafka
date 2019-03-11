@@ -104,7 +104,6 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = ARBITRARY_LONG;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        context.setStreamTime(timestamp);
         final String key = "hey";
         final Change<Long> value = ARBITRARY_CHANGE;
         processor.process(key, value);
@@ -124,7 +123,6 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = ARBITRARY_LONG;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        context.setStreamTime(timestamp);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0L, 100L));
         final Change<Long> value = ARBITRARY_CHANGE;
         processor.process(key, value);
@@ -144,14 +142,12 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = 0L;
         context.setRecordMetadata("topic", 0, 0, null, timestamp);
-        context.setStreamTime(timestamp);
         final String key = "hey";
         final Change<Long> value = new Change<>(null, 1L);
         processor.process(key, value);
         assertThat(context.forwarded(), hasSize(0));
 
         context.setRecordMetadata("topic", 0, 1, null, 1L);
-        context.setStreamTime(1L);
         processor.process("tick", new Change<>(null, null));
 
         assertThat(context.forwarded(), hasSize(1));
@@ -171,7 +167,6 @@ public class KTableSuppressProcessorTest {
         final long recordTime = 99L;
         final long windowEnd = 100L;
         context.setRecordMetadata("topic", 0, 0, null, recordTime);
-        context.setStreamTime(recordTime);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(windowStart, windowEnd));
         final Change<Long> value = ARBITRARY_CHANGE;
         processor.process(key, value);
@@ -183,7 +178,6 @@ public class KTableSuppressProcessorTest {
         final long recordTime2 = 100L;
         final long windowEnd2 = 101L;
         context.setRecordMetadata("topic", 0, 1, null, recordTime2);
-        context.setStreamTime(recordTime2);
         processor.process(new Windowed<>("dummyKey1", new TimeWindow(windowStart2, windowEnd2)), ARBITRARY_CHANGE);
         assertThat(context.forwarded(), hasSize(0));
 
@@ -192,7 +186,6 @@ public class KTableSuppressProcessorTest {
         final long recordTime3 = 101L;
         final long windowEnd3 = 102L;
         context.setRecordMetadata("topic", 0, 1, null, recordTime3);
-        context.setStreamTime(recordTime3);
         processor.process(new Windowed<>("dummyKey2", new TimeWindow(windowStart3, windowEnd3)), ARBITRARY_CHANGE);
 
         assertThat(context.forwarded(), hasSize(1));
@@ -219,14 +212,12 @@ public class KTableSuppressProcessorTest {
         final long streamTime = 99L;
         final long windowEnd = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        context.setStreamTime(streamTime);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, windowEnd));
         final Change<Long> value = ARBITRARY_CHANGE;
         processor.process(key, value);
         assertThat(context.forwarded(), hasSize(0));
 
         context.setRecordMetadata("", 0, 1L, null, windowEnd);
-        context.setStreamTime(windowEnd);
         processor.process(new Windowed<>("dummyKey", new TimeWindow(windowEnd, windowEnd + 100L)), ARBITRARY_CHANGE);
 
         assertThat(context.forwarded(), hasSize(1));
@@ -244,7 +235,6 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        context.setStreamTime(timestamp);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, 100L));
         final Change<Long> value = ARBITRARY_CHANGE;
         processor.process(key, value);
@@ -268,7 +258,6 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        context.setStreamTime(timestamp);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, 100L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         processor.process(key, value);
@@ -290,7 +279,6 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        context.setStreamTime(timestamp);
         final Windowed<String> key = new Windowed<>("hey", new SessionWindow(0L, 0L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         processor.process(key, value);
@@ -311,7 +299,6 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        context.setStreamTime(timestamp);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0L, 100L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         processor.process(key, value);
@@ -336,7 +323,6 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        context.setStreamTime(timestamp);
         final Windowed<String> key = new Windowed<>("hey", new SessionWindow(0L, 0L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         processor.process(key, value);
@@ -361,7 +347,6 @@ public class KTableSuppressProcessorTest {
 
         final long timestamp = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
-        context.setStreamTime(timestamp);
         final String key = "hey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         processor.process(key, value);
@@ -380,7 +365,6 @@ public class KTableSuppressProcessorTest {
         final KTableSuppressProcessor<String, Long> processor = harness.processor;
 
         final long timestamp = 100L;
-        context.setStreamTime(timestamp);
         context.setRecordMetadata("", 0, 0L, null, timestamp);
         final String key = "hey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
@@ -403,7 +387,6 @@ public class KTableSuppressProcessorTest {
         final KTableSuppressProcessor<String, Long> processor = harness.processor;
 
         final long timestamp = 100L;
-        context.setStreamTime(timestamp);
         context.setRecordMetadata("", 0, 0L, null, timestamp);
         final String key = "hey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
@@ -426,7 +409,6 @@ public class KTableSuppressProcessorTest {
         final KTableSuppressProcessor<String, Long> processor = harness.processor;
 
         final long timestamp = 100L;
-        context.setStreamTime(timestamp);
         context.setRecordMetadata("", 0, 0L, null, timestamp);
         context.setCurrentNode(new ProcessorNode("testNode"));
         final String key = "hey";
@@ -450,7 +432,6 @@ public class KTableSuppressProcessorTest {
         final KTableSuppressProcessor<String, Long> processor = harness.processor;
 
         final long timestamp = 100L;
-        context.setStreamTime(timestamp);
         context.setRecordMetadata("", 0, 0L, null, timestamp);
         context.setCurrentNode(new ProcessorNode("testNode"));
         final String key = "hey";

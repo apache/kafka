@@ -36,8 +36,10 @@ import java.util.Objects;
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
 import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTaskAndStoreLatencyAndThroughputSensors;
 
-public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateStore implements SessionStore<K, V> {
-    private final SessionStore<Bytes, byte[]> inner;
+public class MeteredSessionStore<K, V>
+    extends WrappedStateStore<SessionStore<Bytes, byte[]>, Windowed<K>, V>
+    implements SessionStore<K, V> {
+
     private final String metricScope;
     private final Serde<K> keySerde;
     private final Serde<V> valueSerde;
@@ -56,7 +58,6 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
                         final Serde<V> valueSerde,
                         final Time time) {
         super(inner);
-        this.inner = inner;
         this.metricScope = metricScope;
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -88,7 +89,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         // register and possibly restore the state from the logs
         final long startNs = time.nanoseconds();
         try {
-            inner.init(context, root);
+            super.init(context, root);
         } finally {
             metrics.recordLatency(
                 restoreTime,
@@ -98,64 +99,22 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         }
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public void close() {
-        super.close();
-        metrics.removeAllStoreLevelSensors(taskName, name());
-    }
-
-
-    @Override
-    public KeyValueIterator<Windowed<K>, V> findSessions(final K key,
-                                                         final long earliestSessionEndTime,
-                                                         final long latestSessionStartTime) {
-        Objects.requireNonNull(key, "key cannot be null");
-        final Bytes bytesKey = keyBytes(key);
-        return new MeteredWindowedKeyValueIterator<>(
-            inner.findSessions(
-                bytesKey,
-                earliestSessionEndTime,
-                latestSessionStartTime),
-            fetchTime,
-            metrics,
-            serdes,
-            time);
-    }
-
-    @Override
-    public KeyValueIterator<Windowed<K>, V> findSessions(final K keyFrom,
-                                                         final K keyTo,
-                                                         final long earliestSessionEndTime,
-                                                         final long latestSessionStartTime) {
-        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
-        Objects.requireNonNull(keyTo, "keyTo cannot be null");
-        final Bytes bytesKeyFrom = keyBytes(keyFrom);
-        final Bytes bytesKeyTo = keyBytes(keyTo);
-        return new MeteredWindowedKeyValueIterator<>(
-            inner.findSessions(
-                bytesKeyFrom,
-                bytesKeyTo,
-                earliestSessionEndTime,
-                latestSessionStartTime),
-            fetchTime,
-            metrics,
-            serdes,
-            time);
-    }
-
-    @Override
-    public void remove(final Windowed<K> sessionKey) {
-        Objects.requireNonNull(sessionKey, "sessionKey can't be null");
-        final long startNs = time.nanoseconds();
-        try {
-            final Bytes key = keyBytes(sessionKey.key());
-            inner.remove(new Windowed<>(key, sessionKey.window()));
-        } catch (final ProcessorStateException e) {
-            final String message = String.format(e.getMessage(), sessionKey.key());
-            throw new ProcessorStateException(message, e);
-        } finally {
-            metrics.recordLatency(removeTime, startNs, time.nanoseconds());
+    public boolean setFlushListener(final CacheFlushListener<Windowed<K>, V> listener,
+                                    final boolean sendOldValues) {
+        final SessionStore<Bytes, byte[]> wrapped = wrapped();
+        if (wrapped instanceof CachedStateStore) {
+            return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
+                (key, newValue, oldValue, timestamp) -> listener.apply(
+                    SessionKeySchema.from(key, serdes.keyDeserializer(), serdes.topic()),
+                    newValue != null ? serdes.valueFrom(newValue) : null,
+                    oldValue != null ? serdes.valueFrom(oldValue) : null,
+                    timestamp
+                ),
+                sendOldValues);
         }
+        return false;
     }
 
     @Override
@@ -165,7 +124,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         final long startNs = time.nanoseconds();
         try {
             final Bytes key = keyBytes(sessionKey.key());
-            inner.put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
+            wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
             throw new ProcessorStateException(message, e);
@@ -174,8 +133,19 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         }
     }
 
-    private Bytes keyBytes(final K key) {
-        return Bytes.wrap(serdes.rawKey(key));
+    @Override
+    public void remove(final Windowed<K> sessionKey) {
+        Objects.requireNonNull(sessionKey, "sessionKey can't be null");
+        final long startNs = time.nanoseconds();
+        try {
+            final Bytes key = keyBytes(sessionKey.key());
+            wrapped().remove(new Windowed<>(key, sessionKey.window()));
+        } catch (final ProcessorStateException e) {
+            final String message = String.format(e.getMessage(), sessionKey.key());
+            throw new ProcessorStateException(message, e);
+        } finally {
+            metrics.recordLatency(removeTime, startNs, time.nanoseconds());
+        }
     }
 
     @Override
@@ -185,7 +155,7 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
         final Bytes bytesKey = keyBytes(key);
         final long startNs = time.nanoseconds();
         try {
-            value = serdes.valueFrom(inner.fetchSession(bytesKey, startTime, endTime));
+            value = serdes.valueFrom(wrapped().fetchSession(bytesKey, startTime, endTime));
         } finally {
             metrics.recordLatency(flushTime, startNs, time.nanoseconds());
         }
@@ -208,12 +178,60 @@ public class MeteredSessionStore<K, V> extends WrappedStateStore.AbstractStateSt
     }
 
     @Override
+    public KeyValueIterator<Windowed<K>, V> findSessions(final K key,
+                                                         final long earliestSessionEndTime,
+                                                         final long latestSessionStartTime) {
+        Objects.requireNonNull(key, "key cannot be null");
+        final Bytes bytesKey = keyBytes(key);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().findSessions(
+                bytesKey,
+                earliestSessionEndTime,
+                latestSessionStartTime),
+            fetchTime,
+            metrics,
+            serdes,
+            time);
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> findSessions(final K keyFrom,
+                                                         final K keyTo,
+                                                         final long earliestSessionEndTime,
+                                                         final long latestSessionStartTime) {
+        Objects.requireNonNull(keyFrom, "keyFrom cannot be null");
+        Objects.requireNonNull(keyTo, "keyTo cannot be null");
+        final Bytes bytesKeyFrom = keyBytes(keyFrom);
+        final Bytes bytesKeyTo = keyBytes(keyTo);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().findSessions(
+                bytesKeyFrom,
+                bytesKeyTo,
+                earliestSessionEndTime,
+                latestSessionStartTime),
+            fetchTime,
+            metrics,
+            serdes,
+            time);
+    }
+
+    @Override
     public void flush() {
         final long startNs = time.nanoseconds();
         try {
-            inner.flush();
+            super.flush();
         } finally {
             metrics.recordLatency(flushTime, startNs, time.nanoseconds());
         }
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        metrics.removeAllStoreLevelSensors(taskName, name());
+    }
+
+    private Bytes keyBytes(final K key) {
+        return Bytes.wrap(serdes.rawKey(key));
     }
 }

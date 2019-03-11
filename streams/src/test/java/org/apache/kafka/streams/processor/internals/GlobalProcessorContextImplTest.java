@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.hamcrest.core.IsInstanceOf;
@@ -32,8 +33,9 @@ import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 public class GlobalProcessorContextImplTest {
     private static final String GLOBAL_STORE_NAME = "global-store";
@@ -104,11 +106,13 @@ public class GlobalProcessorContextImplTest {
         globalContext.forward(null, null, To.all());
     }
 
+    @SuppressWarnings("deprecation") // need to test deprecated code until removed
     @Test(expected = UnsupportedOperationException.class)
     public void shouldNotSupportForwardingViaChildIndex() {
         globalContext.forward(null, null, 0);
     }
 
+    @SuppressWarnings("deprecation") // need to test deprecated code until removed
     @Test(expected = UnsupportedOperationException.class)
     public void shouldNotSupportForwardingViaChildName() {
         globalContext.forward(null, null, "processorName");
@@ -130,8 +134,23 @@ public class GlobalProcessorContextImplTest {
         globalContext.schedule(null, null, null);
     }
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldNotAllowToGetStreamTime() {
-        globalContext.streamTime();
+    @Test
+    public void shouldNotAllowInit() {
+        final StateStore store = globalContext.getStateStore(GLOBAL_STORE_NAME);
+        try {
+            store.init(null, null);
+            fail("Should have thrown UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) {
+        }
+    }
+
+    @Test
+    public void shouldNotAllowClose() {
+        final StateStore store = globalContext.getStateStore(GLOBAL_STORE_NAME);
+        try {
+            store.close();
+            fail("Should have thrown UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) {
+        }
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -39,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.EXPIRED_WINDOW_RECORD_DROP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 
 public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
@@ -51,6 +53,7 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private volatile boolean open;
     private Set<KeyValueSegment> bulkLoadSegments;
     private Sensor expiredRecordSensor;
+    private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
     RocksDBSegmentedBytesStore(final String name,
                                final String metricScope,
@@ -107,7 +110,9 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     @Override
     public void remove(final Bytes key) {
-        final KeyValueSegment segment = segments.getSegmentForTimestamp(keySchema.segmentTimestamp(key));
+        final long timestamp = keySchema.segmentTimestamp(key);
+        observedStreamTime = Math.max(observedStreamTime, timestamp);
+        final KeyValueSegment segment = segments.getSegmentForTimestamp(timestamp);
         if (segment == null) {
             return;
         }
@@ -117,8 +122,9 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     @Override
     public void put(final Bytes key, final byte[] value) {
         final long timestamp = keySchema.segmentTimestamp(key);
+        observedStreamTime = Math.max(observedStreamTime, timestamp);
         final long segmentId = segments.segmentId(timestamp);
-        final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
+        final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
         if (segment == null) {
             expiredRecordSensor.record();
             LOG.debug("Skipping record for expired segment.");
@@ -152,17 +158,17 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         expiredRecordSensor = metrics.storeLevelSensor(
             taskName,
             name(),
-            "expired-window-record-drop",
+            EXPIRED_WINDOW_RECORD_DROP,
             Sensor.RecordingLevel.INFO
         );
         addInvocationRateAndCount(
             expiredRecordSensor,
             "stream-" + metricScope + "-metrics",
             metrics.tagMap("task-id", taskName, metricScope + "-id", name()),
-            "expired-window-record-drop"
+            EXPIRED_WINDOW_RECORD_DROP
         );
 
-        segments.openExisting(this.context);
+        segments.openExisting(this.context, observedStreamTime);
 
         bulkLoadSegments = new HashSet<>(segments.allSegments());
 
@@ -214,10 +220,17 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     // Visible for testing
     Map<KeyValueSegment, WriteBatch> getWriteBatches(final Collection<KeyValue<byte[], byte[]>> records) {
+        // advance stream time to the max timestamp in the batch
+        for (final KeyValue<byte[], byte[]> record : records) {
+            final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key));
+            observedStreamTime = Math.max(observedStreamTime, timestamp);
+        }
+
         final Map<KeyValueSegment, WriteBatch> writeBatchMap = new HashMap<>();
         for (final KeyValue<byte[], byte[]> record : records) {
-            final long segmentId = segments.segmentId(keySchema.segmentTimestamp(Bytes.wrap(record.key)));
-            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context);
+            final long timestamp = keySchema.segmentTimestamp(Bytes.wrap(record.key));
+            final long segmentId = segments.segmentId(timestamp);
+            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
             if (segment != null) {
                 // This handles the case that state store is moved to a new client and does not
                 // have the local RocksDB instance for the segment. In this case, toggleDBForBulkLoading
@@ -246,7 +259,7 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     }
 
     private void toggleForBulkLoading(final boolean prepareForBulkload) {
-        for (final KeyValueSegment segment: segments.allSegments()) {
+        for (final KeyValueSegment segment : segments.allSegments()) {
             segment.toggleDbForBulkLoading(prepareForBulkload);
         }
     }

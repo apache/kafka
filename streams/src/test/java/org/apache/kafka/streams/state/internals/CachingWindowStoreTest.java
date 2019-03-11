@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
@@ -27,6 +28,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
@@ -64,6 +66,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class CachingWindowStoreTest {
 
@@ -73,7 +76,7 @@ public class CachingWindowStoreTest {
     private static final long SEGMENT_INTERVAL = 100L;
     private InternalMockProcessorContext context;
     private RocksDBSegmentedBytesStore underlying;
-    private CachingWindowStore<String, String> cachingStore;
+    private CachingWindowStore cachingStore;
     private CachingKeyValueStoreTest.CacheFlushListenerStub<Windowed<String>, String> cacheListener;
     private ThreadCache cache;
     private String topic;
@@ -83,14 +86,14 @@ public class CachingWindowStoreTest {
     public void setUp() {
         keySchema = new WindowKeySchema();
         underlying = new RocksDBSegmentedBytesStore("test", "metrics-scope", 0, SEGMENT_INTERVAL, keySchema);
-        final RocksDBWindowStore<Bytes, byte[]> windowStore = new RocksDBWindowStore<>(
+        final RocksDBWindowStore windowStore = new RocksDBWindowStore(
             underlying,
-            Serdes.Bytes(),
-            Serdes.ByteArray(),
             false,
             WINDOW_SIZE);
-        cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>();
-        cachingStore = new CachingWindowStore<>(windowStore, Serdes.String(), Serdes.String(), WINDOW_SIZE, SEGMENT_INTERVAL);
+        final TimeWindowedDeserializer<String> keyDeserializer = new TimeWindowedDeserializer<>(new StringDeserializer(), WINDOW_SIZE);
+        keyDeserializer.setIsChangelogTopic(true);
+        cacheListener = new CachingKeyValueStoreTest.CacheFlushListenerStub<>(keyDeserializer, new StringDeserializer());
+        cachingStore = new CachingWindowStore(windowStore, WINDOW_SIZE, SEGMENT_INTERVAL);
         cachingStore.setFlushListener(cacheListener, false);
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         topic = "topic";
@@ -340,16 +343,37 @@ public class CachingWindowStoreTest {
     }
 
     @Test
+    public void shouldSetFlushListener() {
+        assertTrue(cachingStore.setFlushListener(null, true));
+        assertTrue(cachingStore.setFlushListener(null, false));
+    }
+
+    @Test
     public void shouldForwardOldValuesWhenEnabled() {
         cachingStore.setFlushListener(cacheListener, true);
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"));
-        cachingStore.flush();
         cachingStore.put(bytesKey("1"), bytesValue("b"));
         cachingStore.flush();
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
-        assertEquals("a", cacheListener.forwarded.get(windowedKey).oldValue);
+        assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
+        cacheListener.forwarded.clear();
+        cachingStore.put(bytesKey("1"), bytesValue("c"));
+        cachingStore.flush();
+        assertEquals("c", cacheListener.forwarded.get(windowedKey).newValue);
+        assertEquals("b", cacheListener.forwarded.get(windowedKey).oldValue);
+        cachingStore.put(bytesKey("1"), null);
+        cachingStore.flush();
+        assertNull(cacheListener.forwarded.get(windowedKey).newValue);
+        assertEquals("c", cacheListener.forwarded.get(windowedKey).oldValue);
+        cacheListener.forwarded.clear();
+        cachingStore.put(bytesKey("1"), bytesValue("a"));
+        cachingStore.put(bytesKey("1"), bytesValue("b"));
+        cachingStore.put(bytesKey("1"), null);
+        cachingStore.flush();
+        assertNull(cacheListener.forwarded.get(windowedKey));
+        cacheListener.forwarded.clear();
     }
 
     @Test
@@ -357,11 +381,25 @@ public class CachingWindowStoreTest {
         final Windowed<String> windowedKey =
             new Windowed<>("1", new TimeWindow(DEFAULT_TIMESTAMP, DEFAULT_TIMESTAMP + WINDOW_SIZE));
         cachingStore.put(bytesKey("1"), bytesValue("a"));
-        cachingStore.flush();
         cachingStore.put(bytesKey("1"), bytesValue("b"));
         cachingStore.flush();
         assertEquals("b", cacheListener.forwarded.get(windowedKey).newValue);
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
+        cachingStore.put(bytesKey("1"), bytesValue("c"));
+        cachingStore.flush();
+        assertEquals("c", cacheListener.forwarded.get(windowedKey).newValue);
+        assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
+        cachingStore.put(bytesKey("1"), null);
+        cachingStore.flush();
+        assertNull(cacheListener.forwarded.get(windowedKey).newValue);
+        assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
+        cacheListener.forwarded.clear();
+        cachingStore.put(bytesKey("1"), bytesValue("a"));
+        cachingStore.put(bytesKey("1"), bytesValue("b"));
+        cachingStore.put(bytesKey("1"), null);
+        cachingStore.flush();
+        assertNull(cacheListener.forwarded.get(windowedKey));
+        cacheListener.forwarded.clear();
     }
 
     @Test

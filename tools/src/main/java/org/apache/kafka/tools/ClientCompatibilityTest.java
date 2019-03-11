@@ -340,18 +340,8 @@ public class ClientCompatibilityTest {
         }
 
         @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-            // nothing to do
-        }
-
-        @Override
         public byte[] deserialize(String topic, byte[] data) {
             return data;
-        }
-
-        @Override
-        public void close() {
-            // nothing to do
         }
 
         @Override

@@ -168,7 +168,6 @@ public class RocksDBWindowStoreTest {
 
     private void setCurrentTime(final long currentTime) {
         context.setRecordContext(createRecordContext(currentTime));
-        context.setStreamTime(currentTime);
     }
 
     private ProcessorRecordContext createRecordContext(final long time) {
@@ -1255,8 +1254,10 @@ public class RocksDBWindowStoreTest {
         new File(storeDir, segments.segmentName(6L)).mkdir();
         windowStore.close();
 
-        context.setStreamTime(segmentInterval * 6L);
         windowStore = createWindowStore(context, false);
+
+        // put something in the store to advance its stream time and expire the old segments
+        windowStore.put(1, "v", 6L * segmentInterval);
 
         final List<String> expected = asList(
             segments.segmentName(4L),
@@ -1365,24 +1366,6 @@ public class RocksDBWindowStoreTest {
     public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
         windowStore = createWindowStore(context, false);
         windowStore.fetch(1, null, ofEpochMilli(1L), ofEpochMilli(2L));
-    }
-
-    @Test
-    public void shouldNoNullPointerWhenSerdeDoesNotHandleNull() {
-        windowStore = new RocksDBWindowStore<>(
-            new RocksDBSegmentedBytesStore(
-                windowName,
-                "metrics-scope",
-                retentionPeriod,
-                segmentInterval,
-                new WindowKeySchema()),
-            Serdes.Integer(),
-            new SerdeThatDoesntHandleNull(),
-            false,
-            windowSize);
-        windowStore.init(context, windowStore);
-
-        assertNull(windowStore.fetch(1, 0));
     }
 
     @Test

@@ -47,13 +47,13 @@ import org.junit.Assert._
 
 import scala.util.Random
 import scala.collection.JavaConverters._
-
 import kafka.zk.KafkaZkClient
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
-
 import java.lang.{Long => JLong}
+
+import kafka.security.auth.{Cluster, Group, Topic}
 
 /**
  * An integration test of the KafkaAdminClient.
@@ -224,6 +224,40 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(topics.toSet, topicDesc.keySet.asScala)
   }
 
+  @Test
+  def testAuthorizedOperations(): Unit = {
+    client = AdminClient.create(createConfig())
+
+    // without includeAuthorizedOperations flag
+    var result = client.describeCluster
+    assertEquals(Set().asJava, result.authorizedOperations().get())
+
+    //with includeAuthorizedOperations flag
+    result = client.describeCluster(new DescribeClusterOptions().includeAuthorizedOperations(true))
+    var expectedOperations = configuredClusterPermissions.asJava
+    assertEquals(expectedOperations, result.authorizedOperations().get())
+
+    val topic = "mytopic"
+    val newTopics = Seq(new NewTopic(topic, 3, 3))
+    client.createTopics(newTopics.asJava).all.get()
+    waitForTopics(client, expectedPresent = Seq(topic), expectedMissing = List())
+
+    // without includeAuthorizedOperations flag
+    var topicResult = client.describeTopics(Seq(topic).asJava).values
+    assertEquals(Set().asJava, topicResult.get(topic).get().authorizedOperations())
+
+    //with includeAuthorizedOperations flag
+    topicResult = client.describeTopics(Seq(topic).asJava,
+      new DescribeTopicsOptions().includeAuthorizedOperations(true)).values
+    expectedOperations = Topic.supportedOperations
+      .map(operation => operation.toJava).asJava
+    assertEquals(expectedOperations, topicResult.get(topic).get().authorizedOperations())
+  }
+
+  def configuredClusterPermissions() : Set[AclOperation] = {
+    Cluster.supportedOperations.map(operation => operation.toJava)
+  }
+
   /**
     * describe should not auto create topics
     */
@@ -245,10 +279,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testDescribeCluster(): Unit = {
     client = AdminClient.create(createConfig())
-    val nodes = client.describeCluster.nodes.get()
-    val clusterId = client.describeCluster().clusterId().get()
+    val result = client.describeCluster
+    val nodes = result.nodes.get()
+    val clusterId = result.clusterId().get()
     assertEquals(servers.head.dataPlaneRequestProcessor.clusterId, clusterId)
-    val controller = client.describeCluster().controller().get()
+    val controller = result.controller().get()
     assertEquals(servers.head.dataPlaneRequestProcessor.metadataCache.getControllerId.
       getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id())
     val brokers = brokerList.split(",")
@@ -825,7 +860,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       }, s"Expected follower to discover new log start offset $expectedStartOffset")
 
       TestUtils.waitUntilTrue(() => {
-        servers(followerIndex).replicaManager.localReplica(topicPartition).get.logEndOffset.messageOffset == expectedEndOffset
+        servers(followerIndex).replicaManager.localReplica(topicPartition).get.logEndOffset == expectedEndOffset
       }, s"Expected follower to catch up to log end offset $expectedEndOffset")
     }
 
@@ -871,7 +906,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     // make sure we are in the expected state after delete records
     for (i <- 0 until serverCount) {
       assertEquals(3, servers(i).replicaManager.localReplica(topicPartition).get.logStartOffset)
-      assertEquals(expectedLEO, servers(i).replicaManager.localReplica(topicPartition).get.logEndOffset.messageOffset)
+      assertEquals(expectedLEO, servers(i).replicaManager.localReplica(topicPartition).get.logEndOffset)
     }
 
     // we will create another dir just for one server
@@ -886,7 +921,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     // once replica moved, its LSO and LEO should match other replicas
     assertEquals(3, servers(0).replicaManager.localReplica(topicPartition).get.logStartOffset)
-    assertEquals(expectedLEO, servers(0).replicaManager.localReplica(topicPartition).get.logEndOffset.messageOffset)
+    assertEquals(expectedLEO, servers(0).replicaManager.localReplica(topicPartition).get.logEndOffset)
   }
 
   @Test
@@ -1045,7 +1080,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testForceClose(): Unit = {
     val config = createConfig()
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:22")
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
     client = AdminClient.create(config)
     // Because the bootstrap servers are set up incorrectly, this call will not complete, but must be
     // cancelled by the close operation.
@@ -1062,7 +1097,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testMinimumRequestTimeouts(): Unit = {
     val config = createConfig()
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:22")
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0")
     client = AdminClient.create(config)
     val startTimeMs = Time.SYSTEM.milliseconds()
@@ -1070,7 +1105,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       new CreateTopicsOptions().timeoutMs(2)).all()
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
     val endTimeMs = Time.SYSTEM.milliseconds()
-    assertTrue("Expected the timeout to take at least one millisecond.", endTimeMs > startTimeMs);
+    assertTrue("Expected the timeout to take at least one millisecond.", endTimeMs > startTimeMs)
   }
 
   /**
@@ -1142,12 +1177,14 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             !matching.isEmpty
           }, s"Expected to be able to list $testGroupId")
 
-          val result = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
+          val result = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
+            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
           assertEquals(2, result.describedGroups().size())
 
           // Test that we can get information about the test consumer group.
           assertTrue(result.describedGroups().containsKey(testGroupId))
           val testGroupDescription = result.describedGroups().get(testGroupId).get()
+
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup())
           assertEquals(1, testGroupDescription.members().size())
@@ -1157,14 +1194,19 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertEquals(testNumPartitions, topicPartitions.size())
           assertEquals(testNumPartitions, topicPartitions.asScala.
             count(tp => tp.topic().equals(testTopicName)))
+          val expectedOperations = Group.supportedOperations
+            .map(operation => operation.toJava).asJava
+          assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
           // Test that the fake group is listed as dead.
           assertTrue(result.describedGroups().containsKey(fakeGroupId))
           val fakeGroupDescription = result.describedGroups().get(fakeGroupId).get()
+
           assertEquals(fakeGroupId, fakeGroupDescription.groupId())
           assertEquals(0, fakeGroupDescription.members().size())
           assertEquals("", fakeGroupDescription.partitionAssignor())
           assertEquals(ConsumerGroupState.DEAD, fakeGroupDescription.state())
+          assertEquals(expectedOperations, fakeGroupDescription.authorizedOperations())
 
           // Test that all() returns 2 results
           assertEquals(2, result.all().get().size())
@@ -1274,17 +1316,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     waitForLeaderToBecome(partition1, 1)
 
     // topic 2 unchanged
-    try {
-      electResult.partitionResult(partition2).get()
-      fail("topic 2 wasn't requested")
-    } catch {
-      case e: ExecutionException =>
-        val cause = e.getCause
-        assertTrue(cause.getClass.getName, cause.isInstanceOf[UnknownTopicOrPartitionException])
-        assertEquals("Preferred leader election for partition \"elect-preferred-leaders-topic-2-0\" was not attempted",
-          cause.getMessage)
-        assertEquals(0, currentLeader(partition2))
-    }
+    var e = intercept[ExecutionException](electResult.partitionResult(partition2).get()).getCause
+    assertEquals(classOf[UnknownTopicOrPartitionException], e.getClass)
+    assertEquals("Preferred leader election for partition \"elect-preferred-leaders-topic-2-0\" was not attempted",
+      e.getMessage)
+    assertEquals(0, currentLeader(partition2))
 
     // meaningful election with null partitions
     electResult = client.electPreferredLeaders(null)
@@ -1298,17 +1334,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val unknownPartition = new TopicPartition("topic-does-not-exist", 0)
     electResult = client.electPreferredLeaders(asList(unknownPartition))
     assertEquals(Set(unknownPartition).asJava, electResult.partitions.get)
-    try {
-      electResult.partitionResult(unknownPartition).get()
-    } catch {
-      case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.isInstanceOf[UnknownTopicOrPartitionException])
-        assertEquals("The partition does not exist.",
-          cause.getMessage)
-        assertEquals(1, currentLeader(partition1))
-        assertEquals(1, currentLeader(partition2))
-    }
+    e = intercept[ExecutionException](electResult.partitionResult(unknownPartition).get()).getCause
+    assertEquals(classOf[UnknownTopicOrPartitionException], e.getClass)
+    assertEquals("The partition does not exist.", e.getMessage)
+    assertEquals(1, currentLeader(partition1))
+    assertEquals(1, currentLeader(partition2))
 
     // Now change the preferred leader to 2
     changePreferredLeader(prefer2)
@@ -1318,15 +1348,9 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(Set(unknownPartition, partition1).asJava, electResult.partitions.get)
     waitForLeaderToBecome(partition1, 2)
     assertEquals(1, currentLeader(partition2))
-    try {
-      electResult.partitionResult(unknownPartition).get()
-    } catch {
-      case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.isInstanceOf[UnknownTopicOrPartitionException])
-        assertEquals("The partition does not exist.",
-          cause.getMessage)
-    }
+    e = intercept[ExecutionException](electResult.partitionResult(unknownPartition).get()).getCause
+    assertEquals(classOf[UnknownTopicOrPartitionException], e.getClass)
+    assertEquals("The partition does not exist.", e.getMessage)
 
     // dupe partitions
     electResult = client.electPreferredLeaders(asList(partition2, partition2))
@@ -1338,63 +1362,36 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     changePreferredLeader(prefer1)
     // but shut it down...
     servers(1).shutdown()
-    waitUntilTrue (
-      () => {
-        val description = client.describeTopics(Set (partition1.topic(), partition2.topic()).asJava).all().get()
-        return !description.asScala.flatMap{
-          case (topic, description) => description.partitions().asScala.map(
-            partition => partition.isr().asScala).flatten
-        }.exists(node => node.id == 1)
-      },
-      "Expect broker 1 to no longer be in any ISR"
-    )
+    waitUntilTrue (() => {
+      val description = client.describeTopics(Set(partition1.topic, partition2.topic).asJava).all().get()
+      val isr = description.asScala.values.flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
+      !isr.exists(_.id == 1)
+    }, "Expect broker 1 to no longer be in any ISR")
 
     // ... now what happens if we try to elect the preferred leader and it's down?
     val shortTimeout = new ElectPreferredLeadersOptions().timeoutMs(10000)
     electResult = client.electPreferredLeaders(asList(partition1), shortTimeout)
     assertEquals(Set(partition1).asJava, electResult.partitions.get)
-    try {
-      electResult.partitionResult(partition1).get()
-      fail()
-    } catch {
-      case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.getClass.getName, cause.isInstanceOf[LeaderNotAvailableException])
-        assertTrue(s"Wrong message ${cause.getMessage}", cause.getMessage.contains(
-          "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
-    }
+    e = intercept[ExecutionException](electResult.partitionResult(partition1).get()).getCause
+    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
+    assertTrue(s"Wrong message ${e.getMessage}", e.getMessage.contains(
+      "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
     assertEquals(2, currentLeader(partition1))
 
     // preferred leader unavailable with null argument
     electResult = client.electPreferredLeaders(null, shortTimeout)
-    try {
-      electResult.partitions.get()
-      fail()
-    } catch {
-      case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.getClass.getName, cause.isInstanceOf[LeaderNotAvailableException])
-    }
-    try {
-      electResult.partitionResult(partition1).get()
-      fail()
-    } catch {
-      case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.getClass.getName, cause.isInstanceOf[LeaderNotAvailableException])
-        assertTrue(s"Wrong message ${cause.getMessage}", cause.getMessage.contains(
-          "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
-    }
-    try {
-      electResult.partitionResult(partition2).get()
-      fail()
-    } catch {
-      case e: Exception =>
-        val cause = e.getCause
-        assertTrue(cause.getClass.getName, cause.isInstanceOf[LeaderNotAvailableException])
-        assertTrue(s"Wrong message ${cause.getMessage}", cause.getMessage.contains(
-          "Failed to elect leader for partition elect-preferred-leaders-topic-2-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
-    }
+    e = intercept[ExecutionException](electResult.partitions.get()).getCause
+    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
+
+    e = intercept[ExecutionException](electResult.partitionResult(partition1).get()).getCause
+    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
+    assertTrue(s"Wrong message ${e.getMessage}", e.getMessage.contains(
+      "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
+
+    e = intercept[ExecutionException](electResult.partitionResult(partition2).get()).getCause
+    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
+    assertTrue(s"Wrong message ${e.getMessage}", e.getMessage.contains(
+      "Failed to elect leader for partition elect-preferred-leaders-topic-2-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
 
     assertEquals(2, currentLeader(partition1))
     assertEquals(2, currentLeader(partition2))

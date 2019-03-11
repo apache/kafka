@@ -31,7 +31,6 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -40,10 +39,13 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableProcessorNode;
 import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
 import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessor;
+import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -60,6 +62,7 @@ import static org.apache.kafka.streams.kstream.internals.graph.GraphGraceSearchU
  * @param <V> the value type
  */
 public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<K, V> {
+    private static final Logger LOG = LoggerFactory.getLogger(KTableImpl.class);
 
     static final String SOURCE_NAME = "KTABLE-SOURCE-";
 
@@ -325,8 +328,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final ProcessorGraphNode<K, V> toStreamNode = new ProcessorGraphNode<>(
             name,
-            processorParameters,
-            false
+            processorParameters
         );
 
         builder.addGraphNode(this.streamsGraphNode, toStreamNode);
@@ -342,10 +344,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public KTable<K, V> suppress(final Suppressed<? super K> suppressed) {
-        final SuppressedInternal<K> suppressedInternal = buildSuppress(suppressed);
+        final String name;
+        if (suppressed instanceof NamedSuppressed) {
+            final String givenName = ((NamedSuppressed) suppressed).name();
+            name = givenName != null ? givenName : builder.newProcessorName(SUPPRESS_NAME);
+        } else {
+            throw new IllegalArgumentException("Custom subclasses of Suppressed are not supported.");
+        }
 
-        final String name =
-            suppressedInternal.name() != null ? suppressedInternal.name() : builder.newProcessorName(SUPPRESS_NAME);
+        final SuppressedInternal<K> suppressedInternal = buildSuppress(suppressed, name);
 
         final String storeName =
             suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
@@ -362,8 +369,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
-            new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName),
-            false
+            new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName)
         );
 
         builder.addGraphNode(streamsGraphNode, node);
@@ -381,13 +387,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @SuppressWarnings("unchecked")
-    private SuppressedInternal<K> buildSuppress(final Suppressed<? super K> suppress) {
+    private SuppressedInternal<K> buildSuppress(final Suppressed<? super K> suppress, final String name) {
         if (suppress instanceof FinalResultsSuppressionBuilder) {
             final long grace = findAndVerifyWindowGrace(streamsGraphNode);
+            LOG.info("Using grace period of [{}] as the suppress duration for node [{}].",
+                     Duration.ofMillis(grace), name);
 
-            final FinalResultsSuppressionBuilder<?> builder = (FinalResultsSuppressionBuilder) suppress;
+            final FinalResultsSuppressionBuilder<?> builder = (FinalResultsSuppressionBuilder<?>) suppress;
 
-            final SuppressedInternal<? extends Windowed> finalResultsSuppression =
+            final SuppressedInternal<?> finalResultsSuppression =
                 builder.buildFinalResultsSuppression(Duration.ofMillis(grace));
 
             return (SuppressedInternal<K>) finalResultsSuppression;
@@ -569,7 +577,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorParameters<K, Change<V>> processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
-        final ProcessorGraphNode<K, Change<V>> groupByMapNode = new ProcessorGraphNode<>(selectName, processorParameters, false);
+        final ProcessorGraphNode<K, Change<V>> groupByMapNode = new ProcessorGraphNode<>(selectName, processorParameters);
 
         builder.addGraphNode(this.streamsGraphNode, groupByMapNode);
 

@@ -101,6 +101,7 @@ public class KafkaStreamsTest {
     public void before() {
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.put(StreamsConfig.CLIENT_ID_CONFIG, "clientId");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.put(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
@@ -529,6 +530,12 @@ public class KafkaStreamsTest {
                 asList("RUNNING", "STARTING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()));
             assertEquals(0, metadata.standbyTasks().size());
             assertEquals(0, metadata.activeTasks().size());
+            final String threadName = metadata.threadName();
+            assertTrue(threadName.startsWith("clientId-StreamThread-"));
+            assertEquals(threadName + "-consumer", metadata.consumerClientId());
+            assertEquals(threadName + "-restore-consumer", metadata.restoreConsumerClientId());
+            assertEquals(Collections.singleton(threadName + "-producer"), metadata.producerClientIds());
+            assertEquals("clientId-admin", metadata.adminClientId());
         }
     }
 
@@ -685,7 +692,7 @@ public class KafkaStreamsTest {
                 .addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "process");
 
         final StoreBuilder<KeyValueStore<String, String>> globalStoreBuilder = Stores.keyValueStoreBuilder(
-                isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName), 
+                isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName),
                 Serdes.String(), Serdes.String()).withLoggingDisabled();
         topology.addGlobalStore(globalStoreBuilder,
                 "global",

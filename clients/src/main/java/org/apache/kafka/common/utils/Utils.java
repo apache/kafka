@@ -275,6 +275,15 @@ public final class Utils {
     }
 
     /**
+     * Returns a copy of src byte array
+     * @param src The byte array to copy
+     * @return The copy
+     */
+    public static byte[] copyArray(byte[] src) {
+        return Arrays.copyOf(src, src.length);
+    }
+
+    /**
      * Check that the parameter t is not null
      *
      * @param t The object to check
@@ -1005,4 +1014,28 @@ public final class Utils {
                 .collect(Collectors.collectingAndThen(Collectors.toList(), finisher));
     }
 
+    public static int to32BitField(final Set<Byte> bytes) {
+        int value = 0;
+        for (final byte b : bytes)
+            value |= 1 << checkRange(b);
+        return value;
+    }
+
+    private static byte checkRange(final byte i) {
+        if (i > 31)
+            throw new IllegalArgumentException("out of range: i>31, i = " + i);
+        if (i < 0)
+            throw new IllegalArgumentException("out of range: i<0, i = " + i);
+        return i;
+    }
+
+    public static Set<Byte> from32BitField(final int intValue) {
+        Set<Byte> result = new HashSet<>();
+        for (int itr = intValue, count = 0; itr != 0; itr >>>= 1) {
+            if ((itr & 1) != 0)
+                result.add((byte) count);
+            count++;
+        }
+        return result;
+    }
 }

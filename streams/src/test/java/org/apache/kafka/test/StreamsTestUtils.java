@@ -88,6 +88,15 @@ public final class StreamsTestUtils {
         return results;
     }
 
+    public static <K, V> List<V> valuesToList(final Iterator<KeyValue<K, V>> iterator) {
+        final List<V> results = new ArrayList<>();
+
+        while (iterator.hasNext()) {
+            results.add(iterator.next().value);
+        }
+        return results;
+    }
+
     public static <K> void verifyKeyValueList(final List<KeyValue<K, byte[]>> expected, final List<KeyValue<K, byte[]>> actual) {
         assertThat(actual.size(), equalTo(expected.size()));
         for (int i = 0; i < actual.size(); i++) {
