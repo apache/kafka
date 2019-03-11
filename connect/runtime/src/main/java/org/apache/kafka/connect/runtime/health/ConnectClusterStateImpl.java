@@ -57,7 +57,10 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
         try {
             // Should take no more than 10 seconds to get a list of connectors. Any longer than this
             // and it's very likely something is wrong.
-            connectorsLatch.await(10, TimeUnit.SECONDS);
+            boolean success = connectorsLatch.await(10, TimeUnit.SECONDS);
+            if (!success) {
+                throw new ConnectException("Timed out while retrieving list of connectors");
+            }
         } catch (InterruptedException e) {
             throw new ConnectException("Interrupted while retrieving list of connectors", e);
         }
