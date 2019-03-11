@@ -574,7 +574,8 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
   def testAlterInternalTopicPartitionCount(): Unit = {
     val brokers = List(0)
     TestUtils.createBrokersInZk(zkClient, brokers)
-    // create the offsets topic
+    
+    // create internal topics
     adminZkClient.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, 1)
     adminZkClient.createTopic(Topic.TRANSACTION_STATE_TOPIC_NAME, 1, 1)
 
