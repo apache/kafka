@@ -204,13 +204,25 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     brokerReconfigurables.clear()
   }
 
+  /**
+   * Add reconfigurables to be notified when a dynamic broker config is updated.
+   *
+   * `Reconfigurable` is the public API used by configurable plugins like metrics reporter
+   * and quota callbacks. These are reconfigured before `KafkaConfig` is updated so that
+   * the update can be aborted if `reconfigure()` fails with an exception.
+   *
+   * `BrokerReconfigurable` is used for internal reconfigurable classes. These are
+   * reconfigured after `KafkaConfig` is updated so that they can access `KafkaConfig`
+   * directly. They are provided both old and new configs.
+   */
   def addReconfigurables(kafkaServer: KafkaServer): Unit = {
+    addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer))
+    addReconfigurable(new DynamicClientQuotaCallback(kafkaConfig.brokerId, kafkaServer))
+
     addBrokerReconfigurable(new DynamicThreadPool(kafkaServer))
     if (kafkaServer.logManager.cleaner != null)
       addBrokerReconfigurable(kafkaServer.logManager.cleaner)
-    addReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer))
-    addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer))
-    addReconfigurable(new DynamicClientQuotaCallback(kafkaConfig.brokerId, kafkaServer))
+    addBrokerReconfigurable(new DynamicLogConfig(kafkaServer.logManager, kafkaServer))
     addBrokerReconfigurable(new DynamicListenerConfig(kafkaServer))
     addBrokerReconfigurable(new DynamicConnectionQuota(kafkaServer))
   }
@@ -565,25 +577,24 @@ object DynamicLogConfig {
   val ReconfigurableConfigs = LogConfig.TopicConfigSynonyms.values.toSet -- ExcludedConfigs
   val KafkaConfigToLogConfigName = LogConfig.TopicConfigSynonyms.map { case (k, v) => (v, k) }
 }
-class DynamicLogConfig(logManager: LogManager, server: KafkaServer) extends Reconfigurable with Logging {
 
-  override def configure(configs: util.Map[String, _]): Unit = {}
+class DynamicLogConfig(logManager: LogManager, server: KafkaServer) extends BrokerReconfigurable with Logging {
 
-  override def reconfigurableConfigs(): util.Set[String] = {
-    DynamicLogConfig.ReconfigurableConfigs.asJava
+  override def reconfigurableConfigs: Set[String] = {
+    DynamicLogConfig.ReconfigurableConfigs
   }
 
-  override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
+  override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     // For update of topic config overrides, only config names and types are validated
     // Names and types have already been validated. For consistency with topic config
     // validation, no additional validation is performed.
   }
 
-  override def reconfigure(configs: util.Map[String, _]): Unit = {
+  override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     val currentLogConfig = logManager.currentDefaultConfig
     val origUncleanLeaderElectionEnable = logManager.currentDefaultConfig.uncleanLeaderElectionEnable
     val newBrokerDefaults = new util.HashMap[String, Object](currentLogConfig.originals)
-    configs.asScala.filterKeys(DynamicLogConfig.ReconfigurableConfigs.contains).foreach { case (k, v) =>
+    newConfig.valuesFromThisConfig.asScala.filterKeys(DynamicLogConfig.ReconfigurableConfigs.contains).foreach { case (k, v) =>
       if (v != null) {
         DynamicLogConfig.KafkaConfigToLogConfigName.get(k).foreach { configName =>
           newBrokerDefaults.put(configName, v.asInstanceOf[AnyRef])
