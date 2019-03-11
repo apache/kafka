@@ -353,9 +353,9 @@ public class KafkaAdminClientTest {
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1,
                     "Failed awaiting CreateTopics first request failure");
 
-            // Wait until the retry request created in AdminClient
-            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).noOfPendingCalls() == 1,
-                "Failed to retry CreateTopics request");
+            // Wait until the retry call added to the queue in AdminClient
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,
+                "Failed to add retry CreateTopics call");
 
             time.sleep(retryBackoff);
 

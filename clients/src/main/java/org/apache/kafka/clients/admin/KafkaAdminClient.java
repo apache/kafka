@@ -1262,7 +1262,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     //for testing
-    int noOfPendingCalls() {
+    int numPendingCalls() {
         return runnable.pendingCalls.size();
     }
 
