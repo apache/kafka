@@ -37,6 +37,8 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
+import org.apache.log4j.Logger;
+import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -45,13 +47,14 @@ import org.junit.experimental.categories.Category;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 import java.util.Properties;
 import java.util.stream.Collectors;
 
 @SuppressWarnings("unchecked")
 @Category({IntegrationTest.class})
 public class MetricsIntegrationTest {
+
+    private Logger logger = Logger.getLogger(MetricsIntegrationTest.class);
 
     private static final int NUM_BROKERS = 1;
 
@@ -504,16 +507,17 @@ public class MetricsIntegrationTest {
         }
     }
 
-    private boolean testMetricByName(final List<Metric> listMetric, final String metricName, final int numMetric) {
+    private void testMetricByName(final List<Metric> listMetric, final String metricName, final int numMetric) {
         try {
             final List<Metric> metrics = listMetric.stream().filter(m -> m.metricName().name().equals(metricName)).collect(Collectors.toList());
-            boolean b = numMetric == metrics.size();
+            Assert.assertEquals("Size of metrics of type:'" + metricName + "' must be equal to:" + numMetric + " but it's equal to " + metrics.size(), numMetric, metrics.size());
             for (final Metric m : metrics) {
-                b = b && !Objects.isNull(m.metricValue());
+                Assert.assertNotNull("Metric:'" + m.metricName() + "' must be not null", m.metricValue());
             }
-            return b;
         } catch (final Throwable e) {
-            return false;
+            logger.error(e.getMessage());
+            throw e;
         }
+
     }
 }
