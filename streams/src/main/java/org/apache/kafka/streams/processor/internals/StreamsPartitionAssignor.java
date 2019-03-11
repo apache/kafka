@@ -642,7 +642,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         // construct the global partition assignment per host map
         final Map<HostInfo, Set<TaskId>> tasksByHostState = new HashMap<>();
         final Map<HostInfo, Set<TopicPartition>> partitionsByHostState = new HashMap<>();
-        if (minReceivedMetadataVersion >= 4) {
+        if (minReceivedMetadataVersion >= 5) {
             for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
 
@@ -675,12 +675,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
 
         taskManager.setPartitionsByHostState(partitionsByHostState);
-
-        final Map<HostInfo, Set<TopicPartition>> partitionsByHost = new HashMap<>();
-
-        for(final Map.Entry<HostInfo, Set<TaskId>> entry : tasksByHostState.entrySet()) {
-            partitionsByHost.put(entry.getKey(), partitionsForTask.get(entry.getValue()));
-        }
 
         final Map<String, Assignment> assignment;
         if (versionProbing) {
@@ -938,20 +932,22 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = taskManager.builder().topicGroups();
 
-        final Set<String> allSourceTopics = new HashSet<>();
         final Map<Integer, Set<String>> sourceTopicsByGroup = new HashMap<>();
         for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
-            allSourceTopics.addAll(entry.getValue().sourceTopics);
             sourceTopicsByGroup.put(entry.getKey(), entry.getValue().sourceTopics);
         }
 
-        Cluster fullMetadata = Cluster.empty().withPartitions(topicToPartitionInfo);
+        final Cluster fullMetadata = Cluster.empty().withPartitions(topicToPartitionInfo);
 
         final Map<TaskId, Set<TopicPartition>> partitionsForTask = partitionGrouper.partitionGroups(sourceTopicsByGroup, fullMetadata);
         final Map<HostInfo, Set<TopicPartition>> partitionsByHost = new HashMap<>();
 
-        for(final Map.Entry<HostInfo, Set<TaskId>> entry : tasksByHosts.entrySet()) {
-            partitionsByHost.put(entry.getKey(), partitionsForTask.get(entry.getValue()));
+        for (final Map.Entry<HostInfo, Set<TaskId>> entry : tasksByHosts.entrySet()) {
+            final Set<TopicPartition> topicPartitions = new HashSet<>();
+            for (final TaskId taskId : entry.getValue()) {
+                topicPartitions.addAll(partitionsForTask.get(taskId));
+            }
+            partitionsByHost.put(entry.getKey(), topicPartitions);
         }
 
         taskManager.setClusterMetadata(fullMetadata);

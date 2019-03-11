@@ -24,7 +24,10 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.io.DataInputStream;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -123,28 +126,39 @@ public class AssignmentInfo {
         return tasksByHost;
     }
 
+    private byte[] toBytes(final int i) {
+        final byte[] result = new byte[4];
+        result[0] = (byte) (i >> 24);
+        result[1] = (byte) (i >> 16);
+        result[2] = (byte) (i >> 8);
+        result[3] = (byte) i /*>> 0*/;
+        return result;
+    }
+
     /**
      * @throws TaskAssignmentException if method fails to encode the data, e.g., if there is an
      * IO exception during encoding
      */
     public ByteBuffer encode() {
-        OutputStream baos = new ByteArrayOutputStream();
-
-// first write the version as byte array directly before switch
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         try {
-            baos.write(usedVersion);
-        } catch (IOException e) {
-            e.printStackTrace();
+            baos.write(toBytes(usedVersion));
+        } catch (final IOException ex) {
+            throw new TaskAssignmentException("Failed to encode AssignmentInfo", ex);
         }
-// then wrap with compression if it is newer version
-        if (usedVersion >= 5) {
-            try {
-                baos = new GZIPOutputStream(baos);
-            } catch (IOException e) {
-                e.printStackTrace();
+
+        final DataOutputStream out;
+        try {
+            if (usedVersion >= 5) {
+                out = new DataOutputStream(new GZIPOutputStream(baos));
+            } else {
+                out = new DataOutputStream(baos);
             }
+        } catch (final IOException ex) {
+            throw new IllegalStateException("Unknown metadata version: " + usedVersion
+                    + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
         }
-        try (final DataOutputStream out = new DataOutputStream(baos)) {
+        try {
             switch (usedVersion) {
                 case 1:
                     encodeVersionOne(out);
@@ -163,18 +177,20 @@ public class AssignmentInfo {
                     break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
-                        + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
+                            + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
             }
+
             out.flush();
             out.close();
-            return ByteBuffer.wrap(((ByteArrayOutputStream) baos).toByteArray());
+
+            return ByteBuffer.wrap(baos.toByteArray());
         } catch (final IOException ex) {
             throw new TaskAssignmentException("Failed to encode AssignmentInfo", ex);
         }
     }
 
+
     private void encodeVersionOne(final DataOutputStream out) throws IOException {
-        out.writeInt(1); // version
         encodeActiveAndStandbyTaskAssignment(out);
     }
 
@@ -197,7 +213,7 @@ public class AssignmentInfo {
     }
 
     private void encodeVersionTwo(final DataOutputStream out) throws IOException {
-        out.writeInt(2); // version
+      //  out.writeInt(2); // version
         encodeActiveAndStandbyTaskAssignment(out);
         encodeTasksByHost(out);
     }
@@ -231,14 +247,14 @@ public class AssignmentInfo {
     }
 
     private void encodeVersionThree(final DataOutputStream out) throws IOException {
-        out.writeInt(3);
+     //   out.writeInt(3);
         out.writeInt(LATEST_SUPPORTED_VERSION);
         encodeActiveAndStandbyTaskAssignment(out);
         encodeTasksByHost(out);
     }
 
     private void encodeVersionFour(final DataOutputStream out) throws IOException {
-        out.writeInt(4);
+     //   out.writeInt(4);
         out.writeInt(LATEST_SUPPORTED_VERSION);
         encodeActiveAndStandbyTaskAssignment(out);
         encodeTasksByHost(out);
@@ -246,7 +262,7 @@ public class AssignmentInfo {
     }
 
     private void encodeVersionFive(final DataOutputStream out) throws IOException {
-        out.writeInt(5);
+     //   out.writeInt(5);
         out.writeInt(LATEST_SUPPORTED_VERSION);
         encodeActiveAndStandbyTaskAssignment(out);
         encodeTasksByHost(out);

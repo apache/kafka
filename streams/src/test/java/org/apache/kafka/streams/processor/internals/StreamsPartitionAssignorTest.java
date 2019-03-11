@@ -673,22 +673,22 @@ public class StreamsPartitionAssignorTest {
     public void testOnNewAssignment() {
         configurePartitionAssignor(Collections.<String, Object>emptyMap());
 
-        final List<TaskId> activeTaskList = asList(task0, task3);
+        final List<TaskId> activeTaskList = asList(task0, task1);
         final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
         final Map<TaskId, Set<TopicPartition>> standbyTasks = new HashMap<>();
         final Map<HostInfo, Set<TopicPartition>> hostStatePartitions = Collections.singletonMap(
                 new HostInfo("localhost", 9090),
-                Utils.mkSet(t3p0, t3p3));
+                Utils.mkSet(t3p0, t3p1));
         final Map<HostInfo, Set<TaskId>> hostState = Collections.singletonMap(
                 new HostInfo("localhost", 9090),
-                Utils.mkSet(task0, task3));
+                Utils.mkSet(task0, task1));
         activeTasks.put(task0, Utils.mkSet(t3p0));
-        activeTasks.put(task3, Utils.mkSet(t3p3));
-        standbyTasks.put(task1, Utils.mkSet(t3p1));
+        activeTasks.put(task1, Utils.mkSet(t3p1));
+        standbyTasks.put(task3, Utils.mkSet(t3p3));
         standbyTasks.put(task2, Utils.mkSet(t3p2));
 
         final AssignmentInfo info = new AssignmentInfo(activeTaskList, standbyTasks, hostState);
-        final PartitionAssignor.Assignment assignment = new PartitionAssignor.Assignment(asList(t3p0, t3p3), info.encode());
+        final PartitionAssignor.Assignment assignment = new PartitionAssignor.Assignment(asList(t3p0, t3p1), info.encode());
 
         builder.addSource(null, "source1", null, null, null, "topic3");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source1");
@@ -1015,21 +1015,20 @@ public class StreamsPartitionAssignorTest {
 
     @Test
     public void shouldUpdateClusterMetadataAndHostInfoOnAssignment() {
-        final TopicPartition partitionOne = new TopicPartition("topic", 1);
-        final TopicPartition partitionTwo = new TopicPartition("topic", 2);
+        final TopicPartition partitionOne = new TopicPartition("topic", 0);
+        final TopicPartition partitionTwo = new TopicPartition("topic", 1);
         final Map<HostInfo, Set<TopicPartition>> hostStatePartitions = Collections.singletonMap(
                 new HostInfo("localhost", 9090), Utils.mkSet(partitionOne, partitionTwo));
 
-        final TaskId taskOne = new TaskId(0, 1);
-        final TaskId taskTwo = new TaskId(0, 2);
+        final TaskId taskOne = new TaskId(0, 0);
+        final TaskId taskTwo = new TaskId(0, 1);
         final Map<HostInfo, Set<TaskId>> hostState = Collections.singletonMap(
                 new HostInfo("localhost", 9090), Utils.mkSet(taskOne, taskTwo));
-
         configurePartitionAssignor(Collections.emptyMap());
-
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         EasyMock.expect(taskManager.builder()).andReturn(builder).anyTimes();
+
         taskManager.setPartitionsByHostState(hostStatePartitions);
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager);

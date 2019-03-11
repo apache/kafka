@@ -32,7 +32,7 @@ public class SubscriptionInfo {
 
     private static final Logger log = LoggerFactory.getLogger(SubscriptionInfo.class);
 
-    public static final int LATEST_SUPPORTED_VERSION = 4;
+    public static final int LATEST_SUPPORTED_VERSION = 5;
     static final int UNKNOWN = -1;
 
     private final int usedVersion;
@@ -126,6 +126,9 @@ public class SubscriptionInfo {
                 break;
             case 4:
                 buf = encodeVersionFour();
+                break;
+            case 5:
+                buf = encodeVersionFive();
                 break;
             default:
                 throw new IllegalStateException("Unknown metadata version: " + usedVersion
@@ -235,6 +238,21 @@ public class SubscriptionInfo {
         return buf;
     }
 
+    private ByteBuffer encodeVersionFive() {
+        final byte[] endPointBytes = prepareUserEndPoint();
+
+        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
+
+        buf.putInt(5); // used version
+        buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
+        encodeClientUUID(buf);
+        encodeTasks(buf, prevTasks);
+        encodeTasks(buf, standbyTasks);
+        encodeUserEndPoint(buf, endPointBytes);
+
+        return buf;
+    }
+
     protected int getVersionThreeAndFourByteLength(final byte[] endPointBytes) {
         return 4 + // used version
                4 + // latest supported version version
@@ -266,6 +284,11 @@ public class SubscriptionInfo {
                 break;
             case 3:
             case 4:
+                latestSupportedVersion = data.getInt();
+                subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
+                decodeVersionThreeData(subscriptionInfo, data);
+                break;
+            case 5:
                 latestSupportedVersion = data.getInt();
                 subscriptionInfo = new SubscriptionInfo(usedVersion, latestSupportedVersion);
                 decodeVersionThreeData(subscriptionInfo, data);
