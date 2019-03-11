@@ -83,10 +83,6 @@ public class TestUtils {
         return clusterWith(1);
     }
 
-    public static Cluster singletonCluster(final Map<String, Integer> topicPartitionCounts) {
-        return clusterWith(1, topicPartitionCounts);
-    }
-
     public static Cluster singletonCluster(final String topic, final int partitions) {
         return clusterWith(1, topic, partitions);
     }

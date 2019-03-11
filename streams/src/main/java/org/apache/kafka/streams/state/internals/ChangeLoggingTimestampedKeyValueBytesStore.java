@@ -23,6 +23,7 @@ import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserial
 import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.timestamp;
 
 public class ChangeLoggingTimestampedKeyValueBytesStore extends ChangeLoggingKeyValueBytesStore {
+
     ChangeLoggingTimestampedKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
     }

@@ -47,6 +47,9 @@ public interface InternalProcessorContext extends ProcessorContext {
      */
     void setCurrentNode(ProcessorNode currentNode);
 
+    /**
+     * Get the current {@link ProcessorNode}
+     */
     ProcessorNode currentNode();
 
     /**

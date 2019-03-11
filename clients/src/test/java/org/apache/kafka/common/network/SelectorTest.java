@@ -493,8 +493,10 @@ public class SelectorTest {
             do {
                 selector.poll(1000);
             } while (selector.completedReceives().isEmpty());
-        } while (selector.numStagedReceives(channel) == 0 && --retries > 0);
+        } while (selector.numStagedReceives(channel) == 0 && !channel.hasBytesBuffered() && --retries > 0);
         assertTrue("No staged receives after 100 attempts", selector.numStagedReceives(channel) > 0);
+        // We want to return without any bytes buffered to ensure that channel will be closed after idle time
+        assertFalse("Channel has bytes buffered", channel.hasBytesBuffered());
 
         return channel;
     }
