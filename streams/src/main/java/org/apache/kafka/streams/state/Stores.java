@@ -196,7 +196,7 @@ public class Stores {
      * @return an instance of {@link WindowBytesStoreSupplier}
      * @deprecated since 2.1 Use {@link Stores#persistentWindowStore(String, Duration, Duration, boolean)} instead
      */
-    @Deprecated
+    @Deprecated // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                  final long retentionPeriod,
                                                                  final int numSegments,
@@ -271,21 +271,21 @@ public class Stores {
     /**
      * Create a persistent {@link SessionBytesStoreSupplier}.
      * @param name              name of the store (cannot be {@code null})
-     * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
+     * @param retentionPeriodMs length ot time to retain data in the store (cannot be negative)
      *                          Note that the retention period must be at least long enough to contain the
      *                          windowed data's entire life cycle, from window-start through window-end,
      *                          and for the entire grace period.
      * @return an instance of a {@link  SessionBytesStoreSupplier}
      * @deprecated since 2.1 Use {@link Stores#persistentSessionStore(String, Duration)} instead
      */
-    @Deprecated
+    @Deprecated // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
-                                                                   final long retentionPeriod) {
+                                                                   final long retentionPeriodMs) {
         Objects.requireNonNull(name, "name cannot be null");
-        if (retentionPeriod < 0) {
+        if (retentionPeriodMs < 0) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
-        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriod);
+        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs);
     }
 
     /**
@@ -297,7 +297,7 @@ public class Stores {
      *                          and for the entire grace period.
      * @return an instance of a {@link  SessionBytesStoreSupplier}
      */
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // removing #persistentSessionStore(String name, long retentionPeriodMs) will fix this
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
                                                                    final Duration retentionPeriod) {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");

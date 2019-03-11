@@ -251,12 +251,12 @@ public class MeteredSessionStoreTest {
         metered.findSessions("a", null, 0, 0);
     }
 
-    private interface CachedSessionStore<K, V> extends SessionStore<K, V>, CachedStateStore<K, V> { }
+    private interface CachedSessionStore extends SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }
 
     @SuppressWarnings("unchecked")
     @Test
     public void shouldSetFlushListenerOnWrappedCachingStore() {
-        final CachedSessionStore<Bytes, byte[]> cachedSessionStore = mock(CachedSessionStore.class);
+        final CachedSessionStore cachedSessionStore = mock(CachedSessionStore.class);
 
         expect(cachedSessionStore.setFlushListener(anyObject(CacheFlushListener.class), eq(false))).andReturn(true);
         replay(cachedSessionStore);

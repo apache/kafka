@@ -47,13 +47,13 @@ import org.junit.Assert._
 
 import scala.util.Random
 import scala.collection.JavaConverters._
-
 import kafka.zk.KafkaZkClient
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
-
 import java.lang.{Long => JLong}
+
+import kafka.security.auth.{Cluster, Group, Topic}
 
 /**
  * An integration test of the KafkaAdminClient.
@@ -224,6 +224,40 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(topics.toSet, topicDesc.keySet.asScala)
   }
 
+  @Test
+  def testAuthorizedOperations(): Unit = {
+    client = AdminClient.create(createConfig())
+
+    // without includeAuthorizedOperations flag
+    var result = client.describeCluster
+    assertEquals(Set().asJava, result.authorizedOperations().get())
+
+    //with includeAuthorizedOperations flag
+    result = client.describeCluster(new DescribeClusterOptions().includeAuthorizedOperations(true))
+    var expectedOperations = configuredClusterPermissions.asJava
+    assertEquals(expectedOperations, result.authorizedOperations().get())
+
+    val topic = "mytopic"
+    val newTopics = Seq(new NewTopic(topic, 3, 3))
+    client.createTopics(newTopics.asJava).all.get()
+    waitForTopics(client, expectedPresent = Seq(topic), expectedMissing = List())
+
+    // without includeAuthorizedOperations flag
+    var topicResult = client.describeTopics(Seq(topic).asJava).values
+    assertEquals(Set().asJava, topicResult.get(topic).get().authorizedOperations())
+
+    //with includeAuthorizedOperations flag
+    topicResult = client.describeTopics(Seq(topic).asJava,
+      new DescribeTopicsOptions().includeAuthorizedOperations(true)).values
+    expectedOperations = Topic.supportedOperations
+      .map(operation => operation.toJava).asJava
+    assertEquals(expectedOperations, topicResult.get(topic).get().authorizedOperations())
+  }
+
+  def configuredClusterPermissions() : Set[AclOperation] = {
+    Cluster.supportedOperations.map(operation => operation.toJava)
+  }
+
   /**
     * describe should not auto create topics
     */
@@ -245,10 +279,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testDescribeCluster(): Unit = {
     client = AdminClient.create(createConfig())
-    val nodes = client.describeCluster.nodes.get()
-    val clusterId = client.describeCluster().clusterId().get()
+    val result = client.describeCluster
+    val nodes = result.nodes.get()
+    val clusterId = result.clusterId().get()
     assertEquals(servers.head.dataPlaneRequestProcessor.clusterId, clusterId)
-    val controller = client.describeCluster().controller().get()
+    val controller = result.controller().get()
     assertEquals(servers.head.dataPlaneRequestProcessor.metadataCache.getControllerId.
       getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id())
     val brokers = brokerList.split(",")
@@ -825,7 +860,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       }, s"Expected follower to discover new log start offset $expectedStartOffset")
 
       TestUtils.waitUntilTrue(() => {
-        servers(followerIndex).replicaManager.localReplica(topicPartition).get.logEndOffset.messageOffset == expectedEndOffset
+        servers(followerIndex).replicaManager.localReplica(topicPartition).get.logEndOffset == expectedEndOffset
       }, s"Expected follower to catch up to log end offset $expectedEndOffset")
     }
 
@@ -871,7 +906,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     // make sure we are in the expected state after delete records
     for (i <- 0 until serverCount) {
       assertEquals(3, servers(i).replicaManager.localReplica(topicPartition).get.logStartOffset)
-      assertEquals(expectedLEO, servers(i).replicaManager.localReplica(topicPartition).get.logEndOffset.messageOffset)
+      assertEquals(expectedLEO, servers(i).replicaManager.localReplica(topicPartition).get.logEndOffset)
     }
 
     // we will create another dir just for one server
@@ -886,7 +921,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     // once replica moved, its LSO and LEO should match other replicas
     assertEquals(3, servers(0).replicaManager.localReplica(topicPartition).get.logStartOffset)
-    assertEquals(expectedLEO, servers(0).replicaManager.localReplica(topicPartition).get.logEndOffset.messageOffset)
+    assertEquals(expectedLEO, servers(0).replicaManager.localReplica(topicPartition).get.logEndOffset)
   }
 
   @Test
@@ -1045,7 +1080,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testForceClose(): Unit = {
     val config = createConfig()
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:22")
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
     client = AdminClient.create(config)
     // Because the bootstrap servers are set up incorrectly, this call will not complete, but must be
     // cancelled by the close operation.
@@ -1062,7 +1097,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testMinimumRequestTimeouts(): Unit = {
     val config = createConfig()
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:22")
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, s"localhost:${TestUtils.IncorrectBrokerPort}")
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0")
     client = AdminClient.create(config)
     val startTimeMs = Time.SYSTEM.milliseconds()
@@ -1070,7 +1105,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       new CreateTopicsOptions().timeoutMs(2)).all()
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
     val endTimeMs = Time.SYSTEM.milliseconds()
-    assertTrue("Expected the timeout to take at least one millisecond.", endTimeMs > startTimeMs);
+    assertTrue("Expected the timeout to take at least one millisecond.", endTimeMs > startTimeMs)
   }
 
   /**
@@ -1142,12 +1177,14 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             !matching.isEmpty
           }, s"Expected to be able to list $testGroupId")
 
-          val result = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
+          val result = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
+            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
           assertEquals(2, result.describedGroups().size())
 
           // Test that we can get information about the test consumer group.
           assertTrue(result.describedGroups().containsKey(testGroupId))
           val testGroupDescription = result.describedGroups().get(testGroupId).get()
+
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup())
           assertEquals(1, testGroupDescription.members().size())
@@ -1157,14 +1194,19 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertEquals(testNumPartitions, topicPartitions.size())
           assertEquals(testNumPartitions, topicPartitions.asScala.
             count(tp => tp.topic().equals(testTopicName)))
+          val expectedOperations = Group.supportedOperations
+            .map(operation => operation.toJava).asJava
+          assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
           // Test that the fake group is listed as dead.
           assertTrue(result.describedGroups().containsKey(fakeGroupId))
           val fakeGroupDescription = result.describedGroups().get(fakeGroupId).get()
+
           assertEquals(fakeGroupId, fakeGroupDescription.groupId())
           assertEquals(0, fakeGroupDescription.members().size())
           assertEquals("", fakeGroupDescription.partitionAssignor())
           assertEquals(ConsumerGroupState.DEAD, fakeGroupDescription.state())
+          assertEquals(expectedOperations, fakeGroupDescription.authorizedOperations())
 
           // Test that all() returns 2 results
           assertEquals(2, result.all().get().size())

@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -108,16 +109,18 @@ final class ClusterConnectionStates {
     }
 
     /**
-     * Enter the connecting state for the given connection.
+     * Enter the connecting state for the given connection, moving to a new resolved address if necessary.
      * @param id the id of the connection
-     * @param now the current time
-     * @throws UnknownHostException 
+     * @param now the current time in ms
+     * @param host the host of the connection, to be resolved internally if needed
+     * @param clientDnsLookup the mode of DNS lookup to use when resolving the {@code host}
      */
-    public void connecting(String id, long now, String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
+    public void connecting(String id, long now, String host, ClientDnsLookup clientDnsLookup) {
         NodeConnectionState connectionState = nodeState.get(id);
         if (connectionState != null && connectionState.host().equals(host)) {
             connectionState.lastConnectAttemptMs = now;
             connectionState.state = ConnectionState.CONNECTING;
+            // Move to next resolved address, or if addresses are exhausted, mark node to be re-resolved
             connectionState.moveToNextAddress();
             return;
         } else if (connectionState != null) {
@@ -130,14 +133,19 @@ final class ClusterConnectionStates {
             this.reconnectBackoffInitMs, host, clientDnsLookup));
     }
 
-    public InetAddress currentAddress(String id) {
-        return nodeState.get(id).currentAddress();
+    /**
+     * Returns a resolved address for the given connection, resolving it if necessary.
+     * @param id the id of the connection
+     * @throws UnknownHostException if the address was not resolvable
+     */
+    public InetAddress currentAddress(String id) throws UnknownHostException {
+        return nodeState(id).currentAddress();
     }
 
     /**
      * Enter the disconnected state for the given node.
      * @param id the connection we have disconnected
-     * @param now the current time
+     * @param now the current time in ms
      */
     public void disconnected(String id, long now) {
         NodeConnectionState nodeState = nodeState(id);
@@ -212,7 +220,7 @@ final class ClusterConnectionStates {
     /**
      * Enter the authentication failed state for the given node.
      * @param id the connection identifier
-     * @param now the current time
+     * @param now the current time in ms
      * @param exception the authentication exception
      */
     public void authenticationFailed(String id, long now, AuthenticationException exception) {
@@ -227,7 +235,7 @@ final class ClusterConnectionStates {
      * Return true if the connection is in the READY state and currently not throttled.
      *
      * @param id the connection identifier
-     * @param now the current time
+     * @param now the current time in ms
      */
     public boolean isReady(String id, long now) {
         return isReady(nodeState.get(id), now);
@@ -241,7 +249,7 @@ final class ClusterConnectionStates {
      * Return true if there is at least one node with connection in the READY state and not throttled. Returns false
      * otherwise.
      *
-     * @param now the current time
+     * @param now the current time in ms
      */
     public boolean hasReadyNodes(long now) {
         for (Map.Entry<String, NodeConnectionState> entry : nodeState.entrySet()) {
@@ -353,14 +361,15 @@ final class ClusterConnectionStates {
         // Connection is being throttled if current time < throttleUntilTimeMs.
         long throttleUntilTimeMs;
         private List<InetAddress> addresses;
-        private int index = 0;
+        private int addressIndex;
         private final String host;
         private final ClientDnsLookup clientDnsLookup;
 
-        public NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs, 
-                String host, ClientDnsLookup clientDnsLookup) throws UnknownHostException {
+        private NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs,
+                String host, ClientDnsLookup clientDnsLookup) {
             this.state = state;
-            this.addresses = ClientUtils.resolve(host, clientDnsLookup);
+            this.addresses = Collections.emptyList();
+            this.addressIndex = -1;
             this.authenticationException = null;
             this.lastConnectAttemptMs = lastConnectAttempt;
             this.failedAttempts = 0;
@@ -374,17 +383,32 @@ final class ClusterConnectionStates {
             return host;
         }
 
-        public InetAddress currentAddress() {
-            return addresses.get(index);
+        /**
+         * Fetches the current selected IP address for this node, resolving {@link #host()} if necessary.
+         * @return the selected address
+         * @throws UnknownHostException if resolving {@link #host()} fails
+         */
+        private InetAddress currentAddress() throws UnknownHostException {
+            if (addresses.isEmpty()) {
+                // (Re-)initialize list
+                addresses = ClientUtils.resolve(host, clientDnsLookup);
+                addressIndex = 0;
+            }
+
+            return addresses.get(addressIndex);
         }
 
-        /*
-         * implementing a ring buffer with the addresses
+        /**
+         * Jumps to the next available resolved address for this node. If no other addresses are available, marks the
+         * list to be refreshed on the next {@link #currentAddress()} call.
          */
-        public void moveToNextAddress() throws UnknownHostException {
-            index = (index + 1) % addresses.size();
-            if (index == 0)
-                addresses = ClientUtils.resolve(host, clientDnsLookup);
+        private void moveToNextAddress() {
+            if (addresses.isEmpty())
+                return; // Avoid div0. List will initialize on next currentAddress() call
+
+            addressIndex = (addressIndex + 1) % addresses.size();
+            if (addressIndex == 0)
+                addresses = Collections.emptyList(); // Exhausted list. Re-resolve on next currentAddress() call
         }
 
         public String toString() {

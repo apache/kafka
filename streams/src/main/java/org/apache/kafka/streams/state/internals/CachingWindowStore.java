@@ -64,9 +64,10 @@ class CachingWindowStore
         this.context = context;
         final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name());
 
-        bytesSerdes = new StateSerdes<>(topic,
-                                        Serdes.Bytes(),
-                                        Serdes.ByteArray());
+        bytesSerdes = new StateSerdes<>(
+            topic,
+            Serdes.Bytes(),
+            Serdes.ByteArray());
         name = context.taskId() + "-" + name();
         cache = this.context.getCache();
 
@@ -82,31 +83,32 @@ class CachingWindowStore
         final byte[] binaryWindowKey = cacheFunction.key(entry.key()).get();
         final Windowed<Bytes> windowedKeyBytes = WindowKeySchema.fromStoreBytesKey(binaryWindowKey, windowSize);
         final long windowStartTimestamp = windowedKeyBytes.window().start();
-        final Bytes key = windowedKeyBytes.key();
+        final Bytes binaryKey = windowedKeyBytes.key();
         if (flushListener != null) {
-            final byte[] newValueBytes = entry.newValue();
-            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ? wrapped().fetch(key, windowStartTimestamp) : null;
+            final byte[] rawNewValue = entry.newValue();
+            final byte[] rawOldValue = rawNewValue == null || sendOldValues ?
+                wrapped().fetch(binaryKey, windowStartTimestamp) : null;
 
             // this is an optimization: if this key did not exist in underlying store and also not in the cache,
             // we can skip flushing to downstream as well as writing to underlying store
-            if (newValueBytes != null || oldValueBytes != null) {
+            if (rawNewValue != null || rawOldValue != null) {
                 // we need to get the old values if needed, and then put to store, and then flush
-                wrapped().put(key, entry.newValue(), windowStartTimestamp);
+                wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
 
                 final ProcessorRecordContext current = context.recordContext();
                 context.setRecordContext(entry.entry().context());
                 try {
                     flushListener.apply(
                         binaryWindowKey,
-                        newValueBytes,
-                        sendOldValues ? oldValueBytes : null,
+                        rawNewValue,
+                        sendOldValues ? rawOldValue : null,
                         entry.entry().context().timestamp());
                 } finally {
                     context.setRecordContext(current);
                 }
             }
         } else {
-            wrapped().put(key, entry.newValue(), windowStartTimestamp);
+            wrapped().put(binaryKey, entry.newValue(), windowStartTimestamp);
         }
     }
 
@@ -120,12 +122,15 @@ class CachingWindowStore
     }
 
     @Override
-    public synchronized void put(final Bytes key, final byte[] value) {
+    public synchronized void put(final Bytes key,
+                                 final byte[] value) {
         put(key, value, context.timestamp());
     }
 
     @Override
-    public synchronized void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
+    public synchronized void put(final Bytes key,
+                                 final byte[] value,
+                                 final long windowStartTimestamp) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
@@ -144,7 +149,8 @@ class CachingWindowStore
     }
 
     @Override
-    public byte[] fetch(final Bytes key, final long timestamp) {
+    public byte[] fetch(final Bytes key,
+                        final long timestamp) {
         validateStoreOpen();
         final Bytes bytesKey = WindowKeySchema.toStoreKeyBinary(key, timestamp, 0);
         final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
@@ -159,9 +165,11 @@ class CachingWindowStore
         }
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
-    public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
+    public synchronized WindowStoreIterator<byte[]> fetch(final Bytes key,
+                                                          final long timeFrom,
+                                                          final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
@@ -174,10 +182,7 @@ class CachingWindowStore
         final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
-                                                                             key,
-                                                                             timeFrom,
-                                                                             timeTo);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key, key, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(
             cacheIterator, hasNextCondition, cacheFunction
         );
@@ -185,14 +190,18 @@ class CachingWindowStore
         return new MergedSortedCacheWindowStoreIterator(filteredCacheIterator, underlyingIterator);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to, final long timeFrom, final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
+                                                           final Bytes to,
+                                                           final long timeFrom,
+                                                           final long timeTo) {
         // since this function may not access the underlying inner store, we need to validate
         // if store is open outside as well.
         validateStoreOpen();
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().fetch(from, to, timeFrom, timeTo);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator =
+            wrapped().fetch(from, to, timeFrom, timeTo);
         if (cache == null) {
             return underlyingIterator;
         }
@@ -200,10 +209,7 @@ class CachingWindowStore
         final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(to, timeTo));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(name, cacheKeyFrom, cacheKeyTo);
 
-        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(from,
-                                                                             to,
-                                                                             timeFrom,
-                                                                             timeTo);
+        final HasNextCondition hasNextCondition = keySchema.hasNextCondition(from, to, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
 
         return new MergedSortedCacheWindowStoreKeyValueIterator(
@@ -215,18 +221,18 @@ class CachingWindowStore
         );
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
+                                                              final long timeTo) {
         validateStoreOpen();
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> underlyingIterator = wrapped().fetchAll(timeFrom, timeTo);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(name);
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(null, null, timeFrom, timeTo);
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator,
-                                                                                                              hasNextCondition,
-                                                                                                              cacheFunction);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
+            new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheWindowStoreKeyValueIterator(
                 filteredCacheIterator,
                 underlyingIterator,
