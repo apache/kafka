@@ -37,7 +37,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
-import org.apache.log4j.Logger;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.ClassRule;
@@ -53,8 +52,6 @@ import java.util.stream.Collectors;
 @SuppressWarnings("unchecked")
 @Category({IntegrationTest.class})
 public class MetricsIntegrationTest {
-
-    private Logger logger = Logger.getLogger(MetricsIntegrationTest.class);
 
     private static final int NUM_BROKERS = 1;
 
@@ -515,9 +512,7 @@ public class MetricsIntegrationTest {
                 Assert.assertNotNull("Metric:'" + m.metricName() + "' must be not null", m.metricValue());
             }
         } catch (final Throwable e) {
-            logger.error(e.getMessage());
             throw e;
         }
-
     }
 }
