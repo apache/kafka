@@ -155,6 +155,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private Set<String> connectorTargetStateChanges = new HashSet<>();
     private boolean needsReconfigRebalance;
     private volatile int generation;
+    private volatile long scheduledRebalance;
 
     private final DistributedConfig config;
     ConnectProtocolCompatibility protocolCompatibility;
@@ -216,6 +217,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         protocolCompatibility = ConnectProtocolCompatibility.compatibility(
                 config.getString(DistributedConfig.CONNECT_PROTOCOL_CONFIG));
+        scheduledRebalance = Long.MAX_VALUE;
     }
 
     @Override
@@ -289,6 +291,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             } catch (Throwable t) {
                 next.callback().onCompletion(t, null);
             }
+        }
+
+        if (scheduledRebalance < Long.MAX_VALUE) {
+            nextRequestTimeoutMs = Math.min(nextRequestTimeoutMs, Math.max(scheduledRebalance - now, 0));
         }
 
         // Process any configuration updates
@@ -791,6 +797,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
         }
 
+        long now = System.currentTimeMillis();
+        if (scheduledRebalance <= now) {
+            needsRejoin = true;
+            scheduledRebalance = Long.MAX_VALUE;
+        }
+
         if (needsReadToEnd) {
             // Force exiting this method to avoid creating any connectors/tasks and require immediate rejoining if
             // we timed out. This should only happen if we failed to read configuration for long enough,
@@ -1252,6 +1264,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             synchronized (DistributedHerder.this) {
                 DistributedHerder.this.assignment = assignment;
                 DistributedHerder.this.generation = generation;
+                int delay = assignment.delay();
+                DistributedHerder.this.scheduledRebalance = delay > 0
+                                                            ? System.currentTimeMillis() + delay
+                                                            : Long.MAX_VALUE;
                 rebalanceResolved = false;
                 herderMetrics.rebalanceStarted(time.milliseconds());
             }
