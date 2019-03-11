@@ -28,14 +28,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
-import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 
@@ -44,16 +42,26 @@ import java.util.Map;
 import static java.time.Instant.ofEpochMilli;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
+import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.createNiceMock;
+import static org.easymock.EasyMock.eq;
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class MeteredWindowStoreTest {
     private InternalMockProcessorContext context;
     @SuppressWarnings("unchecked")
-    private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
+    private final WindowStore<Bytes, byte[]> innerStoreMock = createNiceMock(WindowStore.class);
     private final MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
         innerStoreMock,
+        10L, // any size
         "scope",
         new MockTime(),
         Serdes.String(),
@@ -62,7 +70,7 @@ public class MeteredWindowStoreTest {
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
 
     {
-        EasyMock.expect(innerStoreMock.name()).andReturn("mocked-store").anyTimes();
+        expect(innerStoreMock.name()).andReturn("mocked-store").anyTimes();
     }
 
     @Before
@@ -75,19 +83,14 @@ public class MeteredWindowStoreTest {
             Serdes.Long(),
             streamsMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-            new RecordCollector.Supplier() {
-                @Override
-                public RecordCollector recordCollector() {
-                    return new NoOpRecordCollector();
-                }
-            },
+            NoOpRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
         );
     }
 
     @Test
     public void testMetrics() {
-        EasyMock.replay(innerStoreMock);
+        replay(innerStoreMock);
         store.init(context, store);
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
@@ -100,8 +103,8 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldRecordRestoreLatencyOnInit() {
         innerStoreMock.init(context, store);
-        EasyMock.expectLastCall();
-        EasyMock.replay(innerStoreMock);
+        expectLastCall();
+        replay(innerStoreMock);
         store.init(context, store);
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "restore-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
@@ -111,79 +114,104 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldRecordPutLatency() {
         final byte[] bytes = "a".getBytes();
-        innerStoreMock.put(EasyMock.eq(Bytes.wrap(bytes)), EasyMock.<byte[]>anyObject(), EasyMock.eq(context.timestamp()));
-        EasyMock.expectLastCall();
-        EasyMock.replay(innerStoreMock);
+        innerStoreMock.put(eq(Bytes.wrap(bytes)), anyObject(), eq(context.timestamp()));
+        expectLastCall();
+        replay(innerStoreMock);
 
         store.init(context, store);
         store.put("a", "a");
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "put-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "put-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());
-        EasyMock.verify(innerStoreMock);
+        verify(innerStoreMock);
     }
 
     @Test
     public void shouldRecordFetchLatency() {
-        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
-        EasyMock.replay(innerStoreMock);
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
+        replay(innerStoreMock);
 
         store.init(context, store);
         store.fetch("a", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "fetch-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "fetch-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());
-        EasyMock.verify(innerStoreMock);
+        verify(innerStoreMock);
     }
 
     @Test
     public void shouldRecordFetchRangeLatency() {
-        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
-        EasyMock.replay(innerStoreMock);
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
+        replay(innerStoreMock);
 
         store.init(context, store);
         store.fetch("a", "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "fetch-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "fetch-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());
-        EasyMock.verify(innerStoreMock);
+        verify(innerStoreMock);
     }
-
 
     @Test
     public void shouldRecordFlushLatency() {
         innerStoreMock.flush();
-        EasyMock.expectLastCall();
-        EasyMock.replay(innerStoreMock);
+        expectLastCall();
+        replay(innerStoreMock);
 
         store.init(context, store);
         store.flush();
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "flush-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "flush-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());
-        EasyMock.verify(innerStoreMock);
+        verify(innerStoreMock);
     }
-
 
     @Test
     public void shouldCloseUnderlyingStore() {
         innerStoreMock.close();
-        EasyMock.expectLastCall();
-        EasyMock.replay(innerStoreMock);
+        expectLastCall();
+        replay(innerStoreMock);
 
         store.init(context, store);
         store.close();
-        EasyMock.verify(innerStoreMock);
+        verify(innerStoreMock);
     }
-
 
     @Test
     public void shouldNotExceptionIfFetchReturnsNull() {
-        EasyMock.expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).andReturn(null);
-        EasyMock.replay(innerStoreMock);
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).andReturn(null);
+        replay(innerStoreMock);
 
         store.init(context, store);
         assertNull(store.fetch("a", 0));
+    }
+
+    private interface CachedWindowStore extends WindowStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> { }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldSetFlushListenerOnWrappedCachingStore() {
+        final CachedWindowStore cachedWindowStore = mock(CachedWindowStore.class);
+
+        expect(cachedWindowStore.setFlushListener(anyObject(CacheFlushListener.class), eq(false))).andReturn(true);
+        replay(cachedWindowStore);
+
+        final MeteredWindowStore<String, String> metered = new MeteredWindowStore<>(
+            cachedWindowStore,
+            10L, // any size
+            "scope",
+            new MockTime(),
+            Serdes.String(),
+            new SerdeThatDoesntHandleNull()
+        );
+        assertTrue(metered.setFlushListener(null, false));
+
+        verify(cachedWindowStore);
+    }
+
+    @Test
+    public void shouldNotSetFlushListenerOnWrappedNoneCachingStore() {
+        assertFalse(store.setFlushListener(null, false));
     }
 
 }

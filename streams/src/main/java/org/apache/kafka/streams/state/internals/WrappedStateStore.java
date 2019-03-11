@@ -24,7 +24,8 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 /**
  * A storage engine wrapper for utilities like logging, caching, and metering.
  */
-public abstract class WrappedStateStore<S extends StateStore> implements StateStore {
+public abstract class WrappedStateStore<S extends StateStore, K, V> implements StateStore, CachedStateStore<K, V> {
+
     public static boolean isTimestamped(final StateStore stateStore) {
         if (stateStore instanceof TimestampedBytesStore) {
             return true;
@@ -45,6 +46,16 @@ public abstract class WrappedStateStore<S extends StateStore> implements StateSt
     public void init(final ProcessorContext context,
                      final StateStore root) {
         wrapped.init(context, root);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Override
+    public boolean setFlushListener(final CacheFlushListener<K, V> listener,
+                                    final boolean sendOldValues) {
+        if (wrapped instanceof CachedStateStore) {
+            return ((CachedStateStore<K, V>) wrapped).setFlushListener(listener, sendOldValues);
+        }
+        return false;
     }
 
     @Override

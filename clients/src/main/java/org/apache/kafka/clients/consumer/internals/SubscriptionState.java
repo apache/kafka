@@ -34,6 +34,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collector;
@@ -54,6 +55,11 @@ import java.util.stream.Collectors;
  *
  * Note that pause state as well as fetch/consumed positions are not preserved when partition
  * assignment is changed whether directly by the user or through a group rebalance.
+ *
+ * Thread Safety: this class is generally not thread-safe. It should only be accessed in the
+ * consumer's calling thread. The only exception is {@link ConsumerMetadata} which accesses
+ * the subscription state needed to build and handle Metadata requests. The thread-safe methods
+ * are documented below.
  */
 public class SubscriptionState {
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
@@ -66,15 +72,17 @@ public class SubscriptionState {
     }
 
     /* the type of subscription */
-    private SubscriptionType subscriptionType;
+    private volatile SubscriptionType subscriptionType;
 
     /* the pattern user has requested */
-    private Pattern subscribedPattern;
+    private volatile Pattern subscribedPattern;
 
     /* the list of topics the user has requested */
     private Set<String> subscription;
 
-    /* the list of topics the group has subscribed to (set only for the leader on join group completion) */
+    /* The list of topics the group has subscribed to. This may include some topics which are not part
+     * of `subscription` for the leader of a group since it is responsible for detecting metadata changes
+     * which require a group rebalance. */
     private final Set<String> groupSubscription;
 
     /* the partitions that are currently assigned, note that the order of partition matters (see FetchBuilder for more details) */
@@ -94,7 +102,7 @@ public class SubscriptionState {
         this.defaultResetStrategy = defaultResetStrategy;
         this.subscription = Collections.emptySet();
         this.assignment = new PartitionStates<>();
-        this.groupSubscription = new HashSet<>();
+        this.groupSubscription = ConcurrentHashMap.newKeySet();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
     }
@@ -112,7 +120,7 @@ public class SubscriptionState {
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
     }
 
-    public void subscribe(Set<String> topics, ConsumerRebalanceListener listener) {
+    public boolean subscribe(Set<String> topics, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
 
@@ -120,22 +128,24 @@ public class SubscriptionState {
 
         this.rebalanceListener = listener;
 
-        changeSubscription(topics);
+        return changeSubscription(topics);
     }
 
-    public void subscribeFromPattern(Set<String> topics) {
+    public boolean subscribeFromPattern(Set<String> topics) {
         if (subscriptionType != SubscriptionType.AUTO_PATTERN)
             throw new IllegalArgumentException("Attempt to subscribe from pattern while subscription type set to " +
                     subscriptionType);
 
-        changeSubscription(topics);
+        return changeSubscription(topics);
     }
 
-    private void changeSubscription(Set<String> topicsToSubscribe) {
-        if (!this.subscription.equals(topicsToSubscribe)) {
-            this.subscription = topicsToSubscribe;
-            this.groupSubscription.addAll(topicsToSubscribe);
-        }
+    private boolean changeSubscription(Set<String> topicsToSubscribe) {
+        if (subscription.equals(topicsToSubscribe))
+            return false;
+
+        this.subscription = topicsToSubscribe;
+        this.groupSubscription.addAll(topicsToSubscribe);
+        return true;
     }
 
     /**
@@ -143,10 +153,10 @@ public class SubscriptionState {
      * that it receives metadata updates for all topics that the group is interested in.
      * @param topics The topics to add to the group subscription
      */
-    public void groupSubscribe(Collection<String> topics) {
-        if (this.subscriptionType == SubscriptionType.USER_ASSIGNED)
+    public boolean groupSubscribe(Collection<String> topics) {
+        if (!partitionsAutoAssigned())
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
-        this.groupSubscription.addAll(topics);
+        return this.groupSubscription.addAll(topics);
     }
 
     /**
@@ -161,21 +171,25 @@ public class SubscriptionState {
      * note this is different from {@link #assignFromSubscribed(Collection)}
      * whose input partitions are provided from the subscribed topics.
      */
-    public void assignFromUser(Set<TopicPartition> partitions) {
+    public boolean assignFromUser(Set<TopicPartition> partitions) {
         setSubscriptionType(SubscriptionType.USER_ASSIGNED);
 
-        if (!this.assignment.partitionSet().equals(partitions)) {
-            fireOnAssignment(partitions);
+        if (this.assignment.partitionSet().equals(partitions))
+            return false;
 
-            Map<TopicPartition, TopicPartitionState> partitionToState = new HashMap<>();
-            for (TopicPartition partition : partitions) {
-                TopicPartitionState state = assignment.stateValue(partition);
-                if (state == null)
-                    state = new TopicPartitionState();
-                partitionToState.put(partition, state);
-            }
-            this.assignment.set(partitionToState);
+        fireOnAssignment(partitions);
+
+        Set<String> manualSubscribedTopics = new HashSet<>();
+        Map<TopicPartition, TopicPartitionState> partitionToState = new HashMap<>();
+        for (TopicPartition partition : partitions) {
+            TopicPartitionState state = assignment.stateValue(partition);
+            if (state == null)
+                state = new TopicPartitionState();
+            partitionToState.put(partition, state);
+            manualSubscribedTopics.add(partition.topic());
         }
+        this.assignment.set(partitionToState);
+        return changeSubscription(manualSubscribedTopics);
     }
 
     /**
@@ -229,6 +243,10 @@ public class SubscriptionState {
         this.subscribedPattern = pattern;
     }
 
+    /**
+     * Check whether pattern subscription is in use. This is thread-safe.
+     *
+     */
     public boolean hasPatternSubscription() {
         return this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
@@ -239,18 +257,31 @@ public class SubscriptionState {
 
     public void unsubscribe() {
         this.subscription = Collections.emptySet();
+        this.groupSubscription.clear();
         this.assignment.clear();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
         fireOnAssignment(Collections.emptySet());
     }
 
-    public Pattern subscribedPattern() {
-        return this.subscribedPattern;
+    /**
+     * Check whether a topic matches a subscribed pattern.
+     *
+     * This is thread-safe, but it may not always reflect the most recent subscription pattern.
+     *
+     * @return true if pattern subscription is in use and the topic matches the subscribed pattern, false otherwise
+     */
+    public boolean matchesSubscribedPattern(String topic) {
+        Pattern pattern = this.subscribedPattern;
+        if (hasPatternSubscription() && pattern != null)
+            return pattern.matcher(topic).matches();
+        return false;
     }
 
     public Set<String> subscription() {
-        return this.subscription;
+        if (partitionsAutoAssigned())
+            return this.subscription;
+        return Collections.emptySet();
     }
 
     public Set<TopicPartition> pausedPartitions() {
@@ -264,11 +295,21 @@ public class SubscriptionState {
      * require rebalancing. The leader fetches metadata for all topics in the group so that it
      * can do the partition assignment (which requires at least partition counts for all topics
      * to be assigned).
+     *
+     * Note this is thread-safe since the Set is backed by a ConcurrentMap.
+     *
      * @return The union of all subscribed topics in the group if this member is the leader
      *   of the current generation; otherwise it returns the same set as {@link #subscription()}
      */
     public Set<String> groupSubscription() {
         return this.groupSubscription;
+    }
+
+    /**
+     * Note this is thread-safe since the Set is backed by a ConcurrentMap.
+     */
+    public boolean isGroupSubscribed(String topic) {
+        return groupSubscription.contains(topic);
     }
 
     private TopicPartitionState assignedState(TopicPartition tp) {

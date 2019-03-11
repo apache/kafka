@@ -81,5 +81,10 @@ public class VersionsTest {
         assertFalse(newVersions(0, 1).contains((short) 2));
         assertTrue(newVersions(0, Short.MAX_VALUE).contains((short) 100));
         assertFalse(newVersions(2, Short.MAX_VALUE).contains((short) 0));
+        assertTrue(newVersions(2, 3).contains(newVersions(2, 3)));
+        assertTrue(newVersions(2, 3).contains(newVersions(2, 2)));
+        assertFalse(newVersions(2, 3).contains(newVersions(2, 4)));
+        assertTrue(newVersions(2, 3).contains(Versions.NONE));
+        assertTrue(Versions.ALL.contains(newVersions(1, 2)));
     }
 }

@@ -23,6 +23,6 @@ public interface CachedStateStore<K, V> {
      * @param listener
      * @param sendOldValues
      */
-    void setFlushListener(final CacheFlushListener<K, V> listener,
-                          final boolean sendOldValues);
+    boolean setFlushListener(final CacheFlushListener<K, V> listener,
+                             final boolean sendOldValues);
 }

@@ -82,7 +82,7 @@ public class Sender implements Runnable {
     private final RecordAccumulator accumulator;
 
     /* the metadata for the client */
-    private final Metadata metadata;
+    private final ProducerMetadata metadata;
 
     /* the flag indicating whether the producer should guarantee the message order on the broker or not. */
     private final boolean guaranteeMessageOrder;
@@ -125,7 +125,7 @@ public class Sender implements Runnable {
 
     public Sender(LogContext logContext,
                   KafkaClient client,
-                  Metadata metadata,
+                  ProducerMetadata metadata,
                   RecordAccumulator accumulator,
                   boolean guaranteeMessageOrder,
                   int maxRequestSize,
@@ -494,7 +494,7 @@ public class Sender implements Runnable {
     }
 
     private void maybeWaitForProducerId() {
-        while (running && !transactionManager.hasProducerId() && !transactionManager.hasError()) {
+        while (!forceClose && !transactionManager.hasProducerId() && !transactionManager.hasError()) {
             Node node = null;
             try {
                 node = awaitLeastLoadedNodeReady(requestTimeoutMs);
@@ -668,7 +668,7 @@ public class Sender implements Runnable {
                 log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}",
                     batch.producerId(),
                     batch.topicPartition,
-                    transactionManager.lastAckedSequence(batch.topicPartition));
+                    transactionManager.lastAckedSequence(batch.topicPartition).orElse(-1));
             }
             transactionManager.updateLastAckedOffset(response, batch);
             transactionManager.removeInFlightBatch(batch);
