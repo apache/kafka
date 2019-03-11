@@ -68,6 +68,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
+import org.slf4j.helpers.MessageFormatter;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -243,8 +244,19 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                     TopicPartition partition = entry.getKey();
                                     FetchRequest.PartitionData requestData = data.sessionPartitions().get(partition);
                                     if (requestData == null) {
+                                        String message;
+                                        if (data.metadata().isFull()) {
+                                            message = MessageFormatter.arrayFormat(
+                                                    "Response for missing full request partition: partition={}; metadata={}",
+                                                    new Object[]{partition, data.metadata()}).getMessage();
+                                        } else {
+                                            message = MessageFormatter.arrayFormat(
+                                                    "Response for missing session request partition: partition={}; metadata={}; toSend={}; toForget={}",
+                                                    new Object[]{partition, data.metadata(), data.toSend(), data.toForget()}).getMessage();
+                                        }
+
                                         // Received fetch response for missing session partition
-                                        throw new IllegalStateException("Received response for partition " + partition + " which is not part of the session");
+                                        throw new IllegalStateException(message);
                                     } else {
                                         long fetchOffset = requestData.fetchOffset;
                                         FetchResponse.PartitionData<Records> fetchData = entry.getValue();
