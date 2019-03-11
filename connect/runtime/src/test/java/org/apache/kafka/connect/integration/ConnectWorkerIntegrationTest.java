@@ -75,7 +75,6 @@ public class ConnectWorkerIntegrationTest {
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
-                .numBrokers(1)
                 .workerProps(exampleWorkerProps)
                 .brokerProps(exampleBrokerProps)
                 .maskExitProcedures(true) // true is the default, setting here as example

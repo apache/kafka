@@ -88,13 +88,12 @@ public class MonitorableSourceConnector extends TestSourceConnector {
         private String connectorName;
         private String taskId;
         private String topicName;
-        //TODO: extend its class and use it
         private TaskHandle taskHandle;
         private volatile boolean stopped;
         private long startingSeqno;
         private long seqno;
         private long throughput;
-        private long batchSize;
+        private int batchSize;
         private ThroughputThrottler throttler;
 
         @Override
@@ -108,7 +107,7 @@ public class MonitorableSourceConnector extends TestSourceConnector {
             connectorName = props.get("connector.name");
             topicName = props.getOrDefault("topic", "sequential-topic");
             throughput = Long.valueOf(props.getOrDefault("throughput", "-1"));
-            batchSize = Long.valueOf(props.getOrDefault("messages.per.poll", "1"));
+            batchSize = Integer.valueOf(props.getOrDefault("messages.per.poll", "1"));
             taskHandle = RuntimeHandles.get().connectorHandle(connectorName).taskHandle(taskId);
             Map<String, Object> offset = Optional.ofNullable(
                     context.offsetStorageReader().offset(Collections.singletonMap("task.id", taskId)))
@@ -124,6 +123,7 @@ public class MonitorableSourceConnector extends TestSourceConnector {
                 if (throttler.shouldThrottle(seqno - startingSeqno, System.currentTimeMillis())) {
                     throttler.throttle();
                 }
+                taskHandle.record(batchSize);
                 return LongStream.range(0, batchSize)
                         .mapToObj(i -> new SourceRecord(
                                 Collections.singletonMap("task.id", taskId),
@@ -143,6 +143,12 @@ public class MonitorableSourceConnector extends TestSourceConnector {
         public void commit() {
             log.info("Task {} committing offsets", taskId);
             //TODO: save progress outside the offset topic, potentially in the task handle
+        }
+
+        @Override
+        public void commitRecord(SourceRecord record) {
+            log.trace("Committing record: {}", record);
+            taskHandle.commit();
         }
 
         @Override

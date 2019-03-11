@@ -40,6 +40,7 @@ import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 
 /**
  * An example integration test that demonstrates how to setup an integration test for Connect.
@@ -54,9 +55,8 @@ public class ExampleConnectIntegrationTest {
 
     private static final int NUM_RECORDS_PRODUCED = 2000;
     private static final int NUM_TOPIC_PARTITIONS = 3;
-    private static final int CONSUME_MAX_DURATION_MS = 5000;
+    private static final int RECORD_MAX_DURATION_MS = 5000;
     private static final int CONNECTOR_SETUP_DURATION_MS = 15000;
-    private static final int WORKER_SETUP_DURATION_MS = 20_000;
     private static final int NUM_TASKS = 3;
     private static final int NUM_WORKERS = 3;
     private static final String CONNECTOR_NAME = "simple-conn";
@@ -68,7 +68,7 @@ public class ExampleConnectIntegrationTest {
     public void setup() throws IOException {
         // setup Connect worker properties
         Map<String, String> exampleWorkerProps = new HashMap<>();
-        exampleWorkerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, "30000");
+        exampleWorkerProps.put(OFFSET_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(5_000));
 
         // setup Kafka broker properties
         Properties exampleBrokerProps = new Properties();
@@ -104,7 +104,7 @@ public class ExampleConnectIntegrationTest {
      * records, and start up a sink connector which will consume these records.
      */
     @Test
-    public void testProduceConsumeConnector() throws Exception {
+    public void testSinkConnector() throws Exception {
         // create test topic
         connect.kafka().createTopic("test-topic", NUM_TOPIC_PARTITIONS);
 
@@ -118,6 +118,9 @@ public class ExampleConnectIntegrationTest {
 
         // expect all records to be consumed by the connector
         connectorHandle.expectedRecords(NUM_RECORDS_PRODUCED);
+
+        // expect all records to be consumed by the connector
+        connectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
 
         // start a sink connector
         connect.configureConnector(CONNECTOR_NAME, props);
@@ -133,10 +136,54 @@ public class ExampleConnectIntegrationTest {
 
         // consume all records from the source topic or fail, to ensure that they were correctly produced.
         assertEquals("Unexpected number of records consumed", NUM_RECORDS_PRODUCED,
-                connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, "test-topic").count());
+                connect.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_MAX_DURATION_MS, "test-topic").count());
 
         // wait for the connector tasks to consume all records.
-        connectorHandle.awaitRecords(CONSUME_MAX_DURATION_MS);
+        connectorHandle.awaitRecords(RECORD_MAX_DURATION_MS);
+
+        // wait for the connector tasks to commit all records.
+        connectorHandle.awaitCommits(CONNECTOR_SETUP_DURATION_MS);
+
+        // delete connector
+        connect.deleteConnector(CONNECTOR_NAME);
+    }
+
+    /**
+     * Simple test case to configure and execute an embedded Connect cluster. The test will produce and consume
+     * records, and start up a sink connector which will consume these records.
+     */
+    @Test
+    public void testSourceConnector() throws Exception {
+        // create test topic
+        connect.kafka().createTopic("test-topic", NUM_TOPIC_PARTITIONS);
+
+        // setup up props for the sink connector
+        Map<String, String> props = new HashMap<>();
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
+        props.put("topic", "test-topic");
+        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
+
+        // expect all records to be produced by the connector
+        connectorHandle.expectedRecords(NUM_RECORDS_PRODUCED);
+
+        // expect all records to be produced by the connector
+        connectorHandle.expectedCommits(NUM_RECORDS_PRODUCED);
+
+        // start a source connector
+        connect.configureConnector(CONNECTOR_NAME, props);
+
+        // wait for the connector tasks to produce enough records
+        connectorHandle.awaitRecords(RECORD_MAX_DURATION_MS);
+
+        // wait for the connector tasks to commit enough records
+        connectorHandle.awaitCommits(CONNECTOR_SETUP_DURATION_MS);
+
+        // consume all records from the source topic or fail, to ensure that they were correctly produced
+        int recordNum = connect.kafka().consume(NUM_RECORDS_PRODUCED, RECORD_MAX_DURATION_MS, "test-topic").count();
+        assertTrue("Not enough records produced by source connector. Expected at least: " + NUM_RECORDS_PRODUCED + " + but got " + recordNum,
+                recordNum >= NUM_RECORDS_PRODUCED);
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);
