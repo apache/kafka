@@ -70,7 +70,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
-      service.collectGroupMembers(false)._2.get.size == 1
+      service.collectGroupMembers(group, false)._2.get.size == 1
     }, "The group did not initialize as expected.", maxRetries = 3)
 
     val output = TestUtils.grabConsoleOutput(service.deleteGroups())
@@ -88,7 +88,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
-      service.collectGroupMembers(false)._2.get.size == 1
+      service.collectGroupMembers(group, false)._2.get.size == 1
     }, "The group did not initialize as expected.", maxRetries = 3)
 
     val result = service.deleteGroups()
