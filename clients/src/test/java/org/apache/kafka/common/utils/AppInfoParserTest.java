@@ -28,17 +28,17 @@ import javax.management.ObjectName;
 
 import java.lang.management.ManagementFactory;
 
-import static junit.framework.TestCase.assertNull;
-import static junit.framework.TestCase.assertEquals;
-import static junit.framework.TestCase.assertFalse;
-import static junit.framework.TestCase.assertTrue;
+import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 public class AppInfoParserTest {
-    private static final String expectedCommitVersion = AppInfoParser.DEFAULT_VALUE;
-    private static final String expectedVersion = AppInfoParser.DEFAULT_VALUE;
-    private static final Long expectedStartMs = 1552313875722L;
-    private static final String metricsPrefix = "app-info-test";
-    private static final String metricsId = "test";
+    private static final String EXPECTED_COMMIT_VERSION = AppInfoParser.DEFAULT_VALUE;
+    private static final String EXPECTED_VERSION = AppInfoParser.DEFAULT_VALUE;
+    private static final Long EXPECTED_START_MS = 1552313875722L;
+    private static final String METRICS_PREFIX = "app-info-test";
+    private static final String METRICS_ID = "test";
 
     private Metrics metrics;
     private MBeanServer mBeanServer;
@@ -62,7 +62,7 @@ public class AppInfoParserTest {
     @Test
     public void testUnregisterAppInfoUnregistersMetrics() throws JMException {
         registerAppInfo();
-        AppInfoParser.unregisterAppInfo(metricsPrefix, metricsId, metrics);
+        AppInfoParser.unregisterAppInfo(METRICS_PREFIX, METRICS_ID, metrics);
 
         assertFalse(mBeanServer.isRegistered(expectedAppObjectName()));
         assertNull(metrics.metric(metrics.metricName("commit-id", "app-info")));
@@ -71,18 +71,18 @@ public class AppInfoParserTest {
     }
 
     private void registerAppInfo() throws JMException {
-        assertEquals(expectedCommitVersion, AppInfoParser.getCommitId());
-        assertEquals(expectedVersion, AppInfoParser.getVersion());
+        assertEquals(EXPECTED_COMMIT_VERSION, AppInfoParser.getCommitId());
+        assertEquals(EXPECTED_VERSION, AppInfoParser.getVersion());
 
-        AppInfoParser.registerAppInfo(metricsPrefix, metricsId, metrics, expectedStartMs);
+        AppInfoParser.registerAppInfo(METRICS_PREFIX, METRICS_ID, metrics, EXPECTED_START_MS);
 
         assertTrue(mBeanServer.isRegistered(expectedAppObjectName()));
-        assertEquals(expectedCommitVersion, metrics.metric(metrics.metricName("commit-id", "app-info")).metricValue());
-        assertEquals(expectedVersion, metrics.metric(metrics.metricName("version", "app-info")).metricValue());
-        assertEquals(expectedStartMs, metrics.metric(metrics.metricName("start-time-ms", "app-info")).metricValue());
+        assertEquals(EXPECTED_COMMIT_VERSION, metrics.metric(metrics.metricName("commit-id", "app-info")).metricValue());
+        assertEquals(EXPECTED_VERSION, metrics.metric(metrics.metricName("version", "app-info")).metricValue());
+        assertEquals(EXPECTED_START_MS, metrics.metric(metrics.metricName("start-time-ms", "app-info")).metricValue());
     }
 
     private ObjectName expectedAppObjectName() throws MalformedObjectNameException {
-        return new ObjectName(metricsPrefix + ":type=app-info,id=" + metricsId);
+        return new ObjectName(METRICS_PREFIX + ":type=app-info,id=" + METRICS_ID);
     }
 }
