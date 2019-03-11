@@ -95,7 +95,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case STOP_REPLICA:
                 return new StopReplicaResponse(struct);
             case CONTROLLED_SHUTDOWN:
-                return new ControlledShutdownResponse(struct);
+                return new ControlledShutdownResponse(struct, version);
             case UPDATE_METADATA:
                 return new UpdateMetadataResponse(struct);
             case LEADER_AND_ISR:
