@@ -341,6 +341,7 @@ class ConsumerBounceTest extends BaseConsumerTest with Logging {
     }}
     if (kickedOutConsumerIdx.isEmpty)
       fail(s"Should have received an ${classOf[GroupMaxSizeReachedException]} during the cluster roll")
+    restartDeadBrokers()
 
     // assert that the group has gone through a rebalance and shed off one consumer
     consumerPollers.remove(kickedOutConsumerIdx.get).shutdown()
