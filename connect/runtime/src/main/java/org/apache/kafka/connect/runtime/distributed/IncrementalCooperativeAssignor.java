@@ -30,6 +30,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -52,6 +53,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private final int maxDelay;
     private ConnectorsAndTasks previousAssignment;
     private long scheduledRebalance;
+    private Set<String> candidateWorkersForReassignment;
     private int delay;
 
     public IncrementalCooperativeAssignor(LogContext logContext, int maxDelay) {
@@ -59,6 +61,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         this.maxDelay = maxDelay;
         this.previousAssignment = ConnectorsAndTasks.EMPTY;
         this.scheduledRebalance = 0;
+        this.candidateWorkersForReassignment = new LinkedHashSet<>();
         this.delay = 0;
     }
 
@@ -161,12 +164,16 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         // A collection of the complete assignment
         List<WorkerLoad> completeWorkerAssignment = workerAssignment(memberConfigs, ConnectorsAndTasks.EMPTY);
+        // Per worker connector assignments without removing deleted connectors yet
         Map<String, Collection<String>> connectorAssignments =
                 completeWorkerAssignment.stream().collect(Collectors.toMap(WorkerLoad::worker, WorkerLoad::connectors));
+        // Per worker task assignments without removing deleted connectors yet
         Map<String, Collection<ConnectorTaskId>> taskAssignments =
                 completeWorkerAssignment.stream().collect(Collectors.toMap(WorkerLoad::worker, WorkerLoad::tasks));
 
+        // Connector to worker reverse lookup map
         Map<String, String> connectorOwners = WorkerCoordinator.invertAssignment(connectorAssignments);
+        // Task to worker reverse lookup map
         Map<ConnectorTaskId, String> taskOwners = WorkerCoordinator.invertAssignment(taskAssignments);
 
         // A collection of the current assignment excluding the connectors-and-tasks to be deleted
@@ -174,18 +181,18 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         // Compute the connectors-and-tasks to be revoked for load balancing without taking into
         // account the deleted ones.
-        // TODO: From the activeAssignments we only use their size of connectors-and-tasks.
-        // Consider optimizing out the computation of this set
+        // TODO: From the activeAssignments we only use their size of connectors-and-tasks;
+        // consider optimizing out the computation of this set
         Map<String, ConnectorsAndTasks> toRevoke = performTaskRevocation(activeAssignments, currentWorkerAssignment);
 
-        // Add the connectors deleted via configuration to the revoked set
+        // Add the connectors that have been deleted to the revoked set
         deleted.connectors().forEach(c ->
                 toRevoke.computeIfAbsent(
                     connectorOwners.get(c),
                     v -> ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>()))
                     .connectors().add(c));
 
-        // Add the tasks deleted via configuration to the revoked set
+        // Add the tasks that have been deleted to the revoked set
         deleted.tasks().forEach(t ->
                 toRevoke.computeIfAbsent(
                     taskOwners.get(t),
@@ -200,36 +207,12 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         taskAssignments =
                 completeWorkerAssignment.stream().collect(Collectors.toMap(WorkerLoad::worker, WorkerLoad::tasks));
 
-        if (lostAssignments.isEmpty()) {
-            assignConnectors(completeWorkerAssignment, newSubmissions.connectors());
-            assignTasks(completeWorkerAssignment, newSubmissions.tasks());
-        } else {
-            long now = System.currentTimeMillis();
-            log.debug("Found the following connectors and tasks missing from previous assignment: "
-                    + lostAssignments);
-
-            if (scheduledRebalance > 0 && now >= scheduledRebalance) {
-                // delayed rebalance expired and it's time to assign resources
-                // TODO: assign lost
-            } else {
-                if (now < scheduledRebalance) {
-                    // a delayed rebalance is in progress, but it's not yet time to reassign
-                    // unaccounted resources
-                    delay = calculateDelay(now);
-                } else {
-                    // the leader is not aware of a scheduled rebalance, but maybe the group has one
-                    // if so, respect the existing delay with a small decrease.
-                    // TODO: this is currently not reachable here. Move before lostAssignments check
-                    int maxExistingDelay = maxDelay(memberConfigs);
-                    // Decrease any existing delay by %10 of maxDelay
-                    int decrement = maxDelay / 10;
-                    delay = maxExistingDelay > 0
-                            ? Math.max(0, Math.min(maxExistingDelay - decrement, decrement * 9))
-                            : maxDelay;
-                }
-                scheduledRebalance = now + delay;
-            }
+        if (!lostAssignments.isEmpty()) {
+            handleLostAssignments(lostAssignments, newSubmissions, completeWorkerAssignment);
         }
+
+        assignConnectors(completeWorkerAssignment, newSubmissions.connectors());
+        assignTasks(completeWorkerAssignment, newSubmissions.tasks());
 
         log.debug("Complete assignments: {}", currentWorkerAssignment);
         log.debug("New complete assignments: {}", completeWorkerAssignment);
@@ -257,16 +240,71 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                                 incrementalTaskAssignments, toRevoke, delay);
 
         previousAssignment = ConnectorsAndTasks.embed(
-                connectorAssignments.values().stream().flatMap(Collection::stream).collect(Collectors.toList()),
-                taskAssignments.values().stream().flatMap(Collection::stream).collect(Collectors.toList()));
+                connectorAssignments.values().stream().flatMap(Collection::stream).collect(Collectors.toSet()),
+                taskAssignments.values().stream().flatMap(Collection::stream).collect(Collectors.toSet()));
 
         for (ConnectorsAndTasks revoked : toRevoke.values()) {
             previousAssignment.connectors().removeAll(revoked.connectors());
             previousAssignment.tasks().removeAll(revoked.tasks());
         }
 
+        // Depends on the previous assignment's collections being sets at the moment.
+        // TODO: make it independent
+        previousAssignment.connectors().addAll(lostAssignments.connectors());
+        previousAssignment.tasks().addAll(lostAssignments.tasks());
+
         log.debug("Actual assignments: {}", assignments);
         return serializeAssignments(assignments);
+    }
+
+    // Factoring out with specific arguments to fix checkstyle error on method length.
+    // TODO: revisit passed arguments
+    private void handleLostAssignments(ConnectorsAndTasks lostAssignments,
+                                       ConnectorsAndTasks newSubmissions,
+                                       List<WorkerLoad> completeWorkerAssignment) {
+        if (!lostAssignments.isEmpty()) {
+            final long now = System.currentTimeMillis();
+            log.debug("Found the following connectors and tasks missing from previous assignment: "
+                    + lostAssignments);
+
+            if (scheduledRebalance > 0 && now >= scheduledRebalance) {
+                // delayed rebalance expired and it's time to assign resources
+                if (!candidateWorkersForReassignment.isEmpty()) {
+                    // At the moment we pick the first one.
+                    // The set is non-empty so it has at least one element.
+                    String recoveredWorker = candidateWorkersForReassignment.iterator().next();
+                    WorkerLoad workerLoad = completeWorkerAssignment.stream()
+                            .filter(w -> recoveredWorker.equals(w.worker()))
+                            .findAny()
+                            .orElse(null);
+
+                    if (workerLoad != null) {
+                        lostAssignments.connectors().forEach(c -> workerLoad.assign(c));
+                        lostAssignments.tasks().forEach(t -> workerLoad.assign(t));
+                    }
+                } else {
+                    newSubmissions.connectors().addAll(lostAssignments.connectors());
+                    newSubmissions.tasks().addAll(lostAssignments.tasks());
+                }
+                scheduledRebalance = 0;
+            } else {
+                if (now < scheduledRebalance) {
+                    // a delayed rebalance is in progress, but it's not yet time to reassign
+                    // unaccounted resources
+                    delay = calculateDelay(now);
+                } else {
+                    // This means scheduledRebalance == 0
+                    candidateWorkersForReassignment.addAll(completeWorkerAssignment.stream()
+                            .filter(WorkerLoad::isEmpty)
+                            .map(WorkerLoad::worker)
+                            .collect(Collectors.toSet()));
+                    // we can also extra the current minimum delay from the group, to make
+                    // independent of consecutive leader failures.
+                    delay = maxDelay;
+                }
+                scheduledRebalance = now + delay;
+            }
+        }
     }
 
     /**

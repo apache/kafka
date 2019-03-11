@@ -339,7 +339,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
     private boolean assertWorkersUp(int numWorkers) {
         try {
             int numUp = connect.activeWorkers().size();
-            return numUp >= numWorkers;
+            return numUp == numWorkers;
         } catch (Exception e) {
             log.error("Could not check active workers.", e);
             return false;
