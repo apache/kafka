@@ -1514,7 +1514,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             log.debug("Seeking to offset {} for partition {}", offset, partition);
-            Metadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
+            ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
 
             SubscriptionState.FetchPosition newPosition =
                     new SubscriptionState.FetchPosition(offset, leaderAndEpoch.epoch, leaderAndEpoch);
@@ -1548,7 +1548,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } else {
                 log.info("Seeking to offset {} for partition {}", offset, partition);
             }
-            Metadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
+            ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
             SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
                     offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(), leaderAndEpoch);
             this.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);

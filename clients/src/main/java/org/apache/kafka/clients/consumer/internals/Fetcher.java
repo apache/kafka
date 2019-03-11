@@ -412,7 +412,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             for (Map.Entry<TopicPartition, ListOffsetData> entry : fetchedOffsets.entrySet()) {
                 // 'entry.getValue().timestamp' will not be null since we are guaranteed
                 // to work with a v1 (or later) ListOffset request
-                OffsetData offsetData = entry.getValue();
+                ListOffsetData offsetData = entry.getValue();
                 offsetsByTimes.put(entry.getKey(), new OffsetAndTimestamp(offsetData.offset, offsetData.timestamp,
                         offsetData.leaderEpoch));
             }
