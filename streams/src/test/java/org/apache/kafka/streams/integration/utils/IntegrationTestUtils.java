@@ -65,8 +65,6 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.test.TestUtils.waitForCondition;
-
 /**
  * Utility functions to make integration testing more convenient.
  */

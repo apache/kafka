@@ -461,8 +461,13 @@ public class KTableSuppressProcessorTest {
         }
     }
 
-    private static <K extends Windowed<?>> SuppressedInternal<K> finalResults(final Duration grace) {
-        return ((FinalResultsSuppressionBuilder<K>) untilWindowCloses(unbounded())).buildFinalResultsSuppression(grace);
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <K extends Windowed> SuppressedInternal<K> finalResults(final Duration grace) {
+        final FinalResultsSuppressionBuilder<Windowed> windowedSuppressed =
+            (FinalResultsSuppressionBuilder<Windowed>) untilWindowCloses(unbounded());
+        final SuppressedInternal<Windowed> windowedSuppressedInternal =
+            windowedSuppressed.buildFinalResultsSuppression(grace);
+        return (SuppressedInternal<K>) windowedSuppressedInternal;
     }
 
     private static <E> Matcher<Collection<E>> hasSize(final int i) {
