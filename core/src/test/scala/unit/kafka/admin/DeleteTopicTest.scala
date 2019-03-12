@@ -69,7 +69,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
         .forall(_.getLogManager().getLog(topicPartition).isEmpty), "Replicas 0,1 have not deleted log.")
     // ensure topic deletion is halted
     TestUtils.waitUntilTrue(() => zkClient.isTopicMarkedForDeletion(topic),
-      "Admin path /admin/delete_topic/test path deleted even when a follower replica is down")
+      "Admin path /admin/delete_topics/test path deleted even when a follower replica is down")
     // restart follower replica
     follower.startup()
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
@@ -93,7 +93,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
 
     // ensure topic deletion is halted
     TestUtils.waitUntilTrue(() => zkClient.isTopicMarkedForDeletion(topic),
-      "Admin path /admin/delete_topic/test path deleted even when a replica is down")
+      "Admin path /admin/delete_topics/test path deleted even when a replica is down")
 
     controller.startup()
     follower.startup()
@@ -397,7 +397,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     // mark the topic for deletion
     adminZkClient.deleteTopic("test")
     TestUtils.waitUntilTrue(() => !zkClient.isTopicMarkedForDeletion(topic),
-      "Admin path /admin/delete_topic/%s path not deleted even if deleteTopic is disabled".format(topic))
+      "Admin path /admin/delete_topics/%s path not deleted even if deleteTopic is disabled".format(topic))
     // verify that topic test is untouched
     assertTrue(servers.forall(_.getLogManager().getLog(topicPartition).isDefined))
     // test the topic path exists

@@ -664,7 +664,7 @@ public class MockClient implements KafkaClient {
 
         private void maybeCheckExpectedTopics(MetadataUpdate update, MetadataRequest.Builder builder) {
             if (update.expectMatchRefreshTopics) {
-                if (builder.topics() == null)
+                if (builder.isAllTopics())
                     throw new IllegalStateException("The metadata topics does not match expectation. "
                             + "Expected topics: " + update.topics()
                             + ", asked topics: ALL");

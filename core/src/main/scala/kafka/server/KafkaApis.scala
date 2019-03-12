@@ -1043,6 +1043,20 @@ class KafkaApis(val requestChannel: RequestChannel,
         getTopicMetadata(metadataRequest.allowAutoTopicCreation, authorizedTopics, request.context.listenerName,
           errorUnavailableEndpoints, errorUnavailableListeners)
 
+    var clusterAuthorizedOperations = 0
+
+    if (request.header.apiVersion >= 8) {
+      // get cluster authorized operations
+      if (metadataRequest.data().includeClusterAuthorizedOperations() &&
+        authorize(request.session, Describe, Resource.ClusterResource))
+        clusterAuthorizedOperations = authorizedOperations(request.session, Resource.ClusterResource)
+      // get topic authorized operations
+      if (metadataRequest.data().includeTopicAuthorizedOperations())
+        topicMetadata.foreach(topicData => {
+          topicData.authorizedOperations(authorizedOperations(request.session, Resource(Topic, topicData.topic(), LITERAL)))
+        })
+    }
+
     val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
     val brokers = metadataCache.getAliveBrokers
@@ -1051,12 +1065,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
 
     sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new MetadataResponse(
-        requestThrottleMs,
-        brokers.flatMap(_.getNode(request.context.listenerName)).asJava,
-        clusterId,
-        metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
-        completeTopicMetadata.asJava
+       MetadataResponse.prepareResponse(
+         requestThrottleMs,
+         brokers.flatMap(_.getNode(request.context.listenerName)).asJava,
+         clusterId,
+         metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         completeTopicMetadata.asJava,
+         clusterAuthorizedOperations
       ))
   }
 

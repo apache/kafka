@@ -1171,7 +1171,7 @@ public class ConsumerCoordinatorTest {
         MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(Errors.NONE,
                 Topic.GROUP_METADATA_TOPIC_NAME, true, singletonList(partitionMetadata));
 
-        client.updateMetadata(new MetadataResponse(singletonList(node), "clusterId", node.id(),
+        client.updateMetadata(MetadataResponse.prepareResponse(singletonList(node), "clusterId", node.id(),
                 singletonList(topicMetadata)));
         coordinator.maybeUpdateSubscriptionMetadata();
 

@@ -874,7 +874,7 @@ public class RequestResponseTest {
             asList(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, 0, null,
                 Optional.empty(), replicas, isr, offlineReplicas))));
 
-        return new MetadataResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
+        return MetadataResponse.prepareResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
     }
 
     @SuppressWarnings("deprecation")
