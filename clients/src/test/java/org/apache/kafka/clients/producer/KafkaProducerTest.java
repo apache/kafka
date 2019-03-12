@@ -35,6 +35,7 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -59,6 +60,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -87,20 +89,21 @@ import static org.mockito.Mockito.when;
 
 public class KafkaProducerTest {
     private String topic = "topic";
-    private Collection<Node> nodes = Collections.singletonList(new Node(0, "host1", 1000));
+    private Node host1 = new Node(0, "host1", 1000);
+    private Collection<Node> nodes = Collections.singletonList(host1);
     private final Cluster emptyCluster = new Cluster(null, nodes,
             Collections.emptySet(),
             Collections.emptySet(),
             Collections.emptySet());
     private final Cluster onePartitionCluster = new Cluster(
             "dummy",
-            Collections.singletonList(new Node(0, "host1", 1000)),
+            Collections.singletonList(host1),
             Collections.singletonList(new PartitionInfo(topic, 0, null, null, null)),
             Collections.emptySet(),
             Collections.emptySet());
     private final Cluster threePartitionCluster = new Cluster(
             "dummy",
-            Collections.singletonList(new Node(0, "host1", 1000)),
+            Collections.singletonList(host1),
             Arrays.asList(
                     new PartitionInfo(topic, 0, null, null, null),
                     new PartitionInfo(topic, 1, null, null, null),
@@ -766,6 +769,92 @@ public class KafkaProducerTest {
                 metadata, client, null, time);
         producer.close();
         assertThrows(IllegalStateException.class, producer::initTransactions);
+    }
+
+    @Test(timeout = 5000)
+    public void testCloseIsForcedOnPendingFindCoordinator() throws InterruptedException {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "this-is-a-transactional-id");
+
+        Time time = new MockTime();
+        MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("testTopic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+        metadata.update(initialUpdateResponse, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+
+        Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer(),
+                metadata, client, null, time);
+
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        CountDownLatch assertionDoneLatch = new CountDownLatch(1);
+        executorService.submit(() -> {
+            assertThrows(KafkaException.class, producer::initTransactions);
+            assertionDoneLatch.countDown();
+        });
+
+        client.waitForRequests(1, 2000);
+        producer.close(Duration.ofMillis(1000));
+        assertionDoneLatch.await();
+    }
+
+    @Test(timeout = 5000)
+    public void testCloseIsForcedOnPendingInitProducerId() throws InterruptedException {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "this-is-a-transactional-id");
+
+        Time time = new MockTime();
+        MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("testTopic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+        metadata.update(initialUpdateResponse, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+
+        Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer(),
+                metadata, client, null, time);
+
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        CountDownLatch assertionDoneLatch = new CountDownLatch(1);
+        client.prepareResponse(new FindCoordinatorResponse(Errors.NONE, host1));
+        executorService.submit(() -> {
+            assertThrows(KafkaException.class, producer::initTransactions);
+            assertionDoneLatch.countDown();
+        });
+
+        client.waitForRequests(1, 2000);
+        producer.close(Duration.ofMillis(1000));
+        assertionDoneLatch.await();
+    }
+
+    @Test(timeout = 5000)
+    public void testCloseIsForcedOnPendingAddOffsetRequest() throws InterruptedException {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "this-is-a-transactional-id");
+
+        Time time = new MockTime();
+        MetadataResponse initialUpdateResponse = TestUtils.metadataUpdateWith(1, singletonMap("testTopic", 1));
+        ProducerMetadata metadata = newMetadata(0, Long.MAX_VALUE);
+        metadata.update(initialUpdateResponse, time.milliseconds());
+
+        MockClient client = new MockClient(time, metadata);
+
+        Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer(),
+                metadata, client, null, time);
+
+        ExecutorService executorService = Executors.newSingleThreadExecutor();
+        CountDownLatch assertionDoneLatch = new CountDownLatch(1);
+        client.prepareResponse(new FindCoordinatorResponse(Errors.NONE, host1));
+        executorService.submit(() -> {
+            assertThrows(KafkaException.class, producer::initTransactions);
+            assertionDoneLatch.countDown();
+        });
+
+        client.waitForRequests(1, 2000);
+        producer.close(Duration.ofMillis(1000));
+        assertionDoneLatch.await();
     }
 
     private ProducerMetadata newMetadata(long refreshBackoffMs, long expirationMs) {

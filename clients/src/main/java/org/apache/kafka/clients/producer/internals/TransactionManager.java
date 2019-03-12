@@ -307,7 +307,7 @@ public class TransactionManager {
 
         log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, consumerGroupId);
         AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(transactionalId,
-                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, consumerGroupId);
+            producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, consumerGroupId);
         AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets);
         enqueueRequest(handler);
         return handler.result;
@@ -682,8 +682,13 @@ public class TransactionManager {
     }
 
     synchronized void abortPendingTransactionalRequests() {
+        KafkaException shutdownException = new KafkaException("The producer closed forcefully");
         pendingRequests.forEach(handler ->
-                handler.fatalError(new KafkaException("The producer closed forcefully")));
+                handler.fatalError(shutdownException));
+        if (pendingResult != null) {
+            pendingResult.setError(shutdownException);
+            pendingResult.done();
+        }
     }
 
     Node coordinator(FindCoordinatorRequest.CoordinatorType type) {
