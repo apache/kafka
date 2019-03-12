@@ -923,11 +923,15 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             } else {
                 // TODO safe to get leader-and-epoch here? Should we use the info in partitionInfoAndEpoch?
                 ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
+
+                // Check the latest epoch from subscription
                 SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
+
+                // If the leader or epoch have changed, we need to validate the fetch position
                 if (!position.safeToFetchFrom(leaderAndEpoch)) {
-                    if (!subscriptions.needsValidation(partition, leaderAndEpoch)) {
+                    if (subscriptions.needsValidation(partition, leaderAndEpoch)) {
                         partitionsToValidate.put(partition, new OffsetsForLeaderEpochRequest.PartitionData(
-                                position.currentLeader.epoch, position.lastFetchEpoch.get())); // TODO clean this up
+                                position.currentLeader.epoch, position.lastFetchEpoch.get()));
                         continue;
                     }
                 }
@@ -990,24 +994,27 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 log.trace("Received OffsetsForLeaderEpochResponse {} from broker {}", ofler, node);
 
                 Map<TopicPartition, OffsetAndMetadata> truncatedPartitions = new HashMap<>();
-                ofler.responses().forEach((topicPartition, epochEndOffset) -> {
-                    ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
-                    ConsumerMetadata.LeaderAndEpoch newLeaderAndEpoch = new ConsumerMetadata.LeaderAndEpoch(
-                            leaderAndEpoch.leader, Optional.of(epochEndOffset.leaderEpoch()));
-                    if (leaderAndEpoch.isObsoletedBy(newLeaderAndEpoch)) {
-                        // The epoch has changed, check for truncation
-                        SubscriptionState.FetchPosition currentPosition = subscriptions.position(topicPartition);
-                        if (epochEndOffset.endOffset() >= currentPosition.offset) {
-                            // Nothing wrong here, just mark the partition as valid
-                            subscriptions.validate(topicPartition);
-                        } else {
+                ofler.responses().forEach((respTopicPartition, respEndOffset) -> {
+
+                    // For each OffsetsForLeader response, check for truncation. This occurs iff the epoch has changed
+                    // and the end offset is lower than our current offset
+                    ConsumerMetadata.LeaderAndEpoch currentLeaderAndEpoch = metadata.leaderAndEpoch(respTopicPartition);
+                    ConsumerMetadata.LeaderAndEpoch newLeaderAndEpoch = new ConsumerMetadata.LeaderAndEpoch(Node.noNode(), Optional.of(respEndOffset.leaderEpoch()));
+
+                    if (currentLeaderAndEpoch.isObsoletedBy(newLeaderAndEpoch)) {
+                        // If we have a new epoch, check if our offset is ahead of the new end offset
+                        SubscriptionState.FetchPosition currentPosition = subscriptions.position(respTopicPartition);
+                        if (respEndOffset.endOffset() < currentPosition.offset) {
                             // Try to reset the offset
                             if (subscriptions.hasDefaultOffsetResetPolicy()) {
-                                log.info("Truncation detected for partition {}, resetting offset", topicPartition);
-                                subscriptions.requestOffsetReset(topicPartition);
+                                log.info("Truncation detected for partition {}, resetting offset", respTopicPartition);
+                                subscriptions.requestOffsetReset(respTopicPartition);
                             } else {
-                                truncatedPartitions.put(topicPartition, new OffsetAndMetadata(currentPosition.offset, currentPosition.currentLeader.epoch, null));
+                                truncatedPartitions.put(respTopicPartition, new OffsetAndMetadata(currentPosition.offset, currentPosition.currentLeader.epoch, null));
                             }
+                        } else {
+                            // Offset is fine, clear the validation state
+                            subscriptions.validate(respTopicPartition);
                         }
                     }
                 });

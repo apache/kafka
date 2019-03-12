@@ -537,7 +537,6 @@ public class SubscriptionState {
 
         private FetchState state;
         private FetchPosition position; // last consumed position
-        private Optional<Integer> currentLeaderEpoch; //
 
         private Long highWatermark; // the high watermark from last fetch
         private Long logStartOffset; // the log start offset
@@ -549,7 +548,6 @@ public class SubscriptionState {
         TopicPartitionState() {
             this.paused = false;
             this.state = FetchState.INITIALIZING;
-            this.currentLeaderEpoch = Optional.empty();
             this.position = null;
             this.highWatermark = null;
             this.logStartOffset = null;
@@ -569,15 +567,14 @@ public class SubscriptionState {
             if (!hasPosition())
                 throw new IllegalStateException("Cannot validate offset while partition is in state " + state);
 
-            this.currentLeaderEpoch = currentLeader.epoch;
             this.position = new FetchPosition(position.offset, position.lastFetchEpoch, currentLeader);
             // If we have no epoch information for the current position, then we can skip validation.
             if (position.lastFetchEpoch.isPresent()) {
                 this.state = FetchState.AWAIT_VALIDATION;
-                return false;
+                return true;
             } else {
                 this.state = FetchState.FETCHING;
-                return true;
+                return false;
             }
         }
 
@@ -593,10 +590,6 @@ public class SubscriptionState {
 
         private boolean awaitingReset() {
             return state == FetchState.AWAIT_RESET;
-        }
-
-        private boolean awaitingValidation() {
-            return state == FetchState.AWAIT_VALIDATION;
         }
 
         private void setNextAllowedRetry(long nextAllowedRetryTimeMs) {
@@ -673,8 +666,11 @@ public class SubscriptionState {
 
             // I think the answer is 'no' because the OffsetsForLeaderEpoch API was
             // not exposed in older versions anyway.
-
-            return currentLeader.equals(leaderAndEpoch);
+            if (currentLeader.leader.isEmpty() || leaderAndEpoch.leader.isEmpty()) {
+                return false;
+            } else {
+                return currentLeader.equals(leaderAndEpoch);
+            }
         }
 
         @Override

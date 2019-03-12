@@ -449,12 +449,14 @@ public class Metadata implements Closeable {
         Node leader = fetch().leaderFor(tp);
         if (leader == null)
             leader = Node.noNode();
-        return new LeaderAndEpoch(leader, Optional.empty());
+        // TODO there a race here between reading the leader node and reading the epoch? Does it matter?
+        Optional<Integer> epoch = lastSeenLeaderEpoch(tp);
+        return new LeaderAndEpoch(leader, epoch);
     }
 
     public static class LeaderAndEpoch {
         public final Node leader;
-        public final Optional<Integer> epoch;
+        public final Optional<Integer> epoch; // TODO shouldn't store an Optional
 
         public LeaderAndEpoch(Node leader, Optional<Integer> epoch) {
             this.leader = Objects.requireNonNull(leader);
