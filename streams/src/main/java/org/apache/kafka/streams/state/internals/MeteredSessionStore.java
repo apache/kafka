@@ -91,11 +91,7 @@ public class MeteredSessionStore<K, V>
         try {
             super.init(context, root);
         } finally {
-            metrics.recordLatency(
-                restoreTime,
-                startNs,
-                time.nanoseconds()
-            );
+            restoreTime.record(time.nanoseconds() - startNs);
         }
     }
 
@@ -129,7 +125,7 @@ public class MeteredSessionStore<K, V>
             final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
             throw new ProcessorStateException(message, e);
         } finally {
-            metrics.recordLatency(putTime, startNs, time.nanoseconds());
+            putTime.record(time.nanoseconds() - startNs);
         }
     }
 
@@ -144,7 +140,7 @@ public class MeteredSessionStore<K, V>
             final String message = String.format(e.getMessage(), sessionKey.key());
             throw new ProcessorStateException(message, e);
         } finally {
-            metrics.recordLatency(removeTime, startNs, time.nanoseconds());
+            removeTime.record(time.nanoseconds() - startNs);
         }
     }
 
@@ -157,7 +153,7 @@ public class MeteredSessionStore<K, V>
         try {
             value = serdes.valueFrom(wrapped().fetchSession(bytesKey, startTime, endTime));
         } finally {
-            metrics.recordLatency(flushTime, startNs, time.nanoseconds());
+            fetchTime.record(time.nanoseconds() - startNs);
         }
 
         return value;
@@ -189,7 +185,6 @@ public class MeteredSessionStore<K, V>
                 earliestSessionEndTime,
                 latestSessionStartTime),
             fetchTime,
-            metrics,
             serdes,
             time);
     }
@@ -210,7 +205,6 @@ public class MeteredSessionStore<K, V>
                 earliestSessionEndTime,
                 latestSessionStartTime),
             fetchTime,
-            metrics,
             serdes,
             time);
     }
@@ -221,7 +215,7 @@ public class MeteredSessionStore<K, V>
         try {
             super.flush();
         } finally {
-            metrics.recordLatency(flushTime, startNs, time.nanoseconds());
+            flushTime.record(time.nanoseconds() - startNs);
         }
     }
 

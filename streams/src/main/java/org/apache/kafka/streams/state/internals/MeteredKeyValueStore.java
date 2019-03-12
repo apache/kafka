@@ -259,7 +259,7 @@ public class MeteredKeyValueStore<K, V>
         try {
             return action.execute();
         } finally {
-            metrics.recordLatency(sensor, startNs, time.nanoseconds());
+            sensor.record(time.nanoseconds() - startNs);
         }
     }
 
@@ -315,7 +315,7 @@ public class MeteredKeyValueStore<K, V>
             try {
                 iter.close();
             } finally {
-                metrics.recordLatency(sensor, startNs, time.nanoseconds());
+                sensor.record(time.nanoseconds() - startNs);
             }
         }
 

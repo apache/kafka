@@ -39,7 +39,6 @@ import java.util.concurrent.TimeUnit;
 
 public class StreamsMetricsImpl implements StreamsMetrics {
     private final Metrics metrics;
-    private final Map<Sensor, Sensor> parentSensors;
     private final Sensor skippedRecordsSensor;
     private final String threadName;
 
@@ -64,12 +63,86 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
         this.metrics = metrics;
 
-        this.parentSensors = new HashMap<>();
-
         final String group = "stream-metrics";
         skippedRecordsSensor = threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
         skippedRecordsSensor.add(new MetricName("skipped-records-rate", group, "The average per-second number of skipped records", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
         skippedRecordsSensor.add(new MetricName("skipped-records-total", group, "The total number of skipped records", tagMap()), new Total());
+    }
+
+    @Override
+    public Sensor addSensor(final String name, final Sensor.RecordingLevel recordingLevel) {
+        return metrics.sensor(name, recordingLevel);
+    }
+
+    @Override
+    public Sensor addSensor(final String name, final Sensor.RecordingLevel recordingLevel, final Sensor... parents) {
+        return metrics.sensor(name, recordingLevel, parents);
+    }
+
+    @Override
+    public Map<MetricName, ? extends Metric> metrics() {
+        return Collections.unmodifiableMap(this.metrics.metrics());
+    }
+
+    @Override
+    @Deprecated
+    public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
+        sensor.record(endNs - startNs);
+    }
+
+    @Override
+    @Deprecated
+    public void recordThroughput(final Sensor sensor, final long value) {
+        sensor.record(value);
+    }
+    /**
+     * Deletes a sensor and its parents, if any
+     */
+    @Override
+    public void removeSensor(final Sensor sensor) {
+        Objects.requireNonNull(sensor, "Sensor is null");
+        metrics.removeSensor(sensor.name());
+    }
+
+    /**
+     * @throws IllegalArgumentException if tags is not constructed in key-value pairs
+     */
+    @Override
+    public Sensor addLatencyAndThroughputSensor(final String scopeName,
+                                                final String entityName,
+                                                final String operationName,
+                                                final Sensor.RecordingLevel recordingLevel,
+                                                final String... tags) {
+        final String group = groupNameFromScope(scopeName);
+
+        // add the operation metrics with additional tags
+        final Map<String, String> tagMap = constructTags(scopeName, entityName, tags);
+        final Sensor sensor = metrics.sensor(externalSensorName(operationName, entityName), recordingLevel);
+
+        addAvgMaxLatency(sensor, group, tagMap, operationName);
+        addInvocationRateAndCount(sensor, group, tagMap, operationName);
+
+        return sensor;
+    }
+
+    /**
+     * @throws IllegalArgumentException if tags is not constructed in key-value pairs
+     */
+    @Override
+    public Sensor addThroughputSensor(final String scopeName,
+                                      final String entityName,
+                                      final String operationName,
+                                      final Sensor.RecordingLevel recordingLevel,
+                                      final String... tags) {
+        final String group = groupNameFromScope(scopeName);
+
+        // add the operation metrics with additional tags
+        final Map<String, String> tagMap = constructTags(scopeName, entityName, tags);
+        final Sensor sensor = metrics.sensor(externalSensorName(operationName, entityName), recordingLevel);
+
+        addInvocationRateAndCount(sensor, group, tagMap, operationName);
+
+        return sensor;
     }
 
     public final Sensor threadLevelSensor(final String sensorName,
@@ -239,30 +312,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return skippedRecordsSensor;
     }
 
-    @Override
-    public Sensor addSensor(final String name, final Sensor.RecordingLevel recordingLevel) {
-        return metrics.sensor(name, recordingLevel);
-    }
 
-    @Override
-    public Sensor addSensor(final String name, final Sensor.RecordingLevel recordingLevel, final Sensor... parents) {
-        return metrics.sensor(name, recordingLevel, parents);
-    }
-
-    @Override
-    public Map<MetricName, ? extends Metric> metrics() {
-        return Collections.unmodifiableMap(this.metrics.metrics());
-    }
-
-    @Override
-    public void recordLatency(final Sensor sensor, final long startNs, final long endNs) {
-        sensor.record(endNs - startNs);
-    }
-
-    @Override
-    public void recordThroughput(final Sensor sensor, final long value) {
-        sensor.record(value);
-    }
 
     public final Map<String, String> tagMap(final String... tags) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
@@ -287,76 +337,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return tagMap(updatedTags);
     }
 
-
-    /**
-     * @throws IllegalArgumentException if tags is not constructed in key-value pairs
-     */
-    @Override
-    public Sensor addLatencyAndThroughputSensor(final String scopeName,
-                                                final String entityName,
-                                                final String operationName,
-                                                final Sensor.RecordingLevel recordingLevel,
-                                                final String... tags) {
-        final String group = groupNameFromScope(scopeName);
-
-        final Map<String, String> tagMap = constructTags(scopeName, entityName, tags);
-        final Map<String, String> allTagMap = constructTags(scopeName, "all", tags);
-
-        // first add the global operation metrics if not yet, with the global tags only
-        final Sensor parent = metrics.sensor(externalParentSensorName(operationName), recordingLevel);
-        addAvgMaxLatency(parent, group, allTagMap, operationName);
-        addInvocationRateAndCount(parent, group, allTagMap, operationName);
-
-        // add the operation metrics with additional tags
-        final Sensor sensor = metrics.sensor(externalChildSensorName(operationName, entityName), recordingLevel, parent);
-        addAvgMaxLatency(sensor, group, tagMap, operationName);
-        addInvocationRateAndCount(sensor, group, tagMap, operationName);
-
-        parentSensors.put(sensor, parent);
-
-        return sensor;
-
-    }
-
-    /**
-     * @throws IllegalArgumentException if tags is not constructed in key-value pairs
-     */
-    @Override
-    public Sensor addThroughputSensor(final String scopeName,
-                                      final String entityName,
-                                      final String operationName,
-                                      final Sensor.RecordingLevel recordingLevel,
-                                      final String... tags) {
-        final String group = groupNameFromScope(scopeName);
-
-        final Map<String, String> tagMap = constructTags(scopeName, entityName, tags);
-        final Map<String, String> allTagMap = constructTags(scopeName, "all", tags);
-
-        // first add the global operation metrics if not yet, with the global tags only
-        final Sensor parent = metrics.sensor(externalParentSensorName(operationName), recordingLevel);
-        addInvocationRateAndCount(parent, group, allTagMap, operationName);
-
-        // add the operation metrics with additional tags
-        final Sensor sensor = metrics.sensor(externalChildSensorName(operationName, entityName), recordingLevel, parent);
-        addInvocationRateAndCount(sensor, group, tagMap, operationName);
-
-        parentSensors.put(sensor, parent);
-
-        return sensor;
-
-    }
-
-    private String externalChildSensorName(final String operationName, final String entityName) {
+    private String externalSensorName(final String operationName, final String entityName) {
         return "external" + SENSOR_PREFIX_DELIMITER + threadName
             + SENSOR_PREFIX_DELIMITER + "entity" + SENSOR_PREFIX_DELIMITER + entityName
             + SENSOR_NAME_DELIMITER + operationName;
     }
-
-    private String externalParentSensorName(final String operationName) {
-        return "external" + SENSOR_PREFIX_DELIMITER + threadName + SENSOR_NAME_DELIMITER + operationName;
-    }
-
-
     public static void addAvgMaxLatency(final Sensor sensor,
                                         final String group,
                                         final Map<String, String> tags,
@@ -401,27 +386,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             ),
             new CumulativeCount()
         );
-    }
-
-    /**
-     * Deletes a sensor and its parents, if any
-     */
-    @Override
-    public void removeSensor(final Sensor sensor) {
-        Objects.requireNonNull(sensor, "Sensor is null");
-        metrics.removeSensor(sensor.name());
-
-        final Sensor parent = parentSensors.remove(sensor);
-        if (parent != null) {
-            metrics.removeSensor(parent.name());
-        }
-    }
-
-    /**
-     * Visible for testing
-     */
-    Map<Sensor, Sensor> parentSensors() {
-        return Collections.unmodifiableMap(parentSensors);
     }
 
     private static String groupNameFromScope(final String scopeName) {

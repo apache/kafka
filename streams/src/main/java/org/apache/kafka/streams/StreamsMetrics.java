@@ -37,20 +37,27 @@ public interface StreamsMetrics {
     Map<MetricName, ? extends Metric> metrics();
 
     /**
-     * Add a latency and throughput sensor for a specific operation, which will include the following sensors:
+     * Add a latency and throughput sensor for a specific operation, which will include the following metrics:
      * <ol>
      *   <li>average latency</li>
      *   <li>max latency</li>
-     *   <li>throughput (num.operations / time unit)</li>
+     *   <li>invocation rate (num.operations / time unit)</li>
+     *   <li>total invocation count</li>
      * </ol>
-     * Also create a parent sensor with the same metrics that aggregates all entities with the same operation under the
-     * same scope if it has not been created.
      *
-     * @param scopeName      name of the scope, could be the type of the state store, etc.
-     * @param entityName     name of the entity, could be the name of the state store instance, etc.
-     * @param operationName  name of the operation, could be get / put / delete / etc.
-     * @param recordingLevel the recording level (e.g., INFO or DEBUG) for this sensor.
-     * @param tags           additional tags of the sensor
+     * Whenever a user record this sensor via {@link Sensor#record(double)} etc,
+     * it will be counted as one invocation of the operation, and hence the rate / count metrics will be updated accordingly;
+     * and the recorded latency value will be used to update the average / max latency as well. The time unit of the latency can be defined
+     * by the user.
+     *
+     * Note that you can add more metrics to this sensor after created it, which can then be updated upon {@link Sensor#record(double)} calls;
+     * but additional user-customized metrics will not be managed by {@link StreamsMetrics}.
+     *
+     * @param scopeName          name of the scope, which will be used as part of the metrics type, e.g.: "stream-[scope]-metrics".
+     * @param entityName         name of the entity, which will be used as part of the metric tags, e.g.: "[scope]-id" = "[entity]".
+     * @param operationName      name of the operation, which will be used as the name of the metric, e.g.: "[operation]-latency-avg".
+     * @param recordingLevel     the recording level (e.g., INFO or DEBUG) for this sensor.
+     * @param tags               additional tags of the sensor
      * @return The added sensor.
      */
     Sensor addLatencyAndThroughputSensor(final String scopeName,
@@ -60,34 +67,27 @@ public interface StreamsMetrics {
                                          final String... tags);
 
     /**
-     * Record the given latency value of the sensor.
-     * If the passed sensor includes throughput metrics, e.g., when created by the
-     * {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)} method, then the
-     * throughput metrics will also be recorded from this event.
-     *
-     * @param sensor  sensor whose latency we are recording.
-     * @param startNs start of measurement time in nanoseconds.
-     * @param endNs   end of measurement time in nanoseconds.
-     */
-    void recordLatency(final Sensor sensor,
-                       final long startNs,
-                       final long endNs);
-
-    /**
-     * Add a throughput sensor for a specific operation:
+     * Add a throughput sensor for a specific operation, which will include the following metrics:
      * <ol>
-     *   <li>throughput (num.operations / time unit)</li>
+     *   <li>invocation rate (num.operations / time unit)</li>
+     *   <li>total invocation count</li>
      * </ol>
-     * Also create a parent sensor with the same metrics that aggregates all entities with the same operation under the
-     * same scope if it has not been created.
-     * This sensor is a strict subset of the sensors created by
+     *
+     * Whenever a user record this sensor via {@link Sensor#record(double)} etc,
+     * it will be counted as one invocation of the operation, and hence the rate / count metrics will be updated accordingly;
+     * whatever recorded values would be ignored since it would not be used to update any metrics.
+     *
+     * The metrics included in the returned sensor is a strict subset of the metrics included in the sensor returned by
      * {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}.
      *
-     * @param scopeName      name of the scope, could be the type of the state store, etc.
-     * @param entityName     name of the entity, could be the name of the state store instance, etc.
-     * @param operationName  name of the operation, could be get / put / delete / etc.
-     * @param recordingLevel the recording level (e.g., INFO or DEBUG) for this sensor.
-     * @param tags           additional tags of the sensor
+     * Note that you can add more metrics to this sensor after created it, which can then be updated upon {@link Sensor#record(double)} calls;
+     * but additional user-customized metrics will not be managed by {@link StreamsMetrics}.
+     *
+     * @param scopeName          name of the scope, which will be used as part of the metrics type, e.g.: "stream-[scope]-metrics".
+     * @param entityName         name of the entity, which will be used as part of the metric tags, e.g.: "[scope]-id" = "[entity]".
+     * @param operationName      name of the operation, which will be used as the name of the metric, e.g.: "[operation]-latency-avg".
+     * @param recordingLevel     the recording level (e.g., INFO or DEBUG) for this sensor.
+     * @param tags               additional tags of the sensor
      * @return The added sensor.
      */
     Sensor addThroughputSensor(final String scopeName,
@@ -97,17 +97,33 @@ public interface StreamsMetrics {
                                final String... tags);
 
     /**
+     * Record the given latency value of the sensor.
+     *
+     * @param sensor  sensor whose latency we are recording.
+     * @param startNs start of measurement time in nanoseconds.
+     * @param endNs   end of measurement time in nanoseconds.
+     * @deprecated    since 2.3. Use {@link Sensor#record(double)} directly instead.
+     */
+    @Deprecated
+    void recordLatency(final Sensor sensor,
+                       final long startNs,
+                       final long endNs);
+
+    /**
      * Record the throughput value of a sensor.
      *
-     * @param sensor add Sensor whose throughput we are recording
-     * @param value  throughput value
+     * @param sensor  sensor whose throughput we are recording
+     * @param value   throughput value
+     * @deprecated    since 2.3. Use {@link Sensor#record(double)} directly instead.
      */
+    @Deprecated
     void recordThroughput(final Sensor sensor,
                           final long value);
 
 
     /**
      * Generic method to create a sensor.
+     *
      * Note that for most cases it is advisable to use
      * {@link #addThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}
      * or {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure
@@ -123,6 +139,7 @@ public interface StreamsMetrics {
 
     /**
      * Generic method to create a sensor with parent sensors.
+     *
      * Note that for most cases it is advisable to use
      * {@link #addThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)}
      * or {@link #addLatencyAndThroughputSensor(String, String, String, Sensor.RecordingLevel, String...)} to ensure

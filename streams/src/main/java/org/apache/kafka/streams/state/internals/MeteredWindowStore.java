@@ -89,11 +89,7 @@ public class MeteredWindowStore<K, V>
         try {
             super.init(context, root);
         } finally {
-            metrics.recordLatency(
-                restoreTime,
-                startNs,
-                time.nanoseconds()
-            );
+            restoreTime.record(time.nanoseconds() - startNs);
         }
     }
 
@@ -140,7 +136,7 @@ public class MeteredWindowStore<K, V>
             final String message = String.format(e.getMessage(), key, value);
             throw new ProcessorStateException(message, e);
         } finally {
-            metrics.recordLatency(putTime, startNs, time.nanoseconds());
+            putTime.record(time.nanoseconds() - startNs);
         }
     }
 
@@ -155,7 +151,7 @@ public class MeteredWindowStore<K, V>
             }
             return serdes.valueFrom(result);
         } finally {
-            metrics.recordLatency(fetchTime, startNs, time.nanoseconds());
+            fetchTime.record(time.nanoseconds() - startNs);
         }
     }
 
@@ -166,7 +162,6 @@ public class MeteredWindowStore<K, V>
                                         final long timeTo) {
         return new MeteredWindowStoreIterator<>(wrapped().fetch(keyBytes(key), timeFrom, timeTo),
                                                 fetchTime,
-                                                metrics,
                                                 serdes,
                                                 time);
     }
@@ -180,7 +175,6 @@ public class MeteredWindowStore<K, V>
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().fetch(keyBytes(from), keyBytes(to), timeFrom, timeTo),
             fetchTime,
-            metrics,
             serdes,
             time);
     }
@@ -192,14 +186,13 @@ public class MeteredWindowStore<K, V>
         return new MeteredWindowedKeyValueIterator<>(
             wrapped().fetchAll(timeFrom, timeTo),
             fetchTime,
-            metrics,
             serdes,
             time);
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> all() {
-        return new MeteredWindowedKeyValueIterator<>(wrapped().all(), fetchTime, metrics, serdes, time);
+        return new MeteredWindowedKeyValueIterator<>(wrapped().all(), fetchTime, serdes, time);
     }
 
     @Override
@@ -208,7 +201,7 @@ public class MeteredWindowStore<K, V>
         try {
             super.flush();
         } finally {
-            metrics.recordLatency(flushTime, startNs, time.nanoseconds());
+            flushTime.record(time.nanoseconds() - startNs);
         }
     }
 

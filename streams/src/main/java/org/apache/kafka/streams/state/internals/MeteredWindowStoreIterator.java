@@ -19,27 +19,23 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
 
     private final WindowStoreIterator<byte[]> iter;
-    private final Sensor sensor;
-    private final StreamsMetrics metrics;
     private final StateSerdes<?, V> serdes;
+    private final Sensor sensor;
     private final long startNs;
     private final Time time;
 
     MeteredWindowStoreIterator(final WindowStoreIterator<byte[]> iter,
                                final Sensor sensor,
-                               final StreamsMetrics metrics,
                                final StateSerdes<?, V> serdes,
                                final Time time) {
         this.iter = iter;
         this.sensor = sensor;
-        this.metrics = metrics;
         this.serdes = serdes;
         this.startNs = time.nanoseconds();
         this.time = time;
@@ -66,7 +62,7 @@ class MeteredWindowStoreIterator<V> implements WindowStoreIterator<V> {
         try {
             iter.close();
         } finally {
-            metrics.recordLatency(this.sensor, this.startNs, time.nanoseconds());
+            sensor.record(time.nanoseconds() - startNs);
         }
     }
 

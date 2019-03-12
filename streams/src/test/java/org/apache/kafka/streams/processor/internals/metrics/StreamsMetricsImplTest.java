@@ -25,7 +25,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.Test;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
@@ -71,8 +70,6 @@ public class StreamsMetricsImplTest {
 
         final Sensor sensor3 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor3);
-
-        assertEquals(Collections.emptyMap(), streamsMetrics.parentSensors());
     }
 
     @Test
@@ -128,7 +125,7 @@ public class StreamsMetricsImplTest {
     }
 
     @Test
-    public void testLatencyMetrics() {
+    public void testLatencyAndThroughputMetrics() {
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
         final int defaultMetrics = streamsMetrics.metrics().size();
 
@@ -138,10 +135,9 @@ public class StreamsMetricsImplTest {
 
         final Sensor sensor1 = streamsMetrics.addLatencyAndThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
 
-        // 2 meters and 4 non-meter metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
-        final int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
-        final int otherMetricsCount = 4;
-        assertEquals(defaultMetrics + meterMetricsCount * 2 + otherMetricsCount, streamsMetrics.metrics().size());
+        // 4 metrics: max / min / total / rate should be added
+        final int addedMetricsCount = 4;
+        assertEquals(defaultMetrics + addedMetricsCount, streamsMetrics.metrics().size());
 
         streamsMetrics.removeSensor(sensor1);
         assertEquals(defaultMetrics, streamsMetrics.metrics().size());
@@ -158,9 +154,9 @@ public class StreamsMetricsImplTest {
 
         final Sensor sensor1 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
 
-        final int meterMetricsCount = 2; // Each Meter is a combination of a Rate and a Total
-        // 2 meter metrics plus a common metric that keeps track of total registered metrics in Metrics() constructor
-        assertEquals(defaultMetrics + meterMetricsCount * 2, streamsMetrics.metrics().size());
+        // 2 metrics: total / rate
+        final int addedMetricsCount = 2;
+        assertEquals(defaultMetrics + addedMetricsCount, streamsMetrics.metrics().size());
 
         streamsMetrics.removeSensor(sensor1);
         assertEquals(defaultMetrics, streamsMetrics.metrics().size());

@@ -20,7 +20,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -28,20 +27,17 @@ import org.apache.kafka.streams.state.StateSerdes;
 class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed<K>, V> {
 
     private final KeyValueIterator<Windowed<Bytes>, byte[]> iter;
-    private final Sensor sensor;
-    private final StreamsMetrics metrics;
     private final StateSerdes<K, V> serdes;
+    private final Sensor sensor;
     private final long startNs;
     private final Time time;
 
     MeteredWindowedKeyValueIterator(final KeyValueIterator<Windowed<Bytes>, byte[]> iter,
                                     final Sensor sensor,
-                                    final StreamsMetrics metrics,
                                     final StateSerdes<K, V> serdes,
                                     final Time time) {
         this.iter = iter;
         this.sensor = sensor;
-        this.metrics = metrics;
         this.serdes = serdes;
         this.startNs = time.nanoseconds();
         this.time = time;
@@ -73,7 +69,7 @@ class MeteredWindowedKeyValueIterator<K, V> implements KeyValueIterator<Windowed
         try {
             iter.close();
         } finally {
-            metrics.recordLatency(sensor, startNs, time.nanoseconds());
+            sensor.record(time.nanoseconds() - startNs);
         }
     }
 
