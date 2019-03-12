@@ -1,0 +1,109 @@
+import java.io.IOException;
+import java.util.Map;
+
+import org.apache.kafka.common.errors.SerializationException;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.serialization.Serializer;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+public class BaseSerde<T> implements Serde<T> {
+
+  public class BaseSerializer implements Serializer<T> {
+    
+    final Class<T> typeClass;
+    
+    public BaseSerializer(Class<T> typeClass) {
+      this.typeClass = typeClass;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+      // Nothing to do
+    }
+
+    @Override
+    public byte[] serialize(String topic, T data) {
+      try {
+        if (data == null)
+          return null;
+        else
+          return new ObjectMapper().writeValueAsBytes(data);
+      } catch (JsonProcessingException e) {
+        throw new SerializationException("Error when serializing " + typeClass + " to byte[] object", e);
+      }
+    }
+
+    @Override
+    public void close() {
+      // Nothing to do
+    }
+
+  }
+
+  public static class BaseDeserializer<T> implements Deserializer<T> {
+    
+    final Class<T> typeClass;
+    
+    public BaseDeserializer(Class<T> typeClass) {
+      this.typeClass = typeClass;
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+      // Nothing to do
+    }
+    
+    @Override
+    public T deserialize(String topic, byte[] data) {
+      try {
+        ObjectMapper objectMapper = new ObjectMapper();
+        JavaType type = objectMapper.getTypeFactory().constructType(typeClass);
+        return objectMapper.readValue(data, type);
+      } catch (IOException e) {
+        throw new SerializationException("Error when deserializing byte[] to " + typeClass + " object", e);
+      }
+    }
+
+    @Override
+    public void close() {
+      // Nothing to do
+    }
+
+  }
+
+  final private Serializer<T> serializer;
+
+  final private Deserializer<T> deserializer;
+
+  protected BaseSerde(Class<T> typeClass) {
+    this.serializer = new BaseSerializer(typeClass);
+    this.deserializer = new BaseDeserializer<>(typeClass);
+  }
+
+  @Override
+  public void configure(Map<String, ?> configs, boolean isKey) {
+    serializer.configure(configs, isKey);
+    deserializer.configure(configs, isKey);
+  }
+
+  @Override
+  public void close() {
+    serializer.close();
+    deserializer.close();
+  }
+
+  @Override
+  public Serializer<T> serializer() {
+    return serializer;
+  }
+
+  @Override
+  public Deserializer<T> deserializer() {
+    return deserializer;
+  }
+
+}
