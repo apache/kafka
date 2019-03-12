@@ -657,7 +657,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     tasksByHostState.put(hostInfo, taskIds);
                 }
             }
-        } else {
+        } else if (minReceivedMetadataVersion >= 2) {
             for (final Map.Entry<UUID, ClientMetadata> entry : clientMetadataMap.entrySet()) {
                 final HostInfo hostInfo = entry.getValue().hostInfo;
 
