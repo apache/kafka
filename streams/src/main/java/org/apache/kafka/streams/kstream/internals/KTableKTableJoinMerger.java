@@ -40,6 +40,10 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         this.queryableName = queryableName;
     }
 
+    public String getQueryableName() {
+        return queryableName;
+    }
+
     @Override
     public Processor<K, Change<V>> get() {
         return new KTableKTableJoinMergeProcessor();
