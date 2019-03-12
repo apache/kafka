@@ -113,6 +113,7 @@ public interface Suppressed<K> {
          * This buffer is "not strict" in the sense that it may emit early, so it is suitable for reducing
          * duplicate results downstream, but does not promise to eliminate them.
          */
+        @SuppressWarnings("rawtypes")
         BufferConfig emitEarlyWhenFull();
     }
 
@@ -136,6 +137,7 @@ public interface Suppressed<K> {
      *                     property to emit early and then issue an update later.
      * @return a "final results" mode suppression configuration
      */
+    @SuppressWarnings("rawtypes")
     static Suppressed<Windowed> untilWindowCloses(final StrictBufferConfig bufferConfig) {
         return new FinalResultsSuppressionBuilder<>(null, bufferConfig);
     }
@@ -150,6 +152,7 @@ public interface Suppressed<K> {
      * @param <K> The key type for the KTable to apply this suppression to.
      * @return a suppression configuration
      */
+    @SuppressWarnings("rawtypes")
     static <K> Suppressed<K> untilTimeLimit(final Duration timeToWaitForMoreEvents, final BufferConfig bufferConfig) {
         return new SuppressedInternal<>(null, timeToWaitForMoreEvents, bufferConfig, null, false);
     }
