@@ -58,6 +58,7 @@ import java.util.concurrent.TimeUnit;
 import static java.lang.String.format;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordLatenessSensor;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_METRICS_GROUP;
 
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
@@ -70,6 +71,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private final long maxTaskIdleMs;
     private final int maxBufferedSize;
     private final TaskMetrics taskMetrics;
+    private final StreamsMetricsImpl metrics;
     private final PartitionGroup partitionGroup;
     private final RecordCollector recordCollector;
     private final PartitionGroup.RecordInfo recordInfo;
@@ -78,60 +80,39 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private final PunctuationQueue systemTimePunctuationQueue;
     private final ProducerSupplier producerSupplier;
 
-    private Sensor closeSensor;
     private long idleStartTime;
     private Producer<byte[], byte[]> producer;
     private boolean commitRequested = false;
     private boolean transactionInFlight = false;
 
-    protected static final class TaskMetrics {
-        final StreamsMetricsImpl metrics;
-        final Sensor taskCommitTimeSensor;
-        final Sensor taskEnforcedProcessSensor;
+    static final class TaskMetrics {
+        private final StreamsMetricsImpl metrics;
+
+        private final Sensor taskCommitTimeSensor;
+        private final Sensor taskEnforcedProcessSensor;
         private final String taskName;
 
         TaskMetrics(final TaskId id, final StreamsMetricsImpl metrics) {
-            taskName = id.toString();
+            this.taskName = id.toString();
             this.metrics = metrics;
-            final String group = "stream-task-metrics";
-
-            // first add the global operation metrics if not yet, with the global tags only
-            final Map<String, String> allTagMap = metrics.tagMap("task-id", "all");
-            final Sensor parent = metrics.threadLevelSensor("commit", Sensor.RecordingLevel.DEBUG);
-            parent.add(
-                new MetricName("commit-latency-avg", group, "The average latency of commit operation.", allTagMap),
-                new Avg()
-            );
-            parent.add(
-                new MetricName("commit-latency-max", group, "The max latency of commit operation.", allTagMap),
-                new Max()
-            );
-            parent.add(
-                new MetricName("commit-rate", group, "The average number of occurrence of commit operation per second.", allTagMap),
-                new Rate(TimeUnit.SECONDS, new Count())
-            );
-            parent.add(
-                new MetricName("commit-total", group, "The total number of occurrence of commit operations.", allTagMap),
-                new CumulativeCount()
-            );
 
             // add the operation metrics with additional tags
-            final Map<String, String> tagMap = metrics.tagMap("task-id", taskName);
-            taskCommitTimeSensor = metrics.taskLevelSensor(taskName, "commit", Sensor.RecordingLevel.DEBUG, parent);
+            final Map<String, String> tagMap = StreamsMetricsImpl.taskLevelTagMap("task-id", taskName);
+            taskCommitTimeSensor = metrics.taskLevelSensor(taskName, "commit", Sensor.RecordingLevel.DEBUG);
             taskCommitTimeSensor.add(
-                new MetricName("commit-latency-avg", group, "The average latency of commit operation.", tagMap),
+                new MetricName("commit-latency-avg", TASK_METRICS_GROUP, "The average latency of commit operation.", tagMap),
                 new Avg()
             );
             taskCommitTimeSensor.add(
-                new MetricName("commit-latency-max", group, "The max latency of commit operation.", tagMap),
+                new MetricName("commit-latency-max", TASK_METRICS_GROUP, "The max latency of commit operation.", tagMap),
                 new Max()
             );
             taskCommitTimeSensor.add(
-                new MetricName("commit-rate", group, "The average number of occurrence of commit operation per second.", tagMap),
+                new MetricName("commit-rate", TASK_METRICS_GROUP, "The average number of occurrence of commit operation per second.", tagMap),
                 new Rate(TimeUnit.SECONDS, new Count())
             );
             taskCommitTimeSensor.add(
-                new MetricName("commit-total", group, "The total number of occurrence of commit operations.", tagMap),
+                new MetricName("commit-total", TASK_METRICS_GROUP, "The total number of occurrence of commit operations.", tagMap),
                 new CumulativeCount()
             );
 
@@ -167,9 +148,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final StateDirectory stateDirectory,
                       final ThreadCache cache,
                       final Time time,
-                      final ProducerSupplier producerSupplier,
-                      final Sensor closeSensor) {
-        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producerSupplier, null, closeSensor);
+                      final ProducerSupplier producerSupplier) {
+        this(id, partitions, topology, consumer, changelogReader, config, metrics, stateDirectory, cache, time, producerSupplier, null);
     }
 
     public StreamTask(final TaskId id,
@@ -183,14 +163,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                       final ThreadCache cache,
                       final Time time,
                       final ProducerSupplier producerSupplier,
-                      final RecordCollector recordCollector,
-                      final Sensor closeSensor) {
+                      final RecordCollector recordCollector) {
         super(id, partitions, topology, consumer, changelogReader, false, stateDirectory, config);
 
         this.time = time;
         this.producerSupplier = producerSupplier;
         this.producer = producerSupplier.get();
-        this.closeSensor = closeSensor;
+        this.metrics = metrics;
         this.taskMetrics = new TaskMetrics(id, metrics);
 
         final ProductionExceptionHandler productionExceptionHandler = config.defaultProductionExceptionHandler();
@@ -200,7 +179,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 id.toString(),
                 logContext,
                 productionExceptionHandler,
-                metrics.skippedRecordsSensor()
+                metrics.threadLevelSensor("skipped-records")
             );
         } else {
             this.recordCollector = recordCollector;
@@ -687,7 +666,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         partitionGroup.close();
         taskMetrics.removeAllSensors();
 
-        closeSensor.record();
+        metrics.threadLevelSensor("task-closed").record();
 
         if (firstException != null) {
             throw firstException;

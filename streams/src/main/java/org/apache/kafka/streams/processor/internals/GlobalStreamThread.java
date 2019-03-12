@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -59,7 +58,7 @@ public class GlobalStreamThread extends Thread {
     private final StateDirectory stateDirectory;
     private final Time time;
     private final ThreadCache cache;
-    private final StreamsMetricsImpl streamsMetrics;
+    private final StreamsMetricsImpl metrics;
     private final ProcessorTopology topology;
     private volatile StreamsException startupException;
 
@@ -179,21 +178,21 @@ public class GlobalStreamThread extends Thread {
                               final Consumer<byte[], byte[]> globalConsumer,
                               final StateDirectory stateDirectory,
                               final long cacheSizeBytes,
-                              final Metrics metrics,
+                              final StreamsMetricsImpl metrics,
                               final Time time,
                               final String threadClientId,
                               final StateRestoreListener stateRestoreListener) {
         super(threadClientId);
         this.time = time;
         this.config = config;
+        this.metrics = metrics;
         this.topology = topology;
         this.globalConsumer = globalConsumer;
         this.stateDirectory = stateDirectory;
-        this.streamsMetrics = new StreamsMetricsImpl(metrics, threadClientId);
         this.logPrefix = String.format("global-stream-thread [%s] ", threadClientId);
         this.logContext = new LogContext(logPrefix);
         this.log = logContext.logger(getClass());
-        this.cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
+        this.cache = new ThreadCache(logContext, cacheSizeBytes, this.metrics);
         this.stateRestoreListener = stateRestoreListener;
     }
 
@@ -279,7 +278,7 @@ public class GlobalStreamThread extends Thread {
             setState(State.DEAD);
 
             log.warn("Error happened during initialization of the global state store; this thread has shutdown");
-            streamsMetrics.removeAllThreadLevelSensors();
+            metrics.removeAllThreadLevelSensors();
 
             return;
         }
@@ -303,7 +302,7 @@ public class GlobalStreamThread extends Thread {
                 log.error("Failed to close state maintainer due to the following error:", e);
             }
 
-            streamsMetrics.removeAllThreadLevelSensors();
+            metrics.removeAllThreadLevelSensors();
 
             setState(DEAD);
 
@@ -324,7 +323,7 @@ public class GlobalStreamThread extends Thread {
             final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
                 config,
                 stateMgr,
-                streamsMetrics,
+                metrics,
                 cache);
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
 

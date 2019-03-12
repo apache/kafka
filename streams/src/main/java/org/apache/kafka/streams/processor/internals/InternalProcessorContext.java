@@ -31,6 +31,8 @@ public interface InternalProcessorContext extends ProcessorContext {
     @Override
     StreamsMetricsImpl metrics();
 
+    String currentThreadName();
+
     /**
      * Returns the current {@link RecordContext}
      * @return the current {@link RecordContext}

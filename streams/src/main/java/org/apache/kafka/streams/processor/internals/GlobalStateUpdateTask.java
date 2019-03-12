@@ -69,7 +69,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                     source,
                     deserializationExceptionHandler,
                     logContext,
-                    processorContext.metrics().skippedRecordsSensor()
+                    processorContext.metrics().threadLevelSensor("skipped-records")
                 )
             );
         }

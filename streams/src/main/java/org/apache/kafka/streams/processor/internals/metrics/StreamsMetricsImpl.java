@@ -26,6 +26,8 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.streams.StreamsMetrics;
+import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
+import org.apache.kafka.streams.processor.internals.SourceNode;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -37,10 +39,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+
 public class StreamsMetricsImpl implements StreamsMetrics {
     private final Metrics metrics;
-    private final Sensor skippedRecordsSensor;
-    private final String threadName;
 
     private final Deque<String> threadLevelSensors = new LinkedList<>();
     private final Map<String, Deque<String>> taskLevelSensors = new HashMap<>();
@@ -48,8 +51,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Map<String, Deque<String>> cacheLevelSensors = new HashMap<>();
     private final Map<String, Deque<String>> storeLevelSensors = new HashMap<>();
 
-    private static final String SENSOR_PREFIX_DELIMITER = ".";
-    private static final String SENSOR_NAME_DELIMITER = ".s.";
+    public static final String SENSOR_PREFIX_DELIMITER = ".";
+    public static final String SENSOR_NAME_DELIMITER = ".s.";
 
     public static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
@@ -57,16 +60,22 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String EXPIRED_WINDOW_RECORD_DROP = "expired-window-record-drop";
     public static final String LATE_RECORD_DROP = "late-record-drop";
 
-    public StreamsMetricsImpl(final Metrics metrics, final String threadName) {
+    public static final String INSTANCE_METRICS_GROUP = "stream-metrics";
+
+    public static final String THREAD_CLIENT_ID = "client-id";
+
+    public static final String TASK_ID = "task-id";
+
+    // we have to keep the thread-level metrics as-is to be compatible, the cost is that
+    // instance-level and thread-level metrics will be under the same metrics type
+    public static final String THREAD_METRICS_GROUP = "stream-metrics";
+
+    public static final String TASK_METRICS_GROUP = "stream-task-metrics";
+
+    public StreamsMetricsImpl(final Metrics metrics) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
-        this.threadName = threadName;
 
         this.metrics = metrics;
-
-        final String group = "stream-metrics";
-        skippedRecordsSensor = threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
-        skippedRecordsSensor.add(new MetricName("skipped-records-rate", group, "The average per-second number of skipped records", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
-        skippedRecordsSensor.add(new MetricName("skipped-records-total", group, "The total number of skipped records", tagMap()), new Total());
     }
 
     @Override
@@ -143,18 +152,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         addInvocationRateAndCount(sensor, group, tagMap, operationName);
 
         return sensor;
-    }
-
-    public final Sensor threadLevelSensor(final String sensorName,
-                                          final Sensor.RecordingLevel recordingLevel,
-                                          final Sensor... parents) {
-        synchronized (threadLevelSensors) {
-            final String fullSensorName = threadSensorPrefix() + SENSOR_NAME_DELIMITER + sensorName;
-            final Sensor sensor = metrics.sensor(fullSensorName, recordingLevel, parents);
-            threadLevelSensors.push(fullSensorName);
-
-            return sensor;
-        }
     }
 
     public final void removeAllThreadLevelSensors() {
@@ -308,8 +305,31 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return taskSensorPrefix(taskName) + SENSOR_PREFIX_DELIMITER + "store" + SENSOR_PREFIX_DELIMITER + storeName;
     }
 
-    public final Sensor skippedRecordsSensor() {
-        return skippedRecordsSensor;
+    // -------- thread level sensors ----------- //
+
+    public static Map<String, String> threadLevelTagMap(final String threadName) {
+        return Collections.singletonMap(THREAD_CLIENT_ID, threadName);
+    }
+
+    private static String threadSensorPrefix(final String threadName) {
+        return "internal" + SENSOR_PREFIX_DELIMITER + threadName;
+    }
+
+    public Sensor threadLevelSensor(final String sensorName) {
+        return threadLevelSensor(sensorName, Thread.currentThread().getName(), Sensor.RecordingLevel.INFO);
+    }
+
+    public Sensor threadLevelSensor(final String sensorName,
+                                    final String threadName,
+                                    final Sensor.RecordingLevel recordingLevel) {
+        final String fullSensorName = threadSensorPrefix(threadName) + SENSOR_NAME_DELIMITER + sensorName;
+        return metrics.sensor(fullSensorName, recordingLevel);
+    }
+
+    // -------- task level sensors ----------- //
+
+    public static Map<String, String> taskLevelTagMap(final String threadName, final String taskName) {
+        return mkMap(mkEntry(THREAD_CLIENT_ID, threadName), mkEntry(TASK_ID, taskName));
     }
 
 
@@ -317,15 +337,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public final Map<String, String> tagMap(final String... tags) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put("client-id", threadName);
-        if (tags != null) {
-            if ((tags.length % 2) != 0) {
-                throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
-            }
-
-            for (int i = 0; i < tags.length; i += 2) {
-                tagMap.put(tags[i], tags[i + 1]);
-            }
-        }
         return tagMap;
     }
 

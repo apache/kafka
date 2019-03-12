@@ -274,10 +274,7 @@ public class TopologyTestDriver implements Closeable {
             .timeWindow(streamsConfig.getLong(StreamsConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS);
 
         metrics = new Metrics(metricConfig, mockWallClockTime);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
-            metrics,
-            "topology-test-driver-virtual-thread"
-        );
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics);
         final ThreadCache cache = new ThreadCache(
             new LogContext("topology-test-driver "),
             Math.max(0, streamsConfig.getLong(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG)),
@@ -357,8 +354,7 @@ public class TopologyTestDriver implements Closeable {
                 stateDirectory,
                 cache,
                 mockWallClockTime,
-                () -> producer,
-                metrics.sensor("dummy"));
+                () -> producer);
             task.initializeStateStores();
             task.initializeTopology();
             ((InternalProcessorContext) task.context()).setRecordContext(new ProcessorRecordContext(

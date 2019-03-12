@@ -29,7 +29,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Rate;
@@ -45,7 +44,6 @@ import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
-import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
@@ -66,6 +64,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgMaxLatency;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_METRICS_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.threadLevelTagMap;
+
 
 public class StreamThread extends Thread {
 
@@ -240,6 +243,60 @@ public class StreamThread extends Thread {
         }
     }
 
+    static final class StreamThreadMetrics {
+        private final StreamsMetricsImpl metrics;
+
+        private final Sensor pollLatencySensor;
+        private final Sensor processLatencySensor;
+        private final Sensor commitLatencySensor;
+        private final Sensor punctuateTimeSensor;
+        private final Sensor skippedRateSensor;
+        private final Sensor taskCreatedRateSensor;
+        private final Sensor taskClosedRateSensor;
+
+        StreamThreadMetrics(final String threadName, final StreamsMetricsImpl metrics) {
+            this.metrics = metrics;
+
+            commitLatencySensor = metrics.threadLevelSensor("commit-latency", threadName, Sensor.RecordingLevel.INFO);
+            addAvgMaxLatency(commitLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "commit");
+            addInvocationRateAndCount(commitLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "commit");
+
+            pollLatencySensor = metrics.threadLevelSensor("poll-latency", threadName, Sensor.RecordingLevel.INFO);
+            addAvgMaxLatency(pollLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "poll");
+            addInvocationRateAndCount(pollLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "poll");
+
+            processLatencySensor = metrics.threadLevelSensor("process-latency", threadName, Sensor.RecordingLevel.INFO);
+            addAvgMaxLatency(processLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "process");
+            addInvocationRateAndCount(processLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "process");
+
+            punctuateTimeSensor = metrics.threadLevelSensor("punctuate-latency", threadName, Sensor.RecordingLevel.INFO);
+            addAvgMaxLatency(punctuateTimeSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "punctuate");
+            addInvocationRateAndCount(punctuateTimeSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "punctuate");
+
+            taskCreatedRateSensor = metrics.threadLevelSensor("task-created", threadName, Sensor.RecordingLevel.DEBUG);
+            addInvocationRateAndCount(taskCreatedRateSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "task-created");
+
+            taskClosedRateSensor = metrics.threadLevelSensor("task-closed", threadName, Sensor.RecordingLevel.DEBUG);
+            addInvocationRateAndCount(taskClosedRateSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "task-closed");
+
+            skippedRateSensor = metrics.threadLevelSensor("skipped-records", threadName, Sensor.RecordingLevel.INFO);
+            addInvocationRateAndCount(skippedRateSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "skipped-records");
+        }
+
+        StreamsMetricsImpl streamsMetrics() {
+            return metrics;
+        }
+
+        void clear() {
+            metrics.removeSensor(commitLatencySensor);
+            metrics.removeSensor(pollLatencySensor);
+            metrics.removeSensor(processLatencySensor);
+            metrics.removeSensor(punctuateTimeSensor);
+            metrics.removeSensor(taskCreatedRateSensor);
+            metrics.removeSensor(taskClosedRateSensor);
+        }
+    }
+
     static class RebalanceListener implements ConsumerRebalanceListener {
         private final Time time;
         private final TaskManager taskManager;
@@ -340,19 +397,18 @@ public class StreamThread extends Thread {
     }
 
     static abstract class AbstractTaskCreator<T extends Task> {
-        final String applicationId;
-        final InternalTopologyBuilder builder;
-        final StreamsConfig config;
-        final StreamsMetricsThreadImpl streamsMetrics;
-        final StateDirectory stateDirectory;
-        final ChangelogReader storeChangelogReader;
         final Time time;
         final Logger log;
-
+        final String applicationId;
+        final StreamsConfig config;
+        final StreamThreadMetrics metrics;
+        final StateDirectory stateDirectory;
+        final InternalTopologyBuilder builder;
+        final ChangelogReader storeChangelogReader;
 
         AbstractTaskCreator(final InternalTopologyBuilder builder,
                             final StreamsConfig config,
-                            final StreamsMetricsThreadImpl streamsMetrics,
+                            final StreamThreadMetrics metrics,
                             final StateDirectory stateDirectory,
                             final ChangelogReader storeChangelogReader,
                             final Time time,
@@ -360,7 +416,7 @@ public class StreamThread extends Thread {
             this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
             this.builder = builder;
             this.config = config;
-            this.streamsMetrics = streamsMetrics;
+            this.metrics = metrics;
             this.stateDirectory = stateDirectory;
             this.storeChangelogReader = storeChangelogReader;
             this.time = time;
@@ -404,7 +460,7 @@ public class StreamThread extends Thread {
 
         TaskCreator(final InternalTopologyBuilder builder,
                     final StreamsConfig config,
-                    final StreamsMetricsThreadImpl streamsMetrics,
+                    final StreamThreadMetrics metrics,
                     final StateDirectory stateDirectory,
                     final ChangelogReader storeChangelogReader,
                     final ThreadCache cache,
@@ -416,7 +472,7 @@ public class StreamThread extends Thread {
             super(
                 builder,
                 config,
-                streamsMetrics,
+                metrics,
                 stateDirectory,
                 storeChangelogReader,
                 time,
@@ -431,7 +487,7 @@ public class StreamThread extends Thread {
         StreamTask createTask(final Consumer<byte[], byte[]> consumer,
                               final TaskId taskId,
                               final Set<TopicPartition> partitions) {
-            streamsMetrics.taskCreatedSensor.record();
+            metrics.taskCreatedRateSensor.record();
 
             return new StreamTask(
                 taskId,
@@ -440,12 +496,11 @@ public class StreamThread extends Thread {
                 consumer,
                 storeChangelogReader,
                 config,
-                streamsMetrics,
+                metrics.streamsMetrics(),
                 stateDirectory,
                 cache,
                 time,
-                () -> createProducer(taskId),
-                streamsMetrics.taskClosedSensor);
+                () -> createProducer(taskId));
         }
 
         private Producer<byte[], byte[]> createProducer(final TaskId id) {
@@ -475,7 +530,7 @@ public class StreamThread extends Thread {
     static class StandbyTaskCreator extends AbstractTaskCreator<StandbyTask> {
         StandbyTaskCreator(final InternalTopologyBuilder builder,
                            final StreamsConfig config,
-                           final StreamsMetricsThreadImpl streamsMetrics,
+                           final StreamThreadMetrics threadMetrics,
                            final StateDirectory stateDirectory,
                            final ChangelogReader storeChangelogReader,
                            final Time time,
@@ -483,7 +538,7 @@ public class StreamThread extends Thread {
             super(
                 builder,
                 config,
-                streamsMetrics,
+                threadMetrics,
                 stateDirectory,
                 storeChangelogReader,
                 time,
@@ -494,7 +549,7 @@ public class StreamThread extends Thread {
         StandbyTask createTask(final Consumer<byte[], byte[]> consumer,
                                final TaskId taskId,
                                final Set<TopicPartition> partitions) {
-            streamsMetrics.taskCreatedSensor.record();
+            metrics.taskCreatedRateSensor.record();
 
             final ProcessorTopology topology = builder.build(taskId.topicGroupId);
 
@@ -506,7 +561,7 @@ public class StreamThread extends Thread {
                     consumer,
                     storeChangelogReader,
                     config,
-                    streamsMetrics,
+                    metrics.streamsMetrics(),
                     stateDirectory);
             } else {
                 log.trace(
@@ -519,47 +574,6 @@ public class StreamThread extends Thread {
         }
     }
 
-    static class StreamsMetricsThreadImpl extends StreamsMetricsImpl {
-
-        private final Sensor commitTimeSensor;
-        private final Sensor pollTimeSensor;
-        private final Sensor processTimeSensor;
-        private final Sensor punctuateTimeSensor;
-        private final Sensor taskCreatedSensor;
-        private final Sensor taskClosedSensor;
-
-        StreamsMetricsThreadImpl(final Metrics metrics, final String threadName) {
-            super(metrics, threadName);
-            final String group = "stream-metrics";
-
-            commitTimeSensor = threadLevelSensor("commit-latency", Sensor.RecordingLevel.INFO);
-            addAvgMaxLatency(commitTimeSensor, group, tagMap(), "commit");
-            addInvocationRateAndCount(commitTimeSensor, group, tagMap(), "commit");
-
-            pollTimeSensor = threadLevelSensor("poll-latency", Sensor.RecordingLevel.INFO);
-            addAvgMaxLatency(pollTimeSensor, group, tagMap(), "poll");
-            // can't use addInvocationRateAndCount due to non-standard description string
-            pollTimeSensor.add(metrics.metricName("poll-rate", group, "The average per-second number of record-poll calls", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
-            pollTimeSensor.add(metrics.metricName("poll-total", group, "The total number of record-poll calls", tagMap()), new CumulativeCount());
-
-            processTimeSensor = threadLevelSensor("process-latency", Sensor.RecordingLevel.INFO);
-            addAvgMaxLatency(processTimeSensor, group, tagMap(), "process");
-            addInvocationRateAndCount(processTimeSensor, group, tagMap(), "process");
-
-            punctuateTimeSensor = threadLevelSensor("punctuate-latency", Sensor.RecordingLevel.INFO);
-            addAvgMaxLatency(punctuateTimeSensor, group, tagMap(), "punctuate");
-            addInvocationRateAndCount(punctuateTimeSensor, group, tagMap(), "punctuate");
-
-            taskCreatedSensor = threadLevelSensor("task-created", Sensor.RecordingLevel.INFO);
-            taskCreatedSensor.add(metrics.metricName("task-created-rate", "stream-metrics", "The average per-second number of newly created tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
-            taskCreatedSensor.add(metrics.metricName("task-created-total", "stream-metrics", "The total number of newly created tasks", tagMap()), new Total());
-
-            taskClosedSensor = threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
-            taskClosedSensor.add(metrics.metricName("task-closed-rate", group, "The average per-second number of closed tasks", tagMap()), new Rate(TimeUnit.SECONDS, new Count()));
-            taskClosedSensor.add(metrics.metricName("task-closed-total", group, "The total number of closed tasks", tagMap()), new Total());
-        }
-    }
-
     private final Time time;
     private final Logger log;
     private final String logPrefix;
@@ -569,7 +583,7 @@ public class StreamThread extends Thread {
     private final int maxPollTimeMs;
     private final String originalReset;
     private final TaskManager taskManager;
-    private final StreamsMetricsThreadImpl streamsMetrics;
+    private final StreamThreadMetrics streamsMetrics;
     private final AtomicInteger assignmentErrorCode;
 
     private long now;
@@ -596,7 +610,7 @@ public class StreamThread extends Thread {
                                       final AdminClient adminClient,
                                       final UUID processId,
                                       final String clientId,
-                                      final Metrics metrics,
+                                      final StreamsMetricsImpl metrics,
                                       final Time time,
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
@@ -622,17 +636,14 @@ public class StreamThread extends Thread {
             threadProducer = clientSupplier.getProducer(producerConfigs);
         }
 
-        final StreamsMetricsThreadImpl streamsMetrics = new StreamsMetricsThreadImpl(
-            metrics,
-            threadClientId
-        );
+        final StreamThreadMetrics threadMetrics = new StreamThreadMetrics(threadClientId, metrics);
 
-        final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
+        final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, metrics);
 
         final AbstractTaskCreator<StreamTask> activeTaskCreator = new TaskCreator(
             builder,
             config,
-            streamsMetrics,
+            threadMetrics,
             stateDirectory,
             changelogReader,
             cache,
@@ -644,7 +655,7 @@ public class StreamThread extends Thread {
         final AbstractTaskCreator<StandbyTask> standbyTaskCreator = new StandbyTaskCreator(
             builder,
             config,
-            streamsMetrics,
+            threadMetrics,
             stateDirectory,
             changelogReader,
             time,
@@ -683,7 +694,7 @@ public class StreamThread extends Thread {
             consumer,
             originalReset,
             taskManager,
-            streamsMetrics,
+            threadMetrics,
             builder,
             threadClientId,
             logContext,
@@ -698,7 +709,7 @@ public class StreamThread extends Thread {
                         final Consumer<byte[], byte[]> consumer,
                         final String originalReset,
                         final TaskManager taskManager,
-                        final StreamsMetricsThreadImpl streamsMetrics,
+                        final StreamThreadMetrics streamsMetrics,
                         final InternalTopologyBuilder builder,
                         final String threadClientId,
                         final LogContext logContext,
@@ -857,7 +868,7 @@ public class StreamThread extends Thread {
         final long pollLatency = advanceNowAndComputeLatency();
 
         if (records != null && !records.isEmpty()) {
-            streamsMetrics.pollTimeSensor.record(pollLatency, now);
+            streamsMetrics.pollLatencySensor.record(pollLatency, now);
             addRecordsToTasks(records);
         }
 
@@ -891,14 +902,14 @@ public class StreamThread extends Thread {
 
                     if (processed > 0) {
                         final long processLatency = advanceNowAndComputeLatency();
-                        streamsMetrics.processTimeSensor.record(processLatency / (double) processed, now);
+                        streamsMetrics.processLatencySensor.record(processLatency / (double) processed, now);
 
                         // commit any tasks that have requested a commit
                         final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
 
                         if (committed > 0) {
                             final long commitLatency = advanceNowAndComputeLatency();
-                            streamsMetrics.commitTimeSensor.record(commitLatency / (double) committed, now);
+                            streamsMetrics.commitLatencySensor.record(commitLatency / (double) committed, now);
                         }
                     } else {
                         // if there is no records to be processed, exit immediately
@@ -1057,7 +1068,7 @@ public class StreamThread extends Thread {
             committed += taskManager.commitAll();
             if (committed > 0) {
                 final long intervalCommitLatency = advanceNowAndComputeLatency();
-                streamsMetrics.commitTimeSensor.record(intervalCommitLatency / (double) committed, now);
+                streamsMetrics.commitLatencySensor.record(intervalCommitLatency / (double) committed, now);
 
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommitedRecords();
@@ -1074,7 +1085,7 @@ public class StreamThread extends Thread {
             final int commitPerRequested = taskManager.maybeCommitActiveTasksPerUserRequested();
             if (commitPerRequested > 0) {
                 final long requestCommitLatency = advanceNowAndComputeLatency();
-                streamsMetrics.commitTimeSensor.record(requestCommitLatency / (double) committed, now);
+                streamsMetrics.commitLatencySensor.record(requestCommitLatency / (double) committed, now);
                 committed += commitPerRequested;
             }
         }
@@ -1220,7 +1231,7 @@ public class StreamThread extends Thread {
         } catch (final Throwable e) {
             log.error("Failed to close restore consumer due to the following error:", e);
         }
-        streamsMetrics.removeAllThreadLevelSensors();
+        streamsMetrics.clear();
 
         setState(State.DEAD);
         log.info("Shutdown complete");

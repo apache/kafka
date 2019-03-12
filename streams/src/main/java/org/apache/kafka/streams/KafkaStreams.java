@@ -53,6 +53,7 @@ import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.StreamsMetadata;
@@ -135,6 +136,7 @@ public class KafkaStreams implements AutoCloseable {
     private final Logger log;
     private final String clientId;
     private final Metrics metrics;
+    private final StreamsMetricsImpl streamsMetrics;
     private final StreamsConfig config;
     protected final StreamThread[] threads;
     private final StateDirectory stateDirectory;
@@ -663,6 +665,7 @@ public class KafkaStreams implements AutoCloseable {
                 Collections.singletonMap(StreamsConfig.CLIENT_ID_CONFIG, clientId));
         reporters.add(new JmxReporter(JMX_PREFIX));
         metrics = new Metrics(metricConfig, reporters, time);
+        streamsMetrics = new StreamsMetricsImpl(metrics);
 
         // re-write the physical topology according to the config
         internalTopologyBuilder.rewriteTopology(config);
@@ -702,7 +705,7 @@ public class KafkaStreams implements AutoCloseable {
                                                         clientSupplier.getGlobalConsumer(config.getGlobalConsumerConfigs(clientId)),
                                                         stateDirectory,
                                                         cacheSizePerThread,
-                                                        metrics,
+                                                        streamsMetrics,
                                                         time,
                                                         globalThreadId,
                                                         delegatingStateRestoreListener);
@@ -721,7 +724,7 @@ public class KafkaStreams implements AutoCloseable {
                                              adminClient,
                                              processId,
                                              clientId,
-                                             metrics,
+                                             streamsMetrics,
                                              time,
                                              streamsMetadataState,
                                              cacheSizePerThread,

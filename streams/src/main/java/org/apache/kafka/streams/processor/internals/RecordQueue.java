@@ -63,7 +63,7 @@ public class RecordQueue {
             source,
             deserializationExceptionHandler,
             logContext,
-            processorContext.metrics().skippedRecordsSensor()
+            processorContext.metrics().threadLevelSensor("skipped-records")
         );
         this.processorContext = processorContext;
         this.log = logContext.logger(RecordQueue.class);
@@ -182,7 +182,7 @@ public class RecordQueue {
                         "Skipping record due to negative extracted timestamp. topic=[{}] partition=[{}] offset=[{}] extractedTimestamp=[{}] extractor=[{}]",
                         deserialized.topic(), deserialized.partition(), deserialized.offset(), timestamp, timestampExtractor.getClass().getCanonicalName()
                 );
-                ((StreamsMetricsImpl) processorContext.metrics()).skippedRecordsSensor().record();
+                ((StreamsMetricsImpl) processorContext.metrics()).threadLevelSensor("skipped-records").record();
                 continue;
             }
 
