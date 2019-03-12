@@ -41,6 +41,7 @@ import org.apache.kafka.test.TestUtils;
 
 import java.time.Duration;
 import java.util.Properties;
+import java.util.Random;
 
 public class SmokeTestClient extends SmokeTestUtil {
 
@@ -105,6 +106,7 @@ public class SmokeTestClient extends SmokeTestUtil {
         fullProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         fullProps.put(ProducerConfig.ACKS_CONFIG, "all");
         fullProps.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        fullProps.put(StreamsConfig.APPLICATION_SERVER_CONFIG,"localhost:"+String.valueOf( Math.round(Math.random()*4460)));
         fullProps.putAll(props);
         return fullProps;
     }

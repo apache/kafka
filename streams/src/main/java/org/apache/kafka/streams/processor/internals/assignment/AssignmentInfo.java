@@ -431,7 +431,7 @@ public class AssignmentInfo {
             + ", supported version=" + latestSupportedVersion
             + ", active tasks=" + activeTasks
             + ", standby tasks=" + standbyTasks
-            + ", global task assignment=" + tasksByHost + "]";
+            + ", tasksByHosts=" + tasksByHost + "]";
     }
 
 }
