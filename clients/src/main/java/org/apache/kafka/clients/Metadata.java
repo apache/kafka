@@ -448,7 +448,7 @@ public class Metadata implements Closeable {
     public LeaderAndEpoch leaderAndEpoch(TopicPartition tp) {
         Node leader = fetch().leaderFor(tp);
         if (leader == null)
-            return null;
+            leader = Node.noNode();
         return new LeaderAndEpoch(leader, Optional.empty());
     }
 
