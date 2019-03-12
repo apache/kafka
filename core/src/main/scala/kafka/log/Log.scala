@@ -41,7 +41,7 @@ import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.{EpochEndOffset, ListOffsetRequest}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{OperatingSystem, Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 
 import scala.collection.JavaConverters._
@@ -1921,6 +1921,11 @@ class Log(@volatile var dir: File,
    * @throws IOException if the file can't be renamed and still exists
    */
   private def asyncDeleteSegment(segment: LogSegment) {
+    // On windows the renaming operation will failed if the file is still
+    // opened
+    if (OperatingSystem.IS_WINDOWS) {
+      segment.closeHandlers()
+    }
     segment.changeFileSuffixes("", Log.DeletedFileSuffix)
     def deleteSeg() {
       info(s"Deleting segment ${segment.baseOffset}")
@@ -2007,6 +2012,12 @@ class Log(@volatile var dir: File,
    */
   @threadsafe
   def addSegment(segment: LogSegment): LogSegment = this.segments.put(segment.baseOffset, segment)
+
+  def safeAddSegment(segment: LogSegment): Unit = {
+    lock synchronized {
+      addSegment(segment)
+    }
+  }
 
   private def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
     try {

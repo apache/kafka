@@ -33,7 +33,7 @@ import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageExcep
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{OperatingSystem, Time}
 
 import scala.collection.JavaConverters._
 import scala.collection.{Iterable, Set, mutable}
@@ -534,7 +534,8 @@ private[log] class Cleaner(val id: Int,
                                  deleteHorizonMs: Long,
                                  stats: CleanerStats) {
     // create a new segment with a suffix appended to the name of the log and indexes
-    val cleaned = LogCleaner.createNewCleanedSegment(log, segments.head.baseOffset)
+    var cleaned = LogCleaner.createNewCleanedSegment(log, segments.head.baseOffset)
+    var baseOffset = segments.head.baseOffset
 
     try {
       // clean segments into the new destination segment
@@ -571,6 +572,11 @@ private[log] class Cleaner(val id: Int,
       // flush new segment to disk before swap
       cleaned.flush()
 
+      // close the file on windows or the rename in replaceSegment will fail
+      if (OperatingSystem.IS_WINDOWS) {
+        cleaned.closeHandlers()
+      }
+
       // update the modification date to retain the last modified date of the original files
       val modified = segments.last.lastModified
       cleaned.lastModified = modified
@@ -578,6 +584,14 @@ private[log] class Cleaner(val id: Int,
       // swap in new segment
       info(s"Swapping in cleaned segment $cleaned for segment(s) $segments in log $log")
       log.replaceSegments(List(cleaned), segments)
+      // add the segment again with opened a new segments, just a workaround
+      // for windows
+      if (OperatingSystem.IS_WINDOWS) {
+        cleaned = LogSegment.open(log.dir, baseOffset, log.config, time, fileSuffix = "",
+          initFileSize = log.initFileSize, preallocate = log.config.preallocate)
+        cleaned.lastModified = modified
+        List(cleaned).foreach(log.safeAddSegment(_))
+      }
     } catch {
       case e: LogCleaningAbortedException =>
         try cleaned.deleteIfExists()
