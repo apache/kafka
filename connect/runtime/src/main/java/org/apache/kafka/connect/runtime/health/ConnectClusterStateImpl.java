@@ -25,46 +25,42 @@ import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.health.TaskState;
 import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
-import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.FutureCallback;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class ConnectClusterStateImpl implements ConnectClusterState {
+    
+    private static final long CONNECTORS_TIMEOUT_MS_DEFAULT = 10_000;
 
     private HerderProvider herderProvider;
+    private long connectorsTimeoutMs;
 
     public ConnectClusterStateImpl(HerderProvider herderProvider) {
+        this(herderProvider, CONNECTORS_TIMEOUT_MS_DEFAULT);
+    }
+    
+    // To enable a lower timeout during testing (don't want to add ten seconds to every run)
+    ConnectClusterStateImpl(HerderProvider herderProvider, long connectorsTimeoutMs) {
         this.herderProvider = herderProvider;
+        this.connectorsTimeoutMs = connectorsTimeoutMs;
     }
 
     @Override
     public Collection<String> connectors() {
-        final CountDownLatch connectorsLatch = new CountDownLatch(1);
-        final Collection<String> connectors = new ArrayList<>();
-        herderProvider.get().connectors(new Callback<java.util.Collection<String>>() {
-            @Override
-            public void onCompletion(Throwable error, Collection<String> result) {
-                connectors.addAll(result);
-                connectorsLatch.countDown();
-            }
-        });
+        FutureCallback<Collection<String>> connectorsCallback = new FutureCallback<>();
+        herderProvider.get().connectors(connectorsCallback);
         try {
-            // Should take no more than 10 seconds to get a list of connectors. Any longer than this
-            // and it's very likely something is wrong.
-            boolean success = connectorsLatch.await(10, TimeUnit.SECONDS);
-            if (!success) {
-                throw new ConnectException("Timed out while retrieving list of connectors");
-            }
-        } catch (InterruptedException e) {
-            throw new ConnectException("Interrupted while retrieving list of connectors", e);
+            return connectorsCallback.get(connectorsTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            throw new ConnectException("Failed to retrieve list of connectors", e);
         }
-        return connectors;
     }
 
     @Override
