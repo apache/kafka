@@ -31,7 +31,6 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
@@ -42,15 +41,10 @@ import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
-import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 import java.util.Properties;
-import java.util.concurrent.ConcurrentHashMap;
 
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
@@ -69,7 +63,7 @@ import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-@Category({IntegrationTest.class})
+@Category(IntegrationTest.class)
 public class SuppressionIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
@@ -81,7 +75,7 @@ public class SuppressionIntegrationTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final int COMMIT_INTERVAL = 100;
 
-    private KTable<String, Long> buildCountsTable(final String input, final StreamsBuilder builder) {
+    private static KTable<String, Long> buildCountsTable(final String input, final StreamsBuilder builder) {
         return builder
             .table(
                 input,
@@ -150,7 +144,7 @@ public class SuppressionIntegrationTest {
 
         valueCounts
             // this is a bit brittle, but I happen to know that the entries are a little over 100 bytes in size.
-            .suppress(untilTimeLimit(Duration.ofMillis(MAX_VALUE), maxBytes(200L).shutDownWhenFull()))
+            .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxBytes(200L).shutDownWhenFull()))
             .toStream()
             .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
 
@@ -216,7 +210,10 @@ public class SuppressionIntegrationTest {
                 )
             );
 
-            waitForCondition(() -> results.equals(asList(new KeyValue<>("v1", 1L), new KeyValue<>("v2", 1L))), DEFAULT_TIMEOUT, "Timed out waiting for result");
+            waitForCondition(
+                () -> results.equals(asList(new KeyValue<>("v1", 1L), new KeyValue<>("v2", 1L))), DEFAULT_TIMEOUT,
+                "Timed out waiting for result"
+            );
             assertThat(driver.state(), is(KafkaStreams.State.RUNNING));
         } finally {
             driver.close();
@@ -224,7 +221,7 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    private Properties getStreamsConfig(final String appId) {
+    private static Properties getStreamsConfig(final String appId) {
         return mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
@@ -239,11 +236,12 @@ public class SuppressionIntegrationTest {
      * scaling to ensure that there are commits in between the various test events,
      * just to exercise that everything works properly in the presence of commits.
      */
-    private long scaledTime(final long unscaledTime) {
+    private static long scaledTime(final long unscaledTime) {
         return COMMIT_INTERVAL * 2 * unscaledTime;
     }
 
-    private void produceSynchronously(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
+    private static void produceSynchronously(final String topic,
+                                             final List<KeyValueTimestamp<String, String>> toProduce) {
         final Properties producerConfig = mkProperties(mkMap(
             mkEntry(ProducerConfig.CLIENT_ID_CONFIG, "anything"),
             mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
@@ -253,7 +251,7 @@ public class SuppressionIntegrationTest {
         IntegrationTestUtils.produceSynchronously(producerConfig, false, topic, toProduce);
     }
 
-    private void verifyErrorShutdown(final KafkaStreams driver) throws InterruptedException {
+    private static void verifyErrorShutdown(final KafkaStreams driver) throws InterruptedException {
         waitForCondition(() -> !driver.state().isRunning(), DEFAULT_TIMEOUT, "Streams didn't shut down.");
         assertThat(driver.state(), is(KafkaStreams.State.ERROR));
     }
