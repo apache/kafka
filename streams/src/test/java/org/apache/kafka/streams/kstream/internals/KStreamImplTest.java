@@ -104,12 +104,13 @@ public class KStreamImplTest {
 
         final KStream<String, String> source2 = builder.stream(Arrays.asList("topic-3", "topic-4"), stringConsumed);
 
-        final KStream<String, String> stream1 =
-            source1.filter((key, value) -> true).filterNot((key, value) -> false);
+        final KStream<String, String> stream1 = source1.filter((key, value) -> true)
+                                                       .filterNot((key, value) -> false);
 
         final KStream<String, Integer> stream2 = stream1.mapValues(Integer::new);
 
-        final KStream<String, Integer> stream3 = source2.flatMapValues((ValueMapper<String, Iterable<Integer>>) value -> Collections.singletonList(new Integer(value)));
+        final KStream<String, Integer> stream3 = source2.flatMapValues((ValueMapper<String, Iterable<Integer>>)
+            value -> Collections.singletonList(new Integer(value)));
 
         final KStream<String, Integer>[] streams2 = stream2.branch(
             (key, value) -> (value % 2) == 0,
@@ -123,9 +124,11 @@ public class KStreamImplTest {
 
         final int anyWindowSize = 1;
         final Joined<String, Integer, Integer> joined = Joined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer());
-        final KStream<String, Integer> stream4 = streams2[0].join(streams3[0], (value1, value2) -> value1 + value2, JoinWindows.of(ofMillis(anyWindowSize)), joined);
+        final KStream<String, Integer> stream4 = streams2[0].join(streams3[0],
+            (value1, value2) -> value1 + value2, JoinWindows.of(ofMillis(anyWindowSize)), joined);
 
-        streams2[1].join(streams3[1], (value1, value2) -> value1 + value2, JoinWindows.of(ofMillis(anyWindowSize)), joined);
+        streams2[1].join(streams3[1], (value1, value2) -> value1 + value2,
+            JoinWindows.of(ofMillis(anyWindowSize)), joined);
 
         stream4.to("topic-5");
 
