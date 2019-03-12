@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.EXPIRED_WINDOW_RECORD_DROP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 
 public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
@@ -157,14 +158,14 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
         expiredRecordSensor = metrics.storeLevelSensor(
             taskName,
             name(),
-            "expired-window-record-drop",
+            EXPIRED_WINDOW_RECORD_DROP,
             Sensor.RecordingLevel.INFO
         );
         addInvocationRateAndCount(
             expiredRecordSensor,
             "stream-" + metricScope + "-metrics",
             metrics.tagMap("task-id", taskName, metricScope + "-id", name()),
-            "expired-window-record-drop"
+            EXPIRED_WINDOW_RECORD_DROP
         );
 
         segments.openExisting(this.context, observedStreamTime);

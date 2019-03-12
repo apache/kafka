@@ -235,8 +235,8 @@ public class ConsumerConfig extends AbstractConfig {
 
     /** <code>exclude.internal.topics</code> */
     public static final String EXCLUDE_INTERNAL_TOPICS_CONFIG = "exclude.internal.topics";
-    private static final String EXCLUDE_INTERNAL_TOPICS_DOC = "Whether records from internal topics (such as offsets) should be exposed to the consumer. "
-                                                            + "If set to <code>true</code> the only way to receive records from an internal topic is subscribing to it.";
+    private static final String EXCLUDE_INTERNAL_TOPICS_DOC = "Whether internal topics matching a subscribed pattern should " +
+            "be excluded from the subscription. It is always possible to explicitly subscribe to an internal topic.";
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
 
     /**

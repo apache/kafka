@@ -113,17 +113,17 @@ public class InternalTopicManagerTest {
             {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
             }
-        }), mockAdminClient.describeTopics(Collections.singleton(topic)).values().get(topic).get());
+        }, Collections.emptySet()), mockAdminClient.describeTopics(Collections.singleton(topic)).values().get(topic).get());
         assertEquals(new TopicDescription(topic2, false, new ArrayList<TopicPartitionInfo>() {
             {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
             }
-        }), mockAdminClient.describeTopics(Collections.singleton(topic2)).values().get(topic2).get());
+        }, Collections.emptySet()), mockAdminClient.describeTopics(Collections.singleton(topic2)).values().get(topic2).get());
         assertEquals(new TopicDescription(topic3, false, new ArrayList<TopicPartitionInfo>() {
             {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()));
             }
-        }), mockAdminClient.describeTopics(Collections.singleton(topic3)).values().get(topic3).get());
+        }, Collections.emptySet()), mockAdminClient.describeTopics(Collections.singleton(topic3)).values().get(topic3).get());
 
         final ConfigResource resource = new ConfigResource(ConfigResource.Type.TOPIC, topic);
         final ConfigResource resource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2);

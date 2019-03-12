@@ -155,10 +155,9 @@
         This means that all downstream processor nodes can see all records, whereas the state stores see a reduced number of records.
         This does not impact correctness of the system, but is a performance optimization for the state stores. For example, with the
         Processor API you can store a record in a state store while forwarding a different value downstream.</p>
-      <p>Following from the example first shown in section <a class="reference internal" href="processor-api.html#streams-developer-guide-state-store"><span class="std std-ref">State Stores</span></a>, to enable caching, you can
-        add the <code class="docutils literal"><span class="pre">withCachingEnabled</span></code> call (note that caches are disabled by default and there is no explicit <code class="docutils literal"><span class="pre">withDisableCaching</span></code>
+      <p>Following from the example first shown in section <a class="reference internal" href="processor-api.html#streams-developer-guide-state-store"><span class="std std-ref">State Stores</span></a>, to disable caching, you can
+        add the <code class="docutils literal"><span class="pre">withCachingDisabled</span></code> call (note that caches are enabled by default, however there is an explicit <code class="docutils literal"><span class="pre">withCachingEnabled</span></code>
         call).</p>
-      <p><strong>Tip:</strong> Caches are disabled by default and there is no explicit <code class="docutils literal"><span class="pre">disableCaching</span></code> call).</p>
       <div class="highlight-java"><div class="highlight"><pre><span></span><span class="n">StoreBuilder</span> <span class="n">countStoreBuilder</span> <span class="o">=</span>
   <span class="n">Stores</span><span class="o">.</span><span class="na">keyValueStoreBuilder</span><span class="o">(</span>
     <span class="n">Stores</span><span class="o">.</span><span class="na">persistentKeyValueStore</span><span class="o">(</span><span class="s">&quot;Counts&quot;</span><span class="o">),</span>
