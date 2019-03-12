@@ -136,7 +136,7 @@ public class MonitorableSinkConnector extends TestSinkConnector {
                     log.warn("preCommit was called with topic-partition {} that is not included "
                             + "in the assignments of this task {}", tp, assignments);
                 } else {
-                    taskHandle.commit((int) (long) recordsSinceLastCommit);
+                    taskHandle.commit(recordsSinceLastCommit.intValue());
                     log.error("Forwarding to framework request to commit additional {} for {}",
                             recordsSinceLastCommit, tp);
                     taskHandle.commit((int) (long) recordsSinceLastCommit);

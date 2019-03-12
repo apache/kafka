@@ -49,7 +49,7 @@ public class TaskHandle {
     }
 
     /**
-     * Record a message arrival at the task.
+     * Record a message arrival at the task and the connector overall.
      */
     public void record() {
         if (recordsRemainingLatch != null) {
@@ -59,7 +59,9 @@ public class TaskHandle {
     }
 
     /**
-     * Record arrival of a batch of messages at the task.
+     * Record arrival of a batch of messages at the task and the connector overall.
+     *
+     * @param batchSize the number of messages
      */
     public void record(int batchSize) {
         if (recordsRemainingLatch != null) {
@@ -69,7 +71,7 @@ public class TaskHandle {
     }
 
     /**
-     * Record a message commit from the task.
+     * Record a message commit from the task and the connector overall.
      */
     public void commit() {
         if (recordsToCommitLatch != null) {
@@ -79,7 +81,9 @@ public class TaskHandle {
     }
 
     /**
-     * Record a commit of a batch of messages from the task.
+     * Record commit on a batch of messages from the task and the connector overall.
+     *
+     * @param batchSize the number of messages
      */
     public void commit(int batchSize) {
         if (recordsToCommitLatch != null) {

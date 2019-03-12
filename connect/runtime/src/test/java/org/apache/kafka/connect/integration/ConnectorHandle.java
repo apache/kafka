@@ -95,9 +95,8 @@ public class ConnectorHandle {
         recordsRemainingLatch = new CountDownLatch(expected);
     }
 
-
     /**
-     * Set the number of expected record commits performed by this connector.
+     * Set the number of expected commits performed by this connector.
      *
      * @param expected number of commits
      */
@@ -116,7 +115,9 @@ public class ConnectorHandle {
     }
 
     /**
-     * Record arrival of a batch of size {@code batchSize} at the connector.
+     * Record arrival of a batch of messages at the connector.
+     *
+     * @param batchSize the number of messages
      */
     public void record(int batchSize) {
         if (recordsRemainingLatch != null) {
@@ -125,7 +126,7 @@ public class ConnectorHandle {
     }
 
     /**
-     * Record a message arrival at the connector.
+     * Record a message commit from the connector.
      */
     public void commit() {
         if (recordsToCommitLatch != null) {
@@ -134,7 +135,9 @@ public class ConnectorHandle {
     }
 
     /**
-     * Record arrival of a batch of size {@code batchSize} at the connector.
+     * Record commit on a batch of messages from the connector.
+     *
+     * @param batchSize the number of messages
      */
     public void commit(int batchSize) {
         if (recordsToCommitLatch != null) {
