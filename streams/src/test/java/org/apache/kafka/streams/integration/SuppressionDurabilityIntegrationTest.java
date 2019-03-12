@@ -49,7 +49,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -73,7 +72,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 @RunWith(Parameterized.class)
-@Category({IntegrationTest.class})
+@Category(IntegrationTest.class)
 public class SuppressionDurabilityIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
@@ -94,10 +93,10 @@ public class SuppressionDurabilityIntegrationTest {
 
     @Parameters(name = "{index}: eosEnabled={0}")
     public static Collection<Object[]> parameters() {
-        return Arrays.asList(new Object[] {false}, new Object[] {true});
+        return asList(new Object[] {false}, new Object[] {true});
     }
 
-    private KTable<String, Long> buildCountsTable(final String input, final StreamsBuilder builder) {
+    private static KTable<String, Long> buildCountsTable(final String input, final StreamsBuilder builder) {
         return builder
             .table(
                 input,
@@ -233,7 +232,7 @@ public class SuppressionDurabilityIntegrationTest {
         }
     }
 
-    private void verifyOutput(final String topic, final List<KeyValueTimestamp<String, Long>> keyValueTimestamps) {
+    private static void verifyOutput(final String topic, final List<KeyValueTimestamp<String, Long>> keyValueTimestamps) {
         final Properties properties = mkProperties(
             mkMap(
                 mkEntry(ConsumerConfig.GROUP_ID_CONFIG, "test-group"),
@@ -250,11 +249,11 @@ public class SuppressionDurabilityIntegrationTest {
      * scaling to ensure that there are commits in between the various test events,
      * just to exercise that everything works properly in the presence of commits.
      */
-    private long scaledTime(final long unscaledTime) {
+    private static long scaledTime(final long unscaledTime) {
         return COMMIT_INTERVAL * 2 * unscaledTime;
     }
 
-    private void produceSynchronously(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
+    private static void produceSynchronously(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
         final Properties producerConfig = mkProperties(mkMap(
             mkEntry(ProducerConfig.CLIENT_ID_CONFIG, "anything"),
             mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
