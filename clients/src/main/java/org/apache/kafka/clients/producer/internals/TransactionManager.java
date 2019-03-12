@@ -681,6 +681,11 @@ public class TransactionManager {
             request.fatalError(e);
     }
 
+    synchronized void abortPendingTransactionalRequests() {
+        pendingRequests.forEach(handler ->
+                handler.fatalError(new KafkaException("The producer closed forcefully")));
+    }
+
     Node coordinator(FindCoordinatorRequest.CoordinatorType type) {
         switch (type) {
             case GROUP:

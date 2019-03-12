@@ -255,10 +255,10 @@ public class Sender implements Runnable {
             }
         }
 
-        // Abort the transaction if any commit or abort didn't went through the transaction manager's queue
+        // Abort the transaction if any commit or abort didn't go through the transaction manager's queue
         while (!forceClose && transactionManager != null && transactionManager.hasOngoingTransaction()) {
             if (!transactionManager.isCompleting()) {
-                log.debug("Aborting incomplete transaction due to shutdown");
+                log.info("Aborting incomplete transaction due to shutdown");
                 transactionManager.beginAbort();
             }
             try {
@@ -269,8 +269,12 @@ public class Sender implements Runnable {
         }
 
         if (forceClose) {
-            // We need to fail all the incomplete batches and wake up the threads waiting on
+            // We need to fail all the incomplete transactional requests and batches and wake up the threads waiting on
             // the futures.
+            if (transactionManager != null) {
+                log.debug("Aborting incomplete transactional requests due to forced shutdown");
+                transactionManager.abortPendingTransactionalRequests();
+            }
             log.debug("Aborting incomplete batches due to forced shutdown");
             this.accumulator.abortIncompleteBatches();
         }
@@ -494,6 +498,10 @@ public class Sender implements Runnable {
     public void forceClose() {
         this.forceClose = true;
         initiateClose();
+    }
+
+    public boolean isRunning() {
+        return running;
     }
 
     private ClientResponse sendAndAwaitInitProducerIdRequest(Node node) throws IOException {

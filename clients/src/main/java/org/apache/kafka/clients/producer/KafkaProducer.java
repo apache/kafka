@@ -611,6 +611,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void initTransactions() {
         throwIfNoTransactionManager();
+        throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
@@ -631,6 +632,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void beginTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
+        throwIfProducerClosed();
         transactionManager.beginTransaction();
     }
 
@@ -661,6 +663,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
         throwIfNoTransactionManager();
+        throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
         sender.wakeup();
         result.await();
@@ -691,6 +694,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void commitTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
+        throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
@@ -718,6 +722,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void abortTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
+        throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
@@ -848,7 +853,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     // Verify that this producer instance has not been closed. This method throws IllegalStateException if the producer
     // has already been closed.
     private void throwIfProducerClosed() {
-        if (ioThread == null || !ioThread.isAlive())
+        if (sender != null && !sender.isRunning())
             throw new IllegalStateException("Cannot perform operation after producer has been closed");
     }
 
