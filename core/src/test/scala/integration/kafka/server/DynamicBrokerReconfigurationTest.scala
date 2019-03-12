@@ -146,7 +146,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     clientThreads.foreach(_.initiateShutdown())
     clientThreads.foreach(_.join(5 * 1000))
     executors.foreach(_.shutdownNow())
-    producers.foreach(_.close(0, TimeUnit.MILLISECONDS))
+    producers.foreach(_.close(Duration.ZERO))
     consumers.foreach(_.close(Duration.ofMillis(0)))
     adminClients.foreach(_.close())
     TestUtils.shutdownServers(servers)
@@ -1470,7 +1470,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     override def doWork(): Unit = {
       try {
         while (isRunning || (lastReceived != producerThread.lastSent && System.currentTimeMillis < endTimeMs)) {
-          val records = consumer.poll(50)
+          val records = consumer.poll(Duration.ofMillis(50L))
           received += records.count
           if (!records.isEmpty) {
             lastBatch = records
