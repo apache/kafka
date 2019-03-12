@@ -498,7 +498,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorParameters<K, Change<VO>> joinOtherProcessorParameters = new ProcessorParameters<>(joinOther, joinOtherName);
 
         final KTableKTableJoinNode.KTableKTableJoinNodeBuilder<K, V, VO, VR> kTableJoinNodeBuilder =
-            KTableKTableJoinNode.<K, V, VO, VR>kTableKTableJoinNodeBuilder(builder)
+            KTableKTableJoinNode.<K, V, VO, VR>kTableKTableJoinNodeBuilder()
                 .withNodeName(joinMergeName)
                 .withJoinThisProcessorParameters(joinThisProcessorParameters)
                 .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
