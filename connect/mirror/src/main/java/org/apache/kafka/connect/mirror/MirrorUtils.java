@@ -23,8 +23,10 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
+import java.util.List;
 import java.util.HashMap;
 import java.util.Collections;
+import java.util.regex.Pattern;
 
 /** Internal utility methods. */
 final class MirrorUtils {
@@ -75,5 +77,17 @@ final class MirrorUtils {
         String partitionString = topicPartitionString.substring(sep + 1);
         int partition = Integer.parseInt(partitionString);
         return new TopicPartition(topic, partition);
+    }
+
+    // returns null if given empty list
+    static Pattern compilePatternList(List<String> fields) {
+        if (fields.isEmpty()) {
+            // The empty pattern matches _everything_, but a blank
+            // config property should match _nothing_.
+            return null;
+        } else {
+            String joined = String.join("|", fields);
+            return Pattern.compile(joined);
+        }
     }
 }

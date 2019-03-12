@@ -30,7 +30,6 @@ import java.util.HashSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.stream.Collectors;
-import java.util.regex.Pattern;
 import java.util.concurrent.ExecutionException;
 
 import org.slf4j.Logger;
@@ -42,8 +41,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     private Scheduler scheduler;
     private MirrorConnectorConfig config;
-    private Pattern groupsPattern;
-    private Pattern groupsBlacklistPattern;
+    private GroupFilter groupFilter;
     private AdminClient sourceAdminClient;
     private ReplicationPolicy replicationPolicy;
     private SourceAndTarget sourceAndTarget;
@@ -61,8 +59,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
             log.info("{} for {} is disabled.", connectorName, sourceAndTarget);
             return;
         }
-        groupsPattern = config.groupsPattern();
-        groupsBlacklistPattern = config.groupsBlacklistPattern();
+        groupFilter = config.groupFilter();
         replicationPolicy = config.replicationPolicy();
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
         log.info("Starting {} for {}.", connectorName, sourceAndTarget);
@@ -151,6 +148,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
     }
 
     boolean shouldReplicate(String group) {
-        return groupsPattern.matcher(group).matches() && !groupsBlacklistPattern.matcher(group).matches();
+        return groupFilter.shouldReplicateGroup(group);
     }
 }

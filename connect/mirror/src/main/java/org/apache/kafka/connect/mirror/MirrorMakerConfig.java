@@ -23,7 +23,6 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.apache.kafka.connect.sink.SinkTask;
 import org.apache.kafka.connect.converters.ByteArrayConverter;
 
 import java.util.Map;
@@ -129,12 +128,6 @@ public class MirrorMakerConfig extends AbstractConfig {
         // override with connector-level properties
         props.putAll(originalsWithPrefix(sourceAndTarget.source() + "->"
             + sourceAndTarget.target() + "."));
-
-        if (MirrorMonitorConnector.class.isAssignableFrom(connectorClass)) {
-            // SinkConnectors need the topics field. We parse the config to set it correctly.
-            MirrorConnectorConfig connectorConfig = new MirrorConnectorConfig(props);
-            props.put(SinkTask.TOPICS_CONFIG, connectorConfig.sourceHeartbeatsTopic());
-        }
 
         return toStrings(props);
     }

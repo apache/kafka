@@ -134,7 +134,6 @@ public class MirrorMaker {
         startConnector(sourceAndTarget, MirrorSourceConnector.class);
         startConnector(sourceAndTarget, MirrorCheckpointConnector.class);
         startConnector(sourceAndTarget, MirrorHeartbeatConnector.class);
-        startConnector(sourceAndTarget, MirrorMonitorConnector.class);
     }
 
     private List<SourceAndTarget> clusterPairs() {

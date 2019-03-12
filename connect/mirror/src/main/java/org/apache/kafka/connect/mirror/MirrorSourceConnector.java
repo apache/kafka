@@ -44,7 +44,6 @@ import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.concurrent.ExecutionException;
-import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,10 +59,8 @@ public class MirrorSourceConnector extends SourceConnector {
     private MirrorConnectorConfig config;
     private SourceAndTarget sourceAndTarget;
     private String connectorName;
-    private Pattern topicsPattern;
-    private Pattern topicsBlacklistPattern;
-    private Pattern configPropertiesPattern;
-    private Pattern configPropertiesBlacklistPattern;
+    private TopicFilter topicFilter;
+    private ConfigPropertyFilter configPropertyFilter;
     private List<TopicPartition> knownTopicPartitions = Collections.emptyList();
     private ReplicationPolicy replicationPolicy;
     private AdminClient sourceAdminClient;
@@ -80,10 +77,8 @@ public class MirrorSourceConnector extends SourceConnector {
             log.info("{} for {} is disabled.", connectorName, sourceAndTarget);
             return;
         }
-        topicsPattern = config.topicsPattern();
-        topicsBlacklistPattern = config.topicsBlacklistPattern();
-        configPropertiesPattern = config.configPropertiesPattern();
-        configPropertiesBlacklistPattern = config.configPropertiesBlacklistPattern();
+        topicFilter = config.topicFilter();
+        configPropertyFilter = config.configPropertyFilter();
         replicationPolicy = config.replicationPolicy();
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
         targetAdminClient = AdminClient.create(config.targetAdminConfig());
@@ -295,14 +290,11 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     boolean shouldReplicateTopic(String topic) {
-        return topicsPattern.matcher(topic).matches()
-            && !topicsBlacklistPattern.matcher(topic).matches()
-            && !isCycle(topic);
+        return topicFilter.shouldReplicateTopic(topic) && !isCycle(topic);
     }
 
     boolean shouldReplicateTopicConfigurationProperty(String property) {
-        return configPropertiesPattern.matcher(property).matches()
-            && !configPropertiesBlacklistPattern.matcher(property).matches();
+        return configPropertyFilter.shouldReplicateConfigProperty(property);
     }
 
     // Recurse upstream to detect cycles, i.e. whether this topic is already on the target cluster

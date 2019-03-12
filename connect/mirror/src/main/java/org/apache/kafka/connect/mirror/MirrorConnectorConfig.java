@@ -20,12 +20,12 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.connect.runtime.ConnectorConfig;
 
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.regex.Pattern;
 import java.time.Duration;
 
 public class MirrorConnectorConfig extends AbstractConfig {
@@ -44,37 +44,18 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String ENABLED = "enabled";
     private static final String ENABLED_DOC = "Enable this source->target replication flow.";
     private static final boolean ENABLED_DEFAULT = false;
-    public static final String NAME = "name";
-    private static final String NAME_DOC = "name";
-    public static final String TOPICS = "topics";
-    private static final String TOPICS_DOC = "topics";
-    public static final String TOPICS_DEFAULT = ".*";
-    public static final String TOPICS_BLACKLIST = "topics.blacklist";
-    private static final String TOPICS_BLACKLIST_DOC = "topics.blacklist";
-    public static final String TOPICS_BLACKLIST_DEFAULT = ".*[\\-\\.]internal, .*\\.replica, __consumer_offsets";
-    public static final String GROUPS = "groups";
-    private static final String GROUPS_DOC = "groups";
-    public static final String GROUPS_DEFAULT = ".*";
-    public static final String GROUPS_BLACKLIST = "groups.blacklist";
-    private static final String GROUPS_BLACKLIST_DOC = "groups.blacklist";
-    public static final String GROUPS_BLACKLIST_DEFAULT = "console-consumer-.*, connect-.*";
-    public static final String CONFIG_PROPERTIES = "config.properties";
-    private static final String CONFIG_PROPERTIES_DOC = "config.properties";
-    public static final String CONFIG_PROPERTIES_DEFAULT = ".*";
-    public static final String CONFIG_PROPERTIES_BLACKLIST = "config.properties.blacklist";
-    private static final String CONFIG_PROPERTIES_BLACKLIST_DOC = "config.properties.blacklist";
-    public static final String CONFIG_PROPERTIES_BLACKLIST_DEFAULT = "segment\\.bytes";
     public static final String SOURCE_CLUSTER_ALIAS = "source.cluster.alias";
     private static final String SOURCE_CLUSTER_ALIAS_DOC = "source.cluster.alias";
     public static final String TARGET_CLUSTER_ALIAS = "target.cluster.alias";
     private static final String TARGET_CLUSTER_ALIAS_DOC = "target.cluster.alias";
     public static final String REPLICATION_POLICY_CLASS = MirrorClientConfig.REPLICATION_POLICY_CLASS;
+    public static final Class REPLICATION_POLICY_CLASS_DEFAULT = DefaultReplicationPolicy.class;
     private static final String REPLICATION_POLICY_CLASS_DOC = "replication.policy.class";
     public static final String REPLICATION_POLICY_SEPARATOR = MirrorClientConfig.REPLICATION_POLICY_SEPARATOR;
     private static final String REPLICATION_POLICY_SEPARATOR_DOC = "replication.policy.separator";
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
         MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
- 
+
     public static final String SOURCE_CLUSTER_BOOTSTRAP_SERVERS = "source.cluster.bootstrap.servers";
     private static final String SOURCE_CLUSTER_BOOTSTRAP_SERVERS_DOC = "source.cluster.bootstrap.servers";
     public static final String TARGET_CLUSTER_BOOTSTRAP_SERVERS = "target.cluster.bootstrap.servers";
@@ -130,24 +111,33 @@ public class MirrorConnectorConfig extends AbstractConfig {
     private static final String EMIT_CHECKPOINTS_INTERVAL_SECONDS_DOC = EMIT_CHECKPOINTS + INTERVAL_SECONDS_SUFFIX;
     public static final long EMIT_CHECKPOINTS_INTERVAL_SECONDS_DEFAULT = 5;
 
+    public static final String TOPIC_FILTER_CLASS = "topic.filter.class";
+    private static final String TOPIC_FILTER_CLASS_DOC = "TopicFilter to use. Selects topics to replicate.";
+    public static final Class TOPIC_FILTER_CLASS_DEFAULT = DefaultTopicFilter.class;
+    public static final String GROUP_FILTER_CLASS = "group.filter.class";
+    private static final String GROUP_FILTER_CLASS_DOC = "GroupFilter to use. Selects consumer groups to replicate.";
+    public static final Class GROUP_FILTER_CLASS_DEFAULT = DefaultGroupFilter.class;
+    public static final String CONFIG_PROPERTY_FILTER_CLASS = "config.property.filter.class";
+    private static final String CONFIG_PROPERTY_FILTER_CLASS_DOC = "ConfigPropertyFilter to use. Selects topic config "
+        + " properties to replicate.";
+    public static final Class CONFIG_PROPERTY_FILTER_CLASS_DEFAULT = DefaultConfigPropertyFilter.class;
+
     protected static final String PRODUCER_CLIENT_PREFIX = "producer.";
     protected static final String CONSUMER_CLIENT_PREFIX = "consumer.";
     protected static final String ADMIN_CLIENT_PREFIX = "admin.";
     protected static final String SOURCE_ADMIN_CLIENT_PREFIX = "source.admin.";
     protected static final String TARGET_ADMIN_CLIENT_PREFIX = "target.admin.";
 
-    private static final Pattern MATCH_NOTHING = Pattern.compile("\\\0");
-
-    public MirrorConnectorConfig(Map<?, ?> props) {
+    public MirrorConnectorConfig(Map<String, String> props) {
         this(CONNECTOR_CONFIG_DEF, props);
     }
 
-    protected MirrorConnectorConfig(ConfigDef configDef, Map<?, ?> props) {
+    protected MirrorConnectorConfig(ConfigDef configDef, Map<String, String> props) {
         super(configDef, props, true);
     }
 
     String connectorName() {
-        return getString(NAME);
+        return getString(ConnectorConfig.NAME_CONFIG);
     }
 
     boolean enabled() {
@@ -229,43 +219,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
         return getString(TARGET_CLUSTER_BOOTSTRAP_SERVERS);
     }
 
-    // Creates a pattern out of comma-separated names or regexes
-    private Pattern patternListOrNothing(String prop) {
-        List<String> fields = getList(prop);
-        if (fields.isEmpty()) {
-            // The empty pattern matches _everything_, but a blank
-            // config property should match _nothing_.
-            return MATCH_NOTHING;
-        } else {
-            String joined = String.join("|", fields);
-            return Pattern.compile(joined);
-        }
-    }
-
-    Pattern topicsPattern() {
-        return patternListOrNothing(TOPICS);
-    }
-
-    Pattern topicsBlacklistPattern() {
-        return patternListOrNothing(TOPICS_BLACKLIST);
-    }
-
-    Pattern groupsPattern() {
-        return patternListOrNothing(GROUPS);
-    }
-
-    Pattern groupsBlacklistPattern() {
-        return patternListOrNothing(GROUPS_BLACKLIST);
-    }
-
-    Pattern configPropertiesPattern() {
-        return patternListOrNothing(CONFIG_PROPERTIES);
-    }
-
-    Pattern configPropertiesBlacklistPattern() {
-        return patternListOrNothing(CONFIG_PROPERTIES_BLACKLIST);
-    }
-
     String offsetSyncTopic() {
         // ".internal" suffix ensures this doesn't get replicated
         return targetClusterAlias() + ".offset-syncs.internal";
@@ -276,7 +229,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     // e.g. source1.heartbeats
-    String sourceHeartbeatsTopic() {
+    String targetHeartbeatsTopic() {
         return replicationPolicy().formatRemoteTopic(sourceClusterAlias(), heartbeatsTopic());
     }
 
@@ -347,7 +300,19 @@ public class MirrorConnectorConfig extends AbstractConfig {
         return getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
     }
 
-    protected static final ConfigDef CONNECTOR_CONFIG_DEF = new ConfigDef()
+    TopicFilter topicFilter() {
+        return getConfiguredInstance(TOPIC_FILTER_CLASS, TopicFilter.class);
+    }
+
+    GroupFilter groupFilter() {
+        return getConfiguredInstance(GROUP_FILTER_CLASS, GroupFilter.class);
+    }
+
+    ConfigPropertyFilter configPropertyFilter() {
+        return getConfiguredInstance(CONFIG_PROPERTY_FILTER_CLASS, ConfigPropertyFilter.class);
+    }
+
+    protected static final ConfigDef CONNECTOR_CONFIG_DEF = ConnectorConfig.configDef()
         .define(
             ENABLED,
             ConfigDef.Type.BOOLEAN,
@@ -355,47 +320,23 @@ public class MirrorConnectorConfig extends AbstractConfig {
             ConfigDef.Importance.HIGH,
             ENABLED_DOC)
         .define(
-            NAME,
-            ConfigDef.Type.STRING,
-            null,
-            ConfigDef.Importance.HIGH,
-            NAME_DOC)
+            TOPIC_FILTER_CLASS,
+            ConfigDef.Type.CLASS,
+            TOPIC_FILTER_CLASS_DEFAULT,
+            ConfigDef.Importance.LOW,
+            TOPIC_FILTER_CLASS_DOC)
         .define(
-            TOPICS,
-            ConfigDef.Type.LIST,
-            TOPICS_DEFAULT,
-            ConfigDef.Importance.HIGH,
-            TOPICS_DOC)
+            GROUP_FILTER_CLASS,
+            ConfigDef.Type.CLASS,
+            GROUP_FILTER_CLASS_DEFAULT,
+            ConfigDef.Importance.LOW,
+            TOPIC_FILTER_CLASS_DOC)
         .define(
-            TOPICS_BLACKLIST,
-            ConfigDef.Type.LIST,
-            TOPICS_BLACKLIST_DEFAULT,
-            ConfigDef.Importance.HIGH,
-            TOPICS_BLACKLIST_DOC)
-        .define(
-            GROUPS,
-            ConfigDef.Type.LIST,
-            GROUPS_DEFAULT,
-            ConfigDef.Importance.HIGH,
-            GROUPS_DOC)
-        .define(
-            GROUPS_BLACKLIST,
-            ConfigDef.Type.LIST,
-            GROUPS_BLACKLIST_DEFAULT,
-            ConfigDef.Importance.HIGH,
-            GROUPS_BLACKLIST_DOC)
-        .define(
-            CONFIG_PROPERTIES,
-            ConfigDef.Type.LIST,
-            CONFIG_PROPERTIES_DEFAULT,
-            ConfigDef.Importance.HIGH,
-            CONFIG_PROPERTIES_DOC)
-        .define(
-            CONFIG_PROPERTIES_BLACKLIST,
-            ConfigDef.Type.LIST,
-            CONFIG_PROPERTIES_BLACKLIST_DEFAULT,
-            ConfigDef.Importance.HIGH,
-            CONFIG_PROPERTIES_BLACKLIST_DOC)
+            CONFIG_PROPERTY_FILTER_CLASS,
+            ConfigDef.Type.CLASS,
+            CONFIG_PROPERTY_FILTER_CLASS_DEFAULT,
+            ConfigDef.Importance.LOW,
+            CONFIG_PROPERTY_FILTER_CLASS_DOC)
         .define(
             SOURCE_CLUSTER_ALIAS,
             ConfigDef.Type.STRING,
@@ -501,7 +442,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
         .define(
             REPLICATION_POLICY_CLASS,
             ConfigDef.Type.CLASS,
-            DefaultReplicationPolicy.class.getName(),
+            REPLICATION_POLICY_CLASS_DEFAULT,
             ConfigDef.Importance.LOW,
             REPLICATION_POLICY_CLASS_DOC)
         .define(
