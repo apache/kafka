@@ -33,7 +33,6 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
-import org.apache.kafka.clients.admin.NewTopic;
 
 import java.util.Map;
 import java.util.List;
@@ -85,7 +84,6 @@ public class MirrorSourceConnector extends SourceConnector {
         log.info("Starting {} for {}.", connectorName, sourceAndTarget);
         scheduler = new Scheduler(MirrorSourceConnector.class);
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
-        scheduler.execute(this::createMissingTopics, "creating missing topics");
         scheduler.scheduleRepeating(this::syncTopicAcls, config.syncTopicAclsInterval(), "syncing topic ACLs");
         scheduler.scheduleRepeating(this::syncTopicConfigs, config.syncTopicConfigsInterval(), "syncing topic configs");
         scheduler.scheduleRepeatingDelayed(this::refreshTopicPartitions, config.refreshTopicsInterval(),
@@ -167,16 +165,6 @@ public class MirrorSourceConnector extends SourceConnector {
         knownTopicPartitions = findTopicPartitions();
     }
 
-    private void createMissingTopics()
-            throws InterruptedException, ExecutionException {
-        Set<String> existingDownstreamTopics = listTopics(targetAdminClient);
-        Map<String, Integer> missingDownstreamTopics = knownTopicPartitions.stream()
-            .filter(x -> !existingDownstreamTopics.contains(formatRemoteTopic(x.topic())))
-            .collect(Collectors.groupingBy(x -> x.topic(), Collectors.counting())).entrySet().stream()
-            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> x.getValue().intValue()));
-        createTopics(missingDownstreamTopics); 
-    }
-
     Set<String> topicsToReplicate() {
         return knownTopicPartitions.stream()
             .map(x -> x.topic())
@@ -210,22 +198,6 @@ public class MirrorSourceConnector extends SourceConnector {
         }
     }
 
-    private void createTopics(Map<String, Integer> numPartitions)
-            throws InterruptedException, ExecutionException {
-        Set<NewTopic> newTopics = numPartitions.entrySet().stream()
-            .map(x -> new NewTopic(x.getKey(), x.getValue(), (short) 1))
-            .collect(Collectors.toSet());
-        synchronized (targetAdminClient) {
-            targetAdminClient.createTopics(newTopics).values().forEach((x, y) -> y.whenComplete((z, e) -> {
-                if (e != null) {
-                    log.error("Error creating topic {}.", x, e);
-                } else {
-                    log.info("Created new topic {} on {}.", x, sourceAndTarget.target());
-                }
-            }));
-        }
-    }
-
     private Collection<AclBinding> listTopicAclBindings()
             throws InterruptedException, ExecutionException {
         synchronized (sourceAdminClient) {
@@ -247,7 +219,11 @@ public class MirrorSourceConnector extends SourceConnector {
             .collect(Collectors.toMap(x -> new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), x -> x.getValue()));
         log.info("Syncing configs for {} topics.", configs.size());
         synchronized (targetAdminClient) {
-            targetAdminClient.alterConfigs(configs).all().get();
+            targetAdminClient.alterConfigs(configs).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+                if (e != null) {
+                    log.warn("Could not alter configuration of topic {}.", k.name(), e);
+                }
+            }));
         }
     }
 
@@ -255,7 +231,11 @@ public class MirrorSourceConnector extends SourceConnector {
             throws InterruptedException, ExecutionException {
         log.info("Syncing {} topic ACL bindings.", bindings.size());
         synchronized (targetAdminClient) {
-            targetAdminClient.createAcls(bindings).all().get();
+            targetAdminClient.createAcls(bindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+                if (e != null) {
+                    log.warn("Could not sync ACL of topic {}.", k.pattern().name(), e);
+                }
+            }));
         }
     }
 
