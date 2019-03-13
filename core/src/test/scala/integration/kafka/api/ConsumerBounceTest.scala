@@ -14,6 +14,7 @@
 package kafka.api
 
 import java.time
+import java.time.Duration
 import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
@@ -33,7 +34,7 @@ import org.junit.{After, Before, Ignore, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration => SDuration}
 import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutor, Future => SFuture}
 
 /**
@@ -360,7 +361,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
 
         consumeFutures += consumeFuture
       })
-      Await.result(SFuture.sequence(consumeFutures), Duration("12sec"))
+      Await.result(SFuture.sequence(consumeFutures), SDuration("12sec"))
 
       if (kickedConsumerOut.get()) {
         // validate the rest N-1 consumers consumed successfully
@@ -434,7 +435,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     executor.submit(CoreUtils.runnable {
       try {
         consumer.subscribe(Collections.singletonList(topic))
-        consumer.poll(java.time.Duration.ofMillis(pollTimeout))
+        consumer.poll(Duration.ofMillis(pollTimeout))
       } catch {
         case e: Exception => onException.apply(e)
       }
@@ -447,9 +448,9 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
 
     while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone) {
       val consumeFutures = otherConsumers.map(consumer => SFuture {
-        consumer.poll(time.Duration.ofMillis(1000))
+        consumer.poll(Duration.ofMillis(1000))
       })
-      Await.result(SFuture.sequence(consumeFutures), Duration("1500ms"))
+      Await.result(SFuture.sequence(consumeFutures), SDuration("1500ms"))
     }
 
     assertTrue("Rebalance did not complete in time", future.isDone)
@@ -569,7 +570,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
       val closeGraceTimeMs = 2000
       val startNanos = System.nanoTime
       info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
-      consumer.close(closeTimeoutMs, TimeUnit.MILLISECONDS)
+      consumer.close(Duration.ofMillis(closeTimeoutMs))
       val timeTakenMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime - startNanos)
       maxCloseTimeMs.foreach { ms =>
         assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)

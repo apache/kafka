@@ -387,7 +387,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     def close(timeout: Long) {
-      this.producer.close(timeout, TimeUnit.MILLISECONDS)
+      this.producer.close(Duration.ofMillis(timeout))
     }
   }
 

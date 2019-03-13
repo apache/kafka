@@ -413,7 +413,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
 
     @Override
     public synchronized void close() {
-        close(KafkaConsumer.DEFAULT_CLOSE_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+        close(Duration.ofMillis(KafkaConsumer.DEFAULT_CLOSE_TIMEOUT_MS));
     }
 
     @SuppressWarnings("deprecation")

@@ -49,9 +49,10 @@ import scala.util.Random
 import scala.collection.JavaConverters._
 import kafka.zk.KafkaZkClient
 
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{Duration => SDuration}
 import scala.concurrent.{Await, Future}
 import java.lang.{Long => JLong}
+import java.time.Duration
 
 import kafka.security.auth.{Cluster, Group, Topic}
 
@@ -413,7 +414,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         s"only ${numMessages.get - currentMessagesNum} messages are produced within timeout after replica movement. Producer future ${producerFuture.value}")
     } finally running.set(false)
 
-    val finalNumMessages = Await.result(producerFuture, Duration(20, TimeUnit.SECONDS))
+    val finalNumMessages = Await.result(producerFuture, SDuration(20, TimeUnit.SECONDS))
 
     // Verify that all messages that are produced can be consumed
     val consumerRecords = TestUtils.consumeTopicRecords(servers, topic, finalNumMessages,
@@ -1066,11 +1067,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val topics = Seq("mytopic", "mytopic2")
     val newTopics = topics.map(new NewTopic(_, 1, 1))
     val future = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
-    client.close(2, TimeUnit.HOURS)
+    client.close(Duration.ofHours(2))
     val future2 = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
     assertFutureExceptionTypeEquals(future2, classOf[TimeoutException])
     future.get
-    client.close(30, TimeUnit.MINUTES) // multiple close-with-timeout should have no effect
+    client.close(Duration.ofMinutes(30)) // multiple close-with-timeout should have no effect
   }
 
   /**
@@ -1086,7 +1087,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     // cancelled by the close operation.
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
       new CreateTopicsOptions().timeoutMs(900000)).all()
-    client.close(0, TimeUnit.MILLISECONDS)
+    client.close(Duration.ZERO)
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
   }
 
