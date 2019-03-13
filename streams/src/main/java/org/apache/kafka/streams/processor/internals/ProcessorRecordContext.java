@@ -220,4 +220,15 @@ public class ProcessorRecordContext implements RecordContext {
     public int hashCode() {
         return Objects.hash(timestamp, offset, topic, partition, headers);
     }
+
+    @Override
+    public String toString() {
+        return "ProcessorRecordContext{" +
+            "timestamp=" + timestamp +
+            ", offset=" + offset +
+            ", topic='" + topic + '\'' +
+            ", partition=" + partition +
+            ", headers=" + headers +
+            '}';
+    }
 }

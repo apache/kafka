@@ -17,6 +17,8 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.streams.processor.MockProcessorContext;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -24,9 +26,21 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.io.File;
+import java.util.LinkedHashMap;
+import java.util.Map;
+
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
+    private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<String, StateRestoreCallback>();
     private ProcessorNode currentNode;
     private RecordCollector recordCollector;
+
+    public MockInternalProcessorContext() {
+    }
+
+    public MockInternalProcessorContext(final File stateDir) {
+        super(MockProcessorContext.defaultProperties(), MockProcessorContext.defaultTaskId(), stateDir);
+    }
 
     @Override
     public StreamsMetricsImpl metrics() {
@@ -77,5 +91,14 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
 
     public void setRecordCollector(final RecordCollector recordCollector) {
         this.recordCollector = recordCollector;
+    }
+
+    @Override
+    public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+        restoreCallbacks.put(store.name(), stateRestoreCallback);
+    }
+
+    public StateRestoreCallback stateRestoreCallback(final String storeName) {
+        return restoreCallbacks.get(storeName);
     }
 }

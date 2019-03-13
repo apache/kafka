@@ -455,40 +455,41 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
     @Override
     public void evictWhile(final Supplier<Boolean> predicate,
                            final Consumer<KeyValue<Bytes, ContextualRecord>> callback) {
-        final Iterator<Map.Entry<BufferKey, ContextualRecord>> delegate = sortedMap.iterator();
-        int evictions = 0;
+        try(final CloseableIterator<Map.Entry<BufferKey, ContextualRecord>> delegate = sortedMap.iterator()) {
+            int evictions = 0;
 
-        if (predicate.get()) {
-            Map.Entry<BufferKey, ContextualRecord> next = null;
-            if (delegate.hasNext()) {
-                next = delegate.next();
-            }
-
-            // predicate being true means we read one record, call the callback, and then remove it
-            while (next != null && predicate.get()) {
-                callback.accept(new KeyValue<>(next.getKey().key, next.getValue()));
-
-                delegate.remove();
-                index.remove(next.getKey().key);
-
-                dirtyKeys.add(next.getKey().key);
-
-                memBufferSize = memBufferSize - computeRecordSize(next.getKey().key, next.getValue());
-
-                // peek at the next record so we can update the minTimestamp
+            if (predicate.get()) {
+                Map.Entry<BufferKey, ContextualRecord> next = null;
                 if (delegate.hasNext()) {
                     next = delegate.next();
-                    minTimestamp = next == null ? Long.MAX_VALUE : next.getKey().time;
-                } else {
-                    next = null;
-                    minTimestamp = Long.MAX_VALUE;
                 }
 
-                evictions++;
+                // predicate being true means we read one record, call the callback, and then remove it
+                while (next != null && predicate.get()) {
+                    callback.accept(new KeyValue<>(next.getKey().key, next.getValue()));
+
+                    delegate.remove();
+                    index.remove(next.getKey().key);
+
+                    dirtyKeys.add(next.getKey().key);
+
+                    memBufferSize = memBufferSize - computeRecordSize(next.getKey().key, next.getValue());
+
+                    // peek at the next record so we can update the minTimestamp
+                    if (delegate.hasNext()) {
+                        next = delegate.next();
+                        minTimestamp = next == null ? Long.MAX_VALUE : next.getKey().time;
+                    } else {
+                        next = null;
+                        minTimestamp = Long.MAX_VALUE;
+                    }
+
+                    evictions++;
+                }
             }
-        }
-        if (evictions > 0) {
-            updateBufferMetrics();
+            if (evictions > 0) {
+                updateBufferMetrics();
+            }
         }
     }
 

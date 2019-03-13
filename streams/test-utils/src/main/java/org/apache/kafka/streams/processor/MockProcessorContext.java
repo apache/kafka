@@ -79,7 +79,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     /**
      * {@link CapturedPunctuator} holds captured punctuators, along with their scheduling information.
      */
-    public static class CapturedPunctuator {
+    public static final class CapturedPunctuator {
         private final long intervalMs;
         private final PunctuationType type;
         private final Punctuator punctuator;
@@ -91,17 +91,17 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             this.punctuator = punctuator;
         }
 
-        @SuppressWarnings({"WeakerAccess", "unused"})
+        @SuppressWarnings("unused")
         public long getIntervalMs() {
             return intervalMs;
         }
 
-        @SuppressWarnings({"WeakerAccess", "unused"})
+        @SuppressWarnings("unused")
         public PunctuationType getType() {
             return type;
         }
 
-        @SuppressWarnings({"WeakerAccess", "unused"})
+        @SuppressWarnings("unused")
         public Punctuator getPunctuator() {
             return punctuator;
         }
@@ -111,25 +111,25 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
             cancelled = true;
         }
 
-        @SuppressWarnings({"WeakerAccess", "unused"})
+        @SuppressWarnings("unused")
         public boolean cancelled() {
             return cancelled;
         }
     }
 
 
-    public static class CapturedForward {
+    public static final class CapturedForward {
         private final String childName;
         private final long timestamp;
-        private final KeyValue keyValue;
+        private final KeyValue<?, ?> keyValue;
 
-        private CapturedForward(final To to, final KeyValue keyValue) {
+        private CapturedForward(final To to, final KeyValue<?, ?> keyValue) {
             if (keyValue == null) {
                 throw new IllegalArgumentException();
             }
 
-            this.childName = to.childName;
-            this.timestamp = to.timestamp;
+            childName = to.childName;
+            timestamp = to.timestamp;
             this.keyValue = keyValue;
         }
 
@@ -138,7 +138,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
          *
          * @return The child name, or {@code null} if it was broadcast.
          */
-        @SuppressWarnings({"WeakerAccess", "unused"})
+        @SuppressWarnings("unused")
         public String childName() {
             return childName;
         }
@@ -148,7 +148,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
          *
          * @return A timestamp, or {@code -1} if none was forwarded.
          */
-        @SuppressWarnings({"WeakerAccess", "unused"})
+        @SuppressWarnings("unused")
         public long timestamp() {
             return timestamp;
         }
@@ -158,13 +158,24 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
          *
          * @return A key/value pair. Not null.
          */
-        @SuppressWarnings({"WeakerAccess", "unused"})
-        public KeyValue keyValue() {
+        @SuppressWarnings("unused")
+        public KeyValue<?, ?> keyValue() {
             return keyValue;
         }
     }
 
     // constructors ================================================
+
+    protected static Properties defaultProperties() {
+        final Properties properties = new Properties();
+        properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "");
+        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
+        return properties;
+    }
+
+    protected static TaskId defaultTaskId() {
+        return new TaskId(0, 0);
+    }
 
     /**
      * Create a {@link MockProcessorContext} with dummy {@code config} and {@code taskId} and {@code null} {@code stateDir}.
@@ -172,17 +183,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * and most unit tests should be able to get by with the
      * {@link InMemoryKeyValueStore}, so the stateDir won't matter.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext() {
-        //noinspection DoubleBraceInitialization
         this(
-            new Properties() {
-                {
-                    put(StreamsConfig.APPLICATION_ID_CONFIG, "");
-                    put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
-                }
-            },
-            new TaskId(0, 0),
+            defaultProperties(),
+            defaultTaskId(),
             null);
     }
 
@@ -194,9 +198,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param config a Properties object, used to configure the context and the processor.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext(final Properties config) {
-        this(config, new TaskId(0, 0), null);
+        this(config, defaultTaskId(), null);
     }
 
     /**
@@ -206,7 +209,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param taskId   a {@link TaskId}, which the context makes available via {@link MockProcessorContext#taskId()}.
      * @param stateDir a {@link File}, which the context makes available viw {@link MockProcessorContext#stateDir()}.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
         this.taskId = taskId;
@@ -214,7 +216,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.stateDir = stateDir;
         final MetricConfig metricConfig = new MetricConfig();
         metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
-        this.metrics = new StreamsMetricsImpl(
+        metrics = new StreamsMetricsImpl(
             new Metrics(metricConfig),
             "mock-processor-context-virtual-thread"
         );
@@ -274,7 +276,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param offset    A record offset
      * @param timestamp A record timestamp
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
+    @SuppressWarnings("unused")
     public void setRecordMetadata(final String topic,
                                   final int partition,
                                   final long offset,
@@ -293,7 +295,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param topic A topic name
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
+    @SuppressWarnings("unused")
     public void setTopic(final String topic) {
         this.topic = topic;
     }
@@ -304,7 +306,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param partition A partition number
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
+    @SuppressWarnings("unused")
     public void setPartition(final int partition) {
         this.partition = partition;
     }
@@ -315,7 +317,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param offset A record offset
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
+    @SuppressWarnings("unused")
     public void setOffset(final long offset) {
         this.offset = offset;
     }
@@ -326,7 +328,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param headers Record headers
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
+    @SuppressWarnings("unused")
     public void setHeaders(final Headers headers) {
         this.headers = headers;
     }
@@ -337,7 +339,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @param timestamp A record timestamp
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
+    @SuppressWarnings("unused")
     public void setTimestamp(final long timestamp) {
         this.timestamp = timestamp;
     }
@@ -417,12 +419,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @return A list of captured punctuators.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
+    @SuppressWarnings("unused")
     public List<CapturedPunctuator> scheduledPunctuators() {
         return new LinkedList<>(punctuators);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public <K, V> void forward(final K key, final V value) {
         forward(key, value, To.all());
@@ -476,7 +477,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param childName The child name to retrieve forwards for
      * @return A list of key/value pairs that were previously passed to the context.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
+    @SuppressWarnings("unused")
     public List<CapturedForward> forwarded(final String childName) {
         final LinkedList<CapturedForward> result = new LinkedList<>();
         for (final CapturedForward capture : capturedForwards) {
@@ -490,7 +491,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     /**
      * Clear the captured forwarded data.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
+    @SuppressWarnings("unused")
     public void resetForwards() {
         capturedForwards.clear();
     }
@@ -505,7 +506,6 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @return {@code true} iff {@link ProcessorContext#commit()} has been called in this context since construction or reset.
      */
-    @SuppressWarnings("WeakerAccess")
     public boolean committed() {
         return committed;
     }
@@ -513,7 +513,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     /**
      * Reset the commit capture to {@code false} (whether or not it was previously {@code true}).
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
+    @SuppressWarnings("unused")
     public void resetCommit() {
         committed = false;
     }

@@ -85,4 +85,12 @@ public class ContextualRecord {
     public int hashCode() {
         return Objects.hash(value, recordContext);
     }
+
+    @Override
+    public String toString() {
+        return "ContextualRecord{" +
+            "value=" + Arrays.toString(value) +
+            ", recordContext=" + recordContext +
+            '}';
+    }
 }
