@@ -765,24 +765,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 });
     }
 
-    private RequestFuture<OffsetsForLeaderEpochResponse> sendOffsetsForLeaderEpochRequest(
-            final Node node,
-            final Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> partitionMap) {
-
-        OffsetsForLeaderEpochRequest.Builder builder = new OffsetsForLeaderEpochRequest.Builder(
-                ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), partitionMap
-        );
-
-        return client.send(node, builder).compose(new RequestFutureAdapter<ClientResponse, OffsetsForLeaderEpochResponse>() {
-            @Override
-            public void onSuccess(ClientResponse response, RequestFuture<OffsetsForLeaderEpochResponse> future) {
-                OffsetsForLeaderEpochResponse lor = (OffsetsForLeaderEpochResponse) response.responseBody();
-                log.trace("Received ListOffsetResponse {} from broker {}", lor, node);
-                // Handle the resp
-            }
-        });
-    }
-
     /**
      * Callback for the response of the list offset call above.
      * @param timestampsToSearch The mapping from partitions to target timestamps
@@ -966,7 +948,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             regrouped.forEach((node, dataMap) -> {
                 OffsetsForLeaderEpochRequest.Builder builder = new OffsetsForLeaderEpochRequest.Builder(
                         ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), dataMap);
-                sendOffsetForLeaderRequest(node, builder);
+                sendOffsetForLeaderEpochRequest(node, builder);
             });
         }
 
@@ -984,7 +966,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                         Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
 
-    private RequestFuture<OffsetsForLeaderEpochResponse> sendOffsetForLeaderRequest(
+    private RequestFuture<OffsetsForLeaderEpochResponse> sendOffsetForLeaderEpochRequest(
             Node node, OffsetsForLeaderEpochRequest.Builder builder) {
 
         return client.send(node, builder).compose(new RequestFutureAdapter<ClientResponse, OffsetsForLeaderEpochResponse>() {
