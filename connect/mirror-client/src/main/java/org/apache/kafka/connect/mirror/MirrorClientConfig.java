@@ -39,7 +39,7 @@ public class MirrorClientConfig extends AbstractConfig {
     static final String HEARTBEATS_TOPIC = "heartbeats";
  
     MirrorClientConfig(Map<?, ?> props) {
-        super(CONFIG_DEF, props, true);
+        super(CONFIG_DEF, props, false);
     }
 
     ReplicationPolicy replicationPolicy() {

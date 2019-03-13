@@ -27,6 +27,11 @@ import java.util.regex.Pattern;
 
 /** Uses a blacklist of property names or regexes. */
 public class DefaultConfigPropertyFilter implements ConfigPropertyFilter, Configurable {
+    
+    public static final String CONFIG_PROPERTIES_BLACKLIST_CONFIG = "config.properties.blacklist";
+    private static final String CONFIG_PROPERTIES_BLACKLIST_DOC = "List of topic configuration properties and/or regexes "
+        + "that should not be replicated.";
+    public static final String CONFIG_PROPERTIES_BLACKLIST_DEFAULT = "segment\\.bytes";
 
     private Pattern blacklistPattern;
 
@@ -45,15 +50,10 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter, Config
         return !blacklisted(prop);
     }
 
-    private static class ConfigPropertyFilterConfig extends AbstractConfig {
-
-        public static final String CONFIG_PROPERTIES_BLACKLIST = "config.properties.blacklist";
-        private static final String CONFIG_PROPERTIES_BLACKLIST_DOC = "List of topic configuration properties and/or regexes "
-            + "that should not be replicated.";
-        public static final String CONFIG_PROPERTIES_BLACKLIST_DEFAULT = "segment\\.bytes";
+    static class ConfigPropertyFilterConfig extends AbstractConfig {
 
         static final ConfigDef DEF = new ConfigDef()
-            .define(CONFIG_PROPERTIES_BLACKLIST,
+            .define(CONFIG_PROPERTIES_BLACKLIST_CONFIG,
                 Type.LIST,
                 CONFIG_PROPERTIES_BLACKLIST_DEFAULT,
                 Importance.HIGH,
@@ -64,7 +64,7 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter, Config
         }
 
         Pattern blacklistPattern() {
-            return MirrorUtils.compilePatternList(getList(CONFIG_PROPERTIES_BLACKLIST));
+            return MirrorUtils.compilePatternList(getList(CONFIG_PROPERTIES_BLACKLIST_CONFIG));
         }
     }
 }

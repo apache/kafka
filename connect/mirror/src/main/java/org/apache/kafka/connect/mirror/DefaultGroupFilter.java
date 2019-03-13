@@ -28,6 +28,14 @@ import java.util.regex.Pattern;
 /** Uses a whitelist and blacklist. */
 public class DefaultGroupFilter implements GroupFilter, Configurable {
 
+    public static final String GROUPS_WHITELIST_CONFIG = "groups";
+    private static final String GROUPS_WHITELIST_DOC = "List of consumer group names and/or regexes to replicate.";
+    public static final String GROUPS_WHITELIST_DEFAULT = ".*";
+
+    public static final String GROUPS_BLACKLIST_CONFIG = "groups.blacklist";
+    private static final String GROUPS_BLACKLIST_DOC = "List of consumer group names and/or regexes that should not be replicated.";
+    public static final String GROUPS_BLACKLIST_DEFAULT = "console-consumer-.*, connect-.*";
+
     private Pattern whitelistPattern;
     private Pattern blacklistPattern;
 
@@ -51,23 +59,15 @@ public class DefaultGroupFilter implements GroupFilter, Configurable {
         return whitelisted(group) && !blacklisted(group);
     }
 
-    private static class GroupFilterConfig extends AbstractConfig {
-
-        public static final String GROUPS_WHITELIST = "groups";
-        private static final String GROUPS_WHITELIST_DOC = "List of consumer group names and/or regexes to replicate.";
-        public static final String GROUPS_WHITELIST_DEFAULT = ".*";
-
-        public static final String GROUPS_BLACKLIST = "groups.blacklist";
-        private static final String GROUPS_BLACKLIST_DOC = "List of consumer group names and/or regexes that should not be replicated.";
-        public static final String GROUPS_BLACKLIST_DEFAULT = "console-consumer-.*, connect-.*";
+    static class GroupFilterConfig extends AbstractConfig {
 
         static final ConfigDef DEF = new ConfigDef()
-            .define(GROUPS_WHITELIST,
+            .define(GROUPS_WHITELIST_CONFIG,
                 Type.LIST,
                 GROUPS_WHITELIST_DEFAULT,
                 Importance.HIGH,
                 GROUPS_WHITELIST_DOC) 
-            .define(GROUPS_BLACKLIST,
+            .define(GROUPS_BLACKLIST_CONFIG,
                 Type.LIST,
                 GROUPS_BLACKLIST_DEFAULT,
                 Importance.HIGH,
@@ -78,11 +78,11 @@ public class DefaultGroupFilter implements GroupFilter, Configurable {
         }
 
         Pattern whitelistPattern() {
-            return MirrorUtils.compilePatternList(getList(GROUPS_WHITELIST));
+            return MirrorUtils.compilePatternList(getList(GROUPS_WHITELIST_CONFIG));
         }
 
         Pattern blacklistPattern() {
-            return MirrorUtils.compilePatternList(getList(GROUPS_BLACKLIST));
+            return MirrorUtils.compilePatternList(getList(GROUPS_BLACKLIST_CONFIG));
         }
     }
 }

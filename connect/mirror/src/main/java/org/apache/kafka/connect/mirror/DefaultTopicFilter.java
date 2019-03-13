@@ -27,6 +27,14 @@ import java.util.regex.Pattern;
 
 /** Uses a whitelist and blacklist. */
 public class DefaultTopicFilter implements TopicFilter, Configurable {
+    
+    public static final String TOPICS_WHITELIST_CONFIG = "topics";
+    private static final String TOPICS_WHITELIST_DOC = "List of topics and/or regexes to replicate.";
+    public static final String TOPICS_WHITELIST_DEFAULT = ".*";
+
+    public static final String TOPICS_BLACKLIST_CONFIG = "topics.blacklist";
+    private static final String TOPICS_BLACKLIST_DOC = "List of topics and/or regexes that should not be replicated.";
+    public static final String TOPICS_BLACKLIST_DEFAULT = ".*[\\-\\.]internal, .*\\.replica, __consumer_offsets";
 
     private Pattern whitelistPattern;
     private Pattern blacklistPattern;
@@ -51,23 +59,15 @@ public class DefaultTopicFilter implements TopicFilter, Configurable {
         return whitelisted(topic) && !blacklisted(topic);
     }
 
-    private static class TopicFilterConfig extends AbstractConfig {
-
-        public static final String TOPICS_WHITELIST = "topics";
-        private static final String TOPICS_WHITELIST_DOC = "List of topics and/or regexes to replicate.";
-        public static final String TOPICS_WHITELIST_DEFAULT = ".*";
-
-        public static final String TOPICS_BLACKLIST = "topics.blacklist";
-        private static final String TOPICS_BLACKLIST_DOC = "List of topics and/or regexes that should not be replicated.";
-        public static final String TOPICS_BLACKLIST_DEFAULT = ".*[\\-\\.]internal, .*\\.replica, __consumer_offsets";
+    static class TopicFilterConfig extends AbstractConfig {
 
         static final ConfigDef DEF = new ConfigDef()
-            .define(TOPICS_WHITELIST,
+            .define(TOPICS_WHITELIST_CONFIG,
                 Type.LIST,
                 TOPICS_WHITELIST_DEFAULT,
                 Importance.HIGH,
                 TOPICS_WHITELIST_DOC) 
-            .define(TOPICS_BLACKLIST,
+            .define(TOPICS_BLACKLIST_CONFIG,
                 Type.LIST,
                 TOPICS_BLACKLIST_DEFAULT,
                 Importance.HIGH,
@@ -78,11 +78,11 @@ public class DefaultTopicFilter implements TopicFilter, Configurable {
         }
 
         Pattern whitelistPattern() {
-            return MirrorUtils.compilePatternList(getList(TOPICS_WHITELIST));
+            return MirrorUtils.compilePatternList(getList(TOPICS_WHITELIST_CONFIG));
         }
 
         Pattern blacklistPattern() {
-            return MirrorUtils.compilePatternList(getList(TOPICS_BLACKLIST));
+            return MirrorUtils.compilePatternList(getList(TOPICS_BLACKLIST_CONFIG));
         }
     }
 }

@@ -133,7 +133,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     protected MirrorConnectorConfig(ConfigDef configDef, Map<String, String> props) {
-        super(configDef, props, true);
+        super(configDef, props, false);
     }
 
     String connectorName() {
