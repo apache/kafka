@@ -145,6 +145,9 @@ public class MetricsIntegrationTest {
     private static final String HIT_RATIO_MAX = "hitRatio-max";
     private static final String TIME_WINDOWED_AGGREGATED_STREAM_STORE = "time-windowed-aggregated-stream-store";
     private static final String SESSION_AGGREGATED_STREAM_STORE = "session-aggregated-stream-store";
+    public static final String MY_STORE_IN_MEMORY = "myStoreInMemory";
+    public static final String MY_STORE_PERSISTENT_KEY_VALUE = "myStorePersistentKeyValue";
+    public static final String MY_STORE_LRU_MAP = "myStoreLruMap";
 
     private StreamsBuilder builder;
     private Properties streamsConfiguration;
@@ -200,36 +203,37 @@ public class MetricsIntegrationTest {
 
     @Test
     public void testStreamMetric() throws Exception {
+        final StringBuilder errorMessage = new StringBuilder();
         stream = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
         stream.to(STREAM_OUTPUT_1, Produced.with(Serdes.Integer(), Serdes.String()));
-        builder.table(STREAM_OUTPUT_1, Materialized.as(Stores.inMemoryKeyValueStore("myStoreInMemory")).withCachingEnabled())
+        builder.table(STREAM_OUTPUT_1, Materialized.as(Stores.inMemoryKeyValueStore(MY_STORE_IN_MEMORY)).withCachingEnabled())
                 .toStream()
                 .to(STREAM_OUTPUT_2);
-        builder.table(STREAM_OUTPUT_2, Materialized.as(Stores.persistentKeyValueStore("myStorePersistentKeyValue")).withCachingEnabled())
+        builder.table(STREAM_OUTPUT_2, Materialized.as(Stores.persistentKeyValueStore(MY_STORE_PERSISTENT_KEY_VALUE)).withCachingEnabled())
                 .toStream()
                 .to(STREAM_OUTPUT_3);
-        builder.table(STREAM_OUTPUT_3, Materialized.as(Stores.lruMap("myStoreLruMap", 10000)).withCachingEnabled())
+        builder.table(STREAM_OUTPUT_3, Materialized.as(Stores.lruMap(MY_STORE_LRU_MAP, 10000)).withCachingEnabled())
                 .toStream()
                 .to(STREAM_OUTPUT_4);
 
         startApplication();
 
         // metric level : Thread
-        TestUtils.waitForCondition(this::testThreadMetric, 10000, "testThreadMetric");
+        TestUtils.waitForCondition(() -> testThreadMetric(errorMessage), 10000, () -> "testThreadMetric -> " + errorMessage.toString());
 
         // metric level : Task
-        TestUtils.waitForCondition(this::testTaskMetric, 10000, "testTaskMetric");
+        TestUtils.waitForCondition(() -> testTaskMetric(errorMessage), 10000, () -> "testTaskMetric -> " + errorMessage.toString());
 
         // metric level : Processor
-        TestUtils.waitForCondition(this::testProcessorMetric, 10000, "testProcessorMetric");
+        TestUtils.waitForCondition(() -> testProcessorMetric(errorMessage), 10000, () -> "testProcessorMetric -> " + errorMessage.toString());
 
         // metric level : Store (in-memory-state, in-memory-lru-state, rocksdb-state)
-        TestUtils.waitForCondition(() -> testStoreMetricByType(STREAM_STORE_IN_MEMORY_STATE_METRICS), 10000, "testStoreMetricByType:" + STREAM_STORE_IN_MEMORY_STATE_METRICS);
-        TestUtils.waitForCondition(() -> testStoreMetricByType(STREAM_STORE_IN_MEMORY_LRU_STATE_METRICS), 10000, "testStoreMetricByType:" + STREAM_STORE_IN_MEMORY_LRU_STATE_METRICS);
-        TestUtils.waitForCondition(() -> testStoreMetricByType(STREAM_STORE_ROCKSDB_STATE_METRICS), 10000, "testStoreMetricByType:" + STREAM_STORE_ROCKSDB_STATE_METRICS);
+        TestUtils.waitForCondition(() -> testStoreMetricByType(STREAM_STORE_IN_MEMORY_STATE_METRICS, errorMessage), 10000, () -> "testStoreMetricByType:" + STREAM_STORE_IN_MEMORY_STATE_METRICS + " -> " + errorMessage.toString());
+        TestUtils.waitForCondition(() -> testStoreMetricByType(STREAM_STORE_IN_MEMORY_LRU_STATE_METRICS, errorMessage), 10000, () -> "testStoreMetricByType:" + STREAM_STORE_IN_MEMORY_LRU_STATE_METRICS + " -> " + errorMessage.toString());
+        TestUtils.waitForCondition(() -> testStoreMetricByType(STREAM_STORE_ROCKSDB_STATE_METRICS, errorMessage), 10000, () -> "testStoreMetricByType:" + STREAM_STORE_ROCKSDB_STATE_METRICS + " -> " + errorMessage.toString());
 
         //metric level : Cache
-        TestUtils.waitForCondition(this::testCacheMetric, 10000, "testCacheMetric");
+        TestUtils.waitForCondition(() -> testCacheMetric(errorMessage), 10000, () -> "testCacheMetric -> " + errorMessage.toString());
 
         closeApplication();
 
@@ -239,7 +243,7 @@ public class MetricsIntegrationTest {
 
     @Test
     public void testStreamMetricOfWindowStore() throws Exception {
-
+        final StringBuilder errorMessage = new StringBuilder();
         stream2 = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
         final KGroupedStream<Integer, String> groupedStream = stream2.groupByKey();
         groupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(50)))
@@ -250,8 +254,7 @@ public class MetricsIntegrationTest {
         startApplication();
 
         // metric level : Store (window)
-        TestUtils.waitForCondition(this::testStoreMetricWindow, 10000, "testStoreMetricWindow");
-
+        TestUtils.waitForCondition(() -> testStoreMetricWindow(errorMessage), 10000, () -> "testStoreMetricWindow -> " + errorMessage.toString());
 
         closeApplication();
 
@@ -262,7 +265,7 @@ public class MetricsIntegrationTest {
 
     @Test
     public void testStreamMetricOfSessionStore() throws Exception {
-
+        final StringBuilder errorMessage = new StringBuilder();
         stream2 = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
         final KGroupedStream<Integer, String> groupedStream = stream2.groupByKey();
         groupedStream.windowedBy(SessionWindows.with(Duration.ofMillis(50)))
@@ -273,7 +276,7 @@ public class MetricsIntegrationTest {
         startApplication();
 
         // metric level : Store (session)
-        TestUtils.waitForCondition(this::testStoreMetricSession, 10000, "testStoreMetricSession");
+        TestUtils.waitForCondition(() -> testStoreMetricSession(errorMessage), 10000, () -> "testStoreMetricSession -> " + errorMessage.toString());
 
         closeApplication();
 
@@ -282,7 +285,8 @@ public class MetricsIntegrationTest {
 
     }
 
-    private boolean testThreadMetric() {
+    private boolean testThreadMetric(final StringBuilder errorMessage) {
+        errorMessage.setLength(0);
         try {
             final List<Metric> listMetricThread = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().equals(STREAM_THREAD_NODE_METRICS)).collect(Collectors.toList());
             testMetricByName(listMetricThread, COMMIT_LATENCY_AVG, 1);
@@ -309,11 +313,13 @@ public class MetricsIntegrationTest {
             testMetricByName(listMetricThread, SKIPPED_RECORDS_TOTAL, 1);
             return true;
         } catch (final Throwable e) {
+            errorMessage.append(e.getMessage());
             return false;
         }
     }
 
-    private boolean testTaskMetric() {
+    private boolean testTaskMetric(final StringBuilder errorMessage) {
+        errorMessage.setLength(0);
         try {
             final List<Metric> listMetricTask = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().equals(STREAM_TASK_NODE_METRICS)).collect(Collectors.toList());
             testMetricByName(listMetricTask, COMMIT_LATENCY_AVG, 5);
@@ -324,11 +330,13 @@ public class MetricsIntegrationTest {
             testMetricByName(listMetricTask, RECORD_LATENESS_MAX, 4);
             return true;
         } catch (final Throwable e) {
+            errorMessage.append(e.getMessage());
             return false;
         }
     }
 
-    private boolean testProcessorMetric() {
+    private boolean testProcessorMetric(final StringBuilder errorMessage) {
+        errorMessage.setLength(0);
         try {
             final List<Metric> listMetricProcessor = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().equals(STREAM_PROCESSOR_NODE_METRICS)).collect(Collectors.toList());
             testMetricByName(listMetricProcessor, PROCESS_LATENCY_AVG, 18);
@@ -350,11 +358,13 @@ public class MetricsIntegrationTest {
             testMetricByName(listMetricProcessor, FORWARD_TOTAL, 18);
             return true;
         } catch (final Throwable e) {
+            errorMessage.append(e.getMessage());
             return false;
         }
     }
 
-    private boolean testStoreMetricWindow() {
+    private boolean testStoreMetricWindow(final StringBuilder errorMessage) {
+        errorMessage.setLength(0);
         try {
             final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
                     .filter(m -> m.metricName().group().equals(STREAM_STORE_WINDOW_ROCKSDB_STATE_METRICS))
@@ -396,11 +406,13 @@ public class MetricsIntegrationTest {
             testMetricByName(listMetricStore, RESTORE_TOTAL, 2);
             return true;
         } catch (final Throwable e) {
+            errorMessage.append(e.getMessage());
             return false;
         }
     }
 
-    private boolean testStoreMetricSession() {
+    private boolean testStoreMetricSession(final StringBuilder errorMessage) {
+        errorMessage.setLength(0);
         try {
             final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
                     .filter(m -> m.metricName().group().equals(STREAM_STORE_SESSION_ROCKSDB_STATE_METRICS))
@@ -442,11 +454,13 @@ public class MetricsIntegrationTest {
             testMetricByName(listMetricStore, RESTORE_TOTAL, 2);
             return true;
         } catch (final Throwable e) {
+            errorMessage.append(e.getMessage());
             return false;
         }
     }
 
-    private boolean testStoreMetricByType(final String storeType) {
+    private boolean testStoreMetricByType(final String storeType, final StringBuilder errorMessage) {
+        errorMessage.setLength(0);
         try {
             final List<Metric> listMetricStore = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
                     .filter(m -> m.metricName().group().equals(storeType))
@@ -488,11 +502,13 @@ public class MetricsIntegrationTest {
             testMetricByName(listMetricStore, RESTORE_TOTAL, 2);
             return true;
         } catch (final Throwable e) {
+            errorMessage.append(e.getMessage());
             return false;
         }
     }
 
-    private boolean testCacheMetric() {
+    private boolean testCacheMetric(final StringBuilder errorMessage) {
+        errorMessage.setLength(0);
         try {
             final List<Metric> listMetricCache = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream().filter(m -> m.metricName().group().equals(STREAM_CACHE_NODE_METRICS)).collect(Collectors.toList());
             testMetricByName(listMetricCache, HIT_RATIO_AVG, 6);
@@ -500,19 +516,16 @@ public class MetricsIntegrationTest {
             testMetricByName(listMetricCache, HIT_RATIO_MAX, 6);
             return true;
         } catch (final Throwable e) {
+            errorMessage.append(e.getMessage());
             return false;
         }
     }
 
     private void testMetricByName(final List<Metric> listMetric, final String metricName, final int numMetric) {
-        try {
-            final List<Metric> metrics = listMetric.stream().filter(m -> m.metricName().name().equals(metricName)).collect(Collectors.toList());
-            Assert.assertEquals("Size of metrics of type:'" + metricName + "' must be equal to:" + numMetric + " but it's equal to " + metrics.size(), numMetric, metrics.size());
-            for (final Metric m : metrics) {
-                Assert.assertNotNull("Metric:'" + m.metricName() + "' must be not null", m.metricValue());
-            }
-        } catch (final Throwable e) {
-            throw e;
+        final List<Metric> metrics = listMetric.stream().filter(m -> m.metricName().name().equals(metricName)).collect(Collectors.toList());
+        Assert.assertEquals("Size of metrics of type:'" + metricName + "' must be equal to:" + numMetric + " but it's equal to " + metrics.size(), numMetric, metrics.size());
+        for (final Metric m : metrics) {
+            Assert.assertNotNull("Metric:'" + m.metricName() + "' must be not null", m.metricValue());
         }
     }
 }
