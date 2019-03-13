@@ -184,8 +184,8 @@ public class ListOffsetRequest extends AbstractRequest {
 
     public static final class PartitionData {
         public final long timestamp;
-        @Deprecated
-        public final int maxNumOffsets; // only supported in v0
+        // Note, this maximum number offsets is only used in ListOffsetRequest v0
+        public final int maxNumOffsets;
         public final Optional<Integer> currentLeaderEpoch;
 
         private PartitionData(long timestamp, int maxNumOffsets, Optional<Integer> currentLeaderEpoch) {

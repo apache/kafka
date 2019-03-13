@@ -32,6 +32,7 @@ import kafka.utils._
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
+import org.apache.kafka.common.record.DefaultRecord
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
@@ -570,6 +571,11 @@ class ChecksumMessageFormatter extends MessageFormatter {
   }
 
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream) {
-    output.println(topicStr + "checksum:" + consumerRecord.checksum)
+    val checksum = DefaultRecord.computePartialChecksum(
+      consumerRecord.timestamp(),
+      consumerRecord.serializedKeySize(),
+      consumerRecord.serializedValueSize()
+    )
+    output.println(s"${topicStr}checksum:$checksum")
   }
 }

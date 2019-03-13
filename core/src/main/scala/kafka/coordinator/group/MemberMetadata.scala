@@ -29,8 +29,8 @@ case class MemberSummary(memberId: String,
                          metadata: Array[Byte],
                          assignment: Array[Byte])
 
-private object MemberMetadata {
-  def plainProtocolSet(supportedProtocols: List[(String, Array[Byte])]) = supportedProtocols.map(_._1).toSet
+object MemberMetadata {
+  private[group] def plainProtocolSet(supportedProtocols: List[(String, Array[Byte])]) = supportedProtocols.map(_._1).toSet
 }
 
 /**

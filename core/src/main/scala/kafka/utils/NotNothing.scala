@@ -37,5 +37,8 @@ trait NotNothing[T]
 object NotNothing {
   private val evidence: NotNothing[Any] = new Object with NotNothing[Any]
 
-  implicit def notNothingEvidence[T](implicit n: T =:= T): NotNothing[T] = evidence.asInstanceOf[NotNothing[T]]
+  implicit def notNothingEvidence[T](implicit n: T =:= T): NotNothing[T] = {
+    val _ = n // suppress scalac unused parameter warning
+    evidence.asInstanceOf[NotNothing[T]]
+  }
 }

@@ -101,6 +101,7 @@ object RequestChannel extends Logging {
     def requestDesc(details: Boolean): String = s"$header -- ${body[AbstractRequest].toString(details)}"
 
     def body[T <: AbstractRequest](implicit classTag: ClassTag[T], nn: NotNothing[T]): T = {
+      val _ = nn // suppress scalac unused parameter warning
       bodyAndSize.request match {
         case r: T => r
         case r =>

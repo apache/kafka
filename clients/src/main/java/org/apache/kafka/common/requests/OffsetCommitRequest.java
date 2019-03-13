@@ -144,7 +144,6 @@ public class OffsetCommitRequest extends AbstractRequest {
 
     // default values for old versions,
     // will be removed after these versions are deprecated
-    @Deprecated
     public static final long DEFAULT_TIMESTAMP = -1L;            // for V0, V1
 
     private final String groupId;
@@ -154,8 +153,8 @@ public class OffsetCommitRequest extends AbstractRequest {
     private final Map<TopicPartition, PartitionData> offsetData;
 
     public static final class PartitionData {
-        @Deprecated
-        public final long timestamp;                // for V1
+        // Note, only available for OffsetCommitRequest v1
+        public final long timestamp;
 
         public final long offset;
         public final String metadata;
@@ -351,7 +350,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         return memberId;
     }
 
-    @Deprecated
+    // Note, the retention time is only used in OffsetCommitRequest v2
     public long retentionTime() {
         return retentionTime;
     }
