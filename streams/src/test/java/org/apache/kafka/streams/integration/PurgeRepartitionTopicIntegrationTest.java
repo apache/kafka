@@ -59,7 +59,7 @@ public class PurgeRepartitionTopicIntegrationTest {
     private static final String INPUT_TOPIC = "input-stream";
     private static final String APPLICATION_ID = "restore-test";
     private static final String REPARTITION_TOPIC = APPLICATION_ID + "-KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition";
-
+    private static final String APPLICATION_SERVER_CONFIG = "localhost:" + String.valueOf(Math.round(Math.random() * 4460));
     private static AdminClient adminClient;
     private static KafkaStreams kafkaStreams;
     private static final Integer PURGE_INTERVAL_MS = 10;
@@ -152,6 +152,7 @@ public class PurgeRepartitionTopicIntegrationTest {
 
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_SERVER_CONFIG, APPLICATION_SERVER_CONFIG);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, PURGE_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());

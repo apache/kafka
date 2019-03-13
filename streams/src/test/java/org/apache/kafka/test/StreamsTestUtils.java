@@ -52,6 +52,7 @@ public final class StreamsTestUtils {
         props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, valueSerdeClassName);
         props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         props.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, DEBUG.name);
+        props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + String.valueOf(Math.round(Math.random() * 4460)));
         props.putAll(additional);
         return props;
     }
