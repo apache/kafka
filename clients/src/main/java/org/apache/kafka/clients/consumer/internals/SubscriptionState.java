@@ -39,6 +39,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collector;
@@ -361,8 +362,13 @@ public class SubscriptionState {
         assignedState(tp).position(position);
     }
 
-    public boolean needsValidation(TopicPartition tp, Metadata.LeaderAndEpoch leaderAndEpoch) {
-        return assignedState(tp).needsValidation(leaderAndEpoch);
+    public boolean maybeValidatePosition(TopicPartition tp, Metadata.LeaderAndEpoch leaderAndEpoch,
+                                         BiConsumer<Metadata.LeaderAndEpoch, Integer> ifNeedsValidationConsumer) {
+        return assignedState(tp).maybeValidatePosition(leaderAndEpoch, ifNeedsValidationConsumer);
+    }
+
+    public boolean awaitingValidation(TopicPartition tp) {
+        return assignedState(tp).awaitingValidation();
     }
 
     public void validate(TopicPartition tp) {
@@ -563,13 +569,16 @@ public class SubscriptionState {
             this.nextRetryTimeMs = null;
         }
 
-        private boolean needsValidation(Metadata.LeaderAndEpoch currentLeader) {
+        private boolean maybeValidatePosition(
+                Metadata.LeaderAndEpoch currentLeader,
+                BiConsumer<Metadata.LeaderAndEpoch, Integer> ifNeedsValidationConsumer) {
             if (!hasPosition())
                 throw new IllegalStateException("Cannot validate offset while partition is in state " + state);
 
             this.position = new FetchPosition(position.offset, position.lastFetchEpoch, currentLeader);
             // If we have no epoch information for the current position, then we can skip validation.
             if (position.lastFetchEpoch.isPresent()) {
+                ifNeedsValidationConsumer.accept(this.position.currentLeader, this.position.lastFetchEpoch.get());
                 this.state = FetchState.AWAIT_VALIDATION;
                 return true;
             } else {
@@ -578,10 +587,17 @@ public class SubscriptionState {
             }
         }
 
+        /**
+         * Clear the awaiting validation state and enter fetching.
+         */
         private void validate() {
-            if (hasPosition() && state == FetchState.AWAIT_VALIDATION) {
+            if (hasPosition()) {
                 state = FetchState.FETCHING;
             }
+        }
+
+        private boolean awaitingValidation() {
+            return state == FetchState.AWAIT_VALIDATION;
         }
 
         private boolean awaitingRetryBackoff(long nowMs) {
@@ -649,6 +665,12 @@ public class SubscriptionState {
         void onAssignment(Set<TopicPartition> assignment);
     }
 
+    /**
+     * Represents the position of a partition subscription. This includes the offset and epoch from the last record in
+     * the batch from a FetchResponse. It also includes the leader epoch at the time the batch was consumed.
+     *
+     * The last fetch epoch is used to
+     */
     public static class FetchPosition {
         public final long offset;
         public final Optional<Integer> lastFetchEpoch;
@@ -660,14 +682,18 @@ public class SubscriptionState {
             this.currentLeader = Objects.requireNonNull(currentLeader);
         }
 
+        /**
+         * Test if it is "safe" to fetch from a given leader and epoch. This effectively is testing if
+         * {@link Metadata.LeaderAndEpoch} known to the subscription is equal to the one supplied by the caller.
+         */
         public boolean safeToFetchFrom(Metadata.LeaderAndEpoch leaderAndEpoch) {
             // Should we check the if the epoch is present or do we get a benefit
             // for leader changes on older versions of the broker?
 
             // I think the answer is 'no' because the OffsetsForLeaderEpoch API was
             // not exposed in older versions anyway.
-            if (currentLeader.leader.isEmpty() || leaderAndEpoch.leader.isEmpty()) {
-                return false;
+            if (currentLeader.leader.isEmpty()) {
+                return true;
             } else {
                 return currentLeader.equals(leaderAndEpoch);
             }

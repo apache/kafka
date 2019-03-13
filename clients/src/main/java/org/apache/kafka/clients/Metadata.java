@@ -455,6 +455,9 @@ public class Metadata implements Closeable {
     }
 
     public static class LeaderAndEpoch {
+
+        public static final LeaderAndEpoch NO_LEADER_OR_EPOCH = new LeaderAndEpoch(Node.noNode(), Optional.empty());
+
         public final Node leader;
         public final Optional<Integer> epoch; // TODO shouldn't store an Optional
 
@@ -471,6 +474,10 @@ public class Metadata implements Closeable {
 
             // Otherwise, if the new epoch is larger, then
             return epoch.isPresent() && update.epoch.get() >= epoch.get();
+        }
+
+        public static LeaderAndEpoch noLeaderOrEpoch() {
+            return NO_LEADER_OR_EPOCH;
         }
 
         @Override

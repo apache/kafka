@@ -21,6 +21,7 @@ import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.FetchSessionHandler;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
@@ -115,6 +116,7 @@ import java.util.stream.Collectors;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
+import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -3093,6 +3095,101 @@ public class FetcherTest {
 
         assertTrue(offsetAndTimestampMap.containsKey(tp0));
         assertNull(offsetAndTimestampMap.get(tp0));
+    }
+
+    @Test
+    public void testSubscriptionPositionUpdatedWithEpoch() {
+        // Create some records that include a leader epoch (1)
+        MemoryRecordsBuilder builder = MemoryRecords.builder(
+                ByteBuffer.allocate(1024),
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                CompressionType.NONE,
+                TimestampType.CREATE_TIME,
+                0L,
+                RecordBatch.NO_TIMESTAMP,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE,
+                false,
+                1
+        );
+        builder.appendWithOffset(0L, 0L, "key".getBytes(), "value-1".getBytes());
+        builder.appendWithOffset(1L, 0L, "key".getBytes(), "value-2".getBytes());
+        builder.appendWithOffset(2L, 0L, "key".getBytes(), "value-3".getBytes());
+        MemoryRecords records = builder.build();
+
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+
+        // Initialize the epoch=1
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        partitionCounts.put(tp0.topic(), 4);
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
+            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
+                new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(1), replicas, isr, offlineReplicas));
+        metadata.update(metadataResponse, 0L);
+
+        // Seek
+        subscriptions.seek(tp0, 0);
+
+        // Do a normal fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tp0, records, Errors.NONE, 100L, 0));
+        consumerClient.pollNoWakeup();
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp0));
+
+        assertEquals(subscriptions.position(tp0).offset, 3L);
+        assertOptional(subscriptions.position(tp0).lastFetchEpoch, value -> assertEquals(value.intValue(), 1));
+    }
+
+    @Test
+    public void testTruncationDetected() {
+        // Create some records that include a leader epoch (1)
+        MemoryRecordsBuilder builder = MemoryRecords.builder(
+                ByteBuffer.allocate(1024),
+                RecordBatch.CURRENT_MAGIC_VALUE,
+                CompressionType.NONE,
+                TimestampType.CREATE_TIME,
+                0L,
+                RecordBatch.NO_TIMESTAMP,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                RecordBatch.NO_SEQUENCE,
+                false,
+                1 // record epoch is earlier than the leader epoch on the client
+        );
+        builder.appendWithOffset(0L, 0L, "key".getBytes(), "value-1".getBytes());
+        builder.appendWithOffset(1L, 0L, "key".getBytes(), "value-2".getBytes());
+        builder.appendWithOffset(2L, 0L, "key".getBytes(), "value-3".getBytes());
+        MemoryRecords records = builder.build();
+
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+
+        // Initialize the epoch=1
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        partitionCounts.put(tp0.topic(), 4);
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
+            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
+                 new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(2), replicas, isr, offlineReplicas));
+        metadata.update(metadataResponse, 0L);
+
+        // Seek
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.leaderAndEpoch(tp0).leader, Optional.of(1));
+        subscriptions.seek(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1), leaderAndEpoch));
+
+        // No fetches sent since we entered validation
+        assertEquals(0, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+        assertTrue(subscriptions.awaitingValidation(tp0));
+
+        // TODO prepare OffsetForEpoch response then check that we update the subscription position correctly.
+
     }
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {

@@ -911,11 +911,14 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                 // If the leader or epoch have changed, we need to validate the fetch position
                 if (!position.safeToFetchFrom(leaderAndEpoch)) {
-                    if (subscriptions.needsValidation(partition, leaderAndEpoch)) {
-                        partitionsToValidate.put(partition, new OffsetsForLeaderEpochRequest.PartitionData(
-                                position.currentLeader.epoch, position.lastFetchEpoch.get()));
-                        continue;
+                    if (position.lastFetchEpoch.isPresent()) {
+                        boolean nowAwaitingValidation = subscriptions.maybeValidatePosition(partition, leaderAndEpoch,
+                            (lae, lfe) -> partitionsToValidate.put(partition, new OffsetsForLeaderEpochRequest.PartitionData(lae.epoch, lfe)));
+                        if (nowAwaitingValidation) {
+                            continue;
+                        }
                     }
+                    // If the last fetch epoch is not known, we can't do any validation so we just continue with the fetch.
                 }
 
                 // if there is a leader and no in-flight requests, issue a new fetch
@@ -941,7 +944,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         }
 
         if (!partitionsToValidate.isEmpty()) {
-            // Send off the OFFSETS_FOR_LEADER requests asynchronously
+            // Send off the OffsetsForLeader requests asynchronously
             Map<Node, Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData>> regrouped =
                     regroupPartitionMapByNode(partitionsToValidate);
 
@@ -975,15 +978,15 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 OffsetsForLeaderEpochResponse ofler = (OffsetsForLeaderEpochResponse) response.responseBody();
                 log.trace("Received OffsetsForLeaderEpochResponse {} from broker {}", ofler, node);
 
-                Map<TopicPartition, OffsetAndMetadata> truncatedPartitions = new HashMap<>();
+                Map<TopicPartition, OffsetAndMetadata> truncationWithoutResetPolicy = new HashMap<>();
                 ofler.responses().forEach((respTopicPartition, respEndOffset) -> {
-
                     // For each OffsetsForLeader response, check for truncation. This occurs iff the epoch has changed
                     // and the end offset is lower than our current offset
                     ConsumerMetadata.LeaderAndEpoch currentLeaderAndEpoch = metadata.leaderAndEpoch(respTopicPartition);
-                    ConsumerMetadata.LeaderAndEpoch newLeaderAndEpoch = new ConsumerMetadata.LeaderAndEpoch(Node.noNode(), Optional.of(respEndOffset.leaderEpoch()));
+                    ConsumerMetadata.LeaderAndEpoch leaderAndEpochForEndOffset = new ConsumerMetadata.LeaderAndEpoch(
+                            Node.noNode(), Optional.of(respEndOffset.leaderEpoch()));
 
-                    if (currentLeaderAndEpoch.isObsoletedBy(newLeaderAndEpoch)) {
+                    if (currentLeaderAndEpoch.isObsoletedBy(leaderAndEpochForEndOffset)) {
                         // If we have a new epoch, check if our offset is ahead of the new end offset
                         SubscriptionState.FetchPosition currentPosition = subscriptions.position(respTopicPartition);
                         if (respEndOffset.endOffset() < currentPosition.offset) {
@@ -992,16 +995,21 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                 log.info("Truncation detected for partition {}, resetting offset", respTopicPartition);
                                 subscriptions.requestOffsetReset(respTopicPartition);
                             } else {
-                                truncatedPartitions.put(respTopicPartition, new OffsetAndMetadata(currentPosition.offset, currentPosition.currentLeader.epoch, null));
+                                log.warn("Truncation detected for partition {}, but no reset policy is set", respTopicPartition);
+                                truncationWithoutResetPolicy.put(respTopicPartition, new OffsetAndMetadata(
+                                        currentPosition.offset, currentPosition.currentLeader.epoch, null));
                             }
                         } else {
                             // Offset is fine, clear the validation state
                             subscriptions.validate(respTopicPartition);
                         }
+
+                        // Despite any truncation, there is a new leader epoch out there so we should update
+                        leaderAndEpochForEndOffset.epoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(respTopicPartition, epoch));
                     }
                 });
-                if (!truncatedPartitions.isEmpty()) {
-                    throw new LogTruncationException(truncatedPartitions);
+                if (!truncationWithoutResetPolicy.isEmpty()) {
+                    throw new LogTruncationException(truncationWithoutResetPolicy);
                 }
             }
         });

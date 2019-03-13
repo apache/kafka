@@ -52,6 +52,7 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -442,5 +443,13 @@ public class TestUtils {
 
     public static ApiKeys apiKeyFrom(NetworkReceive networkReceive) {
         return RequestHeader.parse(networkReceive.payload().duplicate()).apiKey();
+    }
+
+    public static <T> void assertOptional(Optional<T> optional, Consumer<T> assertion) {
+        if (optional.isPresent()) {
+            assertion.accept(optional.get());
+        } else {
+            fail("Missing value from Optional");
+        }
     }
 }
