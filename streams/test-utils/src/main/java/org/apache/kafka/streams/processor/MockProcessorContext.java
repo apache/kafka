@@ -166,15 +166,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     // constructors ================================================
 
-    protected static Properties defaultProperties() {
+    private static Properties defaultProperties() {
         final Properties properties = new Properties();
         properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "");
         properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
         return properties;
-    }
-
-    protected static TaskId defaultTaskId() {
-        return new TaskId(0, 0);
     }
 
     /**
@@ -186,7 +182,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     public MockProcessorContext() {
         this(
             defaultProperties(),
-            defaultTaskId(),
+            new TaskId(0, 0),
             null);
     }
 
@@ -199,7 +195,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param config a Properties object, used to configure the context and the processor.
      */
     public MockProcessorContext(final Properties config) {
-        this(config, defaultTaskId(), null);
+        this(config, new TaskId(0, 0), null);
     }
 
     /**

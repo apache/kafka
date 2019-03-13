@@ -43,16 +43,14 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static java.nio.ByteBuffer.allocate;
 
-public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
+public final class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
     private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
     private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
 
@@ -72,9 +70,9 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
 
     private volatile boolean open;
 
-    private static class IndexFacade {
-        private static final byte INDEX_FLAGS = (byte) 0;
-        private KeyValueStore<Bytes, byte[]> bytesStore;
+    private static final class IndexFacade {
+        private static final byte INDEX_FLAGS = 0;
+        private final KeyValueStore<Bytes, byte[]> bytesStore;
         private int entries = 0;
 
         private static Bytes packKey(final Bytes key) {
@@ -116,10 +114,10 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
         }
     }
 
-    private static class StorageFacade {
-        private static final byte STORAGE_FLAGS = (byte) 1;
+    private static final class StorageFacade {
+        private static final byte STORAGE_FLAGS = 1;
         // concrete because we need to guarantee iteration in lexicographic order
-        private RocksDBStore bytesStore;
+        private final RocksDBStore bytesStore;
 
         private static Bytes packKey(final BufferKey key) {
             final byte[] keyBytes = key.serialize();
@@ -131,12 +129,12 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
             return Bytes.wrap(allocate(keyBytes.length - 1).put(keyBytes, 1, keyBytes.length - 1).array());
         }
 
-        private static class StorageFacadeIterator implements CloseableIterator<Map.Entry<BufferKey, ContextualRecord>> {
+        private static final class StorageFacadeIterator implements CloseableIterator<Map.Entry<BufferKey, ContextualRecord>> {
             private final KeyValueIterator<Bytes, byte[]> delegate;
             private final StorageFacade storageFacade;
             private BufferKey last = null;
 
-            private StorageFacadeIterator(final KeyValueIterator<Bytes, byte[]> delegate, StorageFacade storageFacade) {
+            private StorageFacadeIterator(final KeyValueIterator<Bytes, byte[]> delegate, final StorageFacade storageFacade) {
                 this.delegate = delegate;
                 this.storageFacade = storageFacade;
             }
@@ -155,7 +153,7 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
             public Map.Entry<BufferKey, ContextualRecord> next() {
                 final KeyValue<Bytes, byte[]> next = delegate.next();
                 final BufferKey bufferKey = BufferKey.deserialize(ByteBuffer.wrap(unpackKey(next.key).get()));
-                this.last = bufferKey;
+                last = bufferKey;
                 return new Utils.MapEntry<>(
                     bufferKey,
                     ContextualRecord.deserialize(ByteBuffer.wrap(next.value))
@@ -182,8 +180,13 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
             return ContextualRecord.deserialize(ByteBuffer.wrap(bytesStore.get(packKey(bufferKey))));
         }
 
-        public void remove(final BufferKey bufferKey) {
-            bytesStore.delete(packKey(bufferKey));
+        public ContextualRecord remove(final BufferKey bufferKey) {
+            final byte[] bytes = bytesStore.delete(packKey(bufferKey));
+            if (bytes == null) {
+                return null;
+            } else {
+                return ContextualRecord.deserialize(ByteBuffer.wrap(bytes));
+            }
         }
 
         public CloseableIterator<Map.Entry<BufferKey, ContextualRecord>> iterator() {
@@ -207,9 +210,9 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
         private final long memLimit;
         private boolean loggingEnabled = true;
 
-        public Builder(final String storeName, final BufferConfigInternal bufferConfigInternal) {
+        public Builder(final String storeName, final BufferConfigInternal<?> bufferConfigInternal) {
             this.storeName = storeName;
-            this.memLimit = bufferConfigInternal.maxBytes();
+            memLimit = bufferConfigInternal.maxBytes();
         }
 
         /**
@@ -268,7 +271,7 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
         }
     }
 
-    private static class BufferKey implements Comparable<BufferKey> {
+    private static final class BufferKey {
         private final long time;
         private final Bytes key;
 
@@ -294,39 +297,14 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
             buffer.get(key);
             return new BufferKey(time, Bytes.wrap(key));
         }
-
-        @Override
-        public boolean equals(final Object o) {
-            if (this == o) {
-                return true;
-            }
-            if (o == null || getClass() != o.getClass()) {
-                return false;
-            }
-            final BufferKey bufferKey = (BufferKey) o;
-            return time == bufferKey.time &&
-                Objects.equals(key, bufferKey.key);
-        }
-
-        @Override
-        public int hashCode() {
-            return Objects.hash(time, key);
-        }
-
-        @Override
-        public int compareTo(final BufferKey o) {
-            // ordering of keys within a time uses hashCode.
-            final int timeComparison = Long.compare(time, o.time);
-            return timeComparison == 0 ? key.compareTo(o.key) : timeComparison;
-        }
     }
 
     private RocksDBTimeOrderedKeyValueBuffer(final String storeName, final boolean loggingEnabled, final long memLimit) {
         this.storeName = storeName;
         this.loggingEnabled = loggingEnabled;
-        this.bytesStore = new RocksDBStore(storeName, "rocksdb-buffer", memLimit);
-        this.index = new IndexFacade(bytesStore);
-        this.sortedMap = new StorageFacade(bytesStore);
+        bytesStore = new RocksDBStore(storeName, "rocksdb-buffer", memLimit);
+        index = new IndexFacade(bytesStore);
+        sortedMap = new StorageFacade(bytesStore);
     }
 
     @Override
@@ -350,7 +328,7 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
         // TODO: restore. For now, just delete the directory and re-create it.
         try {
             Utils.delete(new File(new File(context.stateDir(), "rocksdb-buffer"), bytesStore.name()));
-        } catch (IOException e) {
+        } catch (final IOException e) {
             throw new RuntimeException(e);
         }
         bytesStore.openDB(context);
@@ -424,7 +402,10 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
                 // This was a tombstone. Delete the record.
                 final BufferKey bufferKey = index.remove(key);
                 if (bufferKey != null) {
-                    sortedMap.remove(bufferKey);
+                    final ContextualRecord removed = sortedMap.remove(bufferKey);
+                    if (removed != null) {
+                        memBufferSize -= computeRecordSize(bufferKey.key, removed);
+                    }
                 }
             } else {
                 final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
@@ -455,7 +436,7 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
     @Override
     public void evictWhile(final Supplier<Boolean> predicate,
                            final Consumer<KeyValue<Bytes, ContextualRecord>> callback) {
-        try(final CloseableIterator<Map.Entry<BufferKey, ContextualRecord>> delegate = sortedMap.iterator()) {
+        try (final CloseableIterator<Map.Entry<BufferKey, ContextualRecord>> delegate = sortedMap.iterator()) {
             int evictions = 0;
 
             if (predicate.get()) {
@@ -473,7 +454,7 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
 
                     dirtyKeys.add(next.getKey().key);
 
-                    memBufferSize = memBufferSize - computeRecordSize(next.getKey().key, next.getValue());
+                    memBufferSize -= computeRecordSize(next.getKey().key, next.getValue());
 
                     // peek at the next record so we can update the minTimestamp
                     if (delegate.hasNext()) {
@@ -513,14 +494,11 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
             index.put(key, nextKey);
             sortedMap.put(nextKey, value);
             minTimestamp = Math.min(minTimestamp, time);
-            memBufferSize = memBufferSize + computeRecordSize(key, value);
+            memBufferSize += computeRecordSize(key, value);
         } else {
             final ContextualRecord removedValue = sortedMap.get(previousKey);
             sortedMap.put(previousKey, value);
-            memBufferSize =
-                memBufferSize
-                    + computeRecordSize(key, value)
-                    - (removedValue == null ? 0 : computeRecordSize(key, removedValue));
+            memBufferSize = memBufferSize + computeRecordSize(key, value) - computeRecordSize(key, removedValue);
         }
     }
 
@@ -539,7 +517,7 @@ public class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuff
         return minTimestamp;
     }
 
-    private long computeRecordSize(final Bytes key, final ContextualRecord value) {
+    private static long computeRecordSize(final Bytes key, final ContextualRecord value) {
         long size = 0L;
         size += 8; // buffer time
         size += key.get().length;

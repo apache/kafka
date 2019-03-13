@@ -17,15 +17,19 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.internals.suppress.BufferFullStrategy;
 import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImpl;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.test.MockInternalProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -40,9 +44,11 @@ import java.util.Collection;
 import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
@@ -53,6 +59,7 @@ import static org.junit.Assert.fail;
 
 @RunWith(Parameterized.class)
 public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> {
+    private static final String APP_ID = "test-app";
     private final Function<String, B> bufferSupplier;
     private final String testName;
 
@@ -60,31 +67,40 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
     public static Collection<Object[]> parameters() {
         return asList(
             new Object[] {
-                InMemoryTimeOrderedKeyValueBuffer.class.getSimpleName() + "_" + new Random().nextInt(Integer.MAX_VALUE),
+                InMemoryTimeOrderedKeyValueBuffer.class.getSimpleName(),
                 (Function<String, InMemoryTimeOrderedKeyValueBuffer>) name ->
                     (InMemoryTimeOrderedKeyValueBuffer) new InMemoryTimeOrderedKeyValueBuffer
                         .Builder(name)
-                        .withLoggingDisabled().build()
+                        .build()
             },
             new Object[] {
-                RocksDBTimeOrderedKeyValueBuffer.class.getSimpleName() + "_" + new Random().nextInt(Integer.MAX_VALUE),
+                RocksDBTimeOrderedKeyValueBuffer.class.getSimpleName(),
                 (Function<String, RocksDBTimeOrderedKeyValueBuffer>) name ->
                     (RocksDBTimeOrderedKeyValueBuffer) new RocksDBTimeOrderedKeyValueBuffer
                         .Builder(name, new StrictBufferConfigImpl(-1L,
                                                                   32_000L,
                                                                   BufferFullStrategy.SPILL_TO_DISK))
-                        .withLoggingDisabled().build()
+                        .build()
             }
         );
     }
 
     public TimeOrderedKeyValueBufferTest(final String testName, final Function<String, B> bufferSupplier) {
-        this.testName = testName;
+        this.testName = testName + "_" + new Random().nextInt(Integer.MAX_VALUE);
         this.bufferSupplier = bufferSupplier;
     }
 
     private static MockInternalProcessorContext makeContext() {
-        return new MockInternalProcessorContext(TestUtils.tempDirectory());
+        final Properties properties = new Properties();
+        properties.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, APP_ID);
+        properties.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
+
+        final TaskId taskId = new TaskId(0, 0);
+
+        final MockInternalProcessorContext context = new MockInternalProcessorContext(properties, taskId, TestUtils.tempDirectory());
+        context.setRecordCollector(new MockRecordCollector());
+
+        return context;
     }
 
 
@@ -243,6 +259,51 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         cleanup(context, buffer);
     }
 
+    @Test
+    public void shouldFlush() {
+        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext context = makeContext();
+        buffer.init(context, buffer);
+        buffer.put(1, getBytes("asdf"), getRecord("2093j"));
+        buffer.put(0, getBytes("zxcv"), getRecord("3gon4i"));
+        buffer.flush();
+        final MockRecordCollector collector = (MockRecordCollector) context.recordCollector();
+        final List<ProducerRecord<String, KeyValue<Long, String>>> collected =
+            collector
+                .collected()
+                .stream()
+                .map(pr -> {
+                    final byte[] timestampAndValue = pr.value();
+                    final byte[] value = new byte[timestampAndValue.length - Long.BYTES];
+                    final ByteBuffer wrap = ByteBuffer.wrap(timestampAndValue);
+                    final long timestamp = wrap.getLong();
+                    wrap.get(value);
+                    return new ProducerRecord<>(pr.topic(),
+                                                pr.partition(),
+                                                pr.timestamp(),
+                                                new String(pr.key(), UTF_8),
+                                                new KeyValue<>(timestamp, new String(value, UTF_8)),
+                                                pr.headers());
+                })
+                .collect(Collectors.toList());
+        System.out.println(collected);
+        assertThat(collected, is(asList(
+            new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
+                                 0,
+                                 0L,
+                                 "zxcv",
+                                 new KeyValue<>(0L, "3gon4i"),
+                                 new RecordHeaders()),
+            new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
+                                 0,
+                                 0L,
+                                 "asdf",
+                                 new KeyValue<>(0L, "2093j"),
+                                 new RecordHeaders())
+        )));
+        cleanup(context, buffer);
+    }
+
 
     @Test
     public void shouldRestore() {
@@ -254,6 +315,16 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
         stateRestoreCallback.restoreBatch(asList(
+            new ConsumerRecord<>("topic",
+                                 0,
+                                 0,
+                                 0,
+                                 TimestampType.CREATE_TIME,
+                                 -1,
+                                 -1,
+                                 -1,
+                                 "todelete".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + 6).putLong(1L).put("doomed".getBytes(UTF_8)).array()),
             new ConsumerRecord<>("topic",
                                  0,
                                  0,
@@ -273,7 +344,17 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
                                  -1,
                                  -1,
                                  "zxcv".getBytes(UTF_8),
-                                 ByteBuffer.allocate(Long.BYTES + 5).putLong(0L).put("3o4im".getBytes(UTF_8)).array())
+                                 ByteBuffer.allocate(Long.BYTES + 5).putLong(0L).put("3o4im".getBytes(UTF_8)).array()),
+            new ConsumerRecord<>("topic",
+                                 0,
+                                 0,
+                                 0,
+                                 TimestampType.CREATE_TIME,
+                                 -1,
+                                 -1,
+                                 -1,
+                                 "todelete".getBytes(UTF_8),
+                                 null)
         ));
 
         // the buffer metadata is correct after adding both records

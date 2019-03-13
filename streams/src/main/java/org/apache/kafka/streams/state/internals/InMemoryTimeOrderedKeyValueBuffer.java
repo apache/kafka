@@ -45,7 +45,7 @@ import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
+public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
     private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
     private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
 
@@ -130,7 +130,7 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
         }
     }
 
-    private static class BufferKey implements Comparable<BufferKey> {
+    private static final class BufferKey implements Comparable<BufferKey> {
         private final long time;
         private final Bytes key;
 
@@ -256,7 +256,10 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
                 // This was a tombstone. Delete the record.
                 final BufferKey bufferKey = index.remove(key);
                 if (bufferKey != null) {
-                    sortedMap.remove(bufferKey);
+                    final ContextualRecord removed = sortedMap.remove(bufferKey);
+                    if (removed != null) {
+                        memBufferSize -= computeRecordSize(bufferKey.key, removed);
+                    }
                 }
             } else {
                 final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
@@ -305,7 +308,7 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
 
                 dirtyKeys.add(next.getKey().key);
 
-                memBufferSize = memBufferSize - computeRecordSize(next.getKey().key, next.getValue());
+                memBufferSize -= computeRecordSize(next.getKey().key, next.getValue());
 
                 // peek at the next record so we can update the minTimestamp
                 if (delegate.hasNext()) {
@@ -344,7 +347,7 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
             index.put(key, nextKey);
             sortedMap.put(nextKey, value);
             minTimestamp = Math.min(minTimestamp, time);
-            memBufferSize = memBufferSize + computeRecordSize(key, value);
+            memBufferSize += computeRecordSize(key, value);
         } else {
             final ContextualRecord removedValue = sortedMap.put(previousKey, value);
             memBufferSize =
@@ -369,7 +372,7 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
         return minTimestamp;
     }
 
-    private long computeRecordSize(final Bytes key, final ContextualRecord value) {
+    private static long computeRecordSize(final Bytes key, final ContextualRecord value) {
         long size = 0L;
         size += 8; // buffer time
         size += key.get().length;

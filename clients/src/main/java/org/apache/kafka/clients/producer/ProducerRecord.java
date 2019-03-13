@@ -20,6 +20,9 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
+import java.util.Arrays;
+import java.util.Objects;
+
 /**
  * A key/value pair to be sent to Kafka. This consists of a topic name to which the record is being sent, an optional
  * partition number, and an optional key and value.
@@ -186,11 +189,21 @@ public class ProducerRecord<K, V> {
     @Override
     public String toString() {
         String headers = this.headers == null ? "null" : this.headers.toString();
-        String key = this.key == null ? "null" : this.key.toString();
-        String value = this.value == null ? "null" : this.value.toString();
+        String key = str(this.key);
+        String value = str(this.value);
         String timestamp = this.timestamp == null ? "null" : this.timestamp.toString();
         return "ProducerRecord(topic=" + topic + ", partition=" + partition + ", headers=" + headers + ", key=" + key + ", value=" + value +
             ", timestamp=" + timestamp + ")";
+    }
+
+    private String str(final Object o) {
+        if (o == null) {
+            return "null";
+        } else if (o instanceof byte[]) {
+            return Arrays.toString((byte[]) o);
+        } else {
+            return Objects.toString(o);
+        }
     }
 
     @Override
