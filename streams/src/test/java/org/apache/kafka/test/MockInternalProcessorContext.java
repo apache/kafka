@@ -20,11 +20,13 @@ import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
     private ProcessorNode currentNode;
+    private RecordCollector recordCollector;
 
     @Override
     public StreamsMetricsImpl metrics() {
@@ -67,4 +69,13 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
 
     @Override
     public void uninitialize() {}
+
+    @Override
+    public RecordCollector recordCollector() {
+        return recordCollector;
+    }
+
+    public void setRecordCollector(final RecordCollector recordCollector) {
+        this.recordCollector = recordCollector;
+    }
 }
