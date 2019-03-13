@@ -30,7 +30,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
  * A Metered {@link TimestampedKeyValueStore} wrapper that is used for recording operation metrics, and hence its
  * inner KeyValueStore implementation do not need to provide its own metrics collecting functionality.
  * The inner {@link KeyValueStore} of this class is of type &lt;Bytes,byte[]&gt;, hence we use {@link Serde}s
- * to convert from &lt;K,ValueAndTimestamp&lt;V&gt&gt; to &lt;Bytes,byte[]&gt;
+ * to convert from &lt;K,ValueAndTimestamp&lt;V&gt;&gt; to &lt;Bytes,byte[]&gt;
  * @param <K>
  * @param <V>
  */
