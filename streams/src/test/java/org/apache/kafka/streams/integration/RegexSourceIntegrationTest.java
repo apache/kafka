@@ -315,6 +315,7 @@ public class RegexSourceIntegrationTest {
             final List<String> leaderAssignment = new ArrayList<>();
             final List<String> followerAssignment = new ArrayList<>();
 
+            streamsConfiguration.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:1");
             partitionedStreamsLeader  = new KafkaStreams(builderLeader.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
                 @Override
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
@@ -327,6 +328,7 @@ public class RegexSourceIntegrationTest {
 
                 }
             });
+            streamsConfiguration.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:2");
             partitionedStreamsFollower  = new KafkaStreams(builderFollower.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
                 @Override
                 public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
