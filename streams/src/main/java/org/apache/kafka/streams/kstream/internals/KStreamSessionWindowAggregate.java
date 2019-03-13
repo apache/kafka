@@ -87,8 +87,8 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            internalProcessorContext = (InternalProcessorContext) context;
             metrics = (StreamsMetricsImpl) context.metrics();
+            internalProcessorContext = (InternalProcessorContext) context;
             lateRecordDropSensor = internalProcessorContext.currentNode().nodeMetrics().lateRecordsDropRateSensor();
 
             store = (SessionStore<K, Agg>) context.getStateStore(storeName);

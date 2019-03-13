@@ -66,7 +66,6 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<>(context), sendOldValues);
         }
 
-
         @Override
         public void process(final K key, final V value) {
             // If the key or value is null we don't need to proceed
@@ -75,7 +74,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
                     "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     key, value, context().topic(), context().partition(), context().offset()
                 );
-                metrics.threadLevelSensor("skipped-records").record();
+                .threadLevelSensor("skipped-records").record();
                 return;
             }
 

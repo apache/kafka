@@ -279,6 +279,10 @@ public class StreamThread extends Thread {
             addInvocationRateAndCount(skippedRateSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "skipped-records");
         }
 
+        public Sensor skippedRateSensor() {
+            return skippedRateSensor;
+        }
+
         StreamsMetricsImpl streamsMetrics() {
             return metrics;
         }
@@ -579,7 +583,7 @@ public class StreamThread extends Thread {
     private final int maxPollTimeMs;
     private final String originalReset;
     private final TaskManager taskManager;
-    private final StreamThreadMetrics streamsMetrics;
+    private final StreamThreadMetrics threadMetrics;
     private final AtomicInteger assignmentErrorCode;
 
     private long now;
@@ -705,7 +709,7 @@ public class StreamThread extends Thread {
                         final Consumer<byte[], byte[]> consumer,
                         final String originalReset,
                         final TaskManager taskManager,
-                        final StreamThreadMetrics streamsMetrics,
+                        final StreamThreadMetrics threadMetrics,
                         final InternalTopologyBuilder builder,
                         final String threadClientId,
                         final LogContext logContext,
@@ -717,7 +721,7 @@ public class StreamThread extends Thread {
 
         this.time = time;
         this.builder = builder;
-        this.streamsMetrics = streamsMetrics;
+        this.threadMetrics = threadMetrics;
         this.logPrefix = logContext.logPrefix();
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new RebalanceListener(time, taskManager, this, this.log);
@@ -864,7 +868,7 @@ public class StreamThread extends Thread {
         final long pollLatency = advanceNowAndComputeLatency();
 
         if (records != null && !records.isEmpty()) {
-            streamsMetrics.pollLatencySensor.record(pollLatency, now);
+            threadMetrics.pollLatencySensor.record(pollLatency, now);
             addRecordsToTasks(records);
         }
 
@@ -898,14 +902,14 @@ public class StreamThread extends Thread {
 
                     if (processed > 0) {
                         final long processLatency = advanceNowAndComputeLatency();
-                        streamsMetrics.processLatencySensor.record(processLatency / (double) processed, now);
+                        threadMetrics.processLatencySensor.record(processLatency / (double) processed, now);
 
                         // commit any tasks that have requested a commit
                         final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
 
                         if (committed > 0) {
                             final long commitLatency = advanceNowAndComputeLatency();
-                            streamsMetrics.commitLatencySensor.record(commitLatency / (double) committed, now);
+                            threadMetrics.commitLatencySensor.record(commitLatency / (double) committed, now);
                         }
                     } else {
                         // if there is no records to be processed, exit immediately
@@ -1038,7 +1042,7 @@ public class StreamThread extends Thread {
         final int punctuated = taskManager.punctuate();
         if (punctuated > 0) {
             final long punctuateLatency = advanceNowAndComputeLatency();
-            streamsMetrics.punctuateTimeSensor.record(punctuateLatency / (double) punctuated, now);
+            threadMetrics.punctuateTimeSensor.record(punctuateLatency / (double) punctuated, now);
         }
 
         return punctuated > 0;
@@ -1064,7 +1068,7 @@ public class StreamThread extends Thread {
             committed += taskManager.commitAll();
             if (committed > 0) {
                 final long intervalCommitLatency = advanceNowAndComputeLatency();
-                streamsMetrics.commitLatencySensor.record(intervalCommitLatency / (double) committed, now);
+                threadMetrics.commitLatencySensor.record(intervalCommitLatency / (double) committed, now);
 
                 // try to purge the committed records for repartition topics if possible
                 taskManager.maybePurgeCommitedRecords();
@@ -1081,7 +1085,7 @@ public class StreamThread extends Thread {
             final int commitPerRequested = taskManager.maybeCommitActiveTasksPerUserRequested();
             if (commitPerRequested > 0) {
                 final long requestCommitLatency = advanceNowAndComputeLatency();
-                streamsMetrics.commitLatencySensor.record(requestCommitLatency / (double) committed, now);
+                threadMetrics.commitLatencySensor.record(requestCommitLatency / (double) committed, now);
                 committed += commitPerRequested;
             }
         }
@@ -1227,7 +1231,7 @@ public class StreamThread extends Thread {
         } catch (final Throwable e) {
             log.error("Failed to close restore consumer due to the following error:", e);
         }
-        streamsMetrics.clear();
+        threadMetrics.clear();
 
         setState(State.DEAD);
         log.info("Shutdown complete");
@@ -1289,6 +1293,10 @@ public class StreamThread extends Thread {
 
     public Map<TaskId, StreamTask> tasks() {
         return taskManager.activeTasks();
+    }
+
+    public StreamThreadMetrics threadMetrics() {
+        return threadMetrics;
     }
 
     /**

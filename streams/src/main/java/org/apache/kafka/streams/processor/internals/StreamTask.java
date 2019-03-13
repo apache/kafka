@@ -84,8 +84,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         private final String taskName;
 
         private final Sensor commitLatencySensor;
+        private final Sensor recordLatenessSensor;
         private final Sensor enforcedProcessRateSensor;
-        private Sensor recordLatenessSensor;
 
         TaskMetrics(final TaskId id, final StreamsMetricsImpl metrics) {
             this.metrics = metrics;
@@ -96,21 +96,20 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             StreamsMetricsImpl.addValueAvgAndMax(commitLatencySensor, TASK_METRICS_GROUP, tagMap, "commit-latency");
             StreamsMetricsImpl.addInvocationRateAndCount(commitLatencySensor, TASK_METRICS_GROUP, tagMap, "commit");
 
+            recordLatenessSensor = metrics.taskLevelSensor("record-lateness", taskName, Sensor.RecordingLevel.DEBUG);
+            StreamsMetricsImpl.addValueAvgAndMax(commitLatencySensor, TASK_METRICS_GROUP, tagMap, "record-lateness");
+
             enforcedProcessRateSensor = metrics.taskLevelSensor("enforced-processing", taskName, Sensor.RecordingLevel.DEBUG);
             StreamsMetricsImpl.addInvocationRateAndCount(enforcedProcessRateSensor, TASK_METRICS_GROUP, tagMap, "enforced-processing");
         }
 
         Sensor recordLatenessSensor() {
-            if (recordLatenessSensor == null) {
-                recordLatenessSensor = metrics.taskLevelSensor("record-lateness", taskName, Sensor.RecordingLevel.DEBUG);
-                StreamsMetricsImpl.addValueAvgAndMax(commitLatencySensor, TASK_METRICS_GROUP, tagMap, "record-lateness");
-            }
-
             return recordLatenessSensor;
         }
 
         void removeAllSensors() {
             metrics.removeSensor(commitLatencySensor);
+            metrics.removeSensor(recordLatenessSensor);
             metrics.removeSensor(enforcedProcessRateSensor);
         }
     }
