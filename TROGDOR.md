@@ -16,7 +16,7 @@ Running Kafka:
 
     > ./bin/kafka-server-start.sh ./config/server.properties &> /tmp/kafka.log &
 
-Then, we want to run a Trogdor Agent, plus a Trogdor broker.
+Then, we want to run a Trogdor Agent, plus a Trogdor Coordinator.
 
 To run the Trogdor Agent:
 
@@ -122,6 +122,14 @@ ProcessStopFault stops a process by sending it a SIGSTOP signal.  When the fault
 
 ### NetworkPartitionFault
 NetworkPartitionFault sets up an artificial network partition between one or more sets of nodes.  Currently, this is implemented using iptables.  The iptables rules are set up on the outbound traffic from the affected nodes.  Therefore, the affected nodes should still be reachable from outside the cluster.
+
+External Processes
+========================================
+Trogdor supports running external processes. This is a generic way to run any process in the system via a configurable command - be it a Python program, bash script, docker image, etc.
+
+### ExternalCommandWorker
+ExternalCommandWorker starts an external command defined by the ExternalCommandSpec. It essentially allows you to run any command on any Trogdor agent node and give it any arbitrary JSON input.
+The worker parses the stdout/stderr output from the process in a defined JSON format and acts accordingly to the output.
 
 Exec Mode
 ========================================
