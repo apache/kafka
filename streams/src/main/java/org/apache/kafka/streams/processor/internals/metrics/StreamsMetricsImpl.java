@@ -24,10 +24,7 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
-import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.streams.StreamsMetrics;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.SourceNode;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -71,6 +68,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String THREAD_METRICS_GROUP = "stream-metrics";
 
     public static final String TASK_METRICS_GROUP = "stream-task-metrics";
+
 
     public StreamsMetricsImpl(final Metrics metrics) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
@@ -128,7 +126,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         final Map<String, String> tagMap = constructTags(scopeName, entityName, tags);
         final Sensor sensor = metrics.sensor(externalSensorName(operationName, entityName), recordingLevel);
 
-        addAvgMaxLatency(sensor, group, tagMap, operationName);
+        addValueAvgAndMax(sensor, group, tagMap, operationName + "latency");
         addInvocationRateAndCount(sensor, group, tagMap, operationName);
 
         return sensor;
@@ -162,30 +160,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-    private String threadSensorPrefix() {
-        return "internal" + SENSOR_PREFIX_DELIMITER + threadName;
-    }
-
-    public final Sensor taskLevelSensor(final String taskName,
-                                        final String sensorName,
-                                        final Sensor.RecordingLevel recordingLevel,
-                                        final Sensor... parents) {
-        final String key = taskSensorPrefix(taskName);
-        synchronized (taskLevelSensors) {
-            if (!taskLevelSensors.containsKey(key)) {
-                taskLevelSensors.put(key, new LinkedList<>());
-            }
-
-            final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-
-            final Sensor sensor = metrics.sensor(fullSensorName, recordingLevel, parents);
-
-            taskLevelSensors.get(key).push(fullSensorName);
-
-            return sensor;
-        }
-    }
-
     public final void removeAllTaskLevelSensors(final String taskName) {
         final String key = taskSensorPrefix(taskName);
         synchronized (taskLevelSensors) {
@@ -193,31 +167,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             while (sensors != null && !sensors.isEmpty()) {
                 metrics.removeSensor(sensors.pop());
             }
-        }
-    }
-
-    private String taskSensorPrefix(final String taskName) {
-        return threadSensorPrefix() + SENSOR_PREFIX_DELIMITER + "task" + SENSOR_PREFIX_DELIMITER + taskName;
-    }
-
-    public Sensor nodeLevelSensor(final String taskName,
-                                  final String processorNodeName,
-                                  final String sensorName,
-                                  final Sensor.RecordingLevel recordingLevel,
-                                  final Sensor... parents) {
-        final String key = nodeSensorPrefix(taskName, processorNodeName);
-        synchronized (nodeLevelSensors) {
-            if (!nodeLevelSensors.containsKey(key)) {
-                nodeLevelSensors.put(key, new LinkedList<>());
-            }
-
-            final String fullSensorName = key + SENSOR_NAME_DELIMITER + sensorName;
-
-            final Sensor sensor = metrics.sensor(fullSensorName, recordingLevel, parents);
-
-            nodeLevelSensors.get(key).push(fullSensorName);
-
-            return sensor;
         }
     }
 
@@ -229,10 +178,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                 metrics.removeSensor(sensors.pop());
             }
         }
-    }
-
-    private String nodeSensorPrefix(final String taskName, final String processorNodeName) {
-        return taskSensorPrefix(taskName) + SENSOR_PREFIX_DELIMITER + "node" + SENSOR_PREFIX_DELIMITER + processorNodeName;
     }
 
     public final Sensor cacheLevelSensor(final String taskName,
@@ -332,7 +277,42 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return mkMap(mkEntry(THREAD_CLIENT_ID, threadName), mkEntry(TASK_ID, taskName));
     }
 
+    private String taskSensorPrefix(final String threadName, final String taskName) {
+        return threadSensorPrefix(threadName) + SENSOR_PREFIX_DELIMITER + "task" + SENSOR_PREFIX_DELIMITER + taskName;
+    }
 
+    public final Sensor taskLevelSensor(final String sensorName,
+                                        final String taskName,
+                                        final Sensor.RecordingLevel recordingLevel) {
+        final String fullSensorName = taskSensorPrefix(Thread.currentThread().getName(), taskName) + SENSOR_NAME_DELIMITER + sensorName;
+        return metrics.sensor(fullSensorName, recordingLevel);
+    }
+
+    // -------- processor-node level sensors ----------- //
+
+    public static Map<String, String> nodeLevelTagMap(final String threadName, final String taskName, final String processorNodeName) {
+        return mkMap(mkEntry(THREAD_CLIENT_ID, threadName),
+                     mkEntry(TASK_ID, taskName),
+                     mkEntry(PROCESSOR_NODE_ID_TAG, processorNodeName));
+    }
+
+    private String nodeSensorPrefix(final String taskName, final String processorNodeName) {
+        return taskSensorPrefix(taskName) + SENSOR_PREFIX_DELIMITER + "node" + SENSOR_PREFIX_DELIMITER + processorNodeName;
+    }
+
+    public final Sensor nodeLevelSensor(final String sensorName,
+                                        final String processorNodeName,
+                                        final String taskName,
+                                        final Sensor.RecordingLevel recordingLevel) {
+        final String fullSensorName = nodeSensorPrefix(taskName, processorNodeName) + SENSOR_NAME_DELIMITER + sensorName;
+
+        // get the parent task-level sensor first
+        final Sensor parentSensor = taskLevelSensor(sensorName, taskName, recordingLevel);
+
+        return metrics.sensor(fullSensorName, recordingLevel, parentSensor);
+    }
+
+    // -------- processor-node level sensors ----------- //
 
     public final Map<String, String> tagMap(final String... tags) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
@@ -353,13 +333,14 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             + SENSOR_PREFIX_DELIMITER + "entity" + SENSOR_PREFIX_DELIMITER + entityName
             + SENSOR_NAME_DELIMITER + operationName;
     }
-    public static void addAvgMaxLatency(final Sensor sensor,
-                                        final String group,
-                                        final Map<String, String> tags,
-                                        final String operation) {
+
+    public static void addValueAvgAndMax(final Sensor sensor,
+                                         final String group,
+                                         final Map<String, String> tags,
+                                         final String operation) {
         sensor.add(
             new MetricName(
-                operation + "-latency-avg",
+                operation + "-avg",
                 group,
                 "The average latency of " + operation + " operation.",
                 tags),
@@ -367,7 +348,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
         sensor.add(
             new MetricName(
-                operation + "-latency-max",
+                operation + "-max",
                 group,
                 "The max latency of " + operation + " operation.",
                 tags),

@@ -65,6 +65,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     public void init(final InternalProcessorContext context) {
         super.init(context);
         this.context = context;
+        this.nodeMetrics = new NodeMetrics(context.metrics(), null, name, context);
 
         // if deserializers are null, get the default ones from the context
         if (this.keyDeserializer == null) {
@@ -81,11 +82,10 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         }
     }
 
-
     @Override
     public void process(final K key, final V value) {
         context.forward(key, value);
-        sourceNodeForwardSensor().record();
+        nodeMetrics.processRateSensor().record();
     }
 
     /**

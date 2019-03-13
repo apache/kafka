@@ -22,15 +22,10 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Count;
-import org.apache.kafka.common.metrics.stats.Max;
-import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
@@ -43,7 +38,6 @@ import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
-import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
@@ -53,11 +47,9 @@ import java.io.StringWriter;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import static java.lang.String.format;
 import static java.util.Collections.singleton;
-import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordLatenessSensor;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_METRICS_GROUP;
 
 /**
@@ -88,49 +80,38 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     static final class TaskMetrics {
         private final StreamsMetricsImpl metrics;
 
-        private final Sensor taskCommitTimeSensor;
-        private final Sensor taskEnforcedProcessSensor;
+        private final Map<String, String> tagMap;
         private final String taskName;
 
+        private final Sensor commitLatencySensor;
+        private final Sensor enforcedProcessRateSensor;
+        private Sensor recordLatenessSensor;
+
         TaskMetrics(final TaskId id, final StreamsMetricsImpl metrics) {
-            this.taskName = id.toString();
             this.metrics = metrics;
+            this.taskName = id.toString();
+            this.tagMap = StreamsMetricsImpl.taskLevelTagMap(Thread.currentThread().getName(), taskName);
 
-            // add the operation metrics with additional tags
-            final Map<String, String> tagMap = StreamsMetricsImpl.taskLevelTagMap("task-id", taskName);
-            taskCommitTimeSensor = metrics.taskLevelSensor(taskName, "commit", Sensor.RecordingLevel.DEBUG);
-            taskCommitTimeSensor.add(
-                new MetricName("commit-latency-avg", TASK_METRICS_GROUP, "The average latency of commit operation.", tagMap),
-                new Avg()
-            );
-            taskCommitTimeSensor.add(
-                new MetricName("commit-latency-max", TASK_METRICS_GROUP, "The max latency of commit operation.", tagMap),
-                new Max()
-            );
-            taskCommitTimeSensor.add(
-                new MetricName("commit-rate", TASK_METRICS_GROUP, "The average number of occurrence of commit operation per second.", tagMap),
-                new Rate(TimeUnit.SECONDS, new Count())
-            );
-            taskCommitTimeSensor.add(
-                new MetricName("commit-total", TASK_METRICS_GROUP, "The total number of occurrence of commit operations.", tagMap),
-                new CumulativeCount()
-            );
+            commitLatencySensor = metrics.taskLevelSensor("commit-latency", taskName, Sensor.RecordingLevel.DEBUG);
+            StreamsMetricsImpl.addValueAvgAndMax(commitLatencySensor, TASK_METRICS_GROUP, tagMap, "commit-latency");
+            StreamsMetricsImpl.addInvocationRateAndCount(commitLatencySensor, TASK_METRICS_GROUP, tagMap, "commit");
 
-            // add the metrics for enforced processing
-            taskEnforcedProcessSensor = metrics.taskLevelSensor(taskName, "enforced-processing", Sensor.RecordingLevel.DEBUG, parent);
-            taskEnforcedProcessSensor.add(
-                    new MetricName("enforced-processing-rate", group, "The average number of occurrence of enforced-processing operation per second.", tagMap),
-                    new Rate(TimeUnit.SECONDS, new Count())
-            );
-            taskEnforcedProcessSensor.add(
-                    new MetricName("enforced-processing-total", group, "The total number of occurrence of enforced-processing operations.", tagMap),
-                    new CumulativeCount()
-            );
+            enforcedProcessRateSensor = metrics.taskLevelSensor("enforced-processing", taskName, Sensor.RecordingLevel.DEBUG);
+            StreamsMetricsImpl.addInvocationRateAndCount(enforcedProcessRateSensor, TASK_METRICS_GROUP, tagMap, "enforced-processing");
+        }
 
+        Sensor recordLatenessSensor() {
+            if (recordLatenessSensor == null) {
+                recordLatenessSensor = metrics.taskLevelSensor("record-lateness", taskName, Sensor.RecordingLevel.DEBUG);
+                StreamsMetricsImpl.addValueAvgAndMax(commitLatencySensor, TASK_METRICS_GROUP, tagMap, "record-lateness");
+            }
+
+            return recordLatenessSensor;
         }
 
         void removeAllSensors() {
-            metrics.removeAllTaskLevelSensors(taskName);
+            metrics.removeSensor(commitLatencySensor);
+            metrics.removeSensor(enforcedProcessRateSensor);
         }
     }
 
@@ -199,8 +180,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
         // initialize the topology with its own context
-        final ProcessorContextImpl processorContextImpl = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, metrics, cache);
-        processorContext = processorContextImpl;
+        processorContext = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, metrics, cache);
 
         final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
         final DeserializationExceptionHandler defaultDeserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
@@ -219,7 +199,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         recordInfo = new PartitionGroup.RecordInfo();
-        partitionGroup = new PartitionGroup(partitionQueues, recordLatenessSensor(processorContextImpl));
+        partitionGroup = new PartitionGroup(partitionQueues, taskMetrics.recordLatenessSensor());
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
 
@@ -306,7 +286,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
 
             if (now - idleStartTime >= maxTaskIdleMs) {
-                taskMetrics.taskEnforcedProcessSensor.record();
+                taskMetrics.enforcedProcessRateSensor.record();
                 return true;
             } else {
                 return false;
@@ -479,7 +459,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         commitNeeded = false;
         commitRequested = false;
-        taskMetrics.taskCommitTimeSensor.record(time.nanoseconds() - startNs);
+        taskMetrics.commitLatencySensor.record(time.nanoseconds() - startNs);
     }
 
     @Override

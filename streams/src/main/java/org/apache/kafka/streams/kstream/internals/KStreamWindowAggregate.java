@@ -23,7 +23,6 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
-import org.apache.kafka.streams.kstream.internals.metrics.Sensors;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -69,11 +68,11 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
         sendOldValues = true;
     }
 
-    private class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
+    public class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
 
+        private StreamsMetricsImpl metrics;
         private WindowStore<K, Agg> windowStore;
         private TupleForwarder<Windowed<K>, Agg> tupleForwarder;
-        private StreamsMetricsImpl metrics;
         private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
@@ -86,7 +85,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
             metrics = (StreamsMetricsImpl) context.metrics();
 
-            lateRecordDropSensor = Sensors.lateRecordDropSensor(internalProcessorContext);
+            lateRecordDropSensor = internalProcessorContext.currentNode().nodeMetrics().lateRecordsDropRateSensor();
 
             windowStore = (WindowStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<>(context), sendOldValues);

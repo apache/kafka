@@ -41,7 +41,6 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     private final Serde keySerde;
     private final ThreadCache cache;
     private final Serde valueSerde;
-    private final String threadName;
     private boolean initialized;
     protected ProcessorRecordContext recordContext;
     protected ProcessorNode currentNode;
@@ -53,7 +52,6 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
                                     final StateManager stateManager,
                                     final ThreadCache cache) {
         this.taskId = taskId;
-        this.threadName = Thread.currentThread().getName();
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.config = config;
         this.metrics = metrics;
@@ -91,11 +89,6 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     @Override
     public StreamsMetricsImpl metrics() {
         return metrics;
-    }
-
-    @Override
-    public String currentThreadName() {
-        return threadName;
     }
 
     @Override

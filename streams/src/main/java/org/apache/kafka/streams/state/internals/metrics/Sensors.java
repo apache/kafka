@@ -27,7 +27,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
 import java.util.Map;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgMaxLatency;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueAvgAndMax;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 
 public final class Sensors {
@@ -42,10 +42,10 @@ public final class Sensors {
                                                                        final Map<String, String> taskTags,
                                                                        final Map<String, String> storeTags) {
         final Sensor taskSensor = metrics.taskLevelSensor(taskName, operation, level);
-        addAvgMaxLatency(taskSensor, metricsGroup, taskTags, operation);
+        addValueAvgAndMax(taskSensor, metricsGroup, taskTags, operation);
         addInvocationRateAndCount(taskSensor, metricsGroup, taskTags, operation);
         final Sensor sensor = metrics.storeLevelSensor(taskName, storeName, operation, level, taskSensor);
-        addAvgMaxLatency(sensor, metricsGroup, storeTags, operation);
+        addValueAvgAndMax(sensor, metricsGroup, storeTags, operation);
         addInvocationRateAndCount(sensor, metricsGroup, storeTags, operation);
         return sensor;
     }
