@@ -25,7 +25,6 @@ import org.apache.kafka.streams.scala.utils.StreamToTableJoinScalaIntegrationTes
 import org.apache.kafka.test.IntegrationTest
 import org.junit._
 import org.junit.experimental.categories.Category
-
 /**
  * Test suite that does an example to demonstrate stream-table joins in Kafka Streams
  * <p>

@@ -66,7 +66,7 @@ class StreamToTableJoinScalaIntegrationTestBase extends JUnitSuite with StreamTo
     streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1000")
     streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot.getPath)
-    streamsConfiguration.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + String.valueOf(Math.random.round * 4460))
+    streamsConfiguration.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + String.valueOf((Math.random).toInt * 4460))
     streamsConfiguration
   }
 
