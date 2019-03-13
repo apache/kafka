@@ -25,6 +25,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.Selectable;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -476,6 +477,19 @@ public class KafkaStreamsTest {
         globalStreams.metadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
     }
 
+    class MyStringSerde<K> extends Serdes.WrapperSerde<String> {
+        boolean configured = false;
+
+        MyStringSerde() {
+            super(new StringSerializer(), new StringDeserializer());
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs, boolean isKey) {
+            super.configure(configs, isKey);
+            configured = true;
+        }
+    }
     @Test
     public void shouldReturnFalseOnCloseWhenThreadsHaventTerminated() throws Exception {
         final AtomicBoolean keepRunning = new AtomicBoolean(true);
@@ -486,7 +500,9 @@ public class KafkaStreamsTest {
             final String topic = "input";
             CLUSTER.createTopics(topic);
 
-            builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
+            MyStringSerde keyTestSerde = new MyStringSerde();
+            MyStringSerde valueTestSerde = new MyStringSerde();
+            builder.stream(topic, Consumed.with(keyTestSerde, valueTestSerde))
                     .foreach((key, value) -> {
                         try {
                             latch.countDown();
@@ -510,6 +526,8 @@ public class KafkaStreamsTest {
 
             assertTrue("Timed out waiting to receive single message", latch.await(30, TimeUnit.SECONDS));
             assertFalse(streams.close(Duration.ofMillis(10)));
+            // assertTrue(keyTestSerde.configured);
+            // assertTrue(valueTestSerde.configured);
         } finally {
             // stop the thread so we don't interfere with other tests etc
             keepRunning.set(false);
