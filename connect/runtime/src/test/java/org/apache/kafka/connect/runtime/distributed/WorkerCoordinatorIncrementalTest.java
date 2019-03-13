@@ -20,6 +20,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -115,7 +116,7 @@ public class WorkerCoordinatorIncrementalTest {
         LogContext loggerFactory = new LogContext();
 
         this.time = new MockTime();
-        this.metadata = new Metadata(0, Long.MAX_VALUE, true);
+        this.metadata = new Metadata(0, Long.MAX_VALUE, loggerFactory, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
