@@ -27,10 +27,8 @@ import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.concurrent.TimeUnit;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.fail;
 
 public class ConnectClusterStateImplTest {
   
@@ -50,71 +48,38 @@ public class ConnectClusterStateImplTest {
     }
     
     @Test
-    public void fastConnectors() {
-        assertEquals(expectedConnectors, connectorsWithDelay(0, TimeUnit.MILLISECONDS));
-    }
-    
-    @Test
-    public void slowConnectors() {
-        assertEquals(
-                expectedConnectors,
-                connectorsWithDelay(CONNECTORS_TIMEOUT_MS / 2, TimeUnit.MILLISECONDS)
-        );
+    public void connectors() {
+        mockHerder.connectors(EasyMock.anyObject());
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            @SuppressWarnings("unchecked")
+            public Void answer() throws Throwable {
+                Callback<Collection<String>> connectorsCallback =
+                    (Callback<Collection<String>>) EasyMock.getCurrentArguments()[0];
+                connectorsCallback.onCompletion(null, expectedConnectors);
+                return null;
+            }
+        });
+        EasyMock.replay(mockHerder);
+        
+        assertEquals(expectedConnectors, connectClusterState.connectors());
     }
     
     @Test(expected = ConnectException.class)
-    public void timedOutConnectors() {
-        connectorsWithDelay(CONNECTORS_TIMEOUT_MS + 500, TimeUnit.MILLISECONDS);
-    }
-    
-    protected Collection<String> connectorsWithDelay(long delay, TimeUnit timeUnit) {
+    public void connectorsFailure() {
         mockHerder.connectors(EasyMock.anyObject());
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
-                @Override
-                @SuppressWarnings("unchecked")
-                public Void answer() {
-                    Callback<Collection<String>> connectorsCallback =
-                            (Callback<Collection<String>>) EasyMock.getCurrentArguments()[0];
-                    new Thread(new DelayedConnectorsReturn(
-                            delay,
-                            timeUnit,
-                            expectedConnectors,
-                            connectorsCallback
-                    )).start();
-                    return null;
-                }
+            @Override
+            @SuppressWarnings("unchecked")
+            public Void answer() throws Throwable {
+                Callback<Collection<String>> connectorsCallback =
+                    (Callback<Collection<String>>) EasyMock.getCurrentArguments()[0];
+                connectorsCallback.onCompletion(new RuntimeException(), null);
+                return null;
+            }
         });
         EasyMock.replay(mockHerder);
-        return connectClusterState.connectors();
-    }
-    
-    protected static class DelayedConnectorsReturn implements Runnable {
         
-        private final long delay;
-        private final TimeUnit timeUnit;
-        private final Collection<String> connectors;
-        private final Callback<Collection<String>> connectorsCallback;
-
-        public DelayedConnectorsReturn(
-                long delay,
-                TimeUnit timeUnit,
-                Collection<String> connectors,
-                Callback<Collection<String>> connectorsCallback
-        ) {
-            this.delay = delay;
-            this.timeUnit = timeUnit;
-            this.connectors = connectors;
-            this.connectorsCallback = connectorsCallback;
-        }
-
-        @Override
-        public void run() {
-            try {
-                timeUnit.sleep(delay);
-            } catch (InterruptedException e) {
-                fail("Interrupted while simulating delay");
-            }
-            connectorsCallback.onCompletion(null, connectors);
-        }
+        connectClusterState.connectors();
     }
 }
