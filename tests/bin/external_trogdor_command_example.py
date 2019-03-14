@@ -20,7 +20,7 @@ import time
 
 #
 # This is an example of an external script which can be run through Trogdor's
-# ExternalCommandWorker. It parses the custom workload JSON and sleeps for the given amount of time.
+# ExternalCommandWorker. It sleeps for the given amount of time expressed by the delayMs field in the ExternalCommandSpec
 #
 
 if __name__ == '__main__':

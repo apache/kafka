@@ -125,11 +125,11 @@ NetworkPartitionFault sets up an artificial network partition between one or mor
 
 External Processes
 ========================================
-Trogdor supports running external processes. This is a generic way to run any process in the system via a configurable command - be it a Python program, bash script, docker image, etc.
+Trogdor supports running arbitrary commands in external processes. This is a generic way to run any configurable command in the Trogdor framework - be it a Python program, bash script, docker image, etc.
 
 ### ExternalCommandWorker
-ExternalCommandWorker starts an external command defined by the ExternalCommandSpec. It essentially allows you to run any command on any Trogdor agent node and give it any arbitrary JSON input.
-The worker parses the stdout/stderr output from the process in a defined JSON format and acts accordingly to the output.
+ExternalCommandWorker starts an external command defined by the ExternalCommandSpec. It essentially allows you to run any command on any Trogdor agent node.
+The worker communicates with the external process via its stdin, stdout and stderr in a JSON protocol.
 
 Exec Mode
 ========================================
