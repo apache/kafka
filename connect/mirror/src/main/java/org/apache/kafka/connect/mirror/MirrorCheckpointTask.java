@@ -33,7 +33,6 @@ import java.util.Set;
 import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
-import java.util.regex.Pattern;
 import java.time.Duration;
 
 /** Emits checkpoints for upstream consumer groups. */
@@ -47,8 +46,7 @@ public class MirrorCheckpointTask extends SourceTask {
     private String checkpointsTopic;
     private Duration interval;
     private Duration pollTimeout;
-    private Pattern topicsPattern;
-    private Pattern topicsBlacklistPattern;
+    private TopicFilter topicFilter;
     private Set<String> consumerGroups;
     private ReplicationPolicy replicationPolicy;
     private OffsetSyncStore offsetSyncStore;
@@ -75,8 +73,7 @@ public class MirrorCheckpointTask extends SourceTask {
         metrics = MirrorMetrics.metricsFor(sourceClusterAlias, targetClusterAlias);
         consumerGroups = config.taskConsumerGroups();
         checkpointsTopic = config.checkpointsTopic();
-        topicsPattern = config.topicsPattern();
-        topicsBlacklistPattern = config.topicsBlacklistPattern();
+        topicFilter = config.topicFilter();
         replicationPolicy = config.replicationPolicy();
         interval = config.emitCheckpointsInterval();
         pollTimeout = config.consumerPollTimeout();
@@ -168,7 +165,7 @@ public class MirrorCheckpointTask extends SourceTask {
     }
 
     boolean shouldCheckpointTopic(String topic) {
-        return topicsPattern.matcher(topic).matches() && !topicsBlacklistPattern.matcher(topic).matches();
+        return topicFilter.shouldReplicateTopic(topic);
     }
 
     @Override

@@ -36,18 +36,23 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Collections;
 
 class MirrorMetrics {
 
     private static final String JMX_PREFIX = "kafka.connect.mirror";
     private static final String RECORD_GROUP = "record-metrics";
+    private static final String TOPIC_GROUP = "topic-metrics";
     private static final String CHECKPOINT_GROUP = "checkpoint-metrics";
     private static final String HEARTBEAT_GROUP = "heartbeat-metrics";
 
     private static Map<SourceAndTarget, MirrorMetrics> metricsGroups = new HashMap<>();
 
     private static final Set<String> SOURCE_TARGET_TAGS = new HashSet<>(Arrays.asList("source", "target"));
+    private static final Set<String> TARGET_TOPIC_TAGS = new HashSet<>(Arrays.asList("target", "topic"));
+    
     private static final MetricNameTemplate RECORD_COUNT = new MetricNameTemplate(
             "record-count", RECORD_GROUP,
             "Number of source records replicated by this connector.",
@@ -68,6 +73,66 @@ class MirrorMetrics {
             "record-age-ms-avg", RECORD_GROUP,
             "The age of incoming source records seen by this connector.",
             SOURCE_TARGET_TAGS);
+    private static final MetricNameTemplate BYTE_RATE = new MetricNameTemplate(
+            "byte-rate", RECORD_GROUP,
+            "Average number of bytes replicated per second.",
+            SOURCE_TARGET_TAGS);
+    private static final MetricNameTemplate REPLICATION_LAG = new MetricNameTemplate(
+            "replication-lag-ms", RECORD_GROUP,
+            "Time it takes records to get replicated from source to target clusters.",
+            SOURCE_TARGET_TAGS);
+    private static final MetricNameTemplate REPLICATION_LAG_MAX = new MetricNameTemplate(
+            "replication-lag-ms-max", RECORD_GROUP,
+            "Time it takes records to get replicated from source to target clusters.",
+            SOURCE_TARGET_TAGS);
+    private static final MetricNameTemplate REPLICATION_LAG_MIN = new MetricNameTemplate(
+            "replication-lag-ms-min", RECORD_GROUP,
+            "Time it takes records to get replicated from source to target clusters.",
+            SOURCE_TARGET_TAGS);
+    private static final MetricNameTemplate REPLICATION_LAG_AVG = new MetricNameTemplate(
+            "replication-lag-ms-avg", RECORD_GROUP,
+            "Time it takes records to get replicated from source to target clusters.",
+            SOURCE_TARGET_TAGS);
+    private static final MetricNameTemplate TOPIC_RECORD_COUNT = new MetricNameTemplate(
+            "record-count", TOPIC_GROUP,
+            "Number of source records replicated by this connector.",
+            TARGET_TOPIC_TAGS);
+    private static final MetricNameTemplate TOPIC_RECORD_AGE = new MetricNameTemplate(
+            "record-age-ms", TOPIC_GROUP,
+            "The age of incoming source records seen by this connector.",
+            TARGET_TOPIC_TAGS);
+    private static final MetricNameTemplate TOPIC_RECORD_AGE_MAX = new MetricNameTemplate(
+            "record-age-ms-max", TOPIC_GROUP,
+            "The age of incoming source records seen by this connector.",
+            TARGET_TOPIC_TAGS);
+    private static final MetricNameTemplate TOPIC_RECORD_AGE_MIN = new MetricNameTemplate(
+            "record-age-ms-min", TOPIC_GROUP,
+            "The age of incoming source records seen by this connector.",
+            TARGET_TOPIC_TAGS);
+    private static final MetricNameTemplate TOPIC_RECORD_AGE_AVG = new MetricNameTemplate(
+            "record-age-ms-avg", TOPIC_GROUP,
+            "The age of incoming source records seen by this connector.",
+            TARGET_TOPIC_TAGS);
+    private static final MetricNameTemplate TOPIC_BYTE_RATE = new MetricNameTemplate(
+            "byte-rate", TOPIC_GROUP,
+            "Average number of bytes replicated per second.",
+            TARGET_TOPIC_TAGS);
+    private static final MetricNameTemplate TOPIC_REPLICATION_LAG = new MetricNameTemplate(
+            "replication-lag-ms", TOPIC_GROUP,
+            "Time it takes records to get replicated from source to target clusters.",
+            TARGET_TOPIC_TAGS);
+    private static final MetricNameTemplate TOPIC_REPLICATION_LAG_MAX = new MetricNameTemplate(
+            "replication-lag-ms-max", TOPIC_GROUP,
+            "Time it takes records to get replicated from source to target clusters.",
+            TARGET_TOPIC_TAGS);
+    private static final MetricNameTemplate TOPIC_REPLICATION_LAG_MIN = new MetricNameTemplate(
+            "replication-lag-ms-min", TOPIC_GROUP,
+            "Time it takes records to get replicated from source to target clusters.",
+            TARGET_TOPIC_TAGS);
+    private static final MetricNameTemplate TOPIC_REPLICATION_LAG_AVG = new MetricNameTemplate(
+            "replication-lag-ms-avg", TOPIC_GROUP,
+            "Time it takes records to get replicated from source to target clusters.",
+            TARGET_TOPIC_TAGS);
     private static final MetricNameTemplate HEARTBEAT_RATE = new MetricNameTemplate(
             "heartbeat-rate", HEARTBEAT_GROUP,
             "Rate of heartbeats emitted from this connector.",
@@ -76,20 +141,20 @@ class MirrorMetrics {
             "heartbeat-count", HEARTBEAT_GROUP,
             "Number of heartbeats sent from source to target cluster.",
             SOURCE_TARGET_TAGS);
-    private static final MetricNameTemplate REPLICATION_LAG = new MetricNameTemplate(
-            "replication-lag-ms", HEARTBEAT_GROUP,
+    private static final MetricNameTemplate HEARTBEAT_REPLICATION_LAG = new MetricNameTemplate(
+            "heartbeat-lag-ms", HEARTBEAT_GROUP,
             "Time it takes heartbeats to get replicated from source to target clusters.",
             SOURCE_TARGET_TAGS);
-    private static final MetricNameTemplate REPLICATION_LAG_MAX = new MetricNameTemplate(
-            "replication-lag-ms-max", HEARTBEAT_GROUP,
+    private static final MetricNameTemplate HEARTBEAT_REPLICATION_LAG_MAX = new MetricNameTemplate(
+            "heartbeat-lag-ms-max", HEARTBEAT_GROUP,
             "Time it takes heartbeats to get replicated from source to target clusters.",
             SOURCE_TARGET_TAGS);
-    private static final MetricNameTemplate REPLICATION_LAG_MIN = new MetricNameTemplate(
-            "replication-lag-ms-min", HEARTBEAT_GROUP,
+    private static final MetricNameTemplate HEARTBEAT_REPLICATION_LAG_MIN = new MetricNameTemplate(
+            "heartbeat-lag-ms-min", HEARTBEAT_GROUP,
             "Time it takes heartbeats to get replicated from source to target clusters.",
             SOURCE_TARGET_TAGS);
-    private static final MetricNameTemplate REPLICATION_LAG_AVG = new MetricNameTemplate(
-            "replication-lag-ms-avg", HEARTBEAT_GROUP,
+    private static final MetricNameTemplate HEARTBEAT_REPLICATION_LAG_AVG = new MetricNameTemplate(
+            "heartbeat-lag-ms-avg", HEARTBEAT_GROUP,
             "Time it takes heartbeats to get replicated from source to target clusters.",
             SOURCE_TARGET_TAGS);
     private static final MetricNameTemplate CHECKPOINT_COUNT = new MetricNameTemplate(
@@ -117,17 +182,22 @@ class MirrorMetrics {
             "Time it takes consumer state to get replicated from source to target clusters.",
             SOURCE_TARGET_TAGS);
  
- 
+
+    private final SourceAndTarget sourceAndTarget;
     private final Metrics metrics; 
     private final Sensor recordSensor;
+    private final Sensor byteRateSensor;
     private final Sensor recordAgeSensor;
     private final Sensor replicationLagSensor;
+    private final Sensor heartbeatLagSensor;
     private final Sensor checkpointSensor;
     private final Sensor checkpointLagSensor;
     private final Sensor heartbeatSensor;
+    private final ConcurrentMap<String, TopicMetrics> topicMetrics = new ConcurrentHashMap<>();
  
     MirrorMetrics(SourceAndTarget sourceAndTarget, MetricConfig config, 
             List<MetricsReporter> metricsReporters, Time time) {
+        this.sourceAndTarget = sourceAndTarget;
         metrics = new Metrics(config, metricsReporters, time);
         Map<String, String> tags = new HashMap<>();
         tags.put("source", sourceAndTarget.source());
@@ -141,6 +211,9 @@ class MirrorMetrics {
         recordAgeSensor.add(metrics.metricInstance(RECORD_AGE_MAX, tags), new Max());
         recordAgeSensor.add(metrics.metricInstance(RECORD_AGE_MIN, tags), new Min());
         recordAgeSensor.add(metrics.metricInstance(RECORD_AGE_AVG, tags), new Avg());
+
+        byteRateSensor = metrics.sensor("byte-rate");
+        byteRateSensor.add(metrics.metricInstance(BYTE_RATE, tags), new Rate());
 
         checkpointSensor = metrics.sensor("checkpoint");
         checkpointSensor.add(metrics.metricInstance(CHECKPOINT_COUNT, tags), new Count());
@@ -156,6 +229,12 @@ class MirrorMetrics {
         replicationLagSensor.add(metrics.metricInstance(REPLICATION_LAG_MIN, tags), new Min());
         replicationLagSensor.add(metrics.metricInstance(REPLICATION_LAG_AVG, tags), new Avg());
 
+        heartbeatLagSensor = metrics.sensor("heartbeat-lag");
+        heartbeatLagSensor.add(metrics.metricInstance(HEARTBEAT_REPLICATION_LAG, tags), new Value());
+        heartbeatLagSensor.add(metrics.metricInstance(HEARTBEAT_REPLICATION_LAG_MAX, tags), new Max());
+        heartbeatLagSensor.add(metrics.metricInstance(HEARTBEAT_REPLICATION_LAG_MIN, tags), new Min());
+        heartbeatLagSensor.add(metrics.metricInstance(HEARTBEAT_REPLICATION_LAG_AVG, tags), new Avg());
+
         checkpointLagSensor = metrics.sensor("checkpoint-lag");
         checkpointLagSensor.add(metrics.metricInstance(CHECKPOINT_LAG, tags), new Value());
         checkpointLagSensor.add(metrics.metricInstance(CHECKPOINT_LAG_MAX, tags), new Max());
@@ -163,16 +242,28 @@ class MirrorMetrics {
         checkpointLagSensor.add(metrics.metricInstance(CHECKPOINT_LAG_AVG, tags), new Avg());
     }
 
-    void countRecord() {
+    void countRecord(String topic) {
         recordSensor.record();
+        topicMetrics(topic).topicRecordSensor.record();
     }
 
-    void recordAge(long ageMillis) {
+    void recordAge(String topic, long ageMillis) {
         recordAgeSensor.record((double) ageMillis);
+        topicMetrics(topic).topicRecordAgeSensor.record((double) ageMillis);
     }
 
-    void replicationLag(long millis) {
+    void heartbeatLag(long millis) {
+        heartbeatLagSensor.record((double) millis);
+    }
+
+    void replicationLag(String topic, long millis) {
         replicationLagSensor.record((double) millis);
+        topicMetrics(topic).topicReplicationLagSensor.record((double) millis);
+    }
+
+    void recordBytes(String topic, long bytes) {
+        byteRateSensor.record((double) bytes);
+        topicMetrics(topic).topicByteRateSensor.record((double) bytes);
     }
 
     void countCheckpoint() {
@@ -198,5 +289,40 @@ class MirrorMetrics {
     private static MirrorMetrics makeMetrics(SourceAndTarget sourceAndTarget) {
         return new MirrorMetrics(sourceAndTarget, new MetricConfig(), 
             Collections.singletonList(new JmxReporter(JMX_PREFIX)), Time.SYSTEM);
+    }
+
+    private TopicMetrics topicMetrics(String topic) {
+        return topicMetrics.computeIfAbsent(topic, x -> new TopicMetrics(x));
+    }
+       
+    private class TopicMetrics {
+        private final Sensor topicRecordSensor;
+        private final Sensor topicByteRateSensor;
+        private final Sensor topicRecordAgeSensor;
+        private final Sensor topicReplicationLagSensor;
+     
+        TopicMetrics(String topic) {
+            Map<String, String> tags = new HashMap<>();
+            tags.put("target", sourceAndTarget.target());
+            tags.put("topic", topic);
+
+            topicRecordSensor = metrics.sensor("record-count");
+            topicRecordSensor.add(metrics.metricInstance(TOPIC_RECORD_COUNT, tags), new Count());
+
+            topicByteRateSensor = metrics.sensor("byte-rate");
+            topicByteRateSensor.add(metrics.metricInstance(TOPIC_BYTE_RATE, tags), new Rate());
+
+            topicRecordAgeSensor = metrics.sensor("record-age");
+            topicRecordAgeSensor.add(metrics.metricInstance(TOPIC_RECORD_AGE, tags), new Value());
+            topicRecordAgeSensor.add(metrics.metricInstance(TOPIC_RECORD_AGE_MAX, tags), new Max());
+            topicRecordAgeSensor.add(metrics.metricInstance(TOPIC_RECORD_AGE_MIN, tags), new Min());
+            topicRecordAgeSensor.add(metrics.metricInstance(TOPIC_RECORD_AGE_AVG, tags), new Avg());
+
+            topicReplicationLagSensor = metrics.sensor("replication-lag");
+            topicReplicationLagSensor.add(metrics.metricInstance(TOPIC_REPLICATION_LAG, tags), new Value());
+            topicReplicationLagSensor.add(metrics.metricInstance(TOPIC_REPLICATION_LAG_MAX, tags), new Max());
+            topicReplicationLagSensor.add(metrics.metricInstance(TOPIC_REPLICATION_LAG_MIN, tags), new Min());
+            topicReplicationLagSensor.add(metrics.metricInstance(TOPIC_REPLICATION_LAG_AVG, tags), new Avg());
+        }
     }
 }

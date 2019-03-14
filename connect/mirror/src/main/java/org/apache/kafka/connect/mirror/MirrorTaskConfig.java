@@ -26,7 +26,7 @@ import java.util.stream.Collectors;
 
 public class MirrorTaskConfig extends MirrorConnectorConfig {
 
-    public MirrorTaskConfig(Map<?, ?> props) {
+    public MirrorTaskConfig(Map<String, String> props) {
         super(TASK_CONFIG_DEF, props);
     }
 

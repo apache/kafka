@@ -34,26 +34,18 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     private String connectorName;
     private MirrorConnectorConfig config;
     private SourceAndTarget sourceAndTarget;
-    private boolean enabled;
 
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorConnectorConfig(props);
         connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
-        enabled = config.enabled();
-        if (!enabled) {
-            log.info("{} for {} is disabled.", connectorName, sourceAndTarget);
-            return;
-        }
         log.info("Starting {}.", connectorName);
     }
 
     @Override
     public void stop() {
-        if (enabled) {
-            log.info("Stopping {}.", connectorName);
-        }
+        log.info("Stopping {}.", connectorName);
     }
 
     @Override
@@ -63,12 +55,8 @@ public class MirrorHeartbeatConnector extends SourceConnector {
 
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-        if (!enabled) {
-            return Collections.emptyList();
-        } else {
-            // just need a single task
-            return Collections.singletonList(config.originalsStrings());
-        }
+        // just need a single task
+        return Collections.singletonList(config.originalsStrings());
     }
 
     @Override

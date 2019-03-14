@@ -74,12 +74,14 @@ public class MirrorHeartbeatTask extends SourceTask {
         if (stopped.await(interval.toMillis(), TimeUnit.MILLISECONDS)) {
             return Collections.emptyList();
         }
-        Heartbeat heartbeat = new Heartbeat(sourceClusterAlias, targetClusterAlias, System.currentTimeMillis());
+        long timestamp = System.currentTimeMillis();
+        Heartbeat heartbeat = new Heartbeat(sourceClusterAlias, targetClusterAlias, timestamp);
         SourceRecord record = new SourceRecord(
             heartbeat.connectPartition(), MirrorUtils.wrapOffset(0),
             heartbeatsTopic, 0,
             Schema.BYTES_SCHEMA, heartbeat.recordKey(),
-            Schema.BYTES_SCHEMA, heartbeat.recordValue());
+            Schema.BYTES_SCHEMA, heartbeat.recordValue(),
+            timestamp);
         return Collections.singletonList(record);
     }
 

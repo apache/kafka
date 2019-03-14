@@ -33,7 +33,6 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
-import org.apache.kafka.clients.admin.NewTopic;
 
 import java.util.Map;
 import java.util.List;
@@ -44,7 +43,6 @@ import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 import java.util.concurrent.ExecutionException;
-import java.util.regex.Pattern;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -60,37 +58,26 @@ public class MirrorSourceConnector extends SourceConnector {
     private MirrorConnectorConfig config;
     private SourceAndTarget sourceAndTarget;
     private String connectorName;
-    private Pattern topicsPattern;
-    private Pattern topicsBlacklistPattern;
-    private Pattern configPropertiesPattern;
-    private Pattern configPropertiesBlacklistPattern;
+    private TopicFilter topicFilter;
+    private ConfigPropertyFilter configPropertyFilter;
     private List<TopicPartition> knownTopicPartitions = Collections.emptyList();
     private ReplicationPolicy replicationPolicy;
     private AdminClient sourceAdminClient;
     private AdminClient targetAdminClient;
-    private boolean enabled;
 
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorConnectorConfig(props);
         connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
-        enabled = config.enabled();
-        if (!enabled) {
-            log.info("{} for {} is disabled.", connectorName, sourceAndTarget);
-            return;
-        }
-        topicsPattern = config.topicsPattern();
-        topicsBlacklistPattern = config.topicsBlacklistPattern();
-        configPropertiesPattern = config.configPropertiesPattern();
-        configPropertiesBlacklistPattern = config.configPropertiesBlacklistPattern();
+        topicFilter = config.topicFilter();
+        configPropertyFilter = config.configPropertyFilter();
         replicationPolicy = config.replicationPolicy();
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
         targetAdminClient = AdminClient.create(config.targetAdminConfig());
         log.info("Starting {} for {}.", connectorName, sourceAndTarget);
         scheduler = new Scheduler(MirrorSourceConnector.class);
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
-        scheduler.execute(this::createMissingTopics, "creating missing topics");
         scheduler.scheduleRepeating(this::syncTopicAcls, config.syncTopicAclsInterval(), "syncing topic ACLs");
         scheduler.scheduleRepeating(this::syncTopicConfigs, config.syncTopicConfigsInterval(), "syncing topic configs");
         scheduler.scheduleRepeatingDelayed(this::refreshTopicPartitions, config.refreshTopicsInterval(),
@@ -100,15 +87,13 @@ public class MirrorSourceConnector extends SourceConnector {
 
     @Override
     public void stop() {
-        if (enabled) {
-            log.info("Stopping {}.", connectorName);
-            scheduler.shutdown();
-            synchronized (sourceAdminClient) {
-                sourceAdminClient.close();
-            }
-            synchronized (targetAdminClient) {
-                targetAdminClient.close();
-            }
+        log.info("Stopping {}.", connectorName);
+        scheduler.shutdown();
+        synchronized (sourceAdminClient) {
+            sourceAdminClient.close();
+        }
+        synchronized (targetAdminClient) {
+            targetAdminClient.close();
         }
     }
 
@@ -120,7 +105,7 @@ public class MirrorSourceConnector extends SourceConnector {
     // divide topic-partitions among tasks
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-        if (!enabled || knownTopicPartitions.isEmpty()) {
+        if (knownTopicPartitions.isEmpty()) {
             return Collections.emptyList();
         }
         int numTasks = Math.min(maxTasks, knownTopicPartitions.size());
@@ -172,16 +157,6 @@ public class MirrorSourceConnector extends SourceConnector {
         knownTopicPartitions = findTopicPartitions();
     }
 
-    private void createMissingTopics()
-            throws InterruptedException, ExecutionException {
-        Set<String> existingDownstreamTopics = listTopics(targetAdminClient);
-        Map<String, Integer> missingDownstreamTopics = knownTopicPartitions.stream()
-            .filter(x -> !existingDownstreamTopics.contains(formatRemoteTopic(x.topic())))
-            .collect(Collectors.groupingBy(x -> x.topic(), Collectors.counting())).entrySet().stream()
-            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> x.getValue().intValue()));
-        createTopics(missingDownstreamTopics); 
-    }
-
     Set<String> topicsToReplicate() {
         return knownTopicPartitions.stream()
             .map(x -> x.topic())
@@ -215,22 +190,6 @@ public class MirrorSourceConnector extends SourceConnector {
         }
     }
 
-    private void createTopics(Map<String, Integer> numPartitions)
-            throws InterruptedException, ExecutionException {
-        Set<NewTopic> newTopics = numPartitions.entrySet().stream()
-            .map(x -> new NewTopic(x.getKey(), x.getValue(), (short) 1))
-            .collect(Collectors.toSet());
-        synchronized (targetAdminClient) {
-            targetAdminClient.createTopics(newTopics).values().forEach((x, y) -> y.whenComplete((z, e) -> {
-                if (e != null) {
-                    log.error("Error creating topic {}.", x, e);
-                } else {
-                    log.info("Created new topic {} on {}.", x, sourceAndTarget.target());
-                }
-            }));
-        }
-    }
-
     private Collection<AclBinding> listTopicAclBindings()
             throws InterruptedException, ExecutionException {
         synchronized (sourceAdminClient) {
@@ -252,7 +211,11 @@ public class MirrorSourceConnector extends SourceConnector {
             .collect(Collectors.toMap(x -> new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), x -> x.getValue()));
         log.info("Syncing configs for {} topics.", configs.size());
         synchronized (targetAdminClient) {
-            targetAdminClient.alterConfigs(configs).all().get();
+            targetAdminClient.alterConfigs(configs).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+                if (e != null) {
+                    log.warn("Could not alter configuration of topic {}.", k.name(), e);
+                }
+            }));
         }
     }
 
@@ -260,7 +223,11 @@ public class MirrorSourceConnector extends SourceConnector {
             throws InterruptedException, ExecutionException {
         log.info("Syncing {} topic ACL bindings.", bindings.size());
         synchronized (targetAdminClient) {
-            targetAdminClient.createAcls(bindings).all().get();
+            targetAdminClient.createAcls(bindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+                if (e != null) {
+                    log.warn("Could not sync ACL of topic {}.", k.pattern().name(), e);
+                }
+            }));
         }
     }
 
@@ -295,14 +262,11 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     boolean shouldReplicateTopic(String topic) {
-        return topicsPattern.matcher(topic).matches()
-            && !topicsBlacklistPattern.matcher(topic).matches()
-            && !isCycle(topic);
+        return topicFilter.shouldReplicateTopic(topic) && !isCycle(topic);
     }
 
     boolean shouldReplicateTopicConfigurationProperty(String property) {
-        return configPropertiesPattern.matcher(property).matches()
-            && !configPropertiesBlacklistPattern.matcher(property).matches();
+        return configPropertyFilter.shouldReplicateConfigProperty(property);
     }
 
     // Recurse upstream to detect cycles, i.e. whether this topic is already on the target cluster

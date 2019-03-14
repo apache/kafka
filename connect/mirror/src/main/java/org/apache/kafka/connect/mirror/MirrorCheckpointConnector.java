@@ -30,7 +30,6 @@ import java.util.HashSet;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.stream.Collectors;
-import java.util.regex.Pattern;
 import java.util.concurrent.ExecutionException;
 
 import org.slf4j.Logger;
@@ -42,27 +41,19 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     private Scheduler scheduler;
     private MirrorConnectorConfig config;
-    private Pattern groupsPattern;
-    private Pattern groupsBlacklistPattern;
+    private GroupFilter groupFilter;
     private AdminClient sourceAdminClient;
     private ReplicationPolicy replicationPolicy;
     private SourceAndTarget sourceAndTarget;
     private String connectorName;
     private List<String> knownConsumerGroups = Collections.emptyList();
-    private boolean enabled;
 
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorConnectorConfig(props);
         connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
-        enabled = config.enabled();
-        if (!enabled) {
-            log.info("{} for {} is disabled.", connectorName, sourceAndTarget);
-            return;
-        }
-        groupsPattern = config.groupsPattern();
-        groupsBlacklistPattern = config.groupsBlacklistPattern();
+        groupFilter = config.groupFilter();
         replicationPolicy = config.replicationPolicy();
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
         log.info("Starting {} for {}.", connectorName, sourceAndTarget);
@@ -75,13 +66,11 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     @Override
     public void stop() {
-        if (enabled) {
-            log.info("Stopping {}.", connectorName);
-            scheduler.shutdown();
-            synchronized (sourceAdminClient) {
-                sourceAdminClient.close();
-            } 
-        }
+        log.info("Stopping {}.", connectorName);
+        scheduler.shutdown();
+        synchronized (sourceAdminClient) {
+            sourceAdminClient.close();
+        } 
     }
 
     @Override
@@ -92,7 +81,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     // divide consumer groups among tasks
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-        if (!enabled || knownConsumerGroups.isEmpty()) {
+        if (knownConsumerGroups.isEmpty()) {
             return Collections.emptyList();
         }
         int numTasks = Math.min(maxTasks, knownConsumerGroups.size());
@@ -151,6 +140,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
     }
 
     boolean shouldReplicate(String group) {
-        return groupsPattern.matcher(group).matches() && !groupsBlacklistPattern.matcher(group).matches();
+        return groupFilter.shouldReplicateGroup(group);
     }
 }
