@@ -446,8 +446,6 @@ public class EosIntegrationTest {
         }
     }
 
-    /*
-    // Testing build without this test case
     @Test
     public void shouldNotViolateEosIfOneTaskGetsFencedUsingIsolatedAppInstances() throws Exception {
         // this test writes 10 + 5 + 5 + 10 records per partition (running with 2 partitions)
@@ -499,10 +497,10 @@ public class EosIntegrationTest {
             System.out.println("navi 1: " + streams1.allMetadata().size() + " " + streams2.allMetadata().size());
             System.out.println("navi 2: " + streams1.allMetadata().toArray()[0].toString() + " " + streams2.allMetadata().toArray()[0].toString());
             TestUtils.waitForCondition(
-                () -> streams1.allMetadata().size() == 2
-                    && streams2.allMetadata().size() == 2
-                    && (streams1.allMetadata().iterator().next().topicPartitions().size() == 1
-                    || streams2.allMetadata().iterator().next().topicPartitions().size() == 1),
+                () -> streams1.allMetadata().size() == 1
+                    && streams2.allMetadata().size() == 1
+                    || (streams1.allMetadata().iterator().next().topicPartitions().size() == 2
+                    || streams2.allMetadata().iterator().next().topicPartitions().size() == 2),
                 MAX_WAIT_TIME_MS, "Should have rebalanced.");
 
             final List<KeyValue<Long, Long>> committedRecordsAfterRebalance = readResult(
@@ -520,8 +518,8 @@ public class EosIntegrationTest {
             System.out.println("navi 11: " + streams1.allMetadata().size() + " " + streams2.allMetadata().size());
             System.out.println("navi 22: " + streams1.allMetadata().toArray()[0].toString() + " " + streams2.allMetadata().toArray()[0].toString());
             TestUtils.waitForCondition(
-                () -> streams1.allMetadata().size() == 1
-                    && streams2.allMetadata().size() == 1
+                () -> streams1.allMetadata().size() == 2
+                    && streams2.allMetadata().size() == 2
                     && streams1.allMetadata().iterator().next().topicPartitions().size() == 1
                     && streams2.allMetadata().iterator().next().topicPartitions().size() == 1,
                 MAX_WAIT_TIME_MS,
@@ -543,7 +541,6 @@ public class EosIntegrationTest {
             checkResultPerKey(allCommittedRecords, allExpectedCommittedRecordsAfterRecovery);
         }
     }
-    */
 
     private List<KeyValue<Long, Long>> prepareData(final long fromInclusive,
                                                    final long toExclusive,
@@ -662,7 +659,6 @@ public class EosIntegrationTest {
             Serdes.LongSerde.class.getName(),
             Serdes.LongSerde.class.getName(),
             properties);
-
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);
 
         streams.setUncaughtExceptionHandler((t, e) -> {
