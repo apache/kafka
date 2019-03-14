@@ -497,7 +497,24 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorParameters<K, Change<V>> joinThisProcessorParameters = new ProcessorParameters<>(joinThis, joinThisName);
         final ProcessorParameters<K, Change<VO>> joinOtherProcessorParameters = new ProcessorParameters<>(joinOther, joinOtherName);
 
-        final KTableKTableJoinNode.KTableKTableJoinNodeBuilder<K, V, VO, VR> kTableJoinNodeBuilder =
+        final Serde<K> keySerde;
+        final Serde<VR> valueSerde;
+        final String queryableStoreName;
+        final StoreBuilder<KeyValueStore<K, VR>> storeBuilder;
+
+        if (materializedInternal != null) {
+            keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
+            valueSerde = materializedInternal.valueSerde();
+            queryableStoreName = materializedInternal.storeName();
+            storeBuilder = new KeyValueStoreMaterializer<>(materializedInternal).materialize();
+        } else {
+            keySerde = this.keySerde;
+            valueSerde = null;
+            queryableStoreName = null;
+            storeBuilder = null;
+        }
+
+        final KTableKTableJoinNode<K, V, VO, VR> kTableKTableJoinNode =
             KTableKTableJoinNode.<K, V, VO, VR>kTableKTableJoinNodeBuilder()
                 .withNodeName(joinMergeName)
                 .withJoinThisProcessorParameters(joinThisProcessorParameters)
@@ -505,31 +522,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 .withThisJoinSideNodeName(name)
                 .withOtherJoinSideNodeName(((KTableImpl) other).name)
                 .withJoinThisStoreNames(valueGetterSupplier().storeNames())
-                .withJoinOtherStoreNames(((KTableImpl) other).valueGetterSupplier().storeNames());
-
-        if (materializedInternal != null) {
-            final Serde<K> keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
-            final Serde<VR> valueSerde = materializedInternal.valueSerde();
-            final String queryableStoreName = materializedInternal.storeName();
-            final StoreBuilder<KeyValueStore<K, VR>> storeBuilder = new KeyValueStoreMaterializer<>(materializedInternal).materialize();
-            kTableJoinNodeBuilder
+                .withJoinOtherStoreNames(((KTableImpl) other).valueGetterSupplier().storeNames())
                 .withKeySerde(keySerde)
                 .withValueSerde(valueSerde)
                 .withQueryableStoreName(queryableStoreName)
-                .withStoreBuilder(storeBuilder);
-        } else {
-            final Serde<K> keySerde = this.keySerde;
-            final Serde<VR> valueSerde = null;
-            final String queryableStoreName = null;
-            final StoreBuilder<KeyValueStore<K, VR>> storeBuilder = null;
-            kTableJoinNodeBuilder
-                .withKeySerde(keySerde)
-                .withValueSerde(valueSerde)
-                .withQueryableStoreName(queryableStoreName)
-                .withStoreBuilder(storeBuilder);
-        }
-
-        final KTableKTableJoinNode<K, V, VO, VR> kTableKTableJoinNode = kTableJoinNodeBuilder.build();
+                .withStoreBuilder(storeBuilder)
+                .build();
         builder.addGraphNode(this.streamsGraphNode, kTableKTableJoinNode);
 
         // we can inherit parent key serde if user do not provide specific overrides
