@@ -1899,7 +1899,7 @@ public class KafkaConsumerTest {
     @SuppressWarnings("deprecation")
     public void testCloseWithTimeUnit() {
         KafkaConsumer consumer = mock(KafkaConsumer.class);
-        doCallRealMethod().when(consumer).close(Duration.of(anyLong(),any()));
+        doCallRealMethod().when(consumer).close(Duration.of(anyLong(), any()));
         consumer.close(Duration.ofSeconds(1));
         verify(consumer).close(Duration.ofSeconds(1));
     }
