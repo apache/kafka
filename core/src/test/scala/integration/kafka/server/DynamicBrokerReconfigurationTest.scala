@@ -131,9 +131,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       servers += TestUtils.createServer(kafkaConfig)
     }
 
-    TestUtils.createTopic(zkClient, topic, numPartitions, replicationFactor = numServers, servers)
+    TestUtils.createTopic(zkClient, topic, numPartitions, replicationFactor = numServers.toShort, servers)
     TestUtils.createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, servers.head.config.offsetsTopicPartitions,
-      replicationFactor = numServers, servers, servers.head.groupCoordinator.offsetsTopicConfigs)
+      replicationFactor = numServers.toShort, servers, servers.head.groupCoordinator.offsetsTopicConfigs)
 
     createAdminClient(SecurityProtocol.SSL, SecureInternal)
 
@@ -216,7 +216,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   @Test
   def testKeyStoreAlter(): Unit = {
     val topic2 = "testtopic2"
-    TestUtils.createTopic(zkClient, topic2, numPartitions, replicationFactor = numServers, servers)
+    TestUtils.createTopic(zkClient, topic2, numPartitions, replicationFactor = numServers.toShort, servers)
 
     // Start a producer and consumer that work with the current broker keystore.
     // This should continue working while changes are made
@@ -767,7 +767,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
     // Verify that produce/consume work now
     val topic2 = "testtopic2"
-    TestUtils.createTopic(zkClient, topic2, numPartitions, replicationFactor = numServers, servers)
+    TestUtils.createTopic(zkClient, topic2, numPartitions, replicationFactor = numServers.toShort, servers)
     val producer = ProducerBuilder().trustStoreProps(sslProperties1).maxRetries(0).build()
     val consumer = ConsumerBuilder("group2").trustStoreProps(sslProperties1).topic(topic2).build()
     verifyProduceConsume(producer, consumer, 10, topic2)
@@ -967,7 +967,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
     // Test that other listeners still work
     val topic2 = "testtopic2"
-    TestUtils.createTopic(zkClient, topic2, numPartitions, replicationFactor = numServers, servers)
+    TestUtils.createTopic(zkClient, topic2, numPartitions, replicationFactor = numServers.toShort, servers)
     val producer2 = ProducerBuilder().trustStoreProps(sslProperties1).maxRetries(0).build()
     val consumer2 = ConsumerBuilder(s"remove-listener-group2-$securityProtocol")
       .trustStoreProps(sslProperties1)

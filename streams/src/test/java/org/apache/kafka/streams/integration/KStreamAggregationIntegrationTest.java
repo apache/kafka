@@ -757,7 +757,7 @@ public class KStreamAggregationIntegrationTest {
         streamOneInput = "stream-one-" + testNo;
         outputTopic = "output-" + testNo;
         userSessionsStream = userSessionsStream + "-" + testNo;
-        CLUSTER.createTopic(streamOneInput, 3, 1);
+        CLUSTER.createTopic(streamOneInput, 3, (short) 1);
         CLUSTER.createTopics(userSessionsStream, outputTopic);
     }
 

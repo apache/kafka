@@ -30,7 +30,7 @@ import scala.collection.Map
 class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {
   val numServers = 4
   val numPartitions = 8
-  val replicationFactor = 2
+  val replicationFactor = 2.toShort
   val overridingProps = new Properties()
   overridingProps.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
   overridingProps.put(KafkaConfig.DefaultReplicationFactorProp, replicationFactor.toString)

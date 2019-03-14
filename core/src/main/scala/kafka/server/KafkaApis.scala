@@ -908,7 +908,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def createTopic(topic: String,
                           numPartitions: Int,
-                          replicationFactor: Int,
+                          replicationFactor: Short,
                           properties: Properties = new Properties()): MetadataResponse.TopicMetadata = {
     try {
       adminZkClient.createTopic(topic, numPartitions, replicationFactor, properties, RackAwareMode.Safe)
@@ -941,7 +941,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             s"and not all brokers are up yet.")
           new MetadataResponse.TopicMetadata(Errors.COORDINATOR_NOT_AVAILABLE, topic, true, java.util.Collections.emptyList())
         } else {
-          createTopic(topic, config.offsetsTopicPartitions, config.offsetsTopicReplicationFactor.toInt,
+          createTopic(topic, config.offsetsTopicPartitions, config.offsetsTopicReplicationFactor,
             groupCoordinator.offsetsTopicConfigs)
         }
       case TRANSACTION_STATE_TOPIC_NAME =>
@@ -952,7 +952,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             s"and not all brokers are up yet.")
           new MetadataResponse.TopicMetadata(Errors.COORDINATOR_NOT_AVAILABLE, topic, true, java.util.Collections.emptyList())
         } else {
-          createTopic(topic, config.transactionTopicPartitions, config.transactionTopicReplicationFactor.toInt,
+          createTopic(topic, config.transactionTopicPartitions, config.transactionTopicReplicationFactor,
             txnCoordinator.transactionTopicConfigs)
         }
       case _ => throw new IllegalArgumentException(s"Unexpected internal topic name: $topic")

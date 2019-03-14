@@ -70,7 +70,7 @@ class LegacyAdminClientTest extends IntegrationTestHarness with Logging {
   override def setUp() {
     super.setUp()
     client = AdminClient.createSimplePlaintext(this.brokerList)
-    createTopic(topic, 2, serverCount)
+    createTopic(topic, 2, serverCount.toShort)
   }
 
   @After

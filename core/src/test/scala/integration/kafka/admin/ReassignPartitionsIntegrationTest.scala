@@ -25,7 +25,7 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness with RackAw
     TestUtils.createBrokersInZk(toBrokerMetadata(rackInfo), zkClient)
 
     val numPartitions = 18
-    val replicationFactor = 3
+    val replicationFactor = 3.toShort
 
     // create a non rack aware assignment topic first
     val createOpts = new kafka.admin.TopicCommand.TopicCommandOptions(Array(

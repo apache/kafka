@@ -109,8 +109,8 @@ public class RegexSourceIntegrationTest {
             FA_TOPIC,
             FOO_TOPIC,
             DEFAULT_OUTPUT_TOPIC);
-        CLUSTER.createTopic(PARTITIONED_TOPIC_1, 2, 1);
-        CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, 1);
+        CLUSTER.createTopic(PARTITIONED_TOPIC_1, 2, (short) 1);
+        CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, (short) 1);
     }
 
     @Before

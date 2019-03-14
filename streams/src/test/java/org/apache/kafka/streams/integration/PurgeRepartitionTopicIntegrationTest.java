@@ -140,7 +140,7 @@ public class PurgeRepartitionTopicIntegrationTest {
 
     @BeforeClass
     public static void createTopics() throws Exception {
-        CLUSTER.createTopic(INPUT_TOPIC, 1, 1);
+        CLUSTER.createTopic(INPUT_TOPIC, 1, (short) 1);
     }
 
     @Before

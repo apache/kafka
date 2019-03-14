@@ -65,7 +65,7 @@ public class InternalTopicManager {
         final LogContext logContext = new LogContext(String.format("stream-thread [%s] ", Thread.currentThread().getName()));
         log = logContext.logger(getClass());
 
-        replicationFactor = streamsConfig.getInt(StreamsConfig.REPLICATION_FACTOR_CONFIG).shortValue();
+        replicationFactor = streamsConfig.getShort(StreamsConfig.REPLICATION_FACTOR_CONFIG);
         windowChangeLogAdditionalRetention = streamsConfig.getLong(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG);
         final InternalAdminClientConfig dummyAdmin = new InternalAdminClientConfig(streamsConfig.getAdminConfigs("dummy"));
         retries = dummyAdmin.getInt(AdminClientConfig.RETRIES_CONFIG);

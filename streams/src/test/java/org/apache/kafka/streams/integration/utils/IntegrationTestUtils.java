@@ -120,7 +120,7 @@ public class IntegrationTestUtils {
         try {
             cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
             for (final String topic : topics) {
-                cluster.createTopic(topic, 1, 1);
+                cluster.createTopic(topic, 1, (short) 1);
             }
         } catch (final InterruptedException e) {
             throw new RuntimeException(e);

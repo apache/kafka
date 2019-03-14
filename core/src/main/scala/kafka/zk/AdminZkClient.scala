@@ -48,7 +48,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
    */
   def createTopic(topic: String,
                   partitions: Int,
-                  replicationFactor: Int,
+                  replicationFactor: Short,
                   topicConfig: Properties = new Properties,
                   rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
     val brokerMetadatas = getBrokerMetadatas(rackAwareMode)
@@ -198,13 +198,13 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
           s"$numPartitions would not be an increase.")
 
     replicaAssignment.foreach { proposedReplicaAssignment =>
-      validateReplicaAssignment(proposedReplicaAssignment, existingAssignmentPartition0.size,
+      validateReplicaAssignment(proposedReplicaAssignment, existingAssignmentPartition0.size.toShort,
         allBrokers.map(_.id).toSet)
     }
 
     val proposedAssignmentForNewPartitions = replicaAssignment.getOrElse {
       val startIndex = math.max(0, allBrokers.indexWhere(_.id >= existingAssignmentPartition0.head))
-      AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size,
+      AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size.toShort,
         startIndex, existingAssignment.size)
     }
 
@@ -219,7 +219,7 @@ class AdminZkClient(zkClient: KafkaZkClient) extends Logging {
   }
 
   private def validateReplicaAssignment(replicaAssignment: Map[Int, Seq[Int]],
-                                        expectedReplicationFactor: Int,
+                                        expectedReplicationFactor: Short,
                                         availableBrokerIds: Set[Int]): Unit = {
 
     replicaAssignment.foreach { case (partitionId, replicas) =>

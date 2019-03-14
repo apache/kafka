@@ -486,7 +486,7 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.HIGH,
                     CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
             .define(REPLICATION_FACTOR_CONFIG,
-                    Type.INT,
+                    Type.SHORT,
                     1,
                     Importance.HIGH,
                     REPLICATION_FACTOR_DOC)
@@ -990,7 +990,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // add configs required for stream partition assignor
         consumerProps.put(UPGRADE_FROM_CONFIG, getString(UPGRADE_FROM_CONFIG));
-        consumerProps.put(REPLICATION_FACTOR_CONFIG, getInt(REPLICATION_FACTOR_CONFIG));
+        consumerProps.put(REPLICATION_FACTOR_CONFIG, getShort(REPLICATION_FACTOR_CONFIG));
         consumerProps.put(APPLICATION_SERVER_CONFIG, getString(APPLICATION_SERVER_CONFIG));
         consumerProps.put(NUM_STANDBY_REPLICAS_CONFIG, getInt(NUM_STANDBY_REPLICAS_CONFIG));
         consumerProps.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, StreamsPartitionAssignor.class.getName());

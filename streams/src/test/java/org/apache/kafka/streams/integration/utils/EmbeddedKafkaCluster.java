@@ -158,7 +158,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      */
     public void createTopics(final String... topics) throws InterruptedException {
         for (final String topic : topics) {
-            createTopic(topic, 1, 1, Collections.emptyMap());
+            createTopic(topic, 1, (short) 1, Collections.emptyMap());
         }
     }
 
@@ -168,7 +168,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param topic The name of the topic.
      */
     public void createTopic(final String topic) throws InterruptedException {
-        createTopic(topic, 1, 1, Collections.emptyMap());
+        createTopic(topic, 1, (short) 1, Collections.emptyMap());
     }
 
     /**
@@ -178,7 +178,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param partitions  The number of partitions for this topic.
      * @param replication The replication factor for (the partitions of) this topic.
      */
-    public void createTopic(final String topic, final int partitions, final int replication) throws InterruptedException {
+    public void createTopic(final String topic, final int partitions, final short replication) throws InterruptedException {
         createTopic(topic, partitions, replication, Collections.emptyMap());
     }
 
@@ -192,7 +192,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      */
     public void createTopic(final String topic,
                             final int partitions,
-                            final int replication,
+                            final short replication,
                             final Map<String, String> topicConfig) throws InterruptedException {
         brokers[0].createTopic(topic, partitions, replication, topicConfig);
         final List<TopicPartition> topicPartitions = new ArrayList<>();

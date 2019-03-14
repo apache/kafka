@@ -254,7 +254,7 @@ class MetadataRequestTest extends BaseRequestTest {
     val replicaCount = 3
 
     // create a topic with 3 replicas
-    createTopic(replicaDownTopic, 1, replicaCount)
+    createTopic(replicaDownTopic, 1, replicaCount.toShort)
 
     // Kill a replica node that is not the leader
     val metadataResponse = sendMetadataRequest(new MetadataRequest.Builder(List(replicaDownTopic).asJava, true, 1.toShort).build())
@@ -321,7 +321,7 @@ class MetadataRequestTest extends BaseRequestTest {
     }
 
     val topic = "isr-after-broker-shutdown"
-    val replicaCount = 3
+    val replicaCount = 3.toShort
     createTopic(topic, 1, replicaCount)
 
     servers.last.shutdown()

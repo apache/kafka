@@ -52,7 +52,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   @Before
   override def setUp() {
     super.setUp()
-    createTopic(topic, partitionNum, serverCount)
+    createTopic(topic, partitionNum, serverCount.toShort)
   }
 
   @Test

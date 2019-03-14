@@ -49,7 +49,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   @Test
   def testMetricsReporterAfterDeletingTopic() {
     val topic = "test-topic-metric"
-    createTopic(topic, 1, 1)
+    createTopic(topic, 1, 1.toShort)
     adminZkClient.deleteTopic(topic)
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
     assertEquals("Topic metrics exists after deleteTopic", Set.empty, topicMetricGroups(topic))
@@ -95,7 +95,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
     val topicConfig = new Properties
     topicConfig.setProperty(LogConfig.MinInSyncReplicasProp, "2")
-    createTopic(topic, 1, numNodes, topicConfig)
+    createTopic(topic, 1, numNodes.toShort, topicConfig)
     // Produce a few messages to create the metrics
     TestUtils.generateAndProduceMessages(servers, topic, nMessages)
 
