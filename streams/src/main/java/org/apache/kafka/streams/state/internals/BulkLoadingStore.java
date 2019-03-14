@@ -16,12 +16,10 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatch;
 
-public interface BulkLoadingKeyValueStore extends KeyValueStore<Bytes, byte[]> {
+public interface BulkLoadingStore {
     void toggleDbForBulkLoading(final boolean prepareForBulkload);
     void write(final WriteBatch batch) throws RocksDBException;
 }

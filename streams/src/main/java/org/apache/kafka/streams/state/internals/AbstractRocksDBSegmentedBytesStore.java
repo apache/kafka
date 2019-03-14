@@ -43,8 +43,8 @@ import java.util.Set;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.EXPIRED_WINDOW_RECORD_DROP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 
-public class AbstractSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
-    private static final Logger LOG = LoggerFactory.getLogger(AbstractSegmentedBytesStore.class);
+public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements SegmentedBytesStore {
+    private static final Logger LOG = LoggerFactory.getLogger(AbstractRocksDBSegmentedBytesStore.class);
     private final String name;
     private final AbstractSegments<S> segments;
     private final String metricScope;
@@ -55,10 +55,10 @@ public class AbstractSegmentedBytesStore<S extends Segment> implements Segmented
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
-    AbstractSegmentedBytesStore(final String name,
-                                final String metricScope,
-                                final KeySchema keySchema,
-                                final AbstractSegments<S> segments) {
+    AbstractRocksDBSegmentedBytesStore(final String name,
+                                       final String metricScope,
+                                       final KeySchema keySchema,
+                                       final AbstractSegments<S> segments) {
         this.name = name;
         this.metricScope = metricScope;
         this.keySchema = keySchema;

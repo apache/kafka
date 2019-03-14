@@ -422,7 +422,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
     @Test
     public void shouldLogAndMeasureExpiredRecords() {
-        LogCaptureAppender.setClassLoggerToDebug(AbstractSegmentedBytesStore.class);
+        LogCaptureAppender.setClassLoggerToDebug(AbstractRocksDBSegmentedBytesStore.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
         // write a record to advance stream time, with a high enough timestamp

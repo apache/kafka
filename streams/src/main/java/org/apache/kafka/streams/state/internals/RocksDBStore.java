@@ -28,6 +28,7 @@ import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
@@ -64,7 +65,7 @@ import java.util.regex.Pattern;
 /**
  * A persistent key-value store based on RocksDB.
  */
-public class RocksDBStore implements BulkLoadingKeyValueStore {
+public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingStore {
     private static final Logger log = LoggerFactory.getLogger(RocksDBStore.class);
 
     private static final Pattern SST_FILE_EXTENSION = Pattern.compile(".*\\.sst");

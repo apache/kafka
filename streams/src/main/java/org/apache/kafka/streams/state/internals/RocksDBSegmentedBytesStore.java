@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-public class RocksDBSegmentedBytesStore extends AbstractSegmentedBytesStore<KeyValueSegment> {
+public class RocksDBSegmentedBytesStore extends AbstractRocksDBSegmentedBytesStore<KeyValueSegment> {
 
     RocksDBSegmentedBytesStore(final String name,
                                final String metricScope,
