@@ -116,7 +116,7 @@ public class ConnectionStressWorker implements TaskWorker {
      * Update the worker's status.
      * This method should be called inside a lock on the ConnectionStressWorker object
      */
-    private void updateStatus(long lastTimeMs) {
+    private synchronized void updateStatus(long lastTimeMs) {
         status.update(JsonUtil.JSON_SERDE.valueToTree(
                 new StatusData(totalConnections,
                         totalFailedConnections,
@@ -254,9 +254,7 @@ public class ConnectionStressWorker implements TaskWorker {
         doneFuture.complete("");
         workerExecutor.shutdownNow();
         workerExecutor.awaitTermination(1, TimeUnit.DAYS);
-        synchronized (ConnectionStressWorker.this) {
-            updateStatus(throttle.lastTimeMs());
-        }
+        updateStatus(throttle.lastTimeMs());
         this.workerExecutor = null;
         this.status = null;
     }
