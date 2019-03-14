@@ -935,8 +935,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       .autoOffsetReset("latest")
       .build()
     verifyProduceConsume(producer1, consumer1, numRecords = 10, topic)
-    // send another message to check consumer later
-    producer1.send(new ProducerRecord(topic, "key", "value")).get(1, TimeUnit.SECONDS)
 
     val config = servers.head.config
     val existingListenerCount = config.listeners.size
