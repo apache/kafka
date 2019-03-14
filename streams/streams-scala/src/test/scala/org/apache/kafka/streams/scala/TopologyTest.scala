@@ -25,20 +25,23 @@ import java.util.{Locale, Properties}
 import java.util.regex.Pattern
 
 import org.apache.kafka.common.serialization.{Serdes => SerdesJ}
-import org.apache.kafka.streams.kstream.{Joined => JoinedJ, Materialized => MaterializedJ}
 import org.apache.kafka.streams.kstream.{
   Aggregator,
+  ForeachAction,
   Initializer,
   JoinWindows,
   KeyValueMapper,
+  Predicate,
   Reducer,
   Transformer,
   TransformerSupplier,
   ValueJoiner,
   ValueMapper,
+  Joined => JoinedJ,
   KGroupedStream => KGroupedStreamJ,
   KStream => KStreamJ,
-  KTable => KTableJ
+  KTable => KTableJ,
+  Materialized => MaterializedJ
 }
 import org.apache.kafka.streams.processor.{AbstractProcessor, ProcessorContext, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
@@ -342,24 +345,44 @@ class TopologyTest extends JUnitSuite {
     // build the Java topology
     def getTopologyJava: StreamsBuilderJ = {
 
-      val initializer: Initializer[Integer] = () => 0
-      val aggregator: Aggregator[String, String, Integer] = (_: String, v: String, agg: Integer) => agg + v.length
-      val reducer: Reducer[String] = (v1: String, v2: String) => v1 + ":" + v2
-      val valueMapper: ValueMapper[String, String] = (v: String) => v.toUpperCase(Locale.getDefault)
+      val keyValueMapper: KeyValueMapper[String, String, KeyValue[String, String]] =
+        new KeyValueMapper[String, String, KeyValue[String, String]] {
+          override def apply(key: String, value: String): KeyValue[String, String] =
+            KeyValue.pair(key.toUpperCase(Locale.getDefault), value)
+        }
+      val initializer: Initializer[Integer] = new Initializer[Integer] {
+        override def apply(): Integer = 0
+      }
+      val aggregator: Aggregator[String, String, Integer] = new Aggregator[String, String, Integer] {
+        override def apply(key: String, value: String, aggregate: Integer): Integer = aggregate + value.length
+      }
+      val reducer: Reducer[String] = new Reducer[String] {
+        override def apply(v1: String, v2: String): String = v1 + ":" + v2
+      }
+      val valueMapper: ValueMapper[String, String] = new ValueMapper[String, String] {
+        override def apply(v: String): String = v.toUpperCase(Locale.getDefault)
+      }
       val processorValueCollector = new util.ArrayList[String]
-      val processorSupplier: ProcessorSupplier[String, String] = () => new SimpleProcessor(processorValueCollector)
-      val valueJoiner2: ValueJoiner[String, java.lang.Integer, String] = (v1: String, v2: java.lang.Integer) =>
-        v1 + ":" + v2.toString
-      val valueJoiner3: ValueJoiner[String, String, String] = (v1: String, v2: String) => v1 + ":" + v2.toString
+      val processorSupplier: ProcessorSupplier[String, String] = new ProcessorSupplier[String, String] {
+        override def get() = new SimpleProcessor(processorValueCollector)
+      }
+      val valueJoiner2: ValueJoiner[String, Integer, String] = new ValueJoiner[String, Integer, String] {
+        override def apply(value1: String, value2: Integer): String = value1 + ":" + value2.toString
+      }
+      val valueJoiner3: ValueJoiner[String, String, String] = new ValueJoiner[String, String, String] {
+        override def apply(value1: String, value2: String): String = value1 + ":" + value2.toString
+      }
 
       val builder = new StreamsBuilderJ
 
       val sourceStream = builder.stream(inputTopic, Consumed.`with`(Serdes.String, Serdes.String))
 
       val mappedStream: KStreamJ[String, String] =
-        sourceStream.map((k: String, v: String) => KeyValue.pair(k.toUpperCase(Locale.getDefault), v))
+        sourceStream.map(keyValueMapper)
       mappedStream
-        .filter((k: String, _: String) => k == "B")
+        .filter(new Predicate[String, String] {
+          override def test(key: String, value: String): Boolean = key == "B"
+        })
         .mapValues[String](valueMapper)
         .process(processorSupplier)
 
@@ -370,15 +393,21 @@ class TopologyTest extends JUnitSuite {
 
       // adding operators for case where the repartition node is further downstream
       val stream3 = mappedStream
-        .filter((_: String, _: String) => true)
-        .peek((k: String, v: String) => System.out.println(k + ":" + v))
+        .filter(new Predicate[String, String] {
+          override def test(k: String, v: String) = true
+        })
+        .peek(new ForeachAction[String, String] {
+          override def apply(k: String, v: String) = System.out.println(k + ":" + v)
+        })
         .groupByKey
         .reduce(reducer, MaterializedJ.`with`(Serdes.String, Serdes.String))
         .toStream
       stream3.to(REDUCE_TOPIC, Produced.`with`(Serdes.String, Serdes.String))
 
       mappedStream
-        .filter((k: String, _: String) => k == "A")
+        .filter(new Predicate[String, String] {
+          override def test(key: String, value: String): Boolean = key == "A"
+        })
         .join(stream2,
               valueJoiner2,
               JoinWindows.of(Duration.ofMillis(5000)),
@@ -386,7 +415,9 @@ class TopologyTest extends JUnitSuite {
         .to(JOINED_TOPIC)
 
       mappedStream
-        .filter((k: String, _: String) => k == "A")
+        .filter(new Predicate[String, String] {
+          override def test(key: String, value: String): Boolean = key == "A"
+        })
         .join(stream3,
               valueJoiner3,
               JoinWindows.of(Duration.ofMillis(5000)),
@@ -398,6 +429,8 @@ class TopologyTest extends JUnitSuite {
 
     assertNotEquals(getTopologyScala.build(props).describe.toString,
                     getTopologyScala.build(propsNoOptimization).describe.toString)
+    assertEquals(getTopologyScala.build(propsNoOptimization).describe.toString,
+                 getTopologyScala.build(propsNoOptimization).describe.toString)
     assertEquals(getTopologyScala.build(props).describe.toString, getTopologyJava.build(props).describe.toString)
   }
 
