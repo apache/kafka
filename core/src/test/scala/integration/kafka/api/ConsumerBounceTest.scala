@@ -481,7 +481,8 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
               revokeSemaphore.foreach(s => s.release())
             }
           })
-          consumer.poll(time.Duration.ZERO)
+        // requires to used deprecated `poll(long)` to trigger metadata update
+          consumer.poll(0L)
         }, 0)
     }
 
