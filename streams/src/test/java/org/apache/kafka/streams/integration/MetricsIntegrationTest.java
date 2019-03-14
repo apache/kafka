@@ -143,11 +143,13 @@ public class MetricsIntegrationTest {
     private static final String HIT_RATIO_AVG = "hitRatio-avg";
     private static final String HIT_RATIO_MIN = "hitRatio-min";
     private static final String HIT_RATIO_MAX = "hitRatio-max";
+
+    // stores name
     private static final String TIME_WINDOWED_AGGREGATED_STREAM_STORE = "time-windowed-aggregated-stream-store";
     private static final String SESSION_AGGREGATED_STREAM_STORE = "session-aggregated-stream-store";
-    public static final String MY_STORE_IN_MEMORY = "myStoreInMemory";
-    public static final String MY_STORE_PERSISTENT_KEY_VALUE = "myStorePersistentKeyValue";
-    public static final String MY_STORE_LRU_MAP = "myStoreLruMap";
+    private static final String MY_STORE_IN_MEMORY = "myStoreInMemory";
+    private static final String MY_STORE_PERSISTENT_KEY_VALUE = "myStorePersistentKeyValue";
+    private static final String MY_STORE_LRU_MAP = "myStoreLruMap";
 
     private StreamsBuilder builder;
     private Properties streamsConfiguration;
