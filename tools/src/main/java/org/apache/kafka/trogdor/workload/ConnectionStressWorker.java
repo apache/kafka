@@ -112,6 +112,18 @@ public class ConnectionStressWorker implements TaskWorker {
         }
     }
 
+    /**
+     * Update the worker's status.
+     * This method should be called inside a lock on the ConnectionStressWorker object
+     */
+    private void updateStatus(long lastTimeMs) {
+        status.update(JsonUtil.JSON_SERDE.valueToTree(
+                new StatusData(totalConnections,
+                        totalFailedConnections,
+                        (totalConnections * 1000.0) / (lastTimeMs - startTimeMs))));
+        nextReportTime = lastTimeMs + REPORT_INTERVAL_MS;
+    }
+
     private static class ConnectStressThrottle extends Throttle {
         ConnectStressThrottle(int maxPerPeriod) {
             super(maxPerPeriod, THROTTLE_PERIOD_MS);
@@ -130,10 +142,7 @@ public class ConnectionStressWorker implements TaskWorker {
                         conf.getList(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG),
                         conf.getString(AdminClientConfig.CLIENT_DNS_LOOKUP_CONFIG));
                 ManualMetadataUpdater updater = new ManualMetadataUpdater(Cluster.bootstrap(addresses).nodes());
-                while (true) {
-                    if (doneFuture.isDone()) {
-                        break;
-                    }
+                while (!doneFuture.isDone()) {
                     throttle.increment();
                     long lastTimeMs = throttle.lastTimeMs();
                     boolean success = false;
@@ -150,13 +159,8 @@ public class ConnectionStressWorker implements TaskWorker {
                         if (!success) {
                             totalFailedConnections++;
                         }
-                        if (lastTimeMs > nextReportTime) {
-                            status.update(JsonUtil.JSON_SERDE.valueToTree(
-                                new StatusData(totalConnections,
-                                    totalFailedConnections,
-                                    (totalConnections * 1000.0) / (lastTimeMs - startTimeMs))));
-                            nextReportTime = lastTimeMs + REPORT_INTERVAL_MS;
-                        }
+                        if (lastTimeMs > nextReportTime)
+                            updateStatus(lastTimeMs);
                     }
                 }
             } catch (Exception e) {
@@ -165,7 +169,7 @@ public class ConnectionStressWorker implements TaskWorker {
         }
 
         private boolean attemptConnection(AdminClientConfig conf,
-                                          ManualMetadataUpdater updater) throws Exception {
+                                          ManualMetadataUpdater updater) {
             try {
                 List<Node> nodes = updater.fetchNodes();
                 Node targetNode = nodes.get(ThreadLocalRandom.current().nextInt(nodes.size()));
@@ -250,6 +254,9 @@ public class ConnectionStressWorker implements TaskWorker {
         doneFuture.complete("");
         workerExecutor.shutdownNow();
         workerExecutor.awaitTermination(1, TimeUnit.DAYS);
+        synchronized (ConnectionStressWorker.this) {
+            updateStatus(throttle.lastTimeMs());
+        }
         this.workerExecutor = null;
         this.status = null;
     }
