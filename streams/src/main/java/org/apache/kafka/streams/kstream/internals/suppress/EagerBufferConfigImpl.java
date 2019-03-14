@@ -31,12 +31,12 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
     }
 
     @Override
-    public Suppressed.EagerBufferConfig withMaxRecords(long recordLimit) {
+    public Suppressed.EagerBufferConfig withMaxRecords(final long recordLimit) {
         return new EagerBufferConfigImpl(recordLimit, maxBytes);
     }
 
     @Override
-    public Suppressed.EagerBufferConfig withMaxBytes(long byteLimit) {
+    public Suppressed.EagerBufferConfig withMaxBytes(final long byteLimit) {
         return new EagerBufferConfigImpl(maxRecords, byteLimit);
     }
 

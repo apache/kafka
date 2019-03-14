@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.kstream;
 
-import org.apache.kafka.streams.kstream.internals.suppress.*;
+import org.apache.kafka.streams.kstream.internals.suppress.EagerBufferConfigImpl;
+import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
+import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImpl;
+import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 
 import java.time.Duration;
 
