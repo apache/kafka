@@ -262,7 +262,6 @@ public class MetricsIntegrationTest {
 
         // check all metrics de-registered
         checkMetricDeregistration();
-
     }
 
     @Test
@@ -284,7 +283,6 @@ public class MetricsIntegrationTest {
 
         // check all metrics de-registered
         checkMetricDeregistration();
-
     }
 
     private boolean testThreadMetric(final StringBuilder errorMessage) {
