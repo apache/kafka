@@ -99,12 +99,14 @@ public class ConnectionStressWorker implements TaskWorker {
         log.info("{}: Activating ConnectionStressWorker with {}", id, spec);
         this.doneFuture = doneFuture;
         this.status = status;
-        this.totalConnections = 0;
-        this.totalFailedConnections  = 0;
-        this.startTimeMs = TIME.milliseconds();
+        synchronized (ConnectionStressWorker.this) {
+            this.totalConnections = 0;
+            this.totalFailedConnections = 0;
+            this.nextReportTime = 0;
+            this.startTimeMs = TIME.milliseconds();
+        }
         this.throttle = new ConnectStressThrottle(WorkerUtils.
             perSecToPerPeriod(spec.targetConnectionsPerSec(), THROTTLE_PERIOD_MS));
-        this.nextReportTime = 0;
         this.workerExecutor = Executors.newFixedThreadPool(spec.numThreads(),
             ThreadUtils.createThreadFactory("ConnectionStressWorkerThread%d", false));
         for (int i = 0; i < spec.numThreads(); i++) {
