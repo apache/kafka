@@ -60,6 +60,7 @@ public class ProducerPerformance {
             String producerConfig = res.getString("producerConfigFile");
             String payloadFilePath = res.getString("payloadFile");
             String transactionalId = res.getString("transactionalId");
+            String keyRange = res.getString("keyRange");
             boolean shouldPrintMetrics = res.getBoolean("printMetrics");
             long transactionDurationMs = res.getLong("transactionDurationMs");
             boolean transactionsEnabled =  0 < transactionDurationMs;
@@ -124,6 +125,22 @@ public class ProducerPerformance {
 
             ThroughputThrottler throttler = new ThroughputThrottler(throughput, startMs);
 
+            int start=0;
+            int end=0;
+            String keyRangePattern = "\\d+-\\d+";
+            if(keyRange != null) {
+                if(keyRange.matches(keyRangePattern)) {
+                    String[] ranges = keyRange.split("-");
+                    start = Integer.parseInt(ranges[0]);
+                    end = Integer.parseInt(ranges[1]);
+                    if(end < start) {
+                        throw new  IllegalArgumentException(String.format("Please specify valid key range where start value (%s) is less than end value (%s).", start, end));
+                    }
+                } else {
+                    throw new  IllegalArgumentException(String.format("Key range '%s' does not match the pattern '%s'.", keyRange, keyRangePattern));
+                }
+            }
+
             int currentTransactionSize = 0;
             long transactionStartTime = 0;
             for (long i = 0; i < numRecords; i++) {
@@ -132,11 +149,15 @@ public class ProducerPerformance {
                     transactionStartTime = System.currentTimeMillis();
                 }
 
-
                 if (payloadFilePath != null) {
                     payload = payloadByteList.get(random.nextInt(payloadByteList.size()));
                 }
-                record = new ProducerRecord<>(topicName, payload);
+                if(keyRange != null) {
+                    String key = "Device" + start + random.nextInt(end-start+1);
+                    record = new ProducerRecord<>(topicName, key.getBytes(),payload);
+                } else {
+                    record = new ProducerRecord<>(topicName, payload);
+                }
 
                 long sendStartMs = System.currentTimeMillis();
                 Callback cb = stats.nextCompletion(sendStartMs, payload.length, stats);
@@ -272,6 +293,14 @@ public class ProducerPerformance {
                 .metavar("PRINT-METRICS")
                 .dest("printMetrics")
                 .help("print out metrics at the end of the test.");
+
+        parser.addArgument("--key-range")
+                .action(store())
+                .required(false)
+                .type(String.class)
+                .metavar("KEY-RANGE")
+                .dest("keyRange")
+                .help("Use random value between range as key for compact topics. ex 0-500");
 
         parser.addArgument("--transactional-id")
                .action(store())
