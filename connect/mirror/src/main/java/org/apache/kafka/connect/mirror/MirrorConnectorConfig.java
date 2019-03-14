@@ -41,9 +41,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
     protected static final String EMIT_CHECKPOINTS = "emit.checkpoints";
     protected static final String BOOTSTRAP_SERVERS = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
     
-    public static final String ENABLED = "enabled";
-    private static final String ENABLED_DOC = "Enable this source->target replication flow.";
-    private static final boolean ENABLED_DEFAULT = false;
     public static final String SOURCE_CLUSTER_ALIAS = "source.cluster.alias";
     private static final String SOURCE_CLUSTER_ALIAS_DOC = "source.cluster.alias";
     public static final String TARGET_CLUSTER_ALIAS = "target.cluster.alias";
@@ -138,10 +135,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
 
     String connectorName() {
         return getString(ConnectorConfig.NAME_CONFIG);
-    }
-
-    boolean enabled() {
-        return getBoolean(ENABLED);
     }
 
     Duration consumerPollTimeout() {
@@ -313,12 +306,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = ConnectorConfig.configDef()
-        .define(
-            ENABLED,
-            ConfigDef.Type.BOOLEAN,
-            ENABLED_DEFAULT,
-            ConfigDef.Importance.HIGH,
-            ENABLED_DOC)
         .define(
             TOPIC_FILTER_CLASS,
             ConfigDef.Type.CLASS,

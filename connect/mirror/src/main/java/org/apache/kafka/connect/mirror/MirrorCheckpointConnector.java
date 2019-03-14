@@ -47,18 +47,12 @@ public class MirrorCheckpointConnector extends SourceConnector {
     private SourceAndTarget sourceAndTarget;
     private String connectorName;
     private List<String> knownConsumerGroups = Collections.emptyList();
-    private boolean enabled;
 
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorConnectorConfig(props);
         connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
-        enabled = config.enabled();
-        if (!enabled) {
-            log.info("{} for {} is disabled.", connectorName, sourceAndTarget);
-            return;
-        }
         groupFilter = config.groupFilter();
         replicationPolicy = config.replicationPolicy();
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
@@ -72,13 +66,11 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     @Override
     public void stop() {
-        if (enabled) {
-            log.info("Stopping {}.", connectorName);
-            scheduler.shutdown();
-            synchronized (sourceAdminClient) {
-                sourceAdminClient.close();
-            } 
-        }
+        log.info("Stopping {}.", connectorName);
+        scheduler.shutdown();
+        synchronized (sourceAdminClient) {
+            sourceAdminClient.close();
+        } 
     }
 
     @Override
@@ -89,7 +81,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     // divide consumer groups among tasks
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-        if (!enabled || knownConsumerGroups.isEmpty()) {
+        if (knownConsumerGroups.isEmpty()) {
             return Collections.emptyList();
         }
         int numTasks = Math.min(maxTasks, knownConsumerGroups.size());

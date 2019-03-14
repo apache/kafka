@@ -43,6 +43,7 @@ import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 
 /**
@@ -53,6 +54,11 @@ import java.util.Collections;
 public class MirrorMaker {
     private static final Logger log = LoggerFactory.getLogger(MirrorMaker.class);
 
+    private static final List<Class> CONNECTOR_CLASSES = Arrays.asList(
+        MirrorSourceConnector.class,
+        MirrorCheckpointConnector.class,
+        MirrorHeartbeatConnector.class);
+ 
     private final Map<SourceAndTarget, Herder> herders = new HashMap<>();
     private CountDownLatch startLatch;
     private CountDownLatch stopLatch;
@@ -67,7 +73,7 @@ public class MirrorMaker {
         this.time = time;
         this.advertisedBaseUrl = "TODO";
         this.config = new MirrorMakerConfig(props);
-        clusterPairs().forEach(x -> addHerder(x, config.workerConfig(x)));
+        enabledClusterPairs().forEach(x -> addHerder(x, config.workerConfig(x)));
         shutdownHook = new ShutdownHook();
     }
 
@@ -87,7 +93,7 @@ public class MirrorMaker {
             }
         }
         log.info("Starting connectors...");
-        clusterPairs().forEach(x -> startConnectors(x));
+        enabledClusterPairs().forEach(x -> startConnectors(x));
         log.info("Kafka MirrorMaker started");
     }
 
@@ -114,10 +120,22 @@ public class MirrorMaker {
         }
     }
 
+    public void pause(String source, String target) {
+        SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
+        checkHerder(sourceAndTarget);
+        Herder herder = herders.get(sourceAndTarget);
+        CONNECTOR_CLASSES.forEach(x -> herder.pauseConnector(x.getSimpleName()));
+    }
+
+    public void resume(String source, String target) {
+        SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
+        checkHerder(sourceAndTarget);
+        Herder herder = herders.get(sourceAndTarget);
+        CONNECTOR_CLASSES.forEach(x -> herder.resumeConnector(x.getSimpleName()));
+    }
+
     private void startConnector(SourceAndTarget sourceAndTarget, Class connectorClass) {
-        if (herders.get(sourceAndTarget) == null) {
-            throw new IllegalArgumentException("no Herder for " + sourceAndTarget.toString());
-        }
+        checkHerder(sourceAndTarget);
         Map<String, String> connectorProps = config.connectorBaseConfig(sourceAndTarget, connectorClass);
         herders.get(sourceAndTarget)
                 .putConnectorConfig(connectorClass.getSimpleName(), connectorProps, true, (e, x) -> {
@@ -130,18 +148,23 @@ public class MirrorMaker {
                 });
     }
 
-    private void startConnectors(SourceAndTarget sourceAndTarget) {
-        startConnector(sourceAndTarget, MirrorSourceConnector.class);
-        startConnector(sourceAndTarget, MirrorCheckpointConnector.class);
-        startConnector(sourceAndTarget, MirrorHeartbeatConnector.class);
+    private void checkHerder(SourceAndTarget sourceAndTarget) {
+        if (!herders.containsKey(sourceAndTarget)) {
+            throw new IllegalArgumentException("No herder for " + sourceAndTarget.toString());
+        }
     }
 
-    private List<SourceAndTarget> clusterPairs() {
+    private void startConnectors(SourceAndTarget sourceAndTarget) {
+        CONNECTOR_CLASSES.forEach(x -> startConnector(sourceAndTarget, x));
+    }
+
+    private List<SourceAndTarget> enabledClusterPairs() {
         List<SourceAndTarget> pairs = new ArrayList<>();
         for (String source : config.clusters()) {
             for (String target : config.clusters()) {
-                if (!source.equals(target)) {
-                    pairs.add(new SourceAndTarget(source, target));
+                SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
+                if (!source.equals(target) && config.enabled(sourceAndTarget)) {
+                    pairs.add(sourceAndTarget);
                 }
             }
         }

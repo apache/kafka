@@ -31,8 +31,11 @@ import java.util.List;
 
 public class MirrorMakerConfig extends AbstractConfig {
 
-    public static final String CLUSTERS = "clusters";
-    private static final String CLUSTERS_DOC = "clusters";
+    public static final String CLUSTERS_CONFIG = "clusters";
+    private static final String CLUSTERS_DOC = "List of cluster aliases.";
+
+    public static final String ENABLED_CONFIG = "enabled";
+    private static final String ENABLED_DOC = "Whether to replicate source->target.";
 
     // Properties passed to internal Kafka clients
     static final ConfigDef CLIENT_CONFIG_DEF = new ConfigDef()
@@ -41,7 +44,7 @@ public class MirrorMakerConfig extends AbstractConfig {
             null,
             Importance.HIGH,
             CommonClientConfigs.BOOTSTRAP_SERVERS_DOC) 
-            // security support
+        // security support
         .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
             Type.STRING,
             CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
@@ -50,12 +53,25 @@ public class MirrorMakerConfig extends AbstractConfig {
         .withClientSslSupport()
         .withClientSaslSupport();
 
+    static final ConfigDef ENABLED_CONFIG_DEF = new ConfigDef()
+        .define(ENABLED_CONFIG,
+            Type.BOOLEAN,
+            false,
+            Importance.HIGH,
+            ENABLED_DOC);
+
     public MirrorMakerConfig(Map<?, ?> props) {
         super(CONFIG_DEF, props, false);
     }
 
     List<String> clusters() {
-        return getList(CLUSTERS);
+        return getList(CLUSTERS_CONFIG);
+    }
+
+    boolean enabled(SourceAndTarget sourceAndTarget) {
+        return new AbstractConfig(ENABLED_CONFIG_DEF, originalsWithPrefix(
+            sourceAndTarget.source() + "->" + sourceAndTarget.target() + "."), false)
+            .getBoolean(ENABLED_CONFIG);
     }
 
     // loads properties of the form cluster.x.y.z
@@ -137,7 +153,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
     
     protected static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(CLUSTERS, Type.LIST, null, Importance.HIGH, CLUSTERS_DOC);
+            .define(CLUSTERS_CONFIG, Type.LIST, null, Importance.HIGH, CLUSTERS_DOC);
 
     private static Map<String, String> toStrings(Map<String, ?> props) {
         Map<String, String> copy = new HashMap<>();
