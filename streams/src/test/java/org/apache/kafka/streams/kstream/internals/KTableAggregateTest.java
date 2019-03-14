@@ -47,7 +47,6 @@ import static org.junit.Assert.assertEquals;
 
 @SuppressWarnings("deprecation")
 public class KTableAggregateTest {
-
     private final Serde<String> stringSerde = Serdes.String();
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
     private final Grouped<String, String> stringSerialzied = Grouped.with(stringSerde, stringSerde);
@@ -105,14 +104,14 @@ public class KTableAggregateTest {
 
         assertEquals(
             asList(
-                "A:0+1",
-                "B:0+2",
-                "A:0+1-1+3",
-                "B:0+2-2+4",
-                "C:0+5",
-                "D:0+6",
-                "B:0+2-2+4-4+7",
-                "C:0+5-5+8"),
+                "A:0+1 (ts: 0)",
+                "B:0+2 (ts: 0)",
+                "A:0+1-1+3 (ts: 0)",
+                "B:0+2-2+4 (ts: 0)",
+                "C:0+5 (ts: 0)",
+                "D:0+6 (ts: 0)",
+                "B:0+2-2+4-4+7 (ts: 0)",
+                "C:0+5-5+8 (ts: 0)"),
             supplier.theCapturedProcessor().processed);
     }
 
@@ -142,9 +141,8 @@ public class KTableAggregateTest {
         driver.process(topic1, "A", "4");
         driver.flushState();
 
-        assertEquals(Collections.singletonList("A:0+4"), supplier.theCapturedProcessor().processed);
+        assertEquals(Collections.singletonList("A:0+4 (ts: 0)"), supplier.theCapturedProcessor().processed);
     }
-
 
     @Test
     public void testAggRepartition() {
@@ -195,14 +193,14 @@ public class KTableAggregateTest {
 
         assertEquals(
             asList(
-                "1:0+1",
-                "1:0+1-1",
-                "1:0+1-1+1",
-                "2:0+2",
+                "1:0+1 (ts: 0)",
+                "1:0+1-1 (ts: 0)",
+                "1:0+1-1+1 (ts: 0)",
+                "2:0+2 (ts: 0)",
                   //noop
-                "2:0+2-2", "4:0+4",
+                "2:0+2-2 (ts: 0)", "4:0+4 (ts: 0)",
                   //noop
-                "4:0+4-4", "7:0+7"),
+                "4:0+4-4 (ts: 0)", "7:0+7 (ts: 0)"),
             supplier.theCapturedProcessor().processed);
     }
 
@@ -225,11 +223,11 @@ public class KTableAggregateTest {
 
         assertEquals(
             asList(
-                "green:1",
-                "green:2",
-                "green:1", "blue:1",
-                "yellow:1",
-                "green:2"),
+                "green:1 (ts: 0)",
+                "green:2 (ts: 0)",
+                "green:1 (ts: 0)", "blue:1 (ts: 0)",
+                "yellow:1 (ts: 0)",
+                "green:2 (ts: 0)"),
             supplier.theCapturedProcessor().processed);
     }
 
@@ -289,9 +287,9 @@ public class KTableAggregateTest {
 
         assertEquals(
             asList(
-                "blue:1",
-                "yellow:1",
-                "green:2"),
+                "blue:1 (ts: 0)",
+                "yellow:1 (ts: 0)",
+                "green:2 (ts: 0)"),
             proc.processed);
     }
 
@@ -332,10 +330,10 @@ public class KTableAggregateTest {
 
         assertEquals(
             asList(
-                "1:1",
-                "1:12",
-                "1:2",
-                "1:2"),
+                "1:1 (ts: 0)",
+                "1:12 (ts: 0)",
+                "1:2 (ts: 0)",
+                "1:2 (ts: 0)"),
             proc.processed);
     }
 
@@ -379,5 +377,4 @@ public class KTableAggregateTest {
         driver.process("tableOne", "1", "5");
         assertEquals(Long.valueOf(4L), reduceResults.get("2"));
     }
-
 }

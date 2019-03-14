@@ -47,13 +47,12 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamKStreamJoinTest {
-
     final private String topic1 = "topic1";
     final private String topic2 = "topic2";
 
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final ConsumerRecordFactory<Integer, String> recordFactory =
-        new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
+        new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @Test
@@ -109,7 +108,6 @@ public class KStreamKStreamJoinTest {
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             // push two items to the primary stream. the other window is empty
@@ -117,11 +115,9 @@ public class KStreamKStreamJoinTest {
             // w2 = {}
             // --> w1 = { 0:X0, 1:X1 }
             //     w2 = {}
-
             for (int i = 0; i < 2; i++) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i]));
             }
-
             processor.checkAndClearProcessResult();
 
             // push two items to the other stream. this should produce two items.
@@ -129,60 +125,50 @@ public class KStreamKStreamJoinTest {
             // w2 = {}
             // --> w1 = { 0:X0, 1:X1 }
             //     w2 = { 0:Y0, 1:Y1 }
-
             for (int i = 0; i < 2; i++) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i]));
             }
-
-            processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
+            processor.checkAndClearProcessResult("0:X0+Y0 (ts: 0)", "1:X1+Y1 (ts: 0)");
 
             // push all four items to the primary stream. this should produce two items.
             // w1 = { 0:X0, 1:X1 }
             // w2 = { 0:Y0, 1:Y1 }
             // --> w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3 }
             //     w2 = { 0:Y0, 1:Y1 }
-
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "X" + expectedKey));
             }
-
-            processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
+            processor.checkAndClearProcessResult("0:X0+Y0 (ts: 0)", "1:X1+Y1 (ts: 0)");
 
             // push all items to the other stream. this should produce six items.
             // w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3 }
             // w2 = { 0:Y0, 1:Y1 }
             // --> w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3 }
             //     w2 = { 0:Y0, 1:Y1, 0:YY0, 1:YY1, 2:YY2, 3:YY3 }
-
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YY0", "0:X0+YY0", "1:X1+YY1", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 0)", "0:X0+YY0 (ts: 0)", "1:X1+YY1 (ts: 0)", "1:X1+YY1 (ts: 0)", "2:X2+YY2 (ts: 0)", "3:X3+YY3 (ts: 0)");
 
             // push all four items to the primary stream. this should produce six items.
             // w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3 }
-            // w2 = { 0:Y0, 1:Y1, 0:YY0, 0:YY0, 1:YY1, 2:YY2, 3:YY3
+            // w2 = { 0:Y0, 1:Y1, 0:YY0, 0:YY0, 1:YY1, 2:YY2, 3:YY3 }
             // --> w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3,  0:XX0, 1:XX1, 2:XX2, 3:XX3 }
             //     w2 = { 0:Y0, 1:Y1, 0:YY0, 1:YY1, 2:YY2, 3:YY3 }
-
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey));
             }
-
-            processor.checkAndClearProcessResult("0:XX0+Y0", "0:XX0+YY0", "1:XX1+Y1", "1:XX1+YY1", "2:XX2+YY2", "3:XX3+YY3");
+            processor.checkAndClearProcessResult("0:XX0+Y0 (ts: 0)", "0:XX0+YY0 (ts: 0)", "1:XX1+Y1 (ts: 0)", "1:XX1+YY1 (ts: 0)", "2:XX2+YY2 (ts: 0)", "3:XX3+YY3 (ts: 0)");
 
             // push two items to the other stream. this should produce six item.
             // w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3,  0:XX0, 1:XX1, 2:XX2, 3:XX3 }
-            // w2 = { 0:Y0, 1:Y1, 0:YY0, 0:YY0, 1:YY1, 2:YY2, 3:YY3
+            // w2 = { 0:Y0, 1:Y1, 0:YY0, 0:YY0, 1:YY1, 2:YY2, 3:YY3 }
             // --> w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3,  0:XX0, 1:XX1, 2:XX2, 3:XX3 }
             //     w2 = { 0:Y0, 1:Y1, 0:YY0, 1:YY1, 2:YY2, 3:YY3, 0:YYY0, 1:YYY1 }
-
             for (int i = 0; i < 2; i++) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "YYY" + expectedKeys[i]));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YYY0", "0:X0+YYY0", "0:XX0+YYY0", "1:X1+YYY1", "1:X1+YYY1", "1:XX1+YYY1");
+            processor.checkAndClearProcessResult("0:X0+YYY0 (ts: 0)", "0:X0+YYY0 (ts: 0)", "0:XX0+YYY0 (ts: 0)", "1:X1+YYY1 (ts: 0)", "1:X1+YYY1 (ts: 0)", "1:XX1+YYY1 (ts: 0)");
         }
     }
 
@@ -211,8 +197,7 @@ public class KStreamKStreamJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
-
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
 
             // push two items to the primary stream. the other window is empty.this should produce two items
@@ -220,79 +205,65 @@ public class KStreamKStreamJoinTest {
             // w2 = {}
             // --> w1 = { 0:X0, 1:X1 }
             //     w2 = {}
-
             for (int i = 0; i < 2; i++) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i]));
             }
-
-            processor.checkAndClearProcessResult("0:X0+null", "1:X1+null");
+            processor.checkAndClearProcessResult("0:X0+null (ts: 0)", "1:X1+null (ts: 0)");
 
             // push two items to the other stream. this should produce two items.
             // w1 = { 0:X0, 1:X1 }
             // w2 = {}
             // --> w1 = { 0:X0, 1:X1 }
             //     w2 = { 0:Y0, 1:Y1 }
-
             for (int i = 0; i < 2; i++) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i]));
             }
-
-            processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
+            processor.checkAndClearProcessResult("0:X0+Y0 (ts: 0)", "1:X1+Y1 (ts: 0)");
 
             // push all four items to the primary stream. this should produce four items.
             // w1 = { 0:X0, 1:X1 }
             // w2 = { 0:Y0, 1:Y1 }
             // --> w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3 }
             //     w2 = { 0:Y0, 1:Y1 }
-
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "X" + expectedKey));
             }
-
-            processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1", "2:X2+null", "3:X3+null");
+            processor.checkAndClearProcessResult("0:X0+Y0 (ts: 0)", "1:X1+Y1 (ts: 0)", "2:X2+null (ts: 0)", "3:X3+null (ts: 0)");
 
             // push all items to the other stream. this should produce six items.
             // w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3 }
             // w2 = { 0:Y0, 1:Y1 }
             // --> w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3 }
             //     w2 = { 0:Y0, 1:Y1, 0:YY0, 0:YY0, 1:YY1, 2:YY2, 3:YY3 }
-
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YY0", "0:X0+YY0", "1:X1+YY1", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 0)", "0:X0+YY0 (ts: 0)", "1:X1+YY1 (ts: 0)", "1:X1+YY1 (ts: 0)", "2:X2+YY2 (ts: 0)", "3:X3+YY3 (ts: 0)");
 
             // push all four items to the primary stream. this should produce six items.
             // w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3 }
-            // w2 = { 0:Y0, 1:Y1, 0:YY0, 0:YY0, 1:YY1, 2:YY2, 3:YY3
+            // w2 = { 0:Y0, 1:Y1, 0:YY0, 0:YY0, 1:YY1, 2:YY2, 3:YY3 }
             // --> w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3,  0:XX0, 1:XX1, 2:XX2, 3:XX3 }
             //     w2 = { 0:Y0, 1:Y1, 0:YY0, 0:YY0, 1:YY1, 2:YY2, 3:YY3 }
-
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey));
             }
-
-            processor.checkAndClearProcessResult("0:XX0+Y0", "0:XX0+YY0", "1:XX1+Y1", "1:XX1+YY1", "2:XX2+YY2", "3:XX3+YY3");
+            processor.checkAndClearProcessResult("0:XX0+Y0 (ts: 0)", "0:XX0+YY0 (ts: 0)", "1:XX1+Y1 (ts: 0)", "1:XX1+YY1 (ts: 0)", "2:XX2+YY2 (ts: 0)", "3:XX3+YY3 (ts: 0)");
 
             // push two items to the other stream. this should produce six item.
             // w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3,  0:XX0, 1:XX1, 2:XX2, 3:XX3 }
-            // w2 = { 0:Y0, 1:Y1, 0:YY0, 0:YY0, 1:YY1, 2:YY2, 3:YY3
+            // w2 = { 0:Y0, 1:Y1, 0:YY0, 0:YY0, 1:YY1, 2:YY2, 3:YY3 }
             // --> w1 = { 0:X0, 1:X1, 0:X0, 1:X1, 2:X2, 3:X3,  0:XX0, 1:XX1, 2:XX2, 3:XX3 }
             //     w2 = { 0:Y0, 1:Y1, 0:YY0, 0:YY0, 1:YY1, 2:YY2, 3:YY3, 0:YYY0, 1:YYY1 }
-
             for (int i = 0; i < 2; i++) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "YYY" + expectedKeys[i]));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YYY0", "0:X0+YYY0", "0:XX0+YYY0", "1:X1+YYY1", "1:X1+YYY1", "1:XX1+YYY1");
+            processor.checkAndClearProcessResult("0:X0+YYY0 (ts: 0)", "0:X0+YYY0 (ts: 0)", "0:XX0+YYY0 (ts: 0)", "1:X1+YYY1 (ts: 0)", "1:X1+YYY1 (ts: 0)", "1:XX1+YYY1 (ts: 0)");
         }
     }
 
     @Test
     public void testWindowing() {
-        long time = 0L;
-
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -317,7 +288,9 @@ public class KStreamKStreamJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, time)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            long time = 0L;
 
             // push two items to the primary stream. the other window is empty. this should produce no items.
             // w1 = {}
@@ -327,9 +300,6 @@ public class KStreamKStreamJoinTest {
             for (int i = 0; i < 2; i++) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], time));
             }
-
-            final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
-
             processor.checkAndClearProcessResult();
 
             // push two items to the other stream. this should produce two items.
@@ -341,8 +311,7 @@ public class KStreamKStreamJoinTest {
             for (int i = 0; i < 2; i++) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i], time));
             }
-
-            processor.checkAndClearProcessResult("0:X0+Y0", "1:X1+Y1");
+            processor.checkAndClearProcessResult("0:X0+Y0 (ts: 0)", "1:X1+Y1 (ts: 0)");
 
             // clear logically
             time = 1000L;
@@ -353,168 +322,141 @@ public class KStreamKStreamJoinTest {
 
             // gradually expires items in w1
             // w1 = { 0:X0, 1:X1, 2:X2, 3:X3 }
-
             time += 100L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
-            }
-
-            processor.checkAndClearProcessResult("1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 1100)", "1:X1+YY1 (ts: 1100)", "2:X2+YY2 (ts: 1100)", "3:X3+YY3 (ts: 1100)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("2:X2+YY2", "3:X3+YY3");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
-            }
-
-            processor.checkAndClearProcessResult("3:X3+YY3");
+            processor.checkAndClearProcessResult("1:X1+YY1 (ts: 1101)", "2:X2+YY2 (ts: 1101)", "3:X3+YY3 (ts: 1101)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
+            processor.checkAndClearProcessResult("2:X2+YY2 (ts: 1102)", "3:X3+YY3 (ts: 1102)");
 
+            time += 1L;
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
+            }
+            processor.checkAndClearProcessResult("3:X3+YY3 (ts: 1103)");
+
+            time += 1L;
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
+            }
             processor.checkAndClearProcessResult();
 
             // go back to the time before expiration
-
             time = 1000L - 100L - 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
             processor.checkAndClearProcessResult();
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YY0");
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 900)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1");
-
-            time += 1;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
-            }
-
-            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2");
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 901)", "1:X1+YY1 (ts: 901)");
 
             time += 1;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 902)", "1:X1+YY1 (ts: 902)", "2:X2+YY2 (ts: 902)");
 
-            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            time += 1;
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
+            }
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 903)", "1:X1+YY1 (ts: 903)", "2:X2+YY2 (ts: 903)", "3:X3+YY3 (ts: 903)");
 
             // clear (logically)
             time = 2000L;
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i], time + i));
             }
-
             processor.checkAndClearProcessResult();
 
             // gradually expires items in w2
             // w2 = { 0:Y0, 1:Y1, 2:Y2, 3:Y3 }
-
             time = 2000L + 100L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-
-            processor.checkAndClearProcessResult("1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
+            processor.checkAndClearProcessResult("0:XX0+Y0 (ts: 2100)", "1:XX1+Y1 (ts: 2100)", "2:XX2+Y2 (ts: 2100)", "3:XX3+Y3 (ts: 2100)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("2:XX2+Y2", "3:XX3+Y3");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-
-            processor.checkAndClearProcessResult("3:XX3+Y3");
+            processor.checkAndClearProcessResult("1:XX1+Y1 (ts: 2101)", "2:XX2+Y2 (ts: 2101)", "3:XX3+Y3 (ts: 2101)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
             }
+            processor.checkAndClearProcessResult("2:XX2+Y2 (ts: 2102)", "3:XX3+Y3 (ts: 2102)");
 
+            time += 1L;
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
+            }
+            processor.checkAndClearProcessResult("3:XX3+Y3 (ts: 2103)");
+
+            time += 1L;
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
+            }
             processor.checkAndClearProcessResult();
 
             // go back to the time before expiration
-
             time = 2000L - 100L - 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
             }
-
             processor.checkAndClearProcessResult();
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("0:XX0+Y0");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
-            }
-
-            processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1");
+            processor.checkAndClearProcessResult("0:XX0+Y0 (ts: 1900)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2");
+            processor.checkAndClearProcessResult("0:XX0+Y0 (ts: 1901)", "1:XX1+Y1 (ts: 1901)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
             }
+            processor.checkAndClearProcessResult("0:XX0+Y0 (ts: 1902)", "1:XX1+Y1 (ts: 1902)", "2:XX2+Y2 (ts: 1902)");
 
-            processor.checkAndClearProcessResult("0:XX0+Y0", "1:XX1+Y1", "2:XX2+Y2", "3:XX3+Y3");
+            time += 1L;
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, time));
+            }
+            processor.checkAndClearProcessResult("0:XX0+Y0 (ts: 1903)", "1:XX1+Y1 (ts: 1903)", "2:XX2+Y2 (ts: 1903)", "3:XX3+Y3 (ts: 1903)");
         }
     }
 
     @Test
     public void testAsymmetricWindowingAfter() {
-        long time = 1000L;
-
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -541,9 +483,9 @@ public class KStreamKStreamJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, time)) {
-
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            long time = 1000L;
 
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], time + i));
@@ -554,78 +496,66 @@ public class KStreamKStreamJoinTest {
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
             processor.checkAndClearProcessResult();
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YY0");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
-            }
-
-            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1");
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 1000)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2");
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 1001)", "1:X1+YY1 (ts: 1001)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 1002)", "1:X1+YY1 (ts: 1002)", "2:X2+YY2 (ts: 1002)");
 
-            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            time += 1L;
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
+            }
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 1003)", "1:X1+YY1 (ts: 1003)", "2:X2+YY2 (ts: 1003)", "3:X3+YY3 (ts: 1003)");
 
             time = 1000 + 100L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
-            }
-
-            processor.checkAndClearProcessResult("1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 1100)", "1:X1+YY1 (ts: 1100)", "2:X2+YY2 (ts: 1100)", "3:X3+YY3 (ts: 1100)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("2:X2+YY2", "3:X3+YY3");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
-            }
-
-            processor.checkAndClearProcessResult("3:X3+YY3");
+            processor.checkAndClearProcessResult("1:X1+YY1 (ts: 1101)", "2:X2+YY2 (ts: 1101)", "3:X3+YY3 (ts: 1101)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
+            processor.checkAndClearProcessResult("2:X2+YY2 (ts: 1102)", "3:X3+YY3 (ts: 1102)");
 
+            time += 1L;
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
+            }
+            processor.checkAndClearProcessResult("3:X3+YY3 (ts: 1103)");
+
+            time += 1L;
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
+            }
             processor.checkAndClearProcessResult();
         }
     }
 
     @Test
     public void testAsymmetricWindowingBefore() {
-        long time = 1000L;
-
         final StreamsBuilder builder = new StreamsBuilder();
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
@@ -651,9 +581,9 @@ public class KStreamKStreamJoinTest {
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, time)) {
-
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final MockProcessor<Integer, String> processor = supplier.theCapturedProcessor();
+            long time = 1000L;
 
             for (int i = 0; i < expectedKeys.length; i++) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], time + i));
@@ -664,70 +594,60 @@ public class KStreamKStreamJoinTest {
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
             processor.checkAndClearProcessResult();
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YY0");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
-            }
-
-            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1");
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 900)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2");
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 901)", "1:X1+YY1 (ts: 901)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 902)", "1:X1+YY1 (ts: 902)", "2:X2+YY2 (ts: 902)");
 
-            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            time += 1L;
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
+            }
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 903)", "1:X1+YY1 (ts: 903)", "2:X2+YY2 (ts: 903)", "3:X3+YY3 (ts: 903)");
 
             time = 1000L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("0:X0+YY0", "1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
-            }
-
-            processor.checkAndClearProcessResult("1:X1+YY1", "2:X2+YY2", "3:X3+YY3");
+            processor.checkAndClearProcessResult("0:X0+YY0 (ts: 1000)", "1:X1+YY1 (ts: 1000)", "2:X2+YY2 (ts: 1000)", "3:X3+YY3 (ts: 1000)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
-
-            processor.checkAndClearProcessResult("2:X2+YY2", "3:X3+YY3");
-
-            time += 1L;
-            for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
-            }
-
-            processor.checkAndClearProcessResult("3:X3+YY3");
+            processor.checkAndClearProcessResult("1:X1+YY1 (ts: 1001)", "2:X2+YY2 (ts: 1001)", "3:X3+YY3 (ts: 1001)");
 
             time += 1L;
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
             }
+            processor.checkAndClearProcessResult("2:X2+YY2 (ts: 1002)", "3:X3+YY3 (ts: 1002)");
 
+            time += 1L;
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
+            }
+            processor.checkAndClearProcessResult("3:X3+YY3 (ts: 1003)");
+
+            time += 1L;
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, time));
+            }
             processor.checkAndClearProcessResult();
         }
     }

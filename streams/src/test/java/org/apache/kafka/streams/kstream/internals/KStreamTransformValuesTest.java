@@ -47,10 +47,10 @@ import static org.junit.Assert.assertArrayEquals;
 
 @RunWith(EasyMockRunner.class)
 public class KStreamTransformValuesTest {
-
-    private String topicName = "topic";
+    private final String topicName = "topic";
     private final MockProcessorSupplier<Integer, Integer> supplier = new MockProcessorSupplier<>();
-    private final ConsumerRecordFactory<Integer, Integer> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer());
+    private final ConsumerRecordFactory<Integer, Integer> recordFactory =
+        new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
     @Mock(MockType.NICE)
     private ProcessorContext context;
@@ -60,27 +60,20 @@ public class KStreamTransformValuesTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final ValueTransformerSupplier<Number, Integer> valueTransformerSupplier =
-            new ValueTransformerSupplier<Number, Integer>() {
-                public ValueTransformer<Number, Integer> get() {
-                    return new ValueTransformer<Number, Integer>() {
+            () -> new ValueTransformer<Number, Integer>() {
+                private int total = 0;
 
-                        private int total = 0;
+                @Override
+                public void init(final ProcessorContext context) {}
 
-                        @Override
-                        public void init(final ProcessorContext context) {
-                        }
-
-                        @Override
-                        public Integer transform(final Number value) {
-                            total += value.intValue();
-                            return total;
-                        }
-
-                        @Override
-                        public void close() {
-                        }
-                    };
+                @Override
+                public Integer transform(final Number value) {
+                    total += value.intValue();
+                    return total;
                 }
+
+                @Override
+                public void close() {}
             };
 
         final int[] expectedKeys = {1, 10, 100, 1000};
@@ -89,12 +82,12 @@ public class KStreamTransformValuesTest {
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transformValues(valueTransformerSupplier).process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, 0L));
             }
         }
-        final String[] expected = {"1:10", "10:110", "100:1110", "1000:11110"};
+        final String[] expected = {"1:10 (ts: 0)", "10:110 (ts: 0)", "100:1110 (ts: 0)", "1000:11110 (ts: 0)"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
@@ -104,27 +97,21 @@ public class KStreamTransformValuesTest {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final ValueTransformerWithKeySupplier<Integer, Number, Integer> valueTransformerSupplier =
-                new ValueTransformerWithKeySupplier<Integer, Number, Integer>() {
-            public ValueTransformerWithKey<Integer, Number, Integer> get() {
-                return new ValueTransformerWithKey<Integer, Number, Integer>() {
-                    private int total = 0;
-                    @Override
-                    public void init(final ProcessorContext context) {
+            () -> new ValueTransformerWithKey<Integer, Number, Integer>() {
+                private int total = 0;
 
-                    }
-                    @Override
-                    public Integer transform(final Integer readOnlyKey, final Number value) {
-                        total += value.intValue() + readOnlyKey;
-                        return total;
-                    }
+                @Override
+                public void init(final ProcessorContext context) {}
 
-                    @Override
-                    public void close() {
+                @Override
+                public Integer transform(final Integer readOnlyKey, final Number value) {
+                    total += value.intValue() + readOnlyKey;
+                    return total;
+                }
 
-                    }
-                };
-            }
-        };
+                @Override
+                public void close() {}
+            };
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
@@ -132,12 +119,12 @@ public class KStreamTransformValuesTest {
         stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.Integer()));
         stream.transformValues(valueTransformerSupplier).process(supplier);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, 0L));
             }
         }
-        final String[] expected = {"1:11", "10:121", "100:1221", "1000:12221"};
+        final String[] expected = {"1:11 (ts: 0)", "10:121 (ts: 0)", "100:1221 (ts: 0)", "1000:12221 (ts: 0)"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
