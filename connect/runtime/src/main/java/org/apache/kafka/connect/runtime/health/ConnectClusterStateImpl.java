@@ -37,19 +37,12 @@ import java.util.concurrent.TimeoutException;
 
 public class ConnectClusterStateImpl implements ConnectClusterState {
     
-    private static final long CONNECTORS_TIMEOUT_MS_DEFAULT = 10_000;
+    private static final long CONNECTORS_TIMEOUT_MS = 10_000;
 
     private HerderProvider herderProvider;
-    private long connectorsTimeoutMs;
 
     public ConnectClusterStateImpl(HerderProvider herderProvider) {
-        this(herderProvider, CONNECTORS_TIMEOUT_MS_DEFAULT);
-    }
-    
-    // To enable a lower timeout during testing (don't want to add ten seconds to every run)
-    ConnectClusterStateImpl(HerderProvider herderProvider, long connectorsTimeoutMs) {
         this.herderProvider = herderProvider;
-        this.connectorsTimeoutMs = connectorsTimeoutMs;
     }
 
     @Override
@@ -57,7 +50,7 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
         FutureCallback<Collection<String>> connectorsCallback = new FutureCallback<>();
         herderProvider.get().connectors(connectorsCallback);
         try {
-            return connectorsCallback.get(connectorsTimeoutMs, TimeUnit.MILLISECONDS);
+            return connectorsCallback.get(CONNECTORS_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new ConnectException("Failed to retrieve list of connectors", e);
         }

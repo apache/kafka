@@ -20,66 +20,65 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.util.Callback;
+import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
 import org.junit.Before;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.powermock.api.easymock.annotation.Mock;
+import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.concurrent.TimeoutException;
 
 import static org.junit.Assert.assertEquals;
 
+@RunWith(PowerMockRunner.class)
 public class ConnectClusterStateImplTest {
   
-    protected static final long CONNECTORS_TIMEOUT_MS = 2_000;
-    
-    protected Herder mockHerder;
+    @Mock
+    protected Herder herder;
     protected HerderProvider herderProvider;
     protected ConnectClusterStateImpl connectClusterState;
     protected Collection<String> expectedConnectors;
     
     @Before
     public void setUp() {
-        mockHerder = EasyMock.mock(Herder.class);
-        herderProvider = new HerderProvider(mockHerder);
-        connectClusterState = new ConnectClusterStateImpl(herderProvider, CONNECTORS_TIMEOUT_MS);
+        herderProvider = new HerderProvider(herder);
+        connectClusterState = new ConnectClusterStateImpl(herderProvider);
         expectedConnectors = Arrays.asList("sink1", "source1", "source2");
     }
     
     @Test
     public void connectors() {
-        mockHerder.connectors(EasyMock.anyObject());
+        Capture<Callback<Collection<String>>> callback = EasyMock.newCapture();
+        herder.connectors(EasyMock.capture(callback));
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
             @Override
-            @SuppressWarnings("unchecked")
-            public Void answer() throws Throwable {
-                Callback<Collection<String>> connectorsCallback =
-                    (Callback<Collection<String>>) EasyMock.getCurrentArguments()[0];
-                connectorsCallback.onCompletion(null, expectedConnectors);
+            public Void answer() {
+                callback.getValue().onCompletion(null, expectedConnectors);
                 return null;
             }
         });
-        EasyMock.replay(mockHerder);
-        
+        EasyMock.replay(herder);
         assertEquals(expectedConnectors, connectClusterState.connectors());
     }
-    
+
     @Test(expected = ConnectException.class)
     public void connectorsFailure() {
-        mockHerder.connectors(EasyMock.anyObject());
+        Capture<Callback<Collection<String>>> callback = EasyMock.newCapture();
+        herder.connectors(EasyMock.capture(callback));
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
             @Override
-            @SuppressWarnings("unchecked")
-            public Void answer() throws Throwable {
-                Callback<Collection<String>> connectorsCallback =
-                    (Callback<Collection<String>>) EasyMock.getCurrentArguments()[0];
-                connectorsCallback.onCompletion(new RuntimeException(), null);
+            public Void answer() {
+                Throwable timeout = new TimeoutException();
+                callback.getValue().onCompletion(timeout, null);
                 return null;
             }
         });
-        EasyMock.replay(mockHerder);
-        
+        EasyMock.replay(herder);
         connectClusterState.connectors();
     }
 }
