@@ -323,6 +323,8 @@ class CachingSessionStore
             }
 
             setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
+
+            current.close();
             current = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
         }
 

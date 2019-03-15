@@ -379,6 +379,8 @@ class CachingWindowStore
             }
 
             setCacheKeyRange(currentSegmentBeginTime(), currentSegmentLastTime());
+
+            current.close();
             current = cache.range(name, cacheKeyFrom, cacheKeyTo);
         }
 
