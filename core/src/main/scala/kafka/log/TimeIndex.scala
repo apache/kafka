@@ -90,7 +90,8 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
   def entry(n: Int): TimestampOffset = {
     maybeLock(lock) {
       if(n >= _entries)
-        throw new IllegalArgumentException(s"Attempt to fetch the ${n}th entry from a time index of size ${_entries}.")
+        throw new IllegalArgumentException(s"Attempt to fetch the ${n}th entry from  time index ${file.getAbsolutePath} " +
+          s"which has size ${_entries}.")
       parseEntry(mmap, n)
     }
   }

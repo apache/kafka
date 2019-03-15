@@ -128,7 +128,8 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
   def entry(n: Int): OffsetPosition = {
     maybeLock(lock) {
       if (n >= _entries)
-        throw new IllegalArgumentException(s"Attempt to fetch the ${n}th entry from an index of size ${_entries}.")
+        throw new IllegalArgumentException(s"Attempt to fetch the ${n}th entry from index ${file.getAbsolutePath}, " +
+          s"which has size ${_entries}.")
       parseEntry(mmap, n)
     }
   }
@@ -185,7 +186,8 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
       _entries = entries
       mmap.position(_entries * entrySize)
       _lastOffset = lastEntry.offset
-      debug(s"Truncated index ${file.getAbsolutePath} to $entries entries; position is now ${mmap.position()} and last offset is now ${_lastOffset}")
+      debug(s"Truncated index ${file.getAbsolutePath} to $entries entries;" +
+        s" position is now ${mmap.position()} and last offset is now ${_lastOffset}")
     }
   }
 

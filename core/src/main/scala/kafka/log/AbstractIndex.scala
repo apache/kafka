@@ -190,7 +190,8 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
           mmap = raf.getChannel().map(FileChannel.MapMode.READ_WRITE, 0, roundedNewSize)
           _maxEntries = mmap.limit() / entrySize
           mmap.position(position)
-          debug(s"Resized ${file.getAbsolutePath} to $roundedNewSize, position is ${mmap.position()} and limit is ${mmap.limit()}")
+          debug(s"Resized ${file.getAbsolutePath} to $roundedNewSize, position is ${mmap.position()} " +
+            s"and limit is ${mmap.limit()}")
           true
         } finally {
           CoreUtils.swallow(raf.close(), AbstractIndex)
