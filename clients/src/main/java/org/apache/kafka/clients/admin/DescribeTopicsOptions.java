@@ -29,8 +29,6 @@ import java.util.Collection;
 @InterfaceStability.Evolving
 public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions> {
 
-    private boolean includeAuthorizedOperations;
-
     /**
      * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
      * AdminClient should be used.
@@ -40,15 +38,6 @@ public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions
     public DescribeTopicsOptions timeoutMs(Integer timeoutMs) {
         this.timeoutMs = timeoutMs;
         return this;
-    }
-
-    public DescribeTopicsOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
-        this.includeAuthorizedOperations = includeAuthorizedOperations;
-        return this;
-    }
-
-    public boolean includeAuthorizedOperations() {
-        return includeAuthorizedOperations;
     }
 
 }

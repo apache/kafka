@@ -1720,7 +1720,7 @@ public class FetcherTest {
             altTopics.add(alteredTopic);
         }
         Node controller = originalResponse.controller();
-        MetadataResponse altered = MetadataResponse.prepareResponse(
+        MetadataResponse altered = new MetadataResponse(
             (List<Node>) originalResponse.brokers(),
             originalResponse.clusterId(),
             controller != null ? controller.id() : MetadataResponse.NO_CONTROLLER_ID,
@@ -3162,7 +3162,7 @@ public class FetcherTest {
         MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, false,
                 partitionsMetadata);
         List<Node> brokers = new ArrayList<>(initialUpdateResponse.brokers());
-        return MetadataResponse.prepareResponse(brokers, initialUpdateResponse.clusterId(),
+        return new MetadataResponse(brokers, initialUpdateResponse.clusterId(),
                 initialUpdateResponse.controller().id(), Collections.singletonList(topicMetadata));
     }
 

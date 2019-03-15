@@ -66,7 +66,6 @@ import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicRe
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
-import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -158,7 +157,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.requests.MetadataRequest.convertToMetadataRequestTopic;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
@@ -1224,9 +1222,7 @@ public class KafkaAdminClient extends AdminClient {
                     // Since this only requests node information, it's safe to pass true
                     // for allowAutoTopicCreation (and it simplifies communication with
                     // older brokers)
-                    return new MetadataRequest.Builder(new MetadataRequestData()
-                        .setTopics(Collections.emptyList())
-                        .setAllowAutoTopicCreation(true));
+                    return new MetadataRequest.Builder(Collections.emptyList(), true);
                 }
 
                 @Override
@@ -1471,10 +1467,7 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
                 if (supportsDisablingTopicCreation)
-                    return new MetadataRequest.Builder(new MetadataRequestData()
-                        .setTopics(convertToMetadataRequestTopic(topicNamesList))
-                        .setAllowAutoTopicCreation(false)
-                        .setIncludeTopicAuthorizedOperations(options.includeAuthorizedOperations()));
+                    return new MetadataRequest.Builder(topicNamesList, false);
                 else
                     return MetadataRequest.Builder.allTopics();
             }
@@ -1507,8 +1500,7 @@ public class KafkaAdminClient extends AdminClient {
                         partitions.add(topicPartitionInfo);
                     }
                     partitions.sort(Comparator.comparingInt(TopicPartitionInfo::partition));
-                    TopicDescription topicDescription = new TopicDescription(topicName, isInternal, partitions,
-                        validAclOperations(response.data().topics().find(topicName).topicAuthorizedOperations()));
+                    TopicDescription topicDescription = new TopicDescription(topicName, isInternal, partitions);
                     future.complete(topicDescription);
                 }
             }
@@ -1544,8 +1536,6 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Collection<Node>> describeClusterFuture = new KafkaFutureImpl<>();
         final KafkaFutureImpl<Node> controllerFuture = new KafkaFutureImpl<>();
         final KafkaFutureImpl<String> clusterIdFuture = new KafkaFutureImpl<>();
-        final KafkaFutureImpl<Set<AclOperation>> authorizedOperationsFuture = new KafkaFutureImpl<>();
-
         final long now = time.milliseconds();
         runnable.call(new Call("listNodes", calcDeadlineMs(now, options.timeoutMs()),
             new LeastLoadedNodeProvider()) {
@@ -1554,10 +1544,7 @@ public class KafkaAdminClient extends AdminClient {
             AbstractRequest.Builder createRequest(int timeoutMs) {
                 // Since this only requests node information, it's safe to pass true for allowAutoTopicCreation (and it
                 // simplifies communication with older brokers)
-                return new MetadataRequest.Builder(new MetadataRequestData()
-                    .setTopics(Collections.emptyList())
-                    .setAllowAutoTopicCreation(true)
-                    .setIncludeClusterAuthorizedOperations(options.includeAuthorizedOperations()));
+                return new MetadataRequest.Builder(Collections.emptyList(), true);
             }
 
             @Override
@@ -1566,8 +1553,6 @@ public class KafkaAdminClient extends AdminClient {
                 describeClusterFuture.complete(response.brokers());
                 controllerFuture.complete(controller(response));
                 clusterIdFuture.complete(response.clusterId());
-                authorizedOperationsFuture.complete(
-                    validAclOperations(response.data().clusterAuthorizedOperations()));
             }
 
             private Node controller(MetadataResponse response) {
@@ -1581,12 +1566,10 @@ public class KafkaAdminClient extends AdminClient {
                 describeClusterFuture.completeExceptionally(throwable);
                 controllerFuture.completeExceptionally(throwable);
                 clusterIdFuture.completeExceptionally(throwable);
-                authorizedOperationsFuture.completeExceptionally(throwable);
             }
         }, now);
 
-        return new DescribeClusterResult(describeClusterFuture, controllerFuture, clusterIdFuture,
-            authorizedOperationsFuture);
+        return new DescribeClusterResult(describeClusterFuture, controllerFuture, clusterIdFuture);
     }
 
     @Override
@@ -2201,9 +2184,7 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new MetadataRequest.Builder(new MetadataRequestData()
-                    .setTopics(convertToMetadataRequestTopic(topics))
-                    .setAllowAutoTopicCreation(false));
+                return new MetadataRequest.Builder(new ArrayList<>(topics), false);
             }
 
             @Override
@@ -2607,9 +2588,7 @@ public class KafkaAdminClient extends AdminClient {
         runnable.call(new Call("findAllBrokers", deadline, new LeastLoadedNodeProvider()) {
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new MetadataRequest.Builder(new MetadataRequestData()
-                    .setTopics(Collections.emptyList())
-                    .setAllowAutoTopicCreation(true));
+                return new MetadataRequest.Builder(Collections.emptyList(), true);
             }
 
             @Override

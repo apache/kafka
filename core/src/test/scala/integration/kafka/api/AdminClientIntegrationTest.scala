@@ -53,7 +53,7 @@ import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import java.lang.{Long => JLong}
 
-import kafka.security.auth.{Cluster, Group, Topic}
+import kafka.security.auth.Group
 
 /**
  * An integration test of the KafkaAdminClient.
@@ -224,40 +224,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(topics.toSet, topicDesc.keySet.asScala)
   }
 
-  @Test
-  def testAuthorizedOperations(): Unit = {
-    client = AdminClient.create(createConfig())
-
-    // without includeAuthorizedOperations flag
-    var result = client.describeCluster
-    assertEquals(Set().asJava, result.authorizedOperations().get())
-
-    //with includeAuthorizedOperations flag
-    result = client.describeCluster(new DescribeClusterOptions().includeAuthorizedOperations(true))
-    var expectedOperations = configuredClusterPermissions.asJava
-    assertEquals(expectedOperations, result.authorizedOperations().get())
-
-    val topic = "mytopic"
-    val newTopics = Seq(new NewTopic(topic, 3, 3))
-    client.createTopics(newTopics.asJava).all.get()
-    waitForTopics(client, expectedPresent = Seq(topic), expectedMissing = List())
-
-    // without includeAuthorizedOperations flag
-    var topicResult = client.describeTopics(Seq(topic).asJava).values
-    assertEquals(Set().asJava, topicResult.get(topic).get().authorizedOperations())
-
-    //with includeAuthorizedOperations flag
-    topicResult = client.describeTopics(Seq(topic).asJava,
-      new DescribeTopicsOptions().includeAuthorizedOperations(true)).values
-    expectedOperations = Topic.supportedOperations
-      .map(operation => operation.toJava).asJava
-    assertEquals(expectedOperations, topicResult.get(topic).get().authorizedOperations())
-  }
-
-  def configuredClusterPermissions() : Set[AclOperation] = {
-    Cluster.supportedOperations.map(operation => operation.toJava)
-  }
-
   /**
     * describe should not auto create topics
     */
@@ -279,11 +245,10 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testDescribeCluster(): Unit = {
     client = AdminClient.create(createConfig())
-    val result = client.describeCluster
-    val nodes = result.nodes.get()
-    val clusterId = result.clusterId().get()
+    val nodes = client.describeCluster.nodes.get()
+    val clusterId = client.describeCluster().clusterId().get()
     assertEquals(servers.head.dataPlaneRequestProcessor.clusterId, clusterId)
-    val controller = result.controller().get()
+    val controller = client.describeCluster().controller().get()
     assertEquals(servers.head.dataPlaneRequestProcessor.metadataCache.getControllerId.
       getOrElse(MetadataResponse.NO_CONTROLLER_ID), controller.id())
     val brokers = brokerList.split(",")

@@ -27,8 +27,6 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 @InterfaceStability.Evolving
 public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptions> {
 
-    private boolean includeAuthorizedOperations;
-
     /**
      * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
      * AdminClient should be used.
@@ -40,12 +38,4 @@ public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptio
         return this;
     }
 
-    public DescribeClusterOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
-        this.includeAuthorizedOperations = includeAuthorizedOperations;
-        return this;
-    }
-
-    public boolean includeAuthorizedOperations() {
-        return includeAuthorizedOperations;
-    }
 }

@@ -435,8 +435,7 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.PRODUCE => new ProduceResponse(response).throttleTimeMs
       case ApiKeys.FETCH => FetchResponse.parse(response).throttleTimeMs
       case ApiKeys.LIST_OFFSETS => new ListOffsetResponse(response).throttleTimeMs
-      case ApiKeys.METADATA =>
-        new MetadataResponse(response, ApiKeys.DESCRIBE_GROUPS.latestVersion()).throttleTimeMs
+      case ApiKeys.METADATA => new MetadataResponse(response).throttleTimeMs
       case ApiKeys.OFFSET_COMMIT => new OffsetCommitResponse(response).throttleTimeMs
       case ApiKeys.OFFSET_FETCH => new OffsetFetchResponse(response).throttleTimeMs
       case ApiKeys.FIND_COORDINATOR => new FindCoordinatorResponse(response).throttleTimeMs

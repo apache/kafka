@@ -25,7 +25,6 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
-import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
@@ -39,7 +38,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 public class MockAdminClient extends AdminClient {
     public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
@@ -127,22 +125,19 @@ public class MockAdminClient extends AdminClient {
         KafkaFutureImpl<Collection<Node>> nodesFuture = new KafkaFutureImpl<>();
         KafkaFutureImpl<Node> controllerFuture = new KafkaFutureImpl<>();
         KafkaFutureImpl<String> brokerIdFuture = new KafkaFutureImpl<>();
-        KafkaFutureImpl<Set<AclOperation>> authorizedOperationsFuture = new KafkaFutureImpl<>();
 
         if (timeoutNextRequests > 0) {
             nodesFuture.completeExceptionally(new TimeoutException());
             controllerFuture.completeExceptionally(new TimeoutException());
             brokerIdFuture.completeExceptionally(new TimeoutException());
-            authorizedOperationsFuture.completeExceptionally(new TimeoutException());
             --timeoutNextRequests;
         } else {
             nodesFuture.complete(brokers);
             controllerFuture.complete(controller);
             brokerIdFuture.complete(clusterId);
-            authorizedOperationsFuture.complete(Collections.emptySet());
         }
 
-        return new DescribeClusterResult(nodesFuture, controllerFuture, brokerIdFuture, authorizedOperationsFuture);
+        return new DescribeClusterResult(nodesFuture, controllerFuture, brokerIdFuture);
     }
 
     @Override
@@ -233,8 +228,7 @@ public class MockAdminClient extends AdminClient {
                 if (topicName.equals(requestedTopic) && !topicDescription.getValue().markedForDeletion) {
                     TopicMetadata topicMetadata = topicDescription.getValue();
                     KafkaFutureImpl<TopicDescription> future = new KafkaFutureImpl<>();
-                    future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions,
-                            Collections.emptySet()));
+                    future.complete(new TopicDescription(topicName, topicMetadata.isInternalTopic, topicMetadata.partitions));
                     topicDescriptions.put(topicName, future);
                     break;
                 }

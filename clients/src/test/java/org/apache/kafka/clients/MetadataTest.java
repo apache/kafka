@@ -52,7 +52,7 @@ public class MetadataTest {
             new ClusterResourceListeners());
 
     private static MetadataResponse emptyMetadataResponse() {
-        return MetadataResponse.prepareResponse(
+        return new MetadataResponse(
                 Collections.emptyList(),
                 null,
                 -1,

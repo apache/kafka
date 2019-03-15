@@ -75,8 +75,7 @@ public class ConsumerMetadataTest {
         topics.add(topicMetadata("__matching_topic", false));
         topics.add(topicMetadata("non_matching_topic", false));
 
-        MetadataResponse response = MetadataResponse.prepareResponse(singletonList(node),
-            "clusterId", node.id(), topics);
+        MetadataResponse response = new MetadataResponse(singletonList(node), "clusterId", node.id(), topics);
         metadata.update(response, time.milliseconds());
 
         if (includeInternalTopics)
@@ -143,8 +142,7 @@ public class ConsumerMetadataTest {
         for (String expectedInternalTopic : expectedInternalTopics)
             topics.add(topicMetadata(expectedInternalTopic, true));
 
-        MetadataResponse response = MetadataResponse.prepareResponse(singletonList(node),
-            "clusterId", node.id(), topics);
+        MetadataResponse response = new MetadataResponse(singletonList(node), "clusterId", node.id(), topics);
         metadata.update(response, time.milliseconds());
 
         assertEquals(allTopics, metadata.fetch().topics());

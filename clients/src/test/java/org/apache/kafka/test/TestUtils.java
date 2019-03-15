@@ -155,7 +155,7 @@ public class TestUtils {
                     Topic.isInternal(topic), Collections.emptyList()));
         }
 
-        return MetadataResponse.prepareResponse(nodes, clusterId, 0, topicMetadata);
+        return new MetadataResponse(nodes, clusterId, 0, topicMetadata);
     }
 
     @FunctionalInterface
