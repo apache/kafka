@@ -356,10 +356,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
-    public static void addInvocationRateAndCount(final Sensor sensor,
-                                                 final String group,
-                                                 final Map<String, String> tags,
-                                                 final String operation) {
+    public static void addInvocationRate(final Sensor sensor,
+                                         final String group,
+                                         final Map<String, String> tags,
+                                         final String operation) {
         sensor.add(
             new MetricName(
                 operation + "-rate",
@@ -369,6 +369,14 @@ public class StreamsMetricsImpl implements StreamsMetrics {
             ),
             new Rate(TimeUnit.SECONDS, new Count())
         );
+    }
+
+    public static void addInvocationRateAndCount(final Sensor sensor,
+                                                 final String group,
+                                                 final Map<String, String> tags,
+                                                 final String operation) {
+        addInvocationRate(sensor, group, tags, operation);
+
         sensor.add(
             new MetricName(
                 operation + "-total",

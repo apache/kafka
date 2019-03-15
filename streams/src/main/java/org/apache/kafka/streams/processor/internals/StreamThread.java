@@ -60,6 +60,7 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singleton;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRate;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueAvgAndMax;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_METRICS_GROUP;
@@ -246,41 +247,33 @@ public class StreamThread extends Thread {
         private final Sensor processLatencySensor;
         private final Sensor commitLatencySensor;
         private final Sensor punctuateTimeSensor;
-        private final Sensor skippedRateSensor;
         private final Sensor taskCreatedRateSensor;
         private final Sensor taskClosedRateSensor;
 
         StreamThreadMetrics(final String threadName, final StreamsMetricsImpl metrics) {
             this.metrics = metrics;
 
-            commitLatencySensor = metrics.threadLevelSensor("commit-latency", threadName, Sensor.RecordingLevel.INFO);
-            addValueAvgAndMax(commitLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "commit-latency");
-            addInvocationRateAndCount(commitLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "commit");
-
-            pollLatencySensor = metrics.threadLevelSensor("poll-latency", threadName, Sensor.RecordingLevel.INFO);
-            addValueAvgAndMax(pollLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "poll-latency");
-            addInvocationRateAndCount(pollLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "poll");
-
             processLatencySensor = metrics.threadLevelSensor("process-latency", threadName, Sensor.RecordingLevel.INFO);
             addValueAvgAndMax(processLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "process-latency");
-            addInvocationRateAndCount(processLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "process");
+            addInvocationRate(processLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "process");
 
             punctuateTimeSensor = metrics.threadLevelSensor("punctuate-latency", threadName, Sensor.RecordingLevel.INFO);
             addValueAvgAndMax(punctuateTimeSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "punctuate-latency");
-            addInvocationRateAndCount(punctuateTimeSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "punctuate");
+            addInvocationRate(punctuateTimeSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "punctuate");
+
+            commitLatencySensor = metrics.threadLevelSensor("commit-latency", threadName, Sensor.RecordingLevel.INFO);
+            addValueAvgAndMax(commitLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "commit-latency");
+            addInvocationRate(commitLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "commit");
+
+            pollLatencySensor = metrics.threadLevelSensor("poll-latency", threadName, Sensor.RecordingLevel.INFO);
+            addValueAvgAndMax(pollLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "poll-latency");
+            addInvocationRate(pollLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "poll");
 
             taskCreatedRateSensor = metrics.threadLevelSensor("task-created", threadName, Sensor.RecordingLevel.INFO);
             addInvocationRateAndCount(taskCreatedRateSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "task-created");
 
             taskClosedRateSensor = metrics.threadLevelSensor("task-closed", threadName, Sensor.RecordingLevel.INFO);
             addInvocationRateAndCount(taskClosedRateSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "task-closed");
-
-            skippedRateSensor = metrics.threadLevelSensor("skipped-records", threadName, Sensor.RecordingLevel.INFO);
-            addInvocationRateAndCount(skippedRateSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "skipped-records");
-        }
-
-        public Sensor skippedRateSensor() {
-            return skippedRateSensor;
         }
 
         StreamsMetricsImpl streamsMetrics() {

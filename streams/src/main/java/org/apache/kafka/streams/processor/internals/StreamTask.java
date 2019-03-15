@@ -83,8 +83,12 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         private final Map<String, String> tagMap;
         private final String taskName;
 
-        private final Sensor commitLatencySensor;
+        private final Sensor processRateSensor;
+        private final Sensor commitRateSensor;
         private final Sensor recordLatenessSensor;
+        private final Sensor lateRecordsDropRateSensor;
+
+        private final Sensor lateRecordsDropRateSensor;
         private final Sensor enforcedProcessRateSensor;
 
         TaskMetrics(final TaskId id, final StreamsMetricsImpl metrics) {
@@ -92,12 +96,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             this.taskName = id.toString();
             this.tagMap = StreamsMetricsImpl.taskLevelTagMap(Thread.currentThread().getName(), taskName);
 
-            commitLatencySensor = metrics.taskLevelSensor("commit-latency", taskName, Sensor.RecordingLevel.DEBUG);
-            StreamsMetricsImpl.addValueAvgAndMax(commitLatencySensor, TASK_METRICS_GROUP, tagMap, "commit-latency");
-            StreamsMetricsImpl.addInvocationRateAndCount(commitLatencySensor, TASK_METRICS_GROUP, tagMap, "commit");
+            processRateSensor = metrics.taskLevelSensor("commit", taskName, Sensor.RecordingLevel.DEBUG);
+            StreamsMetricsImpl.addInvocationRate(processRateSensor, TASK_METRICS_GROUP, tagMap, "commit");
+
+            commitRateSensor = metrics.taskLevelSensor("commit", taskName, Sensor.RecordingLevel.DEBUG);
+            StreamsMetricsImpl.addInvocationRate(commitRateSensor, TASK_METRICS_GROUP, tagMap, "commit");
 
             recordLatenessSensor = metrics.taskLevelSensor("record-lateness", taskName, Sensor.RecordingLevel.DEBUG);
-            StreamsMetricsImpl.addValueAvgAndMax(commitLatencySensor, TASK_METRICS_GROUP, tagMap, "record-lateness");
+            StreamsMetricsImpl.addValueAvgAndMax(commitRateSensor, TASK_METRICS_GROUP, tagMap, "record-lateness");
 
             enforcedProcessRateSensor = metrics.taskLevelSensor("enforced-processing", taskName, Sensor.RecordingLevel.DEBUG);
             StreamsMetricsImpl.addInvocationRateAndCount(enforcedProcessRateSensor, TASK_METRICS_GROUP, tagMap, "enforced-processing");
@@ -108,7 +114,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         void removeAllSensors() {
-            metrics.removeSensor(commitLatencySensor);
+            metrics.removeSensor(processRateSensor);
+            metrics.removeSensor(commitRateSensor);
             metrics.removeSensor(recordLatenessSensor);
             metrics.removeSensor(enforcedProcessRateSensor);
         }
@@ -458,7 +465,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         commitNeeded = false;
         commitRequested = false;
-        taskMetrics.commitLatencySensor.record(time.nanoseconds() - startNs);
+        taskMetrics.commitRateSensor.record(time.nanoseconds() - startNs);
     }
 
     @Override
