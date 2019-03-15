@@ -75,6 +75,7 @@ object Defaults {
   val SocketRequestMaxBytes: Int = 100 * 1024 * 1024
   val MaxConnectionsPerIp: Int = Int.MaxValue
   val MaxConnectionsPerIpOverrides: String = ""
+  val MaxConnections: Int = Int.MaxValue
   val ConnectionsMaxIdleMs = 10 * 60 * 1000L
   val RequestTimeoutMs = 30000
   val FailedAuthenticationDelayMs = 100
@@ -293,6 +294,7 @@ object KafkaConfig {
   val SocketRequestMaxBytesProp = "socket.request.max.bytes"
   val MaxConnectionsPerIpProp = "max.connections.per.ip"
   val MaxConnectionsPerIpOverridesProp = "max.connections.per.ip.overrides"
+  val MaxConnectionsProp = "max.connections"
   val ConnectionsMaxIdleMsProp = "connections.max.idle.ms"
   val FailedAuthenticationDelayMsProp = "connection.failed.authentication.delay.ms"
   /***************** rack configuration *************/
@@ -570,8 +572,15 @@ object KafkaConfig {
   val SocketReceiveBufferBytesDoc = "The SO_RCVBUF buffer of the socket server sockets. If the value is -1, the OS default will be used."
   val SocketRequestMaxBytesDoc = "The maximum number of bytes in a socket request"
   val MaxConnectionsPerIpDoc = "The maximum number of connections we allow from each ip address. This can be set to 0 if there are overrides " +
-    "configured using " + MaxConnectionsPerIpOverridesProp + " property"
-  val MaxConnectionsPerIpOverridesDoc = "A comma-separated list of per-ip or hostname overrides to the default maximum number of connections. An example value is \"hostName:100,127.0.0.1:200\""
+    s"configured using $MaxConnectionsPerIpOverridesProp property. New connections from the ip address are dropped if the limit is reached."
+  val MaxConnectionsPerIpOverridesDoc = "A comma-separated list of per-ip or hostname overrides to the default maximum number of connections. " +
+    "An example value is \"hostName:100,127.0.0.1:200\""
+  val MaxConnectionsDoc = "The maximum number of connections we allow in the broker at any time. This limit is applied in addition " +
+    s"to any per-ip limits configured using $MaxConnectionsPerIpProp. Listener-level limits may also be configured by prefixing the " +
+    s"config name with the listener prefix, for example, <code>listener.name.internal.$MaxConnectionsProp</code>. Broker-wide limit " +
+    "should be configured based on broker capacity while listener limits should be configured based on application requirements. " +
+    "New connections are blocked if either the listener or broker limit is reached. Connections on the inter-broker listener are " +
+    "permitted even if broker-wide limit is reached. The least recently used connection on another listener will be closed in this case."
   val ConnectionsMaxIdleMsDoc = "Idle connections timeout: the server socket processor threads close the connections that idle more than this"
   val FailedAuthenticationDelayMsDoc = "Connection close delay on failed authentication: this is the time (in milliseconds) by which connection close will be delayed on authentication failure. " +
     s"This must be configured to be less than $ConnectionsMaxIdleMsProp to prevent connection timeout."
@@ -872,6 +881,7 @@ object KafkaConfig {
       .define(SocketRequestMaxBytesProp, INT, Defaults.SocketRequestMaxBytes, atLeast(1), HIGH, SocketRequestMaxBytesDoc)
       .define(MaxConnectionsPerIpProp, INT, Defaults.MaxConnectionsPerIp, atLeast(0), MEDIUM, MaxConnectionsPerIpDoc)
       .define(MaxConnectionsPerIpOverridesProp, STRING, Defaults.MaxConnectionsPerIpOverrides, MEDIUM, MaxConnectionsPerIpOverridesDoc)
+      .define(MaxConnectionsProp, INT, Defaults.MaxConnections, atLeast(0), MEDIUM, MaxConnectionsDoc)
       .define(ConnectionsMaxIdleMsProp, LONG, Defaults.ConnectionsMaxIdleMs, MEDIUM, ConnectionsMaxIdleMsDoc)
       .define(FailedAuthenticationDelayMsProp, INT, Defaults.FailedAuthenticationDelayMs, atLeast(0), LOW, FailedAuthenticationDelayMsDoc)
 
@@ -1163,6 +1173,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val maxConnectionsPerIp = getInt(KafkaConfig.MaxConnectionsPerIpProp)
   val maxConnectionsPerIpOverrides: Map[String, Int] =
     getMap(KafkaConfig.MaxConnectionsPerIpOverridesProp, getString(KafkaConfig.MaxConnectionsPerIpOverridesProp)).map { case (k, v) => (k, v.toInt)}
+  def maxConnections = getInt(KafkaConfig.MaxConnectionsProp)
   val connectionsMaxIdleMs = getLong(KafkaConfig.ConnectionsMaxIdleMsProp)
   val failedAuthenticationDelayMs = getInt(KafkaConfig.FailedAuthenticationDelayMsProp)
 
@@ -1329,6 +1340,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)
+  }
+
+  def removeReconfigurable(reconfigurable: Reconfigurable): Unit = {
+    dynamicConfig.removeReconfigurable(reconfigurable)
   }
 
   def logRetentionTimeMillis: Long = {
