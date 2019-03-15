@@ -60,7 +60,7 @@ class OffsetIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writabl
   private[this] var _lastOffset = lastEntry.offset
 
   debug(s"Loaded index file ${file.getAbsolutePath} with maxEntries = $maxEntries, " +
-    s"maxIndexSize = $maxIndexSize, entries = ${_entries}, lastOffset = ${_lastOffset}, file position = ${mmap.position}")
+    s"maxIndexSize = $maxIndexSize, entries = ${_entries}, lastOffset = ${_lastOffset}, file position = ${mmap.position()}")
 
   /**
    * The last entry in the index

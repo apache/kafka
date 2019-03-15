@@ -59,7 +59,7 @@ class TimeIndex(_file: File, baseOffset: Long, maxIndexSize: Int = -1, writable:
   override def entrySize = 12
 
   debug(s"Loaded index file ${file.getAbsolutePath} with maxEntries = $maxEntries, maxIndexSize = $maxIndexSize," +
-    s" entries = ${_entries}, lastOffset = ${_lastEntry}, file position = ${mmap.position}")
+    s" entries = ${_entries}, lastOffset = ${_lastEntry}, file position = ${mmap.position()}")
 
   // We override the full check to reserve the last time index entry slot for the on roll call.
   override def isFull: Boolean = entries >= maxEntries - 1
