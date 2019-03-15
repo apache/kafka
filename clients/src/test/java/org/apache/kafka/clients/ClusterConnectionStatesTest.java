@@ -53,7 +53,7 @@ public class ClusterConnectionStatesTest {
     }
 
     @Test
-    public void testClusterConnectionStateChanges() throws UnknownHostException {
+    public void testClusterConnectionStateChanges() {
         assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
 
         // Start connecting to Node and check state
@@ -97,7 +97,7 @@ public class ClusterConnectionStatesTest {
     }
 
     @Test
-    public void testMultipleNodeConnectionStates() throws UnknownHostException {
+    public void testMultipleNodeConnectionStates() {
         // Check initial state, allowed to connect to all nodes, but no nodes shown as ready
         assertTrue(connectionStates.canConnect(nodeId1, time.milliseconds()));
         assertTrue(connectionStates.canConnect(nodeId2, time.milliseconds()));
@@ -135,7 +135,7 @@ public class ClusterConnectionStatesTest {
     }
 
     @Test
-    public void testAuthorizationFailed() throws UnknownHostException {
+    public void testAuthorizationFailed() {
         // Try connecting
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
 
@@ -156,7 +156,7 @@ public class ClusterConnectionStatesTest {
     }
 
     @Test
-    public void testRemoveNode() throws UnknownHostException {
+    public void testRemoveNode() {
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
         time.sleep(1000);
         connectionStates.ready(nodeId1);
@@ -171,7 +171,7 @@ public class ClusterConnectionStatesTest {
     }
 
     @Test
-    public void testMaxReconnectBackoff() throws UnknownHostException {
+    public void testMaxReconnectBackoff() {
         long effectiveMaxReconnectBackoff = Math.round(reconnectBackoffMax * (1 + reconnectBackoffJitter));
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
         time.sleep(1000);
@@ -191,7 +191,7 @@ public class ClusterConnectionStatesTest {
     }
 
     @Test
-    public void testExponentialReconnectBackoff() throws UnknownHostException {
+    public void testExponentialReconnectBackoff() {
         // Calculate fixed components for backoff process
         final int reconnectBackoffExpBase = 2;
         double reconnectBackoffMaxExp = Math.log(reconnectBackoffMax / (double) Math.max(reconnectBackoffMs, 1))
@@ -211,7 +211,7 @@ public class ClusterConnectionStatesTest {
     }
 
     @Test
-    public void testThrottled() throws UnknownHostException {
+    public void testThrottled() {
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost", ClientDnsLookup.DEFAULT);
         time.sleep(1000);
         connectionStates.ready(nodeId1);

@@ -76,7 +76,7 @@ public class OAuthBearerExtensionsValidatorCallback implements Callback {
     }
 
     /**
-     * @return An immutable {@link Map} consisting of the name->error messages of extensions which failed validation
+     * @return An immutable {@link Map} consisting of the name-&gt;error messages of extensions which failed validation
      */
     public Map<String, String> invalidExtensions() {
         return Collections.unmodifiableMap(invalidExtensions);

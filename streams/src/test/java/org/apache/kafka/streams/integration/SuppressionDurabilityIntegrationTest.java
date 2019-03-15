@@ -49,7 +49,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameters;
 
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -88,13 +87,16 @@ public class SuppressionDurabilityIntegrationTest {
     private static final int COMMIT_INTERVAL = 100;
     private final boolean eosEnabled;
 
-    public SuppressionDurabilityIntegrationTest(final boolean eosEnabled) {
-        this.eosEnabled = eosEnabled;
-    }
-
     @Parameters(name = "{index}: eosEnabled={0}")
     public static Collection<Object[]> parameters() {
-        return Arrays.asList(new Object[] {false}, new Object[] {true});
+        return asList(
+            new Object[] {false},
+            new Object[] {true}
+        );
+    }
+
+    public SuppressionDurabilityIntegrationTest(final boolean eosEnabled) {
+        this.eosEnabled = eosEnabled;
     }
 
     private KTable<String, Long> buildCountsTable(final String input, final StreamsBuilder builder) {

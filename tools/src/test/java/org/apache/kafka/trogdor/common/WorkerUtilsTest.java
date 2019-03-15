@@ -81,7 +81,8 @@ public class WorkerUtilsTest {
             new TopicDescription(
                 TEST_TOPIC, false,
                 Collections.singletonList(
-                    new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()))),
+                    new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList())),
+                    Collections.emptySet()),
             adminClient.describeTopics(
                 Collections.singleton(TEST_TOPIC)).values().get(TEST_TOPIC).get()
         );
@@ -98,7 +99,8 @@ public class WorkerUtilsTest {
             new TopicDescription(
                 TEST_TOPIC, false,
                 Collections.singletonList(
-                    new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()))),
+                    new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList())),
+                    Collections.emptySet()),
             adminClient.describeTopics(
                 Collections.singleton(TEST_TOPIC)).values().get(TEST_TOPIC).get()
         );
@@ -178,7 +180,8 @@ public class WorkerUtilsTest {
             new TopicDescription(
                 TEST_TOPIC, false,
                 Collections.singletonList(
-                    new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList()))),
+                    new TopicPartitionInfo(0, broker1, singleReplica, Collections.<Node>emptyList())),
+                    Collections.emptySet()),
             adminClient.describeTopics(Collections.singleton(TEST_TOPIC)).values().get(TEST_TOPIC).get()
         );
     }
