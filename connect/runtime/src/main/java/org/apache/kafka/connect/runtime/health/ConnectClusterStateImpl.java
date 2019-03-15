@@ -37,7 +37,7 @@ import java.util.concurrent.TimeoutException;
 
 public class ConnectClusterStateImpl implements ConnectClusterState {
     
-    private static final long CONNECTORS_TIMEOUT_MS = 10_000;
+    private static final long CONNECTORS_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
 
     private HerderProvider herderProvider;
 
