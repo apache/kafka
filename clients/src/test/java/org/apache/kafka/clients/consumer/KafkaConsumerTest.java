@@ -118,6 +118,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doCallRealMethod;
 import static org.mockito.Mockito.mock;
@@ -1899,7 +1900,7 @@ public class KafkaConsumerTest {
     @SuppressWarnings("deprecation")
     public void testCloseWithTimeUnit() {
         KafkaConsumer consumer = mock(KafkaConsumer.class);
-        doCallRealMethod().when(consumer).close(Duration.ofMillis(ArgumentMatchers.<TimeUnit>any().toMillis(anyLong())));
+        doCallRealMethod().when(consumer).close(anyLong(), any());
         consumer.close(Duration.ofSeconds(1));
         verify(consumer).close(Duration.ofSeconds(1));
     }
