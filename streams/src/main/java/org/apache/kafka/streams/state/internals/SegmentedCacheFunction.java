@@ -57,12 +57,12 @@ class SegmentedCacheFunction implements CacheFunction {
         return binaryKey;
     }
 
-    long segmentId(final long timestamp) {
-        return timestamp / segmentInterval;
+    public long segmentId(final Bytes key) {
+        return segmentId(keySchema.segmentTimestamp(key));
     }
 
-    long segmentId(final Bytes key) {
-        return segmentId(keySchema.segmentTimestamp(key));
+    long segmentId(final long timestamp) {
+        return timestamp / segmentInterval;
     }
 
     long getSegmentInterval() {
