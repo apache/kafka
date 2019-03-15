@@ -133,6 +133,23 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         cleanup(context, buffer);
     }
 
+    @Test
+    public void shouldRejectNullValues() {
+        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext context = makeContext();
+        buffer.init(context, buffer);
+        try {
+            buffer.put(0, getBytes("asdf"), new ContextualRecord(
+                null,
+                new ProcessorRecordContext(0, 0, 0, "topic")
+            ));
+            fail("expected an exception");
+        } catch (final IllegalArgumentException expected) {
+            // expected
+        }
+        cleanup(context, buffer);
+    }
+
     private static ContextualRecord getRecord(final String value) {
         return new ContextualRecord(
             value.getBytes(UTF_8),
@@ -264,43 +281,64 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        buffer.put(1, getBytes("asdf"), getRecord("2093j"));
-        buffer.put(0, getBytes("zxcv"), getRecord("3gon4i"));
+        buffer.put(2, getBytes("asdf"), getRecord("2093j"));
+        buffer.put(1, getBytes("zxcv"), getRecord("3gon4i"));
+        buffer.put(0, getBytes("deleteme"), getRecord("deadbeef"));
+        buffer.evictWhile(() -> buffer.minTimestamp() < 1, kv -> { });
         buffer.flush();
-        final MockRecordCollector collector = (MockRecordCollector) context.recordCollector();
+
+        // the buffer should serialize the buffer time and the value as byte[],
+        // which we can't compare for equality using ProducerRecord.
+        // As a workaround, I'm deserializing them and shoving them in a KeyValue, just for ease of testing.
+
         final List<ProducerRecord<String, KeyValue<Long, String>>> collected =
-            collector
+            ((MockRecordCollector) context.recordCollector())
                 .collected()
                 .stream()
                 .map(pr -> {
-                    final byte[] timestampAndValue = pr.value();
-                    final byte[] value = new byte[timestampAndValue.length - Long.BYTES];
-                    final ByteBuffer wrap = ByteBuffer.wrap(timestampAndValue);
-                    final long timestamp = wrap.getLong();
-                    wrap.get(value);
+
+                    final KeyValue<Long, String> niceValue;
+                    if (pr.value() == null) {
+                        niceValue = null;
+                    } else {
+                        final byte[] timestampAndValue = pr.value();
+                        final byte[] value = new byte[timestampAndValue.length - Long.BYTES];
+                        final ByteBuffer wrap = ByteBuffer.wrap(timestampAndValue);
+                        final long timestamp = wrap.getLong();
+                        wrap.get(value);
+                        niceValue = new KeyValue<>(timestamp, new String(value, UTF_8));
+                    }
+
                     return new ProducerRecord<>(pr.topic(),
                                                 pr.partition(),
                                                 pr.timestamp(),
                                                 new String(pr.key(), UTF_8),
-                                                new KeyValue<>(timestamp, new String(value, UTF_8)),
+                                                niceValue,
                                                 pr.headers());
                 })
                 .collect(Collectors.toList());
-        System.out.println(collected);
+
         assertThat(collected, is(asList(
+            new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
+                                 null,   // Producer will assign
+                                 null,
+                                 "deleteme",
+                                 null,
+                                 new RecordHeaders()),
             new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
                                  0,
                                  0L,
                                  "zxcv",
-                                 new KeyValue<>(0L, "3gon4i"),
+                                 new KeyValue<>(1L, "3gon4i"),
                                  new RecordHeaders()),
             new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
                                  0,
                                  0L,
                                  "asdf",
-                                 new KeyValue<>(0L, "2093j"),
+                                 new KeyValue<>(2L, "2093j"),
                                  new RecordHeaders())
         )));
+
         cleanup(context, buffer);
     }
 

@@ -477,8 +477,13 @@ public final class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyVal
     @Override
     public void put(final long time,
                     final Bytes key,
-                    final ContextualRecord value) {
-        cleanPut(time, key, value);
+                    final ContextualRecord contextualRecord) {
+        if (contextualRecord.value() == null) {
+            throw new IllegalArgumentException("value cannot be null");
+        } else if (contextualRecord.recordContext() == null) {
+            throw new IllegalArgumentException("recordContext cannot be null");
+        }
+        cleanPut(time, key, contextualRecord);
         dirtyKeys.add(key);
         updateBufferMetrics();
     }
