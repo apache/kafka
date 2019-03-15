@@ -52,6 +52,7 @@ public class AssignmentInfo {
     private List<TaskId> activeTasks;
     private Map<TaskId, Set<TopicPartition>> standbyTasks;
     private Map<HostInfo, Set<TaskId>> tasksByHost;
+    private Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
     // used for decoding; don't apply version checks
     private AssignmentInfo(final int version,
@@ -64,12 +65,13 @@ public class AssignmentInfo {
     public AssignmentInfo(final List<TaskId> activeTasks,
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
                           final Map<HostInfo, Set<TaskId>> tasksByHost) {
-        this(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, tasksByHost, 0);
+        this(LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, tasksByHost, Collections.emptyMap(), 0);
     }
 
     public AssignmentInfo() {
         this(LATEST_SUPPORTED_VERSION,
             Collections.emptyList(),
+            Collections.emptyMap(),
             Collections.emptyMap(),
             Collections.emptyMap(),
             0);
@@ -80,7 +82,20 @@ public class AssignmentInfo {
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,
                           final Map<HostInfo, Set<TaskId>> tasksByHost,
                           final int errCode) {
-        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, tasksByHost, errCode);
+        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, tasksByHost, Collections.emptyMap(), errCode);
+        if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
+            throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
+                    + "; was: " + version);
+        }
+    }
+
+    public AssignmentInfo(final int version,
+                          final List<TaskId> activeTasks,
+                          final Map<TaskId, Set<TopicPartition>> standbyTasks,
+                          final Map<HostInfo, Set<TaskId>> tasksByHost,
+                          final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
+                          final int errCode) {
+        this(version, LATEST_SUPPORTED_VERSION, activeTasks, standbyTasks, tasksByHost, partitionsByHost, errCode);
         if (version < 1 || version > LATEST_SUPPORTED_VERSION) {
             throw new IllegalArgumentException("version must be between 1 and " + LATEST_SUPPORTED_VERSION
                 + "; was: " + version);
@@ -93,12 +108,14 @@ public class AssignmentInfo {
                    final List<TaskId> activeTasks,
                    final Map<TaskId, Set<TopicPartition>> standbyTasks,
                    final Map<HostInfo, Set<TaskId>> tasksByHost,
+                   final Map<HostInfo, Set<TopicPartition>> partitionsByHost,
                    final int errCode) {
         this.usedVersion = version;
         this.latestSupportedVersion = latestSupportedVersion;
         this.activeTasks = activeTasks;
         this.standbyTasks = standbyTasks;
         this.tasksByHost = tasksByHost;
+        this.partitionsByHost = partitionsByHost;
         this.errCode = errCode;
     }
 
@@ -213,13 +230,23 @@ public class AssignmentInfo {
     }
 
     private void encodeVersionTwo(final DataOutputStream out) throws IOException {
-      //  out.writeInt(2); // version
         encodeActiveAndStandbyTaskAssignment(out);
-        encodeTasksByHost(out);
+        encodePartitionsByHost(out);
+    }
+
+    private void encodePartitionsByHost(final DataOutputStream out) throws IOException {
+        // encode partitions by host
+        out.writeInt(partitionsByHost.size());
+        for (final Map.Entry<HostInfo, Set<TopicPartition>> entry : partitionsByHost.entrySet()) {
+            final HostInfo hostInfo = entry.getKey();
+            out.writeUTF(hostInfo.host());
+            out.writeInt(hostInfo.port());
+            writeTopicPartitions(out, entry.getValue());
+        }
     }
 
     private void encodeTasksByHost(final DataOutputStream out) throws IOException {
-        // encode partitions by host
+        // encode tasks by host
         out.writeInt(tasksByHost.size());
         for (final Map.Entry<HostInfo, Set<TaskId>> entry : tasksByHost.entrySet()) {
             final HostInfo hostInfo = entry.getKey();
@@ -247,22 +274,19 @@ public class AssignmentInfo {
     }
 
     private void encodeVersionThree(final DataOutputStream out) throws IOException {
-     //   out.writeInt(3);
         out.writeInt(LATEST_SUPPORTED_VERSION);
         encodeActiveAndStandbyTaskAssignment(out);
-        encodeTasksByHost(out);
+        encodePartitionsByHost(out);
     }
 
     private void encodeVersionFour(final DataOutputStream out) throws IOException {
-     //   out.writeInt(4);
         out.writeInt(LATEST_SUPPORTED_VERSION);
         encodeActiveAndStandbyTaskAssignment(out);
-        encodeTasksByHost(out);
+        encodePartitionsByHost(out);
         out.writeInt(errCode);
     }
 
     private void encodeVersionFive(final DataOutputStream out) throws IOException {
-     //   out.writeInt(5);
         out.writeInt(LATEST_SUPPORTED_VERSION);
         encodeActiveAndStandbyTaskAssignment(out);
         encodeTasksByHost(out);
@@ -326,6 +350,7 @@ public class AssignmentInfo {
         decodeActiveTasks(assignmentInfo, in);
         decodeStandbyTasks(assignmentInfo, in);
         assignmentInfo.tasksByHost = new HashMap<>();
+        assignmentInfo.partitionsByHost = new HashMap<>();
     }
 
     private static void decodeActiveTasks(final AssignmentInfo assignmentInfo,
@@ -351,7 +376,18 @@ public class AssignmentInfo {
                                              final DataInputStream in) throws IOException {
         decodeActiveTasks(assignmentInfo, in);
         decodeStandbyTasks(assignmentInfo, in);
-        decodeGlobalTasksAssignmentData(assignmentInfo, in);
+        assignmentInfo.tasksByHost = new HashMap<>();
+        decodeGlobalAssignmentData(assignmentInfo, in);
+    }
+
+    private static void decodeGlobalAssignmentData(final AssignmentInfo assignmentInfo,
+                                                   final DataInputStream in) throws IOException {
+        assignmentInfo.partitionsByHost = new HashMap<>();
+        final int numEntries = in.readInt();
+        for (int i = 0; i < numEntries; i++) {
+            final HostInfo hostInfo = new HostInfo(in.readUTF(), in.readInt());
+            assignmentInfo.partitionsByHost.put(hostInfo, readTopicPartitions(in));
+        }
     }
 
     private static void decodeGlobalTasksAssignmentData(final AssignmentInfo assignmentInfo,
@@ -387,26 +423,32 @@ public class AssignmentInfo {
                                                final DataInputStream in) throws IOException {
         decodeActiveTasks(assignmentInfo, in);
         decodeStandbyTasks(assignmentInfo, in);
-        decodeGlobalTasksAssignmentData(assignmentInfo, in);
+        assignmentInfo.tasksByHost = new HashMap<>();
+        decodeGlobalAssignmentData(assignmentInfo, in);
     }
 
     private static void decodeVersionFourData(final AssignmentInfo assignmentInfo,
                                               final DataInputStream in) throws IOException {
         decodeActiveTasks(assignmentInfo, in);
         decodeStandbyTasks(assignmentInfo, in);
-        decodeGlobalTasksAssignmentData(assignmentInfo, in);
+        assignmentInfo.tasksByHost = new HashMap<>();
+        decodeGlobalAssignmentData(assignmentInfo, in);
         assignmentInfo.errCode = in.readInt();
     }
 
     private static void decodeVersionFiveData(final AssignmentInfo assignmentInfo,
                                               final DataInputStream in) throws IOException {
-        decodeVersionFourData(assignmentInfo, in);
+        decodeActiveTasks(assignmentInfo, in);
+        decodeStandbyTasks(assignmentInfo, in);
+        decodeGlobalTasksAssignmentData(assignmentInfo, in);
+        assignmentInfo.partitionsByHost = new HashMap<>();
+        assignmentInfo.errCode = in.readInt();
     }
 
     @Override
     public int hashCode() {
         final int result = usedVersion ^ latestSupportedVersion ^ activeTasks.hashCode() ^ standbyTasks.hashCode() ^ errCode;
-        return result ^ tasksByHost.hashCode();
+        return result ^ tasksByHost.hashCode() ^ partitionsByHost.hashCode();
     }
 
     @Override
@@ -417,7 +459,8 @@ public class AssignmentInfo {
                     latestSupportedVersion == other.latestSupportedVersion &&
                     errCode == other.errCode &&
                     activeTasks.equals(other.activeTasks) &&
-                    standbyTasks.equals(other.standbyTasks);
+                    standbyTasks.equals(other.standbyTasks) &&
+                    partitionsByHost.equals(other.partitionsByHost);
 
             return result && tasksByHost.equals(other.tasksByHost);
         } else {
@@ -431,7 +474,8 @@ public class AssignmentInfo {
             + ", supported version=" + latestSupportedVersion
             + ", active tasks=" + activeTasks
             + ", standby tasks=" + standbyTasks
-            + ", tasksByHosts=" + tasksByHost + "]";
+            + ", tasksByHosts=" + tasksByHost
+            + ", partitionsByHost=" + partitionsByHost + "]";
     }
 
 }

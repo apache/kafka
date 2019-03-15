@@ -92,8 +92,8 @@ public class StreamsMetadataStateTest {
         });
 
         builder.globalTable("global-topic",
-                Consumed.with(null, null),
-                Materialized.<Object, Object, KeyValueStore<Bytes, byte[]>>as(globalTable));
+                            Consumed.with(null, null),
+                            Materialized.<Object, Object, KeyValueStore<Bytes, byte[]>>as(globalTable));
 
         TopologyWrapper.getInternalTopologyBuilder(builder.build()).setApplicationId("appId");
 
@@ -207,8 +207,8 @@ public class StreamsMetadataStateTest {
                 Collections.singleton(topic3P0));
 
         final StreamsMetadata actual = metadataState.getMetadataWithKey("table-three",
-                "the-key",
-                Serdes.String().serializer());
+                                                               "the-key",
+                                                                    Serdes.String().serializer());
 
         assertEquals(expected, actual);
     }

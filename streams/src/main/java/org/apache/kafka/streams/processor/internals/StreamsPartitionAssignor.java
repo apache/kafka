@@ -365,6 +365,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                         Collections.emptyList(),
                         Collections.emptyMap(),
                         Collections.emptyMap(),
+                        Collections.emptyMap(),
                         errorCode).encode()
                 ));
             }
@@ -678,7 +679,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
         final Map<String, Assignment> assignment;
         if (versionProbing) {
-            assignment = versionProbingAssignment(clientMetadataMap, partitionsForTask, tasksByHostState, futureConsumers, minReceivedMetadataVersion);
+            assignment = versionProbingAssignment(clientMetadataMap, partitionsForTask, partitionsByHostState, futureConsumers, minReceivedMetadataVersion);
         } else {
             assignment = computeNewAssignment(clientMetadataMap, partitionsForTask, tasksByHostState, minReceivedMetadataVersion);
         }
@@ -733,7 +734,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 }
 
                 // finally, encode the assignment before sending back to coordinator
-                final ByteBuffer bb = new AssignmentInfo(minUserMetadataVersion, active, standby, tasksByHostState, 0).encode();
+                final ByteBuffer bb = new AssignmentInfo(minUserMetadataVersion, active, standby, tasksByHostState, Collections.emptyMap(), 0).encode();
                 assignmentSize = assignmentSize + bb.array().length;
                 assignment.put(consumer, new Assignment(
                         activePartitions, bb));
@@ -744,34 +745,13 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         return assignment;
     }
 
-    Map<HostInfo, Set<TaskId>> convertTopicPartitionsToTaskIds(final Map<HostInfo, Set<TopicPartition>> partitionsByHostState) {
-        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = this.taskManager.builder().topicGroups();
-        final Map<String, Integer> topicToTaskMap = new HashMap<>();
-        for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
-            for (final String sourceTopic : entry.getValue().sourceTopics) {
-                topicToTaskMap.put(sourceTopic, entry.getKey());
-            }
-        }
-        final Map<HostInfo, Set<TaskId>> tasksByHostState = new HashMap<>();
-
-        for (final Map.Entry<HostInfo, Set<TopicPartition>> entry : partitionsByHostState.entrySet()) {
-            final HostInfo key = entry.getKey();
-            final Set<TaskId> taskIdsForHost = new HashSet<>();
-            for (final TopicPartition topicPartition : entry.getValue()) {
-                taskIdsForHost.add(new TaskId(topicToTaskMap.get(topicPartition.topic()), topicPartition.partition()));
-            }
-            tasksByHostState.put(key, taskIdsForHost);
-        }
-        return tasksByHostState;
-    }
-
     private Map<String, Assignment> versionProbingAssignment(final Map<UUID, ClientMetadata> clientsMetadata,
                                                              final Map<TaskId, Set<TopicPartition>> partitionsForTask,
-                                                             final Map<HostInfo, Set<TaskId>> tasksByHostState,
+                                                             final Map<HostInfo, Set<TopicPartition>> partitionsByHostState,
                                                              final Set<String> futureConsumers,
                                                              final int minUserMetadataVersion) {
         final Map<String, Assignment> assignment = new HashMap<>();
-        long assignmentSize = 0;
+
         // assign previously assigned tasks to "old consumers"
         for (final ClientMetadata clientMetadata : clientsMetadata.values()) {
             for (final String consumerId : clientMetadata.consumers) {
@@ -792,18 +772,25 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     standbyTasks.put(taskId, partitionsForTask.get(taskId));
                 }
 
-                final ByteBuffer bb = new AssignmentInfo(minUserMetadataVersion, activeTasks, standbyTasks, tasksByHostState, 0).encode();
-                assignmentSize = assignmentSize + bb.array().length;
                 assignment.put(consumerId, new Assignment(
-                        assignedPartitions, bb));
+                        assignedPartitions,
+                        new AssignmentInfo(
+                                minUserMetadataVersion,
+                                activeTasks,
+                                standbyTasks,
+                                Collections.emptyMap(),
+                                partitionsByHostState,
+                                0)
+                                .encode()
+                ));
             }
         }
 
         // add empty assignment for "future version" clients (ie, empty version probing response)
         for (final String consumerId : futureConsumers) {
             assignment.put(consumerId, new Assignment(
-                Collections.emptyList(),
-                new AssignmentInfo().encode()
+                    Collections.emptyList(),
+                    new AssignmentInfo().encode()
             ));
         }
 
