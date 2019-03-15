@@ -53,5 +53,6 @@ class ReassignPartitionsZNodeTest {
     assertTrue(result.isRight)
     val assignmentMap = result.right.get
     assertEquals(Seq(replica1, replica2), assignmentMap(new TopicPartition(topic, partition1))("replicas"))
+    assertEquals(Seq(replica1, replica3), assignmentMap(new TopicPartition(topic, partition1))("original_replicas"))
   }
 }

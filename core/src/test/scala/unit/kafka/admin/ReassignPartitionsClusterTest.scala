@@ -790,11 +790,9 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       new TopicPartition("orders", 2) -> scala.Predef.Map("replicas" -> Seq(4, 5), "original_replicas" -> Seq(2, 1))  // moves
     )
 
-    // shutdonw 2, 4, 5,  Leave 0, 1, 3 brokers up, so the ressignments are pending.
+    // shutdonw 2, 4, 5,  Leave 0, 1, 3 brokers up, so the reassignments are pending.
     servers.foreach( server => server.config.brokerId match {
-      case 2 => server.shutdown()
-      case 4 => server.shutdown()
-      case 5 => server.shutdown()
+      case 2 | 4 | 5 => server.shutdown()
       case _ =>
     })
 
@@ -807,6 +805,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitUntilTrue(() => zkClient.getTopicPartitionStates(Seq(tp)).get(tp).exists { leaderIsrAndControllerEpoch =>
       leaderIsrAndControllerEpoch.leaderAndIsr.isr.contains(3) },
       s"topic/partition $tp does not have broker 3 in its ISR: %s".format(zkClient.getTopicPartitionStates(Seq(tp)).get(tp)), pause = 10000L)
+    // Shutdown broker 1 as well, so orders-1 original_replicas (1,2), both brokers are all offline.
     servers.foreach( server => server.config.brokerId match {
       case 1 => server.shutdown()
       case _ =>

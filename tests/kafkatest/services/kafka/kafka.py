@@ -498,6 +498,27 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.logger.debug("Verify partition reassignment:")
         self.logger.debug(output)
 
+    def execute_reassign_cancel(self, node=None):
+        """Run the cancel pending reassign partitions admin tool in "cancel" mode
+        """
+        if node is None:
+            node = self.nodes[0]
+
+        # create command
+        cmd = "%s " % self.path.script( "kafka-reassign-partitions.sh", node)
+        cmd += "--zookeeper %s " % self.zk_connect_setting()
+        cmd += "--cancel"
+
+        # send command
+        self.logger.info("Executing cancel / rollback pending partition reassignment...")
+        self.logger.debug(cmd)
+        output = ""
+        for line in node.account.ssh_capture(cmd):
+            output += line
+
+        self.logger.debug("Verify cancel / rollback pending partition reassignment:")
+        self.logger.debug(output)
+
     def search_data_files(self, topic, messages):
         """Check if a set of messages made it into the Kakfa data files. Note that
         this method takes no account of replication. It simply looks for the

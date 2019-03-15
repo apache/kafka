@@ -287,6 +287,30 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testCancelRollbackReassignment(): Unit = {
+    servers = makeServers(2)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val otherBrokerId = servers.map(_.config.brokerId).filter(_ != controllerId).head
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(controllerId))
+    val reassignment = Map(tp -> Map("replicas" -> Seq(otherBrokerId), "original_replicas" -> Seq(controllerId)))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+    servers(otherBrokerId).shutdown()
+    servers(otherBrokerId).awaitShutdown()
+    zkClient.createPartitionReassignment(reassignment)
+    waitForPartitionState(tp, firstControllerEpoch, controllerId, LeaderAndIsr.initialLeaderEpoch + 1,
+      "failed to get expected partition state during partition reassignment with offline replica")
+    // Cancel / Rollback pending reassignments
+    zkClient.createReassignCancel()
+    TestUtils.waitUntilTrue(() => zkClient.getReplicaAssignmentForTopics(Set(tp.topic)) == reassignment.map{ case(tp, replicas_type) => tp -> replicas_type("original_replicas")},
+      "failed to get updated partition assignment on topic znode after cancel / rollback partition reassignment")
+    TestUtils.waitUntilTrue(() => !zkClient.reassignPartitionsInProgress,
+      "failed to remove reassign partitions path after completion")
+    TestUtils.waitUntilTrue(() => !zkClient.reassignCancelInPlace,
+      "failed to remove cancel reassignment znode after reassignment cancellation")
+  }
+
+  @Test
   def testPreferredReplicaLeaderElection(): Unit = {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
