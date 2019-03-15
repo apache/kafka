@@ -430,7 +430,7 @@ class TopologyTest extends JUnitSuite {
     assertNotEquals(getTopologyScala.build(props).describe.toString,
                     getTopologyScala.build(propsNoOptimization).describe.toString)
     assertEquals(getTopologyScala.build(propsNoOptimization).describe.toString,
-                 getTopologyScala.build(propsNoOptimization).describe.toString)
+                 getTopologyJava.build(propsNoOptimization).describe.toString)
     assertEquals(getTopologyScala.build(props).describe.toString, getTopologyJava.build(props).describe.toString)
   }
 
