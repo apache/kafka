@@ -1169,6 +1169,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             try {
               while (true) {
                 consumer.poll(JDuration.ofSeconds(5))
+                if (!consumer.assignment().isEmpty && latch.getCount > 0L)
+                  latch.countDown()
                 consumer.commitSync()
               }
             } catch {
