@@ -67,6 +67,7 @@ import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -74,6 +75,7 @@ import org.apache.kafka.common.requests.ListOffsetRequest;
 import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -3183,12 +3185,40 @@ public class FetcherTest {
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.leaderAndEpoch(tp0).leader, Optional.of(1));
         subscriptions.seek(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1), leaderAndEpoch));
 
+        // Check for truncation, this should cause tp0 to go into validation
+        fetcher.checkForTruncation();
+
         // No fetches sent since we entered validation
         assertEquals(0, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
         assertTrue(subscriptions.awaitingValidation(tp0));
 
-        // TODO prepare OffsetForEpoch response then check that we update the subscription position correctly.
+        // Prepare OffsetForEpoch response then check that we update the subscription position correctly.
+        Map<TopicPartition, EpochEndOffset> endOffsetMap = new HashMap<>();
+        endOffsetMap.put(tp0, new EpochEndOffset(Errors.NONE, 1, 10L));
+        OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(endOffsetMap);
+        client.prepareResponse(resp);
+        consumerClient.pollNoWakeup();
+
+        assertFalse(subscriptions.awaitingValidation(tp0));
+
+        // Fetch again, now it works
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        client.prepareResponse(fullFetchResponse(tp0, records, Errors.NONE, 100L, 0));
+        consumerClient.pollNoWakeup();
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
+        assertTrue(partitionRecords.containsKey(tp0));
+
+        assertEquals(subscriptions.position(tp0).offset, 3L);
+        assertOptional(subscriptions.position(tp0).lastFetchEpoch, value -> assertEquals(value.intValue(), 1));
+
+
+
+
 
     }
 

@@ -445,11 +445,10 @@ public class Metadata implements Closeable {
         }
     }
 
-    public LeaderAndEpoch leaderAndEpoch(TopicPartition tp) {
+    public synchronized LeaderAndEpoch leaderAndEpoch(TopicPartition tp) {
         Node leader = fetch().leaderFor(tp);
         if (leader == null)
             leader = Node.noNode();
-        // TODO there a race here between reading the leader node and reading the epoch? Does it matter?
         Optional<Integer> epoch = lastSeenLeaderEpoch(tp);
         return new LeaderAndEpoch(leader, epoch);
     }
@@ -459,21 +458,11 @@ public class Metadata implements Closeable {
         public static final LeaderAndEpoch NO_LEADER_OR_EPOCH = new LeaderAndEpoch(Node.noNode(), Optional.empty());
 
         public final Node leader;
-        public final Optional<Integer> epoch; // TODO shouldn't store an Optional
+        public final Optional<Integer> epoch;
 
         public LeaderAndEpoch(Node leader, Optional<Integer> epoch) {
             this.leader = Objects.requireNonNull(leader);
             this.epoch = Objects.requireNonNull(epoch);
-        }
-
-        public boolean isObsoletedBy(LeaderAndEpoch update) {
-            // If epoch information is missing from the update, we always accept it. This allows
-            // for graceful downgrades of the brokers.
-            if (!update.epoch.isPresent())
-                return true;
-
-            // Otherwise, if the new epoch is larger, then
-            return epoch.isPresent() && update.epoch.get() >= epoch.get();
         }
 
         public static LeaderAndEpoch noLeaderOrEpoch() {

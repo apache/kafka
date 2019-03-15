@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataCache;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -561,9 +562,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 List<ConsumerRecord<K, V>> partRecords = partitionRecords.fetchRecords(maxRecords);
 
                 if (partitionRecords.nextFetchOffset > position.offset) {
-                    ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partitionRecords.partition);
                     SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
-                            partitionRecords.nextFetchOffset, partitionRecords.lastEpoch, leaderAndEpoch);
+                            partitionRecords.nextFetchOffset, partitionRecords.lastEpoch, position.currentLeader);
 
                     log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
                             "position to {}", position, partitionRecords.partition, nextPosition);
@@ -906,8 +906,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 // TODO safe to get leader-and-epoch here? Should we use the info in partitionInfoAndEpoch?
                 ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
 
-                // Check the latest epoch from subscription
                 SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
+
+                /*
+
+
 
                 // If the leader or epoch have changed, we need to validate the fetch position
                 if (!position.safeToFetchFrom(leaderAndEpoch)) {
@@ -920,6 +923,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     }
                     // If the last fetch epoch is not known, we can't do any validation so we just continue with the fetch.
                 }
+                */
 
                 // if there is a leader and no in-flight requests, issue a new fetch
                 FetchSessionHandler.Builder builder = fetchable.get(leaderAndEpoch.leader);
@@ -943,6 +947,50 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             }
         }
 
+        /*
+        if (!partitionsToValidate.isEmpty()) {
+            // Send off the OffsetsForLeader requests asynchronously
+            Map<Node, Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData>> regrouped =
+                    regroupPartitionMapByNode(partitionsToValidate);
+
+            regrouped.forEach((node, dataMap) -> {
+                OffsetsForLeaderEpochRequest.Builder builder = new OffsetsForLeaderEpochRequest.Builder(
+                        ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), dataMap);
+                sendOffsetForLeaderEpochRequest(node, builder);
+            });
+        }
+        */
+
+        Map<Node, FetchSessionHandler.FetchRequestData> reqs = new LinkedHashMap<>();
+        for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet()) {
+            reqs.put(entry.getKey(), entry.getValue().build());
+        }
+        return reqs;
+    }
+
+    /**
+     *
+     */
+    public void checkForTruncation() {
+        Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> partitionsToValidate = new LinkedHashMap<>();
+
+        subscriptions.assignedPartitions().forEach(topicPartition -> {
+            ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
+
+            // Check the latest epoch from subscription
+            SubscriptionState.FetchPosition position = this.subscriptions.position(topicPartition);
+
+            // If the leader or epoch have changed, we need to validate the fetch position
+            if (position != null && !position.safeToFetchFrom(leaderAndEpoch)) {
+                if (position.lastFetchEpoch.isPresent()) {
+                    subscriptions.maybeValidatePosition(topicPartition, leaderAndEpoch,
+                        (lae, lfe) -> partitionsToValidate.put(topicPartition,
+                            new OffsetsForLeaderEpochRequest.PartitionData(lae.epoch, lfe)));
+
+                }
+            }
+        });
+
         if (!partitionsToValidate.isEmpty()) {
             // Send off the OffsetsForLeader requests asynchronously
             Map<Node, Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData>> regrouped =
@@ -955,11 +1003,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             });
         }
 
-        Map<Node, FetchSessionHandler.FetchRequestData> reqs = new LinkedHashMap<>();
-        for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet()) {
-            reqs.put(entry.getKey(), entry.getValue().build());
-        }
-        return reqs;
     }
 
     private <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(Map<TopicPartition, T> partitionMap) {
@@ -980,32 +1023,28 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                 Map<TopicPartition, OffsetAndMetadata> truncationWithoutResetPolicy = new HashMap<>();
                 ofler.responses().forEach((respTopicPartition, respEndOffset) -> {
-                    // For each OffsetsForLeader response, check for truncation. This occurs iff the epoch has changed
-                    // and the end offset is lower than our current offset
-                    ConsumerMetadata.LeaderAndEpoch currentLeaderAndEpoch = metadata.leaderAndEpoch(respTopicPartition);
-                    ConsumerMetadata.LeaderAndEpoch leaderAndEpochForEndOffset = new ConsumerMetadata.LeaderAndEpoch(
-                            Node.noNode(), Optional.of(respEndOffset.leaderEpoch()));
-
-                    if (currentLeaderAndEpoch.isObsoletedBy(leaderAndEpochForEndOffset)) {
-                        // If we have a new epoch, check if our offset is ahead of the new end offset
+                    // For each OffsetsForLeader response, check for truncation. This occurs iff the end offset is lower
+                    // than our current offset
+                    if (subscriptions.awaitingValidation(respTopicPartition)) {
                         SubscriptionState.FetchPosition currentPosition = subscriptions.position(respTopicPartition);
                         if (respEndOffset.endOffset() < currentPosition.offset) {
                             // Try to reset the offset
                             if (subscriptions.hasDefaultOffsetResetPolicy()) {
                                 log.info("Truncation detected for partition {}, resetting offset", respTopicPartition);
                                 subscriptions.requestOffsetReset(respTopicPartition);
+                                Metadata.LeaderAndEpoch currentLeader = metadata.leaderAndEpoch(respTopicPartition);
+                                SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                                        respEndOffset.endOffset(), Optional.of(respEndOffset.leaderEpoch()), currentLeader);
+                                subscriptions.position(respTopicPartition, newPosition);
                             } else {
                                 log.warn("Truncation detected for partition {}, but no reset policy is set", respTopicPartition);
                                 truncationWithoutResetPolicy.put(respTopicPartition, new OffsetAndMetadata(
-                                        currentPosition.offset, currentPosition.currentLeader.epoch, null));
+                                        respEndOffset.endOffset(), Optional.of(respEndOffset.leaderEpoch()), null));
                             }
                         } else {
                             // Offset is fine, clear the validation state
                             subscriptions.validate(respTopicPartition);
                         }
-
-                        // Despite any truncation, there is a new leader epoch out there so we should update
-                        leaderAndEpochForEndOffset.epoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(respTopicPartition, epoch));
                     }
                 });
                 if (!truncationWithoutResetPolicy.isEmpty()) {
