@@ -1315,7 +1315,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     executors += executor
     val future = executor.submit(new Runnable() {
       def run() {
-        assertEquals(0, consumer.poll(100).count)
+        consumer.commitSync()
       }
     })
     verifyTimeout(future)
