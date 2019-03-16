@@ -920,6 +920,28 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     /**
+     * Returns the lowest priority channel chosen using the following sequence:
+     *   1) If one or more channels are in closing state, return any one of them
+     *   2) If idle expiry manager is enabled, return the least recently updated channel
+     *   3) Otherwise return any of the channels
+     *
+     * This method is used to close a channel to accommodate a new channel on the inter-broker listener
+     * when broker-wide `max.connections` limit is enabled.
+     */
+    public KafkaChannel lowestPriorityChannel() {
+        KafkaChannel channel = null;
+        if (!closingChannels.isEmpty()) {
+            channel = closingChannels.values().iterator().next();
+        } else if (idleExpiryManager != null && !idleExpiryManager.lruConnections.isEmpty()) {
+            String channelId = idleExpiryManager.lruConnections.keySet().iterator().next();
+            channel = channel(channelId);
+        } else if (!channels.isEmpty()) {
+            channel = channels.values().iterator().next();
+        }
+        return channel;
+    }
+
+    /**
      * Get the channel associated with selectionKey
      */
     private KafkaChannel channel(SelectionKey key) {

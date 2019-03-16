@@ -17,6 +17,7 @@
 
 package kafka.api
 
+import java.time.Duration
 import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.time.temporal.ChronoUnit
@@ -250,7 +251,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
           s"value$i".getBytes(StandardCharsets.UTF_8))
         (record, producer.send(record, callback))
       }
-      producer.close(Duration.ofMillis(20000L))
+      producer.close(Duration.ofSeconds(20L))
       recordAndFutures.foreach { case (record, future) =>
         val recordMetadata = future.get
         if (timestampType == TimestampType.LOG_APPEND_TIME)
@@ -456,7 +457,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
           case e: ExecutionException => assertEquals(classOf[KafkaException], e.getCause.getClass)
         }
       }
-      assertEquals("Fetch response should have no message returned.", 0, consumer.poll(50).count)
+      assertEquals("Fetch response should have no message returned.", 0, consumer.poll(Duration.ofMillis(50L)).count)
     }
   }
 
@@ -480,7 +481,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         // The close call will be called by all the message callbacks. This tests idempotence of the close call.
         producer.close(Duration.ZERO)
         // Test close with non zero timeout. Should not block at all.
-        producer.close(Duration.of(Long.MaxValue,  ChronoUnit.MICROS))
+        producer.close()
       }
     }
     for (i <- 0 until 50) {
