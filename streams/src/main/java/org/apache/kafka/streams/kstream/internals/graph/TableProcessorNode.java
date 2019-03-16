@@ -17,36 +17,32 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
-import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Arrays;
 
-public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraphNode {
+public class TableProcessorNode<K, V> extends StreamsGraphNode {
 
-    private final MaterializedInternal<K, V, S> materializedInternal;
     private final ProcessorParameters<K, V> processorParameters;
     private final String[] storeNames;
+    private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V> processorParameters,
-                              final MaterializedInternal<K, V, S> materializedInternal,
-                              final String[] storeNames) {
+                              final String[] storeNames,
+                              final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
 
         super(nodeName);
         this.processorParameters = processorParameters;
-        this.materializedInternal = materializedInternal;
         this.storeNames = storeNames != null ? storeNames : new String[]{};
+        this.storeBuilder = storeBuilder;
     }
 
     @Override
     public String toString() {
         return "TableProcessorNode{" +
-               "materializedInternal=" + materializedInternal +
                ", processorParameters=" + processorParameters +
                ", storeNames=" + Arrays.toString(storeNames) +
                "} " + super.toString();
@@ -62,15 +58,9 @@ public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraph
             topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
         }
 
-        // only materialize if materialized is specified and it is queryable
-        final boolean shouldMaterialize = materializedInternal != null && materializedInternal.queryableStoreName() != null;
-        if (shouldMaterialize) {
-            // TODO: we are enforcing this as a keyvalue store, but it should go beyond any type of stores
-            topologyBuilder.addStateStore(
-                new KeyValueStoreMaterializer<>(
-                    (MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal
-                ).materialize(),
-                processorName);
+        // TODO: we are enforcing this as a keyvalue store, but it should go beyond any type of stores
+        if (this.storeBuilder != null) {
+            topologyBuilder.addStateStore(this.storeBuilder, processorName);
         }
     }
 }
