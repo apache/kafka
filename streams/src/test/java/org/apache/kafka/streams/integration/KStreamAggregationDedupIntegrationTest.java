@@ -25,6 +25,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KafkaStreamsTest.MyStringSerde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -54,6 +55,7 @@ import java.util.List;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
+import static org.junit.Assert.assertTrue;
 
 /**
  * Similar to KStreamAggregationIntegrationTest but with dedupping enabled
@@ -113,15 +115,19 @@ public class KStreamAggregationDedupIntegrationTest {
     @Test
     public void shouldReduce() throws Exception {
         produceMessages(System.currentTimeMillis());
+        final MyStringSerde keyTestSerde = new MyStringSerde();
+        final MyStringSerde valueTestSerde = new MyStringSerde();
         groupedStream
                 .reduce(reducer, Materialized.as("reduce-by-key"))
                 .toStream()
-                .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
+                .to(outputTopic, Produced.with(keyTestSerde, valueTestSerde));
 
         startStreams();
 
         produceMessages(System.currentTimeMillis());
 
+        assertTrue(keyTestSerde.configured());
+        assertTrue(valueTestSerde.configured());
         validateReceivedMessages(
                 new StringDeserializer(),
                 new StringDeserializer(),

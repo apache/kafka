@@ -476,26 +476,48 @@ public class KafkaStreamsTest {
         globalStreams.metadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
     }
 
-    class MyStringSerializer extends StringSerializer {
+    static class MyStringSerializer extends StringSerializer {
         boolean configured = false;
+        boolean called = false;
 
         @Override
         public void configure(final Map<String, ?> configs, final boolean isKey) {
             super.configure(configs, isKey);
             configured = true;
         }
+
+        @Override
+        public byte[] serialize(String topic, String data) {
+            called = true;
+            return super.serialize(topic, data);
+        }
+
+        boolean configured() {
+            return !called || configured;
+        }
     }
-    class MyStringDeserializer extends StringDeserializer {
+    static class MyStringDeserializer extends StringDeserializer {
         boolean configured = false;
+        boolean called = false;
 
         @Override
         public void configure(final Map<String, ?> configs, final boolean isKey) {
             super.configure(configs, isKey);
             configured = true;
         }
+        @Override
+        public String deserialize(String topic, byte[] data) {
+            called = true;
+            return super.deserialize(topic, data);
+        }
+
+        boolean configured() {
+            return !called || configured;
+        }
     }
-    class MyStringSerde<K> extends Serdes.WrapperSerde<String> {
-        MyStringSerde() {
+
+    public static class MyStringSerde<K> extends Serdes.WrapperSerde<String> {
+        public MyStringSerde() {
             super(new MyStringSerializer(), new MyStringDeserializer());
         }
 
@@ -503,8 +525,9 @@ public class KafkaStreamsTest {
         public void configure(final Map<String, ?> configs, final boolean isKey) {
             super.configure(configs, isKey);
         }
-        boolean configured() {
-            if (!((MyStringDeserializer)this.deserializer()).configured) return false;
+        public boolean configured() {
+            if (!((MyStringSerializer)this.serializer()).configured()) return false;
+            if (!((MyStringDeserializer) this.deserializer()).configured()) return false;
             return true;
         }
     }
