@@ -54,9 +54,9 @@ public class LineSplit {
 
         /* ------- use the code below for Java 8 and uncomment the above ----
 
-        builder.stream("streams-plaintext-input")
-               .flatMapValues(value -> Arrays.asList(value.split("\\W+")))
-               .to("streams-linesplit-output");
+        builder.<String, String>stream("streams-plaintext-input")
+            .flatMapValues(value -> Arrays.asList(value.split("\\W+")))
+            .to("streams-linesplit-output");
 
            ----------------------------------------------------------------- */
 
