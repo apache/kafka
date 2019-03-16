@@ -113,6 +113,7 @@ public class KStreamAggregationDedupIntegrationTest {
 
 
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldReduce() throws Exception {
         produceMessages(System.currentTimeMillis());
         final MyStringSerde keyTestSerde = new MyStringSerde();
