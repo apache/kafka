@@ -55,6 +55,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
     public Deserializer getKeyDeSer() {
         return keyDeserializer;
     }
+
     public Deserializer getValueDeSer() {
         return valDeserializer;
     }
