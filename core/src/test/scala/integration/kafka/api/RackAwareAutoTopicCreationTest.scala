@@ -25,6 +25,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.junit.Assert._
 import org.junit.Test
+
 import scala.collection.Map
 
 class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {

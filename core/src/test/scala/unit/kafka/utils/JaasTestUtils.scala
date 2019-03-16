@@ -16,8 +16,9 @@
  */
 package kafka.utils
 
-import java.io.{File, BufferedWriter, FileWriter}
+import java.io.{BufferedWriter, File, FileWriter}
 import java.util.Properties
+
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.utils.Java
 

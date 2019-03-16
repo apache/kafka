@@ -56,7 +56,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     val result = service.deleteGroups()
     assertTrue(s"The expected error (${Errors.GROUP_ID_NOT_FOUND}) was not detected while deleting consumer group",
-      result.size == 1 && result.keySet.contains(missingGroup) && result.get(missingGroup).get.getCause
+      result.size == 1 && result.keySet.contains(missingGroup) && result(missingGroup).getCause
         .isInstanceOf[GroupIdNotFoundException])
   }
 
@@ -92,9 +92,9 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     }, "The group did not initialize as expected.", maxRetries = 3)
 
     val result = service.deleteGroups()
-    assertNotNull(s"Group was deleted successfully, but it shouldn't have been. Result was:(${result})", result.get(group).get)
+    assertNotNull(s"Group was deleted successfully, but it shouldn't have been. Result was:(${result})", result(group))
     assertTrue(s"The expected error (${Errors.NON_EMPTY_GROUP}) was not detected while deleting consumer group. Result was:(${result})",
-      result.size == 1 && result.keySet.contains(group) && result.get(group).get.getCause.isInstanceOf[GroupNotEmptyException])
+      result.size == 1 && result.keySet.contains(group) && result(group).getCause.isInstanceOf[GroupNotEmptyException])
   }
 
   @Test
@@ -142,7 +142,7 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
 
     val result = service.deleteGroups()
     assertTrue(s"The consumer group could not be deleted as expected",
-      result.size == 1 && result.keySet.contains(group) && result.get(group).get == null)
+      result.size == 1 && result.keySet.contains(group) && result(group) == null)
   }
 
   @Test
@@ -196,8 +196,8 @@ class DeleteConsumerGroupsTest extends ConsumerGroupCommandTest {
     val result = service2.deleteGroups()
     assertTrue(s"The consumer group deletion did not work as expected",
       result.size == 2 &&
-        result.keySet.contains(group) && result.get(group).get == null &&
-        result.keySet.contains(missingGroup) && result.get(missingGroup).get.getMessage.contains(Errors.GROUP_ID_NOT_FOUND.message))
+        result.keySet.contains(group) && result(group) == null &&
+        result.keySet.contains(missingGroup) && result(missingGroup).getMessage.contains(Errors.GROUP_ID_NOT_FOUND.message))
   }
 
 

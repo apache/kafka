@@ -17,23 +17,22 @@
 package kafka.server
 
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
+import java.util.{Optional, Properties}
 
 import kafka.api._
-import kafka.utils._
 import kafka.cluster.Replica
 import kafka.log.{Log, LogManager}
 import kafka.server.QuotaFactory.UnboundedQuota
+import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.requests.FetchRequest.PartitionData
-import org.junit.{After, Before, Test}
-import java.util.{Optional, Properties}
-import java.util.concurrent.atomic.AtomicBoolean
-
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
 class SimpleFetchTest {
 

@@ -19,20 +19,20 @@ package kafka.server
 import java.nio.charset.StandardCharsets
 import java.util.Properties
 
+import kafka.admin.AdminOperationException
+import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig._
 import kafka.server.Constants._
-import org.junit.Assert._
-import org.apache.kafka.common.metrics.Quota
-import org.easymock.EasyMock
-import org.junit.Test
-import kafka.integration.KafkaServerTestHarness
 import kafka.utils._
-import kafka.admin.AdminOperationException
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.metrics.Quota
+import org.easymock.EasyMock
+import org.junit.Assert._
+import org.junit.Test
 
-import scala.collection.Map
 import scala.collection.JavaConverters._
+import scala.collection.Map
 
 class DynamicConfigChangeTest extends KafkaServerTestHarness {
   def generateConfigs = List(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))

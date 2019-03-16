@@ -18,21 +18,21 @@
 package kafka.metrics
 
 import java.util.Properties
-import javax.management.ObjectName
 
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.{Meter, MetricPredicate}
-import org.junit.Test
-import org.junit.Assert._
+import javax.management.ObjectName
 import kafka.integration.KafkaServerTestHarness
+import kafka.log.LogConfig
 import kafka.server._
 import kafka.utils._
-
-import scala.collection._
-import scala.collection.JavaConverters._
-import scala.util.matching.Regex
-import kafka.log.LogConfig
 import org.apache.kafka.common.TopicPartition
+import org.junit.Assert._
+import org.junit.Test
+
+import scala.collection.JavaConverters._
+import scala.collection._
+import scala.util.matching.Regex
 
 class MetricsTest extends KafkaServerTestHarness with Logging {
   val numNodes = 2
@@ -107,7 +107,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
       val brokerId = server.config.brokerId
       val logSize = log.map(_.size)
       assertTrue(s"Expected broker $brokerId to have a Log for $topicPartition with positive size, actual: $logSize",
-        logSize.map(_ > 0).getOrElse(false))
+        logSize.exists(_ > 0))
     }
 
     val initialReplicationBytesIn = meterCount(replicationBytesIn)

@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
-import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -120,7 +119,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
         Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
         for (TopicPartition tp : topicPartitions) {
             if (!partitionsByTopic.containsKey(tp.topic())) {
-                partitionsByTopic.put(tp.topic(), new ArrayList<Integer>());
+                partitionsByTopic.put(tp.topic(), new ArrayList<>());
             }
             partitionsByTopic.get(tp.topic()).add(tp.partition());
         }
@@ -143,7 +142,7 @@ public class DescribeLogDirsRequest extends AbstractRequest {
         switch (versionId) {
             case 0:
             case 1:
-                return new DescribeLogDirsResponse(throttleTimeMs, new HashMap<String, LogDirInfo>());
+                return new DescribeLogDirsResponse(throttleTimeMs, new HashMap<>());
             default:
                 throw new IllegalArgumentException(
                     String.format("Version %d is not valid. Valid versions for %s are 0 to %d", versionId,

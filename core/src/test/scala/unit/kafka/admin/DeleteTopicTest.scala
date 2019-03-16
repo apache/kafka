@@ -16,19 +16,19 @@
  */
 package kafka.admin
 
-import kafka.log.Log
-import kafka.zk.{TopicPartitionZNode, ZooKeeperTestHarness}
-import kafka.utils.TestUtils
-import kafka.server.{KafkaConfig, KafkaServer}
-import org.junit.Assert._
-import org.junit.{After, Test}
 import java.util.Properties
 
 import kafka.admin.TopicCommand.ZookeeperTopicService
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaDeletionSuccessful}
+import kafka.log.Log
+import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.utils.TestUtils
+import kafka.zk.{TopicPartitionZNode, ZooKeeperTestHarness}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
+import org.junit.Assert._
+import org.junit.{After, Test}
 
 class DeleteTopicTest extends ZooKeeperTestHarness {
 

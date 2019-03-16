@@ -18,22 +18,21 @@
 package kafka.utils
 
 import java.io._
+import java.lang.management._
 import java.nio._
 import java.nio.channels._
 import java.util.concurrent.locks.{Lock, ReadWriteLock}
-import java.lang.management._
 import java.util.{Base64, Properties, UUID}
 
 import com.typesafe.scalalogging.Logger
 import javax.management._
-
-import scala.collection._
-import scala.collection.mutable
 import kafka.cluster.EndPoint
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, Utils}
 import org.slf4j.event.Level
+
+import scala.collection.{mutable, _}
 
 /**
  * General helper functions!

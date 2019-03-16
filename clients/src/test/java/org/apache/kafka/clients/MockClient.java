@@ -26,7 +26,6 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
 import java.util.ArrayList;
@@ -44,12 +43,7 @@ import java.util.stream.Collectors;
  * A mock network client for use testing code
  */
 public class MockClient implements KafkaClient {
-    public static final RequestMatcher ALWAYS_TRUE = new RequestMatcher() {
-        @Override
-        public boolean matches(AbstractRequest body) {
-            return true;
-        }
-    };
+    public static final RequestMatcher ALWAYS_TRUE = body -> true;
 
     private static class FutureResponse {
         private final Node node;
@@ -428,12 +422,7 @@ public class MockClient implements KafkaClient {
     }
 
     public void waitForRequests(final int minRequests, long maxWaitMs) throws InterruptedException {
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return requests.size() >= minRequests;
-            }
-        }, maxWaitMs, "Expected requests have not been sent");
+        TestUtils.waitForCondition(() -> requests.size() >= minRequests, maxWaitMs, "Expected requests have not been sent");
     }
 
     public void reset() {

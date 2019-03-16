@@ -255,7 +255,7 @@ class DelegationTokenManagerTest extends ZooKeeperTestHarness  {
 
     //get all tokens for  empty owner list
     tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession, owner1, List())
-    assert(tokens.size == 0)
+    assert(tokens.isEmpty)
 
     //get all tokens for owner1
     tokens = getTokens(tokenManager, simpleAclAuthorizer, hostSession, owner1, List(owner1))

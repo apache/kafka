@@ -56,7 +56,7 @@ public class RequestContextTest {
         assertTrue(request.hasUnsupportedRequestVersion());
 
         Send send = context.buildResponse(new ApiVersionsResponse(0, Errors.UNSUPPORTED_VERSION,
-                Collections.<ApiVersionsResponse.ApiVersion>emptyList()));
+                Collections.emptyList()));
         ByteBufferChannel channel = new ByteBufferChannel(256);
         send.writeTo(channel);
 

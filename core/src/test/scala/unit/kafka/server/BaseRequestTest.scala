@@ -26,8 +26,8 @@ import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
 import kafka.utils._
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.ApiKeys
+import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractRequestResponse, RequestHeader, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 

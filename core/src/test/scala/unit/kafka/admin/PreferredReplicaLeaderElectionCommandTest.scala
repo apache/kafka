@@ -88,7 +88,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
   }
 
   private def getLeader(topicPartition: TopicPartition) = {
-    servers(0).metadataCache.getPartitionInfo(topicPartition.topic(), topicPartition.partition()).get.basePartitionState.leader
+    servers.head.metadataCache.getPartitionInfo(topicPartition.topic(), topicPartition.partition()).get.basePartitionState.leader
   }
 
   private def bootstrapServer(broker: Int = 0): String = {

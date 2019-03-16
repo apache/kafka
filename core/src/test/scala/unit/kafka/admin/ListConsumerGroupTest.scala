@@ -17,8 +17,8 @@
 package kafka.admin
 
 import joptsimple.OptionException
-import org.junit.Test
 import kafka.utils.TestUtils
+import org.junit.Test
 
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 

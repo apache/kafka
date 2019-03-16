@@ -19,8 +19,8 @@ package kafka.zookeeper
 
 import java.util
 import java.util.Locale
-import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 import java.util.concurrent._
+import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
 
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.metrics.KafkaMetricsGroup
@@ -31,8 +31,8 @@ import org.apache.zookeeper.AsyncCallback._
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
-import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper._
+import org.apache.zookeeper.data.{ACL, Stat}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Set

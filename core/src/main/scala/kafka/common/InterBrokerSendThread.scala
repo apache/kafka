@@ -16,8 +16,8 @@
  */
 package kafka.common
 
-import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Iterator}
 import java.util.Map.Entry
+import java.util.{ArrayDeque, ArrayList, Collection, Collections, HashMap, Iterator}
 
 import kafka.utils.ShutdownableThread
 import org.apache.kafka.clients.{ClientRequest, ClientResponse, NetworkClient, RequestCompletionHandler}

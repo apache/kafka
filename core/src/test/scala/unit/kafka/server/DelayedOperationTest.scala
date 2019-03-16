@@ -25,8 +25,8 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Time
-import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
 class DelayedOperationTest {
 
@@ -274,7 +274,7 @@ class DelayedOperationTest {
     // Lock held by another thread, should not block, only operations that can be
     // locked without blocking on the current thread should complete
     ops = createDelayedOperations(2)
-    runOnAnotherThread(ops(0).lock.lock(), true)
+    runOnAnotherThread(ops.head.lock.lock(), true)
     try {
       checkAndComplete(ops, Seq(ops(1)))
     } finally {

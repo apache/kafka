@@ -87,7 +87,7 @@ public abstract class KafkaFuture<T> implements Future<T> {
      * Returns a new KafkaFuture that is already completed with the given value.
      */
     public static <U> KafkaFuture<U> completedFuture(U value) {
-        KafkaFuture<U> future = new KafkaFutureImpl<U>();
+        KafkaFuture<U> future = new KafkaFutureImpl<>();
         future.complete(value);
         return future;
     }

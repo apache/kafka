@@ -22,6 +22,6 @@ package org.apache.kafka.clients;
  */
 public interface RequestCompletionHandler {
 
-    public void onComplete(ClientResponse response);
+    void onComplete(ClientResponse response);
 
 }

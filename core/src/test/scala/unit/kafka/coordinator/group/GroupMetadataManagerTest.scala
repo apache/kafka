@@ -1584,7 +1584,7 @@ class GroupMetadataManagerTest {
     assertEquals(Some(Errors.NONE), commitErrors.get.get(topicPartition1))
 
     // do not expire offsets while within retention period since commit timestamp
-    val expiryTimestamp = offsets.get(topicPartition1).get.commitTimestamp + defaultOffsetRetentionMs
+    val expiryTimestamp = offsets(topicPartition1).commitTimestamp + defaultOffsetRetentionMs
     time.sleep(expiryTimestamp - time.milliseconds() - 1)
 
     groupMetadataManager.cleanupGroupMetadata()

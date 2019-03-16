@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.network;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SslConfigs;
@@ -29,7 +31,6 @@ import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -46,8 +47,6 @@ import java.nio.ByteBuffer;
 import java.nio.channels.Channels;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.SocketChannel;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -525,10 +524,10 @@ public class SslTransportLayerTest {
     @Test
     public void testUnsupportedTLSVersion() throws Exception {
         String node = "0";
-        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.2"));
+        sslServerConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.2"));
         server = createEchoServer(SecurityProtocol.SSL);
 
-        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Arrays.asList("TLSv1.1"));
+        sslClientConfigs.put(SslConfigs.SSL_ENABLED_PROTOCOLS_CONFIG, Collections.singletonList("TLSv1.1"));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -546,10 +545,10 @@ public class SslTransportLayerTest {
         SSLContext context = SSLContext.getInstance("TLSv1.2");
         context.init(null, null, null);
         String[] cipherSuites = context.getDefaultSSLParameters().getCipherSuites();
-        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[0]));
+        sslServerConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[0]));
         server = createEchoServer(SecurityProtocol.SSL);
 
-        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Arrays.asList(cipherSuites[1]));
+        sslClientConfigs.put(SslConfigs.SSL_CIPHER_SUITES_CONFIG, Collections.singletonList(cipherSuites[1]));
         createSelector(sslClientConfigs);
         InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
@@ -597,25 +596,17 @@ public class SslTransportLayerTest {
         selector.send(new NetworkSend(node, ByteBuffer.wrap(message.getBytes())));
 
         // Send the message to echo server
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                try {
-                    selector.poll(100L);
-                } catch (IOException e) {
-                    return false;
-                }
-                return selector.completedSends().size() > 0;
+        TestUtils.waitForCondition(() -> {
+            try {
+                selector.poll(100L);
+            } catch (IOException e) {
+                return false;
             }
+            return selector.completedSends().size() > 0;
         }, "Timed out waiting for message to be sent");
 
         // Wait for echo server to send the message back
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return server.numSent() >= 2;
-            }
-        }, "Timed out waiting for echo server to send message");
+        TestUtils.waitForCondition(() -> server.numSent() >= 2, "Timed out waiting for echo server to send message");
 
         // Read the message from socket with only one poll()
         selector.poll(1000L);
@@ -674,7 +665,7 @@ public class SslTransportLayerTest {
     public void testNetworkThreadTimeRecorded() throws Exception {
         selector.close();
         this.selector = new Selector(NetworkReceive.UNLIMITED, Selector.NO_IDLE_TIMEOUT_MS, new Metrics(), Time.SYSTEM,
-                "MetricGroup", new HashMap<String, String>(), false, true, channelBuilder, MemoryPool.NONE, new LogContext());
+                "MetricGroup", new HashMap<>(), false, true, channelBuilder, MemoryPool.NONE, new LogContext());
 
         String node = "0";
         server = createEchoServer(SecurityProtocol.SSL);
@@ -700,17 +691,14 @@ public class SslTransportLayerTest {
 
         selector.unmute(node);
         // Wait for echo server to send the message back
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                try {
-                    selector.poll(100L);
-                    assertEquals(0, selector.numStagedReceives(channel));
-                } catch (IOException e) {
-                    return false;
-                }
-                return !selector.completedReceives().isEmpty();
+        TestUtils.waitForCondition(() -> {
+            try {
+                selector.poll(100L);
+                assertEquals(0, selector.numStagedReceives(channel));
+            } catch (IOException e) {
+                return false;
             }
+            return !selector.completedReceives().isEmpty();
         }, "Timed out waiting for a message to receive from echo server");
 
         long receiveTimeNanos = channel.getAndResetNetworkThreadTimeNanos();
@@ -880,12 +868,7 @@ public class SslTransportLayerTest {
         }
         server.selector().unmuteAll();
         selector.close(node);
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                return bytesOut.toByteArray().length == totalSendSize;
-            }
-        }, 5000, "All requests sent were not processed");
+        TestUtils.waitForCondition(() -> bytesOut.toByteArray().length == totalSendSize, 5000, "All requests sent were not processed");
     }
 
     /**

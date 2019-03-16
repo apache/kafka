@@ -17,11 +17,11 @@
 
 package kafka.utils
 
+import java.util.Random
+import java.util.concurrent.TimeUnit
+
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.utils.Time
-
-import java.util.concurrent.TimeUnit
-import java.util.Random
 
 import scala.math._
 

@@ -23,9 +23,8 @@ import kafka.security.auth._
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
-import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.network.ListenerName
-
+import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.SecurityUtils

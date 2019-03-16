@@ -783,7 +783,7 @@ public class RequestResponseTest {
         DescribeGroupsResponseData.DescribedGroupMember member = DescribeGroupsResponse.groupMember("memberId",
                 clientId, clientHost, new byte[0], new byte[0]);
         DescribeGroupsResponseData.DescribedGroup metadata = DescribeGroupsResponse.groupMetadata("test-group", Errors.NONE,
-                "STABLE", "consumer", "roundrobin", asList(member), Collections.emptySet());
+                "STABLE", "consumer", "roundrobin", singletonList(member), Collections.emptySet());
         describeGroupsResponseData.groups().add(metadata);
         return new DescribeGroupsResponse(describeGroupsResponseData);
     }
@@ -842,7 +842,7 @@ public class RequestResponseTest {
         if (version == 0) {
             Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
             responseData.put(new TopicPartition("test", 0),
-                    new ListOffsetResponse.PartitionData(Errors.NONE, asList(100L)));
+                    new ListOffsetResponse.PartitionData(Errors.NONE, singletonList(100L)));
             return new ListOffsetResponse(responseData);
         } else if (version == 1 || version == 2) {
             Map<TopicPartition, ListOffsetResponse.PartitionData> responseData = new HashMap<>();
@@ -860,21 +860,21 @@ public class RequestResponseTest {
 
     private MetadataResponse createMetadataResponse() {
         Node node = new Node(1, "host1", 1001);
-        List<Node> replicas = asList(node);
-        List<Node> isr = asList(node);
-        List<Node> offlineReplicas = asList();
+        List<Node> replicas = singletonList(node);
+        List<Node> isr = singletonList(node);
+        List<Node> offlineReplicas = Collections.emptyList();
 
         List<MetadataResponse.TopicMetadata> allTopicMetadata = new ArrayList<>();
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "__consumer_offsets", true,
-                asList(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node,
+                singletonList(new MetadataResponse.PartitionMetadata(Errors.NONE, 1, node,
                         Optional.of(5), replicas, isr, offlineReplicas))));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.LEADER_NOT_AVAILABLE, "topic2", false,
                 Collections.emptyList()));
         allTopicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, "topic3", false,
-            asList(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, 0, null,
-                Optional.empty(), replicas, isr, offlineReplicas))));
+                singletonList(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, 0, null,
+                        Optional.empty(), replicas, isr, offlineReplicas))));
 
-        return MetadataResponse.prepareResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
+        return MetadataResponse.prepareResponse(singletonList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
     }
 
     @SuppressWarnings("deprecation")
@@ -983,7 +983,7 @@ public class RequestResponseTest {
         Map<TopicPartition, UpdateMetadataRequest.PartitionState> partitionStates = new HashMap<>();
         List<Integer> isr = asList(1, 2);
         List<Integer> replicas = asList(1, 2, 3, 4);
-        List<Integer> offlineReplicas = asList();
+        List<Integer> offlineReplicas = Collections.emptyList();
         partitionStates.put(new TopicPartition("topic5", 105),
             new UpdateMetadataRequest.PartitionState(0, 2, 1, isr, 2, replicas, offlineReplicas));
         partitionStates.put(new TopicPartition("topic5", 1),
@@ -1048,7 +1048,7 @@ public class RequestResponseTest {
     }
 
     private ApiVersionsResponse createApiVersionResponse() {
-        List<ApiVersionsResponse.ApiVersion> apiVersions = asList(new ApiVersionsResponse.ApiVersion((short) 0, (short) 0, (short) 2));
+        List<ApiVersionsResponse.ApiVersion> apiVersions = singletonList(new ApiVersionsResponse.ApiVersion((short) 0, (short) 0, (short) 2));
         return new ApiVersionsResponse(Errors.NONE, apiVersions);
     }
 
@@ -1237,7 +1237,7 @@ public class RequestResponseTest {
                         new ResourcePattern(ResourceType.TOPIC, "mytopic4", PatternType.LITERAL),
                         new AccessControlEntry("User:ANONYMOUS", "*", AclOperation.DESCRIBE, AclPermissionType.DENY))))));
         responses.add(new AclFilterResponse(new ApiError(Errors.SECURITY_DISABLED, "No security"),
-            Collections.<AclDeletionResult>emptySet()));
+            Collections.emptySet()));
         return new DeleteAclsResponse(0, responses);
     }
 
@@ -1252,7 +1252,7 @@ public class RequestResponseTest {
         Map<ConfigResource, Collection<String>> resources = new HashMap<>();
         resources.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), asList("foo", "bar"));
         resources.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic"), null);
-        resources.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic a"), Collections.<String>emptyList());
+        resources.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic a"), Collections.emptyList());
         return new DescribeConfigsRequest.Builder(resources).build((short) version);
     }
 
@@ -1268,7 +1268,7 @@ public class RequestResponseTest {
         configs.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), new DescribeConfigsResponse.Config(
                 ApiError.NONE, configEntries));
         configs.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic"), new DescribeConfigsResponse.Config(
-                ApiError.NONE, Collections.<DescribeConfigsResponse.ConfigEntry>emptyList()));
+                ApiError.NONE, Collections.emptyList()));
         return new DescribeConfigsResponse(200, configs);
     }
 
@@ -1280,7 +1280,7 @@ public class RequestResponseTest {
         );
         configs.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), new AlterConfigsRequest.Config(configEntries));
         configs.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic"),
-                new AlterConfigsRequest.Config(Collections.<AlterConfigsRequest.ConfigEntry>emptyList()));
+                new AlterConfigsRequest.Config(Collections.emptyList()));
         return new AlterConfigsRequest((short) 0, configs, false);
     }
 
@@ -1300,7 +1300,7 @@ public class RequestResponseTest {
 
     private CreatePartitionsRequest createCreatePartitionsRequestWithAssignments() {
         Map<String, PartitionDetails> assignments = new HashMap<>();
-        assignments.put("my_topic", new PartitionDetails(3, asList(asList(2))));
+        assignments.put("my_topic", new PartitionDetails(3, singletonList(singletonList(2))));
         assignments.put("my_other_topic", new PartitionDetails(3, asList(asList(2, 3), asList(3, 1))));
         return new CreatePartitionsRequest(assignments, 0, false, (short) 0);
     }

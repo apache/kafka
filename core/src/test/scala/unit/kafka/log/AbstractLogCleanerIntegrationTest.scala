@@ -21,8 +21,8 @@ import java.nio.file.Files
 import java.util.Properties
 
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
-import kafka.utils.{MockTime, Pool, TestUtils}
 import kafka.utils.Implicits._
+import kafka.utils.{MockTime, Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch}
 import org.apache.kafka.common.utils.Utils

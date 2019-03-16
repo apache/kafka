@@ -17,15 +17,15 @@
 
 package kafka.api
 
-import org.junit._
-import org.scalatest.junit.JUnitSuite
-import org.junit.Assert._
-
-import scala.util.Random
 import java.nio.ByteBuffer
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.KafkaException
+import org.junit.Assert._
+import org.junit._
+import org.scalatest.junit.JUnitSuite
+
+import scala.util.Random
 
 object ApiUtilsTest {
   val rnd: Random = new Random()

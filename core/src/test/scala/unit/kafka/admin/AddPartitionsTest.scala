@@ -18,15 +18,15 @@
 package kafka.admin
 
 import kafka.network.SocketServer
-import org.junit.Assert._
-import kafka.utils.TestUtils._
-import kafka.utils.TestUtils
 import kafka.server.BaseRequestTest
+import kafka.utils.TestUtils
+import kafka.utils.TestUtils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.MetadataResponse.TopicMetadata
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
+import org.junit.Assert._
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
@@ -127,7 +127,7 @@ class AddPartitionsTest extends BaseRequestTest {
     val topicMetadata = response.topicMetadata.asScala.head
     val partitionMetadata = topicMetadata.partitionMetadata.asScala.sortBy(_.partition)
     assertEquals(3, topicMetadata.partitionMetadata.size)
-    assertEquals(0, partitionMetadata(0).partition)
+    assertEquals(0, partitionMetadata.head.partition)
     assertEquals(1, partitionMetadata(1).partition)
     assertEquals(2, partitionMetadata(2).partition)
     val replicas = partitionMetadata(1).replicas

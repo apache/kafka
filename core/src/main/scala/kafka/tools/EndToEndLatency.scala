@@ -19,13 +19,13 @@ package kafka.tools
 
 import java.nio.charset.StandardCharsets
 import java.time.Duration
-import java.util.{Collections, Arrays, Properties}
+import java.util.{Arrays, Collections, Properties}
 
 import kafka.utils.Exit
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.clients.{admin, CommonClientConfigs}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer._
+import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 

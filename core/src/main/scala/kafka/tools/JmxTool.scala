@@ -18,17 +18,17 @@
  */
 package kafka.tools
 
-import java.util.Date
 import java.text.SimpleDateFormat
+import java.util.Date
+
 import javax.management._
 import javax.management.remote._
-
 import joptsimple.OptionParser
+import kafka.utils.{CommandLineUtils, Exit, Logging}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.math._
-import kafka.utils.{CommandLineUtils , Exit, Logging}
 
 
 /**

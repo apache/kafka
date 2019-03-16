@@ -27,14 +27,13 @@ import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient, ZooKeeperTestHarness}
+import org.apache.kafka.common.TopicPartition
 import org.easymock.EasyMock._
 import org.easymock.{Capture, CaptureType, EasyMock}
-import org.junit.{After, Before, Test}
 import org.junit.Assert.{assertEquals, assertFalse, assertNull, assertTrue}
+import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
-import org.apache.kafka.common.TopicPartition
-
 import scala.collection.mutable
 
 class ReassignPartitionsCommandTest extends ZooKeeperTestHarness with Logging {

@@ -64,7 +64,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
@@ -395,13 +394,10 @@ public class FetcherTest {
     }
 
     private MockClient.RequestMatcher matchesOffset(final TopicPartition tp, final long offset) {
-        return new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                FetchRequest fetch = (FetchRequest) body;
-                return fetch.fetchData().containsKey(tp) &&
-                        fetch.fetchData().get(tp).fetchOffset == offset;
-            }
+        return body -> {
+            FetchRequest fetch = (FetchRequest) body;
+            return fetch.fetchData().containsKey(tp) &&
+                    fetch.fetchData().get(tp).fetchOffset == offset;
         };
     }
 
@@ -2134,7 +2130,7 @@ public class FetcherTest {
         buildFetcher();
 
         // Empty map
-        assertTrue(fetcher.offsetsForTimes(new HashMap<TopicPartition, Long>(), time.timer(100L)).isEmpty());
+        assertTrue(fetcher.offsetsForTimes(new HashMap<>(), time.timer(100L)).isEmpty());
         // Unknown Offset
         testGetOffsetsForTimesWithUnknownOffset();
         // Error code none with unknown offset
@@ -2345,13 +2341,10 @@ public class FetcherTest {
         // normal fetch
         assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                FetchRequest request = (FetchRequest) body;
-                assertEquals(IsolationLevel.READ_COMMITTED, request.isolationLevel());
-                return true;
-            }
+        client.prepareResponse(body -> {
+            FetchRequest request = (FetchRequest) body;
+            assertEquals(IsolationLevel.READ_COMMITTED, request.isolationLevel());
+            return true;
         }, fullFetchResponseWithAbortedTransactions(records, abortedTransactions, Errors.NONE, 100L, 100L, 0));
 
         consumerClient.poll(time.timer(0));
@@ -2918,9 +2911,7 @@ public class FetcherTest {
                 Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
                 if (!fetchedRecords.isEmpty()) {
                     fetchesRemaining.decrementAndGet();
-                    fetchedRecords.entrySet().forEach(entry -> {
-                        TopicPartition tp = entry.getKey();
-                        List<ConsumerRecord<byte[], byte[]>> records = entry.getValue();
+                    fetchedRecords.forEach((tp, records) -> {
                         assertEquals(2, records.size());
                         long nextOffset = nextFetchOffsets.get(tp);
                         assertEquals(nextOffset, records.get(0).offset());
@@ -2962,13 +2953,10 @@ public class FetcherTest {
         // normal fetch
         assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                FetchRequest request = (FetchRequest) body;
-                assertEquals(IsolationLevel.READ_COMMITTED, request.isolationLevel());
-                return true;
-            }
+        client.prepareResponse(body -> {
+            FetchRequest request = (FetchRequest) body;
+            assertEquals(IsolationLevel.READ_COMMITTED, request.isolationLevel());
+            return true;
         }, fullFetchResponseWithAbortedTransactions(records, abortedTransactions, Errors.NONE, 100L, 100L, 0));
 
         consumerClient.poll(time.timer(0));
@@ -3097,12 +3085,9 @@ public class FetcherTest {
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {
         // matches any list offset request with the provided timestamp
-        return new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                ListOffsetRequest req = (ListOffsetRequest) body;
-                return timestamp == req.partitionTimestamps().get(tp0).timestamp;
-            }
+        return body -> {
+            ListOffsetRequest req = (ListOffsetRequest) body;
+            return timestamp == req.partitionTimestamps().get(tp0).timestamp;
         };
     }
 
@@ -3154,9 +3139,7 @@ public class FetcherTest {
                     .stream()
                     .filter(topicMetadata -> topicMetadata.topic().equals(topic))
                     .findFirst();
-            foundMetadata.ifPresent(topicMetadata -> {
-                partitionsMetadata.addAll(topicMetadata.partitionMetadata());
-            });
+            foundMetadata.ifPresent(topicMetadata -> partitionsMetadata.addAll(topicMetadata.partitionMetadata()));
         }
 
         MetadataResponse.TopicMetadata topicMetadata = new MetadataResponse.TopicMetadata(error, topic, false,

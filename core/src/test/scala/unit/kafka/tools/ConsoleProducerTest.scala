@@ -19,11 +19,11 @@ package kafka.tools
 
 import java.util
 
-import ConsoleProducer.LineMessageReader
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.junit.{Assert, Test}
-import Assert.assertEquals
+import kafka.tools.ConsoleProducer.LineMessageReader
 import kafka.utils.Exit
+import org.apache.kafka.clients.producer.ProducerConfig
+import org.junit.Assert.assertEquals
+import org.junit.{Assert, Test}
 
 class ConsoleProducerTest {
 

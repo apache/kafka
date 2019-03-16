@@ -27,8 +27,7 @@ import java.util.{Date, Optional, Properties}
 
 import joptsimple.OptionParser
 import kafka.api._
-import kafka.utils.Whitelist
-import kafka.utils._
+import kafka.utils.{Whitelist, _}
 import org.apache.kafka.clients._
 import org.apache.kafka.clients.admin.{ListTopicsOptions, TopicDescription}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}

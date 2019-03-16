@@ -15,10 +15,10 @@
 package kafka.api
 
 import java.io.File
-import java.{lang, util}
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.{Collections, Properties}
+import java.{lang, util}
 
 import kafka.api.GroupedUserPrincipalBuilder._
 import kafka.api.GroupedUserQuotaCallback._
@@ -29,17 +29,17 @@ import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{Cluster, Reconfigurable}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.scram.ScramCredential
+import org.apache.kafka.common.{Cluster, Reconfigurable}
 import org.apache.kafka.server.quota._
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
-import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
 
 class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 

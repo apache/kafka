@@ -245,9 +245,9 @@ class KafkaConfigTest {
 
     //advertised listener should contain control-plane listener
     val advertisedEndpoints = serverConfig.advertisedListeners
-    assertFalse(advertisedEndpoints.filter { endpoint =>
+    assertFalse(!advertisedEndpoints.exists { endpoint =>
       endpoint.securityProtocol == controlEndpoint.securityProtocol && endpoint.listenerName.value().equals(controlEndpoint.listenerName.value())
-    }.isEmpty)
+    })
 
     // interBrokerListener name should be different from control-plane listener name
     val interBrokerListenerName = serverConfig.interBrokerListenerName

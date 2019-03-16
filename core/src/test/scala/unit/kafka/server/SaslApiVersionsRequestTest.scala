@@ -19,16 +19,14 @@ package kafka.server
 import java.net.Socket
 import java.util.Collections
 
-import org.apache.kafka.common.message.SaslHandshakeRequestData
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
-import org.apache.kafka.common.requests.SaslHandshakeRequest
-import org.apache.kafka.common.requests.SaslHandshakeResponse
-import org.junit.{After, Before, Test}
-import org.junit.Assert._
 import kafka.api.{KafkaSasl, SaslSetup}
 import kafka.utils.JaasTestUtils
+import org.apache.kafka.common.message.SaslHandshakeRequestData
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, SaslHandshakeRequest, SaslHandshakeResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
 class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT

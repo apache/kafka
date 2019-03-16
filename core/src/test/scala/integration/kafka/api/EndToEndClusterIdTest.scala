@@ -17,23 +17,23 @@
 
 package kafka.api
 
+import java.util.Properties
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
-import java.util.Properties
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
-import kafka.utils._
 import kafka.utils.Implicits._
+import kafka.utils._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, TopicPartition}
+import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.apache.kafka.test.{TestUtils => _, _}
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
-import org.apache.kafka.test.TestUtils.isValidClusterId
 
 /** The test cases here verify the following conditions.
   * 1. The ProducerInterceptor receives the cluster id after the onSend() method is called and before onAcknowledgement() method is called.

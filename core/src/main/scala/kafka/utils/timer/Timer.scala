@@ -16,9 +16,9 @@
  */
 package kafka.utils.timer
 
-import java.util.concurrent.{DelayQueue, Executors, ThreadFactory, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.concurrent.{DelayQueue, Executors, ThreadFactory, TimeUnit}
 
 import kafka.utils.threadsafe
 import org.apache.kafka.common.utils.{KafkaThread, Time}

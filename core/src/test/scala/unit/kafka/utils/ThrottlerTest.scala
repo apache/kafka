@@ -19,8 +19,8 @@ package unit.kafka.utils
 
 import kafka.utils.Throttler
 import org.apache.kafka.common.utils.MockTime
+import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.Test
-import org.junit.Assert.{assertTrue, assertEquals}
 
 
 class ThrottlerTest {

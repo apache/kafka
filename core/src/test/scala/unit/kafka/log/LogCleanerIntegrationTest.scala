@@ -23,8 +23,8 @@ import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Gauge
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.apache.kafka.common.record.{CompressionType, RecordBatch}
+import org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS
 import org.junit.Assert.{assertFalse, assertTrue, fail}
 import org.junit.Test
 

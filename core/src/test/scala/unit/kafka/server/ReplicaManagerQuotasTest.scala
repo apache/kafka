@@ -17,8 +17,8 @@
 package kafka.server
 
 import java.io.File
-import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.{Optional, Properties}
 
 import kafka.cluster.{Partition, Replica}
 import kafka.log.{Log, LogManager, LogOffsetSnapshot}
@@ -29,7 +29,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
-import EasyMock._
+import org.easymock.EasyMock._
 import org.junit.Assert._
 import org.junit.{After, Test}
 

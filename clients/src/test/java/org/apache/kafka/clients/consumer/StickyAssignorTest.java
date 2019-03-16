@@ -46,7 +46,7 @@ public class StickyAssignorTest {
 
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
         Map<String, Subscription> subscriptions =
-                Collections.singletonMap(consumerId, new Subscription(Collections.<String>emptyList()));
+                Collections.singletonMap(consumerId, new Subscription(Collections.emptyList()));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
@@ -360,7 +360,7 @@ public class StickyAssignorTest {
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 1; i < 20; i++) {
-            List<String> topics = new ArrayList<String>();
+            List<String> topics = new ArrayList<>();
             for (int j = 1; j <= i; j++)
                 topics.add(getTopicName(j, 20));
             subscriptions.put(getConsumerName(i, 20), new Subscription(topics));
@@ -409,7 +409,7 @@ public class StickyAssignorTest {
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 1; i < 9; i++) {
-            List<String> topics = new ArrayList<String>();
+            List<String> topics = new ArrayList<>();
             for (int j = 1; j <= partitionsPerTopic.size(); j++)
                 topics.add(getTopicName(j, 15));
             subscriptions.put(getConsumerName(i, 9), new Subscription(topics));
@@ -442,7 +442,7 @@ public class StickyAssignorTest {
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 0; i < consumerCount; i++) {
-            List<String> topics = new ArrayList<String>();
+            List<String> topics = new ArrayList<>();
             for (int j = 0; j < rand.nextInt(20); j++)
                 topics.add(getTopicName(rand.nextInt(topicCount), topicCount));
             subscriptions.put(getConsumerName(i, consumerCount), new Subscription(topics));
@@ -474,7 +474,7 @@ public class StickyAssignorTest {
 
         Map<String, Subscription> subscriptions = new HashMap<>();
         for (int i = 0; i < 3; i++) {
-            List<String> topics = new ArrayList<String>();
+            List<String> topics = new ArrayList<>();
             for (int j = i; j <= 3 * i - 2; j++)
                 topics.add(getTopicName(j, 5));
             subscriptions.put(getConsumerName(i, 3), new Subscription(topics));
@@ -617,7 +617,7 @@ public class StickyAssignorTest {
                 Collections.singletonMap(consumerId, new Subscription(topics("topic01", "topic02", "topic03")));
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
-        assertEquals(assignment.values().stream().mapToInt(topicPartitions -> topicPartitions.size()).sum(), 1 + 100);
+        assertEquals(assignment.values().stream().mapToInt(List::size).sum(), 1 + 100);
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(isFullyBalanced(assignment));
     }

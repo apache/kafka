@@ -34,7 +34,7 @@ public class NodeApiVersionsTest {
 
     @Test
     public void testUnsupportedVersionsToString() {
-        NodeApiVersions versions = new NodeApiVersions(Collections.<ApiVersion>emptyList());
+        NodeApiVersions versions = new NodeApiVersions(Collections.emptyList());
         StringBuilder bld = new StringBuilder();
         String prefix = "(";
         for (ApiKeys apiKey : ApiKeys.values()) {
@@ -136,9 +136,7 @@ public class NodeApiVersionsTest {
     @Test
     public void testUsableVersionLatestVersions() {
         List<ApiVersion> versionList = new LinkedList<>();
-        for (ApiVersion apiVersion: ApiVersionsResponse.defaultApiVersionsResponse().apiVersions()) {
-            versionList.add(apiVersion);
-        }
+        versionList.addAll(ApiVersionsResponse.defaultApiVersionsResponse().apiVersions());
         // Add an API key that we don't know about.
         versionList.add(new ApiVersion((short) 100, (short) 0, (short) 1));
         NodeApiVersions versions =  new NodeApiVersions(versionList);

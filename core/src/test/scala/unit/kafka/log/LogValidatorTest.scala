@@ -221,7 +221,7 @@ class LogValidatorTest {
 
     val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
       producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
-      new SimpleRecord(timestampSeq(0), "hello".getBytes),
+      new SimpleRecord(timestampSeq.head, "hello".getBytes),
       new SimpleRecord(timestampSeq(1), "there".getBytes),
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
@@ -244,7 +244,7 @@ class LogValidatorTest {
     for (batch <- validatedRecords.batches.asScala) {
       assertTrue(batch.isValid)
       assertEquals(batch.timestampType, TimestampType.CREATE_TIME)
-      maybeCheckBaseTimestamp(timestampSeq(0), batch)
+      maybeCheckBaseTimestamp(timestampSeq.head, batch)
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
       assertEquals(producerEpoch, batch.producerEpoch)
       assertEquals(producerId, batch.producerId)
@@ -288,7 +288,7 @@ class LogValidatorTest {
 
     val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
       producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
-      new SimpleRecord(timestampSeq(0), "hello".getBytes),
+      new SimpleRecord(timestampSeq.head, "hello".getBytes),
       new SimpleRecord(timestampSeq(1), "there".getBytes),
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
@@ -311,7 +311,7 @@ class LogValidatorTest {
     for (batch <- validatedRecords.batches.asScala) {
       assertTrue(batch.isValid)
       assertEquals(batch.timestampType, TimestampType.CREATE_TIME)
-      maybeCheckBaseTimestamp(timestampSeq(0), batch)
+      maybeCheckBaseTimestamp(timestampSeq.head, batch)
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
       assertEquals(producerEpoch, batch.producerEpoch)
       assertEquals(producerId, batch.producerId)
@@ -436,7 +436,7 @@ class LogValidatorTest {
 
     val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
       producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
-      new SimpleRecord(timestampSeq(0), "hello".getBytes),
+      new SimpleRecord(timestampSeq.head, "hello".getBytes),
       new SimpleRecord(timestampSeq(1), "there".getBytes),
       new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
 
@@ -459,7 +459,7 @@ class LogValidatorTest {
     for (batch <- validatedRecords.batches.asScala) {
       assertTrue(batch.isValid)
       assertEquals(batch.timestampType, TimestampType.CREATE_TIME)
-      maybeCheckBaseTimestamp(timestampSeq(0), batch)
+      maybeCheckBaseTimestamp(timestampSeq.head, batch)
       assertEquals(batch.maxTimestamp, batch.asScala.map(_.timestamp).max)
       assertEquals(producerEpoch, batch.producerEpoch)
       assertEquals(producerId, batch.producerId)

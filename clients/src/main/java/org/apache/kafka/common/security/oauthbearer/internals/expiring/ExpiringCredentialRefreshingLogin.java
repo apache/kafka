@@ -83,10 +83,10 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
                 }
                 // safety check motivated by KAFKA-7945,
                 // should generally never happen except due to a bug
-                if (nextRefreshMs.longValue() < nowMs) {
+                if (nextRefreshMs < nowMs) {
                     log.warn("[Principal={}]: Expiring credential re-login sleep time was calculated to be in the past! Will explicitly adjust. ({})", principalLogText(),
                             new Date(nextRefreshMs));
-                    nextRefreshMs = Long.valueOf(nowMs + 10 * 1000); // refresh in 10 seconds
+                    nextRefreshMs = nowMs + 10 * 1000; // refresh in 10 seconds
                 }
                 log.info("[Principal={}]: Expiring credential re-login sleeping until: {}", principalLogText(),
                         new Date(nextRefreshMs));
@@ -305,16 +305,16 @@ public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable
             }
         }
         Long absoluteLastRefreshTimeMs = expiringCredential.absoluteLastRefreshTimeMs();
-        if (absoluteLastRefreshTimeMs != null && absoluteLastRefreshTimeMs.longValue() < expireTimeMs) {
+        if (absoluteLastRefreshTimeMs != null && absoluteLastRefreshTimeMs < expireTimeMs) {
             log.warn("[Principal={}]: Expiring credential refresh thread exiting because the"
                     + " expiring credential's current expiration time ({}) exceeds the latest possible refresh time ({})."
                     + " This process will not be able to authenticate new SASL connections after that"
                     + " time (for example, it will not be able to authenticate a new connection with a Kafka Broker).",
-                    principalLogText(), new Date(expireTimeMs), new Date(absoluteLastRefreshTimeMs.longValue()));
+                    principalLogText(), new Date(expireTimeMs), new Date(absoluteLastRefreshTimeMs));
             return null;
         }
         Long optionalStartTime = expiringCredential.startTimeMs();
-        long startMs = optionalStartTime != null ? optionalStartTime.longValue() : relativeToMs;
+        long startMs = optionalStartTime != null ? optionalStartTime : relativeToMs;
         log.info("[Principal={}]: Expiring credential valid from {} to {}", expiringCredential.principalName(),
                 new java.util.Date(startMs), new java.util.Date(expireTimeMs));
 

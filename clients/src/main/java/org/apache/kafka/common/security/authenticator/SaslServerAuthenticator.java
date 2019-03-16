@@ -169,7 +169,7 @@ public class SaslServerAuthenticator implements Authenticator {
         List<String> enabledMechanisms = (List<String>) this.configs.get(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG);
         if (enabledMechanisms == null || enabledMechanisms.isEmpty())
             throw new IllegalArgumentException("No SASL mechanisms are enabled");
-        this.enabledMechanisms = new ArrayList<String>(new HashSet<String>(enabledMechanisms));
+        this.enabledMechanisms = new ArrayList<>(new HashSet<>(enabledMechanisms));
         for (String mechanism : this.enabledMechanisms) {
             if (!callbackHandlers.containsKey(mechanism))
                 throw new IllegalArgumentException("Callback handler not specified for SASL mechanism " + mechanism);
@@ -676,30 +676,29 @@ public class SaslServerAuthenticator implements Authenticator {
             Long connectionsMaxReauthMs = connectionsMaxReauthMsByMechanism.get(saslMechanism);
             if (credentialExpirationMs != null || connectionsMaxReauthMs != null) {
                 if (credentialExpirationMs == null)
-                    retvalSessionLifetimeMs = zeroIfNegative(connectionsMaxReauthMs.longValue());
+                    retvalSessionLifetimeMs = zeroIfNegative(connectionsMaxReauthMs);
                 else if (connectionsMaxReauthMs == null)
-                    retvalSessionLifetimeMs = zeroIfNegative(credentialExpirationMs.longValue() - authenticationEndMs);
+                    retvalSessionLifetimeMs = zeroIfNegative(credentialExpirationMs - authenticationEndMs);
                 else
                     retvalSessionLifetimeMs = zeroIfNegative(
-                            Math.min(credentialExpirationMs.longValue() - authenticationEndMs,
-                                    connectionsMaxReauthMs.longValue()));
+                            Math.min(credentialExpirationMs - authenticationEndMs,
+                                    connectionsMaxReauthMs));
                 if (retvalSessionLifetimeMs > 0L)
-                    sessionExpirationTimeNanos = Long
-                            .valueOf(authenticationEndNanos + 1000 * 1000 * retvalSessionLifetimeMs);
+                    sessionExpirationTimeNanos = authenticationEndNanos + 1000 * 1000 * retvalSessionLifetimeMs;
             }
             if (credentialExpirationMs != null) {
                 if (sessionExpirationTimeNanos != null)
                     LOG.debug(
                             "Authentication complete; session max lifetime from broker config={} ms, credential expiration={} ({} ms); session expiration = {} ({} ms), sending {} ms to client",
                             connectionsMaxReauthMs, new Date(credentialExpirationMs),
-                            Long.valueOf(credentialExpirationMs.longValue() - authenticationEndMs),
+                            credentialExpirationMs - authenticationEndMs,
                             new Date(authenticationEndMs + retvalSessionLifetimeMs), retvalSessionLifetimeMs,
                             retvalSessionLifetimeMs);
                 else
                     LOG.debug(
                             "Authentication complete; session max lifetime from broker config={} ms, credential expiration={} ({} ms); no session expiration, sending 0 ms to client",
                             connectionsMaxReauthMs, new Date(credentialExpirationMs),
-                            Long.valueOf(credentialExpirationMs.longValue() - authenticationEndMs));
+                            credentialExpirationMs - authenticationEndMs);
             } else {
                 if (sessionExpirationTimeNanos != null)
                     LOG.debug(
@@ -719,7 +718,7 @@ public class SaslServerAuthenticator implements Authenticator {
                 return null;
             // record at least 1 ms if there is some latency
             long latencyNanos = authenticationEndNanos - reauthenticationBeginNanos;
-            return latencyNanos == 0L ? 0L : Math.max(1L, Long.valueOf(Math.round(latencyNanos / 1000.0 / 1000.0)));
+            return latencyNanos == 0L ? 0L : Math.max(1L, Math.round(latencyNanos / 1000.0 / 1000.0));
         }
 
         private long zeroIfNegative(long value) {

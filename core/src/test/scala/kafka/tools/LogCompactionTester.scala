@@ -27,9 +27,9 @@ import java.util.{Properties, Random}
 import joptsimple.OptionParser
 import kafka.utils._
 import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.serialization.{ByteArraySerializer, StringDeserializer}
 import org.apache.kafka.common.utils.{AbstractIterator, Utils}

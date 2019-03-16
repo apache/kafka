@@ -119,7 +119,7 @@ object CreateTopicsRequestWithPolicyTest {
 
     def validate(requestMetadata: RequestMetadata): Unit = {
       require(!closed, "Policy should not be closed")
-      require(!configs.isEmpty, "configure should have been called with non empty configs")
+      require(configs.nonEmpty, "configure should have been called with non empty configs")
 
       import requestMetadata._
       if (numPartitions != null || replicationFactor != null) {

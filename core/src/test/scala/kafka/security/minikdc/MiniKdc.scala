@@ -26,8 +26,6 @@ import java.text.MessageFormat
 import java.util.{Locale, Properties, UUID}
 
 import kafka.utils.{CoreUtils, Exit, Logging}
-
-import scala.collection.JavaConverters._
 import org.apache.commons.lang.text.StrSubstitutor
 import org.apache.directory.api.ldap.model.entry.{DefaultEntry, Entry}
 import org.apache.directory.api.ldap.model.ldif.LdifReader
@@ -37,8 +35,8 @@ import org.apache.directory.api.ldap.schema.loader.LdifSchemaLoader
 import org.apache.directory.api.ldap.schema.manager.impl.DefaultSchemaManager
 import org.apache.directory.server.constants.ServerDNConstants
 import org.apache.directory.server.core.DefaultDirectoryService
-import org.apache.directory.server.core.api.{CacheService, DirectoryService, InstanceLayout}
 import org.apache.directory.server.core.api.schema.SchemaPartition
+import org.apache.directory.server.core.api.{CacheService, DirectoryService, InstanceLayout}
 import org.apache.directory.server.core.kerberos.KeyDerivationInterceptor
 import org.apache.directory.server.core.partition.impl.btree.jdbm.{JdbmIndex, JdbmPartition}
 import org.apache.directory.server.core.partition.ldif.LdifPartition
@@ -50,6 +48,8 @@ import org.apache.directory.server.protocol.shared.transport.{TcpTransport, UdpT
 import org.apache.directory.server.xdbm.Index
 import org.apache.directory.shared.kerberos.KerberosTime
 import org.apache.kafka.common.utils.{Java, Utils}
+
+import scala.collection.JavaConverters._
 
 /**
   * Mini KDC based on Apache Directory Server that can be embedded in tests or used from command line as a standalone

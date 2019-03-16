@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.internals.DefaultPartitioner;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -80,8 +79,8 @@ public class MockProducerTest {
     public void testPartitioner() throws Exception {
         PartitionInfo partitionInfo0 = new PartitionInfo(topic, 0, null, null, null);
         PartitionInfo partitionInfo1 = new PartitionInfo(topic, 1, null, null, null);
-        Cluster cluster = new Cluster(null, new ArrayList<Node>(0), asList(partitionInfo0, partitionInfo1),
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+        Cluster cluster = new Cluster(null, new ArrayList<>(0), asList(partitionInfo0, partitionInfo1),
+                Collections.emptySet(), Collections.emptySet());
         MockProducer<String, String> producer = new MockProducer<>(cluster, true, new DefaultPartitioner(), new StringSerializer(), new StringSerializer());
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "key", "value");
         Future<RecordMetadata> metadata = producer.send(record);
@@ -433,7 +432,7 @@ public class MockProducerTest {
         producer.beginTransaction();
 
         try {
-            producer.sendOffsetsToTransaction(Collections.<TopicPartition, OffsetAndMetadata>emptyMap(), null);
+            producer.sendOffsetsToTransaction(Collections.emptyMap(), null);
             fail("Should have thrown NullPointerException");
         } catch (NullPointerException e) { }
     }
@@ -443,7 +442,7 @@ public class MockProducerTest {
         buildMockProducer(true);
         producer.initTransactions();
         producer.beginTransaction();
-        producer.sendOffsetsToTransaction(Collections.<TopicPartition, OffsetAndMetadata>emptyMap(), "groupId");
+        producer.sendOffsetsToTransaction(Collections.emptyMap(), "groupId");
         assertFalse(producer.sentOffsets());
     }
 

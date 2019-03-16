@@ -22,9 +22,9 @@ import java.util.Properties
 import kafka.log.LogConfig._
 import kafka.server.KafkaConfig.fromProps
 import kafka.server.QuotaType._
-import kafka.utils.TestUtils._
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils
+import kafka.utils.TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition

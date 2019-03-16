@@ -39,27 +39,24 @@ public class ListConsumerGroupsResult {
         this.all = new KafkaFutureImpl<>();
         this.valid = new KafkaFutureImpl<>();
         this.errors = new KafkaFutureImpl<>();
-        future.thenApply(new KafkaFuture.BaseFunction<Collection<Object>, Void>() {
-            @Override
-            public Void apply(Collection<Object> results) {
-                ArrayList<Throwable> curErrors = new ArrayList<>();
-                ArrayList<ConsumerGroupListing> curValid = new ArrayList<>();
-                for (Object resultObject : results) {
-                    if (resultObject instanceof Throwable) {
-                        curErrors.add((Throwable) resultObject);
-                    } else {
-                        curValid.add((ConsumerGroupListing) resultObject);
-                    }
-                }
-                if (!curErrors.isEmpty()) {
-                    all.completeExceptionally(curErrors.get(0));
+        future.thenApply((KafkaFuture.BaseFunction<Collection<Object>, Void>) results -> {
+            ArrayList<Throwable> curErrors = new ArrayList<>();
+            ArrayList<ConsumerGroupListing> curValid = new ArrayList<>();
+            for (Object resultObject : results) {
+                if (resultObject instanceof Throwable) {
+                    curErrors.add((Throwable) resultObject);
                 } else {
-                    all.complete(curValid);
+                    curValid.add((ConsumerGroupListing) resultObject);
                 }
-                valid.complete(curValid);
-                errors.complete(curErrors);
-                return null;
             }
+            if (!curErrors.isEmpty()) {
+                all.completeExceptionally(curErrors.get(0));
+            } else {
+                all.complete(curValid);
+            }
+            valid.complete(curValid);
+            errors.complete(curErrors);
+            return null;
         });
     }
 

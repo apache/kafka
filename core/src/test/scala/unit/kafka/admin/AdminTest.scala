@@ -16,22 +16,20 @@
  */
 package kafka.admin
 
+import java.util.Properties
+
+import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
+import kafka.utils.{Logging, TestUtils, ZkUtils, _}
+import kafka.zk.{ConfigEntityZNode, ZooKeeperTestHarness}
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
+import org.apache.kafka.common.security.JaasUtils
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import java.util.Properties
-
-import kafka.utils._
-import kafka.zk.{ConfigEntityZNode, ZooKeeperTestHarness}
-import kafka.utils.{Logging, TestUtils, ZkUtils}
-import kafka.server.{ConfigType, KafkaConfig, KafkaServer}
-
-import scala.collection.{Map, immutable}
-import org.apache.kafka.common.security.JaasUtils
 
 import scala.collection.JavaConverters._
+import scala.collection.{Map, immutable}
 
 @deprecated("This test has been deprecated and will be removed in a future release.", "1.1.0")
 class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
@@ -115,7 +113,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val actualReplicaList = leaderForPartitionMap.keys.toArray.map(p => p -> zkUtils.getReplicasForPartition(topic, p)).toMap
     assertEquals(expectedReplicaAssignment.size, actualReplicaList.size)
     for(i <- 0 until actualReplicaList.size)
-      assertEquals(expectedReplicaAssignment.get(i).get, actualReplicaList(i))
+      assertEquals(expectedReplicaAssignment(i), actualReplicaList(i))
 
     intercept[TopicExistsException] {
       // shouldn't be able to create a topic that already exists

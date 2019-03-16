@@ -19,8 +19,8 @@ package kafka.api
 
 import java.io.File
 import java.util.Properties
-import javax.security.auth.login.Configuration
 
+import javax.security.auth.login.Configuration
 import kafka.admin.ConfigCommand
 import kafka.security.minikdc.MiniKdc
 import kafka.server.KafkaConfig

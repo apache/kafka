@@ -26,19 +26,9 @@ public class Exit {
         void execute(int statusCode, String message);
     }
 
-    private static final Procedure DEFAULT_HALT_PROCEDURE = new Procedure() {
-        @Override
-        public void execute(int statusCode, String message) {
-            Runtime.getRuntime().halt(statusCode);
-        }
-    };
+    private static final Procedure DEFAULT_HALT_PROCEDURE = (statusCode, message) -> Runtime.getRuntime().halt(statusCode);
 
-    private static final Procedure DEFAULT_EXIT_PROCEDURE = new Procedure() {
-        @Override
-        public void execute(int statusCode, String message) {
-            System.exit(statusCode);
-        }
-    };
+    private static final Procedure DEFAULT_EXIT_PROCEDURE = (statusCode, message) -> System.exit(statusCode);
 
     private volatile static Procedure exitProcedure = DEFAULT_EXIT_PROCEDURE;
     private volatile static Procedure haltProcedure = DEFAULT_HALT_PROCEDURE;

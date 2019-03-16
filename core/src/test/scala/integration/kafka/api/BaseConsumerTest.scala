@@ -15,20 +15,19 @@ package kafka.api
 import java.time.Duration
 import java.util
 
+import kafka.server.KafkaConfig
+import kafka.utils.{ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
+import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
-import kafka.utils.{ShutdownableThread, TestUtils}
-import kafka.server.KafkaConfig
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.common.errors.WakeupException
-import org.apache.kafka.common.internals.Topic
 
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures

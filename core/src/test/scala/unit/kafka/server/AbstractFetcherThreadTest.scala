@@ -35,13 +35,12 @@ import org.apache.kafka.common.requests.{EpochEndOffset, FetchRequest}
 import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{Before, Test}
-
-import scala.collection.JavaConverters._
-import scala.collection.{Map, Set, mutable}
-import scala.util.Random
 import org.scalatest.Assertions.assertThrows
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
+import scala.collection.{Map, Set, mutable}
+import scala.util.Random
 
 class AbstractFetcherThreadTest {
 

@@ -17,11 +17,12 @@
 
 package kafka.utils
 
-import java.util.Properties
-import java.util.Collections
-import scala.collection._
+import java.util.{Collections, Properties}
+
 import kafka.message.{CompressionCodec, NoCompressionCodec}
+
 import scala.collection.JavaConverters._
+import scala.collection._
 
 
 class VerifiableProperties(val props: Properties) extends Logging {

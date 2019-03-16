@@ -56,11 +56,11 @@ public class FetcherMetricsRegistry {
     public MetricNameTemplate partitionRecordsLeadAvg;
 
     public FetcherMetricsRegistry() {
-        this(new HashSet<String>(), "");
+        this(new HashSet<>(), "");
     }
 
     public FetcherMetricsRegistry(String metricGrpPrefix) {
-        this(new HashSet<String>(), metricGrpPrefix);
+        this(new HashSet<>(), metricGrpPrefix);
     }
 
     public FetcherMetricsRegistry(Set<String> tags, String metricGrpPrefix) {

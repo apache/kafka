@@ -76,7 +76,7 @@ public class ConsumerInterceptorsTest {
                 if (tp.partition() != filterPartition)
                     recordMap.put(tp, records.records(tp));
             }
-            return new ConsumerRecords<K, V>(recordMap);
+            return new ConsumerRecords<>(recordMap);
         }
 
         @Override

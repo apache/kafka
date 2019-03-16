@@ -19,24 +19,22 @@ import java.util.regex.Pattern
 import java.util.{Collections, Locale, Optional, Properties}
 
 import kafka.log.LogConfig
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, KafkaServer, QuotaType}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
-import kafka.server.QuotaType
-import kafka.server.KafkaServer
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {

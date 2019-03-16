@@ -20,6 +20,8 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
+import java.util.Objects;
+
 /**
  * A key/value pair to be sent to Kafka. This consists of a topic name to which the record is being sent, an optional
  * partition number, and an optional key and value.
@@ -202,17 +204,17 @@ public class ProducerRecord<K, V> {
 
         ProducerRecord<?, ?> that = (ProducerRecord<?, ?>) o;
 
-        if (key != null ? !key.equals(that.key) : that.key != null) 
+        if (!Objects.equals(key, that.key))
             return false;
-        else if (partition != null ? !partition.equals(that.partition) : that.partition != null) 
+        else if (!Objects.equals(partition, that.partition))
             return false;
-        else if (topic != null ? !topic.equals(that.topic) : that.topic != null) 
+        else if (!Objects.equals(topic, that.topic))
             return false;
-        else if (headers != null ? !headers.equals(that.headers) : that.headers != null)
+        else if (!Objects.equals(headers, that.headers))
             return false;
-        else if (value != null ? !value.equals(that.value) : that.value != null) 
+        else if (!Objects.equals(value, that.value))
             return false;
-        else if (timestamp != null ? !timestamp.equals(that.timestamp) : that.timestamp != null)
+        else if (!Objects.equals(timestamp, that.timestamp))
             return false;
 
         return true;

@@ -88,12 +88,7 @@ public class MockSelector implements Selectable {
     }
 
     private void removeSendsForNode(String id, Collection<Send> sends) {
-        Iterator<Send> iter = sends.iterator();
-        while (iter.hasNext()) {
-            Send send = iter.next();
-            if (id.equals(send.destination()))
-                iter.remove();
-        }
+        sends.removeIf(send -> id.equals(send.destination()));
     }
 
     public void clear() {

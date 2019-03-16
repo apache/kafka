@@ -12,29 +12,25 @@
   */
 package kafka.admin
 
-import java.util.Collections
-import java.util.Properties
+import java.io.File
+import java.util.{Collections, Properties}
 
 import kafka.admin.ReassignPartitionsCommand._
+import kafka.admin.ReplicationQuotaUtils._
 import kafka.common.AdminCommandFailedException
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.{ReassignPartitionsZNode, ZkVersion, ZooKeeperTestHarness}
+import org.apache.kafka.clients.admin.{AdminClientConfig, AdminClient => JAdminClient}
+import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.junit.{After, Before, Test}
-import kafka.admin.ReplicationQuotaUtils._
-import org.apache.kafka.clients.admin.AdminClientConfig
-import org.apache.kafka.clients.admin.{AdminClient => JAdminClient}
-import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 
 import scala.collection.JavaConverters._
-import scala.collection.Map
-import scala.collection.Seq
+import scala.collection.{Map, Seq}
 import scala.util.Random
-import java.io.File
-
-import org.apache.kafka.clients.producer.ProducerRecord
 
 class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   val partitionId = 0
@@ -127,7 +123,7 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     waitForReassignmentToComplete()
 
     //Then the replica should be on 101
-    assertEquals(Seq(101), zkClient.getPartitionAssignmentForTopics(Set(topicName)).get(topicName).get(partition))
+    assertEquals(Seq(101), zkClient.getPartitionAssignmentForTopics(Set(topicName))(topicName)(partition))
     // The replica should be in the expected log directory on broker 101
     val replica = new TopicPartitionReplica(topicName, 0, 101)
     assertEquals(expectedLogDir, adminClient.describeReplicaLogDirs(Collections.singleton(replica)).all().get.get(replica).getCurrentReplicaLogDir)

@@ -23,7 +23,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.junit.Assert._
 import org.junit.Test
-import collection.JavaConverters._
+
+import scala.collection.JavaConverters._
 
 
 class StopReplicaRequestTest extends BaseRequestTest {

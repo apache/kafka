@@ -26,6 +26,7 @@ import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -54,7 +55,7 @@ public class ClientUtilsTest {
 
         // With lookup of example.com, either one or two addresses are expected depending on
         // whether ipv4 and ipv6 are enabled
-        List<InetSocketAddress> validatedAddresses = checkWithLookup(Arrays.asList("example.com:10000"));
+        List<InetSocketAddress> validatedAddresses = checkWithLookup(Collections.singletonList("example.com:10000"));
         assertTrue("Unexpected addresses " + validatedAddresses, validatedAddresses.size() >= 1);
         List<String> validatedHostNames = validatedAddresses.stream().map(InetSocketAddress::getHostName)
                 .collect(Collectors.toList());
@@ -65,7 +66,7 @@ public class ClientUtilsTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testInvalidConfig() {
-        ClientUtils.parseAndValidateAddresses(Arrays.asList("localhost:10000"), "random.value");
+        ClientUtils.parseAndValidateAddresses(Collections.singletonList("localhost:10000"), "random.value");
     }
 
     @Test(expected = ConfigException.class)

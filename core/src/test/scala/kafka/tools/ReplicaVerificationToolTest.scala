@@ -21,8 +21,8 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.FetchResponse
-import org.junit.Test
 import org.junit.Assert.assertTrue
+import org.junit.Test
 
 class ReplicaVerificationToolTest {
 

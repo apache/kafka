@@ -19,10 +19,10 @@ package kafka.server.epoch
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
 import kafka.server.checkpoints.LeaderEpochCheckpoint
-import org.apache.kafka.common.requests.EpochEndOffset._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.requests.EpochEndOffset._
 
 import scala.collection.mutable.ListBuffer
 

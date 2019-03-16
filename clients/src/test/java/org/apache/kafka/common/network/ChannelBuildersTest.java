@@ -76,12 +76,7 @@ public class ChannelBuildersTest {
 
         @Override
         public Principal buildPrincipal(TransportLayer transportLayer, Authenticator authenticator) throws KafkaException {
-            return new Principal() {
-                @Override
-                public String getName() {
-                    return PRINCIPAL_NAME;
-                }
-            };
+            return () -> PRINCIPAL_NAME;
         }
 
         @Override

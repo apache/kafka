@@ -257,17 +257,15 @@ public class RecordAccumulatorTest {
             1024 + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, CompressionType.NONE, 0L);
         List<Thread> threads = new ArrayList<>();
         for (int i = 0; i < numThreads; i++) {
-            threads.add(new Thread() {
-                public void run() {
-                    for (int i = 0; i < msgs; i++) {
-                        try {
-                            accum.append(new TopicPartition(topic, i % numParts), 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
-                        } catch (Exception e) {
-                            e.printStackTrace();
-                        }
+            threads.add(new Thread(() -> {
+                for (int i1 = 0; i1 < msgs; i1++) {
+                    try {
+                        accum.append(new TopicPartition(topic, i1 % numParts), 0L, key, value, Record.EMPTY_HEADERS, null, maxBlockTimeMs);
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
                 }
-            });
+            }));
         }
         for (Thread t : threads)
             t.start();
@@ -407,12 +405,10 @@ public class RecordAccumulatorTest {
 
 
     private void delayedInterrupt(final Thread thread, final long delayMs) {
-        Thread t = new Thread() {
-            public void run() {
-                Time.SYSTEM.sleep(delayMs);
-                thread.interrupt();
-            }
-        };
+        Thread t = new Thread(() -> {
+            Time.SYSTEM.sleep(delayMs);
+            thread.interrupt();
+        });
         t.start();
     }
 
@@ -707,7 +703,7 @@ public class RecordAccumulatorTest {
         long totalSize = 10 * batchSize;
         String metricGrpName = "producer-metrics";
 
-        apiVersions.update("foobar", NodeApiVersions.create(Arrays.asList(new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id,
+        apiVersions.update("foobar", NodeApiVersions.create(Collections.singletonList(new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id,
                 (short) 0, (short) 2))));
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
             CompressionType.NONE, lingerMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, new TransactionManager(),
@@ -727,12 +723,7 @@ public class RecordAccumulatorTest {
 
         byte[] value = new byte[1024];
         final AtomicInteger acked = new AtomicInteger(0);
-        Callback cb = new Callback() {
-            @Override
-            public void onCompletion(RecordMetadata metadata, Exception exception) {
-                acked.incrementAndGet();
-            }
-        };
+        Callback cb = (metadata, exception) -> acked.incrementAndGet();
         // Append two messages so the batch is too big.
         Future<RecordMetadata> future1 = batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);
         Future<RecordMetadata> future2 = batch.tryAppend(now, null, value, Record.EMPTY_HEADERS, cb, now);

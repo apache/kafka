@@ -20,8 +20,8 @@ package kafka
 import java.util.Properties
 
 import joptsimple.OptionParser
-import kafka.utils.Implicits._
 import kafka.server.{KafkaServer, KafkaServerStartable}
+import kafka.utils.Implicits._
 import kafka.utils.{CommandLineUtils, Exit, Logging}
 import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Utils}
 

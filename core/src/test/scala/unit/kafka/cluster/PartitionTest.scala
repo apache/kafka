@@ -18,9 +18,9 @@ package kafka.cluster
 
 import java.io.File
 import java.nio.ByteBuffer
-import java.util.{Optional, Properties}
-import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{CountDownLatch, Executors, TimeUnit, TimeoutException}
+import java.util.{Optional, Properties}
 
 import kafka.api.{ApiVersion, Request}
 import kafka.common.UnexpectedAppendOffsetException
@@ -34,13 +34,13 @@ import org.apache.kafka.common.errors.{ApiException, OffsetNotAvailableException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
-import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderAndIsrRequest, ListOffsetRequest}
-import org.junit.{After, Before, Test}
-import org.junit.Assert._
-import org.scalatest.Assertions.assertThrows
+import org.apache.kafka.common.utils.Utils
 import org.easymock.{Capture, EasyMock, IAnswer}
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.assertThrows
 
 import scala.collection.JavaConverters._
 

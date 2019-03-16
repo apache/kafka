@@ -20,8 +20,8 @@ package kafka.server
 import java.nio.charset.StandardCharsets
 
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
-import kafka.utils.{Json, Logging}
 import kafka.utils.json.JsonObject
+import kafka.utils.{Json, Logging}
 import kafka.zk.{AdminZkClient, ConfigEntityChangeNotificationSequenceZNode, ConfigEntityChangeNotificationZNode, KafkaZkClient}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.security.scram.internals.ScramMechanism

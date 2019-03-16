@@ -16,16 +16,16 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.common.MessageFormatter
-import org.apache.kafka.clients.consumer.ConsumerRecord
-import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.protocol.types.Type._
-import org.apache.kafka.common.protocol.types._
 import java.io.PrintStream
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 
+import kafka.common.MessageFormatter
+import org.apache.kafka.clients.consumer.ConsumerRecord
+import org.apache.kafka.common.protocol.types.Type._
+import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 
 import scala.collection.mutable
 

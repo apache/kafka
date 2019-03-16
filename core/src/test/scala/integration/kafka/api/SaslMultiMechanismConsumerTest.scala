@@ -15,9 +15,9 @@ package kafka.api
 import java.io.File
 
 import kafka.server.KafkaConfig
-import org.junit.{After, Before, Test}
 import kafka.utils.JaasTestUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
 

@@ -22,11 +22,11 @@ import java.util
 
 import kafka.server.KafkaConfig
 import kafka.utils.Exit
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
-import org.junit.{After, Before, Test}
 import org.junit.Assert._
-import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
+import org.junit.{After, Before, Test}
 
 class KafkaTest {
 

@@ -75,7 +75,7 @@ public class MetricsTest {
 
     @Before
     public void setup() {
-        this.metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
+        this.metrics = new Metrics(config, singletonList((MetricsReporter) new JmxReporter()), time, true);
     }
 
     @After
@@ -90,7 +90,7 @@ public class MetricsTest {
     @Test
     public void testMetricName() {
         MetricName n1 = metrics.metricName("name", "group", "description", "key1", "value1", "key2", "value2");
-        Map<String, String> tags = new HashMap<String, String>();
+        Map<String, String> tags = new HashMap<>();
         tags.put("key1", "value1");
         tags.put("key2", "value2");
         MetricName n2 = metrics.metricName("name", "group", "description", tags);
@@ -192,7 +192,7 @@ public class MetricsTest {
         assertEquals(1.0 + c1, p2, EPS);
         assertEquals(1.0 + c1 + c2, p1, EPS);
         assertEquals(Arrays.asList(child1, child2), metrics.childrenSensors().get(parent1));
-        assertEquals(Arrays.asList(child1), metrics.childrenSensors().get(parent2));
+        assertEquals(singletonList(child1), metrics.childrenSensors().get(parent2));
         assertNull(metrics.childrenSensors().get(grandchild));
     }
 
@@ -612,7 +612,7 @@ public class MetricsTest {
     @Test
     public void testMetricInstances() {
         MetricName n1 = metrics.metricInstance(SampleMetrics.METRIC1, "key1", "value1", "key2", "value2");
-        Map<String, String> tags = new HashMap<String, String>();
+        Map<String, String> tags = new HashMap<>();
         tags.put("key1", "value1");
         tags.put("key2", "value2");
         MetricName n2 = metrics.metricInstance(SampleMetrics.METRIC2, tags);
@@ -631,7 +631,7 @@ public class MetricsTest {
         Map<String, String> childTagsWithValues = new HashMap<>();
         childTagsWithValues.put("child-tag", "child-tag-value");
 
-        try (Metrics inherited = new Metrics(new MetricConfig().tags(parentTagsWithValues), Arrays.asList((MetricsReporter) new JmxReporter()), time, true)) {
+        try (Metrics inherited = new Metrics(new MetricConfig().tags(parentTagsWithValues), singletonList((MetricsReporter) new JmxReporter()), time, true)) {
             MetricName inheritedMetric = inherited.metricInstance(SampleMetrics.METRIC_WITH_INHERITED_TAGS, childTagsWithValues);
 
             Map<String, String> filledOutTags = inheritedMetric.tags();
@@ -731,7 +731,7 @@ public class MetricsTest {
 
         final LockingReporter reporter = new LockingReporter();
         this.metrics.close();
-        this.metrics = new Metrics(config, Arrays.asList((MetricsReporter) reporter), new MockTime(10), true);
+        this.metrics = new Metrics(config, singletonList((MetricsReporter) reporter), new MockTime(10), true);
         final Deque<Sensor> sensors = new ConcurrentLinkedDeque<>();
         SensorCreator sensorCreator = new SensorCreator(metrics);
 
@@ -745,7 +745,7 @@ public class MetricsTest {
             () -> sensors.forEach(sensor -> sensor.metrics().forEach(metric ->
                 assertNotNull("Invalid metric value", metric.metricValue())))));
         Future<?> reportFuture = executorService.submit(new ConcurrentMetricOperation(alive, "report",
-            () -> reporter.processMetrics()));
+                reporter::processMetrics));
 
         for (int i = 0; i < 10000; i++) {
             if (sensors.size() > 10) {

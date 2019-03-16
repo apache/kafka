@@ -23,6 +23,7 @@ import org.junit.rules.Timeout;
 
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
+import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 
@@ -54,6 +55,6 @@ public final class MessageUtilTest {
         assertEquals("[1, 2, 3]",
             MessageUtil.deepToString(Arrays.asList(1, 2, 3).iterator()));
         assertEquals("[foo]",
-            MessageUtil.deepToString(Arrays.asList("foo").iterator()));
+            MessageUtil.deepToString(Collections.singletonList("foo").iterator()));
     }
 }

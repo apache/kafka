@@ -20,6 +20,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.Assert.assertEquals;
@@ -88,15 +89,15 @@ public class KerberosNameTest {
 
     @Test
     public void testInvalidRules() {
-        testInvalidRule(Arrays.asList("default"));
-        testInvalidRule(Arrays.asList("DEFAUL"));
-        testInvalidRule(Arrays.asList("DEFAULT/L"));
-        testInvalidRule(Arrays.asList("DEFAULT/g"));
+        testInvalidRule(Collections.singletonList("default"));
+        testInvalidRule(Collections.singletonList("DEFAUL"));
+        testInvalidRule(Collections.singletonList("DEFAULT/L"));
+        testInvalidRule(Collections.singletonList("DEFAULT/g"));
 
-        testInvalidRule(Arrays.asList("rule:[1:$1]"));
-        testInvalidRule(Arrays.asList("RULE:[1:$1/L"));
-        testInvalidRule(Arrays.asList("RULE:[1:$1]/l"));
-        testInvalidRule(Arrays.asList("RULE:[2:$1](ABC.*)s/ABC/XYZ/L/g"));
+        testInvalidRule(Collections.singletonList("rule:[1:$1]"));
+        testInvalidRule(Collections.singletonList("RULE:[1:$1/L"));
+        testInvalidRule(Collections.singletonList("RULE:[1:$1]/l"));
+        testInvalidRule(Collections.singletonList("RULE:[2:$1](ABC.*)s/ABC/XYZ/L/g"));
     }
 
     private void testInvalidRule(List<String> rules) {

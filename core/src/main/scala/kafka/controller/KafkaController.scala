@@ -29,12 +29,12 @@ import kafka.utils._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk._
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, ApiError, LeaderAndIsrResponse, StopReplicaResponse}
+import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 
@@ -590,10 +590,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         info(s"Skipping reassignment of $tp since the topic is currently being deleted")
         partitionsToBeRemovedFromReassignment.add(tp)
       } else {
-        val reassignedPartitionContext = controllerContext.partitionsBeingReassigned.get(tp).getOrElse {
-          throw new IllegalStateException(s"Initiating reassign replicas for partition $tp not present in " +
-            s"partitionsBeingReassigned: ${controllerContext.partitionsBeingReassigned.mkString(", ")}")
-        }
+        val reassignedPartitionContext = controllerContext.partitionsBeingReassigned.getOrElse(tp, throw new IllegalStateException(s"Initiating reassign replicas for partition $tp not present in " +
+          s"partitionsBeingReassigned: ${controllerContext.partitionsBeingReassigned.mkString(", ")}"))
         val newReplicas = reassignedPartitionContext.newReplicas
         val topic = tp.topic
         val assignedReplicas = controllerContext.partitionReplicaAssignment(tp)
@@ -1202,7 +1200,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           val replicas = controllerContext.partitionReplicaAssignment(topicPartition)
           val preferredReplica = replicas.head
           val leadershipInfo = controllerContext.partitionLeadershipInfo.get(topicPartition)
-          leadershipInfo.map(_.leaderAndIsr.leader != preferredReplica).getOrElse(false) &&
+          leadershipInfo.exists(_.leaderAndIsr.leader != preferredReplica) &&
             !topicDeletionManager.isTopicQueuedUpForDeletion(topicPartition.topic)
         }
       }

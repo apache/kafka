@@ -38,6 +38,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
+import java.util.Objects;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
@@ -269,8 +270,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     highWatermark == that.highWatermark &&
                     lastStableOffset == that.lastStableOffset &&
                     logStartOffset == that.logStartOffset &&
-                    (abortedTransactions == null ? that.abortedTransactions == null : abortedTransactions.equals(that.abortedTransactions)) &&
-                    (records == null ? that.records == null : records.equals(that.records));
+                    (Objects.equals(abortedTransactions, that.abortedTransactions)) &&
+                    (Objects.equals(records, that.records));
         }
 
         @Override

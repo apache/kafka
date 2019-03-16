@@ -39,7 +39,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
@@ -137,27 +136,15 @@ public final class RecordAccumulator {
 
     private void registerMetrics(Metrics metrics, String metricGrpName) {
         MetricName metricName = metrics.metricName("waiting-threads", metricGrpName, "The number of user threads blocked waiting for buffer memory to enqueue their records");
-        Measurable waitingThreads = new Measurable() {
-            public double measure(MetricConfig config, long now) {
-                return free.queued();
-            }
-        };
+        Measurable waitingThreads = (config, now) -> free.queued();
         metrics.addMetric(metricName, waitingThreads);
 
         metricName = metrics.metricName("buffer-total-bytes", metricGrpName, "The maximum amount of buffer memory the client can use (whether or not it is currently used).");
-        Measurable totalBytes = new Measurable() {
-            public double measure(MetricConfig config, long now) {
-                return free.totalMemory();
-            }
-        };
+        Measurable totalBytes = (config, now) -> free.totalMemory();
         metrics.addMetric(metricName, totalBytes);
 
         metricName = metrics.metricName("buffer-available-bytes", metricGrpName, "The total amount of buffer memory that is not being used (either unallocated or in the free list).");
-        Measurable availableBytes = new Measurable() {
-            public double measure(MetricConfig config, long now) {
-                return free.availableMemory();
-            }
-        };
+        Measurable availableBytes = (config, now) -> free.availableMemory();
         metrics.addMetric(metricName, availableBytes);
 
         Sensor bufferExhaustedRecordSensor = metrics.sensor("buffer-exhausted-records");
@@ -558,7 +545,7 @@ public final class RecordAccumulator {
                     if (shouldStopDrainBatchesForPartition(first, tp))
                         break;
 
-                    boolean isTransactional = transactionManager != null ? transactionManager.isTransactional() : false;
+                    boolean isTransactional = transactionManager != null && transactionManager.isTransactional();
                     ProducerIdAndEpoch producerIdAndEpoch =
                         transactionManager != null ? transactionManager.producerIdAndEpoch() : null;
                     ProducerBatch batch = deque.pollFirst();

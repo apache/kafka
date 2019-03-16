@@ -23,15 +23,14 @@ import java.nio.file.Files
 import kafka.common.MessageFormatter
 import kafka.tools.ConsoleConsumer.ConsumerWrapper
 import kafka.utils.{Exit, TestUtils}
-import org.apache.kafka.clients.consumer.{ConsumerRecord, MockConsumer, OffsetResetStrategy}
+import org.apache.kafka.clients.consumer.{ConsumerConfig, ConsumerRecord, MockConsumer, OffsetResetStrategy}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.test.MockDeserializer
-import org.mockito.Mockito._
-import org.mockito.ArgumentMatchers
-import ArgumentMatchers._
 import org.junit.Assert._
 import org.junit.{Before, Test}
+import org.mockito.ArgumentMatchers
+import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
 
 import scala.collection.JavaConverters._
 

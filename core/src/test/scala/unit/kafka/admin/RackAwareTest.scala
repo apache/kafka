@@ -16,8 +16,9 @@
  */
 package kafka.admin
 
-import scala.collection.{Map, Seq, mutable}
 import org.junit.Assert._
+
+import scala.collection.{Map, Seq, mutable}
 
 trait RackAwareTest {
 

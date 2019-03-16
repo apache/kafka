@@ -58,7 +58,7 @@ trait KafkaMetricsGroup extends Logging {
       nameBuilder.append(name)
     }
 
-    val scope: String = toScope(tags).getOrElse(null)
+    val scope: String = toScope(tags).orNull
     val tagsName = toMBeanName(tags)
     tagsName.foreach(nameBuilder.append(",").append(_))
 

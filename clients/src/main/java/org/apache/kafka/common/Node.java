@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common;
 
+import java.util.Objects;
+
 /**
  * Information about a Kafka node
  */
@@ -122,10 +124,10 @@ public class Node {
         if (obj == null || getClass() != obj.getClass())
             return false;
         Node other = (Node) obj;
-        return (host == null ? other.host == null : host.equals(other.host)) &&
+        return (Objects.equals(host, other.host)) &&
             id == other.id &&
             port == other.port &&
-            (rack == null ? other.rack == null : rack.equals(other.rack));
+            (Objects.equals(rack, other.rack));
     }
 
     @Override

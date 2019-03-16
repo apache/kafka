@@ -16,19 +16,16 @@ package kafka.server
 
 import java.net.Socket
 import java.util.Properties
+import java.util.concurrent.atomic.AtomicInteger
 
 import kafka.utils.TestUtils
+import org.apache.kafka.common.metrics.{KafkaMetric, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.requests.{ListGroupsRequest,ListGroupsResponse}
-import org.apache.kafka.common.metrics.MetricsReporter
-import org.apache.kafka.common.metrics.KafkaMetric
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.protocol.Errors
-
+import org.apache.kafka.common.requests.{ListGroupsRequest, ListGroupsResponse}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
-import org.junit.{Before, Test}
-import org.junit.After
-import java.util.concurrent.atomic.AtomicInteger
+import org.junit.{After, Before, Test}
 
 /*
  * this test checks that a reporter that throws an exception will not affect other reporters

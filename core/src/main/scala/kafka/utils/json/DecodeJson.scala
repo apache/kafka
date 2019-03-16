@@ -17,12 +17,12 @@
 
 package kafka.utils.json
 
-import scala.collection._
-import scala.language.higherKinds
-import JavaConverters._
-import generic.CanBuildFrom
-
 import com.fasterxml.jackson.databind.{JsonMappingException, JsonNode}
+
+import scala.collection.JavaConverters._
+import scala.collection._
+import scala.collection.generic.CanBuildFrom
+import scala.language.higherKinds
 
 /**
  * A type class for parsing JSON. This should typically be used via `JsonValue.apply`.

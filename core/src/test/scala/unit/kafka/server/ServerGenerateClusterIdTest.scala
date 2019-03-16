@@ -16,14 +16,15 @@
   */
 package kafka.server
 
-import scala.concurrent._
-import ExecutionContext.Implicits._
-import scala.concurrent.duration._
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
-import org.junit.Assert._
-import org.junit.{Before, After, Test}
 import org.apache.kafka.test.TestUtils.isValidClusterId
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
+
+import scala.concurrent.ExecutionContext.Implicits._
+import scala.concurrent._
+import scala.concurrent.duration._
 
 class ServerGenerateClusterIdTest extends ZooKeeperTestHarness {
   var config1: KafkaConfig = null

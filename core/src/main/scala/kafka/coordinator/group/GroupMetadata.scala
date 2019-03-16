@@ -288,7 +288,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private def candidateProtocols = {
     // get the set of protocols that are commonly supported by all members
     val numMembers = members.size
-    supportedProtocols.filter(_._2 == numMembers).map(_._1).toSet
+    supportedProtocols.filter(_._2 == numMembers).keys.toSet
   }
 
   def supportsProtocols(memberProtocolType: String, memberProtocols: Set[String]) = {

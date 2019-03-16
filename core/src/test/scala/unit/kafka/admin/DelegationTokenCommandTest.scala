@@ -101,7 +101,7 @@ class DelegationTokenCommandTest extends BaseRequestTest with SaslSetup {
     DelegationTokenCommand.expireToken(adminClient, getExpireOpts(token2.hmacAsBase64String()))
 
     tokens = DelegationTokenCommand.describeToken(adminClient, getDescribeOpts(List()))
-    assertTrue(tokens.size == 0)
+    assertTrue(tokens.isEmpty)
 
     //create token with invalid renewer principal type
     intercept[ExecutionException](DelegationTokenCommand.createToken(adminClient, getCreateOpts(List("Group:Renewer3"))))

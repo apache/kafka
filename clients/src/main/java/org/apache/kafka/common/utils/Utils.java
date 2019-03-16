@@ -674,11 +674,9 @@ public final class Utils {
      * @return Set
      */
     @SafeVarargs
+    @SuppressWarnings("varargs")
     public static <T> Set<T> mkSet(T... elems) {
-        Set<T> result = new HashSet<>((int) (elems.length / 0.75) + 1);
-        for (T elem : elems)
-            result.add(elem);
-        return result;
+        return Arrays.stream(elems).collect(Collectors.toSet());
     }
 
     /**

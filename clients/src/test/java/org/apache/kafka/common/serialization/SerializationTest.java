@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.Collections;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -37,16 +38,16 @@ public class SerializationTest {
     final private String topic = "testTopic";
     final private Map<Class<?>, List<Object>> testData = new HashMap<Class<?>, List<Object>>() {
         {
-            put(String.class, Arrays.asList("my string"));
+            put(String.class, Collections.singletonList("my string"));
             put(Short.class, Arrays.asList((short) 32767, (short) -32768));
             put(Integer.class, Arrays.asList(423412424, -41243432));
             put(Long.class, Arrays.asList(922337203685477580L, -922337203685477581L));
             put(Float.class, Arrays.asList(5678567.12312f, -5678567.12341f));
             put(Double.class, Arrays.asList(5678567.12312d, -5678567.12341d));
-            put(byte[].class, Arrays.asList("my string".getBytes()));
-            put(ByteBuffer.class, Arrays.asList(ByteBuffer.allocate(10).put("my string".getBytes())));
-            put(Bytes.class, Arrays.asList(new Bytes("my string".getBytes())));
-            put(UUID.class, Arrays.asList(UUID.randomUUID()));
+            put(byte[].class, Collections.singletonList("my string".getBytes()));
+            put(ByteBuffer.class, Collections.singletonList(ByteBuffer.allocate(10).put("my string".getBytes())));
+            put(Bytes.class, Collections.singletonList(new Bytes("my string".getBytes())));
+            put(UUID.class, Collections.singletonList(UUID.randomUUID()));
         }
     };
 
@@ -148,12 +149,12 @@ public class SerializationTest {
     }
 
     private Serde<String> getStringSerde(String encoder) {
-        Map<String, Object> serializerConfigs = new HashMap<String, Object>();
+        Map<String, Object> serializerConfigs = new HashMap<>();
         serializerConfigs.put("key.serializer.encoding", encoder);
         Serializer<String> serializer = Serdes.String().serializer();
         serializer.configure(serializerConfigs, true);
 
-        Map<String, Object> deserializerConfigs = new HashMap<String, Object>();
+        Map<String, Object> deserializerConfigs = new HashMap<>();
         deserializerConfigs.put("key.deserializer.encoding", encoder);
         Deserializer<String> deserializer = Serdes.String().deserializer();
         deserializer.configure(deserializerConfigs, true);

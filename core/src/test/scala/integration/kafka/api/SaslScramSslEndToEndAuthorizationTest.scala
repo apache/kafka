@@ -19,9 +19,9 @@ package kafka.api
 import kafka.utils.JaasTestUtils
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
+import org.junit.Before
 
 import scala.collection.JavaConverters._
-import org.junit.Before
 
 class SaslScramSslEndToEndAuthorizationTest extends SaslEndToEndAuthorizationTest {
   override protected def kafkaClientSaslMechanism = "SCRAM-SHA-256"

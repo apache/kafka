@@ -17,12 +17,11 @@
 
 package kafka.zk
 
-import org.apache.zookeeper.server.ZooKeeperServer
-import org.apache.zookeeper.server.NIOServerCnxnFactory
-import kafka.utils.{CoreUtils, Logging, TestUtils}
 import java.net.InetSocketAddress
 
+import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.common.utils.Utils
+import org.apache.zookeeper.server.{NIOServerCnxnFactory, ZooKeeperServer}
 
 /**
  * ZooKeeperServer wrapper that starts the server with temporary directories during construction and deletes

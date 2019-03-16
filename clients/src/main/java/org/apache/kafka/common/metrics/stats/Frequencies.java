@@ -18,7 +18,6 @@ package org.apache.kafka.common.metrics.stats;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat;
-import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.stats.Histogram.BinScheme;
 import org.apache.kafka.common.metrics.stats.Histogram.ConstantBinScheme;
@@ -63,7 +62,7 @@ public class Frequencies extends SampledStat implements CompoundStat {
         if (frequencies.isEmpty()) {
             throw new IllegalArgumentException("Must specify at least one metric name");
         }
-        Frequency[] frequencyArray = frequencies.toArray(new Frequency[frequencies.size()]);
+        Frequency[] frequencyArray = frequencies.toArray(new Frequency[0]);
         return new Frequencies(2, 0.0, 1.0, frequencyArray);
     }
 
@@ -111,11 +110,7 @@ public class Frequencies extends SampledStat implements CompoundStat {
         List<NamedMeasurable> ms = new ArrayList<>(frequencies.length);
         for (Frequency frequency : frequencies) {
             final double center = frequency.centerValue();
-            ms.add(new NamedMeasurable(frequency.name(), new Measurable() {
-                public double measure(MetricConfig config, long now) {
-                    return frequency(config, now, center);
-                }
-            }));
+            ms.add(new NamedMeasurable(frequency.name(), (config, now) -> frequency(config, now, center)));
         }
         return ms;
     }

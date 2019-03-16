@@ -17,12 +17,13 @@
 
 package kafka.security
 
-import kafka.security.auth.{Acl, Operation, PermissionType, Resource, ResourceType}
+import kafka.security.auth._
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding, AclBindingFilter}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.utils.SecurityUtils._
+
 import scala.util.{Failure, Success, Try}
 
 

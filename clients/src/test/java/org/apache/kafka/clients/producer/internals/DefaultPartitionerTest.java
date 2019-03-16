@@ -43,7 +43,7 @@ public class DefaultPartitionerTest {
                                                     new PartitionInfo(topic, 2, node1, nodes, nodes),
                                                     new PartitionInfo(topic, 0, node0, nodes, nodes));
     private Cluster cluster = new Cluster("clusterId", asList(node0, node1, node2), partitions,
-            Collections.<String>emptySet(), Collections.<String>emptySet());
+            Collections.emptySet(), Collections.emptySet());
 
     @Test
     public void testKeyPartitionIsStable() {
@@ -79,7 +79,7 @@ public class DefaultPartitionerTest {
                 new PartitionInfo(topicB, 0, node0, nodes, nodes)
                 );
         Cluster testCluster = new Cluster("clusterId", asList(node0, node1, node2), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+                Collections.emptySet(), Collections.emptySet());
 
         final Map<Integer, Integer> partitionCount = new HashMap<>();
 
