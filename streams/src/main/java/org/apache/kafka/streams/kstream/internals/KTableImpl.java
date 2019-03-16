@@ -116,7 +116,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                   final boolean filterNot) {
         final Serde<K> keySerde;
         final Serde<V> valueSerde;
-        final String queryableName;
+        final String queryableStoreName;
         final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
 
         // we can inherit parent key and value serde if user do not provide specific overrides, more specifically:
@@ -130,20 +130,20 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             }
             keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
             valueSerde = materializedInternal.valueSerde() != null ? materializedInternal.valueSerde() : this.valSerde;
-            queryableName = materializedInternal.queryableStoreName();
+            queryableStoreName = materializedInternal.queryableStoreName();
             // only materialize if materialized is specified and it has queryable name
-            storeBuilder = queryableName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
+            storeBuilder = queryableStoreName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
         } else {
             keySerde = this.keySerde;
             valueSerde = this.valSerde;
-            queryableName = null;
+            queryableStoreName = null;
             storeBuilder = null;
         }
 
         final String name = builder.newProcessorName(FILTER_NAME);
 
         final KTableProcessorSupplier<K, V, V> processorSupplier =
-            new KTableFilter<>(this, predicate, filterNot, queryableName);
+            new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
 
         final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
             new ProcessorParameters<>(processorSupplier, name)
@@ -162,7 +162,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                 keySerde,
                                 valueSerde,
                                 sourceNodes,
-                                queryableName,
+                                queryableStoreName,
                                 processorSupplier,
                                 tableNode,
                                 builder);
@@ -211,9 +211,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String name = builder.newProcessorName(MAPVALUES_NAME);
 
         // only materialize if the state store has queryable name
-        final String queryableName = materializedInternal != null ? materializedInternal.queryableStoreName() : null;
-        final StoreBuilder<KeyValueStore<K, VR>> storeBuilder = queryableName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this, mapper, queryableName);
+        final String queryableStoreName = materializedInternal != null ? materializedInternal.queryableStoreName() : null;
+        final StoreBuilder<KeyValueStore<K, VR>> storeBuilder = queryableStoreName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
+        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this, mapper, queryableStoreName);
 
         // leaving in calls to ITB until building topology with graph
 
@@ -237,7 +237,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             materializedInternal != null && materializedInternal.keySerde() != null ? materializedInternal.keySerde() : keySerde,
             materializedInternal != null ? materializedInternal.valueSerde() : null,
             sourceNodes,
-            queryableName,
+            queryableStoreName,
             processorSupplier,
             tableNode,
             builder
