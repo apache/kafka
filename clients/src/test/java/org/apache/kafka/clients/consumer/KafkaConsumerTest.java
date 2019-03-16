@@ -80,6 +80,7 @@ import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Assert;
 import org.junit.Test;
+import org.mockito.ArgumentMatchers;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -1900,7 +1901,7 @@ public class KafkaConsumerTest {
     public void testCloseWithTimeUnit() {
         KafkaConsumer consumer = mock(KafkaConsumer.class);
         doCallRealMethod().when(consumer).close(anyLong(), any());
-        consumer.close(1, TimeUnit.SECONDS);
+        consumer.close(Duration.ofSeconds(1));
         verify(consumer).close(Duration.ofSeconds(1));
     }
 

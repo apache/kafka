@@ -147,7 +147,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     clientThreads.foreach(_.join(5 * 1000))
     executors.foreach(_.shutdownNow())
     producers.foreach(_.close(Duration.ZERO))
-    consumers.foreach(_.close(Duration.ofMillis(0)))
+    consumers.foreach(_.close(Duration.ZERO))
     adminClients.foreach(_.close())
     TestUtils.shutdownServers(servers)
     super.tearDown()
