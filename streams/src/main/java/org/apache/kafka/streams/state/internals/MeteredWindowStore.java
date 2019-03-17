@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -43,13 +44,13 @@ public class MeteredWindowStore<K, V>
     private final long windowSizeMs;
     private final String metricScope;
     private final Time time;
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
+    final Serde<K> keySerde;
+    final Serde<V> valueSerde;
+    StateSerdes<K, V> serdes;
     private StreamsMetricsImpl metrics;
     private Sensor putTime;
     private Sensor fetchTime;
     private Sensor flushTime;
-    private StateSerdes<K, V> serdes;
     private ProcessorContext context;
     private String taskName;
 
@@ -67,15 +68,12 @@ public class MeteredWindowStore<K, V>
         this.valueSerde = valueSerde;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context,
-                     final StateStore root) {
+                     final StateStore root,
+                     final StreamsConfig config) {
         this.context = context;
-        serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        initStoreSerde(context, config);
         metrics = (StreamsMetricsImpl) context.metrics();
 
         taskName = context.taskId().toString();
@@ -99,6 +97,20 @@ public class MeteredWindowStore<K, V>
                 time.nanoseconds()
             );
         }
+    }
+
+    @SuppressWarnings("unchecked")
+    void initStoreSerde(final ProcessorContext context, final StreamsConfig config) {
+        if (keySerde != null) {
+            keySerde.configure(config.originals(), true);
+        }
+        if (valueSerde != null) {
+            valueSerde.configure(config.originals(), false);
+        }
+        serdes = new StateSerdes<>(
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
 
     @SuppressWarnings("unchecked")
@@ -155,7 +167,7 @@ public class MeteredWindowStore<K, V>
         }
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public WindowStoreIterator<V> fetch(final K key,
                                         final long timeFrom,
@@ -167,7 +179,7 @@ public class MeteredWindowStore<K, V>
                                                 time);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from,
                                                   final K to,
@@ -181,7 +193,7 @@ public class MeteredWindowStore<K, V>
             time);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                      final long timeTo) {

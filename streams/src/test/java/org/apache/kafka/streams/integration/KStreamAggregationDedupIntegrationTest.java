@@ -19,6 +19,7 @@ package org.apache.kafka.streams.integration;
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
@@ -40,6 +41,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestUtils;
@@ -52,6 +54,7 @@ import org.junit.experimental.categories.Category;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
@@ -177,16 +180,79 @@ public class KStreamAggregationDedupIntegrationTest {
         );
     }
 
+    static class MyIntSerializer extends IntegerSerializer {
+        boolean configured = false;
+        boolean called = false;
+
+        MyIntSerializer() {
+            super();
+        }
+
+        @Override
+        public void configure(final Map<String, ?> configs, final boolean isKey) {
+            super.configure(configs, isKey);
+            configured = true;
+        }
+
+        @Override
+        public byte[] serialize(final String topic, final Integer data) {
+            called = true;
+            return super.serialize(topic, data);
+        }
+
+        boolean configured() {
+            return !called || configured;
+        }
+    }
+    static class MyIntDeserializer extends IntegerDeserializer {
+        boolean configured = false;
+        boolean called = false;
+
+        @Override
+        public void configure(final Map<String, ?> configs, final boolean isKey) {
+            super.configure(configs, isKey);
+            configured = true;
+        }
+        @Override
+        public Integer deserialize(final String topic, final byte[] data) {
+            called = true;
+            return super.deserialize(topic, data);
+        }
+
+        boolean configured() {
+            return !called || configured;
+        }
+    }
+
+    class MyIntegerSerde<K> extends Serdes.WrapperSerde<Integer> {
+        public MyIntegerSerde() {
+            super(new MyIntSerializer(), new MyIntDeserializer());
+        }
+        @Override
+        public void configure(final Map<String, ?> configs, final boolean isKey) {
+            super.configure(configs, isKey);
+        }
+
+        public boolean configured() {
+            if (!((MyIntSerializer) this.serializer()).configured()) return false;
+            if (!((MyIntDeserializer) this.deserializer()).configured()) return false;
+            return true;
+        }
+    }
     @Test
+    @SuppressWarnings("unchecked")
     public void shouldGroupByKey() throws Exception {
         final long timestamp = mockTime.milliseconds();
         produceMessages(timestamp);
         produceMessages(timestamp);
 
-        stream.groupByKey(Grouped.with(Serdes.Integer(), Serdes.String()))
+        final MyIntegerSerde keyTestSerde = new MyIntegerSerde();
+        final MyStringSerde valueTestSerde = new MyStringSerde();
+        stream.groupByKey(Grouped.with(keyTestSerde, valueTestSerde))
             .windowedBy(TimeWindows.of(ofMillis(500L)))
             .count(Materialized.as("count-windows"))
-            .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start())
+            .toStream((windowedKey, value) -> ((Windowed<Integer>)windowedKey).key() + "@" +
+                    ((Windowed<Integer>)windowedKey).window().start())
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         startStreams();
@@ -204,6 +270,8 @@ public class KStreamAggregationDedupIntegrationTest {
                         KeyValue.pair("5@" + window, 2L)
                 )
         );
+        assertTrue(keyTestSerde.configured());
+        assertTrue(valueTestSerde.configured());
     }
 
 
