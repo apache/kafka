@@ -122,6 +122,13 @@ public final class Versions {
         return version >= lowest && version <= highest;
     }
 
+    public boolean contains(Versions other) {
+        if (other.empty()) {
+            return true;
+        }
+        return !((lowest > other.lowest) || (highest < other.highest));
+    }
+
     @Override
     public int hashCode() {
         return Objects.hash(lowest, highest);

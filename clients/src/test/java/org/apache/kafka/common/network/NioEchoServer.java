@@ -28,6 +28,7 @@ import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 
@@ -158,8 +159,10 @@ public class NioEchoServer extends Thread {
         waitForMetrics("failed-reauthentication", failedReauthentications,
                 EnumSet.of(MetricType.TOTAL, MetricType.RATE));
         waitForMetrics("successful-authentication-no-reauth", 0, EnumSet.of(MetricType.TOTAL));
-        waitForMetrics("reauthentication-latency", Math.signum(successfulReauthentications),
-                EnumSet.of(MetricType.MAX, MetricType.AVG));
+        if (!(time instanceof MockTime)) {
+            waitForMetrics("reauthentication-latency", Math.signum(successfulReauthentications),
+                    EnumSet.of(MetricType.MAX, MetricType.AVG));
+        }
     }
 
     public void verifyAuthenticationNoReauthMetric(int successfulAuthenticationNoReauths) throws InterruptedException {

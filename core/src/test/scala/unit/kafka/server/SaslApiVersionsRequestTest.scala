@@ -19,6 +19,7 @@ package kafka.server
 import java.net.Socket
 import java.util.Collections
 
+import org.apache.kafka.common.message.SaslHandshakeRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse}
 import org.apache.kafka.common.requests.SaslHandshakeRequest
@@ -95,7 +96,7 @@ class SaslApiVersionsRequestTest extends BaseRequestTest with SaslSetup {
   }
 
   private def sendSaslHandshakeRequestValidateResponse(socket: Socket) {
-    val request = new SaslHandshakeRequest("PLAIN")
+    val request = new SaslHandshakeRequest(new SaslHandshakeRequestData().setMechanism("PLAIN"))
     val response = sendAndReceive(request, ApiKeys.SASL_HANDSHAKE, socket)
     val handshakeResponse = SaslHandshakeResponse.parse(response, request.version)
     assertEquals(Errors.NONE, handshakeResponse.error)

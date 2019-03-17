@@ -24,7 +24,6 @@ import java.util.Properties
 
 import kafka.api.IntegrationTestHarness
 import kafka.network.SocketServer
-import kafka.utils._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Struct
 import org.apache.kafka.common.protocol.ApiKeys

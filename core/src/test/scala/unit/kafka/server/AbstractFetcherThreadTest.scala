@@ -41,6 +41,8 @@ import scala.collection.{Map, Set, mutable}
 import scala.util.Random
 import org.scalatest.Assertions.assertThrows
 
+import scala.collection.mutable.ArrayBuffer
+
 class AbstractFetcherThreadTest {
 
   @Before
@@ -347,6 +349,34 @@ class AbstractFetcherThreadTest {
   }
 
   @Test
+  def testTruncateToHighWatermarkDuringRemovePartitions(): Unit = {
+    val highWatermark = 2L
+    val partition = new TopicPartition("topic", 0)
+    val fetcher = new MockFetcherThread {
+      override def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit = {
+        removePartitions(Set(partition))
+        super.truncateToHighWatermark(partitions)
+      }
+
+      override def latestEpoch(topicPartition: TopicPartition): Option[Int] = None
+    }
+
+    val replicaLog = Seq(
+      mkBatch(baseOffset = 0, leaderEpoch = 0, new SimpleRecord("a".getBytes)),
+      mkBatch(baseOffset = 1, leaderEpoch = 2, new SimpleRecord("b".getBytes)),
+      mkBatch(baseOffset = 2, leaderEpoch = 4, new SimpleRecord("c".getBytes)))
+
+    val replicaState = MockFetcherThread.PartitionState(replicaLog, leaderEpoch = 5, highWatermark)
+    fetcher.setReplicaState(partition, replicaState)
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(highWatermark, leaderEpoch = 5)))
+
+    fetcher.doWork()
+
+    assertEquals(replicaLog.last.nextOffset(), replicaState.logEndOffset)
+    assertTrue(fetcher.fetchState(partition).isEmpty)
+  }
+
+  @Test
   def testTruncationSkippedIfNoEpochChange(): Unit = {
     val partition = new TopicPartition("topic", 0)
 
@@ -628,6 +658,48 @@ class AbstractFetcherThreadTest {
     // make sure the fetcher is now able to truncate and fetch
     fetcher.doWork()
     assertEquals(fetcher.leaderPartitionState(partition).log, fetcher.replicaPartitionState(partition).log)
+  }
+
+  @Test
+  def testTruncateToEpochEndOffsetsDuringRemovePartitions(): Unit = {
+    val partition = new TopicPartition("topic", 0)
+    val leaderEpochOnLeader = 0
+    val initialLeaderEpochOnFollower = 0
+    val nextLeaderEpochOnFollower = initialLeaderEpochOnFollower + 1
+
+    val fetcher = new MockFetcherThread {
+      override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
+        val fetchedEpochs = super.fetchEpochEndOffsets(partitions)
+        // leader epoch changes while fetching epochs from leader
+        // at the same time, the replica fetcher manager removes the partition
+        removePartitions(Set(partition))
+        setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = nextLeaderEpochOnFollower))
+        fetchedEpochs
+      }
+    }
+
+    fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = initialLeaderEpochOnFollower))
+    fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = initialLeaderEpochOnFollower)))
+
+    val leaderLog = Seq(
+      mkBatch(baseOffset = 0, leaderEpoch = initialLeaderEpochOnFollower, new SimpleRecord("c".getBytes)))
+    val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpochOnLeader, highWatermark = 0L)
+    fetcher.setLeaderState(partition, leaderState)
+
+    // first round of work
+    fetcher.doWork()
+
+    // since the partition was removed before the fetched endOffsets were filtered against the leader epoch,
+    // we do not expect the partition to be in Truncating state
+    assertEquals(None, fetcher.fetchState(partition).map(_.state))
+    assertEquals(None, fetcher.fetchState(partition).map(_.currentLeaderEpoch))
+
+    fetcher.setLeaderState(
+      partition, MockFetcherThread.PartitionState(leaderLog, nextLeaderEpochOnFollower, highWatermark = 0L))
+
+    // make sure the fetcher is able to continue work
+    fetcher.doWork()
+    assertEquals(ArrayBuffer.empty, fetcher.replicaPartitionState(partition).log)
   }
 
   @Test

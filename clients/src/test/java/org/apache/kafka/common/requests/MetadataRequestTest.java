@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.protocol.types.Schema;
-import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.message.MetadataRequestData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -31,25 +31,38 @@ public class MetadataRequestTest {
 
     @Test
     public void testEmptyMeansAllTopicsV0() {
-        Struct rawRequest = new Struct(MetadataRequest.schemaVersions()[0]);
-        rawRequest.set("topics", new Object[0]);
-        MetadataRequest parsedRequest = new MetadataRequest(rawRequest, (short) 0);
+        MetadataRequestData data = new MetadataRequestData();
+        MetadataRequest parsedRequest = new MetadataRequest(data, (short) 0);
         assertTrue(parsedRequest.isAllTopics());
         assertNull(parsedRequest.topics());
     }
 
     @Test
     public void testEmptyMeansEmptyForVersionsAboveV0() {
-        for (int i = 1; i < MetadataRequest.schemaVersions().length; i++) {
-            Schema schema = MetadataRequest.schemaVersions()[i];
-            Struct rawRequest = new Struct(schema);
-            rawRequest.set("topics", new Object[0]);
-            if (rawRequest.hasField("allow_auto_topic_creation"))
-                rawRequest.set("allow_auto_topic_creation", true);
-            MetadataRequest parsedRequest = new MetadataRequest(rawRequest, (short) i);
+        for (int i = 1; i < MetadataRequestData.SCHEMAS.length; i++) {
+            MetadataRequestData data = new MetadataRequestData();
+            data.setAllowAutoTopicCreation(true);
+            MetadataRequest parsedRequest = new MetadataRequest(data, (short) i);
             assertFalse(parsedRequest.isAllTopics());
             assertEquals(Collections.emptyList(), parsedRequest.topics());
         }
     }
 
+    @Test
+    public void testMetadataRequestVersion() {
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(Collections.singletonList("topic"), false);
+        assertEquals(ApiKeys.METADATA.oldestVersion(), builder.oldestAllowedVersion());
+        assertEquals(ApiKeys.METADATA.latestVersion(), builder.latestAllowedVersion());
+
+        short version = 5;
+        MetadataRequest.Builder builder2 = new MetadataRequest.Builder(Collections.singletonList("topic"), false, version);
+        assertEquals(version, builder2.oldestAllowedVersion());
+        assertEquals(version, builder2.latestAllowedVersion());
+
+        short minVersion = 1;
+        short maxVersion = 6;
+        MetadataRequest.Builder builder3 = new MetadataRequest.Builder(Collections.singletonList("topic"), false, minVersion, maxVersion);
+        assertEquals(minVersion, builder3.oldestAllowedVersion());
+        assertEquals(maxVersion, builder3.latestAllowedVersion());
+    }
 }

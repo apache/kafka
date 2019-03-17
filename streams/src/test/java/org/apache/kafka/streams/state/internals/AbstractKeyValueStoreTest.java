@@ -311,12 +311,12 @@ public abstract class AbstractKeyValueStoreTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionOnPutAllNullKey() {
-        store.putAll(Collections.singletonList(new KeyValue<Integer, String>(null, "anyValue")));
+        store.putAll(Collections.singletonList(new KeyValue<>(null, "anyValue")));
     }
 
     @Test
     public void shouldNotThrowNullPointerExceptionOnPutAllNullKey() {
-        store.putAll(Collections.singletonList(new KeyValue<Integer, String>(1, null)));
+        store.putAll(Collections.singletonList(new KeyValue<>(1, null)));
     }
 
     @Test(expected = NullPointerException.class)
@@ -377,5 +377,16 @@ public abstract class AbstractKeyValueStoreTest {
         store.put(2, "two");
         store.delete(2);
         assertNull(store.get(2));
+    }
+
+    @Test
+    public void shouldNotThrowConcurrentModificationException() {
+        store.put(0, "zero");
+
+        final KeyValueIterator<Integer, String> results = store.range(0, 2);
+
+        store.put(1, "one");
+
+        assertEquals(new KeyValue<>(0, "zero"), results.next());
     }
 }
