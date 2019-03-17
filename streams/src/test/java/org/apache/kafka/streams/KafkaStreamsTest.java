@@ -487,7 +487,7 @@ public class KafkaStreamsTest {
         }
 
         @Override
-        public byte[] serialize(String topic, String data) {
+        public byte[] serialize(final String topic, final String data) {
             called = true;
             return super.serialize(topic, data);
         }
@@ -506,7 +506,7 @@ public class KafkaStreamsTest {
             configured = true;
         }
         @Override
-        public String deserialize(String topic, byte[] data) {
+        public String deserialize(final String topic, final byte[] data) {
             called = true;
             return super.deserialize(topic, data);
         }
