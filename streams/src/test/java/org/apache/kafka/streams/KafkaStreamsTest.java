@@ -526,7 +526,7 @@ public class KafkaStreamsTest {
             super.configure(configs, isKey);
         }
         public boolean configured() {
-            if (!((MyStringSerializer)this.serializer()).configured()) return false;
+            if (!((MyStringSerializer) this.serializer()).configured()) return false;
             if (!((MyStringDeserializer) this.deserializer()).configured()) return false;
             return true;
         }
