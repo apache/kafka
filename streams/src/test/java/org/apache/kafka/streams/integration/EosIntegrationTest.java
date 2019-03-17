@@ -494,8 +494,6 @@ public class EosIntegrationTest {
             gcInjected.set(true);
             writeInputData(dataToTriggerFirstRebalance);
 
-            System.out.println("navi 1: " + streams1.allMetadata().size() + " " + streams2.allMetadata().size());
-            System.out.println("navi 2: " + streams1.allMetadata().toArray()[0].toString() + " " + streams2.allMetadata().toArray()[0].toString());
             TestUtils.waitForCondition(
                 () -> streams1.allMetadata().size() == 1
                     && streams2.allMetadata().size() == 1
@@ -515,8 +513,6 @@ public class EosIntegrationTest {
 
             doGC = false;
 
-            System.out.println("navi 11: " + streams1.allMetadata().size() + " " + streams2.allMetadata().size());
-            System.out.println("navi 22: " + streams1.allMetadata().toArray()[0].toString() + " " + streams2.allMetadata().toArray()[0].toString());
             TestUtils.waitForCondition(
                 () -> streams1.allMetadata().size() == 2
                     && streams2.allMetadata().size() == 2

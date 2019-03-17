@@ -793,7 +793,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     new AssignmentInfo().encode()
             ));
         }
-
+        log.info("VersionProbingAssignment . Total hosts in this assignment are " + clientsMetadata.size());
         return assignment;
     }
 
@@ -822,6 +822,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
      */
     @Override
     public void onAssignment(final Assignment assignment) {
+
         final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
         Collections.sort(partitions, PARTITION_COMPARATOR);
 
@@ -833,6 +834,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         }
         final int receivedAssignmentMetadataVersion = info.version();
         final int leaderSupportedVersion = info.latestSupportedVersion();
+
+        log.info("Assignment received {}", receivedAssignmentMetadataVersion);
 
         if (receivedAssignmentMetadataVersion > usedSubscriptionMetadataVersion) {
             throw new IllegalStateException("Sent a version " + usedSubscriptionMetadataVersion
@@ -941,6 +944,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         taskManager.setPartitionsByHostState(partitionsByHost);
         taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
         taskManager.updateSubscriptionsFromAssignment(partitions);
+        log.info("Assignment working fine on the machine {}", this.userEndPoint);
     }
 
     private void processVersionOneAssignment(final AssignmentInfo info,
