@@ -165,7 +165,7 @@ public class MeteredWindowStore<K, V>
         }
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
+    @SuppressWarnings("deprecation")
     @Override
     public WindowStoreIterator<V> fetch(final K key,
                                         final long timeFrom,
@@ -177,7 +177,7 @@ public class MeteredWindowStore<K, V>
                                                 time);
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K from,
                                                   final K to,
@@ -191,7 +191,7 @@ public class MeteredWindowStore<K, V>
             time);
     }
 
-    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
+    @SuppressWarnings("deprecation")
     @Override
     public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                      final long timeTo) {
