@@ -251,8 +251,8 @@ public class KStreamAggregationDedupIntegrationTest {
         stream.groupByKey(Grouped.with(keyTestSerde, valueTestSerde))
             .windowedBy(TimeWindows.of(ofMillis(500L)))
             .count(Materialized.as("count-windows"))
-            .toStream((windowedKey, value) -> ((Windowed<Integer>)windowedKey).key() + "@" +
-                    ((Windowed<Integer>)windowedKey).window().start())
+            .toStream((windowedKey, value) -> ((Windowed<Integer>) windowedKey).key() + "@" +
+                    ((Windowed<Integer>) windowedKey).window().start())
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
 
         startStreams();
