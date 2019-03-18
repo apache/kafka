@@ -1169,7 +1169,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             try {
               while (true) {
                 consumer.poll(JDuration.ofSeconds(5))
-                if (!consumer.assignment().isEmpty && latch.getCount > 0L)
+                if (!consumer.assignment.isEmpty && latch.getCount > 0L)
                   latch.countDown()
                 consumer.commitSync()
               }
@@ -1180,7 +1180,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         }
         try {
           consumerThread.start
-          latch.await()
+          latch.await(30000, TimeUnit.MILLISECONDS)
           // Test that we can list the new group.
           TestUtils.waitUntilTrue(() => {
             val matching = client.listConsumerGroups.all.get().asScala.filter(_.groupId == testGroupId)
