@@ -857,7 +857,6 @@ public class KafkaStreams implements AutoCloseable {
                 // notify all the threads to stop; avoid deadlocks by stopping any
                 // further state reports from the thread since we're shutting down
                 for (final StreamThread thread : threads) {
-                    thread.setStateListener(null);
                     thread.shutdown();
                 }
 
@@ -872,7 +871,6 @@ public class KafkaStreams implements AutoCloseable {
                 }
 
                 if (globalStreamThread != null) {
-                    globalStreamThread.setStateListener(null);
                     globalStreamThread.shutdown();
                 }
 
