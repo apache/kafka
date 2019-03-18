@@ -3547,7 +3547,8 @@ val clicksPerRegion: KTable[String, Long] =
 // Write the (continuously updating) results to the output topic.
 clicksPerRegion.toStream.to(outputTopic)
               </pre>
-              <p>A complete example of user-defined SerDes can be found in a test class within the library.</p>
+              <p>A complete example of user-defined SerDes can be found in a test class within the library.
+   Kafka Streams will auto-configure the passed-in SerDes objects, i.e., you don't need to call <code>configure()</code> manually.</p>
             </div>
         </div>
 </div>
