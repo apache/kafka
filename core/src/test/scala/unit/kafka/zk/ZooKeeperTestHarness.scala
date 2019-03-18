@@ -84,7 +84,7 @@ abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
 }
 
 object ZooKeeperTestHarness {
-  val ZkClientEventThreadPrefix = "ZkClient-EventThread"
+  val ZkClientEventThreadSuffix = "-EventThread"
 
   // Threads which may cause transient failures in subsequent tests if not shutdown.
   // These include threads which make connections to brokers and may cause issues
@@ -94,7 +94,7 @@ object ZooKeeperTestHarness {
                                   KafkaProducer.NETWORK_THREAD_PREFIX,
                                   AdminClientUnitTestEnv.kafkaAdminClientNetworkThreadPrefix(),
                                   AbstractCoordinator.HEARTBEAT_THREAD_PREFIX,
-                                  ZkClientEventThreadPrefix)
+                                  ZkClientEventThreadSuffix)
 
   /**
    * Verify that a previous test that doesn't use ZooKeeperTestHarness hasn't left behind an unexpected thread.
