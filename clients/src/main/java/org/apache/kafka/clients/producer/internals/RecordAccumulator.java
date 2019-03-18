@@ -36,6 +36,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.metrics.Measurable;
@@ -689,8 +690,17 @@ public final class RecordAccumulator {
      */
     public void awaitFlushCompletion() throws InterruptedException {
         try {
-            for (ProducerBatch batch : this.incomplete.copyAll())
+            boolean retry = false;
+            for (ProducerBatch batch : this.incomplete.copyAll()) {
                 batch.produceFuture.await();
+                if (batch.produceFuture.error() instanceof RecordBatchTooLargeException) {
+                    retry = true;
+                }
+            }
+            if (retry) {
+                this.flushesInProgress.getAndIncrement();
+                awaitFlushCompletion();
+            }
         } finally {
             this.flushesInProgress.decrementAndGet();
         }
