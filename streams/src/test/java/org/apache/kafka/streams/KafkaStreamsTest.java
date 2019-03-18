@@ -215,6 +215,70 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void testStateOneAllThreadDead() throws InterruptedException {
+        final StateListenerStub stateListener = new StateListenerStub();
+        globalStreams.setStateListener(stateListener);
+
+        Assert.assertEquals(0, stateListener.numChanges);
+        Assert.assertEquals(KafkaStreams.State.CREATED, globalStreams.state());
+
+        globalStreams.start();
+
+        TestUtils.waitForCondition(
+            () -> stateListener.numChanges == 2,
+            "Streams never started.");
+        Assert.assertEquals(KafkaStreams.State.RUNNING, globalStreams.state());
+
+        for (final StreamThread thread: globalStreams.threads) {
+            thread.stateListener().onChange(
+                thread,
+                StreamThread.State.PARTITIONS_REVOKED,
+                StreamThread.State.RUNNING);
+        }
+
+        Assert.assertEquals(3, stateListener.numChanges);
+        Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
+
+        globalStreams.threads[NUM_THREADS - 1].stateListener().onChange(
+            globalStreams.threads[NUM_THREADS - 1],
+            StreamThread.State.PENDING_SHUTDOWN,
+            StreamThread.State.PARTITIONS_REVOKED);
+
+        globalStreams.threads[NUM_THREADS - 1].stateListener().onChange(
+            globalStreams.threads[NUM_THREADS - 1],
+            StreamThread.State.DEAD,
+            StreamThread.State.PENDING_SHUTDOWN);
+
+        Assert.assertEquals(3, stateListener.numChanges);
+        Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
+
+        for (final StreamThread thread: globalStreams.threads) {
+            if (thread != globalStreams.threads[NUM_THREADS - 1]) {
+                thread.stateListener().onChange(
+                    thread,
+                    StreamThread.State.PENDING_SHUTDOWN,
+                    StreamThread.State.PARTITIONS_REVOKED);
+
+                thread.stateListener().onChange(
+                    thread,
+                    StreamThread.State.DEAD,
+                    StreamThread.State.PENDING_SHUTDOWN);
+            }
+        }
+
+        Assert.assertEquals(4, stateListener.numChanges);
+        Assert.assertEquals(KafkaStreams.State.ERROR, globalStreams.state());
+
+        globalStreams.close();
+
+        // the state should not stuck with ERROR, but transit to NOT_RUNNING in the end
+        TestUtils.waitForCondition(
+            () -> stateListener.numChanges == 6,
+            "Streams never closed.");
+        Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, globalStreams.state());
+    }
+
+    @Test
     public void shouldCleanupResourcesOnCloseWithoutPreviousStart() throws Exception {
         builder.globalTable("anyTopic");
         final List<Node> nodes = Collections.singletonList(new Node(0, "localhost", 8121));
