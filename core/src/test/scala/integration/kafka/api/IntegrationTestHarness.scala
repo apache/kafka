@@ -126,7 +126,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   @After
   override def tearDown() {
-    producers.foreach(_.close(0, TimeUnit.MILLISECONDS))
+    producers.foreach(_.close(Duration.ZERO))
     consumers.foreach(_.wakeup())
     consumers.foreach(_.close(Duration.ZERO))
     producers.clear()

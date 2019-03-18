@@ -102,7 +102,7 @@ import static org.apache.kafka.common.requests.IsolationLevel.READ_COMMITTED;
  * When increasing {@link ProducerConfig#MAX_BLOCK_MS_CONFIG} to be more resilient to non-available brokers you should also
  * increase {@link ConsumerConfig#MAX_POLL_INTERVAL_MS_CONFIG} using the following guidance:
  * <pre>
- *     max.poll.interval.ms > max.block.ms
+ *     max.poll.interval.ms &gt; max.block.ms
  * </pre>
  *
  *
