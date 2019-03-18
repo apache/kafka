@@ -30,7 +30,6 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-import java.util.Arrays;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
@@ -46,7 +45,7 @@ public class FrequenciesTest {
     public void setup() {
         config = new MetricConfig().eventWindow(50).samples(2);
         time = new MockTime();
-        metrics = new Metrics(config, Arrays.asList((MetricsReporter) new JmxReporter()), time, true);
+        metrics = new Metrics(config, Collections.singletonList((MetricsReporter) new JmxReporter()), time, true);
     }
 
     @After
@@ -150,7 +149,7 @@ public class FrequenciesTest {
     }
 
     protected MetricName name(String metricName) {
-        return new MetricName(metricName, "group-id", "desc", Collections.<String, String>emptyMap());
+        return new MetricName(metricName, "group-id", "desc", Collections.emptyMap());
     }
 
     protected Frequency freq(String name, double value) {

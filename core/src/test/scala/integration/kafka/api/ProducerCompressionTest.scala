@@ -19,18 +19,19 @@ package kafka.api.test
 
 import java.util.{Collection, Collections, Properties}
 
-import scala.collection.JavaConverters._
-import org.junit.runners.Parameterized
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized.Parameters
-import org.junit.{After, Before, Test}
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.junit.Assert._
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
+import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.ByteArraySerializer
+import org.junit.Assert._
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
+import org.junit.runners.Parameterized.Parameters
+import org.junit.{After, Before, Test}
+
+import scala.collection.JavaConverters._
 
 @RunWith(value = classOf[Parameterized])
 class ProducerCompressionTest(compression: String) extends ZooKeeperTestHarness {

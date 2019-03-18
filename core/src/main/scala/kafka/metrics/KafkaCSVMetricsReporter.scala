@@ -20,13 +20,12 @@
 
 package kafka.metrics
 
-import com.yammer.metrics.Metrics
 import java.io.File
 import java.nio.file.Files
-
-import com.yammer.metrics.reporting.CsvReporter
 import java.util.concurrent.TimeUnit
 
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.reporting.CsvReporter
 import kafka.utils.{Logging, VerifiableProperties}
 import org.apache.kafka.common.utils.Utils
 

@@ -49,7 +49,7 @@ class LeaderEpochFileCacheTest {
 
     //Then
     assertEquals(Some(2), cache.latestEpoch)
-    assertEquals(EpochEntry(2, 10), cache.epochEntries(0))
+    assertEquals(EpochEntry(2, 10), cache.epochEntries.head)
     assertEquals((2, logEndOffset), cache.endOffsetFor(2)) //should match logEndOffset
   }
 
@@ -91,7 +91,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(2, 10)
 
     //Then the offset should NOT have been updated
-    assertEquals(logEndOffset, cache.epochEntries(0).startOffset)
+    assertEquals(logEndOffset, cache.epochEntries.head.startOffset)
     assertEquals(ListBuffer(EpochEntry(2, 9)), cache.epochEntries)
   }
 
@@ -115,7 +115,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(2, 10)
 
     //Then later update should have been ignored
-    assertEquals(6, cache.epochEntries(0).startOffset)
+    assertEquals(6, cache.epochEntries.head.startOffset)
   }
 
   @Test
@@ -198,7 +198,7 @@ class LeaderEpochFileCacheTest {
 
     //Then
     assertEquals(1, cache.epochEntries.size)
-    assertEquals(EpochEntry(2, 6), cache.epochEntries.toList(0))
+    assertEquals(EpochEntry(2, 6), cache.epochEntries.toList.head)
   }
 
   @Test
@@ -221,7 +221,7 @@ class LeaderEpochFileCacheTest {
     //Then
     assertEquals((2, logEndOffset), cache.endOffsetFor(2))
     assertEquals(1, cache.epochEntries.size)
-    assertEquals(EpochEntry(2, 6), cache.epochEntries(0))
+    assertEquals(EpochEntry(2, 6), cache.epochEntries.head)
   }
 
   @Test
@@ -239,7 +239,7 @@ class LeaderEpochFileCacheTest {
 
     //Then
     assertEquals(1, cache2.epochEntries.size)
-    assertEquals(EpochEntry(2, 6), cache2.epochEntries.toList(0))
+    assertEquals(EpochEntry(2, 6), cache2.epochEntries.toList.head)
   }
 
   @Test
@@ -263,7 +263,7 @@ class LeaderEpochFileCacheTest {
 
     //Then end offset for epoch 2 is now undefined
     assertEquals((UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET), cache.endOffsetFor(2))
-    assertEquals(EpochEntry(1, 7), cache.epochEntries(0))
+    assertEquals(EpochEntry(1, 7), cache.epochEntries.head)
   }
 
   @Test
@@ -273,7 +273,7 @@ class LeaderEpochFileCacheTest {
     cache.assign(epoch = 3, startOffset = 5)
 
     //The last assignment wins and the conflicting one is removed from the log
-    assertEquals(EpochEntry(3, 5), cache.epochEntries.toList(0))
+    assertEquals(EpochEntry(3, 5), cache.epochEntries.toList.head)
   }
 
   @Test

@@ -23,9 +23,9 @@ import java.util.Properties
 import joptsimple._
 import kafka.utils.{CommandLineUtils, Exit, ToolsUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.requests.ListOffsetRequest
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 
 import scala.collection.JavaConverters._
 

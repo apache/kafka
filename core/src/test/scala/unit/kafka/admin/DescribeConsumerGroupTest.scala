@@ -22,7 +22,7 @@ import joptsimple.OptionException
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{ConsumerConfig, RoundRobinAssignor}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{TimeoutException}
+import org.apache.kafka.common.errors.TimeoutException
 import org.junit.Assert._
 import org.junit.Test
 
@@ -343,7 +343,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       TestUtils.waitUntilTrue(() => {
         val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroup())
         val expectedNumRows = if (describeTypeMembers.contains(describeType)) 3 else 2
-        error.isEmpty && output.trim.split("\n").size == expectedNumRows
+        error.isEmpty && output.trim.split("\n").length == expectedNumRows
       }, s"Expected a single data row in describe group result with describe type '${describeType.mkString(" ")}'", maxRetries = 3)
     }
   }
@@ -424,7 +424,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       TestUtils.waitUntilTrue(() => {
         val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroup())
         val expectedNumRows = if (describeTypeState.contains(describeType)) 2 else 3
-        error.isEmpty && output.trim.split("\n").size == expectedNumRows
+        error.isEmpty && output.trim.split("\n").length == expectedNumRows
       }, s"Expected a single data row in describe group result with describe type '${describeType.mkString(" ")}'", maxRetries = 3)
     }
   }

@@ -24,8 +24,8 @@ import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
-import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
 class ReplicaTest {
 

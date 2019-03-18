@@ -21,8 +21,8 @@ import java.io.File
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
-import org.junit.{After, Before, Test}
 import org.junit.Assert.assertEquals
+import org.junit.{After, Before, Test}
 import org.scalatest.junit.JUnitSuite
 
 /**

@@ -53,25 +53,22 @@ public class ElectPreferredLeadersResult {
      */
     public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
-        electionFuture.whenComplete(new KafkaFuture.BiConsumer<Map<TopicPartition, ApiError>, Throwable>() {
-            @Override
-            public void accept(Map<TopicPartition, ApiError> topicPartitions, Throwable throwable) {
-                if (throwable != null) {
-                    result.completeExceptionally(throwable);
-                } else if (!topicPartitions.containsKey(partition)) {
-                    result.completeExceptionally(new UnknownTopicOrPartitionException(
-                            "Preferred leader election for partition \"" + partition +
-                                    "\" was not attempted"));
+        electionFuture.whenComplete((topicPartitions, throwable) -> {
+            if (throwable != null) {
+                result.completeExceptionally(throwable);
+            } else if (!topicPartitions.containsKey(partition)) {
+                result.completeExceptionally(new UnknownTopicOrPartitionException(
+                        "Preferred leader election for partition \"" + partition +
+                                "\" was not attempted"));
+            } else {
+                if (partitions == null && topicPartitions.isEmpty()) {
+                    result.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
+                }
+                ApiException exception = topicPartitions.get(partition).exception();
+                if (exception == null) {
+                    result.complete(null);
                 } else {
-                    if (partitions == null && topicPartitions.isEmpty()) {
-                        result.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
-                    }
-                    ApiException exception = topicPartitions.get(partition).exception();
-                    if (exception == null) {
-                        result.complete(null);
-                    } else {
-                        result.completeExceptionally(exception);
-                    }
+                    result.completeExceptionally(exception);
                 }
             }
         });
@@ -92,21 +89,18 @@ public class ElectPreferredLeadersResult {
             return KafkaFutureImpl.completedFuture(this.partitions);
         } else {
             final KafkaFutureImpl<Set<TopicPartition>> result = new KafkaFutureImpl<>();
-            electionFuture.whenComplete(new KafkaFuture.BiConsumer<Map<TopicPartition, ApiError>, Throwable>() {
-                @Override
-                public void accept(Map<TopicPartition, ApiError> topicPartitions, Throwable throwable) {
-                    if (throwable != null) {
-                        result.completeExceptionally(throwable);
-                    } else if (topicPartitions.isEmpty()) {
-                        result.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
-                    } else {
-                        for (ApiError apiError : topicPartitions.values()) {
-                            if (apiError.isFailure()) {
-                                result.completeExceptionally(apiError.exception());
-                            }
+            electionFuture.whenComplete((topicPartitions, throwable) -> {
+                if (throwable != null) {
+                    result.completeExceptionally(throwable);
+                } else if (topicPartitions.isEmpty()) {
+                    result.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
+                } else {
+                    for (ApiError apiError : topicPartitions.values()) {
+                        if (apiError.isFailure()) {
+                            result.completeExceptionally(apiError.exception());
                         }
-                        result.complete(topicPartitions.keySet());
                     }
+                    result.complete(topicPartitions.keySet());
                 }
             });
             return result;

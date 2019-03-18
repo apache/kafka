@@ -17,8 +17,8 @@
 
 package kafka.utils.json
 
-import com.fasterxml.jackson.databind.{JsonMappingException, JsonNode}
 import com.fasterxml.jackson.databind.node.{ArrayNode, ObjectNode}
+import com.fasterxml.jackson.databind.{JsonMappingException, JsonNode}
 
 /**
  * A simple wrapper over Jackson's JsonNode that enables type safe parsing via the `DecodeJson` type

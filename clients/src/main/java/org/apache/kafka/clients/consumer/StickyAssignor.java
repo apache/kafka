@@ -213,12 +213,12 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         // initialize partition2AllPotentialConsumers and consumer2AllPotentialPartitions in the following two for loops
         for (Entry<String, Integer> entry: partitionsPerTopic.entrySet()) {
             for (int i = 0; i < entry.getValue(); ++i)
-                partition2AllPotentialConsumers.put(new TopicPartition(entry.getKey(), i), new ArrayList<String>());
+                partition2AllPotentialConsumers.put(new TopicPartition(entry.getKey(), i), new ArrayList<>());
         }
 
         for (Entry<String, Subscription> entry: subscriptions.entrySet()) {
             String consumer = entry.getKey();
-            consumer2AllPotentialPartitions.put(consumer, new ArrayList<TopicPartition>());
+            consumer2AllPotentialPartitions.put(consumer, new ArrayList<>());
             entry.getValue().topics().stream().filter(topic -> partitionsPerTopic.get(topic) != null).forEach(topic -> {
                 for (int i = 0; i < partitionsPerTopic.get(topic); ++i) {
                     TopicPartition topicPartition = new TopicPartition(topic, i);
@@ -229,7 +229,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
             // add this consumer to currentAssignment (with an empty topic partition assignment) if it does not already exist
             if (!currentAssignment.containsKey(consumer))
-                currentAssignment.put(consumer, new ArrayList<TopicPartition>());
+                currentAssignment.put(consumer, new ArrayList<>());
         }
 
         // a mapping of partition to current consumer
@@ -642,8 +642,6 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         // find the correct partition movement considering the stickiness requirement
         TopicPartition partitionToBeMoved = partitionMovements.getTheActualPartitionToBeMoved(partition, consumer, newConsumer);
         processPartitionMovement(partitionToBeMoved, newConsumer, currentAssignment, sortedCurrentSubscriptions, currentPartitionConsumer);
-
-        return;
     }
 
     private void processPartitionMovement(TopicPartition partition,
@@ -794,11 +792,11 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
             String topic = partition.topic();
             if (!partitionMovementsByTopic.containsKey(topic))
-                partitionMovementsByTopic.put(topic, new HashMap<ConsumerPair, Set<TopicPartition>>());
+                partitionMovementsByTopic.put(topic, new HashMap<>());
 
             Map<ConsumerPair, Set<TopicPartition>> partitionMovementsForThisTopic = partitionMovementsByTopic.get(topic);
             if (!partitionMovementsForThisTopic.containsKey(pair))
-                partitionMovementsForThisTopic.put(pair, new HashSet<TopicPartition>());
+                partitionMovementsForThisTopic.put(pair, new HashSet<>());
 
             partitionMovementsForThisTopic.get(pair).add(partition);
         }

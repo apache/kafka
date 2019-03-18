@@ -30,8 +30,8 @@ import kafka.utils.{CoreUtils, Json, Logging}
 import kafka.zk.{DelegationTokenChangeNotificationSequenceZNode, DelegationTokenChangeNotificationZNode, DelegationTokensZNode, KafkaZkClient}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.security.scram.internals.{ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.security.scram.ScramCredential
+import org.apache.kafka.common.security.scram.internals.{ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils, Time}
@@ -172,7 +172,7 @@ class DelegationTokenManager(val config: KafkaConfig,
 
   val secretKey = {
     val keyBytes =  if (config.tokenAuthEnabled) config.delegationTokenMasterKey.value.getBytes(StandardCharsets.UTF_8) else null
-    if (keyBytes == null || keyBytes.length == 0) null
+    if (keyBytes == null || keyBytes.isEmpty) null
     else
       createSecretKey(keyBytes)
   }

@@ -19,8 +19,8 @@ package kafka.utils
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import org.apache.kafka.common.internals.FatalExitError
-import org.junit.{After, Test}
 import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.{After, Test}
 
 class ShutdownableThreadTest {
 

@@ -30,9 +30,9 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
 
-import scala.collection.{Map, mutable}
-import scala.collection.mutable.ArrayBuffer
 import scala.collection.JavaConverters._
+import scala.collection.mutable.ArrayBuffer
+import scala.collection.{Map, mutable}
 
 object DumpLogSegments {
 

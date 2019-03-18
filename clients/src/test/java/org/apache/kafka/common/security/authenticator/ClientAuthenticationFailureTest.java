@@ -40,7 +40,6 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.time.Duration;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -63,13 +62,13 @@ public class ClientAuthenticationFailureTest {
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_PLAINTEXT;
 
         saslServerConfigs = new HashMap<>();
-        saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Arrays.asList("PLAIN"));
+        saslServerConfigs.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, Collections.singletonList("PLAIN"));
 
         saslClientConfigs = new HashMap<>();
         saslClientConfigs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, "SASL_PLAINTEXT");
         saslClientConfigs.put(SaslConfigs.SASL_MECHANISM, "PLAIN");
 
-        testJaasConfig = TestJaasConfig.createConfiguration("PLAIN", Arrays.asList("PLAIN"));
+        testJaasConfig = TestJaasConfig.createConfiguration("PLAIN", Collections.singletonList("PLAIN"));
         testJaasConfig.setClientOptions("PLAIN", TestJaasConfig.USERNAME, "anotherpassword");
         server = createEchoServer(securityProtocol);
     }
@@ -88,7 +87,7 @@ public class ClientAuthenticationFailureTest {
         StringDeserializer deserializer = new StringDeserializer();
 
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props, deserializer, deserializer)) {
-            consumer.subscribe(Arrays.asList(topic));
+            consumer.subscribe(Collections.singletonList(topic));
             consumer.poll(Duration.ofSeconds(10));
             fail("Expected an authentication error!");
         } catch (SaslAuthenticationException e) {

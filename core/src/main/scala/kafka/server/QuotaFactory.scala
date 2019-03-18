@@ -20,8 +20,8 @@ import kafka.server.QuotaType._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.server.quota.ClientQuotaCallback
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.quota.ClientQuotaCallback
 
 object QuotaType  {
   case object Fetch extends QuotaType

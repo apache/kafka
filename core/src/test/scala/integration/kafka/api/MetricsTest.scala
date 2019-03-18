@@ -14,20 +14,20 @@ package kafka.api
 
 import java.util.{Locale, Properties}
 
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 import kafka.log.LogConfig
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{JaasTestUtils, TestUtils}
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.junit.{After, Before, Test}
+import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
 import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
 
@@ -221,7 +221,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
   private def verifyBrokerErrorMetrics(server: KafkaServer): Unit = {
 
-    def errorMetricCount = Metrics.defaultRegistry.allMetrics.keySet.asScala.filter(_.getName == "ErrorsPerSec").size
+    def errorMetricCount = Metrics.defaultRegistry.allMetrics.keySet.asScala.count(_.getName == "ErrorsPerSec")
 
     val startErrorMetricCount = errorMetricCount
     val errorMetricPrefix = "kafka.network:type=RequestMetrics,name=ErrorsPerSec"

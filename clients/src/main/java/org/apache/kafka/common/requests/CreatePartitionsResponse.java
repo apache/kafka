@@ -92,7 +92,7 @@ public class CreatePartitionsResponse extends AbstractResponse {
             topicErrors.add(errorStruct);
         }
         struct.set(THROTTLE_TIME_MS, throttleTimeMs);
-        struct.set(TOPIC_ERRORS_KEY_NAME, topicErrors.toArray(new Object[topicErrors.size()]));
+        struct.set(TOPIC_ERRORS_KEY_NAME, topicErrors.toArray(new Object[0]));
         return struct;
     }
 

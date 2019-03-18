@@ -121,7 +121,7 @@ public class ImplicitLinkedHashMultiSet<E extends ImplicitLinkedHashSet.Element>
      */
     final public List<E> findAll(E key) {
         if (key == null) {
-            return Collections.<E>emptyList();
+            return Collections.emptyList();
         }
         ArrayList<E> results = new ArrayList<>();
         int slot = slot(elements, key);

@@ -17,20 +17,19 @@
 
 package kafka.admin
 
-import kafka.log.LogConfig
-import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
-import kafka.utils._
-import kafka.utils.ZkUtils._
-import java.util.Random
-import java.util.Properties
+import java.util.{Properties, Random}
 
 import kafka.common.TopicAlreadyMarkedForDeletionException
-import org.apache.kafka.common.errors._
-
-import collection.{Map, Set, mutable, _}
-import scala.collection.JavaConverters._
+import kafka.log.LogConfig
+import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig}
+import kafka.utils.ZkUtils._
+import kafka.utils._
 import org.I0Itec.zkclient.exception.ZkNodeExistsException
+import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
+
+import scala.collection.JavaConverters._
+import scala.collection.{Map, Set, mutable, _}
 
 @deprecated("This class is deprecated and will be replaced by kafka.zk.AdminZkClient.", "1.1.0")
 trait AdminUtilities {

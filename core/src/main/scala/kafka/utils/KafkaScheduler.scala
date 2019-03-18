@@ -18,7 +18,8 @@
 package kafka.utils
 
 import java.util.concurrent._
-import atomic._
+import java.util.concurrent.atomic._
+
 import org.apache.kafka.common.utils.KafkaThread
 
 /**

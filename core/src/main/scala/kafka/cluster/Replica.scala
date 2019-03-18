@@ -18,11 +18,11 @@
 package kafka.cluster
 
 import kafka.log.{Log, LogOffsetSnapshot}
-import kafka.utils.Logging
 import kafka.server.{LogOffsetMetadata, LogReadResult, OffsetAndEpoch}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import kafka.utils.Logging
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 
 class Replica(val brokerId: Int,
               val topicPartition: TopicPartition,

@@ -75,7 +75,7 @@ public class MockConsumerInterceptor implements ClusterResourceListener, Consume
             }
             recordMap.put(tp, lst);
         }
-        return new ConsumerRecords<String, String>(recordMap);
+        return new ConsumerRecords<>(recordMap);
     }
 
     @Override

@@ -16,10 +16,11 @@
  */
 package kafka.utils
 
-import scala.collection.mutable.PriorityQueue
 import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.common.utils.Time
+
+import scala.collection.mutable.PriorityQueue
 
 /**
  * A mock scheduler that executes tasks synchronously using a mock time instance. Tasks are executed synchronously when

@@ -18,16 +18,14 @@
 package kafka.api
 
 import java.time.Duration
-
-import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import kafka.utils.TestUtils
-import kafka.utils.Implicits._
 import java.util.Properties
-import java.util.concurrent.TimeUnit
 
-import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
-import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
+import kafka.server.KafkaConfig
+import kafka.utils.Implicits._
+import kafka.utils.TestUtils
+import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
+import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.junit.{After, Before}

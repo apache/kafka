@@ -20,8 +20,9 @@
 
 package kafka.metrics
 
-import kafka.utils.{CoreUtils, VerifiableProperties}
 import java.util.concurrent.atomic.AtomicBoolean
+
+import kafka.utils.{CoreUtils, VerifiableProperties}
 
 import scala.collection.mutable.ArrayBuffer
 

@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Objects;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -112,7 +113,7 @@ public class RecordHeaders implements Headers {
     }
 
     public Header[] toArray() {
-        return headers.isEmpty() ? Record.EMPTY_HEADERS : headers.toArray(new Header[headers.size()]);
+        return headers.isEmpty() ? Record.EMPTY_HEADERS : headers.toArray(new Header[0]);
     }
 
     private void checkKey(String key) {
@@ -155,7 +156,7 @@ public class RecordHeaders implements Headers {
 
         RecordHeaders headers1 = (RecordHeaders) o;
 
-        return headers != null ? headers.equals(headers1.headers) : headers1.headers == null;
+        return Objects.equals(headers, headers1.headers);
     }
 
     @Override

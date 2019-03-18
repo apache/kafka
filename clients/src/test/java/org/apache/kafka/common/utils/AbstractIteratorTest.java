@@ -33,10 +33,10 @@ public class AbstractIteratorTest {
     @Test
     public void testIterator() {
         int max = 10;
-        List<Integer> l = new ArrayList<Integer>();
+        List<Integer> l = new ArrayList<>();
         for (int i = 0; i < max; i++)
             l.add(i);
-        ListIterator<Integer> iter = new ListIterator<Integer>(l);
+        ListIterator<Integer> iter = new ListIterator<>(l);
         for (int i = 0; i < max; i++) {
             Integer value = i;
             assertEquals(value, iter.peek());
@@ -48,7 +48,7 @@ public class AbstractIteratorTest {
 
     @Test(expected = NoSuchElementException.class)
     public void testEmptyIterator() {
-        Iterator<Object> iter = new ListIterator<Object>(Collections.emptyList());
+        Iterator<Object> iter = new ListIterator<>(Collections.emptyList());
         iter.next();
     }
 

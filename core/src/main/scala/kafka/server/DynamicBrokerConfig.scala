@@ -18,8 +18,8 @@
 package kafka.server
 
 import java.util
-import java.util.{Collections, Properties}
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.{Collections, Properties}
 
 import kafka.cluster.EndPoint
 import kafka.log.{LogCleaner, LogConfig, LogManager}
@@ -28,15 +28,15 @@ import kafka.server.DynamicBrokerConfig._
 import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
+import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.MetricsReporter
-import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.Utils
 
-import scala.collection._
 import scala.collection.JavaConverters._
+import scala.collection._
 
 /**
   * Dynamic broker configurations are stored in ZooKeeper and may be defined at two levels:
@@ -250,7 +250,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 
   private def verifyReconfigurableConfigs(configNames: Set[String]): Unit = CoreUtils.inWriteLock(lock) {
-    val nonDynamic = configNames.filter(DynamicConfig.Broker.nonDynamicProps.contains)
+    val nonDynamic = configNames.intersect(DynamicConfig.Broker.nonDynamicProps)
     require(nonDynamic.isEmpty, s"Reconfigurable contains non-dynamic configs $nonDynamic")
   }
 

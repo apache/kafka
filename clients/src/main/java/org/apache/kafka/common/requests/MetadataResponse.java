@@ -384,13 +384,11 @@ public class MetadataResponse extends AbstractResponse {
                                                    int clusterAuthorizedOperations) {
         MetadataResponseData responseData = new MetadataResponseData();
         responseData.setThrottleTimeMs(throttleTimeMs);
-        brokers.forEach(broker -> {
-            responseData.brokers().add(new MetadataResponseBroker()
-                .setNodeId(broker.id())
-                .setHost(broker.host())
-                .setPort(broker.port())
-                .setRack(broker.rack()));
-        });
+        brokers.forEach(broker -> responseData.brokers().add(new MetadataResponseBroker()
+            .setNodeId(broker.id())
+            .setHost(broker.host())
+            .setPort(broker.port())
+            .setRack(broker.rack())));
 
         responseData.setClusterId(clusterId);
         responseData.setControllerId(controllerId);

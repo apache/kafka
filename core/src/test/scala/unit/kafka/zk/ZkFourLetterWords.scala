@@ -18,7 +18,7 @@
 package kafka.zk
 
 import java.io.IOException
-import java.net.{SocketTimeoutException, Socket, InetAddress, InetSocketAddress}
+import java.net.{InetAddress, InetSocketAddress, Socket, SocketTimeoutException}
 
 /**
   * ZooKeeper responds to a small set of commands. Each command is composed of four letters. You issue the commands to

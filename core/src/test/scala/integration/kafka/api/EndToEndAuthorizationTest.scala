@@ -17,23 +17,22 @@
 
 package kafka.api
 
-import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.Gauge
-
 import java.io.File
 import java.util.concurrent.ExecutionException
 
+import com.yammer.metrics.Metrics
+import com.yammer.metrics.core.Gauge
 import kafka.admin.AclCommand
 import kafka.security.auth._
 import kafka.server._
 import kafka.utils._
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
 import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
 

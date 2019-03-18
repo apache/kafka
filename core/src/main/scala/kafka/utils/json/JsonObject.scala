@@ -18,12 +18,10 @@
 package kafka.utils.json
 
 import com.fasterxml.jackson.databind.JsonMappingException
-
-import scala.collection.JavaConverters._
-
 import com.fasterxml.jackson.databind.node.ObjectNode
 
 import scala.collection.Iterator
+import scala.collection.JavaConverters._
 
 /**
  * A thin wrapper over Jackson's `ObjectNode` for a more idiomatic API. See `JsonValue` for more details.

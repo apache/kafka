@@ -87,7 +87,6 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Ignore;
 import org.junit.Rule;
@@ -377,7 +376,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(env.cluster().nodes(),
                 env.cluster().clusterResource().clusterId(),
                 1,
-                Collections.<MetadataResponse.TopicMetadata>emptyList()));
+                Collections.emptyList()));
             env.kafkaClient().prepareResponseFrom(
                 prepareCreateTopicsResponse("myTopic", Errors.NONE),
                 env.cluster().nodeById(1));
@@ -509,7 +508,7 @@ public class KafkaAdminClientTest {
         try {
             Map<String, NewPartitions> counts = new HashMap<>();
             counts.put("my_topic", NewPartitions.increaseTo(3));
-            counts.put("other_topic", NewPartitions.increaseTo(3, asList(asList(2), asList(3))));
+            counts.put("other_topic", NewPartitions.increaseTo(3, asList(singletonList(2), singletonList(3))));
             env.adminClient().createPartitions(counts).all().get();
             fail("Expected an authentication error.");
         } catch (ExecutionException e) {
@@ -574,12 +573,12 @@ public class KafkaAdminClientTest {
 
             // Test a call where we get back no results.
             env.kafkaClient().prepareResponse(new DescribeAclsResponse(0, ApiError.NONE,
-                Collections.<AclBinding>emptySet()));
+                Collections.emptySet()));
             assertTrue(env.adminClient().describeAcls(FILTER2).values().get().isEmpty());
 
             // Test a call where we get back an error.
             env.kafkaClient().prepareResponse(new DescribeAclsResponse(0,
-                new ApiError(Errors.SECURITY_DISABLED, "Security is disabled"), Collections.<AclBinding>emptySet()));
+                new ApiError(Errors.SECURITY_DISABLED, "Security is disabled"), Collections.emptySet()));
             TestUtils.assertFutureError(env.adminClient().describeAcls(FILTER2).values(), SecurityDisabledException.class);
 
             // Test a call where we supply an invalid filter.
@@ -624,7 +623,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, asList(
                     new AclFilterResponse(asList(new AclDeletionResult(ACL1), new AclDeletionResult(ACL2))),
                     new AclFilterResponse(new ApiError(Errors.SECURITY_DISABLED, "No security"),
-                            Collections.<AclDeletionResult>emptySet()))));
+                            Collections.emptySet()))));
             DeleteAclsResult results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             Map<AclBindingFilter, KafkaFuture<FilterResults>> filterResults = results.values();
             FilterResults filter1Results = filterResults.get(FILTER1).get();
@@ -639,15 +638,15 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, asList(
                     new AclFilterResponse(asList(new AclDeletionResult(ACL1),
                             new AclDeletionResult(new ApiError(Errors.SECURITY_DISABLED, "No security"), ACL2))),
-                    new AclFilterResponse(Collections.<AclDeletionResult>emptySet()))));
+                    new AclFilterResponse(Collections.emptySet()))));
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             assertTrue(results.values().get(FILTER2).get().values().isEmpty());
             TestUtils.assertFutureError(results.all(), SecurityDisabledException.class);
 
             // Test a call where there are no errors.
             env.kafkaClient().prepareResponse(new DeleteAclsResponse(0, asList(
-                    new AclFilterResponse(asList(new AclDeletionResult(ACL1))),
-                    new AclFilterResponse(asList(new AclDeletionResult(ACL2))))));
+                    new AclFilterResponse(singletonList(new AclDeletionResult(ACL1))),
+                    new AclFilterResponse(singletonList(new AclDeletionResult(ACL2))))));
             results = env.adminClient().deleteAcls(asList(FILTER1, FILTER2));
             Collection<AclBinding> deleted = results.all().get();
             assertCollectionIs(deleted, ACL1, ACL2);
@@ -713,8 +712,8 @@ public class KafkaAdminClientTest {
         MockTime time = new MockTime();
         nodes.put(0, new Node(0, "localhost", 8121));
         Cluster cluster = new Cluster("mockClusterId", nodes.values(),
-            Collections.<PartitionInfo>emptySet(), Collections.<String>emptySet(),
-            Collections.<String>emptySet(), nodes.get(0));
+            Collections.emptySet(), Collections.emptySet(),
+            Collections.emptySet(), nodes.get(0));
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(time, cluster,
             AdminClientConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG, "1",
                 AdminClientConfig.RECONNECT_BACKOFF_MS_CONFIG, "1")) {
@@ -726,19 +725,9 @@ public class KafkaAdminClientTest {
             // Then wait for it to fail by not supplying any response.
             log.info("Starting AdminClient#listTopics...");
             final ListTopicsResult result = env.adminClient().listTopics(new ListTopicsOptions().timeoutMs(1000));
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return env.kafkaClient().hasInFlightRequests();
-                }
-            }, "Timed out waiting for inFlightRequests");
+            TestUtils.waitForCondition(() -> env.kafkaClient().hasInFlightRequests(), "Timed out waiting for inFlightRequests");
             time.sleep(5000);
-            TestUtils.waitForCondition(new TestCondition() {
-                @Override
-                public boolean conditionMet() {
-                    return result.listings().isDone();
-                }
-            }, "Timed out waiting for listTopics to complete");
+            TestUtils.waitForCondition(() -> result.listings().isDone(), "Timed out waiting for listTopics to complete");
             TestUtils.assertFutureError(result.listings(), TimeoutException.class);
             log.info("Verified the error result of AdminClient#listTopics");
 
@@ -782,7 +771,7 @@ public class KafkaAdminClientTest {
 
             Map<String, NewPartitions> counts = new HashMap<>();
             counts.put("my_topic", NewPartitions.increaseTo(3));
-            counts.put("other_topic", NewPartitions.increaseTo(3, asList(asList(2), asList(3))));
+            counts.put("other_topic", NewPartitions.increaseTo(3, asList(singletonList(2), singletonList(3))));
 
             CreatePartitionsResult results = env.adminClient().createPartitions(counts);
             Map<String, KafkaFuture<Void>> values = results.values();
@@ -812,8 +801,8 @@ public class KafkaAdminClientTest {
         partitionInfos.add(new PartitionInfo("my_topic", 3, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
         partitionInfos.add(new PartitionInfo("my_topic", 4, nodes.get(0), new Node[] {nodes.get(0)}, new Node[] {nodes.get(0)}));
         Cluster cluster = new Cluster("mockClusterId", nodes.values(),
-                partitionInfos, Collections.<String>emptySet(),
-                Collections.<String>emptySet(), nodes.get(0));
+                partitionInfos, Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
 
         TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
         TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
@@ -1052,9 +1041,9 @@ public class KafkaAdminClientTest {
             new Cluster(
                 "mockClusterId",
                 nodes.values(),
-                Collections.<PartitionInfo>emptyList(),
-                Collections.<String>emptySet(),
-                Collections.<String>emptySet(), nodes.get(0));
+                Collections.emptyList(),
+                Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
 
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -1160,9 +1149,9 @@ public class KafkaAdminClientTest {
             new Cluster(
                 "mockClusterId",
                 nodes.values(),
-                Collections.<PartitionInfo>emptyList(),
-                Collections.<String>emptySet(),
-                Collections.<String>emptySet(), nodes.get(0));
+                Collections.emptyList(),
+                Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
 
         final List<String> groupIds = singletonList("group-0");
 

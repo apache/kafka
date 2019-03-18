@@ -27,14 +27,14 @@ import kafka.controller.{LeaderIsrAndControllerEpoch, ReassignedPartitionsContex
 import kafka.zk.{BrokerIdZNode, ReassignPartitionsZNode, ZkData}
 import org.I0Itec.zkclient.exception.{ZkBadVersionException, ZkMarshallingError, ZkNoNodeException, ZkNodeExistsException}
 import org.I0Itec.zkclient.serialize.ZkSerializer
-import org.I0Itec.zkclient.{IZkChildListener, IZkDataListener, IZkStateListener, ZkClient, ZkConnection}
-import org.apache.kafka.common.config.ConfigException
-import org.apache.zookeeper.data.{ACL, Stat}
-import org.apache.zookeeper.ZooDefs
-
-import scala.collection._
-import scala.collection.JavaConverters._
+import org.I0Itec.zkclient._
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.ConfigException
+import org.apache.zookeeper.ZooDefs
+import org.apache.zookeeper.data.{ACL, Stat}
+
+import scala.collection.JavaConverters._
+import scala.collection._
 
 @deprecated("This is an internal class that is no longer used by Kafka and will be removed in a future release. Please " +
   "use org.apache.kafka.clients.admin.AdminClient instead.", since = "2.0.0")

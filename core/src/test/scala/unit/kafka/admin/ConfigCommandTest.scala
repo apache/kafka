@@ -26,10 +26,10 @@ import kafka.server.{ConfigEntityName, KafkaConfig}
 import kafka.utils.{Exit, Logging}
 import kafka.zk.{AdminZkClient, BrokerInfo, KafkaZkClient, ZooKeeperTestHarness}
 import org.apache.kafka.clients.admin._
-import org.apache.kafka.common.config.{ConfigException, ConfigResource}
-import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.InvalidConfigurationException
+import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
@@ -38,8 +38,8 @@ import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
 
-import scala.collection.{Seq, mutable}
 import scala.collection.JavaConverters._
+import scala.collection.{Seq, mutable}
 
 class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 

@@ -24,9 +24,8 @@ import java.util.concurrent.locks.Lock
 import com.yammer.metrics.core.Meter
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Pool
-
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 
 import scala.collection._

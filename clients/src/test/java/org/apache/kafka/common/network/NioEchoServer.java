@@ -107,8 +107,8 @@ public class NioEchoServer extends Thread {
         serverSocketChannel.configureBlocking(false);
         serverSocketChannel.socket().bind(new InetSocketAddress(serverHost, 0));
         this.port = serverSocketChannel.socket().getLocalPort();
-        this.socketChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
-        this.newChannels = Collections.synchronizedList(new ArrayList<SocketChannel>());
+        this.socketChannels = Collections.synchronizedList(new ArrayList<>());
+        this.newChannels = Collections.synchronizedList(new ArrayList<>());
         this.credentialCache = credentialCache;
         this.tokenCache = tokenCache;
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
@@ -252,7 +252,7 @@ public class NioEchoServer extends Thread {
     private static boolean maybeBeginServerReauthentication(KafkaChannel channel, NetworkReceive networkReceive, Time time) {
         try {
             if (TestUtils.apiKeyFrom(networkReceive) == ApiKeys.SASL_HANDSHAKE) {
-                return channel.maybeBeginServerReauthentication(networkReceive, () -> time.nanoseconds());
+                return channel.maybeBeginServerReauthentication(networkReceive, time::nanoseconds);
             }
         } catch (Exception e) {
             // ignore

@@ -17,8 +17,7 @@
 
 package kafka
 
-import java.lang.management.ManagementFactory
-import java.lang.management.OperatingSystemMXBean
+import java.lang.management.{ManagementFactory, OperatingSystemMXBean}
 import java.util.Random
 import java.util.concurrent._
 
@@ -27,8 +26,8 @@ import kafka.server.{DelayedOperation, DelayedOperationPurgatory}
 import kafka.utils._
 import org.apache.kafka.common.utils.Time
 
-import scala.math._
 import scala.collection.JavaConverters._
+import scala.math._
 
 /**
  * This is a benchmark test of the purgatory.

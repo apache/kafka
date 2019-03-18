@@ -98,7 +98,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
     assertTrue(s"There should be no errors, found " +
       s"${response.errorCounts().keySet().asScala.mkString(", ")},",
-      response.errorCounts().keySet().asScala.find(_.code() > 0).isEmpty)
+      !response.errorCounts().keySet().asScala.exists(_.code() > 0))
 
     request.data().topics().asScala.foreach { case topic =>
       def verifyMetadata(socketServer: SocketServer) = {

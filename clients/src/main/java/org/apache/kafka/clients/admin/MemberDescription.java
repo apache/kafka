@@ -17,8 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.TopicPartition;
-
 import java.util.Collections;
 import java.util.Objects;
 
@@ -36,7 +34,7 @@ public class MemberDescription {
         this.clientId = clientId == null ? "" : clientId;
         this.host = host == null ? "" : host;
         this.assignment = assignment == null ?
-            new MemberAssignment(Collections.<TopicPartition>emptySet()) : assignment;
+            new MemberAssignment(Collections.emptySet()) : assignment;
     }
 
     @Override

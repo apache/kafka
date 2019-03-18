@@ -23,8 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.Timer
 import kafka.utils.TestUtils
-import org.junit.{After, Test}
 import org.junit.Assert.{assertEquals, fail}
+import org.junit.{After, Test}
 
 import scala.collection.JavaConverters._
 

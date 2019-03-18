@@ -16,9 +16,6 @@
  */
 package kafka.server
 
-import kafka.zk.ZooKeeperTestHarness
-import kafka.utils.{CoreUtils, TestUtils}
-import kafka.utils.TestUtils._
 import java.io.{DataInputStream, File}
 import java.net.ServerSocket
 import java.util.concurrent.{Executors, TimeUnit}
@@ -26,6 +23,9 @@ import java.util.concurrent.{Executors, TimeUnit}
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelManager, ControllerContext, StateChangeLogger}
 import kafka.log.LogManager
+import kafka.utils.TestUtils._
+import kafka.utils.{CoreUtils, TestUtils}
+import kafka.zk.ZooKeeperTestHarness
 import kafka.zookeeper.ZooKeeperClientTimeoutException
 import org.apache.kafka.clients.consumer.KafkaConsumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -37,8 +37,8 @@ import org.apache.kafka.common.requests.LeaderAndIsrRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
-import org.junit.{Before, Test}
 import org.junit.Assert._
+import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 import scala.reflect.ClassTag

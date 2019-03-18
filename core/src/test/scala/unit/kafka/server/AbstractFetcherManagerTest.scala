@@ -19,8 +19,8 @@ package kafka.server
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.TopicPartition
 import org.easymock.EasyMock
-import org.junit.Test
 import org.junit.Assert._
+import org.junit.Test
 
 class AbstractFetcherManagerTest {
 

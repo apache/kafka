@@ -19,7 +19,6 @@ package kafka.utils
 
 
 import javax.crypto.SecretKeyFactory
-
 import kafka.server.Defaults
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.config.types.Password

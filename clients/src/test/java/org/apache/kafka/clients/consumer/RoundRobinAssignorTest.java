@@ -41,7 +41,7 @@ public class RoundRobinAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(Collections.<String>emptyList())));
+                Collections.singletonMap(consumerId, new Subscription(Collections.emptyList())));
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
     }

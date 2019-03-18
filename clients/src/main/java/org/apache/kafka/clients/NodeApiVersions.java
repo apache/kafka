@@ -46,7 +46,7 @@ public class NodeApiVersions {
      * @return A new NodeApiVersions object.
      */
     public static NodeApiVersions create() {
-        return create(Collections.<ApiVersion>emptyList());
+        return create(Collections.emptyList());
     }
 
     /**

@@ -274,7 +274,7 @@ object ConsoleProducer {
               if (ignoreError) new ProducerRecord(topic, line.getBytes(StandardCharsets.UTF_8))
               else throw new KafkaException(s"No key found on line $lineNumber: $line")
             case n =>
-              val value = (if (n + keySeparator.size > line.size) "" else line.substring(n + keySeparator.size)).getBytes(StandardCharsets.UTF_8)
+              val value = (if (n + keySeparator.length > line.length) "" else line.substring(n + keySeparator.length)).getBytes(StandardCharsets.UTF_8)
               new ProducerRecord(topic, line.substring(0, n).getBytes(StandardCharsets.UTF_8), value)
           }
         case (line, false) =>

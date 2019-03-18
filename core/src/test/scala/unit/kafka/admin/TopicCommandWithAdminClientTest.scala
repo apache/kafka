@@ -29,8 +29,8 @@ import org.apache.kafka.clients.admin.{ListTopicsOptions, NewTopic, AdminClient 
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.internals.Topic
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
-import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.TestName
+import org.junit.{After, Before, Rule, Test}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionException

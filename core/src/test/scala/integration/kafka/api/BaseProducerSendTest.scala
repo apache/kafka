@@ -17,8 +17,8 @@
 
 package kafka.api
 
-import java.time.Duration
 import java.nio.charset.StandardCharsets
+import java.time.Duration
 import java.util.Properties
 import java.util.concurrent.TimeUnit
 

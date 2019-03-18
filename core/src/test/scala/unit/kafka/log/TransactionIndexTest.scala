@@ -163,7 +163,7 @@ class TransactionIndexTest extends JUnitSuite {
 
     val abortedTxns = index.collectAbortedTxns(0L, 100L).abortedTransactions
     assertEquals(2, abortedTxns.size)
-    assertEquals(0, abortedTxns(0).firstOffset)
+    assertEquals(0, abortedTxns.head.firstOffset)
     assertEquals(5, abortedTxns(1).firstOffset)
   }
 

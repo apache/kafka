@@ -73,11 +73,11 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     //Then they should be stamped with Leader Epoch 0
     var expectedLeaderEpoch = 0
-    waitUntilTrue(() => messagesHaveLeaderEpoch(brokers(0), expectedLeaderEpoch, 0), "Leader epoch should be 0")
+    waitUntilTrue(() => messagesHaveLeaderEpoch(brokers.head, expectedLeaderEpoch, 0), "Leader epoch should be 0")
 
     //Given we then bounce the leader
-    brokers(0).shutdown()
-    brokers(0).startup()
+    brokers.head.shutdown()
+    brokers.head.startup()
 
     //Then LeaderEpoch should now have changed from 0 -> 1
     expectedLeaderEpoch = 1
@@ -88,7 +88,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     sendFourMessagesToEachTopic()
 
     //The new messages should be stamped with LeaderEpoch = 1
-    waitUntilTrue(() => messagesHaveLeaderEpoch(brokers(0), expectedLeaderEpoch, 4), "Leader epoch should be 1")
+    waitUntilTrue(() => messagesHaveLeaderEpoch(brokers.head, expectedLeaderEpoch, 4), "Leader epoch should be 1")
   }
 
   @Test
@@ -116,7 +116,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     }
     producer.flush()
 
-    val fetcher0 = new TestFetcherThread(sender(from = brokers(2), to = brokers(0)))
+    val fetcher0 = new TestFetcherThread(sender(from = brokers(2), to = brokers.head))
     val epochsRequested = Map(t1p0 -> 0, t1p1 -> 0, t2p0 -> 0, t2p2 -> 0)
 
     //When
@@ -152,7 +152,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
     //1. Given a single message
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
-    var fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
+    var fetcher = new TestFetcherThread(sender(brokers.head, brokers(1)))
 
     //Then epoch should be 0 and leo: 1
     var epochEndOffset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp)
@@ -165,7 +165,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     brokers(1).startup()
 
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
-    fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
+    fetcher = new TestFetcherThread(sender(brokers.head, brokers(1)))
 
     //Then epoch 0 should still be the start offset of epoch 1
     epochEndOffset = fetcher.leaderOffsetsFor(Map(tp -> 0))(tp)
@@ -190,7 +190,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
     brokers(1).startup()
 
     producer.send(new ProducerRecord(tp.topic, tp.partition, null, "IHeartLogs".getBytes)).get
-    fetcher = new TestFetcherThread(sender(brokers(0), brokers(1)))
+    fetcher = new TestFetcherThread(sender(brokers.head, brokers(1)))
 
     //Then Epoch 0 should still map to offset 1
     assertEquals(1, fetcher.leaderOffsetsFor(Map(tp -> 0))(tp).endOffset())
@@ -231,7 +231,7 @@ class LeaderEpochIntegrationTest extends ZooKeeperTestHarness with Logging {
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
-      brokers(0).metadataCache.getPartitionInfo(topic, partition) match {
+      brokers.head.metadataCache.getPartitionInfo(topic, partition) match {
         case Some(m) => m.basePartitionState.leaderEpoch == epoch
         case None => false
       }

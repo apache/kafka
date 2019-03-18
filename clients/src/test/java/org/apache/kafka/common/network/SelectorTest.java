@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -121,15 +120,12 @@ public class SelectorTest {
 
         // disconnect
         this.server.closeConnections();
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                try {
-                    selector.poll(1000L);
-                    return selector.disconnected().containsKey(node);
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+        TestUtils.waitForCondition(() -> {
+            try {
+                selector.poll(1000L);
+                return selector.disconnected().containsKey(node);
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }, 5000, "Failed to observe disconnected node in disconnected set");
 
@@ -535,7 +531,7 @@ public class SelectorTest {
         selector.close();
         MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
-            new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
+                new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));

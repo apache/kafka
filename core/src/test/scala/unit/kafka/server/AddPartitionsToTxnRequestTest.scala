@@ -22,8 +22,8 @@ import java.util.Properties
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse}
-import org.junit.{Before, Test}
 import org.junit.Assert._
+import org.junit.{Before, Test}
 
 import scala.collection.JavaConverters._
 

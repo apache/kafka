@@ -19,7 +19,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.{Collection, Collections, Properties}
 
-import util.control.Breaks._
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import kafka.utils.{CoreUtils, Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
@@ -35,6 +34,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, ExecutionContextExecutor, Future => SFuture}
+import scala.util.control.Breaks._
 
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures

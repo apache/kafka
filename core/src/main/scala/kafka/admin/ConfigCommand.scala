@@ -23,9 +23,9 @@ import java.util.{Collections, Properties}
 import joptsimple._
 import kafka.common.Config
 import kafka.log.LogConfig
-import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncoder}
+import kafka.server._
 import kafka.utils.Implicits._
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, PasswordEncoder}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{AlterConfigsOptions, ConfigEntry, DescribeConfigsOptions, AdminClient => JAdminClient, Config => JConfig}
@@ -121,7 +121,7 @@ object ConfigCommand extends Config {
       // Replication quota configs may be updated using ZK at any time. Other dynamic broker configs
       // may be updated using ZooKeeper only if the corresponding broker is not running. Dynamic broker
       // configs at cluster-default level may be configured using ZK only if there are no brokers running.
-      val dynamicBrokerConfigs = configsToBeAdded.asScala.keySet.filterNot(BrokerConfigsUpdatableUsingZooKeeperWhileBrokerRunning.contains)
+      val dynamicBrokerConfigs = configsToBeAdded.asScala.keySet.diff(BrokerConfigsUpdatableUsingZooKeeperWhileBrokerRunning)
       if (dynamicBrokerConfigs.nonEmpty) {
         val perBrokerConfig = entityName != ConfigEntityName.Default
         val errorMessage = s"--bootstrap-server option must be specified to update broker configs $dynamicBrokerConfigs."
@@ -181,7 +181,7 @@ object ConfigCommand extends Config {
       throw new IllegalArgumentException("Password encoder secret not specified"))
     new PasswordEncoder(new Password(encoderSecret),
       None,
-      encoderConfigs.get(KafkaConfig.PasswordEncoderCipherAlgorithmProp).getOrElse(Defaults.PasswordEncoderCipherAlgorithm),
+      encoderConfigs.getOrElse(KafkaConfig.PasswordEncoderCipherAlgorithmProp, Defaults.PasswordEncoderCipherAlgorithm),
       encoderConfigs.get(KafkaConfig.PasswordEncoderKeyLengthProp).map(_.toInt).getOrElse(Defaults.PasswordEncoderKeyLength),
       encoderConfigs.get(KafkaConfig.PasswordEncoderIterationsProp).map(_.toInt).getOrElse(Defaults.PasswordEncoderIterations))
   }
@@ -220,7 +220,7 @@ object ConfigCommand extends Config {
 
   private def describeConfig(zkClient: KafkaZkClient, opts: ConfigCommandOptions, adminZkClient: AdminZkClient) {
     val configEntity = parseEntity(opts)
-    val describeAllUsers = configEntity.root.entityType == ConfigType.User && !configEntity.root.sanitizedName.isDefined && !configEntity.child.isDefined
+    val describeAllUsers = configEntity.root.entityType == ConfigType.User && configEntity.root.sanitizedName.isEmpty && configEntity.child.isEmpty
     val entities = configEntity.getAllEntities(zkClient)
     for (entity <- entities) {
       val configs = adminZkClient.fetchEntityConfig(entity.root.entityType, entity.fullSanitizedName)
@@ -444,7 +444,7 @@ object ConfigCommand extends Config {
     if (opts.options.has(opts.alterOpt) && names.size != types.size)
       throw new IllegalArgumentException("--entity-name or --entity-default must be specified with each --entity-type for --alter")
 
-    val reverse = types.size == 2 && types(0) == ConfigType.Client
+    val reverse = types.size == 2 && types.head == ConfigType.Client
     val entityTypes = if (reverse) types.reverse else types
     val sortedNames = (if (reverse && names.length == 2) names.reverse else names).iterator
 

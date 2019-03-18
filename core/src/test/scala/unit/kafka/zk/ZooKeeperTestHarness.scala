@@ -18,23 +18,22 @@
 package kafka.zk
 
 import javax.security.auth.login.Configuration
-
-import kafka.utils.{CoreUtils, Logging, TestUtils}
-import org.junit.{After, AfterClass, Before, BeforeClass}
-import org.junit.Assert._
-import org.scalatest.junit.JUnitSuite
-import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.test.IntegrationTest
-import org.junit.experimental.categories.Category
-
-import scala.collection.Set
-import scala.collection.JavaConverters._
-import org.apache.kafka.clients.producer.KafkaProducer
-import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
 import kafka.controller.ControllerEventManager
+import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.clients.admin.AdminClientUnitTestEnv
+import org.apache.kafka.clients.consumer.internals.AbstractCoordinator
+import org.apache.kafka.clients.producer.KafkaProducer
+import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.test.IntegrationTest
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
+import org.junit.Assert._
+import org.junit.experimental.categories.Category
+import org.junit.{After, AfterClass, Before, BeforeClass}
+import org.scalatest.junit.JUnitSuite
+
+import scala.collection.JavaConverters._
+import scala.collection.Set
 
 @Category(Array(classOf[IntegrationTest]))
 abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {

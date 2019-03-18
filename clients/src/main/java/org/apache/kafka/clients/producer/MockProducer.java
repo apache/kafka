@@ -163,11 +163,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
         if (offsets.size() == 0) {
             return;
         }
-        Map<TopicPartition, OffsetAndMetadata> uncommittedOffsets = this.uncommittedConsumerGroupOffsets.get(consumerGroupId);
-        if (uncommittedOffsets == null) {
-            uncommittedOffsets = new HashMap<>();
-            this.uncommittedConsumerGroupOffsets.put(consumerGroupId, uncommittedOffsets);
-        }
+        Map<TopicPartition, OffsetAndMetadata> uncommittedOffsets = this.uncommittedConsumerGroupOffsets.computeIfAbsent(consumerGroupId, k -> new HashMap<>());
         uncommittedOffsets.putAll(offsets);
         this.sentOffsets = true;
     }
@@ -259,7 +255,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
                 0L, 0, 0, Time.SYSTEM);
         long offset = nextOffset(topicPartition);
         Completion completion = new Completion(offset, new RecordMetadata(topicPartition, 0, offset,
-                RecordBatch.NO_TIMESTAMP, Long.valueOf(0L), 0, 0), result, callback);
+                RecordBatch.NO_TIMESTAMP, 0L, 0, 0), result, callback);
 
         if (!this.transactionInFlight)
             this.sent.add(record);

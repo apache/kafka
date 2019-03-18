@@ -16,10 +16,10 @@
  */
 package kafka.utils.timer
 
-import kafka.utils.nonthreadsafe
-
 import java.util.concurrent.DelayQueue
 import java.util.concurrent.atomic.AtomicInteger
+
+import kafka.utils.nonthreadsafe
 
 /*
  * Hierarchical Timing Wheels

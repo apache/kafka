@@ -43,8 +43,8 @@ public class PartitionStatesTest {
         expected.put(new TopicPartition("baz", 3), "baz 3");
         checkState(states, expected);
 
-        states.set(new LinkedHashMap<TopicPartition, String>());
-        checkState(states, new LinkedHashMap<TopicPartition, String>());
+        states.set(new LinkedHashMap<>());
+        checkState(states, new LinkedHashMap<>());
     }
 
     private LinkedHashMap<TopicPartition, String> createMap() {
@@ -181,7 +181,7 @@ public class PartitionStatesTest {
         LinkedHashMap<TopicPartition, String> map = createMap();
         states.set(map);
         states.clear();
-        checkState(states, new LinkedHashMap<TopicPartition, String>());
+        checkState(states, new LinkedHashMap<>());
     }
 
     @Test

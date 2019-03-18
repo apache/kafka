@@ -29,6 +29,7 @@ import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
+import java.util.Objects;
 import java.util.zip.Checksum;
 
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
@@ -266,8 +267,8 @@ public class DefaultRecord implements Record {
                 offset == that.offset &&
                 timestamp == that.timestamp &&
                 sequence == that.sequence &&
-                (key == null ? that.key == null : key.equals(that.key)) &&
-                (value == null ? that.value == null : value.equals(that.value)) &&
+                (Objects.equals(key, that.key)) &&
+                (Objects.equals(value, that.value)) &&
                 Arrays.equals(headers, that.headers);
     }
 

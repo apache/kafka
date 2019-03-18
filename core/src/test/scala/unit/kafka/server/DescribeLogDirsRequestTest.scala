@@ -17,13 +17,14 @@
 
 package kafka.server
 
+import java.io.File
+
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.junit.Assert._
 import org.junit.Test
-import java.io.File
 
 class DescribeLogDirsRequestTest extends BaseRequestTest {
   override val logDirCount = 2

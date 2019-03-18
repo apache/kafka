@@ -17,10 +17,10 @@
 
 package kafka.server
 
-import kafka.network.SocketServer
-import kafka.utils._
 import java.io.File
 
+import kafka.network.SocketServer
+import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AlterReplicaLogDirsRequest, AlterReplicaLogDirsResponse}

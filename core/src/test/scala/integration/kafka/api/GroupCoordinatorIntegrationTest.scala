@@ -12,20 +12,20 @@
  */
 package kafka.api
 
+import java.util.Properties
+
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.Log
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
-import org.junit.Test
-import org.junit.Assert._
-
-import scala.collection.JavaConverters._
-import java.util.Properties
-
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.CompressionType
+import org.junit.Assert._
+import org.junit.Test
+
+import scala.collection.JavaConverters._
 
 class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   val offsetsTopicCompressionCodec = CompressionType.GZIP

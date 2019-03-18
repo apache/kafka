@@ -47,7 +47,7 @@ public class SaslChannelBuilderTest {
     @Test
     public void testCloseAfterConfigIsIdempotent() {
         SaslChannelBuilder builder = createChannelBuilder(SecurityProtocol.SASL_PLAINTEXT);
-        builder.configure(new HashMap<String, Object>());
+        builder.configure(new HashMap<>());
         assertNotNull(builder.loginManagers().get("PLAIN"));
         builder.close();
         assertTrue(builder.loginManagers().isEmpty());
@@ -71,7 +71,7 @@ public class SaslChannelBuilderTest {
 
     private SaslChannelBuilder createChannelBuilder(SecurityProtocol securityProtocol) {
         TestJaasConfig jaasConfig = new TestJaasConfig();
-        jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
+        jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<>());
         JaasContext jaasContext = new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null);
         Map<String, JaasContext> jaasContexts = Collections.singletonMap("PLAIN", jaasContext);
         return new SaslChannelBuilder(Mode.CLIENT, jaasContexts, securityProtocol, new ListenerName("PLAIN"),

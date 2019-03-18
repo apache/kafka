@@ -33,7 +33,7 @@ public class ConsumerMetrics {
     }
 
     public ConsumerMetrics(String metricGroupPrefix) {
-        this(new HashSet<String>(), metricGroupPrefix);
+        this(new HashSet<>(), metricGroupPrefix);
     }
 
     private List<MetricNameTemplate> getAllTemplates() {

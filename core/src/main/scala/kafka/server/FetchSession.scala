@@ -31,9 +31,9 @@ import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INITIAL_EPOC
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.{ImplicitLinkedHashSet, Time, Utils}
 
-import scala.math.Ordered.orderingToOrdered
-import scala.collection.{mutable, _}
 import scala.collection.JavaConverters._
+import scala.collection.{mutable, _}
+import scala.math.Ordered.orderingToOrdered
 
 object FetchSession {
   type REQ_MAP = util.Map[TopicPartition, FetchRequest.PartitionData]

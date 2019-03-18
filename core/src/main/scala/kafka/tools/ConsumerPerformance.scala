@@ -130,9 +130,9 @@ object ConsumerPerformance extends LazyLogging {
       for (record <- records) {
         messagesRead += 1
         if (record.key != null)
-          bytesRead += record.key.size
+          bytesRead += record.key.length
         if (record.value != null)
-          bytesRead += record.value.size
+          bytesRead += record.value.length
 
         if (currentTimeMillis - lastReportTime >= config.reportingInterval) {
           if (config.showDetailedStats)

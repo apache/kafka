@@ -16,20 +16,19 @@
 */
 package kafka.server
 
-import kafka.log._
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
+import kafka.cluster.Replica
+import kafka.log._
+import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
+import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
-import org.junit._
 import org.junit.Assert._
-import kafka.cluster.Replica
-import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
-import kafka.zk.KafkaZkClient
-import java.util.concurrent.atomic.AtomicBoolean
-
-import org.apache.kafka.common.TopicPartition
+import org.junit._
 
 class HighwatermarkPersistenceTest {
 

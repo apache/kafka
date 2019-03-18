@@ -21,8 +21,8 @@ package kafka.server
 import java.util.concurrent.TimeUnit
 
 import kafka.metrics.KafkaMetricsGroup
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.DeleteRecordsResponse
 
 import scala.collection._

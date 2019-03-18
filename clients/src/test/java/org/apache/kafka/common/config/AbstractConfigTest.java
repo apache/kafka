@@ -294,7 +294,7 @@ public class AbstractConfigTest {
         // Test class overrides where some classes are not visible to thread context classloader
         Thread.currentThread().setContextClassLoader(restrictedClassLoader);
         // Properties specified as classes should succeed
-        testConfig = new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS, Arrays.asList(ClassTestConfig.RESTRICTED_CLASS));
+        testConfig = new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS, Collections.singletonList(ClassTestConfig.RESTRICTED_CLASS));
         testConfig.checkInstances(ClassTestConfig.RESTRICTED_CLASS, ClassTestConfig.RESTRICTED_CLASS);
         testConfig = new ClassTestConfig(ClassTestConfig.RESTRICTED_CLASS, Arrays.asList(ClassTestConfig.VISIBLE_CLASS, ClassTestConfig.RESTRICTED_CLASS));
         testConfig.checkInstances(ClassTestConfig.RESTRICTED_CLASS, ClassTestConfig.VISIBLE_CLASS, ClassTestConfig.RESTRICTED_CLASS);
@@ -329,7 +329,7 @@ public class AbstractConfigTest {
         private static final ConfigDef CONFIG;
         static {
             CONFIG = new ConfigDef().define("class.prop", Type.CLASS, DEFAULT_CLASS, Importance.HIGH, "docs")
-                                    .define("list.prop", Type.LIST, Arrays.asList(DEFAULT_CLASS), Importance.HIGH, "docs");
+                                    .define("list.prop", Type.LIST, Collections.singletonList(DEFAULT_CLASS), Importance.HIGH, "docs");
         }
 
         public ClassTestConfig() {

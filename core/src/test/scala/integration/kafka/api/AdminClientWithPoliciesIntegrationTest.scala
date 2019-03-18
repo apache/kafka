@@ -21,14 +21,14 @@ import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig
 import kafka.server.{Defaults, KafkaConfig}
 import kafka.utils.{Logging, TestUtils}
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, AlterConfigsOptions, Config, ConfigEntry}
+import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.junit.Assert.{assertEquals, assertNull, assertTrue}
-import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.Timeout
+import org.junit.{After, Before, Rule, Test}
 
 import scala.collection.JavaConverters._
 
@@ -195,7 +195,7 @@ object AdminClientWithPoliciesIntegrationTest {
 
     def validate(requestMetadata: AlterConfigPolicy.RequestMetadata): Unit = {
       require(!closed, "Policy should not be closed")
-      require(!configs.isEmpty, "configure should have been called with non empty configs")
+      require(configs.nonEmpty, "configure should have been called with non empty configs")
       require(!requestMetadata.configs.isEmpty, "request configs should not be empty")
       require(requestMetadata.resource.name.nonEmpty, "resource name should not be empty")
       require(requestMetadata.resource.name.contains("topic"))

@@ -17,13 +17,13 @@
 package kafka.api
 
 import java.security.AccessController
-import javax.security.auth.callback._
-import javax.security.auth.Subject
-import javax.security.auth.login.AppConfigurationEntry
 
+import javax.security.auth.Subject
+import javax.security.auth.callback._
+import javax.security.auth.login.AppConfigurationEntry
 import kafka.server.KafkaConfig
-import kafka.utils.{TestUtils}
 import kafka.utils.JaasTestUtils._
+import kafka.utils.TestUtils
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName

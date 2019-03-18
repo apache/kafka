@@ -17,6 +17,7 @@
 package kafka.admin
 
 import java.util.Properties
+
 import kafka.utils.ZkUtils
 
 @deprecated("This class is deprecated since AdminUtilities will be replaced by kafka.zk.AdminZkClient.", "1.1.0")

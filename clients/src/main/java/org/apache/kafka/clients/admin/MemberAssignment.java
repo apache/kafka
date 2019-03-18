@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
 
 /**
@@ -35,7 +36,7 @@ public class MemberAssignment {
      * @param topicPartitions List of topic partitions
      */
     public MemberAssignment(Set<TopicPartition> topicPartitions) {
-        this.topicPartitions = topicPartitions == null ? Collections.<TopicPartition>emptySet() :
+        this.topicPartitions = topicPartitions == null ? Collections.emptySet() :
             Collections.unmodifiableSet(new HashSet<>(topicPartitions));
     }
 
@@ -46,7 +47,7 @@ public class MemberAssignment {
 
         MemberAssignment that = (MemberAssignment) o;
 
-        return topicPartitions != null ? topicPartitions.equals(that.topicPartitions) : that.topicPartitions == null;
+        return Objects.equals(topicPartitions, that.topicPartitions);
     }
 
     @Override

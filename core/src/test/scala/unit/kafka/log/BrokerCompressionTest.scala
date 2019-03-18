@@ -17,19 +17,19 @@
 
 package kafka.log
 
-import kafka.utils._
+import java.util.{Collection, Properties}
+
 import kafka.message._
-import org.scalatest.junit.JUnitSuite
-import org.junit._
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import kafka.utils._
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
+import org.junit._
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
-import org.apache.kafka.common.utils.Utils
-import java.util.{Collection, Properties}
-
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
+import org.scalatest.junit.JUnitSuite
 
 import scala.collection.JavaConverters._
 

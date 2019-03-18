@@ -33,9 +33,8 @@ public class JmxReporterTest {
 
     @Test
     public void testJmxRegistration() throws Exception {
-        Metrics metrics = new Metrics();
-        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        try {
+        try (Metrics metrics = new Metrics()) {
+            MBeanServer server = ManagementFactory.getPlatformMBeanServer();
             JmxReporter reporter = new JmxReporter();
             metrics.addReporter(reporter);
 
@@ -66,16 +65,13 @@ public class JmxReporterTest {
 
             assertFalse(server.isRegistered(new ObjectName(":type=grp1")));
             assertFalse(server.isRegistered(new ObjectName(":type=grp2")));
-        } finally {
-            metrics.close();
         }
     }
 
     @Test
     public void testJmxRegistrationSanitization() throws Exception {
-        Metrics metrics = new Metrics();
-        MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        try {
+        try (Metrics metrics = new Metrics()) {
+            MBeanServer server = ManagementFactory.getPlatformMBeanServer();
             metrics.addReporter(new JmxReporter());
 
             Sensor sensor = metrics.sensor("kafka.requests");
@@ -107,8 +103,6 @@ public class JmxReporterTest {
             assertFalse(server.isRegistered(new ObjectName(":type=group,id=\"foo\\?\"")));
             assertFalse(server.isRegistered(new ObjectName(":type=group,id=\"foo:\"")));
             assertFalse(server.isRegistered(new ObjectName(":type=group,id=foo%")));
-        } finally {
-            metrics.close();
         }
     }
 }

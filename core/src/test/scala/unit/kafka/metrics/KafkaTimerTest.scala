@@ -17,10 +17,11 @@ package kafka.metrics
  * limitations under the License.
  */
 
-import org.junit.Test
 import java.util.concurrent.TimeUnit
+
+import com.yammer.metrics.core.{Clock, MetricsRegistry}
 import org.junit.Assert._
-import com.yammer.metrics.core.{MetricsRegistry, Clock}
+import org.junit.Test
 
 class KafkaTimerTest {
 

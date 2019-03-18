@@ -17,8 +17,8 @@
 
 package kafka.api
 
-import java.util.concurrent.ExecutionException
 import java.util.Properties
+import java.util.concurrent.ExecutionException
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.LogConfig

@@ -31,8 +31,7 @@ public class MetricsBench {
 
     public static void main(String[] args) {
         long iters = Long.parseLong(args[0]);
-        Metrics metrics = new Metrics();
-        try {
+        try (Metrics metrics = new Metrics()) {
             Sensor parent = metrics.sensor("parent");
             Sensor child = metrics.sensor("child", parent);
             for (Sensor sensor : Arrays.asList(parent, child)) {
@@ -44,15 +43,13 @@ public class MetricsBench {
                         iters,
                         BucketSizing.CONSTANT,
                         new Percentile(metrics.metricName(sensor.name() + ".median", "grp1"), 50.0),
-                        new Percentile(metrics.metricName(sensor.name() +  ".p_99", "grp1"), 99.0)));
+                        new Percentile(metrics.metricName(sensor.name() + ".p_99", "grp1"), 99.0)));
             }
             long start = System.nanoTime();
             for (int i = 0; i < iters; i++)
                 parent.record(i);
             double ellapsed = (System.nanoTime() - start) / (double) iters;
             System.out.println(String.format("%.2f ns per metric recording.", ellapsed));
-        } finally {
-            metrics.close();
         }
     }
 }

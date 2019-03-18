@@ -1332,16 +1332,16 @@ class GroupCoordinatorTest extends JUnitSuite {
     val commitOffsetResults = mutable.ArrayBuffer[CommitOffsetCallbackParams]()
 
     // Ensure that the two groups map to different partitions.
-    assertNotEquals(offsetTopicPartitions(0), offsetTopicPartitions(1))
+    assertNotEquals(offsetTopicPartitions.head, offsetTopicPartitions(1))
 
-    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(partitions(0) -> offsets(0))))
-    assertEquals(Errors.NONE, commitOffsetResults(0)(partitions(0)))
+    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerId, producerEpoch, Map(partitions.head -> offsets.head)))
+    assertEquals(Errors.NONE, commitOffsetResults(0)(partitions.head))
     commitOffsetResults.append(commitTransactionalOffsets(otherGroupId, producerId, producerEpoch, Map(partitions(1) -> offsets(1))))
     assertEquals(Errors.NONE, commitOffsetResults(1)(partitions(1)))
 
     // We got a commit for only one __consumer_offsets partition. We should only materialize it's group offsets.
-    handleTxnCompletion(producerId, List(offsetTopicPartitions(0)), TransactionResult.COMMIT)
-    groupCoordinator.handleFetchOffsets(groupIds(0), Some(partitions)) match {
+    handleTxnCompletion(producerId, List(offsetTopicPartitions.head), TransactionResult.COMMIT)
+    groupCoordinator.handleFetchOffsets(groupIds.head, Some(partitions)) match {
       case (error, partData) =>
         errors.append(error)
         partitionData.append(partData)
@@ -1360,16 +1360,16 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.NONE, errors(1))
 
     // Exactly one offset commit should have been materialized.
-    assertEquals(Some(offsets(0).offset), partitionData(0).get(partitions(0)).map(_.offset))
+    assertEquals(Some(offsets.head.offset), partitionData(0).get(partitions.head).map(_.offset))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(partitions(1)).map(_.offset))
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(partitions(0)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(partitions.head).map(_.offset))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(partitions(1)).map(_.offset))
 
     // Now we receive the other marker.
     handleTxnCompletion(producerId, List(offsetTopicPartitions(1)), TransactionResult.COMMIT)
     errors.clear()
     partitionData.clear()
-    groupCoordinator.handleFetchOffsets(groupIds(0), Some(partitions)) match {
+    groupCoordinator.handleFetchOffsets(groupIds.head, Some(partitions)) match {
       case (error, partData) =>
         errors.append(error)
         partitionData.append(partData)
@@ -1383,9 +1383,9 @@ class GroupCoordinatorTest extends JUnitSuite {
       case _ =>
     }
     // Two offsets should have been materialized
-    assertEquals(Some(offsets(0).offset), partitionData(0).get(partitions(0)).map(_.offset))
+    assertEquals(Some(offsets.head.offset), partitionData(0).get(partitions.head).map(_.offset))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(partitions(1)).map(_.offset))
-    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(partitions(0)).map(_.offset))
+    assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(1).get(partitions.head).map(_.offset))
     assertEquals(Some(offsets(1).offset), partitionData(1).get(partitions(1)).map(_.offset))
   }
 
@@ -1408,15 +1408,15 @@ class GroupCoordinatorTest extends JUnitSuite {
     val commitOffsetResults = mutable.ArrayBuffer[CommitOffsetCallbackParams]()
 
     // producer0 commits the offsets for partition0
-    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerIds(0), producerEpochs(0), Map(partitions(0) -> offsets(0))))
-    assertEquals(Errors.NONE, commitOffsetResults(0)(partitions(0)))
+    commitOffsetResults.append(commitTransactionalOffsets(groupId, producerIds.head, producerEpochs.head, Map(partitions.head -> offsets.head)))
+    assertEquals(Errors.NONE, commitOffsetResults(0)(partitions.head))
 
     // producer1 commits the offsets for partition1
     commitOffsetResults.append(commitTransactionalOffsets(groupId, producerIds(1), producerEpochs(1), Map(partitions(1) -> offsets(1))))
     assertEquals(Errors.NONE, commitOffsetResults(1)(partitions(1)))
 
     // producer0 commits its transaction.
-    handleTxnCompletion(producerIds(0), List(offsetTopicPartition), TransactionResult.COMMIT)
+    handleTxnCompletion(producerIds.head, List(offsetTopicPartition), TransactionResult.COMMIT)
     groupCoordinator.handleFetchOffsets(groupId, Some(partitions)) match {
       case (error, partData) =>
         errors.append(error)
@@ -1427,7 +1427,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.NONE, errors(0))
 
     // We should only see the offset commit for producer0
-    assertEquals(Some(offsets(0).offset), partitionData(0).get(partitions(0)).map(_.offset))
+    assertEquals(Some(offsets.head.offset), partitionData(0).get(partitions.head).map(_.offset))
     assertEquals(Some(OffsetFetchResponse.INVALID_OFFSET), partitionData(0).get(partitions(1)).map(_.offset))
 
     // producer1 now commits its transaction.
@@ -1443,7 +1443,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.NONE, errors(1))
 
     // We should now see the offset commits for both producers.
-    assertEquals(Some(offsets(0).offset), partitionData(1).get(partitions(0)).map(_.offset))
+    assertEquals(Some(offsets.head.offset), partitionData(1).get(partitions.head).map(_.offset))
     assertEquals(Some(offsets(1).offset), partitionData(1).get(partitions(1)).map(_.offset))
   }
 

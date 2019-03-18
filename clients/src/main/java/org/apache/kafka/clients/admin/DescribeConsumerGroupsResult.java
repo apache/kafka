@@ -21,14 +21,14 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
+import java.util.stream.Collectors;
 
 
 /**
  * The result of the {@link KafkaAdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)}} call.
- *
+ * <p>
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
 @InterfaceStability.Evolving
@@ -52,21 +52,15 @@ public class DescribeConsumerGroupsResult {
      */
     public KafkaFuture<Map<String, ConsumerGroupDescription>> all() {
         return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
-            new KafkaFuture.BaseFunction<Void, Map<String, ConsumerGroupDescription>>() {
-                @Override
-                public Map<String, ConsumerGroupDescription> apply(Void v) {
-                    try {
-                        Map<String, ConsumerGroupDescription> descriptions = new HashMap<>(futures.size());
-                        for (Map.Entry<String, KafkaFuture<ConsumerGroupDescription>> entry : futures.entrySet()) {
-                            descriptions.put(entry.getKey(), entry.getValue().get());
-                        }
-                        return descriptions;
-                    } catch (InterruptedException | ExecutionException e) {
-                        // This should be unreachable, since the KafkaFuture#allOf already ensured
-                        // that all of the futures completed successfully.
-                        throw new RuntimeException(e);
-                    }
-                }
-            });
+            v ->  futures.entrySet().stream()
+                        .collect(Collectors.toMap(Map.Entry::getKey, entry -> {
+                            try {
+                                return entry.getValue().get();
+                            } catch (InterruptedException | ExecutionException e) {
+                                // This should be unreachable, since the KafkaFuture#allOf already ensured
+                                // that all of the futures completed successfully.
+                                throw new RuntimeException(e);
+                            }
+                        })));
     }
 }

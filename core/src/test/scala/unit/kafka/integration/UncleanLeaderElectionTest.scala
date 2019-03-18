@@ -17,26 +17,26 @@
 
 package kafka.integration
 
-import org.apache.kafka.common.config.ConfigException
-import org.junit.{After, Before, Ignore, Test}
-
-import scala.util.Random
-import scala.collection.JavaConverters._
-import org.apache.log4j.{Level, Logger}
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
+import kafka.utils.{CoreUtils, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
+import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.log4j.{Level, Logger}
 import org.junit.Assert._
+import org.junit.{After, Before, Ignore, Test}
+
+import scala.collection.JavaConverters._
+import scala.util.Random
 
 class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   val brokerId1 = 0

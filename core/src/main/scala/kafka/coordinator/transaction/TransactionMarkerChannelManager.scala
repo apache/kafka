@@ -17,24 +17,25 @@
 package kafka.coordinator.transaction
 
 
+import java.util
+import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
+
+import com.yammer.metrics.core.Gauge
 import kafka.common.{InterBrokerSendThread, RequestAndCompletionHandler}
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, MetadataCache}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients._
-import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
 import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.WriteTxnMarkersRequest.TxnMarkerEntry
-import com.yammer.metrics.core.Gauge
-import java.util
-import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
+import org.apache.kafka.common.{Node, TopicPartition}
 
-import collection.JavaConverters._
+import scala.collection.JavaConverters._
 import scala.collection.{concurrent, immutable}
 
 object TransactionMarkerChannelManager {

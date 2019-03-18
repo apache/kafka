@@ -17,13 +17,13 @@
 package kafka.api
 
 import org.apache.kafka.common.config.SaslConfigs
-import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
-import org.junit.{Before, Test}
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.{Before, Test}
 
-import scala.collection.immutable.List
 import scala.collection.JavaConverters._
+import scala.collection.immutable.List
 
 abstract class SaslEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
   override protected def securityProtocol = SecurityProtocol.SASL_SSL

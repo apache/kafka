@@ -17,10 +17,10 @@
 
 package kafka.server
 
-import org.junit.Assert._
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.junit.Assert._
 import org.junit.{After, Test}
 
 import scala.collection.mutable.ArrayBuffer

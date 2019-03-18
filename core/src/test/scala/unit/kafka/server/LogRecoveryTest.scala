@@ -16,19 +16,18 @@
 */
 package kafka.server
 
+import java.io.File
 import java.util.Properties
 
-import kafka.utils.TestUtils
-import TestUtils._
-import kafka.zk.ZooKeeperTestHarness
-import java.io.File
-
 import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.utils.TestUtils
+import kafka.utils.TestUtils._
+import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
-import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
 class LogRecoveryTest extends ZooKeeperTestHarness {
 

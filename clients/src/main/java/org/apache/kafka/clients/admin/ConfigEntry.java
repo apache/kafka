@@ -65,7 +65,7 @@ public class ConfigEntry {
              isDefault ? ConfigSource.DEFAULT_CONFIG : ConfigSource.UNKNOWN,
              isSensitive,
              isReadOnly,
-             Collections.<ConfigSynonym>emptyList());
+             Collections.emptyList());
     }
 
     /**

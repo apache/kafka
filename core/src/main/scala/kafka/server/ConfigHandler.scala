@@ -19,12 +19,12 @@ package kafka.server
 
 import java.util.Properties
 
-import DynamicConfig.Broker._
 import kafka.api.ApiVersion
 import kafka.controller.KafkaController
 import kafka.log.{LogConfig, LogManager}
 import kafka.security.CredentialProvider
 import kafka.server.Constants._
+import kafka.server.DynamicConfig.Broker._
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigDef.Validator
@@ -165,7 +165,7 @@ class UserConfigHandler(private val quotaManagers: QuotaManagers, val credential
     val sanitizedUser = entities(0)
     val sanitizedClientId = if (entities.length == 3) Some(entities(2)) else None
     updateQuotaConfig(Some(sanitizedUser), sanitizedClientId, config)
-    if (!sanitizedClientId.isDefined && sanitizedUser != ConfigEntityName.Default)
+    if (sanitizedClientId.isEmpty && sanitizedUser != ConfigEntityName.Default)
       credentialProvider.updateCredentials(Sanitizer.desanitize(sanitizedUser), config)
   }
 }

@@ -94,7 +94,7 @@ public class SaslServerAuthenticatorTest {
 
     private SaslServerAuthenticator setupAuthenticator(Map<String, ?> configs, TransportLayer transportLayer, String mechanism) throws IOException {
         TestJaasConfig jaasConfig = new TestJaasConfig();
-        jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<String, Object>());
+        jaasConfig.addEntry("jaasContext", PlainLoginModule.class.getName(), new HashMap<>());
         Map<String, JaasContext> jaasContexts = Collections.singletonMap(mechanism,
                 new JaasContext("jaasContext", JaasContext.Type.SERVER, jaasConfig, null));
         Map<String, Subject> subjects = Collections.singletonMap(mechanism, new Subject());

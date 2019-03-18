@@ -18,10 +18,10 @@
 package kafka.utils
 
 import java.lang.management.ManagementFactory
-import javax.management.ObjectName
 
-import org.junit.Test
+import javax.management.ObjectName
 import org.junit.Assert.{assertEquals, assertTrue}
+import org.junit.Test
 
 
 class LoggingTest extends Logging {

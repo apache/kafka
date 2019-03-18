@@ -17,10 +17,10 @@
 
 package kafka.utils.json
 
-import scala.collection.{Iterator, JavaConverters}
-import JavaConverters._
-
 import com.fasterxml.jackson.databind.node.ArrayNode
+
+import scala.collection.JavaConverters._
+import scala.collection.{Iterator, JavaConverters}
 
 class JsonArray private[json] (protected val node: ArrayNode) extends JsonValue {
   def iterator: Iterator[JsonValue] = node.elements.asScala.map(JsonValue(_))

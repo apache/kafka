@@ -17,13 +17,13 @@
 
 package kafka.server
 
-import kafka.network._
-import kafka.utils._
-import kafka.metrics.KafkaMetricsGroup
-import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{CountDownLatch, TimeUnit}
 
 import com.yammer.metrics.core.Meter
+import kafka.metrics.KafkaMetricsGroup
+import kafka.network._
+import kafka.utils._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 

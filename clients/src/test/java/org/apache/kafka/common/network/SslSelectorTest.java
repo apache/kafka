@@ -25,7 +25,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -106,15 +105,12 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     private void waitForBytesBuffered(Selector selector, String node) throws Exception {
-        TestUtils.waitForCondition(new TestCondition() {
-            @Override
-            public boolean conditionMet() {
-                try {
-                    selector.poll(0L);
-                    return selector.channel(node).hasBytesBuffered();
-                } catch (IOException e) {
-                    throw new RuntimeException(e);
-                }
+        TestUtils.waitForCondition(() -> {
+            try {
+                selector.poll(0L);
+                return selector.channel(node).hasBytesBuffered();
+            } catch (IOException e) {
+                throw new RuntimeException(e);
             }
         }, 2000L, "Failed to reach socket state with bytes buffered");
     }
@@ -226,7 +222,7 @@ public class SslSelectorTest extends SelectorTest {
         channelBuilder = new SslChannelBuilder(Mode.SERVER, null, false);
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
-                new HashMap<String, String>(), true, false, channelBuilder, pool, new LogContext());
+                new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));

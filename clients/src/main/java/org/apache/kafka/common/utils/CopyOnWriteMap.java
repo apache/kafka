@@ -85,7 +85,7 @@ public class CopyOnWriteMap<K, V> implements ConcurrentMap<K, V> {
 
     @Override
     public synchronized V put(K k, V v) {
-        Map<K, V> copy = new HashMap<K, V>(this.map);
+        Map<K, V> copy = new HashMap<>(this.map);
         V prev = copy.put(k, v);
         this.map = Collections.unmodifiableMap(copy);
         return prev;
@@ -93,14 +93,14 @@ public class CopyOnWriteMap<K, V> implements ConcurrentMap<K, V> {
 
     @Override
     public synchronized void putAll(Map<? extends K, ? extends V> entries) {
-        Map<K, V> copy = new HashMap<K, V>(this.map);
+        Map<K, V> copy = new HashMap<>(this.map);
         copy.putAll(entries);
         this.map = Collections.unmodifiableMap(copy);
     }
 
     @Override
     public synchronized V remove(Object key) {
-        Map<K, V> copy = new HashMap<K, V>(this.map);
+        Map<K, V> copy = new HashMap<>(this.map);
         V prev = copy.remove(key);
         this.map = Collections.unmodifiableMap(copy);
         return prev;

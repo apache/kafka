@@ -111,43 +111,37 @@ public class BufferPoolTest {
 
     private CountDownLatch asyncDeallocate(final BufferPool pool, final ByteBuffer buffer) {
         final CountDownLatch latch = new CountDownLatch(1);
-        Thread thread = new Thread() {
-            public void run() {
-                try {
-                    latch.await();
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                }
-                pool.deallocate(buffer);
+        Thread thread = new Thread(() -> {
+            try {
+                latch.await();
+            } catch (InterruptedException e) {
+                e.printStackTrace();
             }
-        };
+            pool.deallocate(buffer);
+        });
         thread.start();
         return latch;
     }
 
     private void delayedDeallocate(final BufferPool pool, final ByteBuffer buffer, final long delayMs) {
-        Thread thread = new Thread() {
-            public void run() {
-                Time.SYSTEM.sleep(delayMs);
-                pool.deallocate(buffer);
-            }
-        };
+        Thread thread = new Thread(() -> {
+            Time.SYSTEM.sleep(delayMs);
+            pool.deallocate(buffer);
+        });
         thread.start();
     }
 
     private CountDownLatch asyncAllocate(final BufferPool pool, final int size) {
         final CountDownLatch completed = new CountDownLatch(1);
-        Thread thread = new Thread() {
-            public void run() {
-                try {
-                    pool.allocate(size, maxBlockTimeMs);
-                } catch (InterruptedException e) {
-                    e.printStackTrace();
-                } finally {
-                    completed.countDown();
-                }
+        Thread thread = new Thread(() -> {
+            try {
+                pool.allocate(size, maxBlockTimeMs);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            } finally {
+                completed.countDown();
             }
-        };
+        });
         thread.start();
         return completed;
     }
@@ -285,7 +279,7 @@ public class BufferPoolTest {
         final int poolableSize = 1024;
         final long totalMemory = numThreads / 2 * poolableSize;
         final BufferPool pool = new BufferPool(totalMemory, poolableSize, metrics, time, metricGroup);
-        List<StressTestThread> threads = new ArrayList<StressTestThread>();
+        List<StressTestThread> threads = new ArrayList<>();
         for (int i = 0; i < numThreads; i++)
             threads.add(new StressTestThread(pool, iterations));
         for (StressTestThread thread : threads)

@@ -17,21 +17,22 @@
 
 package kafka.server
 
-import java.util.{Collections, Optional}
 import java.util.concurrent.locks.ReentrantReadWriteLock
+import java.util.{Collections, Optional}
 
-import scala.collection.{Seq, Set, mutable}
-import scala.collection.JavaConverters._
-import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
+import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.StateChangeLogger
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
+import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition}
+
+import scala.collection.JavaConverters._
+import scala.collection.{Seq, Set, mutable}
 
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through

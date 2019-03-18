@@ -17,19 +17,19 @@
 
 package kafka.utils
 
-import java.util.{Arrays, Base64, UUID}
-import java.util.concurrent.{ConcurrentHashMap, Executors, TimeUnit}
+import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.ReentrantLock
-import java.nio.ByteBuffer
+import java.util.concurrent.{ConcurrentHashMap, Executors, TimeUnit}
 import java.util.regex.Pattern
+import java.util.{Arrays, Base64, UUID}
 
-import org.scalatest.junit.JUnitSuite
-import org.junit.Assert._
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.KafkaException
-import org.junit.Test
 import org.apache.kafka.common.utils.Utils
+import org.junit.Assert._
+import org.junit.Test
+import org.scalatest.junit.JUnitSuite
 import org.slf4j.event.Level
 
 import scala.collection.JavaConverters._
@@ -143,8 +143,8 @@ class CoreUtilsTest extends JUnitSuite with Logging {
   @Test
   def testReadInt() {
     val values = Array(0, 1, -1, Byte.MaxValue, Short.MaxValue, 2 * Short.MaxValue, Int.MaxValue/2, Int.MinValue/2, Int.MaxValue, Int.MinValue, Int.MaxValue)
-    val buffer = ByteBuffer.allocate(4 * values.size)
-    for(i <- 0 until values.length) {
+    val buffer = ByteBuffer.allocate(4 * values.length)
+    for(i <- values.indices) {
       buffer.putInt(i*4, values(i))
       assertEquals("Written value should match read value.", values(i), CoreUtils.readInt(buffer.array, i*4))
     }

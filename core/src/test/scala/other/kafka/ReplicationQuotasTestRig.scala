@@ -19,8 +19,8 @@ package kafka
 
 import java.io.{File, PrintWriter}
 import java.nio.file.{Files, StandardOpenOption}
-import javax.imageio.ImageIO
 
+import javax.imageio.ImageIO
 import kafka.admin.ReassignPartitionsCommand
 import kafka.admin.ReassignPartitionsCommand.Throttle
 import kafka.server.{KafkaConfig, KafkaServer, QuotaType}

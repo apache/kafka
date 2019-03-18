@@ -24,12 +24,12 @@ import java.nio.file.{Files, StandardOpenOption}
 import kafka.log.Log.offsetFromFile
 import kafka.server.LogOffsetMetadata
 import kafka.utils.{Logging, nonthreadsafe, threadsafe}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 
 import scala.collection.mutable.ListBuffer
 import scala.collection.{immutable, mutable}
@@ -488,8 +488,9 @@ object ProducerStateManager {
 class ProducerStateManager(val topicPartition: TopicPartition,
                            @volatile var logDir: File,
                            val maxProducerIdExpirationMs: Int = 60 * 60 * 1000) extends Logging {
-  import ProducerStateManager._
   import java.util
+
+  import ProducerStateManager._
 
   this.logIdent = s"[ProducerStateManager partition=$topicPartition] "
 

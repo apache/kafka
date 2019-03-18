@@ -29,8 +29,8 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.CoreUtils._
 import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.KafkaStorageException
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Iterable, immutable, mutable}
 

@@ -57,7 +57,7 @@ public class SubscriptionStateTest {
         state.seek(tp0, 1);
         assertTrue(state.isFetchable(tp0));
         assertEquals(1L, state.position(tp0).longValue());
-        state.assignFromUser(Collections.<TopicPartition>emptySet());
+        state.assignFromUser(Collections.emptySet());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
         assertFalse(state.isAssigned(tp0));
@@ -148,12 +148,7 @@ public class SubscriptionStateTest {
     @Test
     public void verifyAssignmentListener() {
         final AtomicReference<Set<TopicPartition>> assignmentRef = new AtomicReference<>();
-        state.addListener(new SubscriptionState.Listener() {
-            @Override
-            public void onAssignment(Set<TopicPartition> assignment) {
-                assignmentRef.set(assignment);
-            }
-        });
+        state.addListener(assignmentRef::set);
         Set<TopicPartition> userAssignment = Utils.mkSet(tp0, tp1);
         state.assignFromUser(userAssignment);
         assertEquals(userAssignment, assignmentRef.get());

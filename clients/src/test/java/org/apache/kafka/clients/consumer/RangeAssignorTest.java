@@ -42,7 +42,7 @@ public class RangeAssignorTest {
         Map<String, Integer> partitionsPerTopic = new HashMap<>();
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic,
-                Collections.singletonMap(consumerId, new Subscription(Collections.<String>emptyList())));
+                Collections.singletonMap(consumerId, new Subscription(Collections.emptyList())));
 
         assertEquals(Collections.singleton(consumerId), assignment.keySet());
         assertTrue(assignment.get(consumerId).isEmpty());
@@ -123,7 +123,7 @@ public class RangeAssignorTest {
 
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, consumers);
         assertAssignment(partitions(tp(topic, 0)), assignment.get(consumer1));
-        assertAssignment(Collections.<TopicPartition>emptyList(), assignment.get(consumer2));
+        assertAssignment(Collections.emptyList(), assignment.get(consumer2));
     }
 
 

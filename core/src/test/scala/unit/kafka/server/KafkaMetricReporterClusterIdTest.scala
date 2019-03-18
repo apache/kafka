@@ -23,9 +23,9 @@ import kafka.utils.{CoreUtils, TestUtils, VerifiableProperties}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener}
 import org.apache.kafka.test.MockMetricsReporter
+import org.apache.kafka.test.TestUtils.isValidClusterId
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.apache.kafka.test.TestUtils.isValidClusterId
 
 object KafkaMetricReporterClusterIdTest {
   val setupError = new AtomicReference[String]("")

@@ -88,7 +88,7 @@ public class TestUtils {
     }
 
     public static Cluster clusterWith(int nodes) {
-        return clusterWith(nodes, new HashMap<String, Integer>());
+        return clusterWith(nodes, new HashMap<>());
     }
 
     public static Cluster clusterWith(final int nodes, final Map<String, Integer> topicPartitionCounts) {
@@ -244,16 +244,13 @@ public class TestUtils {
         }
         file.deleteOnExit();
 
-        Runtime.getRuntime().addShutdownHook(new Thread() {
-            @Override
-            public void run() {
-                try {
-                    Utils.delete(file);
-                } catch (IOException e) {
-                    log.error("Error deleting {}", file.getAbsolutePath(), e);
-                }
+        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
+            try {
+                Utils.delete(file);
+            } catch (IOException e) {
+                log.error("Error deleting {}", file.getAbsolutePath(), e);
             }
-        });
+        }));
 
         return file;
     }

@@ -208,11 +208,7 @@ public class Sender implements Runnable {
 
     private void addToInflightBatches(List<ProducerBatch> batches) {
         for (ProducerBatch batch : batches) {
-            List<ProducerBatch> inflightBatchList = inFlightBatches.get(batch.topicPartition);
-            if (inflightBatchList == null) {
-                inflightBatchList = new ArrayList<>();
-                inFlightBatches.put(batch.topicPartition, inflightBatchList);
-            }
+            List<ProducerBatch> inflightBatchList = inFlightBatches.computeIfAbsent(batch.topicPartition, k -> new ArrayList<>());
             inflightBatchList.add(batch);
         }
     }
@@ -781,11 +777,7 @@ public class Sender implements Runnable {
         }
         ProduceRequest.Builder requestBuilder = ProduceRequest.Builder.forMagic(minUsedMagic, acks, timeout,
                 produceRecordsByPartition, transactionalId);
-        RequestCompletionHandler callback = new RequestCompletionHandler() {
-            public void onComplete(ClientResponse response) {
-                handleProduceResponse(response, recordsByPartition, time.milliseconds());
-            }
-        };
+        RequestCompletionHandler callback = response -> handleProduceResponse(response, recordsByPartition, time.milliseconds());
 
         String nodeId = Integer.toString(destination);
         ClientRequest clientRequest = client.newClientRequest(nodeId, requestBuilder, now, acks != 0,

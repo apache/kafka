@@ -27,9 +27,9 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.{BrokerState, RecoveringFromUncleanShutdown, _}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
-import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.errors.{KafkaStorageException, LogDirNotFoundException}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -998,7 +998,7 @@ object LogManager {
 
     // read the log configurations from zookeeper
     val (topicConfigs, failed) = zkClient.getLogConfigs(zkClient.getAllTopicsInCluster, defaultProps)
-    if (!failed.isEmpty) throw failed.head._2
+    if (failed.nonEmpty) throw failed.head._2
 
     val cleanerConfig = LogCleaner.cleanerConfig(config)
 

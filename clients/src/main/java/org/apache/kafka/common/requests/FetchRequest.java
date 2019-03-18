@@ -274,7 +274,7 @@ public class FetchRequest extends AbstractRequest {
                 int partition = topicEntry.getKey().partition();
                 T partitionData = topicEntry.getValue();
                 if (topics.isEmpty() || !topics.get(topics.size() - 1).topic.equals(topic))
-                    topics.add(new TopicAndPartitionData<T>(topic));
+                    topics.add(new TopicAndPartitionData<>(topic));
                 topics.get(topics.size() - 1).partitions.put(partition, partitionData);
             }
             return topics;

@@ -20,9 +20,9 @@ package kafka.log
 import java.nio._
 
 import kafka.utils.Exit
+import org.junit.Assert._
 import org.junit._
 import org.scalatest.junit.JUnitSuite
-import org.junit.Assert._
 
 class OffsetMapTest extends JUnitSuite {
   

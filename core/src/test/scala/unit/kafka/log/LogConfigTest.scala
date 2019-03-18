@@ -19,11 +19,11 @@ package kafka.log
 
 import java.util.Properties
 
-import kafka.server.{ThrottledReplicaListValidator, KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer, ThrottledReplicaListValidator}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
-import org.junit.{Assert, Test}
 import org.junit.Assert._
+import org.junit.{Assert, Test}
 import org.scalatest.Assertions._
 
 class LogConfigTest {

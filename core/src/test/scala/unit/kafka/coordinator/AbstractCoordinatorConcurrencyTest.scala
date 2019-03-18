@@ -17,10 +17,10 @@
 
 package kafka.coordinator
 
-import java.util.{Collections, Random}
-import java.util.concurrent.{ConcurrentHashMap, Executors}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
+import java.util.concurrent.{ConcurrentHashMap, Executors}
+import java.util.{Collections, Random}
 
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.log.Log
@@ -35,8 +35,8 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.easymock.EasyMock
 import org.junit.{After, Before}
 
-import scala.collection._
 import scala.collection.JavaConverters._
+import scala.collection._
 
 abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
 

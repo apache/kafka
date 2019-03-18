@@ -49,7 +49,7 @@ public class JmxReporter implements MetricsReporter {
     private static final Logger log = LoggerFactory.getLogger(JmxReporter.class);
     private static final Object LOCK = new Object();
     private String prefix;
-    private final Map<String, KafkaMbean> mbeans = new HashMap<String, KafkaMbean>();
+    private final Map<String, KafkaMbean> mbeans = new HashMap<>();
 
     public JmxReporter() {
         this("");

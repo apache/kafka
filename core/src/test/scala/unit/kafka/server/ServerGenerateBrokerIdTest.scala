@@ -16,15 +16,14 @@
   */
 package kafka.server
 
+import java.io.File
 import java.util.Properties
 
-import kafka.zk.ZooKeeperTestHarness
 import kafka.utils.TestUtils
-import org.junit.{After, Before, Test}
-import org.junit.Assert._
-import java.io.File
-
+import kafka.zk.ZooKeeperTestHarness
 import org.apache.zookeeper.KeeperException.NodeExistsException
+import org.junit.Assert._
+import org.junit.{After, Before, Test}
 
 class ServerGenerateBrokerIdTest extends ZooKeeperTestHarness {
   var props1: Properties = null
