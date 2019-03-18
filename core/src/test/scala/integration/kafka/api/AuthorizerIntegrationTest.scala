@@ -33,7 +33,7 @@ import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
-import org.apache.kafka.common.message.{CreateTopicsRequestData, DescribeGroupsRequestData, LeaveGroupRequestData}
+import org.apache.kafka.common.message.{CreateTopicsRequestData, DescribeGroupsRequestData, JoinGroupRequestData, LeaveGroupRequestData}
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicSet}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -310,9 +310,21 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createJoinGroupRequest = {
-    new JoinGroupRequest.Builder(group, 10000, "", "consumer",
-      List( new JoinGroupRequest.ProtocolMetadata("consumer-range",ByteBuffer.wrap("test".getBytes()))).asJava)
-      .setRebalanceTimeout(60000).build()
+    val protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+      Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
+        .setName("consumer-range")
+        .setMetadata("test".getBytes())
+    ).iterator())
+
+    new JoinGroupRequest.Builder(
+      new JoinGroupRequestData()
+        .setGroupId(group)
+        .setSessionTimeoutMs(10000)
+        .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+        .setProtocolType("consumer")
+        .setProtocols(protocolSet)
+        .setRebalanceTimeoutMs(60000)
+    ).build()
   }
 
   private def createSyncGroupRequest = {
