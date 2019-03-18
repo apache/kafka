@@ -43,6 +43,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Before
   override def setUp() {
+    ZooKeeperTestHarness.verifyNoUnexpectedThreads("@Before")
     cleanMetricsRegistry()
     super.setUp()
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
@@ -55,6 +56,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       zooKeeperClient.close()
     super.tearDown()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
+    ZooKeeperTestHarness.verifyNoUnexpectedThreads("@After")
   }
 
   @Test
@@ -596,6 +598,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
         }
       })
       assertFalse("Close completed without shutting down expiry scheduler gracefully", closeFuture.isDone)
+      assertTrue(zooKeeperClient.currentZooKeeper.getState.isAlive) // Client should be closed after expiry handler
       semaphore.release()
       closeFuture.get(10, TimeUnit.SECONDS)
       assertFalse("Expiry executor not shutdown", zooKeeperClient.expiryScheduler.isStarted)
