@@ -34,6 +34,7 @@ import java.util.Collection;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 
 @RunWith(PowerMockRunner.class)
 public class ConnectClusterStateImplTest {
@@ -66,7 +67,6 @@ public class ConnectClusterStateImplTest {
         assertEquals(expectedConnectors, connectClusterState.connectors());
     }
 
-    @Test(expected = ConnectException.class)
     public void connectorsFailure() {
         Capture<Callback<Collection<String>>> callback = EasyMock.newCapture();
         herder.connectors(EasyMock.capture(callback));
@@ -79,6 +79,6 @@ public class ConnectClusterStateImplTest {
             }
         });
         EasyMock.replay(herder);
-        connectClusterState.connectors();
+        assertThrows(ConnectException.class, connectClusterState::connectors);
     }
 }
