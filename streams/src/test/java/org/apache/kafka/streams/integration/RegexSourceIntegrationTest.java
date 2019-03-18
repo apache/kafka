@@ -57,7 +57,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.UUID;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
@@ -113,7 +112,8 @@ public class RegexSourceIntegrationTest {
         CLUSTER.createTopic(PARTITIONED_TOPIC_1, 2, 1);
         CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, 1);
 
-        streamsConfiguration = StreamsTestUtils.getStreamsConfig(UUID.randomUUID().toString(),
+        streamsConfiguration = StreamsTestUtils.getStreamsConfig(
+            UUID.randomUUID().toString(),
             CLUSTER.bootstrapServers(),
             STRING_SERDE_CLASSNAME,
             STRING_SERDE_CLASSNAME,
@@ -142,7 +142,7 @@ public class RegexSourceIntegrationTest {
         final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
-        final List<String> assignedTopics = new CopyOnWriteArrayList<>();
+        final List<String> assignedTopics = new ArrayList<>();
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfig, new DefaultKafkaClientSupplier() {
             @Override
             public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
@@ -196,7 +196,7 @@ public class RegexSourceIntegrationTest {
 
         pattern1Stream.to(stringSerde, stringSerde, DEFAULT_OUTPUT_TOPIC);
 
-        final List<String> assignedTopics = new CopyOnWriteArrayList<>();
+        final List<String> assignedTopics = new ArrayList<>();
         final KafkaStreams streams = new KafkaStreams(builder.build(), streamsConfig, new DefaultKafkaClientSupplier() {
             @Override
             public Consumer<byte[], byte[]> getConsumer(final Map<String, Object> config) {
