@@ -149,7 +149,7 @@
         </table>
         <div class="admonition tip">
           <p><b>Tip</b></p>
-          <p class="last"><a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/utils/Bytes.java">Bytes</a> is a wrapper for Java&#8217;s <code class="docutils literal"><span class="pre">byte[]</span></code> (byte array) that supports proper equality and ordering semantics.  You may want to consider using <code class="docutils literal"><span class="pre">Bytes</span></code> instead of <code class="docutils literal"><span class="pre">byte[]</span></code> in your applications.</p>
+          <p class="last"><a class="reference external" href="https://github.com/apache/kafka/blob/2.2/clients/src/main/java/org/apache/kafka/common/utils/Bytes.java">Bytes</a> is a wrapper for Java&#8217;s <code class="docutils literal"><span class="pre">byte[]</span></code> (byte array) that supports proper equality and ordering semantics.  You may want to consider using <code class="docutils literal"><span class="pre">Bytes</span></code> instead of <code class="docutils literal"><span class="pre">byte[]</span></code> in your applications.</p>
         </div>
       </div>
       <div class="section" id="json">
@@ -167,13 +167,13 @@
           existing SerDes (see previous section).  Typically, your workflow will be similar to:</p>
         <ol class="arabic simple">
           <li>Write a <em>serializer</em> for your data type <code class="docutils literal"><span class="pre">T</span></code> by implementing
-            <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/serialization/Serializer.java">org.apache.kafka.common.serialization.Serializer</a>.</li>
+            <a class="reference external" href="https://github.com/apache/kafka/blob/2.2/clients/src/main/java/org/apache/kafka/common/serialization/Serializer.java">org.apache.kafka.common.serialization.Serializer</a>.</li>
           <li>Write a <em>deserializer</em> for <code class="docutils literal"><span class="pre">T</span></code> by implementing
-            <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/serialization/Deserializer.java">org.apache.kafka.common.serialization.Deserializer</a>.</li>
+            <a class="reference external" href="https://github.com/apache/kafka/blob/2.2/clients/src/main/java/org/apache/kafka/common/serialization/Deserializer.java">org.apache.kafka.common.serialization.Deserializer</a>.</li>
           <li>Write a <em>serde</em> for <code class="docutils literal"><span class="pre">T</span></code> by implementing
-            <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/serialization/Serde.java">org.apache.kafka.common.serialization.Serde</a>,
+            <a class="reference external" href="https://github.com/apache/kafka/blob/2.2/clients/src/main/java/org/apache/kafka/common/serialization/Serde.java">org.apache.kafka.common.serialization.Serde</a>,
             which you either do manually (see existing SerDes in the previous section) or by leveraging helper functions in
-            <a class="reference external" href="https://github.com/apache/kafka/blob/1.0/clients/src/main/java/org/apache/kafka/common/serialization/Serdes.java">Serdes</a>
+            <a class="reference external" href="https://github.com/apache/kafka/blob/2.2/clients/src/main/java/org/apache/kafka/common/serialization/Serdes.java">Serdes</a>
             such as <code class="docutils literal"><span class="pre">Serdes.serdeFrom(Serializer&lt;T&gt;, Deserializer&lt;T&gt;)</span></code>.
             Note that you will need to implement your own class (that has no generic types) if you want to use your custom serde in the configuration provided to <code class="docutils literal"><span class="pre">KafkaStreams</span></code>.
             If your serde class has generic types or you use <code class="docutils literal"><span class="pre">Serdes.serdeFrom(Serializer&lt;T&gt;, Deserializer&lt;T&gt;)</span></code>, you can pass your serde only
