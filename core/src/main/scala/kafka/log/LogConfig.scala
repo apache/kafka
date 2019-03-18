@@ -67,7 +67,7 @@ object Defaults {
 }
 
 case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] = Set.empty)
-  extends AbstractConfig(LogConfig.configDef, props, false) {
+  extends AbstractConfig(LogConfig.configDef, props, false, false) {
   /**
    * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
    * should also go in [[kafka.server.KafkaServer.copyKafkaConfigToLog]].

@@ -14,20 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.transforms.util;
+package org.apache.kafka.common.config.provider;
 
-import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigDef;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
 
-import java.util.Map;
+public class MockFileConfigProvider extends FileConfigProvider {
 
-/**
- * A barebones concrete implementation of {@link AbstractConfig}.
- */
-public class SimpleConfig extends AbstractConfig {
-
-    public SimpleConfig(ConfigDef configDef, Map<?, ?> originals) {
-        super(configDef, originals, false, false);
+    @Override
+    protected Reader reader(String path) throws IOException {
+        return new StringReader("key=testKey\npassword=randomPassword");
     }
-
 }

@@ -835,6 +835,8 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
+  /** ********* Flag to enable/disable auto resolution of indirect variables in AbstractConfig *********/
+  val enableIndirectResolution = false
   private val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
@@ -1101,7 +1103,7 @@ object KafkaConfig {
 }
 
 class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigOverride: Option[DynamicBrokerConfig])
-  extends AbstractConfig(KafkaConfig.configDef, props, doLog) {
+  extends AbstractConfig(KafkaConfig.configDef, props, doLog, KafkaConfig.enableIndirectResolution) {
 
   def this(props: java.util.Map[_, _]) = this(props, true, None)
   def this(props: java.util.Map[_, _], doLog: Boolean) = this(props, doLog, None)

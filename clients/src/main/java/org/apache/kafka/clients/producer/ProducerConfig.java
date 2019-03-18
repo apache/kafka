@@ -49,6 +49,8 @@ public class ProducerConfig extends AbstractConfig {
 
     private static final ConfigDef CONFIG;
 
+    private static final boolean ENABLE_INDIRECT_RESOLUTION = false;
+
     /** <code>bootstrap.servers</code> */
     public static final String BOOTSTRAP_SERVERS_CONFIG = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 
@@ -397,7 +399,7 @@ public class ProducerConfig extends AbstractConfig {
     }
 
     ProducerConfig(Map<?, ?> props, boolean doLog) {
-        super(CONFIG, props, doLog);
+        super(CONFIG, props, doLog, ENABLE_INDIRECT_RESOLUTION);
     }
 
     public static Set<String> configNames() {
