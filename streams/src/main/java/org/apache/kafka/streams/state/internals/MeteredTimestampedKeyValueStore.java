@@ -48,11 +48,13 @@ public class MeteredTimestampedKeyValueStore<K, V>
 
     @SuppressWarnings("unchecked")
     void initStoreSerde(final ProcessorContext context) {
-        if (keySerde != null) {
-            keySerde.configure(context.appConfigs(), true);
-        }
-        if (valueSerde != null) {
-            valueSerde.configure(context.appConfigs(), false);
+        if (context.appConfigs() != null) {
+            if (keySerde != null) {
+                keySerde.configure(context.appConfigs(), true);
+            }
+            if (valueSerde != null) {
+                valueSerde.configure(context.appConfigs(), false);
+            }
         }
         serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),

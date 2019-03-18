@@ -38,6 +38,9 @@ public class Serdes {
 
         @Override
         public void configure(Map<String, ?> configs, boolean isKey) {
+            if (configs == null) {
+                return;
+            }
             serializer.configure(configs, isKey);
             deserializer.configure(configs, isKey);
         }
