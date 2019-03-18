@@ -20,7 +20,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -70,10 +69,9 @@ public class MeteredWindowStore<K, V>
 
     @Override
     public void init(final ProcessorContext context,
-                     final StateStore root,
-                     final StreamsConfig config) {
+                     final StateStore root) {
         this.context = context;
-        initStoreSerde(context, config);
+        initStoreSerde(context);
         metrics = (StreamsMetricsImpl) context.metrics();
 
         taskName = context.taskId().toString();
@@ -100,12 +98,12 @@ public class MeteredWindowStore<K, V>
     }
 
     @SuppressWarnings("unchecked")
-    void initStoreSerde(final ProcessorContext context, final StreamsConfig config) {
+    void initStoreSerde(final ProcessorContext context) {
         if (keySerde != null) {
-            keySerde.configure(config.originals(), true);
+            keySerde.configure(context.appConfigs(), true);
         }
         if (valueSerde != null) {
-            valueSerde.configure(config.originals(), false);
+            valueSerde.configure(context.appConfigs(), false);
         }
         serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),

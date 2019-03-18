@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 
 /**
@@ -62,7 +61,7 @@ public interface StateStore {
      * @throws IllegalStateException If store gets registered after initialized is already finished
      * @throws StreamsException if the store's change log does not contain the partition
      */
-    void init(ProcessorContext context, StateStore root, StreamsConfig config);
+    void init(ProcessorContext context, StateStore root);
 
     /**
      * Flush any cached data

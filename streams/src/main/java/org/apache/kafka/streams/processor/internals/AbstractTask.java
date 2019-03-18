@@ -52,7 +52,6 @@ public abstract class AbstractTask implements Task {
     final Logger log;
     final LogContext logContext;
     final StateDirectory stateDirectory;
-    final StreamsConfig config;
 
     boolean taskInitialized;
     boolean taskClosed;
@@ -71,7 +70,6 @@ public abstract class AbstractTask implements Task {
                  final boolean isStandby,
                  final StateDirectory stateDirectory,
                  final StreamsConfig config) {
-        this.config = config;
         this.id = id;
         this.applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.partitions = new HashSet<>(partitions);
@@ -233,7 +231,7 @@ public abstract class AbstractTask implements Task {
         for (final StateStore store : topology.stateStores()) {
             log.trace("Initializing store {}", store.name());
             processorContext.uninitialize();
-            store.init(processorContext, store, config);
+            store.init(processorContext, store);
         }
     }
 

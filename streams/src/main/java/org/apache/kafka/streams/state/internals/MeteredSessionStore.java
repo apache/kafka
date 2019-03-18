@@ -20,7 +20,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -68,14 +67,13 @@ public class MeteredSessionStore<K, V>
     @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context,
-                     final StateStore root,
-                     final StreamsConfig config) {
+                     final StateStore root) {
         //noinspection unchecked
         if (keySerde != null) {
-            keySerde.configure(config.originals(), true);
+            keySerde.configure(context.appConfigs(), true);
         }
         if (valueSerde != null) {
-            valueSerde.configure(config.originals(), false);
+            valueSerde.configure(context.appConfigs(), false);
         }
         serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
