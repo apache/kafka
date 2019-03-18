@@ -3548,6 +3548,7 @@ val clicksPerRegion: KTable[String, Long] =
 clicksPerRegion.toStream.to(outputTopic)
               </pre>
               <p>A complete example of user-defined SerDes can be found in a test class within the library.</p>
+              <p>The auto-configure of user-defined SerDes would be done at KafkaStreams construction time.</p>
             </div>
         </div>
 </div>

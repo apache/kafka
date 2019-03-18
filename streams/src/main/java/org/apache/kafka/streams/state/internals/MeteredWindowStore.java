@@ -99,6 +99,12 @@ public class MeteredWindowStore<K, V>
 
     @SuppressWarnings("unchecked")
     void initStoreSerde(final ProcessorContext context) {
+        if (keySerde != null) {
+            keySerde.configure(context.appConfigs(), true);
+        }
+        if (valueSerde != null) {
+            valueSerde.configure(context.appConfigs(), false);
+        }
         serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
