@@ -560,7 +560,7 @@
 <span class="kn">import</span> <span class="nn">org.apache.kafka.streams.StreamsConfig</span><span class="o">;</span>
 
 <span class="n">Properties</span> <span class="n">streamsConfiguration</span> <span class="o">=</span> <span class="k">new</span> <span class="n">Properties</span><span class="o">();</span>
-<span class="n">streamsConfiguration</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">TIMESTAMP_EXTRACTOR_CLASS_CONFIG</span><span class="o">,</span> <span class="n">MyEventTimeExtractor</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
+<span class="n">streamsConfiguration</span><span class="o">.</span><span class="na">put</span><span class="o">(</span><span class="n">StreamsConfig</span><span class="o">.</span><span class="na">DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG</span><span class="o">,</span> <span class="n">MyEventTimeExtractor</span><span class="o">.</span><span class="na">class</span><span class="o">);</span>
 </pre></div>
               </div>
             </div></blockquote>
