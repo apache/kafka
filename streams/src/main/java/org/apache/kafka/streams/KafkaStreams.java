@@ -655,6 +655,7 @@ public class KafkaStreams implements AutoCloseable {
             }
         }
     }
+
     private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
                          final StreamsConfig config,
                          final KafkaClientSupplier clientSupplier,

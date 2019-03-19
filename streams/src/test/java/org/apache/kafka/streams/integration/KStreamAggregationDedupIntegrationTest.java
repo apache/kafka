@@ -239,6 +239,7 @@ public class KStreamAggregationDedupIntegrationTest {
             return true;
         }
     }
+
     @Test
     @SuppressWarnings("unchecked")
     public void shouldGroupByKey() throws Exception {
