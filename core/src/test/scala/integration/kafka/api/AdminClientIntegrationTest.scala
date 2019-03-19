@@ -1180,7 +1180,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
         }
         try {
           consumerThread.start
-         assertTrue(latch.await(30000, TimeUnit.MILLISECONDS))
+          assertTrue(latch.await(30000, TimeUnit.MILLISECONDS))
           // Test that we can list the new group.
           TestUtils.waitUntilTrue(() => {
             val matching = client.listConsumerGroups.all.get().asScala.filter(_.groupId == testGroupId)
