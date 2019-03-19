@@ -22,6 +22,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.requests.JoinGroupRequest
 import org.apache.kafka.common.utils.Time
 
@@ -378,10 +379,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     receivedTransactionalOffsetCommits = false
   }
 
-  def currentMemberMetadata: Map[String, Array[Byte]] = {
+  def currentMemberMetadata: List[JoinGroupResponseMember] = {
     if (is(Dead) || is(PreparingRebalance))
       throw new IllegalStateException("Cannot obtain member metadata for group in state %s".format(state))
-    members.map{ case (memberId, memberMetadata) => (memberId, memberMetadata.metadata(protocol.get))}.toMap
+    members.map{ case (memberId, memberMetadata) => new JoinGroupResponseMember()
+        .setMemberId(memberId)
+        .setGroupInstanceId(memberMetadata.groupInstanceId)
+        .setMetadata(memberMetadata.metadata(protocol.get))
+    }.toList
   }
 
   def summary: GroupSummary = {

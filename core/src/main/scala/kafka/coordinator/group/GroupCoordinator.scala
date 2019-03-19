@@ -27,6 +27,7 @@ import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch.{NO_PRODUCER_EPOCH, NO_PRODUCER_ID}
 import org.apache.kafka.common.requests._
@@ -197,7 +198,7 @@ class GroupCoordinator(val brokerId: Int,
               members = if (group.isLeader(newMemberId)) {
                 group.currentMemberMetadata
               } else {
-                Map.empty
+                List.empty
               },
               memberId = newMemberId,
               generationId = group.generationId,
@@ -280,7 +281,7 @@ class GroupCoordinator(val brokerId: Int,
                   members = if (group.isLeader(memberId)) {
                     group.currentMemberMetadata
                   } else {
-                    Map.empty
+                    List.empty
                   },
                   memberId = memberId,
                   generationId = group.generationId,
@@ -303,7 +304,7 @@ class GroupCoordinator(val brokerId: Int,
                 // for followers with no actual change to their metadata, just return group information
                 // for the current generation which will allow them to issue SyncGroup
                 responseCallback(JoinGroupResult(
-                  members = Map.empty,
+                  members = List.empty,
                   memberId = memberId,
                   generationId = group.generationId,
                   subProtocol = group.protocolOrNull,
@@ -767,7 +768,7 @@ class GroupCoordinator(val brokerId: Int,
 
   private def joinError(memberId: String, error: Errors): JoinGroupResult = {
     JoinGroupResult(
-      members = Map.empty,
+      members = List.empty,
       memberId = memberId,
       generationId = GroupCoordinator.NoGeneration,
       subProtocol = GroupCoordinator.NoProtocol,
@@ -956,7 +957,7 @@ class GroupCoordinator(val brokerId: Int,
               members = if (group.isLeader(member.memberId)) {
                 group.currentMemberMetadata
               } else {
-                Map.empty
+                List.empty
               },
               memberId = member.memberId,
               generationId = group.generationId,
@@ -1081,7 +1082,8 @@ case class GroupConfig(groupMinSessionTimeoutMs: Int,
                        groupMaxSize: Int,
                        groupInitialRebalanceDelayMs: Int)
 
-case class JoinGroupResult(members: Map[String, Array[Byte]],
+//case class JoinGroupResult(members: Map[String, Array[Byte]],
+case class JoinGroupResult(members: List[JoinGroupResponseMember],
                            memberId: String,
                            generationId: Int,
                            subProtocol: String,

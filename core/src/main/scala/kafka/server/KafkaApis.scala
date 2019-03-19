@@ -1282,12 +1282,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for sending a join-group response
     def sendResponseCallback(joinResult: JoinGroupResult) {
-      val members = joinResult.members map { case (memberId, metadataArray) =>
-        new JoinGroupResponseData.JoinGroupResponseMember()
-          .setMemberId(memberId)
-          .setMetadata(metadataArray)
-      }
-
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
         val responseBody = new JoinGroupResponse(
           new JoinGroupResponseData()
@@ -1297,7 +1291,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setProtocolName(joinResult.subProtocol)
             .setLeader(joinResult.leaderId)
             .setMemberId(joinResult.memberId)
-            .setMembers(members.toSeq.asJava)
+            .setMembers(joinResult.members.asJava)
         )
 
         trace("Sending join group response %s for correlation id %d to client %s."
