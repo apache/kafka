@@ -19,6 +19,7 @@ package kafka.tools
 
 import joptsimple._
 
+import scala.io
 import scala.util.matching.Regex
 import collection.mutable
 import java.util.Date
