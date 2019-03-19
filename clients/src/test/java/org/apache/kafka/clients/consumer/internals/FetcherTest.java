@@ -3186,7 +3186,7 @@ public class FetcherTest {
         subscriptions.seek(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1), leaderAndEpoch));
 
         // Check for truncation, this should cause tp0 to go into validation
-        fetcher.checkForTruncation();
+        fetcher.checkForLeaderChange();
 
         // No fetches sent since we entered validation
         assertEquals(0, fetcher.sendFetches());

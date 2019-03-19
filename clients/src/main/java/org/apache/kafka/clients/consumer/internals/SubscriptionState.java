@@ -23,9 +23,11 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
@@ -39,7 +41,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.function.BiConsumer;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collector;
@@ -362,9 +363,8 @@ public class SubscriptionState {
         assignedState(tp).position(position);
     }
 
-    public boolean maybeValidatePosition(TopicPartition tp, Metadata.LeaderAndEpoch leaderAndEpoch,
-                                         BiConsumer<Metadata.LeaderAndEpoch, Integer> ifNeedsValidationConsumer) {
-        return assignedState(tp).maybeValidatePosition(leaderAndEpoch, ifNeedsValidationConsumer);
+    public boolean maybeValidatePosition(TopicPartition tp, Metadata.LeaderAndEpoch leaderAndEpoch) {
+        return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
     }
 
     public boolean awaitingValidation(TopicPartition tp) {
@@ -479,6 +479,11 @@ public class SubscriptionState {
                 Collectors.toSet());
     }
 
+    public Set<TopicPartition> partitionsNeedingValidation(long nowMs) {
+        return collectPartitions(state -> state.awaitingValidation() && !state.awaitingRetryBackoff(nowMs),
+                Collectors.toSet());
+    }
+
     public boolean isAssigned(TopicPartition tp) {
         return assignment.contains(tp);
     }
@@ -531,6 +536,80 @@ public class SubscriptionState {
             map.put(tp, new TopicPartitionState());
         return map;
     }
+    /*
+
+    public static class RetriableAsyncRequest {
+
+        private final Logger log = null;
+
+        private boolean active = false;
+
+        private long nextRetryTimeMs = 0;
+
+        private final Supplier<Set<TopicPartition>> partitionSupplier;
+
+        private final Function<TopicPartition, Long> partitionTransformer;
+
+        private final Function<Map<TopicPartition, Long>, RequestFuture<Fetcher.ListOffsetResult>> asyncRequest;
+
+        private final AtomicReference<RuntimeException> cachedException = new AtomicReference<>(null);
+
+        private final RequestFutureListener<Fetcher.ListOffsetResult> futureListener;
+
+        RetriableAsyncRequest(Supplier<Set<TopicPartition>> partitionSupplier,
+                              Function<TopicPartition, Long> partitionTransformer,
+                              Function<Map<TopicPartition, Long>, RequestFuture<Fetcher.ListOffsetResult>> asyncRequest,
+                              RequestFutureListener<Fetcher.ListOffsetResult> futureListener) {
+            this.partitionSupplier = partitionSupplier;
+            this.partitionTransformer = partitionTransformer;
+            this.asyncRequest = asyncRequest;
+            this.futureListener = futureListener;
+        }
+
+        public void apply(Time time) {
+            partitionSupplier.get().stream().filter()
+
+
+            if (!awaitingRetryBackoff(time.milliseconds())) {
+
+            }
+
+            RequestFuture<Fetcher.ListOffsetResult> future = asyncRequest.apply(dataSupplier.get());
+            future.addListener(new RequestFutureListener<Fetcher.ListOffsetResult>() {
+                @Override
+                public void onSuccess(Fetcher.ListOffsetResult value) {
+                    futureListener.onSuccess(value);
+                }
+
+                @Override
+                public void onFailure(RuntimeException e) {
+                    if (!(e instanceof RetriableException) && !cachedException.compareAndSet(null, e))
+                        log.error("Discarding error in ListOffsetResponse because another error is pending", e);
+                    futureListener.onFailure(e);
+                }
+            });
+        }
+
+        private boolean awaitingRetryBackoff(long nowMs) {
+            return active && nowMs < nextRetryTimeMs;
+        }
+
+        private void setNextAllowedRetry(long nextAllowedRetryTimeMs) {
+            this.active = true;
+            this.nextRetryTimeMs = nextAllowedRetryTimeMs;
+        }
+
+        private void retryFailed(long nextAllowedRetryTimeMs) {
+            this.active = true;
+            this.nextRetryTimeMs = nextAllowedRetryTimeMs;
+        }
+
+        public void reset() {
+            this.active = false;
+            this.nextRetryTimeMs = 0;
+        }
+    }
+    */
 
     private static class TopicPartitionState {
 
@@ -569,16 +648,13 @@ public class SubscriptionState {
             this.nextRetryTimeMs = null;
         }
 
-        private boolean maybeValidatePosition(
-                Metadata.LeaderAndEpoch currentLeader,
-                BiConsumer<Metadata.LeaderAndEpoch, Integer> ifNeedsValidationConsumer) {
+        private boolean maybeValidatePosition(Metadata.LeaderAndEpoch currentLeader) {
             if (!hasPosition())
                 throw new IllegalStateException("Cannot validate offset while partition is in state " + state);
 
             this.position = new FetchPosition(position.offset, position.lastFetchEpoch, currentLeader);
             // If we have no epoch information for the current position, then we can skip validation.
             if (position.lastFetchEpoch.isPresent()) {
-                ifNeedsValidationConsumer.accept(this.position.currentLeader, this.position.lastFetchEpoch.get());
                 this.state = FetchState.AWAIT_VALIDATION;
                 return true;
             } else {
@@ -592,7 +668,8 @@ public class SubscriptionState {
          */
         private void validate() {
             if (hasPosition()) {
-                state = FetchState.FETCHING;
+                this.state = FetchState.FETCHING;
+                this.nextRetryTimeMs = null;
             }
         }
 

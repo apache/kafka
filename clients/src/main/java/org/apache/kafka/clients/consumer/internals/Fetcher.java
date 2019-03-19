@@ -18,13 +18,10 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataCache;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.LogTruncationException;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -49,7 +46,6 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.Value;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.BufferSupplier;
 import org.apache.kafka.common.record.ControlRecordType;
@@ -66,7 +62,6 @@ import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.LogContext;
@@ -140,6 +135,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
     private final AtomicReference<RuntimeException> cachedListOffsetsException = new AtomicReference<>();
 
+    private final OffsetFetcher offsetFetcher;
+
+
     private PartitionRecords nextInLineRecords = null;
 
     public Fetcher(LogContext logContext,
@@ -180,6 +178,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
         this.isolationLevel = isolationLevel;
         this.sessionHandlers = new HashMap<>();
+        this.offsetFetcher = new OffsetFetcher(metadata, subscriptions, client, time, requestTimeoutMs, retryBackoffMs);
 
         subscriptions.addListener(this);
     }
@@ -871,7 +870,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             future.complete(new ListOffsetResult(fetchedOffsets, partitionsToRetry));
     }
 
-    private static class ListOffsetResult {
+    static class ListOffsetResult {
         private final Map<TopicPartition, ListOffsetData> fetchedOffsets;
         private final Set<TopicPartition> partitionsToRetry;
 
@@ -923,25 +922,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             } else {
                 // TODO safe to get leader-and-epoch here? Should we use the info in partitionInfoAndEpoch?
                 ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
-
                 SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
-
-                /*
-
-
-
-                // If the leader or epoch have changed, we need to validate the fetch position
-                if (!position.safeToFetchFrom(leaderAndEpoch)) {
-                    if (position.lastFetchEpoch.isPresent()) {
-                        boolean nowAwaitingValidation = subscriptions.maybeValidatePosition(partition, leaderAndEpoch,
-                            (lae, lfe) -> partitionsToValidate.put(partition, new OffsetsForLeaderEpochRequest.PartitionData(lae.epoch, lfe)));
-                        if (nowAwaitingValidation) {
-                            continue;
-                        }
-                    }
-                    // If the last fetch epoch is not known, we can't do any validation so we just continue with the fetch.
-                }
-                */
 
                 // if there is a leader and no in-flight requests, issue a new fetch
                 FetchSessionHandler.Builder builder = fetchable.get(leaderAndEpoch.leader);
@@ -965,20 +946,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             }
         }
 
-        /*
-        if (!partitionsToValidate.isEmpty()) {
-            // Send off the OffsetsForLeader requests asynchronously
-            Map<Node, Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData>> regrouped =
-                    regroupPartitionMapByNode(partitionsToValidate);
-
-            regrouped.forEach((node, dataMap) -> {
-                OffsetsForLeaderEpochRequest.Builder builder = new OffsetsForLeaderEpochRequest.Builder(
-                        ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), dataMap);
-                sendOffsetForLeaderEpochRequest(node, builder);
-            });
-        }
-        */
-
         Map<Node, FetchSessionHandler.FetchRequestData> reqs = new LinkedHashMap<>();
         for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet()) {
             reqs.put(entry.getKey(), entry.getValue().build());
@@ -987,10 +954,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     }
 
     /**
-     *
+     *  Check if any assigned partitions need to have their offsets validated due to a leader change
      */
-    public void checkForTruncation() {
-        Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> partitionsToValidate = new LinkedHashMap<>();
+    public void checkForLeaderChange() {
+        offsetFetcher.clearAndMaybeThrowException();
 
         subscriptions.assignedPartitions().forEach(topicPartition -> {
             ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
@@ -1001,26 +968,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             // If the leader or epoch have changed, we need to validate the fetch position
             if (position != null && !position.safeToFetchFrom(leaderAndEpoch)) {
                 if (position.lastFetchEpoch.isPresent()) {
-                    subscriptions.maybeValidatePosition(topicPartition, leaderAndEpoch,
-                        (lae, lfe) -> partitionsToValidate.put(topicPartition,
-                            new OffsetsForLeaderEpochRequest.PartitionData(lae.epoch, lfe)));
-
+                    subscriptions.maybeValidatePosition(topicPartition, leaderAndEpoch);
                 }
             }
         });
 
-        if (!partitionsToValidate.isEmpty()) {
-            // Send off the OffsetsForLeader requests asynchronously
-            Map<Node, Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData>> regrouped =
-                    regroupPartitionMapByNode(partitionsToValidate);
-
-            regrouped.forEach((node, dataMap) -> {
-                OffsetsForLeaderEpochRequest.Builder builder = new OffsetsForLeaderEpochRequest.Builder(
-                        ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), dataMap);
-                sendOffsetForLeaderEpochRequest(node, builder);
-            });
-        }
-
+        offsetFetcher.validateOffsetsAsync();
     }
 
     private <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(Map<TopicPartition, T> partitionMap) {
@@ -1028,48 +981,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 .stream()
                 .collect(Collectors.groupingBy(entry -> metadata.fetch().leaderFor(entry.getKey()),
                         Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
-    }
-
-    private RequestFuture<OffsetsForLeaderEpochResponse> sendOffsetForLeaderEpochRequest(
-            Node node, OffsetsForLeaderEpochRequest.Builder builder) {
-
-        return client.send(node, builder).compose(new RequestFutureAdapter<ClientResponse, OffsetsForLeaderEpochResponse>() {
-            @Override
-            public void onSuccess(ClientResponse response, RequestFuture<OffsetsForLeaderEpochResponse> future) {
-                OffsetsForLeaderEpochResponse ofler = (OffsetsForLeaderEpochResponse) response.responseBody();
-                log.trace("Received OffsetsForLeaderEpochResponse {} from broker {}", ofler, node);
-
-                Map<TopicPartition, OffsetAndMetadata> truncationWithoutResetPolicy = new HashMap<>();
-                ofler.responses().forEach((respTopicPartition, respEndOffset) -> {
-                    // For each OffsetsForLeader response, check for truncation. This occurs iff the end offset is lower
-                    // than our current offset
-                    if (subscriptions.awaitingValidation(respTopicPartition)) {
-                        SubscriptionState.FetchPosition currentPosition = subscriptions.position(respTopicPartition);
-                        if (respEndOffset.endOffset() < currentPosition.offset) {
-                            // Try to reset the offset
-                            if (subscriptions.hasDefaultOffsetResetPolicy()) {
-                                log.info("Truncation detected for partition {}, resetting offset", respTopicPartition);
-                                subscriptions.requestOffsetReset(respTopicPartition);
-                                Metadata.LeaderAndEpoch currentLeader = metadata.leaderAndEpoch(respTopicPartition);
-                                SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
-                                        respEndOffset.endOffset(), Optional.of(respEndOffset.leaderEpoch()), currentLeader);
-                                subscriptions.position(respTopicPartition, newPosition);
-                            } else {
-                                log.warn("Truncation detected for partition {}, but no reset policy is set", respTopicPartition);
-                                truncationWithoutResetPolicy.put(respTopicPartition, new OffsetAndMetadata(
-                                        respEndOffset.endOffset(), Optional.of(respEndOffset.leaderEpoch()), null));
-                            }
-                        } else {
-                            // Offset is fine, clear the validation state
-                            subscriptions.validate(respTopicPartition);
-                        }
-                    }
-                });
-                if (!truncationWithoutResetPolicy.isEmpty()) {
-                    throw new LogTruncationException(truncationWithoutResetPolicy);
-                }
-            }
-        });
     }
 
     /**
