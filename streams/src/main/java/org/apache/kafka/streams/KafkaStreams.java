@@ -191,7 +191,7 @@ public class KafkaStreams implements AutoCloseable {
      *   the instance will be in the ERROR state. The user will need to close it.
      */
     public enum State {
-        CREATED(1, 3), REBALANCING(2, 3, 5), RUNNING(1, 3, 5), PENDING_SHUTDOWN(4), NOT_RUNNING, ERROR(3, 5);
+        CREATED(1, 3), REBALANCING(2, 3, 5), RUNNING(1, 3, 5), PENDING_SHUTDOWN(4), NOT_RUNNING, ERROR(3);
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -857,7 +857,6 @@ public class KafkaStreams implements AutoCloseable {
                 // notify all the threads to stop; avoid deadlocks by stopping any
                 // further state reports from the thread since we're shutting down
                 for (final StreamThread thread : threads) {
-                    thread.setStateListener(null);
                     thread.shutdown();
                 }
 
@@ -872,7 +871,6 @@ public class KafkaStreams implements AutoCloseable {
                 }
 
                 if (globalStreamThread != null) {
-                    globalStreamThread.setStateListener(null);
                     globalStreamThread.shutdown();
                 }
 
