@@ -53,7 +53,8 @@ class TransactionIndex(val startOffset: Long, @volatile var file: File) extends 
   def append(abortedTxn: AbortedTxn): Unit = {
     lastOffset.foreach { offset =>
       if (offset >= abortedTxn.lastOffset)
-        throw new IllegalArgumentException(s"The last offset of appended transactions must increase sequentially (${file.getAbsolutePath})")
+        throw new IllegalArgumentException(s"The last offset of appended transactions must increase sequentially, but " +
+          s"${abortedTxn.lastOffset} is not greater than current last offset $offset of index ${file.getAbsolutePath}")
     }
     lastOffset = Some(abortedTxn.lastOffset)
     Utils.writeFully(channel, abortedTxn.buffer.duplicate())
