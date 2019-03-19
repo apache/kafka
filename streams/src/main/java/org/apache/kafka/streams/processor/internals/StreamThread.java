@@ -269,7 +269,6 @@ public class StreamThread extends Thread {
             if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
                 log.error("Received error code {} - shutdown", streamThread.assignmentErrorCode.get());
                 streamThread.shutdown();
-                streamThread.setStateListener(null);
                 return;
             }
             final long start = time.milliseconds();
