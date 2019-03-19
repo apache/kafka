@@ -25,9 +25,9 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
-class OffsetFetcher {
+class OffsetsForLeaderEpochFetcher {
 
-    private static final Logger log = LoggerFactory.getLogger(OffsetFetcher.class);
+    private static final Logger log = LoggerFactory.getLogger(OffsetsForLeaderEpochFetcher.class);
 
     private final Metadata metadata;
     private final SubscriptionState subscriptions;
@@ -37,14 +37,14 @@ class OffsetFetcher {
     private final long retryBackoffMs;
     private final AtomicReference<RuntimeException> cachedOffsetForLeaderException = new AtomicReference<>();
 
-    OffsetFetcher(Metadata metadata, SubscriptionState subscriptions, ConsumerNetworkClient client, Time time, long requestTimeoutMs, long retryBackoffMs) {
+    OffsetsForLeaderEpochFetcher(Metadata metadata, SubscriptionState subscriptions, ConsumerNetworkClient client,
+                                 Time time, long requestTimeoutMs, long retryBackoffMs) {
         this.metadata = metadata;
         this.subscriptions = subscriptions;
         this.client = client;
         this.time = time;
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
-
     }
 
     private <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(Map<TopicPartition, T> partitionMap) {

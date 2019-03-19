@@ -135,7 +135,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
     private final AtomicReference<RuntimeException> cachedListOffsetsException = new AtomicReference<>();
 
-    private final OffsetFetcher offsetFetcher;
+    private final OffsetsForLeaderEpochFetcher offsetsForLeaderEpochFetcher;
 
 
     private PartitionRecords nextInLineRecords = null;
@@ -178,7 +178,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
         this.isolationLevel = isolationLevel;
         this.sessionHandlers = new HashMap<>();
-        this.offsetFetcher = new OffsetFetcher(metadata, subscriptions, client, time, requestTimeoutMs, retryBackoffMs);
+        this.offsetsForLeaderEpochFetcher = new OffsetsForLeaderEpochFetcher(metadata, subscriptions, client, time, requestTimeoutMs, retryBackoffMs);
 
         subscriptions.addListener(this);
     }
@@ -957,7 +957,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      *  Check if any assigned partitions need to have their offsets validated due to a leader change
      */
     public void checkForLeaderChange() {
-        offsetFetcher.clearAndMaybeThrowException();
+        offsetsForLeaderEpochFetcher.clearAndMaybeThrowException();
 
         subscriptions.assignedPartitions().forEach(topicPartition -> {
             ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
@@ -973,7 +973,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             }
         });
 
-        offsetFetcher.validateOffsetsAsync();
+        offsetsForLeaderEpochFetcher.validateOffsetsAsync();
     }
 
     private <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(Map<TopicPartition, T> partitionMap) {
