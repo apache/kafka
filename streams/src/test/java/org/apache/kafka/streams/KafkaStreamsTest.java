@@ -496,6 +496,7 @@ public class KafkaStreamsTest {
             return !called || configured;
         }
     }
+
     static class MyStringDeserializer extends StringDeserializer {
         boolean configured = false;
         boolean called = false;
@@ -505,6 +506,7 @@ public class KafkaStreamsTest {
             super.configure(configs, isKey);
             configured = true;
         }
+
         @Override
         public String deserialize(final String topic, final byte[] data) {
             called = true;
@@ -525,12 +527,14 @@ public class KafkaStreamsTest {
         public void configure(final Map<String, ?> configs, final boolean isKey) {
             super.configure(configs, isKey);
         }
+
         public boolean configured() {
             if (!((MyStringSerializer) this.serializer()).configured()) return false;
             if (!((MyStringDeserializer) this.deserializer()).configured()) return false;
             return true;
         }
     }
+
     @Test
     @SuppressWarnings("unchecked")
     public void shouldReturnFalseOnCloseWhenThreadsHaventTerminated() throws Exception {

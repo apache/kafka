@@ -115,18 +115,28 @@ public class MeteredKeyValueStore<K, V>
 
     @SuppressWarnings("unchecked")
     void initStoreSerde(final ProcessorContext context) {
-        if (context.appConfigs() != null) {
-            if (keySerde != null) {
-                keySerde.configure(context.appConfigs(), true);
+        final Serde<K> usedKeySerde;
+        final Serde<V> usedValueSerde;
+        if (keySerde == null) {
+            usedKeySerde = (Serde<K>) context.keySerde();
+        } else {
+            usedKeySerde = keySerde;
+            if (context.appConfigs() != null) {
+                usedKeySerde.configure(context.appConfigs(), true);
             }
-            if (valueSerde != null) {
-                valueSerde.configure(context.appConfigs(), false);
+        }
+        if (valueSerde == null) {
+            usedValueSerde = (Serde<V>) context.valueSerde();
+        } else {
+            usedValueSerde = valueSerde;
+            if (context.appConfigs() != null) {
+                usedValueSerde.configure(context.appConfigs(), false);
             }
         }
         serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+                usedKeySerde,
+                usedValueSerde);
     }
 
     @SuppressWarnings("unchecked")

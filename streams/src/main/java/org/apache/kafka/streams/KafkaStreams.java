@@ -637,7 +637,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     @SuppressWarnings("unchecked")
-    private void configureSerDe(final Set<SinkNode> sinks, final Set<SourceNode> sources) {
+    private void configureSerDes(final Set<SinkNode> sinks, final Set<SourceNode> sources) {
         for (final SinkNode sn : sinks) {
             if (sn.getKeySer() != null) {
                 sn.getKeySer().configure(config.originals(), true);
@@ -692,7 +692,7 @@ public class KafkaStreams implements AutoCloseable {
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
         final ProcessorTopology taskTopology = internalTopologyBuilder.build();
 
-        configureSerDe(taskTopology.sinks(), taskTopology.sources());
+        configureSerDes(taskTopology.sinks(), taskTopology.sources());
         streamsMetadataState = new StreamsMetadataState(
                 internalTopologyBuilder,
                 parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
@@ -720,7 +720,7 @@ public class KafkaStreams implements AutoCloseable {
         final StateRestoreListener delegatingStateRestoreListener = new DelegatingStateRestoreListener();
         GlobalStreamThread.State globalThreadState = null;
         if (globalTaskTopology != null) {
-            configureSerDe(globalTaskTopology.sinks(), globalTaskTopology.sources());
+            configureSerDes(globalTaskTopology.sinks(), globalTaskTopology.sources());
 
             final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
