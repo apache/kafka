@@ -688,6 +688,36 @@ public class SelectorTest {
         assertEquals((double) conns, getMetric("connection-count").metricValue());
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testLowestPriorityChannel() throws Exception {
+        int conns = 5;
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        for (int i = 0; i < conns; i++) {
+            connect(String.valueOf(i), addr);
+        }
+        assertNotNull(selector.lowestPriorityChannel());
+        for (int i = conns - 1; i >= 0; i--) {
+            if (i != 2)
+              assertEquals("", blockingRequest(String.valueOf(i), ""));
+            time.sleep(10);
+        }
+        assertEquals("2", selector.lowestPriorityChannel().id());
+
+        Field field = Selector.class.getDeclaredField("closingChannels");
+        field.setAccessible(true);
+        Map<String, KafkaChannel> closingChannels = (Map<String, KafkaChannel>) field.get(selector);
+        closingChannels.put("3", selector.channel("3"));
+        assertEquals("3", selector.lowestPriorityChannel().id());
+        closingChannels.remove("3");
+
+        for (int i = 0; i < conns; i++) {
+            selector.close(String.valueOf(i));
+        }
+        assertNull(selector.lowestPriorityChannel());
+    }
+
+
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
         selector.poll(1000L);

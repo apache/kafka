@@ -43,8 +43,12 @@ public class MetadataRequest extends AbstractRequest {
             this.data = data;
         }
 
-        public Builder(List<String> topics, boolean allowAutoTopicCreation, short version) {
-            super(ApiKeys.METADATA, version);
+        public Builder(List<String> topics, boolean allowAutoTopicCreation, short allowedVersion) {
+            this(topics, allowAutoTopicCreation, allowedVersion, allowedVersion);
+        }
+
+        public Builder(List<String> topics, boolean allowAutoTopicCreation, short minVersion, short maxVersion) {
+            super(ApiKeys.METADATA, minVersion, maxVersion);
             MetadataRequestData data = new MetadataRequestData();
             if (topics == null)
                 data.setTopics(null);
@@ -57,7 +61,7 @@ public class MetadataRequest extends AbstractRequest {
         }
 
         public Builder(List<String> topics, boolean allowAutoTopicCreation) {
-            this(topics, allowAutoTopicCreation, ApiKeys.METADATA.latestVersion());
+            this(topics, allowAutoTopicCreation, ApiKeys.METADATA.oldestVersion(),  ApiKeys.METADATA.latestVersion());
         }
 
         public static Builder allTopics() {
