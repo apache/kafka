@@ -78,7 +78,7 @@ class OffsetsForLeaderEpochFetcher {
                 regroupPartitionMapByNode(validationData);
 
         regrouped.forEach((node, dataMap) -> {
-            subscriptions.setResetPending(dataMap.keySet(), time.milliseconds() + requestTimeoutMs);
+            subscriptions.setNextAllowedRetry(dataMap.keySet(), time.milliseconds() + requestTimeoutMs);
             RequestFuture<OffsetForEpochResult> future = sendOffsetForLeaderEpochRequest(node, dataMap);
             future.addListener(new RequestFutureListener<OffsetForEpochResult>() {
                 @Override
@@ -86,7 +86,7 @@ class OffsetsForLeaderEpochFetcher {
                     Map<TopicPartition, OffsetAndMetadata> truncationWithoutResetPolicy = new HashMap<>();
                     offsetsResult.endOffsets.forEach((respTopicPartition, respEndOffset) -> {
                         if (!offsetsResult.partitionsToRetry.isEmpty()) {
-                            subscriptions.resetFailed(offsetsResult.partitionsToRetry, time.milliseconds() + retryBackoffMs);
+                            subscriptions.setNextAllowedRetry(offsetsResult.partitionsToRetry, time.milliseconds() + retryBackoffMs);
                             metadata.requestUpdate();
                         }
 

@@ -423,7 +423,7 @@ public class SubscriptionState {
         requestOffsetReset(partition, defaultResetStrategy);
     }
 
-    public void setResetPending(Set<TopicPartition> partitions, long nextAllowResetTimeMs) {
+    public void setNextAllowedRetry(Set<TopicPartition> partitions, long nextAllowResetTimeMs) {
         for (TopicPartition partition : partitions) {
             assignedState(partition).setNextAllowedRetry(nextAllowResetTimeMs);
         }

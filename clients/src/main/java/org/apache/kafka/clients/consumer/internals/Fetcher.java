@@ -634,7 +634,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         for (Map.Entry<Node, Map<TopicPartition, ListOffsetRequest.PartitionData>> entry : timestampsToSearchByNode.entrySet()) {
             Node node = entry.getKey();
             final Map<TopicPartition, ListOffsetRequest.PartitionData> resetTimestamps = entry.getValue();
-            subscriptions.setResetPending(resetTimestamps.keySet(), time.milliseconds() + requestTimeoutMs);
+            subscriptions.setNextAllowedRetry(resetTimestamps.keySet(), time.milliseconds() + requestTimeoutMs);
 
             RequestFuture<ListOffsetResult> future = sendListOffsetRequest(node, resetTimestamps, false);
             future.addListener(new RequestFutureListener<ListOffsetResult>() {
