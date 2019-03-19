@@ -140,14 +140,14 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testStateCloseAfterCreate() {
+    public void stateShouldTransitToNotRunningIfCloseRightAfterCreated() {
         globalStreams.close();
 
         Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, globalStreams.state());
     }
 
     @Test
-    public void testStateOneThreadDeadButRebalanceFinish() throws InterruptedException {
+    public void stateShouldTransitToRunningIfNonDeadThreadsBackToRunning() throws InterruptedException {
         final StateListenerStub stateListener = new StateListenerStub();
         globalStreams.setStateListener(stateListener);
 
@@ -171,7 +171,7 @@ public class KafkaStreamsTest {
         Assert.assertEquals(3, stateListener.numChanges);
         Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
 
-        for (final StreamThread thread: globalStreams.threads) {
+        for (final StreamThread thread : globalStreams.threads) {
             thread.stateListener().onChange(
                 thread,
                 StreamThread.State.PARTITIONS_ASSIGNED,
@@ -194,7 +194,7 @@ public class KafkaStreamsTest {
         Assert.assertEquals(3, stateListener.numChanges);
         Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
 
-        for (final StreamThread thread: globalStreams.threads) {
+        for (final StreamThread thread : globalStreams.threads) {
             if (thread != globalStreams.threads[NUM_THREADS - 1]) {
                 thread.stateListener().onChange(
                     thread,
@@ -215,7 +215,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testStateOneAllThreadDead() throws InterruptedException {
+    public void stateShouldTransitToErrorIfAllThreadsDead() throws InterruptedException {
         final StateListenerStub stateListener = new StateListenerStub();
         globalStreams.setStateListener(stateListener);
 
@@ -229,7 +229,7 @@ public class KafkaStreamsTest {
             "Streams never started.");
         Assert.assertEquals(KafkaStreams.State.RUNNING, globalStreams.state());
 
-        for (final StreamThread thread: globalStreams.threads) {
+        for (final StreamThread thread : globalStreams.threads) {
             thread.stateListener().onChange(
                 thread,
                 StreamThread.State.PARTITIONS_REVOKED,
@@ -252,7 +252,7 @@ public class KafkaStreamsTest {
         Assert.assertEquals(3, stateListener.numChanges);
         Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
 
-        for (final StreamThread thread: globalStreams.threads) {
+        for (final StreamThread thread : globalStreams.threads) {
             if (thread != globalStreams.threads[NUM_THREADS - 1]) {
                 thread.stateListener().onChange(
                     thread,
