@@ -2223,7 +2223,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         if (coordinator != null && !coordinator.refreshCommittedOffsetsIfNeeded(timer)) return false;
 
         // If any partitions have been truncated due to a leader change, we need to validate the offsets
-        fetcher.checkForLeaderChange();
+        fetcher.validateOffsetsIfNeeded();
 
         // If there are partitions still needing a position and a reset policy is defined,
         // request reset using the default policy. If no reset strategy is defined and there
