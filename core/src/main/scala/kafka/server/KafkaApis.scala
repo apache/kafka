@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.lang.{Long => JLong}
+import java.lang.{Byte => JByte}
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ConcurrentHashMap
@@ -46,8 +47,11 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultSet}
+import org.apache.kafka.common.message.DescribeGroupsResponseData
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData
+import org.apache.kafka.common.message.JoinGroupResponseData
 import org.apache.kafka.common.message.LeaveGroupResponseData
+import org.apache.kafka.common.message.SaslAuthenticateResponseData
 import org.apache.kafka.common.message.SaslHandshakeResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
@@ -1041,6 +1045,20 @@ class KafkaApis(val requestChannel: RequestChannel,
         getTopicMetadata(metadataRequest.allowAutoTopicCreation, authorizedTopics, request.context.listenerName,
           errorUnavailableEndpoints, errorUnavailableListeners)
 
+    var clusterAuthorizedOperations = 0
+
+    if (request.header.apiVersion >= 8) {
+      // get cluster authorized operations
+      if (metadataRequest.data().includeClusterAuthorizedOperations() &&
+        authorize(request.session, Describe, Resource.ClusterResource))
+        clusterAuthorizedOperations = authorizedOperations(request.session, Resource.ClusterResource)
+      // get topic authorized operations
+      if (metadataRequest.data().includeTopicAuthorizedOperations())
+        topicMetadata.foreach(topicData => {
+          topicData.authorizedOperations(authorizedOperations(request.session, Resource(Topic, topicData.topic(), LITERAL)))
+        })
+    }
+
     val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
     val brokers = metadataCache.getAliveBrokers
@@ -1049,12 +1067,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
 
     sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new MetadataResponse(
-        requestThrottleMs,
-        brokers.flatMap(_.getNode(request.context.listenerName)).asJava,
-        clusterId,
-        metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
-        completeTopicMetadata.asJava
+       MetadataResponse.prepareResponse(
+         requestThrottleMs,
+         brokers.flatMap(_.getNode(request.context.listenerName)).asJava,
+         clusterId,
+         metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         completeTopicMetadata.asJava,
+         clusterAuthorizedOperations
       ))
   }
 
@@ -1186,24 +1205,65 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeGroupRequest(request: RequestChannel.Request) {
-    val describeRequest = request.body[DescribeGroupsRequest]
 
-    val groups = describeRequest.groupIds.asScala.map { groupId =>
-      if (!authorize(request.session, Describe, Resource(Group, groupId, LITERAL))) {
-        groupId -> DescribeGroupsResponse.GroupMetadata.forError(Errors.GROUP_AUTHORIZATION_FAILED)
+    def sendResponseCallback(describeGroupsResponseData: DescribeGroupsResponseData): Unit = {
+      def createResponse(requestThrottleMs: Int): AbstractResponse = {
+        describeGroupsResponseData.setThrottleTimeMs(requestThrottleMs)
+        new DescribeGroupsResponse(describeGroupsResponseData)
+      }
+      sendResponseMaybeThrottle(request, createResponse)
+    }
+
+    val describeRequest = request.body[DescribeGroupsRequest]
+    val describeGroupsResponseData = new DescribeGroupsResponseData()
+
+    describeRequest.data().groups().asScala.foreach { groupId =>
+      val resource = Resource(Group, groupId, LITERAL)
+      if (!authorize(request.session, Describe, resource)) {
+        describeGroupsResponseData.groups().add(DescribeGroupsResponse.forError(groupId, Errors.GROUP_AUTHORIZATION_FAILED))
       } else {
         val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
         val members = summary.members.map { member =>
-          val metadata = ByteBuffer.wrap(member.metadata)
-          val assignment = ByteBuffer.wrap(member.assignment)
-          new DescribeGroupsResponse.GroupMember(member.memberId, member.clientId, member.clientHost, metadata, assignment)
+          new DescribeGroupsResponseData.DescribedGroupMember()
+            .setMemberId(member.memberId)
+            .setClientId(member.clientId)
+            .setClientHost(member.clientHost)
+            .setMemberAssignment(member.assignment)
+            .setMemberMetadata(member.assignment)
         }
-        groupId -> new DescribeGroupsResponse.GroupMetadata(error, summary.state, summary.protocolType,
-          summary.protocol, members.asJava)
-      }
-    }.toMap
 
-    sendResponseMaybeThrottle(request, requestThrottleMs => new DescribeGroupsResponse(requestThrottleMs, groups.asJava))
+        val describedGroup = new DescribeGroupsResponseData.DescribedGroup()
+          .setErrorCode(error.code())
+          .setGroupId(groupId)
+          .setGroupState(summary.state)
+          .setProtocolType(summary.protocolType)
+          .setProtocolData(summary.protocol)
+          .setMembers(members.asJava)
+
+        if (request.header.apiVersion >= 3) {
+          if (error == Errors.NONE && describeRequest.data().includeAuthorizedOperations()) {
+            describedGroup.setAuthorizedOperations(authorizedOperations(request.session, resource))
+          } else {
+            describedGroup.setAuthorizedOperations(0)
+          }
+        }
+
+        describeGroupsResponseData.groups().add(describedGroup)
+      }
+    }
+
+    sendResponseCallback(describeGroupsResponseData)
+  }
+
+
+  private def authorizedOperations(session: RequestChannel.Session, resource: Resource): Int = {
+    val authorizedOps = authorizer match {
+      case None => resource.resourceType.supportedOperations
+      case Some(auth) => resource.resourceType.supportedOperations
+        .filter(operation => authorize(session, operation, resource))
+    }
+
+    Utils.to32BitField(authorizedOps.map(operation => operation.toJava.code().asInstanceOf[JByte]).asJava)
   }
 
   def handleListGroupsRequest(request: RequestChannel.Request) {
@@ -1224,10 +1284,23 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for sending a join-group response
     def sendResponseCallback(joinResult: JoinGroupResult) {
-      val members = joinResult.members map { case (memberId, metadataArray) => (memberId, ByteBuffer.wrap(metadataArray)) }
+      val members = joinResult.members map { case (memberId, metadataArray) =>
+        new JoinGroupResponseData.JoinGroupResponseMember()
+          .setMemberId(memberId)
+          .setMetadata(metadataArray)
+      }
+
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val responseBody = new JoinGroupResponse(requestThrottleMs, joinResult.error, joinResult.generationId,
-          joinResult.subProtocol, joinResult.memberId, joinResult.leaderId, members.asJava)
+        val responseBody = new JoinGroupResponse(
+          new JoinGroupResponseData()
+            .setThrottleTimeMs(requestThrottleMs)
+            .setErrorCode(joinResult.error.code())
+            .setGenerationId(joinResult.generationId)
+            .setProtocolName(joinResult.subProtocol)
+            .setLeader(joinResult.leaderId)
+            .setMemberId(joinResult.memberId)
+            .setMembers(members.toSeq.asJava)
+        )
 
         trace("Sending join group response %s for correlation id %d to client %s."
           .format(responseBody, request.header.correlationId, request.header.clientId))
@@ -1236,33 +1309,35 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, createResponse)
     }
 
-    if (!authorize(request.session, Read, Resource(Group, joinGroupRequest.groupId(), LITERAL))) {
+    if (!authorize(request.session, Read, Resource(Group, joinGroupRequest.data().groupId(), LITERAL))) {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new JoinGroupResponse(
-          requestThrottleMs,
-          Errors.GROUP_AUTHORIZATION_FAILED,
-          JoinGroupResponse.UNKNOWN_GENERATION_ID,
-          JoinGroupResponse.UNKNOWN_PROTOCOL,
-          JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
-          JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
-          Collections.emptyMap())
+          new JoinGroupResponseData()
+            .setThrottleTimeMs(requestThrottleMs)
+            .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())
+            .setGenerationId(JoinGroupResponse.UNKNOWN_GENERATION_ID)
+            .setProtocolName(JoinGroupResponse.UNKNOWN_PROTOCOL)
+            .setLeader(JoinGroupResponse.UNKNOWN_MEMBER_ID)
+            .setMemberId(JoinGroupResponse.UNKNOWN_MEMBER_ID)
+            .setMembers(Collections.emptyList())
+        )
       )
     } else {
       // Only return MEMBER_ID_REQUIRED error if joinGroupRequest version is >= 4
       val requireKnownMemberId = joinGroupRequest.version >= 4
 
       // let the coordinator handle join-group
-      val protocols = joinGroupRequest.groupProtocols().asScala.map(protocol =>
-        (protocol.name, Utils.toArray(protocol.metadata))).toList
+      val protocols = joinGroupRequest.data().protocols().asScala.map(protocol =>
+        (protocol.name, protocol.metadata)).toList
       groupCoordinator.handleJoinGroup(
-        joinGroupRequest.groupId,
-        joinGroupRequest.memberId,
+        joinGroupRequest.data().groupId,
+        joinGroupRequest.data().memberId,
         requireKnownMemberId,
         request.header.clientId,
         request.session.clientAddress.toString,
-        joinGroupRequest.rebalanceTimeout,
-        joinGroupRequest.sessionTimeout,
-        joinGroupRequest.protocolType,
+        joinGroupRequest.data().rebalanceTimeoutMs,
+        joinGroupRequest.data().sessionTimeoutMs,
+        joinGroupRequest.data().protocolType,
         protocols,
         sendResponseCallback)
     }
@@ -1338,9 +1413,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(error: Errors) {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
         val response = new LeaveGroupResponse(new LeaveGroupResponseData()
-          .setThrottleTimeMs(requestThrottleMs).setErrorCode(error.code()))
+          .setThrottleTimeMs(requestThrottleMs)
+          .setErrorCode(error.code()))
         trace("Sending leave group response %s for correlation id %d to client %s."
-                    .format(response, request.header.correlationId, request.header.clientId))
+          .format(response, request.header.correlationId, request.header.clientId))
         response
       }
       sendResponseMaybeThrottle(request, createResponse)
@@ -1349,7 +1425,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (!authorize(request.session, Read, Resource(Group, leaveGroupRequest.data().groupId(), LITERAL))) {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new LeaveGroupResponse(new LeaveGroupResponseData()
-          .setThrottleTimeMs(requestThrottleMs).setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())))
+          .setThrottleTimeMs(requestThrottleMs)
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())))
     } else {
       // let the coordinator to handle leave-group
       groupCoordinator.handleLeaveGroup(
@@ -1360,13 +1437,15 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleSaslHandshakeRequest(request: RequestChannel.Request) {
-    val responseData = new SaslHandshakeResponseData().setErrorCode(Errors.ILLEGAL_SASL_STATE.code())
+    val responseData = new SaslHandshakeResponseData().setErrorCode(Errors.ILLEGAL_SASL_STATE.code)
     sendResponseMaybeThrottle(request, _ => new SaslHandshakeResponse(responseData))
   }
 
   def handleSaslAuthenticateRequest(request: RequestChannel.Request) {
-    sendResponseMaybeThrottle(request, _ => new SaslAuthenticateResponse(Errors.ILLEGAL_SASL_STATE,
-      "SaslAuthenticate request received after successful authentication"))
+    val responseData = new SaslAuthenticateResponseData()
+      .setErrorCode(Errors.ILLEGAL_SASL_STATE.code)
+      .setErrorMessage("SaslAuthenticate request received after successful authentication")
+    sendResponseMaybeThrottle(request, _ => new SaslAuthenticateResponse(responseData))
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request) {

@@ -796,6 +796,7 @@ class LogManager(logDirs: Seq[File],
       val sourceLog = currentLogs.get(topicPartition)
       val destLog = futureLogs.get(topicPartition)
 
+      info(s"Attempting to replace current log $sourceLog with $destLog for $topicPartition")
       if (sourceLog == null)
         throw new KafkaStorageException(s"The current replica for $topicPartition is offline")
       if (destLog == null)

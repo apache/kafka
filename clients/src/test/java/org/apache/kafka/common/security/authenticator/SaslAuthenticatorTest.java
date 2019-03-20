@@ -53,6 +53,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
+import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.network.CertStores;
 import org.apache.kafka.common.network.ChannelBuilder;
@@ -100,6 +101,7 @@ import org.apache.kafka.common.security.scram.ScramLoginModule;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SecurityUtils;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.authenticator.TestDigestLoginModule.DigestServerCallbackHandler;
@@ -138,6 +140,7 @@ public class SaslAuthenticatorTest {
     @Before
     public void setup() throws Exception {
         LoginManager.closeAll();
+        time = Time.SYSTEM;
         serverCertStores = new CertStores(true, "localhost");
         clientCertStores = new CertStores(false, "localhost");
         saslServerConfigs = serverCertStores.getTrustingConfig(clientCertStores);
@@ -1472,6 +1475,7 @@ public class SaslAuthenticatorTest {
     @Test
     public void testCannotReauthenticateAgainFasterThanOneSecond() throws Exception {
         String node = "0";
+        time = new MockTime();
         SecurityProtocol securityProtocol = SecurityProtocol.SASL_SSL;
         configureMechanisms(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
                 Arrays.asList(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM));
@@ -1485,7 +1489,7 @@ public class SaslAuthenticatorTest {
              * Now sleep long enough so that the next write will cause re-authentication,
              * which we expect to succeed.
              */
-            delay((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
+            time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
             checkClientConnection(node);
             server.verifyAuthenticationMetrics(1, 0);
             server.verifyReauthenticationMetrics(1, 0);
@@ -1496,14 +1500,16 @@ public class SaslAuthenticatorTest {
              * expected the one byte-plus-node response but got the SaslHandshakeRequest
              * instead
              */
-            delay((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
+            time.sleep((long) (CONNECTIONS_MAX_REAUTH_MS_VALUE * 1.1));
             NetworkTestUtils.checkClientConnection(selector, node, 1, 1);
             fail("Expected a failure when trying to re-authenticate to quickly, but that did not occur");
         } catch (AssertionError e) {
             String expectedResponseTextRegex = "\\w-" + node;
             String receivedResponseTextRegex = ".*" + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
             assertTrue(
-                    "Should have received the SaslHandshakeRequest bytes back since we re-authenticated too quickly, but instead we got our generated message echoed back, implying re-auth succeeded when it should not have",
+                    "Should have received the SaslHandshakeRequest bytes back since we re-authenticated too quickly, " +
+                    "but instead we got our generated message echoed back, implying re-auth succeeded when it " +
+                    "should not have: " + e,
                     e.getMessage().matches(
                             ".*\\<\\[" + expectedResponseTextRegex + "]>.*\\<\\[" + receivedResponseTextRegex + "]>"));
             server.verifyReauthenticationMetrics(1, 0); // unchanged
@@ -1796,7 +1802,8 @@ public class SaslAuthenticatorTest {
         String authString = "\u0000" + TestJaasConfig.USERNAME + "\u0000" + TestJaasConfig.PASSWORD;
         ByteBuffer authBuf = ByteBuffer.wrap(authString.getBytes("UTF-8"));
         if (enableSaslAuthenticateHeader) {
-            SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(authBuf).build();
+            SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(authBuf.array());
+            SaslAuthenticateRequest request = new SaslAuthenticateRequest.Builder(data).build();
             sendKafkaRequestReceiveResponse(node, ApiKeys.SASL_AUTHENTICATE, request);
         } else {
             selector.send(new NetworkSend(node, authBuf));
@@ -1902,7 +1909,7 @@ public class SaslAuthenticatorTest {
     }
 
     private void checkAuthenticationAndReauthentication(SecurityProtocol securityProtocol, String node)
-            throws Exception, InterruptedException {
+            throws Exception {
         try {
             createClientConnection(securityProtocol, node);
             checkClientConnection(node);

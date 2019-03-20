@@ -229,18 +229,19 @@ public interface KStream<K, V> {
      * and emit a record {@code <word:1>} for each word.
      * <pre>{@code
      * KStream<byte[], String> inputStream = builder.stream("topic");
-     * KStream<String, Integer> outputStream = inputStream.flatMap(new KeyValueMapper<byte[], String, Iterable<KeyValue<String, Integer>>> {
-     *     Iterable<KeyValue<String, Integer>> apply(byte[] key, String value) {
-     *         String[] tokens = value.split(" ");
-     *         List<KeyValue<String, Integer>> result = new ArrayList<>(tokens.length);
+     * KStream<String, Integer> outputStream = inputStream.flatMap(
+     *     new KeyValueMapper<byte[], String, Iterable<KeyValue<String, Integer>>> {
+     *         Iterable<KeyValue<String, Integer>> apply(byte[] key, String value) {
+     *             String[] tokens = value.split(" ");
+     *             List<KeyValue<String, Integer>> result = new ArrayList<>(tokens.length);
      *
-     *         for(String token : tokens) {
-     *             result.add(new KeyValue<>(token, 1));
+     *             for(String token : tokens) {
+     *                 result.add(new KeyValue<>(token, 1));
+     *             }
+     *
+     *             return result;
      *         }
-     *
-     *         return result;
-     *     }
-     * });
+     *     });
      * }</pre>
      * The provided {@link KeyValueMapper} must return an {@link Iterable} (e.g., any {@link java.util.Collection} type)
      * and the return value must not be {@code null}.
@@ -493,11 +494,12 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or one output record.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K':V'>}.
-     * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper)}).
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)}, the processing progress
-     * can be observed and additional periodic actions can be performed.
+     * This is a stateful record-by-record operation (cf. {@link #map(KeyValueMapper) map()}).
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
+     * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand:
+     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
+     * global state stores; read-only access to global state stores is available by default):
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
@@ -509,11 +511,13 @@ public interface KStream<K, V> {
      *
      * KStream outputStream = inputStream.transform(new TransformerSupplier() { ... }, "myTransformState");
      * }</pre>
-     * Within the {@link Transformer}, the state is obtained via the {@link  ProcessorContext}.
+     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * The {@link Transformer} must return a {@link KeyValue} type in {@link Transformer#transform(Object, Object)
      * transform()} and {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}.
+     * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
+     * in which case no record is emitted.
      * <pre>{@code
      * new TransformerSupplier() {
      *     Transformer get() {
@@ -541,19 +545,24 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code transform()}.
      * <p>
      * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
      * or join) is applied to the result {@code KStream}.
-     * (cf. {@link #transformValues(ValueTransformerSupplier, String...)})
+     * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()} )
      * <p>
      * Note that it is possible to emit multiple records for each input record by using
-     * {@link ProcessorContext#forward(Object, Object) context#forward()} in {@link Transformer#transform(K, V)}.
-     * However, a mismatch between the types of the emitted records and the type of the stream would only be detected
-     * at runtime.
-     * To ensure type-safety at compile-time, it is recommended to use
-     * {@link #flatTransform(TransformerSupplier, String...)} if multiple records need to be emitted for each input
-     * record.
+     * {@link ProcessorContext#forward(Object, Object) context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
+     * detected at runtime.
+     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * If in {@link Transformer#transform(Object, Object) Transformer#transform()} multiple records need to be emitted
+     * for each input record, it is recommended to use {@link #flatTransform(TransformerSupplier, String...)
+     * flatTransform()}.
      *
      * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
      * @param stateStoreNames     the names of the state stores used by the processor
@@ -575,12 +584,13 @@ public interface KStream<K, V> {
      * A {@link Transformer} (provided by the given {@link TransformerSupplier}) is applied to each input record and
      * returns zero or more output records.
      * Thus, an input record {@code <K,V>} can be transformed into output records {@code <K':V'>, <K'':V''>, ...}.
-     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper)} for stateless record
-     * transformation).
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
-     * can be observed and additional periodic actions can be performed.
+     * This is a stateful record-by-record operation (cf. {@link #flatMap(KeyValueMapper) flatMap()} for stateless
+     * record transformation).
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
+     * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand:
+     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
+     * global state stores; read-only access to global state stores is available by default):
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
@@ -593,8 +603,12 @@ public interface KStream<K, V> {
      * KStream outputStream = inputStream.flatTransform(new TransformerSupplier() { ... }, "myTransformState");
      * }</pre>
      * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
-     * a schedule must be registered.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)
+     * punctuate()}, a schedule must be registered.
+     * The {@link Transformer} must return an {@link java.lang.Iterable} type (e.g., any {@link java.util.Collection}
+     * type) in {@link Transformer#transform(Object, Object) transform()}.
+     * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
+     * which is equal to returning an empty {@link java.lang.Iterable Iterable}, i.e., no records are emitted.
      * <pre>{@code
      * new TransformerSupplier() {
      *     Transformer get() {
@@ -626,11 +640,21 @@ public interface KStream<K, V> {
      * }
      * }</pre>
      * Even if any upstream operation was key-changing, no auto-repartition is triggered.
-     * If repartitioning is required, a call to {@link #through(String)} should be performed before {@code transform()}.
+     * If repartitioning is required, a call to {@link #through(String) through()} should be performed before
+     * {@code flatTransform()}.
      * <p>
      * Transforming records might result in an internal data redistribution if a key based operator (like an aggregation
      * or join) is applied to the result {@code KStream}.
-     * (cf. {@link #transformValues(ValueTransformerSupplier, String...)})
+     * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()})
+     * <p>
+     * Note that it is possible to emit records by using {@link ProcessorContext#forward(Object, Object)
+     * context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
+     * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
+     * detected at runtime.
+     * To ensure type-safety at compile-time, {@link ProcessorContext#forward(Object, Object) context#forward()} should
+     * not be used in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      *
      * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
      * @param stateStoreNames     the names of the state stores used by the processor
@@ -652,10 +676,11 @@ public interface KStream<K, V> {
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapper)}).
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions can be performed.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand:
+     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
+     * global state stores; read-only access to global state stores is available by default):
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
@@ -669,8 +694,8 @@ public interface KStream<K, V> {
      * }</pre>
      * Within the {@link ValueTransformer}, the state is obtained via the
      * {@link ProcessorContext}.
-     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}, a schedule must be
-     * registered.
+     * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
+     * a schedule must be registered.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
      * pairs should be emitted via {@link ProcessorContext#forward(Object, Object)
      * ProcessorContext.forward()}.
@@ -682,7 +707,8 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myValueTransformState");
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *                 // punctuate each 1000ms, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
      *             NewValueType transform(V value) {
@@ -718,14 +744,15 @@ public interface KStream<K, V> {
 
     /**
      * Transform the value of each input record into a new value (with possible new type) of the output record.
-     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to each input
-     * record value and computes a new value for it.
+     * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
+     * each input record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
      * This is a stateful record-by-record operation (cf. {@link #mapValues(ValueMapperWithKey)}).
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions can be performed.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand:
+     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
+     * global state stores; read-only access to global state stores is available by default):
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
@@ -752,7 +779,8 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myValueTransformState");
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *                 // punctuate each 1000ms, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
      *             NewValueType transform(K readOnlyKey, V value) {
@@ -791,11 +819,12 @@ public interface KStream<K, V> {
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
      * {@link ProcessorSupplier}).
      * This is a stateful record-by-record operation (cf. {@link #foreach(ForeachAction)}).
-     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress can be observed and additional
-     * periodic actions can be performed.
+     * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
+     * can be observed and additional periodic actions can be performed.
      * Note that this is a terminal operation that returns void.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand:
+     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
+     * global state stores; read-only access to global state stores is available by default):
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
@@ -819,7 +848,8 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myProcessorState");
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..)); // punctuate each 1000ms, can access this.state
+     *                 // punctuate each 1000ms, can access this.state
+     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
      *             void process(K key, V value) {
@@ -857,8 +887,8 @@ public interface KStream<K, V> {
      * {@link #through(String)}) an internal repartitioning topic may need to be created in Kafka if a later
      * operator depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
-     * an internally generated name, and "-repartition" is a fixed suffix.
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * <p>
@@ -886,8 +916,8 @@ public interface KStream<K, V> {
      * {@link #through(String)}) an internal repartitioning topic may need to be created in Kafka
      * if a later operator depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
-     * an internally generated name, and "-repartition" is a fixed suffix.
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * <p>
@@ -916,9 +946,9 @@ public interface KStream<K, V> {
      * {@link #through(String)}) an internal repartitioning topic may need to be created in Kafka if a later operator
      * depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, &lt;name&gt; is
-     * either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an internally generated name,
-     * and "-repartition" is a fixed suffix.
+     * {@link StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * &lt;name&gt; is either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an internally
+     * generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * <p>
@@ -938,14 +968,15 @@ public interface KStream<K, V> {
      * and default serializers and deserializers.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the original values.
+     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the
+     * original values.
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}
      * <p>
      * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a
      * later operator depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
-     * an internally generated name, and "-repartition" is a fixed suffix.
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * <p>
@@ -966,14 +997,15 @@ public interface KStream<K, V> {
      * and {@link Serde}s as specified by {@link Serialized}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the original values.
+     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the
+     * original values.
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
      * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a
      * later operator depends on the newly selected key.
      * This topic will be as "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
-     * an internally generated name, and "-repartition" is a fixed suffix.
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is an internally generated name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * <p>
@@ -997,14 +1029,16 @@ public interface KStream<K, V> {
      * and {@link Serde}s as specified by {@link Grouped}.
      * Grouping a stream on the record key is required before an aggregation operator can be applied to the data
      * (cf. {@link KGroupedStream}).
-     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the original values.
+     * The {@link KeyValueMapper} selects a new key (which may or may not be of the same type) while preserving the
+     * original values.
      * If the new record key is {@code null} the record will not be included in the resulting {@link KGroupedStream}.
      * <p>
      * Because a new key is selected, an internal repartitioning topic may need to be created in Kafka if a later
      * operator depends on the newly selected key.
      * This topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is user-specified in
-     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is
-     * either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an internally generated name.
+     * {@link  StreamsConfig} via parameter {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG},
+     * "&lt;name&gt;" is either provided via {@link org.apache.kafka.streams.kstream.Grouped#as(String)} or an
+     * internally generated name.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * <p>
@@ -1067,8 +1101,8 @@ public interface KStream<K, V> {
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link  StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
+     * name, and "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1144,8 +1178,8 @@ public interface KStream<K, V> {
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link  StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
+     * name, and "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1227,8 +1261,8 @@ public interface KStream<K, V> {
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
+     * name, and "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1308,8 +1342,8 @@ public interface KStream<K, V> {
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
+     * name, and "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1392,8 +1426,8 @@ public interface KStream<K, V> {
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
+     * name, and "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1474,8 +1508,8 @@ public interface KStream<K, V> {
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
+     * name, and "-repartition" is a fixed suffix.
      * <p>
      * Repartitioning can happen for one or both of the joining {@code KStream}s.
      * For this case, all data of the stream will be redistributed through the repartitioning topic by writing all
@@ -1561,8 +1595,8 @@ public interface KStream<K, V> {
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
+     * name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * <p>
@@ -1636,8 +1670,8 @@ public interface KStream<K, V> {
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
+     * name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * <p>
@@ -1717,8 +1751,8 @@ public interface KStream<K, V> {
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
+     * name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * <p>
@@ -1795,8 +1829,8 @@ public interface KStream<K, V> {
      * internal repartitioning topic in Kafka and write and re-read the data via this topic before the actual join.
      * The repartitioning topic will be named "${applicationId}-&lt;name&gt;-repartition", where "applicationId" is
      * user-specified in {@link StreamsConfig} via parameter
-     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated name, and
-     * "-repartition" is a fixed suffix.
+     * {@link StreamsConfig#APPLICATION_ID_CONFIG APPLICATION_ID_CONFIG}, "&lt;name&gt;" is an internally generated
+     * name, and "-repartition" is a fixed suffix.
      * <p>
      * You can retrieve all generated internal topic names via {@link Topology#describe()}.
      * <p>
@@ -1889,5 +1923,4 @@ public interface KStream<K, V> {
     <GK, GV, RV> KStream<K, RV> leftJoin(final GlobalKTable<GK, GV> globalKTable,
                                          final KeyValueMapper<? super K, ? super V, ? extends GK> keyValueMapper,
                                          final ValueJoiner<? super V, ? super GV, ? extends RV> valueJoiner);
-
 }

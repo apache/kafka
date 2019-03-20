@@ -85,7 +85,7 @@ class GetOffsetShellTest(Test):
 
         node = self.consumer.nodes[0]
 
-        wait_until(lambda: self.consumer.alive(node), timeout_sec=10, backoff_sec=.2, err_msg="Consumer was too slow to start")
+        wait_until(lambda: self.consumer.alive(node), timeout_sec=20, backoff_sec=.2, err_msg="Consumer was too slow to start")
 
         # Assert that offset is correctly indicated by GetOffsetShell tool
         wait_until(lambda: "%s:%s:%s" % (TOPIC, NUM_PARTITIONS - 1, MAX_MESSAGES) in self.kafka.get_offset_shell(TOPIC, None, 1000, 1, -1), timeout_sec=10,

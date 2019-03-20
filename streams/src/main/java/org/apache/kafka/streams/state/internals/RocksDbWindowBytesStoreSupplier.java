@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
@@ -54,12 +53,10 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
                 segmentInterval,
                 new WindowKeySchema()
         );
-        return new RocksDBWindowStore<>(segmentedBytesStore,
-                Serdes.Bytes(),
-                Serdes.ByteArray(),
-                retainDuplicates,
-                windowSize);
-
+        return new RocksDBWindowStore(
+            segmentedBytesStore,
+            retainDuplicates,
+            windowSize);
     }
 
     @Override

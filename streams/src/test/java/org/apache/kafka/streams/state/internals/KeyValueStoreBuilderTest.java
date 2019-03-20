@@ -51,12 +51,12 @@ public class KeyValueStoreBuilderTest {
         EasyMock.expect(supplier.get()).andReturn(inner);
         EasyMock.expect(supplier.name()).andReturn("name");
         EasyMock.replay(supplier);
-        builder = new KeyValueStoreBuilder<>(supplier,
-                                             Serdes.String(),
-                                             Serdes.String(),
-                                             new MockTime()
+        builder = new KeyValueStoreBuilder<>(
+            supplier,
+            Serdes.String(),
+            Serdes.String(),
+            new MockTime()
         );
-
     }
 
     @Test

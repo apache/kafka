@@ -16,11 +16,19 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 
 /**
- * Interface for storing the aggregated values of sessions
+ * Interface for storing the aggregated values of sessions.
+ * <p>
+ * The key is internally represented as {@link Windowed Windowed&lt;K&gt;} that comprises the plain key
+ * and the {@link Window} that represents window start- and end-timestamp.
+ * <p>
+ * If two sessions are merged, a new session with new start- and end-timestamp must be inserted into the store
+ * while the two old sessions must be deleted.
+ *
  * @param <K>   type of the record keys
  * @param <AGG> type of the aggregated values
  */

@@ -18,7 +18,7 @@
  */
 package kafka.tools
 
-import java.util.Date
+import java.util.{Date, Objects}
 import java.text.SimpleDateFormat
 import javax.management._
 import javax.management.remote._
@@ -28,7 +28,7 @@ import joptsimple.OptionParser
 import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.math._
-import kafka.utils.{CommandLineUtils , Exit, Logging}
+import kafka.utils.{CommandLineUtils, Exit, Logging}
 
 
 /**
@@ -140,7 +140,7 @@ object JmxTool extends Logging {
       else
         List(null)
 
-    val hasPatternQueries = queries.exists((name: ObjectName) => name.isPattern)
+    val hasPatternQueries = queries.filterNot(Objects.isNull).exists((name: ObjectName) => name.isPattern)
 
     var names: Iterable[ObjectName] = null
     def namesSet = Option(names).toSet.flatten
@@ -165,12 +165,20 @@ object JmxTool extends Logging {
     }
 
     val numExpectedAttributes: Map[ObjectName, Int] =
-      if (attributesWhitelistExists)
-        queries.map((_, attributesWhitelist.get.length)).toMap
-      else {
-        names.map{(name: ObjectName) =>
+      if (!attributesWhitelistExists)
+        names.map{name: ObjectName =>
           val mbean = mbsc.getMBeanInfo(name)
           (name, mbsc.getAttributes(name, mbean.getAttributes.map(_.getName)).size)}.toMap
+      else {
+        if (!hasPatternQueries)
+          names.map{name: ObjectName =>
+            val mbean = mbsc.getMBeanInfo(name)
+            val attributes = mbsc.getAttributes(name, mbean.getAttributes.map(_.getName))
+            val expectedAttributes = attributes.asScala.asInstanceOf[mutable.Buffer[Attribute]]
+              .filter(attr => attributesWhitelist.get.contains(attr.getName))
+            (name, expectedAttributes.size)}.toMap.filter(_._2 > 0)
+        else
+          queries.map((_, attributesWhitelist.get.length)).toMap
       }
 
     if(numExpectedAttributes.isEmpty) {

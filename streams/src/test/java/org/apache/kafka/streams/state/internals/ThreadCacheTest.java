@@ -310,9 +310,10 @@ public class ThreadCacheTest {
         }
         assertEquals(5, cache.size());
 
-        final ThreadCache.MemoryLRUCacheBytesIterator range = cache.range(namespace, Bytes.wrap(new byte[]{0}), Bytes.wrap(new byte[]{5}));
         // should evict byte[] {0}
         cache.put(namespace, Bytes.wrap(new byte[]{6}), dirtyEntry(new byte[]{6}));
+
+        final ThreadCache.MemoryLRUCacheBytesIterator range = cache.range(namespace, Bytes.wrap(new byte[]{0}), Bytes.wrap(new byte[]{5}));
 
         assertEquals(Bytes.wrap(new byte[]{1}), range.peekNextKey());
     }

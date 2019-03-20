@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
@@ -44,13 +43,11 @@ public class InMemoryWindowBytesStoreSupplier implements WindowBytesStoreSupplie
 
     @Override
     public WindowStore<Bytes, byte[]> get() {
-        return new InMemoryWindowStore<>(name,
-                                         Serdes.Bytes(),
-                                         Serdes.ByteArray(),
-                                         retentionPeriod,
-                                         windowSize,
-                                         retainDuplicates,
-                                         metricsScope());
+        return new InMemoryWindowStore(name,
+                                       retentionPeriod,
+                                       windowSize,
+                                       retainDuplicates,
+                                       metricsScope());
     }
 
     @Override

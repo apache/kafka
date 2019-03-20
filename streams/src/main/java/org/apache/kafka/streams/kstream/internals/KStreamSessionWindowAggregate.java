@@ -93,7 +93,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
             lateRecordDropSensor = Sensors.lateRecordDropSensor(internalProcessorContext);
 
             store = (SessionStore<K, Agg>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
+            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<>(context), sendOldValues);
         }
 
         @Override

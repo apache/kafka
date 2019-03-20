@@ -45,11 +45,13 @@ import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTas
  * @param <K>
  * @param <V>
  */
-public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<Bytes, byte[]>> implements KeyValueStore<K, V> {
+public class MeteredKeyValueStore<K, V>
+    extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, K, V>
+    implements KeyValueStore<K, V> {
 
-    private final Serde<K> keySerde;
-    private final Serde<V> valueSerde;
-    private StateSerdes<K, V> serdes;
+    final Serde<K> keySerde;
+    final Serde<V> valueSerde;
+    StateSerdes<K, V> serdes;
 
     private final String metricScope;
     protected final Time time;
@@ -76,7 +78,6 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
         this.valueSerde = valueSerde;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
@@ -87,10 +88,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
         final Map<String, String> taskTags = metrics.tagMap("task-id", taskName, metricScope + "-id", "all");
         final Map<String, String> storeTags = metrics.tagMap("task-id", taskName, metricScope + "-id", name());
 
-        serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
+        initStoreSerde(context);
 
         putTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
         putIfAbsentTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put-if-absent", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
@@ -115,15 +113,30 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
         }
     }
 
-    @Override
-    public void close() {
-        super.close();
-        metrics.removeAllStoreLevelSensors(taskName, name());
+    @SuppressWarnings("unchecked")
+    void initStoreSerde(final ProcessorContext context) {
+        serdes = new StateSerdes<>(
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
     }
 
+    @SuppressWarnings("unchecked")
     @Override
-    public long approximateNumEntries() {
-        return wrapped().approximateNumEntries();
+    public boolean setFlushListener(final CacheFlushListener<K, V> listener,
+                                    final boolean sendOldValues) {
+        final KeyValueStore<Bytes, byte[]> wrapped = wrapped();
+        if (wrapped instanceof CachedStateStore) {
+            return ((CachedStateStore<byte[], byte[]>) wrapped).setFlushListener(
+                (rawKey, rawNewValue, rawOldValue, timestamp) -> listener.apply(
+                    serdes.keyFrom(rawKey),
+                    rawNewValue != null ? serdes.valueFrom(rawNewValue) : null,
+                    rawOldValue != null ? serdes.valueFrom(rawOldValue) : null,
+                    timestamp
+                ),
+                sendOldValues);
+        }
+        return false;
     }
 
     @Override
@@ -225,6 +238,17 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
         }
     }
 
+    @Override
+    public long approximateNumEntries() {
+        return wrapped().approximateNumEntries();
+    }
+
+    @Override
+    public void close() {
+        super.close();
+        metrics.removeAllStoreLevelSensors(taskName, name());
+    }
+
     private interface Action<V> {
         V execute();
     }
@@ -240,7 +264,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
     }
 
     private V outerValue(final byte[] value) {
-        return value == null ? null : serdes.valueFrom(value);
+        return value != null ? serdes.valueFrom(value) : null;
     }
 
     private Bytes keyBytes(final K key) {
@@ -278,7 +302,7 @@ public class MeteredKeyValueStore<K, V> extends WrappedStateStore<KeyValueStore<
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
             return KeyValue.pair(
                 serdes.keyFrom(keyValue.key.get()),
-                keyValue.value == null ? null : serdes.valueFrom(keyValue.value));
+                outerValue(keyValue.value));
         }
 
         @Override

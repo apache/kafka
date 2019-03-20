@@ -17,6 +17,8 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.util.List;
+import java.util.concurrent.ConcurrentNavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -26,18 +28,16 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Iterator;
 import java.util.Map;
-import java.util.NavigableMap;
-import java.util.TreeMap;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final String name;
-    private final NavigableMap<Bytes, byte[]> map;
+    private final ConcurrentNavigableMap<Bytes, byte[]> map;
     private volatile boolean open = false;
 
     public InMemoryKeyValueStore(final String name) {
         this.name = name;
 
-        this.map = new TreeMap<>();
+        this.map = new ConcurrentSkipListMap<>();
     }
 
     @Override
@@ -46,7 +46,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context,
                      final StateStore root) {
 
@@ -76,12 +75,12 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public synchronized byte[] get(final Bytes key) {
+    public byte[] get(final Bytes key) {
         return this.map.get(key);
     }
 
     @Override
-    public synchronized void put(final Bytes key, final byte[] value) {
+    public void put(final Bytes key, final byte[] value) {
         if (value == null) {
             this.map.remove(key);
         } else {
@@ -90,7 +89,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public synchronized byte[] putIfAbsent(final Bytes key, final byte[] value) {
+    public byte[] putIfAbsent(final Bytes key, final byte[] value) {
         final byte[] originalValue = get(key);
         if (originalValue == null) {
             put(key, value);
@@ -99,29 +98,29 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     @Override
-    public synchronized void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
+    public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         for (final KeyValue<Bytes, byte[]> entry : entries) {
             put(entry.key, entry.value);
         }
     }
 
     @Override
-    public synchronized byte[] delete(final Bytes key) {
+    public byte[] delete(final Bytes key) {
         return this.map.remove(key);
     }
 
     @Override
-    public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
-                                                              final Bytes to) {
+    public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
         return new DelegatingPeekingKeyValueIterator<>(
             name,
             new InMemoryKeyValueIterator(this.map.subMap(from, true, to, true).entrySet().iterator()));
     }
 
     @Override
-    public synchronized KeyValueIterator<Bytes, byte[]> all() {
-        final TreeMap<Bytes, byte[]> copy = new TreeMap<>(this.map);
-        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator(copy.entrySet().iterator()));
+    public KeyValueIterator<Bytes, byte[]> all() {
+        return new DelegatingPeekingKeyValueIterator<>(
+            name,
+            new InMemoryKeyValueIterator(this.map.entrySet().iterator()));
     }
 
     @Override

@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
@@ -36,6 +37,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static java.time.Duration.ofMillis;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToList;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -51,19 +53,12 @@ public class RocksDBSessionStoreTest {
 
     @Before
     public void before() {
-        final SessionKeySchema schema = new SessionKeySchema();
-
-        final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(
-            "session-store",
-            "metrics-scope",
-            10_000L,
-            60_000L,
-            schema);
-
-        sessionStore = new RocksDBSessionStore<>(
-            bytesStore,
+        sessionStore = Stores.sessionStoreBuilder(
+            Stores.persistentSessionStore(
+                "session-store",
+                ofMillis(10_000L)),
             Serdes.String(),
-            Serdes.Long());
+            Serdes.Long()).build();
 
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
@@ -74,6 +69,7 @@ public class RocksDBSessionStoreTest {
                 new LogContext("testCache "),
                 0,
                 new MockStreamsMetrics(new Metrics())));
+
         sessionStore.init(context, sessionStore);
     }
 
@@ -188,17 +184,12 @@ public class RocksDBSessionStoreTest {
 
     @Test
     public void shouldFetchExactKeys() {
-        final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(
-            "session-store",
-            "metrics-scope",
-            0x7a00000000000000L,
-            0x7a00000000000000L,
-            new SessionKeySchema());
-
-        sessionStore = new RocksDBSessionStore<>(
-            bytesStore,
+        sessionStore = Stores.sessionStoreBuilder(
+            Stores.persistentSessionStore(
+                "session-store",
+                ofMillis(0x7a00000000000000L)),
             Serdes.String(),
-            Serdes.Long());
+            Serdes.Long()).build();
 
         sessionStore.init(context, sessionStore);
 

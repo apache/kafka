@@ -99,7 +99,7 @@ class ReplicaFetcherThread(name: String,
   }
 
   override protected def logEndOffset(topicPartition: TopicPartition): Long = {
-    replicaMgr.localReplicaOrException(topicPartition).logEndOffset.messageOffset
+    replicaMgr.localReplicaOrException(topicPartition).logEndOffset
   }
 
   override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
@@ -145,21 +145,21 @@ class ReplicaFetcherThread(name: String,
 
     maybeWarnIfOversizedRecords(records, topicPartition)
 
-    if (fetchOffset != replica.logEndOffset.messageOffset)
+    if (fetchOffset != replica.logEndOffset)
       throw new IllegalStateException("Offset mismatch for partition %s: fetched offset = %d, log end offset = %d.".format(
-        topicPartition, fetchOffset, replica.logEndOffset.messageOffset))
+        topicPartition, fetchOffset, replica.logEndOffset))
 
     if (isTraceEnabled)
       trace("Follower has replica log end offset %d for partition %s. Received %d messages and leader hw %d"
-        .format(replica.logEndOffset.messageOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
+        .format(replica.logEndOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
 
     // Append the leader's messages to the log
     val logAppendInfo = partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)
 
     if (isTraceEnabled)
       trace("Follower has replica log end offset %d after appending %d bytes of messages for partition %s"
-        .format(replica.logEndOffset.messageOffset, records.sizeInBytes, topicPartition))
-    val followerHighWatermark = replica.logEndOffset.messageOffset.min(partitionData.highWatermark)
+        .format(replica.logEndOffset, records.sizeInBytes, topicPartition))
+    val followerHighWatermark = replica.logEndOffset.min(partitionData.highWatermark)
     val leaderLogStartOffset = partitionData.logStartOffset
     // for the follower replica, we do not need to keep
     // its segment base offset the physical position,
@@ -328,7 +328,7 @@ class ReplicaFetcherThread(name: String,
    */
   private def shouldFollowerThrottle(quota: ReplicaQuota, topicPartition: TopicPartition): Boolean = {
     val isReplicaInSync = fetcherLagStats.isReplicaInSync(topicPartition)
-    quota.isThrottled(topicPartition) && quota.isQuotaExceeded && !isReplicaInSync
+    !isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
 }

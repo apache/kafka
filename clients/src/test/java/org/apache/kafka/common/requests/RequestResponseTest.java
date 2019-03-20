@@ -38,13 +38,19 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DescribeGroupsRequestData;
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersRequestData;
 import org.apache.kafka.common.message.ElectPreferredLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.SaslAuthenticateRequestData;
+import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.network.ListenerName;
@@ -644,7 +650,7 @@ public class RequestResponseTest {
         final short version = 0;
         JoinGroupRequest jgr = createJoinGroupRequest(version);
         JoinGroupRequest jgr2 = new JoinGroupRequest(jgr.toStruct(), version);
-        assertEquals(jgr2.rebalanceTimeout(), jgr.rebalanceTimeout());
+        assertEquals(jgr2.data().rebalanceTimeoutMs(), jgr.data().rebalanceTimeoutMs());
     }
 
     @Test
@@ -738,23 +744,53 @@ public class RequestResponseTest {
     }
 
     private JoinGroupRequest createJoinGroupRequest(int version) {
-        ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
-        List<JoinGroupRequest.ProtocolMetadata> protocols = new ArrayList<>();
-        protocols.add(new JoinGroupRequest.ProtocolMetadata("consumer-range", metadata));
+        JoinGroupRequestData.JoinGroupRequestProtocolSet protocols = new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+                Collections.singleton(
+                new JoinGroupRequestData.JoinGroupRequestProtocol()
+                        .setName("consumer-range")
+                        .setMetadata(new byte[0])).iterator()
+        );
         if (version == 0) {
-            return new JoinGroupRequest.Builder("group1", 30000, "consumer1", "consumer", protocols).
-                    build((short) version);
+            return new JoinGroupRequest.Builder(
+                    new JoinGroupRequestData()
+                            .setGroupId("group1")
+                            .setSessionTimeoutMs(30000)
+                            .setMemberId("consumer1")
+                            .setProtocolType("consumer")
+                            .setProtocols(protocols))
+                    .build((short) version);
         } else {
-            return new JoinGroupRequest.Builder("group1", 10000, "consumer1", "consumer", protocols).
-                    setRebalanceTimeout(60000).build();
+            return new JoinGroupRequest.Builder(
+                    new JoinGroupRequestData()
+                            .setGroupId("group1")
+                            .setSessionTimeoutMs(30000)
+                            .setMemberId("consumer1")
+                            .setProtocolType("consumer")
+                            .setProtocols(protocols)
+                            .setRebalanceTimeoutMs(60000)) // v1 and above contains rebalance timeout
+                    .build((short) version);
         }
     }
 
     private JoinGroupResponse createJoinGroupResponse() {
-        Map<String, ByteBuffer> members = new HashMap<>();
-        members.put("consumer1", ByteBuffer.wrap(new byte[]{}));
-        members.put("consumer2", ByteBuffer.wrap(new byte[]{}));
-        return new JoinGroupResponse(Errors.NONE, 1, "range", "consumer1", "leader", members);
+        List<JoinGroupResponseData.JoinGroupResponseMember> members = Arrays.asList(
+                new JoinGroupResponseData.JoinGroupResponseMember()
+                        .setMemberId("consumer1")
+                        .setMetadata(new byte[0]),
+                new JoinGroupResponseData.JoinGroupResponseMember()
+                        .setMemberId("consumer2")
+                        .setMetadata(new byte[0])
+        );
+
+        return new JoinGroupResponse(
+                new JoinGroupResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setGenerationId(1)
+                        .setProtocolName("range")
+                        .setLeader("leader")
+                        .setMemberId("consumer1")
+                        .setMembers(members)
+        );
     }
 
     private ListGroupsRequest createListGroupsRequest() {
@@ -767,18 +803,21 @@ public class RequestResponseTest {
     }
 
     private DescribeGroupsRequest createDescribeGroupRequest() {
-        return new DescribeGroupsRequest.Builder(singletonList("test-group")).build();
+        return new DescribeGroupsRequest.Builder(
+            new DescribeGroupsRequestData().
+                setGroups(Collections.singletonList("test-group"))).build();
     }
 
     private DescribeGroupsResponse createDescribeGroupResponse() {
         String clientId = "consumer-1";
         String clientHost = "localhost";
-        ByteBuffer empty = ByteBuffer.allocate(0);
-        DescribeGroupsResponse.GroupMember member = new DescribeGroupsResponse.GroupMember("memberId",
-                clientId, clientHost, empty, empty);
-        DescribeGroupsResponse.GroupMetadata metadata = new DescribeGroupsResponse.GroupMetadata(Errors.NONE,
-                "STABLE", "consumer", "roundrobin", asList(member));
-        return new DescribeGroupsResponse(Collections.singletonMap("test-group", metadata));
+        DescribeGroupsResponseData describeGroupsResponseData = new DescribeGroupsResponseData();
+        DescribeGroupsResponseData.DescribedGroupMember member = DescribeGroupsResponse.groupMember("memberId",
+                clientId, clientHost, new byte[0], new byte[0]);
+        DescribeGroupsResponseData.DescribedGroup metadata = DescribeGroupsResponse.groupMetadata("test-group", Errors.NONE,
+                "STABLE", "consumer", "roundrobin", asList(member), Collections.emptySet());
+        describeGroupsResponseData.groups().add(metadata);
+        return new DescribeGroupsResponse(describeGroupsResponseData);
     }
 
     private LeaveGroupRequest createLeaveGroupRequest() {
@@ -867,7 +906,7 @@ public class RequestResponseTest {
             asList(new MetadataResponse.PartitionMetadata(Errors.LEADER_NOT_AVAILABLE, 0, null,
                 Optional.empty(), replicas, isr, offlineReplicas))));
 
-        return new MetadataResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
+        return MetadataResponse.prepareResponse(asList(node), null, MetadataResponse.NO_CONTROLLER_ID, allTopicMetadata);
     }
 
     @SuppressWarnings("deprecation")
@@ -1024,11 +1063,16 @@ public class RequestResponseTest {
     }
 
     private SaslAuthenticateRequest createSaslAuthenticateRequest() {
-        return new SaslAuthenticateRequest(ByteBuffer.wrap(new byte[0]));
+        SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(new byte[0]);
+        return new SaslAuthenticateRequest(data);
     }
 
     private SaslAuthenticateResponse createSaslAuthenticateResponse() {
-        return new SaslAuthenticateResponse(Errors.NONE, null, ByteBuffer.wrap(new byte[0]), Long.MAX_VALUE);
+        SaslAuthenticateResponseData data = new SaslAuthenticateResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setAuthBytes(new byte[0])
+                .setSessionLifetimeMs(Long.MAX_VALUE);
+        return new SaslAuthenticateResponse(data);
     }
 
     private ApiVersionsRequest createApiVersionRequest() {
