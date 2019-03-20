@@ -56,8 +56,10 @@ public class KTableKTableInnerJoinTest {
     final private String output = "output";
 
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
-    private final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.with(Serdes.Integer(), Serdes.String());
-    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(Serdes.Integer().serializer(), Serdes.String().serializer());
+    private final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized =
+        Materialized.with(Serdes.Integer(), Serdes.String());
+    private final ConsumerRecordFactory<Integer, String> recordFactory =
+        new ConsumerRecordFactory<>(Serdes.Integer().serializer(), Serdes.String().serializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
@@ -161,8 +163,7 @@ public class KTableKTableInnerJoinTest {
                                         final MockProcessorSupplier<Integer, String> supplier,
                                         final KTable<Integer, String> joined) {
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
-
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
             assertFalse(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
@@ -179,50 +180,48 @@ public class KTableKTableInnerJoinTest {
             for (int i = 0; i < 2; i++) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i]));
             }
-            proc.checkAndClearProcessResult("0:(X0+Y0<-null)", "1:(X1+Y1<-null)");
+            proc.checkAndClearProcessResult("0:(X0+Y0<-null) (ts: 0)", "1:(X1+Y1<-null) (ts: 0)");
 
             // push all four items to the primary stream. this should produce two items.
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey));
             }
-            proc.checkAndClearProcessResult("0:(XX0+Y0<-null)", "1:(XX1+Y1<-null)");
+            proc.checkAndClearProcessResult("0:(XX0+Y0<-null) (ts: 0)", "1:(XX1+Y1<-null) (ts: 0)");
 
             // push all items to the other stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey));
             }
-            proc.checkAndClearProcessResult("0:(XX0+YY0<-null)", "1:(XX1+YY1<-null)", "2:(XX2+YY2<-null)", "3:(XX3+YY3<-null)");
+            proc.checkAndClearProcessResult("0:(XX0+YY0<-null) (ts: 0)", "1:(XX1+YY1<-null) (ts: 0)", "2:(XX2+YY2<-null) (ts: 0)", "3:(XX3+YY3<-null) (ts: 0)");
 
             // push all four items to the primary stream. this should produce four items.
-
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "X" + expectedKey));
             }
-            proc.checkAndClearProcessResult("0:(X0+YY0<-null)", "1:(X1+YY1<-null)", "2:(X2+YY2<-null)", "3:(X3+YY3<-null)");
+            proc.checkAndClearProcessResult("0:(X0+YY0<-null) (ts: 0)", "1:(X1+YY1<-null) (ts: 0)", "2:(X2+YY2<-null) (ts: 0)", "3:(X3+YY3<-null) (ts: 0)");
 
             // push two items with null to the other stream as deletes. this should produce two item.
             for (int i = 0; i < 2; i++) {
                 driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], null));
             }
-            proc.checkAndClearProcessResult("0:(null<-null)", "1:(null<-null)");
+            proc.checkAndClearProcessResult("0:(null<-null) (ts: 0)", "1:(null<-null) (ts: 0)");
 
             // push all four items to the primary stream. this should produce two items.
             for (final int expectedKey : expectedKeys) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey));
             }
-            proc.checkAndClearProcessResult("2:(XX2+YY2<-null)", "3:(XX3+YY3<-null)");
+            proc.checkAndClearProcessResult("2:(XX2+YY2<-null) (ts: 0)", "3:(XX3+YY3<-null) (ts: 0)");
         }
     }
 
     private void doTestJoin(final StreamsBuilder builder, final int[] expectedKeys) {
-
-        final Collection<Set<String>> copartitionGroups = TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
+        final Collection<Set<String>> copartitionGroups =
+            TopologyWrapper.getInternalTopologyBuilder(builder.build()).copartitionGroups();
 
         assertEquals(1, copartitionGroups.size());
         assertEquals(new HashSet<>(Arrays.asList(topic1, topic2)), copartitionGroups.iterator().next());
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {
                 driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i]));
@@ -288,7 +287,6 @@ public class KTableKTableInnerJoinTest {
             driver.pipeInput(recordFactory.create(topic1, null, "XX" + 1));
             assertNull(driver.readOutput(output));
         }
-
     }
 
     private void assertOutputKeyValue(final TopologyTestDriver driver,
