@@ -229,7 +229,7 @@ public class KStreamAggregationDedupIntegrationTest {
         }
     }
 
-    class MyIntegerSerde<K> extends Serdes.WrapperSerde<Integer> {
+    static class MyIntegerSerde<K> extends Serdes.WrapperSerde<Integer> {
         public MyIntegerSerde() {
             super(new MyIntSerializer(), new MyIntDeserializer());
         }
