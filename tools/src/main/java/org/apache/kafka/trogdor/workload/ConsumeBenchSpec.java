@@ -98,6 +98,7 @@ public class ConsumeBenchSpec extends TaskSpec {
     private final List<String> activeTopics;
     private final String consumerGroup;
     private final int threadsPerWorker;
+    private final String autoOffsetReset;
 
     @JsonCreator
     public ConsumeBenchSpec(@JsonProperty("startMs") long startMs,
@@ -111,7 +112,8 @@ public class ConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
                             @JsonProperty("threadsPerWorker") Integer threadsPerWorker,
-                            @JsonProperty("activeTopics") List<String> activeTopics) {
+                            @JsonProperty("activeTopics") List<String> activeTopics,
+                            @JsonProperty("autoOffsetReset") String autoOffsetReset) {
         super(startMs, durationMs);
         this.consumerNode = (consumerNode == null) ? "" : consumerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
@@ -123,6 +125,7 @@ public class ConsumeBenchSpec extends TaskSpec {
         this.activeTopics = activeTopics == null ? new ArrayList<>() : activeTopics;
         this.consumerGroup = consumerGroup == null ? "" : consumerGroup;
         this.threadsPerWorker = threadsPerWorker == null ? 1 : threadsPerWorker;
+        this.autoOffsetReset = autoOffsetReset == null ? "earliest" : autoOffsetReset;
     }
 
     @JsonProperty
@@ -183,6 +186,11 @@ public class ConsumeBenchSpec extends TaskSpec {
     @Override
     public TaskWorker newTaskWorker(String id) {
         return new ConsumeBenchWorker(id, this);
+    }
+
+    @JsonProperty
+    public String autoOffsetReset() {
+        return autoOffsetReset;
     }
 
     /**
