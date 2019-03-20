@@ -3217,52 +3217,6 @@ public class FetcherTest {
         assertOptional(subscriptions.position(tp0).lastFetchEpoch, value -> assertEquals(value.intValue(), 1));
     }
 
-    @Test
-    public void testOffsetsForLeaderEpoch() {
-        buildFetcher();
-        assignFromUser(singleton(tp0));
-
-        Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
-        positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
-                new Metadata.LeaderAndEpoch(Node.noNode(), Optional.of(1))));
-
-
-        OffsetsForLeaderEpochClient offsetClient = new OffsetsForLeaderEpochClient(consumerClient);
-        RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =
-                offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
-
-        Map<TopicPartition, EpochEndOffset> endOffsetMap = new HashMap<>();
-        endOffsetMap.put(tp0, new EpochEndOffset(Errors.NONE, 1, 10L));
-        OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(endOffsetMap);
-        client.prepareResponse(resp);
-        consumerClient.pollNoWakeup();
-
-        OffsetsForLeaderEpochClient.OffsetForEpochResult result = future.value();
-    }
-
-    @Test
-    public void testOffsetsForLeaderFetcher() {
-        buildFetcher();
-
-        assignFromUser(singleton(tp0));
-
-        // Initialize the epoch=1
-        Map<String, Integer> partitionCounts = new HashMap<>();
-        partitionCounts.put(tp0.topic(), 4);
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
-                (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                        new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(2), replicas, isr, offlineReplicas));
-        metadata.update(metadataResponse, 0L);
-
-        // Seek
-        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.leaderAndEpoch(tp0).leader, Optional.of(1));
-        subscriptions.seek(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1), leaderAndEpoch));
-
-        fetcher.validateOffsetsIfNeeded();
-
-        assertTrue(subscriptions.awaitingValidation(tp0));
-    }
-
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {
         // matches any list offset request with the provided timestamp
         return new MockClient.RequestMatcher() {
