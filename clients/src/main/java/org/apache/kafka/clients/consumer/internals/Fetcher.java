@@ -419,6 +419,32 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         resetOffsetsAsync(offsetResetTimestamps);
     }
 
+    /**
+     *  Validate offsets for all assigned partitions for which a leader change has been detected.
+     */
+    public void validateOffsetsIfNeeded() {
+        RuntimeException exception = cachedOffsetForLeaderException.getAndSet(null);
+        if (exception != null)
+            throw exception;
+
+        // Check for a leader change
+        subscriptions.assignedPartitions().forEach(topicPartition -> {
+            ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
+
+            // Check the latest epoch from subscription
+            SubscriptionState.FetchPosition position = this.subscriptions.position(topicPartition);
+
+            // If the leader or epoch have changed, we need to validate the fetch position
+            if (position != null && !position.safeToFetchFrom(leaderAndEpoch)) {
+                if (position.lastFetchEpoch.isPresent()) {
+                    subscriptions.maybeValidatePosition(topicPartition, leaderAndEpoch);
+                }
+            }
+        });
+
+        validateOffsetsAsync();
+    }
+
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
                                                                    Timer timer) {
         metadata.addTransientTopics(topicsForPartitions(timestampsToSearch.keySet()));
@@ -1025,32 +1051,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             reqs.put(entry.getKey(), entry.getValue().build());
         }
         return reqs;
-    }
-
-    /**
-     *  Check if any assigned partitions need to have their offsets validated due to a leader change
-     */
-    public void validateOffsetsIfNeeded() {
-        RuntimeException exception = cachedOffsetForLeaderException.getAndSet(null);
-        if (exception != null)
-            throw exception;
-
-        // Check for a leader change
-        subscriptions.assignedPartitions().forEach(topicPartition -> {
-            ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
-
-            // Check the latest epoch from subscription
-            SubscriptionState.FetchPosition position = this.subscriptions.position(topicPartition);
-
-            // If the leader or epoch have changed, we need to validate the fetch position
-            if (position != null && !position.safeToFetchFrom(leaderAndEpoch)) {
-                if (position.lastFetchEpoch.isPresent()) {
-                    subscriptions.maybeValidatePosition(topicPartition, leaderAndEpoch);
-                }
-            }
-        });
-
-        validateOffsetsAsync();
     }
 
 
