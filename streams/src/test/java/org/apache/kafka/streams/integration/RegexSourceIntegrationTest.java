@@ -161,7 +161,9 @@ public class RegexSourceIntegrationTest {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
-                    return assignedTopics.equals(expectedFirstAssignment);
+                    synchronized (assignedTopics) {
+                        return assignedTopics.equals(expectedFirstAssignment);
+                    }
                 }
             }, STREAM_TASKS_NOT_UPDATED);
 
@@ -170,7 +172,9 @@ public class RegexSourceIntegrationTest {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
-                    return assignedTopics.equals(expectedSecondAssignment);
+                    synchronized (assignedTopics) {
+                        return assignedTopics.equals(expectedSecondAssignment);
+                    }
                 }
             }, STREAM_TASKS_NOT_UPDATED);
         } finally {
@@ -215,7 +219,9 @@ public class RegexSourceIntegrationTest {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
-                    return assignedTopics.equals(expectedFirstAssignment);
+                    synchronized (assignedTopics) {
+                        return assignedTopics.equals(expectedFirstAssignment);
+                    }
                 }
             }, STREAM_TASKS_NOT_UPDATED);
 
@@ -224,7 +230,9 @@ public class RegexSourceIntegrationTest {
             TestUtils.waitForCondition(new TestCondition() {
                 @Override
                 public boolean conditionMet() {
-                    return assignedTopics.equals(expectedSecondAssignment);
+                    synchronized (assignedTopics) {
+                        return assignedTopics.equals(expectedSecondAssignment);
+                    }
                 }
             }, STREAM_TASKS_NOT_UPDATED);
         } finally {
@@ -440,16 +448,20 @@ public class RegexSourceIntegrationTest {
 
         @Override
         public void onPartitionsRevoked(final Collection<TopicPartition> partitions) {
-            assignedTopics.clear();
+            synchronized (assignedTopics) {
+                assignedTopics.clear();
+            }
             listener.onPartitionsRevoked(partitions);
         }
 
         @Override
         public void onPartitionsAssigned(final Collection<TopicPartition> partitions) {
-            for (final TopicPartition partition : partitions) {
-                assignedTopics.add(partition.topic());
+            synchronized (assignedTopics) {
+                for (final TopicPartition partition : partitions) {
+                    assignedTopics.add(partition.topic());
+                }
+                Collections.sort(assignedTopics);
             }
-            Collections.sort(assignedTopics);
             listener.onPartitionsAssigned(partitions);
         }
     }
