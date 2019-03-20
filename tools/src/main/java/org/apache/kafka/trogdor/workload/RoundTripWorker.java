@@ -61,7 +61,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
@@ -99,7 +98,7 @@ public class RoundTripWorker implements TaskWorker {
 
     private KafkaConsumer<byte[], byte[]> consumer;
 
-    private AtomicLong unackedSends;
+    private volatile Long unackedSends;
 
     private ToSendTracker toSendTracker;
 
@@ -121,7 +120,7 @@ public class RoundTripWorker implements TaskWorker {
         this.doneFuture = doneFuture;
         this.producer = null;
         this.consumer = null;
-        this.unackedSends = new AtomicLong(spec.maxMessages());
+        this.unackedSends = spec.maxMessages();
         executor.submit(new Prepare());
     }
 
@@ -255,8 +254,14 @@ public class RoundTripWorker implements TaskWorker {
                         spec.valueGenerator().generate(messageIndex));
                     producer.send(record, (metadata, exception) -> {
                         if (exception == null) {
-                            if (unackedSends.decrementAndGet() <= 0)
-                                unackedSendsAreZero.signalAll();
+                            try {
+                                lock.lock();
+                                unackedSends -= 1;
+                                if (unackedSends <= 0)
+                                    unackedSendsAreZero.signalAll();
+                            } finally {
+                                lock.unlock();
+                            }
                         } else {
                             log.info("{}: Got exception when sending message {}: {}",
                                 id, messageIndex, exception.getMessage());
@@ -269,7 +274,7 @@ public class RoundTripWorker implements TaskWorker {
             } finally {
                 log.info("{}: ProducerRunnable is exiting.  messagesSent={}; uniqueMessagesSent={}; " +
                         "ackedSends={}/{}.", id, messagesSent, uniqueMessagesSent,
-                        spec.maxMessages() - unackedSends.get(), spec.maxMessages());
+                        spec.maxMessages() - unackedSends, spec.maxMessages());
             }
         }
     }
@@ -340,7 +345,6 @@ public class RoundTripWorker implements TaskWorker {
                 long lastLogTimeMs = Time.SYSTEM.milliseconds();
                 while (true) {
                     try {
-                        lock.lock();
                         pollInvoked++;
                         ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(50));
                         for (Iterator<ConsumerRecord<byte[], byte[]>> iter = records.iterator(); iter.hasNext(); ) {
@@ -350,10 +354,16 @@ public class RoundTripWorker implements TaskWorker {
                             if (toReceiveTracker.removePending(messageIndex)) {
                                 uniqueMessagesReceived++;
                                 if (uniqueMessagesReceived >= spec.maxMessages()) {
-                                    log.info("{}: Consumer received the full count of {} unique messages.  " +
-                                        "Waiting for all sends to be acked...", id, spec.maxMessages());
-                                    while (unackedSends.get() > 0)
-                                        unackedSendsAreZero.await();
+                                    try {
+                                        lock.lock();
+                                        log.info("{}: Consumer received the full count of {} unique messages.  " +
+                                            "Waiting for all {} sends to be acked...", id, spec.maxMessages(), unackedSends);
+                                        while (unackedSends > 0)
+                                            unackedSendsAreZero.await();
+                                    } finally {
+                                        lock.unlock();
+                                    }
+
                                     log.info("{}: all sends have been acked.", id);
                                     new StatusUpdater().update();
                                     doneFuture.complete("");
