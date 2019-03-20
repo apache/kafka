@@ -44,11 +44,11 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         this.partitioner = partitioner;
     }
 
-    public Serializer getKeySer() {
+    public Serializer getKeySerializer() {
         return keySerializer;
     }
 
-    public Serializer getValueSer() {
+    public Serializer getValueSerializer() {
         return valSerializer;
     }
 
