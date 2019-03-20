@@ -369,8 +369,6 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
             assertThat(getOptions(segment).level0FileNumCompactionTrigger(), equalTo(1 << 30));
         }
 
-        bytesStore.getSegments().forEach(s -> s.toggleDbForBulkLoading(false));
-
         final List<KeyValue<Windowed<String>, Long>> expected = new ArrayList<>();
         expected.add(new KeyValue<>(new Windowed<>(key, windows[0]), 50L));
         expected.add(new KeyValue<>(new Windowed<>(key, windows[3]), 100L));
