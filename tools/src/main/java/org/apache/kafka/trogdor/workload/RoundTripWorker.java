@@ -98,7 +98,7 @@ public class RoundTripWorker implements TaskWorker {
 
     private KafkaConsumer<byte[], byte[]> consumer;
 
-    private volatile Long unackedSends;
+    private Long unackedSends;
 
     private ToSendTracker toSendTracker;
 
@@ -272,9 +272,14 @@ public class RoundTripWorker implements TaskWorker {
             } catch (Throwable e) {
                 WorkerUtils.abort(log, "ProducerRunnable", e, doneFuture);
             } finally {
-                log.info("{}: ProducerRunnable is exiting.  messagesSent={}; uniqueMessagesSent={}; " +
-                        "ackedSends={}/{}.", id, messagesSent, uniqueMessagesSent,
-                        spec.maxMessages() - unackedSends, spec.maxMessages());
+                try {
+                    lock.lock();
+                    log.info("{}: ProducerRunnable is exiting.  messagesSent={}; uniqueMessagesSent={}; " +
+                                    "ackedSends={}/{}.", id, messagesSent, uniqueMessagesSent,
+                            spec.maxMessages() - unackedSends, spec.maxMessages());
+                } finally {
+                    lock.unlock();
+                }
             }
         }
     }
