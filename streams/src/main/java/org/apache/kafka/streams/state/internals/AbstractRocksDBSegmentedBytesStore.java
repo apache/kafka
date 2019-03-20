@@ -259,11 +259,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 }
                 try {
                     final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
-                    if (record.value == null) {
-                        batch.delete(record.key);
-                    } else {
-                        batch.put(record.key, record.value);
-                    }
+                    segment.addToBatch(record, batch);
                 } catch (final RocksDBException e) {
                     throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
                 }
