@@ -18,10 +18,13 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.FetchSessionHandler;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MetadataCache;
 import org.apache.kafka.clients.StaleMetadataException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.LogTruncationException;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -134,8 +137,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final IsolationLevel isolationLevel;
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
     private final AtomicReference<RuntimeException> cachedListOffsetsException = new AtomicReference<>();
+    private final AtomicReference<RuntimeException> cachedOffsetForLeaderException = new AtomicReference<>();
 
-    private final OffsetsForLeaderEpochFetcher offsetsForLeaderEpochFetcher;
+    private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
 
 
     private PartitionRecords nextInLineRecords = null;
@@ -178,7 +182,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
         this.isolationLevel = isolationLevel;
         this.sessionHandlers = new HashMap<>();
-        this.offsetsForLeaderEpochFetcher = new OffsetsForLeaderEpochFetcher(metadata, subscriptions, client, time, requestTimeoutMs, retryBackoffMs);
+        this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client);
 
         subscriptions.addListener(this);
     }
@@ -666,6 +670,76 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     }
 
     /**
+     * For each partition which needs validation, make an asynchronous request to get the end-offsets for the partition
+     * with the epoch less than or equal to the epoch the partition last saw.
+     *
+     * Requests are grouped by Node for efficiency.
+     */
+    private void validateOffsetsAsync() {
+        Set<TopicPartition> partitions = subscriptions.partitionsNeedingValidation(time.milliseconds());
+        Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = partitions.stream()
+                .collect(Collectors.toMap(Function.identity(), subscriptions::position));
+
+        final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
+                regroupPartitionMapByNode(positionMap);
+
+        regrouped.forEach((node, dataMap) -> {
+            subscriptions.setNextAllowedRetry(dataMap.keySet(), time.milliseconds() + requestTimeoutMs);
+
+            RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future = offsetsForLeaderEpochClient.sendAsyncRequest(node, positionMap);
+            future.addListener(new RequestFutureListener<OffsetsForLeaderEpochClient.OffsetForEpochResult>() {
+                @Override
+                public void onSuccess(OffsetsForLeaderEpochClient.OffsetForEpochResult offsetsResult) {
+                    Map<TopicPartition, OffsetAndMetadata> truncationWithoutResetPolicy = new HashMap<>();
+                    if (!offsetsResult.partitionsToRetry().isEmpty()) {
+                        subscriptions.setNextAllowedRetry(offsetsResult.partitionsToRetry(), time.milliseconds() + retryBackoffMs);
+                        metadata.requestUpdate();
+                    }
+
+                    // For each OffsetsForLeader response, check if the end-offset is lower than our current offset
+                    // for the partition. If so, it means we have experienced log truncation and need to reposition
+                    // that partition's offset.
+                    offsetsResult.endOffsets().forEach((respTopicPartition, respEndOffset) -> {
+                        if (subscriptions.awaitingValidation(respTopicPartition)) {
+                            SubscriptionState.FetchPosition currentPosition = subscriptions.position(respTopicPartition);
+                            if (respEndOffset.endOffset() < currentPosition.offset) {
+                                if (subscriptions.hasDefaultOffsetResetPolicy()) {
+                                    Metadata.LeaderAndEpoch currentLeader = metadata.leaderAndEpoch(respTopicPartition);
+                                    SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                                            respEndOffset.endOffset(), Optional.of(respEndOffset.leaderEpoch()), currentLeader);
+                                    log.info("Truncation detected for partition {}, resetting offset to {}", respTopicPartition, newPosition);
+                                    subscriptions.position(respTopicPartition, newPosition);
+                                } else {
+                                    log.warn("Truncation detected for partition {}, but no reset policy is set", respTopicPartition);
+                                    truncationWithoutResetPolicy.put(respTopicPartition, new OffsetAndMetadata(
+                                            respEndOffset.endOffset(), Optional.of(respEndOffset.leaderEpoch()), null));
+                                }
+                            } else {
+                                // Offset is fine, clear the validation state
+                                subscriptions.validate(respTopicPartition);
+                            }
+                        }
+                    });
+
+                    if (!truncationWithoutResetPolicy.isEmpty()) {
+                        throw new LogTruncationException(truncationWithoutResetPolicy);
+                    }
+                }
+
+                @Override
+                public void onFailure(RuntimeException e) {
+                    subscriptions.resetFailed(dataMap.keySet(), time.milliseconds() + retryBackoffMs);
+                    metadata.requestUpdate();
+
+                    if (!(e instanceof RetriableException) && !cachedOffsetForLeaderException.compareAndSet(null, e)) {
+                        log.error("Discarding error in OffsetsForLeaderEpoch because another error is pending", e);
+                    }
+                }
+            });
+        });
+    }
+
+    /**
      * Search the offsets by target times for the specified partitions.
      *
      * @param timestampsToSearch the mapping between partitions and target time
@@ -956,9 +1030,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     /**
      *  Check if any assigned partitions need to have their offsets validated due to a leader change
      */
-    public void checkForLeaderChange() {
-        offsetsForLeaderEpochFetcher.clearAndMaybeThrowException();
+    public void validateOffsetsIfNeeded() {
+        RuntimeException exception = cachedOffsetForLeaderException.getAndSet(null);
+        if (exception != null)
+            throw exception;
 
+        // Check for a leader change
         subscriptions.assignedPartitions().forEach(topicPartition -> {
             ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
 
@@ -973,8 +1050,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             }
         });
 
-        offsetsForLeaderEpochFetcher.validateOffsetsAsync();
+        validateOffsetsAsync();
     }
+
 
     private <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(Map<TopicPartition, T> partitionMap) {
         return partitionMap.entrySet()

@@ -15,6 +15,9 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
+/**
+ * Convenience class for making asynchronous requests to the OffsetsForLeaderEpoch API
+ */
 public class OffsetsForLeaderEpochClient extends AsyncClient<
         Map<TopicPartition, SubscriptionState.FetchPosition>,
         OffsetsForLeaderEpochRequest,
