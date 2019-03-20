@@ -83,8 +83,11 @@ public class KStreamAggregationDedupIntegrationTest {
     private KGroupedStream<String, String> groupedStream;
     private Reducer<String> reducer;
     private KStream<Integer, String> stream;
+    final MyIntegerSerde keyIntSerde = new MyIntegerSerde();
+    final MyStringSerde valueStringSerde = new MyStringSerde();
 
     @Before
+    @SuppressWarnings("unchecked")
     public void before() throws InterruptedException {
         testNo++;
         builder = new StreamsBuilder();
@@ -100,7 +103,7 @@ public class KStreamAggregationDedupIntegrationTest {
         streamsConfiguration.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
         final KeyValueMapper<Integer, String, String> mapper = MockMapper.selectValueMapper();
-        stream = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
+        stream = builder.stream(streamOneInput, Consumed.with(keyIntSerde, valueStringSerde));
         groupedStream = stream.groupBy(mapper, Grouped.with(Serdes.String(), Serdes.String()));
 
         reducer = (value1, value2) -> value1 + ":" + value2;
@@ -108,6 +111,8 @@ public class KStreamAggregationDedupIntegrationTest {
 
     @After
     public void whenShuttingDown() throws IOException {
+        assertTrue(keyIntSerde.configured());
+        assertTrue(valueStringSerde.configured());
         if (kafkaStreams != null) {
             kafkaStreams.close();
         }
