@@ -567,13 +567,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         KStreamImpl<K, V> joinThis = this;
         KStreamImpl<K, VO> joinOther = (KStreamImpl<K, VO>) other;
 
+        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
+        final String name = joinedInternal.name();
         if (joinThis.repartitionRequired) {
-            final String leftJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-left" : joinThis.name;
+            final String leftJoinRepartitionTopicName = name != null ? name + "-left" : joinThis.name;
             joinThis = joinThis.repartitionForJoin(leftJoinRepartitionTopicName, joined.keySerde(), joined.valueSerde());
         }
 
         if (joinOther.repartitionRequired) {
-            final String rightJoinRepartitionTopicName = joined.name() != null ? joined.name() + "-right" : joinOther.name;
+            final String rightJoinRepartitionTopicName = name != null ? name + "-right" : joinOther.name;
             joinOther = joinOther.repartitionForJoin(rightJoinRepartitionTopicName, joined.keySerde(), joined.otherValueSerde());
         }
 
@@ -679,9 +681,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(other, "other can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
+
+        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
+        final String name = joinedInternal.name();
         if (repartitionRequired) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
-                joined.name() != null ? joined.name() : name,
+                name != null ? name : this.name,
                 joined.keySerde(),
                 joined.valueSerde()
             );
@@ -703,9 +708,11 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(other, "other can't be null");
         Objects.requireNonNull(joiner, "joiner can't be null");
         Objects.requireNonNull(joined, "joined can't be null");
+        final JoinedInternal<K, V, VO> joinedInternal = new JoinedInternal<>(joined);
+        final String internalName = joinedInternal.name();
         if (repartitionRequired) {
             final KStreamImpl<K, V> thisStreamRepartitioned = repartitionForJoin(
-                joined.name() != null ? joined.name() : name,
+                internalName != null ? internalName : name,
                 joined.keySerde(),
                 joined.valueSerde()
             );
