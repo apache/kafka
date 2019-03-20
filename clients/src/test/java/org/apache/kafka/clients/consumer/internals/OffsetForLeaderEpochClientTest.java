@@ -105,7 +105,7 @@ public class OffsetForLeaderEpochClientTest {
 
         assertTrue(future.failed());
         assertEquals(future.exception().getClass(), TopicAuthorizationException.class);
-        assertTrue(((TopicAuthorizationException)future.exception()).unauthorizedTopics().contains(tp0.topic()));
+        assertTrue(((TopicAuthorizationException) future.exception()).unauthorizedTopics().contains(tp0.topic()));
     }
 
     @Test
