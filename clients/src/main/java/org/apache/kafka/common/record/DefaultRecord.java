@@ -369,6 +369,66 @@ public class DefaultRecord implements Record {
         }
     }
 
+    /**
+     * Compute size in bytes of record body and size in bytes of a full record without depressed.
+     *
+     * @param input
+     * @param baseOffset
+     * @param baseTimestamp
+     * @param baseSequence
+     * @param logAppendTime
+     * @return
+     * @throws IOException
+     */
+    public static SimplifiedDefaultRecord simplifiedreadFrom(DataInput input,
+                                                             long baseOffset,
+                                                             long baseTimestamp,
+                                                             int baseSequence,
+                                                             Long logAppendTime) throws IOException {
+        int sizeOfBodyInBytes = ByteUtils.readVarint(input);
+        int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
+        return simplifiedreadFrom(input, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
+                baseSequence, logAppendTime);
+    }
+
+    private static SimplifiedDefaultRecord simplifiedreadFrom(DataInput input,
+                                                              int sizeInBytes,
+                                                              int sizeOfBodyInBytes,
+                                                              long baseOffset,
+                                                              long baseTimestamp,
+                                                              int baseSequence,
+                                                              Long logAppendTime) throws IOException {
+        try {
+            byte attributes = input.readByte();
+            int skipBytes = 1;
+            long timestampDelta = ByteUtils.readVarlong(input);
+            long timestamp = baseTimestamp + timestampDelta;
+            if (logAppendTime != null)
+                timestamp = logAppendTime;
+            skipBytes += ByteUtils.sizeOfVarlong(timestampDelta);
+
+            int offsetDelta = ByteUtils.readVarint(input);
+            long offset = baseOffset + offsetDelta;
+            int sequence = baseSequence >= 0 ?
+                    DefaultRecordBatch.incrementSequence(baseSequence, offsetDelta) :
+                    RecordBatch.NO_SEQUENCE;
+            skipBytes += ByteUtils.sizeOfVarlong(offsetDelta);
+
+            int keySize = ByteUtils.readVarint(input);
+            boolean hasKey = false;
+            if (keySize >= 0) {
+                hasKey = true;
+            }
+            skipBytes += ByteUtils.sizeOfVarlong(keySize);
+
+            input.skipBytes(sizeOfBodyInBytes - skipBytes);
+
+            return new SimplifiedDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, hasKey);
+        } catch (BufferUnderflowException | IllegalArgumentException e) {
+            throw new InvalidRecordException("Found invalid record structure", e);
+        }
+    }
+
     private static Header[] readHeaders(ByteBuffer buffer, int numHeaders) {
         Header[] headers = new Header[numHeaders];
         for (int i = 0; i < numHeaders; i++) {

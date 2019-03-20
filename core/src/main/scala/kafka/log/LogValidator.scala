@@ -23,7 +23,7 @@ import kafka.common.LongRef
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record.{AbstractRecords, CompressionType, InvalidRecordException, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.mutable
@@ -266,7 +266,7 @@ private[kafka] object LogValidator extends Logging {
         if (sourceCodec == NoCompressionCodec && batch.isControlBatch)
           inPlaceAssignment = true
 
-        for (record <- batch.asScala) {
+        for (record <- batch.asInstanceOf[DefaultRecordBatch].simplifiedIterator().asScala) {
           if (sourceCodec != NoCompressionCodec && record.isCompressed)
             throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
               s"compression attribute set: $record")
@@ -379,9 +379,9 @@ private[kafka] object LogValidator extends Logging {
   }
 
   /**
-   * This method validates the timestamps of a message.
-   * If the message is using create time, this method checks if it is within acceptable range.
-   */
+    * This method validates the timestamps of a message.
+    * If the message is using create time, this method checks if it is within acceptable range.
+    */
   private def validateTimestamp(batch: RecordBatch,
                                 record: Record,
                                 now: Long,
