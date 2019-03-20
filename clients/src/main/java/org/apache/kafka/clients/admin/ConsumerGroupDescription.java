@@ -45,6 +45,15 @@ public class ConsumerGroupDescription {
                                     Collection<MemberDescription> members,
                                     String partitionAssignor,
                                     ConsumerGroupState state,
+                                    Node coordinator) {
+        this(groupId, isSimpleConsumerGroup, members, partitionAssignor, state, coordinator, Collections.emptySet());
+    }
+
+    ConsumerGroupDescription(String groupId,
+                                    boolean isSimpleConsumerGroup,
+                                    Collection<MemberDescription> members,
+                                    String partitionAssignor,
+                                    ConsumerGroupState state,
                                     Node coordinator,
                                     Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;

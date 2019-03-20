@@ -138,8 +138,11 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     }, "Partition reassignment shouldn't complete.")
     val controllerId = zkClient.getControllerId.getOrElse(fail("Controller doesn't exist"))
     val controller = servers.filter(s => s.config.brokerId == controllerId).head
-    assertFalse("Partition reassignment should fail",
-      controller.kafkaController.controllerContext.partitionsBeingReassigned.contains(topicPartition))
+
+    // partitionsBeingReassigned is updated after re-assignment znode is removed, so wait again
+    TestUtils.waitUntilTrue(() => {
+      !controller.kafkaController.controllerContext.partitionsBeingReassigned.contains(topicPartition)
+    }, "Partition should be removed from partitionsBeingReassigned.")
     val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, 0))
     assertEquals("Partition should not be reassigned to 0, 1, 2", oldAssignedReplicas, assignedReplicas)
     follower.startup()

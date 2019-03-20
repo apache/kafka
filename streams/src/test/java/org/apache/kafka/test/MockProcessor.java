@@ -77,8 +77,11 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     public void process(final K key, final V value) {
         processedKeys.add(key);
         processedValues.add(value);
-        processed.add((key == null ? "null" : key) + ":" +
-                (value == null ? "null" : value));
+        processed.add(
+            (key == null ? "null" : key) +
+            ":" + (value == null ? "null" : value) +
+            " (ts: " + context().timestamp() + ")"
+        );
 
         if (commitRequested) {
             context().commit();
