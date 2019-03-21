@@ -19,6 +19,7 @@
  */
 package org.apache.kafka.streams.scala
 
+import java.util.Properties
 import java.util.regex.Pattern
 
 import org.apache.kafka.streams.kstream.GlobalKTable
@@ -27,7 +28,6 @@ import org.apache.kafka.streams.state.StoreBuilder
 import org.apache.kafka.streams.{Topology, StreamsBuilder => StreamsBuilderJ}
 import org.apache.kafka.streams.scala.kstream._
 import ImplicitConversions._
-import org.apache.kafka.streams.errors.TopologyException
 
 import scala.collection.JavaConverters._
 
@@ -163,7 +163,7 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
    *
    * @param builder the builder used to obtain this state store `StateStore` instance
    * @return the underlying Java abstraction `StreamsBuilder` after adding the `StateStore`
-   * @throws TopologyException if state store supplier is already added
+   * @throws org.apache.kafka.streams.errors.TopologyException if state store supplier is already added
    * @see `org.apache.kafka.streams.StreamsBuilder#addStateStore`
    */
   def addStateStore(builder: StoreBuilder[_ <: StateStore]): StreamsBuilderJ = inner.addStateStore(builder)
@@ -184,4 +184,14 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
     inner.addGlobalStore(storeBuilder, topic, consumed, stateUpdateSupplier)
 
   def build(): Topology = inner.build()
+
+  /**
+   * Returns the `Topology` that represents the specified processing logic and accepts
+   * a `Properties` instance used to indicate whether to optimize topology or not.
+   *
+   * @param props the `Properties` used for building possibly optimized topology
+   * @return the `Topology` that represents the specified processing logic
+   * @see `org.apache.kafka.streams.StreamsBuilder#build`
+   */
+  def build(props: Properties): Topology = inner.build(props)
 }

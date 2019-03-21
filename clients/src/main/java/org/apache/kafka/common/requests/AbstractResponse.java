@@ -77,7 +77,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case LIST_OFFSETS:
                 return new ListOffsetResponse(struct);
             case METADATA:
-                return new MetadataResponse(struct);
+                return new MetadataResponse(struct, version);
             case OFFSET_COMMIT:
                 return new OffsetCommitResponse(struct);
             case OFFSET_FETCH:
@@ -85,7 +85,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case FIND_COORDINATOR:
                 return new FindCoordinatorResponse(struct);
             case JOIN_GROUP:
-                return new JoinGroupResponse(struct);
+                return new JoinGroupResponse(struct, version);
             case HEARTBEAT:
                 return new HeartbeatResponse(struct);
             case LEAVE_GROUP:

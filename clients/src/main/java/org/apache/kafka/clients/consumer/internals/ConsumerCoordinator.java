@@ -33,6 +33,8 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -40,7 +42,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -166,16 +167,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected List<ProtocolMetadata> metadata() {
+    protected JoinGroupRequestData.JoinGroupRequestProtocolSet metadata() {
         log.debug("Joining group with current subscription: {}", subscriptions.subscription());
         this.joinedSubscription = subscriptions.subscription();
-        List<ProtocolMetadata> metadataList = new ArrayList<>();
+        JoinGroupRequestData.JoinGroupRequestProtocolSet protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolSet();
+
         for (PartitionAssignor assignor : assignors) {
             Subscription subscription = assignor.subscription(joinedSubscription);
             ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
-            metadataList.add(new ProtocolMetadata(assignor.name(), metadata));
+
+            protocolSet.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+                    .setName(assignor.name())
+                    .setMetadata(metadata.array()));
         }
-        return metadataList;
+        return protocolSet;
     }
 
     public void updatePatternSubscription(Cluster cluster) {
@@ -385,16 +390,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     @Override
     protected Map<String, ByteBuffer> performAssignment(String leaderId,
                                                         String assignmentStrategy,
-                                                        Map<String, ByteBuffer> allSubscriptions) {
+                                                        List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions) {
         PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
         Set<String> allSubscribedTopics = new HashSet<>();
         Map<String, Subscription> subscriptions = new HashMap<>();
-        for (Map.Entry<String, ByteBuffer> subscriptionEntry : allSubscriptions.entrySet()) {
-            Subscription subscription = ConsumerProtocol.deserializeSubscription(subscriptionEntry.getValue());
-            subscriptions.put(subscriptionEntry.getKey(), subscription);
+        for (JoinGroupResponseData.JoinGroupResponseMember memberSubScription : allSubscriptions) {
+            Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberSubScription.metadata()));
+            subscriptions.put(memberSubScription.memberId(), subscription);
             allSubscribedTopics.addAll(subscription.topics());
         }
 

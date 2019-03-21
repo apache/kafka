@@ -88,8 +88,8 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     /**
      * @throws UnsupportedOperationException on every invocation
      */
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
     }
@@ -97,8 +97,8 @@ public class GlobalProcessorContextImpl extends AbstractProcessorContext {
     /**
      * @throws UnsupportedOperationException on every invocation
      */
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final String childName) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in global processor context.");
     }

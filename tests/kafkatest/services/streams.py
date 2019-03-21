@@ -353,6 +353,10 @@ class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
+class StreamsSmokeTestEOSJobRunnerService(StreamsSmokeTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsSmokeTestEOSJobRunnerService, self).__init__(test_context, kafka, "process-eos")
+
 
 class StreamsEosTestDriverService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):

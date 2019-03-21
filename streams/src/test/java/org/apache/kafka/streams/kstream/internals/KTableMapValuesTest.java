@@ -45,10 +45,9 @@ import static org.junit.Assert.assertTrue;
 
 @SuppressWarnings("unchecked")
 public class KTableMapValuesTest {
-
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
     private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     private void doTestKTable(final StreamsBuilder builder,
@@ -59,14 +58,13 @@ public class KTableMapValuesTest {
             driver.pipeInput(recordFactory.create(topic1, "B", "2"));
             driver.pipeInput(recordFactory.create(topic1, "C", "3"));
             driver.pipeInput(recordFactory.create(topic1, "D", "4"));
-            assertEquals(asList("A:1", "B:2", "C:3", "D:4"), supplier.theCapturedProcessor().processed);
+            assertEquals(asList("A:1 (ts: 0)", "B:2 (ts: 0)", "C:3 (ts: 0)", "D:4 (ts: 0)"), supplier.theCapturedProcessor().processed);
         }
     }
 
     @Test
     public void testKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String topic1 = "topic1";
 
         final KTable<String, String> table1 = builder.table(topic1, consumed);
@@ -81,7 +79,6 @@ public class KTableMapValuesTest {
     @Test
     public void testQueryableKTable() {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String topic1 = "topic1";
 
         final KTable<String, String> table1 = builder.table(topic1, consumed);
@@ -166,7 +163,6 @@ public class KTableMapValuesTest {
     @Test
     public void testQueryableValueGetter() {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String topic1 = "topic1";
         final String storeName2 = "store2";
         final String storeName3 = "store3";
@@ -196,7 +192,6 @@ public class KTableMapValuesTest {
     @Test
     public void testNotSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String topic1 = "topic1";
 
         final KTableImpl<String, String, String> table1 =
@@ -205,11 +200,9 @@ public class KTableMapValuesTest {
             (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
-
         final Topology topology = builder.build().addProcessor("proc", supplier, table2.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
-
             final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
 
             assertFalse(table1.sendingOldValueEnabled());
@@ -218,43 +211,35 @@ public class KTableMapValuesTest {
             driver.pipeInput(recordFactory.create(topic1, "A", "01"));
             driver.pipeInput(recordFactory.create(topic1, "B", "01"));
             driver.pipeInput(recordFactory.create(topic1, "C", "01"));
-
-            proc.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+            proc.checkAndClearProcessResult("A:(1<-null) (ts: 0)", "B:(1<-null) (ts: 0)", "C:(1<-null) (ts: 0)");
 
             driver.pipeInput(recordFactory.create(topic1, "A", "02"));
             driver.pipeInput(recordFactory.create(topic1, "B", "02"));
-
-            proc.checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+            proc.checkAndClearProcessResult("A:(2<-null) (ts: 0)", "B:(2<-null) (ts: 0)");
 
             driver.pipeInput(recordFactory.create(topic1, "A", "03"));
-
-            proc.checkAndClearProcessResult("A:(3<-null)");
+            proc.checkAndClearProcessResult("A:(3<-null) (ts: 0)");
 
             driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
-
-            proc.checkAndClearProcessResult("A:(null<-null)");
+            proc.checkAndClearProcessResult("A:(null<-null) (ts: 0)");
         }
     }
 
     @Test
     public void testSendingOldValue() {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String topic1 = "topic1";
 
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
         final KTableImpl<String, String, Integer> table2 =
             (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
-
         table2.enableSendingOldValues();
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
-
         builder.build().addProcessor("proc", supplier, table2.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-
             final MockProcessor<String, Integer> proc = supplier.theCapturedProcessor();
 
             assertTrue(table1.sendingOldValueEnabled());
@@ -263,21 +248,17 @@ public class KTableMapValuesTest {
             driver.pipeInput(recordFactory.create(topic1, "A", "01"));
             driver.pipeInput(recordFactory.create(topic1, "B", "01"));
             driver.pipeInput(recordFactory.create(topic1, "C", "01"));
-
-            proc.checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+            proc.checkAndClearProcessResult("A:(1<-null) (ts: 0)", "B:(1<-null) (ts: 0)", "C:(1<-null) (ts: 0)");
 
             driver.pipeInput(recordFactory.create(topic1, "A", "02"));
             driver.pipeInput(recordFactory.create(topic1, "B", "02"));
-
-            proc.checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
+            proc.checkAndClearProcessResult("A:(2<-1) (ts: 0)", "B:(2<-1) (ts: 0)");
 
             driver.pipeInput(recordFactory.create(topic1, "A", "03"));
-
-            proc.checkAndClearProcessResult("A:(3<-2)");
+            proc.checkAndClearProcessResult("A:(3<-2) (ts: 0)");
 
             driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
-
-            proc.checkAndClearProcessResult("A:(null<-3)");
+            proc.checkAndClearProcessResult("A:(null<-3) (ts: 0)");
         }
     }
 }
