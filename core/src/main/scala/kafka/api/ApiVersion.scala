@@ -307,4 +307,6 @@ object ApiVersionValidator extends Validator {
       case e: IllegalArgumentException => throw new ConfigException(name, value.toString, e.getMessage)
     }
   }
+
+  override def toString: String = "[" + ApiVersion.allVersions.map(_.version).distinct.mkString(", ") + "]"
 }

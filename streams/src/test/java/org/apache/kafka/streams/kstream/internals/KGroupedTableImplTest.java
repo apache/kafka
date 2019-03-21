@@ -21,11 +21,10 @@ import org.apache.kafka.common.serialization.DoubleSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
-import org.apache.kafka.streams.kstream.ForeachAction;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KTable;
@@ -50,7 +49,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
-
 public class KGroupedTableImplTest {
 
     private final StreamsBuilder builder = new StreamsBuilder();
@@ -61,57 +59,84 @@ public class KGroupedTableImplTest {
 
     @Before
     public void before() {
-        groupedTable = builder.table("blah", Consumed.with(Serdes.String(), Serdes.String()))
-                .groupBy(MockMapper.<String, String>selectValueKeyValueMapper());
+        groupedTable = builder
+            .table("blah", Consumed.with(Serdes.String(), Serdes.String()))
+            .groupBy(MockMapper.selectValueKeyValueMapper());
     }
 
     @Test(expected = InvalidTopicException.class)
     public void shouldNotAllowInvalidStoreNameOnAggregate() {
-        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(INVALID_STORE_NAME));
+        groupedTable.aggregate(
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            MockAggregator.TOSTRING_REMOVER,
+            Materialized.as(INVALID_STORE_NAME));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullInitializerOnAggregate() {
-        groupedTable.aggregate(null, MockAggregator.TOSTRING_ADDER, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
+        groupedTable.aggregate(
+            null,
+            MockAggregator.TOSTRING_ADDER,
+            MockAggregator.TOSTRING_REMOVER,
+            Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullAdderOnAggregate() {
-        groupedTable.aggregate(MockInitializer.STRING_INIT, null, MockAggregator.TOSTRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
+        groupedTable.aggregate(
+            MockInitializer.STRING_INIT,
+            null,
+            MockAggregator.TOSTRING_REMOVER,
+            Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullSubtractorOnAggregate() {
-        groupedTable.aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, null, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
+        groupedTable.aggregate(
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            null,
+            Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullAdderOnReduce() {
-        groupedTable.reduce(null, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
+        groupedTable.reduce(
+            null,
+            MockReducer.STRING_REMOVER,
+            Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullSubtractorOnReduce() {
-        groupedTable.reduce(MockReducer.STRING_ADDER, null, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
+        groupedTable.reduce(
+            MockReducer.STRING_ADDER,
+            null,
+            Materialized.as("store"));
     }
 
     @Test(expected = InvalidTopicException.class)
     public void shouldNotAllowInvalidStoreNameOnReduce() {
-        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(INVALID_STORE_NAME));
+        groupedTable.reduce(
+            MockReducer.STRING_ADDER,
+            MockReducer.STRING_REMOVER,
+            Materialized.as(INVALID_STORE_NAME));
     }
 
     private Map<String, Integer> getReducedResults(final KTable<String, Integer> inputKTable) {
         final Map<String, Integer> reducedResults = new HashMap<>();
-        inputKTable.toStream().foreach(new ForeachAction<String, Integer>() {
-            @Override
-            public void apply(final String key, final Integer value) {
-                reducedResults.put(key, value);
-            }
-        });
+        inputKTable
+            .toStream()
+            .foreach(reducedResults::put);
         return reducedResults;
     }
-    private void assertReduced(final Map<String, Integer> reducedResults, final String topic, final TopologyTestDriver driver) {
-        final ConsumerRecordFactory<String, Double> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new DoubleSerializer());
+
+    private void assertReduced(final Map<String, Integer> reducedResults,
+                               final String topic,
+                               final TopologyTestDriver driver) {
+        final ConsumerRecordFactory<String, Double> recordFactory =
+            new ConsumerRecordFactory<>(new StringSerializer(), new DoubleSerializer());
         driver.pipeInput(recordFactory.create(topic, "A", 1.1, 10));
         driver.pipeInput(recordFactory.create(topic, "B", 2.2, 10));
 
@@ -130,20 +155,20 @@ public class KGroupedTableImplTest {
     @Test
     public void shouldReduce() {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
-            new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
-                @Override
-                public KeyValue<String, Integer> apply(final String key, final Number value) {
-                    return KeyValue.pair(key, value.intValue());
-                }
-            };
+            (key, value) -> KeyValue.pair(key, value.intValue());
 
-        final KTable<String, Integer> reduced = builder.table(topic,
-                                                              Consumed.with(Serdes.String(), Serdes.Double()),
-                                                              Materialized.<String, Double, KeyValueStore<Bytes, byte[]>>as("store")
-                                                                      .withKeySerde(Serdes.String())
-                                                                      .withValueSerde(Serdes.Double()))
+        final KTable<String, Integer> reduced = builder
+            .table(
+                topic,
+                Consumed.with(Serdes.String(), Serdes.Double()),
+                Materialized.<String, Double, KeyValueStore<Bytes, byte[]>>as("store")
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.Double()))
             .groupBy(intProjection)
-            .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR, Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("reduced"));
+            .reduce(
+                MockReducer.INTEGER_ADDER,
+                MockReducer.INTEGER_SUBTRACTOR,
+                Materialized.as("reduced"));
 
         final Map<String, Integer> results = getReducedResults(reduced);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -155,18 +180,15 @@ public class KGroupedTableImplTest {
     @Test
     public void shouldReduceWithInternalStoreName() {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
-            new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
-                @Override
-                public KeyValue<String, Integer> apply(final String key, final Number value) {
-                    return KeyValue.pair(key, value.intValue());
-                }
-            };
+            (key, value) -> KeyValue.pair(key, value.intValue());
 
-        final KTable<String, Integer> reduced = builder.table(topic,
-                                                              Consumed.with(Serdes.String(), Serdes.Double()),
-                                                              Materialized.<String, Double, KeyValueStore<Bytes, byte[]>>as("store")
-                                                                      .withKeySerde(Serdes.String())
-                                                                      .withValueSerde(Serdes.Double()))
+        final KTable<String, Integer> reduced = builder
+            .table(
+                topic,
+                Consumed.with(Serdes.String(), Serdes.Double()),
+                Materialized.<String, Double, KeyValueStore<Bytes, byte[]>>as("store")
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.Double()))
             .groupBy(intProjection)
             .reduce(MockReducer.INTEGER_ADDER, MockReducer.INTEGER_SUBTRACTOR);
 
@@ -181,20 +203,19 @@ public class KGroupedTableImplTest {
     @Test
     public void shouldReduceAndMaterializeResults() {
         final KeyValueMapper<String, Number, KeyValue<String, Integer>> intProjection =
-            new KeyValueMapper<String, Number, KeyValue<String, Integer>>() {
-                @Override
-                public KeyValue<String, Integer> apply(final String key, final Number value) {
-                    return KeyValue.pair(key, value.intValue());
-                }
-            };
+            (key, value) -> KeyValue.pair(key, value.intValue());
 
-        final KTable<String, Integer> reduced = builder.table(topic, Consumed.with(Serdes.String(), Serdes.Double()))
-                .groupBy(intProjection)
-                .reduce(MockReducer.INTEGER_ADDER,
-                        MockReducer.INTEGER_SUBTRACTOR,
-                        Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("reduce")
-                                .withKeySerde(Serdes.String())
-                                .withValueSerde(Serdes.Integer()));
+        final KTable<String, Integer> reduced = builder
+            .table(
+                topic,
+                Consumed.with(Serdes.String(), Serdes.Double()))
+            .groupBy(intProjection)
+            .reduce(
+                MockReducer.INTEGER_ADDER,
+                MockReducer.INTEGER_SUBTRACTOR,
+                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("reduce")
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.Integer()));
 
         final Map<String, Integer> results = getReducedResults(reduced);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -208,11 +229,17 @@ public class KGroupedTableImplTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldCountAndMaterializeResults() {
-        final KTable<String, String> table = builder.table(topic, Consumed.with(Serdes.String(), Serdes.String()));
-        table.groupBy(MockMapper.selectValueKeyValueMapper(), Grouped.with(Serdes.String(), Serdes.String()))
-                .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count")
-                               .withKeySerde(Serdes.String())
-                               .withValueSerde(Serdes.Long()));
+        builder
+            .table(
+                topic,
+                Consumed.with(Serdes.String(), Serdes.String()))
+            .groupBy(
+                MockMapper.selectValueKeyValueMapper(),
+                Grouped.with(Serdes.String(), Serdes.String()))
+            .count(
+                Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("count")
+                    .withKeySerde(Serdes.String())
+                    .withValueSerde(Serdes.Long()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(topic, driver);
@@ -225,14 +252,20 @@ public class KGroupedTableImplTest {
     @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateAndMaterializeResults() {
-        final KTable<String, String> table = builder.table(topic, Consumed.with(Serdes.String(), Serdes.String()));
-        table.groupBy(MockMapper.<String, String>selectValueKeyValueMapper(), Grouped.with(Serdes.String(), Serdes.String()))
-                .aggregate(MockInitializer.STRING_INIT,
-                           MockAggregator.TOSTRING_ADDER,
-                           MockAggregator.TOSTRING_REMOVER,
-                           Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("aggregate")
-                                   .withValueSerde(Serdes.String())
-                                   .withKeySerde(Serdes.String()));
+        builder
+            .table(
+                topic,
+                Consumed.with(Serdes.String(), Serdes.String()))
+            .groupBy(
+                MockMapper.selectValueKeyValueMapper(),
+                Grouped.with(Serdes.String(), Serdes.String()))
+            .aggregate(
+                MockInitializer.STRING_INIT,
+                MockAggregator.TOSTRING_ADDER,
+                MockAggregator.TOSTRING_REMOVER,
+                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("aggregate")
+                    .withValueSerde(Serdes.String())
+                    .withKeySerde(Serdes.String()));
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(topic, driver);
@@ -251,54 +284,69 @@ public class KGroupedTableImplTest {
     @SuppressWarnings("unchecked")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnReduceWhenMaterializedIsNull() {
-        groupedTable.reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, (Materialized) null);
+        groupedTable.reduce(
+            MockReducer.STRING_ADDER,
+            MockReducer.STRING_REMOVER,
+            (Materialized) null);
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnReduceWhenAdderIsNull() {
-        groupedTable.reduce(null, MockReducer.STRING_REMOVER, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
+        groupedTable.reduce(
+            null,
+            MockReducer.STRING_REMOVER,
+            Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnReduceWhenSubtractorIsNull() {
-        groupedTable.reduce(MockReducer.STRING_ADDER, null, Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
+        groupedTable.reduce(
+            MockReducer.STRING_ADDER,
+            null,
+            Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnAggregateWhenInitializerIsNull() {
-        groupedTable.aggregate(null,
-                               MockAggregator.TOSTRING_ADDER,
-                               MockAggregator.TOSTRING_REMOVER,
-                               Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
+        groupedTable.aggregate(
+            null,
+            MockAggregator.TOSTRING_ADDER,
+            MockAggregator.TOSTRING_REMOVER,
+            Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnAggregateWhenAdderIsNull() {
-        groupedTable.aggregate(MockInitializer.STRING_INIT,
-                               null,
-                               MockAggregator.TOSTRING_REMOVER,
-                               Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
+        groupedTable.aggregate(
+            MockInitializer.STRING_INIT,
+            null,
+            MockAggregator.TOSTRING_REMOVER,
+            Materialized.as("store"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnAggregateWhenSubtractorIsNull() {
-        groupedTable.aggregate(MockInitializer.STRING_INIT,
-                               MockAggregator.TOSTRING_ADDER,
-                               null,
-                               Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store"));
+        groupedTable.aggregate(
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            null,
+            Materialized.as("store"));
     }
 
     @SuppressWarnings("unchecked")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerOnAggregateWhenMaterializedIsNull() {
-        groupedTable.aggregate(MockInitializer.STRING_INIT,
-                               MockAggregator.TOSTRING_ADDER,
-                               MockAggregator.TOSTRING_REMOVER,
-                               (Materialized) null);
+        groupedTable.aggregate(
+            MockInitializer.STRING_INIT,
+            MockAggregator.TOSTRING_ADDER,
+            MockAggregator.TOSTRING_REMOVER,
+            (Materialized) null);
     }
 
-    private void processData(final String topic, final TopologyTestDriver driver) {
-        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+    private void processData(final String topic,
+                             final TopologyTestDriver driver) {
+        final ConsumerRecordFactory<String, String> recordFactory =
+            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
         driver.pipeInput(recordFactory.create(topic, "A", "1"));
         driver.pipeInput(recordFactory.create(topic, "B", "1"));
         driver.pipeInput(recordFactory.create(topic, "C", "1"));

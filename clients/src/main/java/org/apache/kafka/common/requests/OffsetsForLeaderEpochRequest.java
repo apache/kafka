@@ -98,8 +98,8 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("(type=OffsetForLeaderEpochRequest, ").
-                    append("epochsByTopic=").append(epochsByPartition).
+            bld.append("OffsetsForLeaderEpochRequest(").
+                    append("epochsByPartition=").append(epochsByPartition).
                     append(")");
             return bld.toString();
         }
@@ -180,5 +180,13 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             this.leaderEpoch = leaderEpoch;
         }
 
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(currentLeaderEpoch=").append(currentLeaderEpoch).
+                append(", leaderEpoch=").append(leaderEpoch).
+                append(")");
+            return bld.toString();
+        }
     }
 }

@@ -275,7 +275,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param timestamp A record timestamp
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public void setRecordMetadata(final String topic, final int partition, final long offset, final Headers headers, final long timestamp) {
+    public void setRecordMetadata(final String topic,
+                                  final int partition,
+                                  final long offset,
+                                  final Headers headers,
+                                  final long timestamp) {
         this.topic = topic;
         this.partition = partition;
         this.offset = offset;
@@ -390,7 +394,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     @Deprecated
-    public Cancellable schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) {
+    public Cancellable schedule(final long intervalMs,
+                                final PunctuationType type,
+                                final Punctuator callback) {
         final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(intervalMs, type, callback);
 
         punctuators.add(capturedPunctuator);
@@ -398,7 +404,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return capturedPunctuator::cancel;
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // removing #schedule(final long intervalMs,...) will fix this
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
@@ -433,8 +439,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         );
     }
 
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         throw new UnsupportedOperationException(
             "Forwarding to a child by index is deprecated. " +
@@ -442,8 +448,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         );
     }
 
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final String childName) {
         throw new UnsupportedOperationException(
             "Forwarding to a child by name is deprecated. " +

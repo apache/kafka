@@ -56,13 +56,13 @@ class AclCommandTest extends ZooKeeperTestHarness with Logging {
   )
 
   private val ResourceToOperations = Map[Set[Resource], (Set[Operation], Array[String])](
-    TopicResources -> (Set(Read, Write, Create, Describe, Delete, DescribeConfigs, AlterConfigs),
+    TopicResources -> (Set(Read, Write, Create, Describe, Delete, DescribeConfigs, AlterConfigs, Alter),
       Array("--operation", "Read" , "--operation", "Write", "--operation", "Create", "--operation", "Describe", "--operation", "Delete",
-        "--operation", "DescribeConfigs", "--operation", "AlterConfigs")),
-    Set(Resource.ClusterResource) -> (Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite),
+        "--operation", "DescribeConfigs", "--operation", "AlterConfigs", "--operation", "Alter")),
+    Set(Resource.ClusterResource) -> (Set(Create, ClusterAction, DescribeConfigs, AlterConfigs, IdempotentWrite, Alter, Describe),
       Array("--operation", "Create", "--operation", "ClusterAction", "--operation", "DescribeConfigs",
-        "--operation", "AlterConfigs", "--operation", "IdempotentWrite")),
-    GroupResources -> (Set(Read, Describe), Array("--operation", "Read", "--operation", "Describe")),
+        "--operation", "AlterConfigs", "--operation", "IdempotentWrite", "--operation", "Alter", "--operation", "Describe")),
+    GroupResources -> (Set(Read, Describe, Delete), Array("--operation", "Read", "--operation", "Describe", "--operation", "Delete")),
     TransactionalIdResources -> (Set(Describe, Write), Array("--operation", "Describe", "--operation", "Write")),
     TokenResources -> (Set(Describe), Array("--operation", "Describe"))
   )

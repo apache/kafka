@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -190,6 +191,36 @@ public class InternalTopicManagerTest {
         } catch (final StreamsException expected) {
             assertEquals(TimeoutException.class, expected.getCause().getClass());
         }
+    }
+
+    @Test
+    public void shouldLogWhenTopicNotFoundAndNotThrowException() {
+        LogCaptureAppender.setClassLoggerToDebug(InternalTopicManager.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+        mockAdminClient.addTopic(
+            false,
+            topic,
+            Collections.singletonList(new TopicPartitionInfo(0, broker1, cluster, Collections.emptyList())),
+            null);
+
+        final InternalTopicConfig internalTopicConfig = new RepartitionTopicConfig(topic, Collections.emptyMap());
+        internalTopicConfig.setNumberOfPartitions(1);
+
+        final InternalTopicConfig internalTopicConfigII = new RepartitionTopicConfig("internal-topic", Collections.emptyMap());
+        internalTopicConfigII.setNumberOfPartitions(1);
+
+        final Map<String, InternalTopicConfig> topicConfigMap = new HashMap<>();
+        topicConfigMap.put(topic, internalTopicConfig);
+        topicConfigMap.put("internal-topic", internalTopicConfigII);
+
+
+        internalTopicManager.makeReady(topicConfigMap);
+        boolean foundExpectedMessage = false;
+        for (final String message : appender.getMessages()) {
+            foundExpectedMessage |= message.contains("Topic internal-topic is unknown or not found, hence not existed yet.");
+        }
+        assertTrue(foundExpectedMessage);
+
     }
 
     @Test

@@ -53,6 +53,7 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
+import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
@@ -70,6 +71,10 @@ object TestUtils extends Logging {
 
   /* 0 gives a random port; you can then retrieve the assigned port from the Socket object. */
   val RandomPort = 0
+
+  /* Incorrect broker port which can used by kafka clients in tests. This port should not be used
+   by any other service and hence we use a reserved port. */
+  val IncorrectBrokerPort = 225
 
   /** Port to use for unit tests that mock/don't require a real ZK server. */
   val MockZkPort = 1
@@ -297,7 +302,17 @@ object TestUtils extends Logging {
                   topicConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] = {
     val adminZkClient = new AdminZkClient(zkClient)
     // create topic
-    adminZkClient.createTopic(topic, numPartitions, replicationFactor, topicConfig)
+    TestUtils.waitUntilTrue( () => {
+      var hasSessionExpirationException = false
+      try {
+        adminZkClient.createTopic(topic, numPartitions, replicationFactor, topicConfig)
+      } catch {
+        case _: SessionExpiredException => hasSessionExpirationException = true
+        case e => throw e // let other exceptions propagate
+      }
+      !hasSessionExpirationException},
+      s"Can't create topic $topic")
+
     // wait until the update metadata request for new topic reaches all servers
     (0 until numPartitions).map { i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
@@ -329,7 +344,17 @@ object TestUtils extends Logging {
                   topicConfig: Properties): scala.collection.immutable.Map[Int, Int] = {
     val adminZkClient = new AdminZkClient(zkClient)
     // create topic
-    adminZkClient.createTopicWithAssignment(topic, topicConfig, partitionReplicaAssignment)
+    TestUtils.waitUntilTrue( () => {
+      var hasSessionExpirationException = false
+      try {
+        adminZkClient.createTopicWithAssignment(topic, topicConfig, partitionReplicaAssignment)
+      } catch {
+        case _: SessionExpiredException => hasSessionExpirationException = true
+        case e => throw e // let other exceptions propagate
+      }
+      !hasSessionExpirationException},
+      s"Can't create topic $topic")
+
     // wait until the update metadata request for new topic reaches all servers
     partitionReplicaAssignment.keySet.map { i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
@@ -835,7 +860,7 @@ object TestUtils extends Logging {
                                           timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = servers.map(_.config.brokerId).toSet
     TestUtils.waitUntilTrue(() => servers.forall(server =>
-      expectedBrokerIds == server.apis.metadataCache.getAliveBrokers.map(_.id).toSet
+      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers.map(_.id).toSet
     ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
   }
 
@@ -855,7 +880,7 @@ object TestUtils extends Logging {
     TestUtils.waitUntilTrue(() =>
       servers.foldLeft(true) {
         (result, server) =>
-          val partitionStateOpt = server.apis.metadataCache.getPartitionInfo(topic, partition)
+          val partitionStateOpt = server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition)
           partitionStateOpt match {
             case None => false
             case Some(partitionState) =>
@@ -1029,9 +1054,9 @@ object TestUtils extends Logging {
     val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))
     // wait until admin path for delete topic is deleted, signaling completion of topic deletion
     TestUtils.waitUntilTrue(() => !zkClient.isTopicMarkedForDeletion(topic),
-      "Admin path /admin/delete_topic/%s path not deleted even after a replica is restarted".format(topic))
+      "Admin path /admin/delete_topics/%s path not deleted even after a replica is restarted".format(topic))
     TestUtils.waitUntilTrue(() => !zkClient.topicExists(topic),
-      "Topic path /brokers/topics/%s not deleted after /admin/delete_topic/%s path is deleted".format(topic, topic))
+      "Topic path /brokers/topics/%s not deleted after /admin/delete_topics/%s path is deleted".format(topic, topic))
     // ensure that the topic-partition has been deleted from all brokers' replica managers
     TestUtils.waitUntilTrue(() =>
       servers.forall(server => topicPartitions.forall(tp => server.replicaManager.getPartition(tp).isEmpty)),
@@ -1284,7 +1309,8 @@ object TestUtils extends Logging {
   def createTransactionalProducer(transactionalId: String,
                                   servers: Seq[KafkaServer],
                                   batchSize: Int = 16384,
-                                  transactionTimeoutMs: Long = 60000) = {
+                                  transactionTimeoutMs: Long = 60000,
+                                  maxBlockMs: Long = 60000) = {
     val props = new Properties()
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
     props.put(ProducerConfig.ACKS_CONFIG, "all")
@@ -1292,6 +1318,7 @@ object TestUtils extends Logging {
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
+    props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
     new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
   }
 

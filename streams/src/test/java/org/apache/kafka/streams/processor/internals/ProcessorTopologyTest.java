@@ -349,6 +349,32 @@ public class ProcessorTopologyTest {
     }
 
     @Test
+    public void shouldConsiderModifiedTimeStampsForMultipleProcessors() {
+        final int partition = 10;
+        driver = new TopologyTestDriver(createMultiProcessorTimestampTopology(partition), props);
+
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1", 10L));
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition, 10L);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1", partition, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition, 15L);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1", partition, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition, 12L);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1", partition, 22L);
+        assertNoOutputRecord(OUTPUT_TOPIC_1);
+        assertNoOutputRecord(OUTPUT_TOPIC_2);
+
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2", 20L));
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2", partition, 30L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition, 25L);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2", partition, 30L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition, 22L);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2", partition, 32L);
+        assertNoOutputRecord(OUTPUT_TOPIC_1);
+        assertNoOutputRecord(OUTPUT_TOPIC_2);
+    }
+
+    @Test
     public void shouldConsiderHeaders() {
         final int partition = 10;
         driver = new TopologyTestDriver(createSimpleTopology(partition), props);
@@ -489,6 +515,16 @@ public class ProcessorTopologyTest {
             .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
     }
 
+    private Topology createMultiProcessorTimestampTopology(final int partition) {
+        return topology
+            .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+            .addProcessor("processor", define(new FanOutTimestampProcessor("child1", "child2")), "source")
+            .addProcessor("child1", define(new ForwardingProcessor()), "processor")
+            .addProcessor("child2", define(new TimestampProcessor()), "processor")
+            .addSink("sink1", OUTPUT_TOPIC_1, constantPartitioner(partition), "child1")
+            .addSink("sink2", OUTPUT_TOPIC_2, constantPartitioner(partition), "child2");
+    }
+
     private Topology createMultiplexingTopology() {
         return topology
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
@@ -582,6 +618,25 @@ public class ProcessorTopologyTest {
         }
     }
 
+    protected static class FanOutTimestampProcessor extends AbstractProcessor<String, String> {
+        private final String firstChild;
+        private final String secondChild;
+
+        FanOutTimestampProcessor(final String firstChild,
+                                 final String secondChild) {
+            this.firstChild = firstChild;
+            this.secondChild = secondChild;
+        }
+
+        @Override
+        public void process(final String key, final String value) {
+            context().forward(key, value);
+            context().forward(key, value, To.child(firstChild).withTimestamp(context().timestamp() + 5));
+            context().forward(key, value, To.child(secondChild));
+            context().forward(key, value, To.all().withTimestamp(context().timestamp() + 2));
+        }
+    }
+
     protected static class AddHeaderProcessor extends AbstractProcessor<String, String> {
         @Override
         public void process(final String key, final String value) {
@@ -611,7 +666,7 @@ public class ProcessorTopologyTest {
             this.numChildren = numChildren;
         }
 
-        @SuppressWarnings("deprecation")
+        @SuppressWarnings("deprecation") // need to test deprecated code until removed
         @Override
         public void process(final String key, final String value) {
             for (int i = 0; i != numChildren; ++i) {
@@ -631,7 +686,7 @@ public class ProcessorTopologyTest {
             this.numChildren = numChildren;
         }
 
-        @SuppressWarnings("deprecation")
+        @SuppressWarnings("deprecation") // need to test deprecated code until removed
         @Override
         public void process(final String key, final String value) {
             for (int i = 0; i != numChildren; ++i) {

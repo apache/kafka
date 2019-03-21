@@ -25,7 +25,6 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
     private ProcessorNode currentNode;
-    private long streamTime;
 
     @Override
     public StreamsMetricsImpl metrics() {
@@ -64,21 +63,8 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     }
 
     @Override
-    public void initialize() {
-
-    }
+    public void initialize() {}
 
     @Override
-    public void uninitialize() {
-
-    }
-
-    @Override
-    public long streamTime() {
-        return streamTime;
-    }
-
-    public void setStreamTime(final long streamTime) {
-        this.streamTime = streamTime;
-    }
+    public void uninitialize() {}
 }

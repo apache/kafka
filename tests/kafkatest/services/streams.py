@@ -21,7 +21,7 @@ from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import KafkaConfig
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0
+from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0, LATEST_2_1
 
 STATE_DIR = "state.dir"
 
@@ -353,6 +353,10 @@ class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
+class StreamsSmokeTestEOSJobRunnerService(StreamsSmokeTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsSmokeTestEOSJobRunnerService, self).__init__(test_context, kafka, "process-eos")
+
 
 class StreamsEosTestDriverService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
@@ -482,7 +486,8 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
     def start_cmd(self, node):
         args = self.args.copy()
         if self.KAFKA_STREAMS_VERSION in [str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2),
-                                          str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0)]:
+                                          str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1),
+                                          str(LATEST_2_0), str(LATEST_2_1)]:
             args['kafka'] = self.kafka.bootstrap_servers()
         else:
             args['kafka'] = ""

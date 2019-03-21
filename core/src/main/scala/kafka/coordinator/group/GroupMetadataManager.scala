@@ -1273,7 +1273,10 @@ object GroupMetadataManager {
         val commitTimestamp = value.get(OFFSET_VALUE_COMMIT_TIMESTAMP_FIELD_V1).asInstanceOf[Long]
         val expireTimestamp = value.get(OFFSET_VALUE_EXPIRE_TIMESTAMP_FIELD_V1).asInstanceOf[Long]
 
-        OffsetAndMetadata(offset, metadata, commitTimestamp, expireTimestamp)
+        if (expireTimestamp == OffsetCommitRequest.DEFAULT_TIMESTAMP)
+          OffsetAndMetadata(offset, metadata, commitTimestamp)
+        else
+          OffsetAndMetadata(offset, metadata, commitTimestamp, expireTimestamp)
       } else if (version == 2) {
         val offset = value.get(OFFSET_VALUE_OFFSET_FIELD_V2).asInstanceOf[Long]
         val metadata = value.get(OFFSET_VALUE_METADATA_FIELD_V2).asInstanceOf[String]

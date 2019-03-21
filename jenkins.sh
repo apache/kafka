@@ -17,4 +17,14 @@
 # This script is used for verifying changes in Jenkins. In order to provide faster feedback, the tasks are ordered so
 # that faster tasks are executed in every module before slower tasks (if possible). For example, the unit tests for all
 # the modules are executed before the integration tests.
-./gradlew clean compileJava compileScala compileTestJava compileTestScala spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain unitTest rat integrationTest --no-daemon --continue -PxmlSpotBugsReport=true -PtestLoggingEvents=started,passed,skipped,failed "$@"
+
+# Run validation checks (compilation and static analysis)
+./gradlew clean compileJava compileScala compileTestJava compileTestScala \
+    spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
+    --profile --no-daemon --continue -PxmlSpotBugsReport=true "$@" \
+    || { echo 'Validation steps failed'; exit 1; }
+
+# Run tests
+./gradlew unitTest integrationTest \
+    --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed "$@" \
+    || { echo 'Test steps failed'; exit 1; }

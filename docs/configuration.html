@@ -234,7 +234,7 @@
 
   Configurations pertinent to topics have both a server default as well an optional per-topic override. If no per-topic configuration is given the server default is used. The override can be set at topic creation time by giving one or more <code>--config</code> options. This example creates a topic named <i>my-topic</i> with a custom max message size and flush rate:
   <pre class="brush: bash;">
-  &gt; bin/kafka-topics.sh --zookeeper localhost:2181 --create --topic my-topic --partitions 1
+  &gt; bin/kafka-topics.sh --bootstrap-server localhost:9092 --create --topic my-topic --partitions 1 \
       --replication-factor 1 --config max.message.bytes=64000 --config flush.messages=1
   </pre>
   Overrides can also be changed or set later using the alter configs command. This example updates the max message size for <i>my-topic</i>:

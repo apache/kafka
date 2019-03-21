@@ -16,80 +16,118 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.internals.CacheFlushListener;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
-import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.StateSerdes;
 
-import java.util.List;
 import java.util.Objects;
 
+class CachingSessionStore
+    extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
+    implements SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
 
-class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore implements SessionStore<Bytes, byte[]>, CachedStateStore<Windowed<K>, AGG> {
-
-    private final SessionStore<Bytes, byte[]> bytesStore;
     private final SessionKeySchema keySchema;
-    private final Serde<K> keySerde;
-    private final Serde<AGG> aggSerde;
     private final SegmentedCacheFunction cacheFunction;
     private String cacheName;
     private ThreadCache cache;
-    private StateSerdes<K, AGG> serdes;
     private InternalProcessorContext context;
-    private CacheFlushListener<Windowed<K>, AGG> flushListener;
+    private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
-    private String topic;
 
     CachingSessionStore(final SessionStore<Bytes, byte[]> bytesStore,
-                        final Serde<K> keySerde,
-                        final Serde<AGG> aggSerde,
                         final long segmentInterval) {
         super(bytesStore);
-        this.bytesStore = bytesStore;
-        this.keySerde = keySerde;
-        this.aggSerde = aggSerde;
         this.keySchema = new SessionKeySchema();
         this.cacheFunction = new SegmentedCacheFunction(keySchema, segmentInterval);
     }
 
+    @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), root.name());
         initInternal((InternalProcessorContext) context);
-        bytesStore.init(context, root);
+        super.init(context, root);
     }
 
     @SuppressWarnings("unchecked")
     private void initInternal(final InternalProcessorContext context) {
         this.context = context;
 
-        keySchema.init(topic);
-        serdes = new StateSerdes<>(
-            topic,
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            aggSerde == null ? (Serde<AGG>) context.valueSerde() : aggSerde);
-
-
-        cacheName = context.taskId() + "-" + bytesStore.name();
+        cacheName = context.taskId() + "-" + name();
         cache = context.getCache();
-        cache.addDirtyEntryFlushListener(cacheName, new ThreadCache.DirtyEntryFlushListener() {
-            @Override
-            public void apply(final List<ThreadCache.DirtyEntry> entries) {
-                for (final ThreadCache.DirtyEntry entry : entries) {
-                    putAndMaybeForward(entry, context);
-                }
+        cache.addDirtyEntryFlushListener(cacheName, entries -> {
+            for (final ThreadCache.DirtyEntry entry : entries) {
+                putAndMaybeForward(entry, context);
             }
         });
     }
 
+    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
+        final Bytes binaryKey = cacheFunction.key(entry.key());
+        final Windowed<Bytes> bytesKey = SessionKeySchema.from(binaryKey);
+        if (flushListener != null) {
+            final byte[] newValueBytes = entry.newValue();
+            final byte[] oldValueBytes = newValueBytes == null || sendOldValues ?
+                wrapped().fetchSession(bytesKey.key(), bytesKey.window().start(), bytesKey.window().end()) : null;
+
+            // this is an optimization: if this key did not exist in underlying store and also not in the cache,
+            // we can skip flushing to downstream as well as writing to underlying store
+            if (newValueBytes != null || oldValueBytes != null) {
+                // we need to get the old values if needed, and then put to store, and then flush
+                wrapped().put(bytesKey, entry.newValue());
+
+                final ProcessorRecordContext current = context.recordContext();
+                context.setRecordContext(entry.entry().context());
+                try {
+                    flushListener.apply(
+                        binaryKey.get(),
+                        newValueBytes,
+                        sendOldValues ? oldValueBytes : null,
+                        entry.entry().context().timestamp());
+                } finally {
+                    context.setRecordContext(current);
+                }
+            }
+        } else {
+            wrapped().put(bytesKey, entry.newValue());
+        }
+    }
+
+    @Override
+    public boolean setFlushListener(final CacheFlushListener<byte[], byte[]> flushListener,
+                                    final boolean sendOldValues) {
+        this.flushListener = flushListener;
+        this.sendOldValues = sendOldValues;
+
+        return true;
+    }
+
+    @Override
+    public void put(final Windowed<Bytes> key, final byte[] value) {
+        validateStoreOpen();
+        final Bytes binaryKey = SessionKeySchema.toBinary(key);
+        final LRUCacheEntry entry =
+            new LRUCacheEntry(
+                value,
+                context.headers(),
+                true,
+                context.offset(),
+                context.timestamp(),
+                context.partition(),
+                context.topic());
+        cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
+    }
+
+    @Override
+    public void remove(final Windowed<Bytes> sessionKey) {
+        validateStoreOpen();
+        put(sessionKey, null);
+    }
+
+    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
@@ -98,14 +136,15 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(key,
-                                                                                                earliestSessionEndTime,
-                                                                                                latestSessionStartTime);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(key,
+                                                                                               earliestSessionEndTime,
+                                                                                               latestSessionStartTime);
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key,
                                                                              key,
                                                                              earliestSessionEndTime,
                                                                              latestSessionStartTime);
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
+            new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction);
     }
 
@@ -120,37 +159,34 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
         final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
 
-        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = bytesStore.findSessions(
+        final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(
             keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime
         );
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(keyFrom,
                                                                              keyTo,
                                                                              earliestSessionEndTime,
                                                                              latestSessionStartTime);
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator =
+            new FilteredCacheIterator(cacheIterator, hasNextCondition, cacheFunction);
         return new MergedSortedCacheSessionStoreIterator(filteredCacheIterator, storeIterator, cacheFunction);
     }
 
     @Override
-    public void remove(final Windowed<Bytes> sessionKey) {
+    public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
+        Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
-        put(sessionKey, null);
-    }
-
-    @Override
-    public void put(final Windowed<Bytes> key, final byte[] value) {
-        validateStoreOpen();
-        final Bytes binaryKey = Bytes.wrap(SessionKeySchema.toBinary(key));
-        final LRUCacheEntry entry =
-            new LRUCacheEntry(
-                value,
-                context.headers(),
-                true,
-                context.offset(),
-                context.timestamp(),
-                context.partition(),
-                context.topic());
-        cache.put(cacheName, cacheFunction.cacheKey(binaryKey), entry);
+        if (cache == null) {
+            return wrapped().fetchSession(key, startTime, endTime);
+        } else {
+            final Bytes bytesKey = SessionKeySchema.toBinary(key, startTime, endTime);
+            final Bytes cacheKey = cacheFunction.cacheKey(bytesKey);
+            final LRUCacheEntry entry = cache.get(cacheName, cacheKey);
+            if (entry == null) {
+                return wrapped().fetchSession(key, startTime, endTime);
+            } else {
+                return entry.value();
+            }
+        }
     }
 
     @Override
@@ -160,56 +196,21 @@ class CachingSessionStore<K, AGG> extends WrappedStateStore.AbstractStateStore i
     }
 
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from,
+                                                           final Bytes to) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
         return findSessions(from, to, 0, Long.MAX_VALUE);
     }
 
-    private void putAndMaybeForward(final ThreadCache.DirtyEntry entry, final InternalProcessorContext context) {
-        final Bytes binaryKey = cacheFunction.key(entry.key());
-        final ProcessorRecordContext current = context.recordContext();
-        context.setRecordContext(entry.entry().context());
-        try {
-            final Windowed<K> key = SessionKeySchema.from(binaryKey.get(), serdes.keyDeserializer(), topic);
-            final Bytes rawKey = Bytes.wrap(serdes.rawKey(key.key()));
-            if (flushListener != null) {
-                final AGG newValue = serdes.valueFrom(entry.newValue());
-                final AGG oldValue = newValue == null || sendOldValues ? fetchPrevious(rawKey, key.window()) : null;
-                if (!(newValue == null && oldValue == null)) {
-                    flushListener.apply(key, newValue, oldValue);
-                }
-            }
-            bytesStore.put(new Windowed<>(rawKey, key.window()), entry.newValue());
-        } finally {
-            context.setRecordContext(current);
-        }
-    }
-
-    private AGG fetchPrevious(final Bytes rawKey, final Window window) {
-        try (final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = bytesStore.findSessions(rawKey, window.start(), window.end())) {
-            if (!iterator.hasNext()) {
-                return null;
-            }
-            return serdes.valueFrom(iterator.next().value);
-        }
-    }
-
     public void flush() {
         cache.flush(cacheName);
-        bytesStore.flush();
+        super.flush();
     }
 
     public void close() {
         flush();
         cache.close(cacheName);
-        bytesStore.close();
+        super.close();
     }
-
-    public void setFlushListener(final CacheFlushListener<Windowed<K>, AGG> flushListener,
-                                 final boolean sendOldValues) {
-        this.flushListener = flushListener;
-        this.sendOldValues = sendOldValues;
-    }
-
 }

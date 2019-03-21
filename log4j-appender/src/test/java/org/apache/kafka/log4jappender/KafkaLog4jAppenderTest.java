@@ -16,9 +16,15 @@
  */
 package org.apache.kafka.log4jappender;
 
+import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.CoreMatchers.not;
+import static org.hamcrest.MatcherAssert.assertThat;
+
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.log4j.Logger;
 import org.apache.log4j.PropertyConfigurator;
 import org.apache.log4j.helpers.LogLog;
@@ -77,6 +83,45 @@ public class KafkaLog4jAppenderTest {
         }
     }
 
+    @Test
+    public void testSetSaslMechanism() {
+        Properties props = getLog4jConfig(false);
+        props.put("log4j.appender.KAFKA.SaslMechanism", "PLAIN");
+        PropertyConfigurator.configure(props);
+
+        MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
+        assertThat(
+                mockKafkaLog4jAppender.getProducerProperties().getProperty(SaslConfigs.SASL_MECHANISM),
+                equalTo("PLAIN"));
+    }
+
+    @Test
+    public void testSaslMechanismNotSet() {
+        testProducerPropertyNotSet(SaslConfigs.SASL_MECHANISM);
+    }
+
+    @Test
+    public void testSetJaasConfig() {
+        Properties props = getLog4jConfig(false);
+        props.put("log4j.appender.KAFKA.ClientJaasConf", "jaas-config");
+        PropertyConfigurator.configure(props);
+
+        MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
+        assertThat(
+                mockKafkaLog4jAppender.getProducerProperties().getProperty(SaslConfigs.SASL_JAAS_CONFIG),
+                equalTo("jaas-config"));
+    }
+
+    @Test
+    public void testJaasConfigNotSet() {
+        testProducerPropertyNotSet(SaslConfigs.SASL_JAAS_CONFIG);
+    }
+
+    private void testProducerPropertyNotSet(String name) {
+        PropertyConfigurator.configure(getLog4jConfig(false));
+        MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
+        assertThat(mockKafkaLog4jAppender.getProducerProperties().stringPropertyNames(), not(hasItem(name)));
+    }
 
     @Test
     public void testLog4jAppends() {

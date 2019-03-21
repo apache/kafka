@@ -37,7 +37,7 @@ public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraph
                               final MaterializedInternal<K, V, S> materializedInternal,
                               final String[] storeNames) {
 
-        super(nodeName, false);
+        super(nodeName);
         this.processorParameters = processorParameters;
         this.materializedInternal = materializedInternal;
         this.storeNames = storeNames != null ? storeNames : new String[]{};
@@ -66,7 +66,11 @@ public class TableProcessorNode<K, V, S extends StateStore> extends StreamsGraph
         final boolean shouldMaterialize = materializedInternal != null && materializedInternal.queryableStoreName() != null;
         if (shouldMaterialize) {
             // TODO: we are enforcing this as a keyvalue store, but it should go beyond any type of stores
-            topologyBuilder.addStateStore(new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize(), processorName);
+            topologyBuilder.addStateStore(
+                new KeyValueStoreMaterializer<>(
+                    (MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal
+                ).materialize(),
+                processorName);
         }
     }
 }

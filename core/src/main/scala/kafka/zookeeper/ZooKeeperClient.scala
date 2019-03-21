@@ -29,7 +29,6 @@ import kafka.utils.{KafkaScheduler, Logging}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback._
 import org.apache.zookeeper.KeeperException.Code
-import org.apache.zookeeper.OpResult.{CreateResult, SetDataResult}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -321,6 +320,12 @@ class ZooKeeperClient(connectString: String,
 
   def close(): Unit = {
     info("Closing.")
+
+    // Shutdown scheduler outside of lock to avoid deadlock if scheduler
+    // is waiting for lock to process session expiry. Close expiry thread
+    // first to ensure that new clients are not created during close().
+    expiryScheduler.shutdown()
+
     inWriteLock(initializationLock) {
       zNodeChangeHandlers.clear()
       zNodeChildChangeHandlers.clear()
@@ -328,9 +333,6 @@ class ZooKeeperClient(connectString: String,
       zooKeeper.close()
       metricNames.foreach(removeMetric(_))
     }
-    // Shutdown scheduler outside of lock to avoid deadlock if scheduler
-    // is waiting for lock to process session expiry
-    expiryScheduler.shutdown()
     info("Closed.")
   }
 

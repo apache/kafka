@@ -25,6 +25,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Count;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
+import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -45,6 +47,9 @@ import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.io.IOException;
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -236,14 +241,13 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
         recordInfo = new PartitionGroup.RecordInfo();
         partitionGroup = new PartitionGroup(partitionQueues, recordLatenessSensor(processorContextImpl));
-        processorContextImpl.setStreamTimeSupplier(partitionGroup::timestamp);
 
         stateMgr.registerGlobalStateStores(topology.globalStateStores());
 
         // initialize transactions if eos is turned on, which will block if the previous transaction has not
         // completed yet; do not start the first transaction until the topology has been initialized later
         if (eosEnabled) {
-            this.producer.initTransactions();
+            initializeTransactions();
         }
     }
 
@@ -295,8 +299,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 throw new IllegalStateException("Task producer should be null.");
             }
             producer = producerSupplier.get();
-            producer.initTransactions();
+            initializeTransactions();
             recordCollector.init(producer);
+
+            if (stateMgr.checkpoint != null) {
+                try {
+                    stateMgr.checkpoint.delete();
+                    stateMgr.checkpoint = null;
+                } catch (final IOException e) {
+                    throw new ProcessorStateException(String.format("%sError while deleting the checkpoint file", logPrefix), e);
+                }
+            }
         }
     }
 
@@ -364,18 +377,33 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         } catch (final ProducerFencedException fatal) {
             throw new TaskMigratedException(this, fatal);
         } catch (final KafkaException e) {
-            throw new StreamsException(format("Exception caught in process. taskId=%s, processor=%s, topic=%s, partition=%d, offset=%d",
+            final String stackTrace = getStacktraceString(e);
+            throw new StreamsException(format("Exception caught in process. taskId=%s, " +
+                    "processor=%s, topic=%s, partition=%d, offset=%d, stacktrace=%s",
                 id(),
                 processorContext.currentNode().name(),
                 record.topic(),
                 record.partition(),
-                record.offset()
+                record.offset(),
+                stackTrace
             ), e);
         } finally {
             processorContext.setCurrentNode(null);
         }
 
         return true;
+    }
+
+    private String getStacktraceString(final KafkaException e) {
+        String stacktrace = null;
+        try (final StringWriter stringWriter = new StringWriter();
+             final PrintWriter printWriter = new PrintWriter(stringWriter)) {
+            e.printStackTrace(printWriter);
+            stacktrace = stringWriter.toString();
+        } catch (final IOException ioe) {
+            log.error("Encountered error extracting stacktrace from this exception", ioe);
+        }
+        return stacktrace;
     }
 
     /**
@@ -568,6 +596,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 commit(false);
             } finally {
                 if (eosEnabled) {
+
+                    stateMgr.checkpoint(activeTaskCheckpointableOffsets());
+
                     try {
                         recordCollector.close();
                     } catch (final ProducerFencedException e) {
@@ -841,5 +872,24 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
     Producer<byte[], byte[]> getProducer() {
         return producer;
+    }
+
+    private void initializeTransactions() {
+        try {
+            producer.initTransactions();
+        } catch (final TimeoutException retriable) {
+            log.error(
+                "Timeout exception caught when initializing transactions for task {}. " +
+                    "This might happen if the broker is slow to respond, if the network connection to " +
+                    "the broker was interrupted, or if similar circumstances arise. " +
+                    "You can increase producer parameter `max.block.ms` to increase this timeout.",
+                id,
+                retriable
+            );
+            throw new StreamsException(
+                format("%sFailed to initialize task %s due to timeout.", logPrefix, id),
+                retriable
+            );
+        }
     }
 }
