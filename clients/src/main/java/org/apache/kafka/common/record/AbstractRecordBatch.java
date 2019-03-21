@@ -36,7 +36,7 @@ abstract class AbstractRecordBatch implements RecordBatch {
     }
 
     @Override
-    public void setSimplified(boolean isSimplified){
+    public void setSimplified(boolean isSimplified) {
         this.isSimplified = isSimplified;
     }
 

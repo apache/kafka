@@ -28,7 +28,11 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.NoSuchElementException;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
@@ -313,7 +317,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (!isCompressed())
             return uncompressedIterator();
 
-        if(isSimplified()) {
+        if (isSimplified()) {
             return simplifiedIterator();
         }
 

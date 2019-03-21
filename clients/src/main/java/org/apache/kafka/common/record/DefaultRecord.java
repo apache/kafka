@@ -421,7 +421,12 @@ public class DefaultRecord implements Record {
             }
             skipBytes += ByteUtils.sizeOfVarlong(keySize);
 
-            input.skipBytes(sizeOfBodyInBytes - skipBytes);
+            skipBytes = sizeOfBodyInBytes - skipBytes;
+            if (skipBytes > 0) {
+                int currentSkipBytes = input.skipBytes(skipBytes);
+                if (currentSkipBytes != skipBytes)
+                    throw new InvalidRecordException("Found invalid record structure , skipBytes expected is " + skipBytes + ", actually is " + currentSkipBytes);
+            }
 
             return new SimplifiedDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, hasKey);
         } catch (BufferUnderflowException | IllegalArgumentException e) {
