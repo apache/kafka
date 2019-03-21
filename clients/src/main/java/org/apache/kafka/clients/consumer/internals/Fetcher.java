@@ -64,7 +64,6 @@ import org.apache.kafka.common.requests.ListOffsetRequest;
 import org.apache.kafka.common.requests.ListOffsetResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.CloseableIterator;
 import org.apache.kafka.common.utils.LogContext;
@@ -1002,7 +1001,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      */
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
-        Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> partitionsToValidate = new LinkedHashMap<>();
 
         for (TopicPartition partition : fetchablePartitions()) {
             Node node = metadata.partitionInfoIfCurrent(partition)
