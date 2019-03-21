@@ -69,13 +69,12 @@ public class MeteredSessionStore<K, V>
     public void init(final ProcessorContext context,
                      final StateStore root) {
         //noinspection unchecked
-        if (context.appConfigs() != null) {
-            if (keySerde != null) {
-                keySerde.configure(context.appConfigs(), true);
-            }
-            if (valueSerde != null) {
-                valueSerde.configure(context.appConfigs(), false);
-            }
+        final Map<String, Object> conf = context.appConfigs();
+        if (keySerde != null) {
+            keySerde.configure(conf, true);
+        }
+        if (valueSerde != null) {
+            valueSerde.configure(conf, false);
         }
         serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),

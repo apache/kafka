@@ -26,6 +26,8 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
+import java.util.Map;
+
 /**
  * A Metered {@link TimestampedKeyValueStore} wrapper that is used for recording operation metrics, and hence its
  * inner KeyValueStore implementation do not need to provide its own metrics collecting functionality.
@@ -48,13 +50,12 @@ public class MeteredTimestampedKeyValueStore<K, V>
 
     @SuppressWarnings("unchecked")
     void initStoreSerde(final ProcessorContext context) {
-        if (context.appConfigs() != null) {
-            if (keySerde != null) {
-                keySerde.configure(context.appConfigs(), true);
-            }
-            if (valueSerde != null) {
-                valueSerde.configure(context.appConfigs(), false);
-            }
+        final Map<String, Object> conf = context.appConfigs();
+        if (keySerde != null) {
+            keySerde.configure(conf, true);
+        }
+        if (valueSerde != null) {
+            valueSerde.configure(conf, false);
         }
         serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),

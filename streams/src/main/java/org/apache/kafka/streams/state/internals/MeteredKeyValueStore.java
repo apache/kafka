@@ -117,21 +117,18 @@ public class MeteredKeyValueStore<K, V>
     void initStoreSerde(final ProcessorContext context) {
         final Serde<K> usedKeySerde;
         final Serde<V> usedValueSerde;
+        final Map<String, Object> conf = context.appConfigs();
         if (keySerde == null) {
             usedKeySerde = (Serde<K>) context.keySerde();
         } else {
             usedKeySerde = keySerde;
-            if (context.appConfigs() != null) {
-                usedKeySerde.configure(context.appConfigs(), true);
-            }
+            usedKeySerde.configure(conf, true);
         }
         if (valueSerde == null) {
             usedValueSerde = (Serde<V>) context.valueSerde();
         } else {
             usedValueSerde = valueSerde;
-            if (context.appConfigs() != null) {
-                usedValueSerde.configure(context.appConfigs(), false);
-            }
+            usedValueSerde.configure(conf, false);
         }
         serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
