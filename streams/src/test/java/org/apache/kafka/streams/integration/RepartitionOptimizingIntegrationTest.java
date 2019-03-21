@@ -25,7 +25,6 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KafkaStreamsTest;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
@@ -64,7 +63,6 @@ import static java.time.Duration.ofSeconds;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 @Category({IntegrationTest.class})
 public class RepartitionOptimizingIntegrationTest {
@@ -128,7 +126,7 @@ public class RepartitionOptimizingIntegrationTest {
                            FOUR_REPARTITION_TOPICS);
     }
 
-    @SuppressWarnings("unchecked")
+
     private void runIntegrationTest(final String optimizationConfig,
                                     final int expectedNumberRepartitionTopics) throws Exception {
 
@@ -152,11 +150,9 @@ public class RepartitionOptimizingIntegrationTest {
 
         countStream.to(COUNT_TOPIC, Produced.with(Serdes.String(), Serdes.Long()));
 
-        final KStreamAggregationDedupIntegrationTest.MyIntegerSerde valueTestSerde = new KStreamAggregationDedupIntegrationTest.MyIntegerSerde();
-        final KafkaStreamsTest.MyStringSerde keyTestSerde = new KafkaStreamsTest.MyStringSerde();
         mappedStream.groupByKey().aggregate(initializer,
                                             aggregator,
-                                            Materialized.with(keyTestSerde, valueTestSerde))
+                                            Materialized.with(Serdes.String(), Serdes.Integer()))
             .toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()));
 
         // adding operators for case where the repartition node is further downstream
@@ -176,8 +172,6 @@ public class RepartitionOptimizingIntegrationTest {
 
         IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC, getKeyValues(), producerConfig, mockTime);
 
-        assertTrue(keyTestSerde.configured());
-        assertTrue(valueTestSerde.configured());
         final Properties consumerConfig1 = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, LongDeserializer.class);
         final Properties consumerConfig2 = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, IntegerDeserializer.class);
         final Properties consumerConfig3 = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);

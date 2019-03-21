@@ -476,67 +476,7 @@ public class KafkaStreamsTest {
         globalStreams.metadataForKey("store", "key", (topic, key, value, numPartitions) -> 0);
     }
 
-    static class MyStringSerializer extends StringSerializer {
-        boolean configured = false;
-        boolean called = false;
-
-        @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {
-            super.configure(configs, isKey);
-            configured = true;
-        }
-
-        @Override
-        public byte[] serialize(final String topic, final String data) {
-            called = true;
-            return super.serialize(topic, data);
-        }
-
-        boolean configured() {
-            return !called || configured;
-        }
-    }
-
-    static class MyStringDeserializer extends StringDeserializer {
-        boolean configured = false;
-        boolean called = false;
-
-        @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {
-            super.configure(configs, isKey);
-            configured = true;
-        }
-
-        @Override
-        public String deserialize(final String topic, final byte[] data) {
-            called = true;
-            return super.deserialize(topic, data);
-        }
-
-        boolean configured() {
-            return !called || configured;
-        }
-    }
-
-    public static class MyStringSerde<K> extends Serdes.WrapperSerde<String> {
-        public MyStringSerde() {
-            super(new MyStringSerializer(), new MyStringDeserializer());
-        }
-
-        @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {
-            super.configure(configs, isKey);
-        }
-
-        public boolean configured() {
-            if (!((MyStringSerializer) this.serializer()).configured()) return false;
-            if (!((MyStringDeserializer) this.deserializer()).configured()) return false;
-            return true;
-        }
-    }
-
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldReturnFalseOnCloseWhenThreadsHaventTerminated() throws Exception {
         final AtomicBoolean keepRunning = new AtomicBoolean(true);
         KafkaStreams streams = null;
@@ -546,9 +486,7 @@ public class KafkaStreamsTest {
             final String topic = "input";
             CLUSTER.createTopics(topic);
 
-            final MyStringSerde keyTestSerde = new MyStringSerde();
-            final MyStringSerde valueTestSerde = new MyStringSerde();
-            builder.stream(topic, Consumed.with(keyTestSerde, valueTestSerde))
+            builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
                     .foreach((key, value) -> {
                         try {
                             latch.countDown();
@@ -572,8 +510,6 @@ public class KafkaStreamsTest {
 
             assertTrue("Timed out waiting to receive single message", latch.await(30, TimeUnit.SECONDS));
             assertFalse(streams.close(Duration.ofMillis(10)));
-            assertTrue(keyTestSerde.configured());
-            assertTrue(valueTestSerde.configured());
         } finally {
             // stop the thread so we don't interfere with other tests etc
             keepRunning.set(false);
