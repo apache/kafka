@@ -198,6 +198,10 @@ public interface RecordBatch extends Iterable<Record> {
      */
     boolean isCompressed();
 
+    void setSimplified(boolean isSimplified);
+
+    boolean isSimplified();
+
     /**
      * Write this record batch into a buffer.
      * @param buffer The buffer to write the batch to

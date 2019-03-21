@@ -266,7 +266,8 @@ private[kafka] object LogValidator extends Logging {
         if (sourceCodec == NoCompressionCodec && batch.isControlBatch)
           inPlaceAssignment = true
 
-        for (record <- batch.asInstanceOf[DefaultRecordBatch].simplifiedIterator().asScala) {
+        batch.setSimplified(true)
+        for (record <- batch.asScala) {
           if (sourceCodec != NoCompressionCodec && record.isCompressed)
             throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
               s"compression attribute set: $record")
@@ -290,6 +291,7 @@ private[kafka] object LogValidator extends Logging {
 
           validatedRecords += record
         }
+      batch.setSimplified(false)
       }
 
       if (!inPlaceAssignment) {
@@ -301,7 +303,7 @@ private[kafka] object LogValidator extends Logging {
           (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
         }
         buildRecordsAndAssignOffsets(toMagic, offsetCounter, time, timestampType, CompressionType.forId(targetCodec.codec), now,
-          validatedRecords, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch, isFromClient,
+          records, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch, isFromClient,
           uncompressedSizeInBytes)
       } else {
         // we can update the batch only and write the compressed payload as is
@@ -334,7 +336,7 @@ private[kafka] object LogValidator extends Logging {
                                            timestampType: TimestampType,
                                            compressionType: CompressionType,
                                            logAppendTime: Long,
-                                           validatedRecords: Seq[Record],
+                                           sourceRecords: MemoryRecords,
                                            producerId: Long,
                                            producerEpoch: Short,
                                            baseSequence: Int,
@@ -342,6 +344,14 @@ private[kafka] object LogValidator extends Logging {
                                            partitionLeaderEpoch: Int,
                                            isFromClient: Boolean,
                                            uncompresssedSizeInBytes: Int): ValidationAndOffsetAssignResult = {
+
+    val validatedRecords = new mutable.ArrayBuffer[Record]
+
+    for (batch <- sourceRecords.batches.asScala) {
+      for (record <- batch.asScala) {
+        validatedRecords += record
+      }
+    }
     val startNanos = time.nanoseconds
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
       validatedRecords.asJava)
@@ -379,9 +389,9 @@ private[kafka] object LogValidator extends Logging {
   }
 
   /**
-    * This method validates the timestamps of a message.
-    * If the message is using create time, this method checks if it is within acceptable range.
-    */
+   * This method validates the timestamps of a message.
+   * If the message is using create time, this method checks if it is within acceptable range.
+   */
   private def validateTimestamp(batch: RecordBatch,
                                 record: Record,
                                 now: Long,

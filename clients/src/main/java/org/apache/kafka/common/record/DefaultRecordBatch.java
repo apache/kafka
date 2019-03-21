@@ -313,6 +313,10 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (!isCompressed())
             return uncompressedIterator();
 
+        if(isSimplified()) {
+            return simplifiedIterator();
+        }
+
         // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
         // so we decompress the full record set here. Use cases which call for a lower memory footprint
         // can use `streamingIterator` at the cost of additional complexity
@@ -329,7 +333,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
      *
      * @return
      */
-    public Iterator<Record> simplifiedIterator() {
+    private Iterator<Record> simplifiedIterator() {
         if (count() == 0)
             return Collections.emptyIterator();
         try (CloseableIterator<Record> iterator = simplifiedCompressedIterator(BufferSupplier.NO_CACHING)) {
