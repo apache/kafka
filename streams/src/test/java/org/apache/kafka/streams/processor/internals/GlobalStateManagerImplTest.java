@@ -79,28 +79,28 @@ import static org.junit.Assert.fail;
 public class GlobalStateManagerImplTest {
 
 
-    final MockTime time = new MockTime();
-    final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
-    final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
-    final String storeName1 = "t1-store";
-    final String storeName2 = "t2-store";
-    final String storeName3 = "t3-store";
-    final String storeName4 = "t4-store";
-    final String storeName5 = "t5-store";
-    final TopicPartition t1 = new TopicPartition("t1", 1);
-    final TopicPartition t2 = new TopicPartition("t2", 1);
-    final TopicPartition t3 = new TopicPartition("t3", 1);
-    final TopicPartition t4 = new TopicPartition("t4", 1);
-    final TopicPartition t5 = new TopicPartition("t5", 1);
-    GlobalStateManagerImpl stateManager;
-    StateDirectory stateDirectory;
-    StreamsConfig streamsConfig;
-    NoOpReadOnlyStore<Object, Object> store1, store2, store3, store4;
-    NoOpReadOnlyStore<Long, Long> store5;
-    MockConsumer<byte[], byte[]> consumer;
-    File checkpointFile;
-    ProcessorTopology topology;
-    InternalMockProcessorContext processorContext;
+    protected final MockTime time = new MockTime();
+    protected final TheStateRestoreCallback stateRestoreCallback = new TheStateRestoreCallback();
+    protected final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
+    protected final String storeName1 = "t1-store";
+    protected final String storeName2 = "t2-store";
+    protected final String storeName3 = "t3-store";
+    protected final String storeName4 = "t4-store";
+    protected final String storeName5 = "t5-store";
+    protected final TopicPartition t1 = new TopicPartition("t1", 1);
+    protected final TopicPartition t2 = new TopicPartition("t2", 1);
+    protected final TopicPartition t3 = new TopicPartition("t3", 1);
+    protected final TopicPartition t4 = new TopicPartition("t4", 1);
+    protected final TopicPartition t5 = new TopicPartition("t5", 1);
+    protected GlobalStateManagerImpl stateManager;
+    protected StateDirectory stateDirectory;
+    protected StreamsConfig streamsConfig;
+    protected NoOpReadOnlyStore<Object, Object> store1, store2, store3, store4;
+    protected NoOpReadOnlyStore<Long, Long> store5;
+    protected MockConsumer<byte[], byte[]> consumer;
+    protected File checkpointFile;
+    protected ProcessorTopology topology;
+    protected InternalMockProcessorContext processorContext;
 
     @Before
     public void before() {
@@ -163,7 +163,7 @@ public class GlobalStateManagerImplTest {
         return buffer.array();
     }
 
-    @Test(expected = StreamsException.class)
+    @Test
     public void shouldThrowStreamsExceptionWhenRestoringWithLogAndFailExceptionHandler() {
         final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
         startOffsets.put(t5, 1L);
@@ -181,9 +181,13 @@ public class GlobalStateManagerImplTest {
         consumer.addRecord(new ConsumerRecord<>(t5.topic(), t5.partition(), 3, longValue, longValue));
 
         stateManager.initialize();
-        stateManager.register(store5, stateRestoreCallback);
 
-        assertEquals(2, stateRestoreCallback.restored.size());
+        try {
+            stateManager.register(store5, stateRestoreCallback);
+            fail("Should not get here as LogAndFailExceptionHandler used");
+        } catch (final StreamsException e) {
+            //expected ok to ignore
+        }
 
     }
 
