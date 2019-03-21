@@ -1069,8 +1069,8 @@ public final class MessageDataGenerator {
                 prefix, field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isArray()) {
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
-            buffer.printf("+ \"%s%s=\" + MessageUtil.deepToString(%s.iterator())%n",
-                prefix, field.camelCaseName(), field.camelCaseName());
+            buffer.printf("+ \"%s%s=\" + (%s == null ? null : MessageUtil.deepToString(%s.iterator()))%n",
+                prefix, field.camelCaseName(), field.camelCaseName(), field.camelCaseName());
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
         }
