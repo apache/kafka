@@ -104,9 +104,7 @@ object CommandLineUtils extends Logging {
   }
 
   def printVersionAndDie(): Nothing = {
-    val version = AppInfoParser.getVersion
-    val commitId = AppInfoParser.getCommitId
-    System.out.println(s"${version} (Commit:${commitId})")
+    System.out.println(VersionInfo.getVersionString)
     Exit.exit(0)
   }
 
