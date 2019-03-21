@@ -27,10 +27,12 @@ import java.util.Optional;
  */
 public class TimeIntervalTransactionsGenerator implements TransactionGenerator {
 
+    private static final long NULL_START_MS = -1;
+
     private final Time time;
     private final int intervalMs;
 
-    private Optional<Long> lastCommitMs = Optional.empty();
+    private long lastTransactionStartMs = NULL_START_MS;
 
     @JsonCreator
     public TimeIntervalTransactionsGenerator(@JsonProperty("transactionIntervalMs") int intervalMs) {
@@ -53,12 +55,12 @@ public class TimeIntervalTransactionsGenerator implements TransactionGenerator {
 
     @Override
     public synchronized TransactionAction nextAction() {
-        if (!lastCommitMs.isPresent()) {
-            lastCommitMs = Optional.of(time.milliseconds());
+        if (lastTransactionStartMs == NULL_START_MS) {
+            lastTransactionStartMs = time.milliseconds();
             return TransactionAction.BEGIN_TRANSACTION;
         }
-        if (time.milliseconds() - lastCommitMs.get() >= intervalMs) {
-            lastCommitMs = Optional.empty();
+        if (time.milliseconds() - lastTransactionStartMs >= intervalMs) {
+            lastTransactionStartMs = NULL_START_MS;
             return TransactionAction.COMMIT_TRANSACTION;
         }
 
