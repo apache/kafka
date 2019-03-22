@@ -33,15 +33,15 @@ import org.apache.kafka.streams.state.StateSerdes;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ALL;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.DELETE;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.FLUSH;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.GET;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PUT;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PUT_ALL;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PUT_IF_ABSENT;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RANGE;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RESTORE;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.ALL;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.DELETE;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.FLUSH;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.GET;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.PUT;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.PUT_ALL;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.PUT_IF_ABSENT;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.RANGE;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.RESTORE;
 
 /**
  * A Metered {@link KeyValueStore} wrapper that is used for recording operation metrics, and hence its

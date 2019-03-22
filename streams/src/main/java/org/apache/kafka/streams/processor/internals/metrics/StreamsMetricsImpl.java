@@ -77,7 +77,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String STREAM_TASK_NODE_METRICS = "stream-task-metrics";
     public static final String STREAM_PROCESSOR_NODE_METRICS = "stream-processor-node-metrics";
     public static final String STREAM_CACHE_NODE_METRICS = "stream-record-cache-metrics";
-    public static final String STREAM_BUFFER_METRICS = "stream-buffer-metrics";
 
     public static final String IN_MEMORY_STATE = "in-memory-state";
     public static final String IN_MEMORY_LRU = "in-memory-lru-state";
@@ -106,18 +105,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
 
     // state-store level
-    public static final String PUT = "put";
-    public static final String PUT_IF_ABSENT = "put-if-absent";
-    public static final String PUT_ALL = "put-all";
-    public static final String GET = "get";
-    public static final String ALL = "all";
-    public static final String RANGE = "range";
-    public static final String DELETE = "delete";
-    public static final String FLUSH = "flush";
-    public static final String RESTORE = "restore";
-
-    public static final String SUPPRESSION_BUFFER_SIZE = "suppression-buffer-size";
-    public static final String SUPPRESSION_BUFFER_COUNT = "suppression-buffer-count";
     public static final String EXPIRED_WINDOW_RECORD_DROP = "expired-window-record-drop";
 
     // task level
@@ -225,6 +212,13 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         addInvocationRateAndCount(sensor, group, tagMap, operationName);
 
         return sensor;
+    }
+
+    private Map<String, String> constructTags(final String scopeName, final String entityName, final String... tags) {
+        final String[] updatedTags = Arrays.copyOf(tags, tags.length + 2);
+        updatedTags[tags.length] = scopeName + "-id";
+        updatedTags[tags.length + 1] = entityName;
+        return tagMap(updatedTags);
     }
 
     public final void removeAllThreadLevelSensors() {
@@ -392,10 +386,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     // -------- state-store level sensors ----------- //
 
-    public static Map<String, String> storeLevelTagMap(final String taskName, final String storeScopeName, final String storeName) {
+    public static Map<String, String> storeLevelTagMap(final String taskName, final String storeScopeTag, final String storeName) {
         return mkMap(mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
             mkEntry(TASK_ID_TAG, taskName),
-            mkEntry(storeScopeName, storeName));
+            mkEntry(storeScopeTag, storeName));
     }
 
     private String storeSensorPrefix(final String taskName, final String storeName) {
@@ -421,13 +415,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return tagMap;
     }
 
-
-    private Map<String, String> constructTags(final String scopeName, final String entityName, final String... tags) {
-        final String[] updatedTags = Arrays.copyOf(tags, tags.length + 2);
-        updatedTags[tags.length] = scopeName + "-id";
-        updatedTags[tags.length + 1] = entityName;
-        return tagMap(updatedTags);
-    }
 
     private String externalSensorName(final String operationName, final String entityName) {
         return "external" + SENSOR_PREFIX_DELIMITER + threadName

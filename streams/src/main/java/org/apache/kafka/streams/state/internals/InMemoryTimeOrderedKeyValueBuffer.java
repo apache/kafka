@@ -24,14 +24,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.internals.metrics.Sensors;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
@@ -188,10 +186,9 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
         storeMetrics = new StoreMetrics(context, BUFFER_STRING, storeName, (StreamsMetricsImpl) context.metrics());
-        bufferSizeSensor = Sensors.createBufferSizeSensor(this, internalProcessorContext);
-        bufferCountSensor = Sensors.createBufferCountSensor(this, internalProcessorContext);
+        bufferSizeSensor = storeMetrics.addBufferSizeSensor();
+        bufferCountSensor = storeMetrics.addBufferCountSensor();
 
         context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
         if (loggingEnabled) {
@@ -216,6 +213,7 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
         memBufferSize = 0;
         minTimestamp = Long.MAX_VALUE;
         updateBufferMetrics();
+        storeMetrics.removeAllSensors();
     }
 
     @Override

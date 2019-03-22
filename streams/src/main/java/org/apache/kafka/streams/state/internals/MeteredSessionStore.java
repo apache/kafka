@@ -32,12 +32,13 @@ import org.apache.kafka.streams.state.StateSerdes;
 
 import java.util.Objects;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.DELETE;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.FLUSH;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.GET;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PUT;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RANGE;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RESTORE;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.DELETE;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.FLUSH;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.GET;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.PUT;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.RANGE;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.RESTORE;
+
 
 public class MeteredSessionStore<K, V>
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, Windowed<K>, V>

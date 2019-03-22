@@ -31,11 +31,12 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.FLUSH;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.GET;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PUT;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RANGE;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RESTORE;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.FLUSH;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.GET;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.PUT;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.RANGE;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.RESTORE;
+
 
 public class MeteredWindowStore<K, V>
     extends WrappedStateStore<WindowStore<Bytes, byte[]>, Windowed<K>, V>
