@@ -90,7 +90,10 @@ public class ProcessorRecordContext implements RecordContext {
         if (headers != null) {
             for (final Header header : headers) {
                 size += header.key().toCharArray().length;
-                size += header.value().length;
+                final byte[] value = header.value();
+                if (value != null) {
+                    size += value.length;
+                }
             }
         }
         return size;
