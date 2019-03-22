@@ -38,6 +38,8 @@ public class StandbyTask extends AbstractTask {
 
     private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
 
+    private final StreamsMetricsImpl metrics;
+
     /**
      * Create {@link StandbyTask} with its assigned partitions
      *
@@ -59,6 +61,7 @@ public class StandbyTask extends AbstractTask {
                 final StateDirectory stateDirectory) {
         super(id, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
 
+        this.metrics = metrics;
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
     }
 
@@ -143,6 +146,8 @@ public class StandbyTask extends AbstractTask {
         } finally {
             closeStateManager(true);
         }
+
+        metrics.threadLevelSensor("task-closed").record();
 
         taskClosed = true;
     }

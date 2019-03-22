@@ -17,13 +17,8 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.utils.SystemTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.kstream.internals.KStreamSessionWindowAggregate.KStreamSessionWindowAggregateProcessor;
-import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate.KStreamWindowAggregateProcessor;
-import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -36,7 +31,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATE_RECORD_DROP;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_METRICS_GROUP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STREAM_PROCESSOR_NODE_METRICS;
 
 public class ProcessorNode<K, V> {
 
@@ -117,7 +112,6 @@ public class ProcessorNode<K, V> {
 
     public void punctuate(final long timestamp, final Punctuator punctuator) {
         punctuator.punctuate(timestamp);
-        nodeMetrics.punctuateRateSensor().record();
     }
 
     /**
@@ -149,7 +143,7 @@ public class ProcessorNode<K, V> {
         private final StreamsMetricsImpl metrics;
 
         private final Sensor processRateSensor;
-        private Sensor punctuateRateSensor;
+        private Sensor skippedRecordsRateSensor;
         private Sensor lateRecordsDropRateSensor;
         private Sensor suppressionEmitRateSensor;
 
@@ -169,13 +163,17 @@ public class ProcessorNode<K, V> {
             this.tagMap = StreamsMetricsImpl.nodeLevelTagMap(Thread.currentThread().getName(), context.taskId().toString(), processorNodeName);
 
             processRateSensor = metrics.nodeLevelSensor("process-latency", processorNodeName, taskName, Sensor.RecordingLevel.DEBUG);
-            StreamsMetricsImpl.addInvocationRateAndCount(processRateSensor, PROCESSOR_NODE_METRICS_GROUP, tagMap, "process");
+            StreamsMetricsImpl.addInvocationRateAndCount(processRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, "process");
+        }
+
+        Sensor processRateSensor() {
+            return processRateSensor;
         }
 
         public Sensor suppressionEmitRateSensor() {
             if (suppressionEmitRateSensor == null) {
                 suppressionEmitRateSensor = metrics.nodeLevelSensor("suppression-emit", processorNodeName, taskName, Sensor.RecordingLevel.DEBUG);
-                StreamsMetricsImpl.addInvocationRateAndCount(suppressionEmitRateSensor, PROCESSOR_NODE_METRICS_GROUP, tagMap, "suppression-emit");
+                StreamsMetricsImpl.addInvocationRateAndCount(suppressionEmitRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, "suppression-emit");
             }
 
             return suppressionEmitRateSensor;
@@ -183,35 +181,31 @@ public class ProcessorNode<K, V> {
 
         public Sensor lateRecordsDropRateSensor() {
             if (lateRecordsDropRateSensor == null) {
-                lateRecordsDropRateSensor = metrics.nodeLevelSensor(LATE_RECORD_DROP, processorNodeName, taskName, Sensor.RecordingLevel.DEBUG);
-                StreamsMetricsImpl.addInvocationRateAndCount(lateRecordsDropRateSensor, PROCESSOR_NODE_METRICS_GROUP, tagMap, LATE_RECORD_DROP);
+                lateRecordsDropRateSensor = metrics.nodeLevelSensor(LATE_RECORD_DROP, processorNodeName, taskName, Sensor.RecordingLevel.INFO);
+                StreamsMetricsImpl.addInvocationRateAndCount(lateRecordsDropRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, LATE_RECORD_DROP);
             }
 
             return lateRecordsDropRateSensor;
         }
 
-        Sensor processRateSensor() {
-            return processRateSensor;
-        }
-
-        private Sensor punctuateRateSensor() {
-            if (punctuateRateSensor == null) {
-                punctuateRateSensor = metrics.nodeLevelSensor("punctuate-latency", processorNodeName, taskName, Sensor.RecordingLevel.DEBUG);
-                StreamsMetricsImpl.addInvocationRateAndCount(punctuateRateSensor, PROCESSOR_NODE_METRICS_GROUP, tagMap, "punctuate");
+        private Sensor skippedRecordsRateSensor() {
+            if (skippedRecordsRateSensor == null) {
+                skippedRecordsRateSensor = metrics.nodeLevelSensor("skipped-records", processorNodeName, taskName, Sensor.RecordingLevel.INFO);
+                StreamsMetricsImpl.addInvocationRateAndCount(skippedRecordsRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, "skipped-records");
             }
 
-            return punctuateRateSensor;
+            return skippedRecordsRateSensor;
         }
 
         private void removeAllSensors() {
             metrics.removeSensor(processRateSensor);
 
-            if (punctuateRateSensor != null) {
-                metrics.removeSensor(punctuateRateSensor);
+            if (skippedRecordsRateSensor != null) {
+                metrics.removeSensor(skippedRecordsRateSensor);
             }
 
             if (suppressionEmitRateSensor != null) {
-                metrics.removeSensor(punctuateRateSensor);
+                metrics.removeSensor(suppressionEmitRateSensor);
             }
             if (lateRecordsDropRateSensor != null) {
                 metrics.removeSensor(lateRecordsDropRateSensor);

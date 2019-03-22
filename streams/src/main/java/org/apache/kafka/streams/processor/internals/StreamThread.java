@@ -60,9 +60,8 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singleton;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRate;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueAvgAndMax;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueAvgAndMax;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_METRICS_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.threadLevelTagMap;
 
@@ -255,19 +254,19 @@ public class StreamThread extends Thread {
 
             processLatencySensor = metrics.threadLevelSensor("process-latency", threadName, Sensor.RecordingLevel.INFO);
             addValueAvgAndMax(processLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "process-latency");
-            addInvocationRate(processLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "process");
+            addInvocationRateAndCount(processLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "process");
 
             punctuateTimeSensor = metrics.threadLevelSensor("punctuate-latency", threadName, Sensor.RecordingLevel.INFO);
             addValueAvgAndMax(punctuateTimeSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "punctuate-latency");
-            addInvocationRate(punctuateTimeSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "punctuate");
+            addInvocationRateAndCount(punctuateTimeSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "punctuate");
 
             commitLatencySensor = metrics.threadLevelSensor("commit-latency", threadName, Sensor.RecordingLevel.INFO);
             addValueAvgAndMax(commitLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "commit-latency");
-            addInvocationRate(commitLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "commit");
+            addInvocationRateAndCount(commitLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "commit");
 
             pollLatencySensor = metrics.threadLevelSensor("poll-latency", threadName, Sensor.RecordingLevel.INFO);
             addValueAvgAndMax(pollLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "poll-latency");
-            addInvocationRate(pollLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "poll");
+            addInvocationRateAndCount(pollLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "poll");
 
             taskCreatedRateSensor = metrics.threadLevelSensor("task-created", threadName, Sensor.RecordingLevel.INFO);
             addInvocationRateAndCount(taskCreatedRateSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), "task-created");
