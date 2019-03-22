@@ -38,7 +38,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicSet;
 import org.junit.Assert;
-import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -47,7 +46,6 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@Ignore
 public final class MessageTest {
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
@@ -87,6 +85,11 @@ public final class MessageTest {
             setHostFilter(null).
             setOperation((byte) 0).
             setPermissionType((byte) 0), (short) 0);
+        testMessageRoundTrips(new MetadataRequestData().
+            setTopics(null).
+            setAllowAutoTopicCreation(false).
+            setIncludeClusterAuthorizedOperations(false).
+            setIncludeTopicAuthorizedOperations(false));
     }
 
     private void testMessageRoundTrips(Message message) throws Exception {
