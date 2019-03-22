@@ -20,7 +20,7 @@ import org.apache.kafka.streams.processor.StateStore
 
 package object kstream {
   type Materialized[K, V, S <: StateStore] = org.apache.kafka.streams.kstream.Materialized[K, V, S]
-  type Serialized[K, V] = org.apache.kafka.streams.kstream.Serialized[K, V]
+  type Grouped[K, V] = org.apache.kafka.streams.kstream.Grouped[K, V]
   type Consumed[K, V] = org.apache.kafka.streams.kstream.Consumed[K, V]
   type Produced[K, V] = org.apache.kafka.streams.kstream.Produced[K, V]
   type Joined[K, V, VO] = org.apache.kafka.streams.kstream.Joined[K, V, VO]

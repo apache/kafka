@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.rest.resources;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
@@ -39,7 +40,7 @@ public class RootResourceTest extends EasyMockSupport {
 
     @Before
     public void setUp() {
-        rootResource = new RootResource(herder);
+        rootResource = new RootResource(new HerderProvider(herder));
     }
 
     @Test

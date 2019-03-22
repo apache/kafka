@@ -29,7 +29,9 @@ import org.apache.kafka.common.header.Headers;
  *
  * A class that implements this interface is expected to have a constructor with no parameters.
  * @param <T>
+ * @deprecated This class has been deprecated and will be removed in a future release. Please use {@link Serializer} instead.
  */
+@Deprecated
 public interface ExtendedSerializer<T> extends Serializer<T> {
 
     /**

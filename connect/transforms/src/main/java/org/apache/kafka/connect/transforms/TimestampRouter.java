@@ -28,7 +28,7 @@ import java.util.TimeZone;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
-public class TimestampRouter<R extends ConnectRecord<R>> implements Transformation<R> {
+public class TimestampRouter<R extends ConnectRecord<R>> implements Transformation<R>, AutoCloseable {
 
     private static final Pattern TOPIC = Pattern.compile("${topic}", Pattern.LITERAL);
 

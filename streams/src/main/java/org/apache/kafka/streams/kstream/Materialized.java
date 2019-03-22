@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -32,6 +33,8 @@ import java.time.Duration;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
  * Used to describe how a {@link StateStore} should be materialized.
@@ -242,13 +245,18 @@ public class Materialized<K, V, S extends StateStore> {
      * Note that the retention period must be at least long enough to contain the windowed data's entire life cycle,
      * from window-start through window-end, and for the entire grace period.
      *
+     * @param retention the retention time
      * @return itself
+     * @throws IllegalArgumentException if retention is negative or can't be represented as {@code long milliseconds}
      */
-    public Materialized<K, V, S> withRetention(final long retentionMs) {
-        if (retentionMs < 0) {
+    public Materialized<K, V, S> withRetention(final Duration retention) throws IllegalArgumentException {
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(retention, "retention");
+        final long retenationMs = ApiUtils.validateMillisecondDuration(retention, msgPrefix);
+
+        if (retenationMs < 0) {
             throw new IllegalArgumentException("Retention must not be negative.");
         }
-        retention = Duration.ofMillis(retentionMs);
+        this.retention = retention;
         return this;
     }
 }

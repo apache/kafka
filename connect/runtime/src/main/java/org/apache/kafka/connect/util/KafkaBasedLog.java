@@ -146,6 +146,10 @@ public class KafkaBasedLog<K, V> {
             partitions.add(new TopicPartition(partition.topic(), partition.partition()));
         consumer.assign(partitions);
 
+        // Always consume from the beginning of all partitions. Necessary to ensure that we don't use committed offsets
+        // when a 'group.id' is specified (if offsets happen to have been committed unexpectedly).
+        consumer.seekToBeginning(partitions);
+
         readToLogEnd();
 
         thread = new WorkThread();

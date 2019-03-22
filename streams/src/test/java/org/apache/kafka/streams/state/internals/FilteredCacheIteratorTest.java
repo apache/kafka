@@ -18,14 +18,16 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.test.GenericInMemoryKeyValueStore;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.List;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -47,10 +49,10 @@ public class FilteredCacheIteratorTest {
     };
 
     @SuppressWarnings("unchecked")
-    private final InMemoryKeyValueStore<Bytes, LRUCacheEntry> store = new InMemoryKeyValueStore("name", null, null);
+    private final KeyValueStore<Bytes, LRUCacheEntry> store = new GenericInMemoryKeyValueStore<>("my-store");
     private final KeyValue<Bytes, LRUCacheEntry> firstEntry = KeyValue.pair(Bytes.wrap("a".getBytes()),
                                                                             new LRUCacheEntry("1".getBytes()));
-    private final List<KeyValue<Bytes, LRUCacheEntry>> entries = Utils.mkList(
+    private final List<KeyValue<Bytes, LRUCacheEntry>> entries = asList(
             firstEntry,
             KeyValue.pair(Bytes.wrap("b".getBytes()),
                           new LRUCacheEntry("2".getBytes())),
@@ -119,7 +121,7 @@ public class FilteredCacheIteratorTest {
     @Test
     public void shouldFilterEntriesNotMatchingHasNextCondition() {
         final List<KeyValue<Bytes, LRUCacheEntry>> keyValues = toList(firstEntryIterator);
-        assertThat(keyValues, equalTo(Utils.mkList(firstEntry)));
+        assertThat(keyValues, equalTo(asList(firstEntry)));
     }
 
     @Test(expected = UnsupportedOperationException.class)

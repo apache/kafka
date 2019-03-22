@@ -245,12 +245,12 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
     val configEntries = util.Collections.singletonList(new ConfigEntry("num.io.threads", "5"))
     val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
     future.complete(util.Collections.singletonMap(resource, new Config(configEntries)))
-    val describeResult = EasyMock.createNiceMock(classOf[DescribeConfigsResult])
+    val describeResult: DescribeConfigsResult = EasyMock.createNiceMock(classOf[DescribeConfigsResult])
     EasyMock.expect(describeResult.all()).andReturn(future).once()
 
     val alterFuture = new KafkaFutureImpl[Void]
     alterFuture.complete(null)
-    val alterResult = EasyMock.createNiceMock(classOf[AlterConfigsResult])
+    val alterResult: AlterConfigsResult = EasyMock.createNiceMock(classOf[AlterConfigsResult])
     EasyMock.expect(alterResult.all()).andReturn(alterFuture)
 
     val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
@@ -622,7 +622,7 @@ class ConfigCommandTest extends ZooKeeperTestHarness with Logging {
 
   @Test
   def testQuotaDescribeEntities() {
-    val zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+    val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
 
     def checkEntities(opts: Array[String], expectedFetches: Map[String, Seq[String]], expectedEntityNames: Seq[String]) {
       val entity = ConfigCommand.parseEntity(new ConfigCommandOptions(opts :+ "--describe"))

@@ -19,9 +19,8 @@ package org.apache.kafka.streams.state;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 
 /**
- * A key value store that only supports read operations.
- * Implementations should be thread-safe as concurrent reads and writes
- * are expected.
+ * A key-value store that only supports read operations.
+ * Implementations should be thread-safe as concurrent reads and writes are expected.
  *
  * Please note that this contract defines the thread-safe read functionality only; it does not
  * guarantee anything about whether the actual instance is writable by another thread, or

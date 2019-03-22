@@ -36,6 +36,8 @@ public class TestSecurityConfig extends AbstractConfig {
                     Importance.MEDIUM, BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_DOC)
             .define(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, Type.CLASS,
                     null, Importance.MEDIUM, BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC)
+            .define(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS, Type.LONG, 0L, Importance.MEDIUM,
+                    BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();
 

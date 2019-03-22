@@ -17,12 +17,14 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.MockClient;
+import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.common.Cluster;
-import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -33,6 +35,10 @@ import java.util.Map;
  * To use in a test, create an instance and prepare its {@link #kafkaClient() MockClient} with the expected responses
  * for the {@link AdminClient}. Then, use the {@link #adminClient() AdminClient} in the test, which will then use the MockClient
  * and receive the responses you provided.
+ *
+ * Since {@link #kafkaClient() MockClient} is not thread-safe,
+ * users should be wary of calling its methods after the {@link #adminClient() AdminClient} is instantiated.
+ *
  * <p>
  * When finished, be sure to {@link #close() close} the environment object.
  */
@@ -42,38 +48,45 @@ public class AdminClientUnitTestEnv implements AutoCloseable {
     private final MockClient mockClient;
     private final KafkaAdminClient adminClient;
 
-    public AdminClientUnitTestEnv(Cluster cluster, String...vals) {
+    public AdminClientUnitTestEnv(Cluster cluster, String... vals) {
         this(Time.SYSTEM, cluster, vals);
     }
 
-    public AdminClientUnitTestEnv(Time time, Cluster cluster, String...vals) {
+    public AdminClientUnitTestEnv(Time time, Cluster cluster, String... vals) {
         this(time, cluster, newStrMap(vals));
     }
 
+    public AdminClientUnitTestEnv(Time time, Cluster cluster) {
+        this(time, cluster, newStrMap());
+    }
+
     public AdminClientUnitTestEnv(Time time, Cluster cluster, Map<String, Object> config) {
-        this(newMockClient(time, cluster), time, cluster, config);
-    }
-
-    public AdminClientUnitTestEnv(MockClient mockClient, Time time, Cluster cluster) {
-        this(mockClient, time, cluster, newStrMap());
-    }
-
-    private static MockClient newMockClient(Time time, Cluster cluster) {
-        MockClient mockClient = new MockClient(time);
-        mockClient.prepareResponse(new MetadataResponse(cluster.nodes(),
-            cluster.clusterResource().clusterId(),
-            cluster.controller() == null ? MetadataResponse.NO_CONTROLLER_ID : cluster.controller().id(),
-            Collections.emptyList()));
-        return mockClient;
-    }
-
-    public AdminClientUnitTestEnv(MockClient mockClient, Time time, Cluster cluster,
-                                  Map<String, Object> config) {
         this.time = time;
         this.cluster = cluster;
         AdminClientConfig adminClientConfig = new AdminClientConfig(config);
-        this.mockClient = mockClient;
-        this.adminClient = KafkaAdminClient.createInternal(adminClientConfig, mockClient, time);
+
+        AdminMetadataManager metadataManager = new AdminMetadataManager(new LogContext(),
+                adminClientConfig.getLong(AdminClientConfig.RETRY_BACKOFF_MS_CONFIG),
+                adminClientConfig.getLong(AdminClientConfig.METADATA_MAX_AGE_CONFIG));
+        this.mockClient = new MockClient(time, new MockClient.MockMetadataUpdater() {
+            @Override
+            public List<Node> fetchNodes() {
+                return cluster.nodes();
+            }
+
+            @Override
+            public boolean isUpdateNeeded() {
+                return false;
+            }
+
+            @Override
+            public void update(Time time, MockClient.MetadataUpdate update) {
+                throw new UnsupportedOperationException();
+            }
+        });
+
+        metadataManager.update(cluster, time.milliseconds());
+        this.adminClient = KafkaAdminClient.createInternal(adminClientConfig, metadataManager, mockClient, time);
     }
 
     public Time time() {

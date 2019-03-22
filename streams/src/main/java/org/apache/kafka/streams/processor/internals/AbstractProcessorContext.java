@@ -33,7 +33,7 @@ import java.util.Objects;
 
 public abstract class AbstractProcessorContext implements InternalProcessorContext {
 
-    static final String NONEXIST_TOPIC = "__null_topic__";
+    public static final String NONEXIST_TOPIC = "__null_topic__";
     private final TaskId taskId;
     private final String applicationId;
     private final StreamsConfig config;
@@ -127,7 +127,6 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         if (recordContext == null) {
             throw new IllegalStateException("This should not happen as partition() should only be called while a record is processed");
         }
-
         return recordContext.partition();
     }
 
@@ -139,7 +138,6 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         if (recordContext == null) {
             throw new IllegalStateException("This should not happen as offset() should only be called while a record is processed");
         }
-
         return recordContext.offset();
     }
 
@@ -148,7 +146,6 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         if (recordContext == null) {
             throw new IllegalStateException("This should not happen as headers() should only be called while a record is processed");
         }
-
         return recordContext.headers();
     }
 
@@ -160,7 +157,6 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
         if (recordContext == null) {
             throw new IllegalStateException("This should not happen as timestamp() should only be called while a record is processed");
         }
-
         return recordContext.timestamp();
     }
 
@@ -203,7 +199,7 @@ public abstract class AbstractProcessorContext implements InternalProcessorConte
     }
 
     @Override
-    public void initialized() {
+    public void initialize() {
         initialized = true;
     }
 

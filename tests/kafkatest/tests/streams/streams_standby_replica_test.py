@@ -46,7 +46,7 @@ class StreamsStandbyTask(BaseStreamsTest):
                                                                                     self.streams_sink_topic_1,
                                                                                     self.streams_sink_topic_2))
 
-        producer = self.get_producer(self.streams_source_topic, self.num_messages, repeating_keys=6)
+        producer = self.get_producer(self.streams_source_topic, self.num_messages, throughput=15000, repeating_keys=6)
         producer.start()
 
         processor_1 = StreamsStandbyTaskService(self.test_context, self.kafka, configs)

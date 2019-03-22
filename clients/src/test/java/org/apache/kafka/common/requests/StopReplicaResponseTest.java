@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.junit.Test;
@@ -32,7 +33,7 @@ public class StopReplicaResponseTest {
 
     @Test
     public void testErrorCountsFromGetErrorResponse() {
-        StopReplicaRequest request = new StopReplicaRequest.Builder(15, 20, false,
+        StopReplicaRequest request = new StopReplicaRequest.Builder(ApiKeys.STOP_REPLICA.latestVersion(), 15, 20, 0, false,
                 Utils.mkSet(new TopicPartition("foo", 0), new TopicPartition("foo", 1))).build();
         StopReplicaResponse response = request.getErrorResponse(0, Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
         assertEquals(Collections.singletonMap(Errors.CLUSTER_AUTHORIZATION_FAILED, 2), response.errorCounts());

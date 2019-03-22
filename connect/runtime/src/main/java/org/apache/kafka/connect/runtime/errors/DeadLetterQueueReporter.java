@@ -199,6 +199,10 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     }
 
     private byte[] toBytes(String value) {
-        return value.getBytes(StandardCharsets.UTF_8);
+        if (value != null) {
+            return value.getBytes(StandardCharsets.UTF_8);
+        } else {
+            return null;
+        }
     }
 }

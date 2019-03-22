@@ -47,6 +47,7 @@ public class FileOffsetBackingStoreTest {
         firstSet.put(null, null);
     }
 
+    @SuppressWarnings("deprecation")
     @Before
     public void setup() throws IOException {
         store = new FileOffsetBackingStore();

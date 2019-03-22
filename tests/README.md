@@ -36,6 +36,10 @@ TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest"
 ```
 TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest.test_start_stop" bash tests/docker/run_tests.sh
 ```
+* Run tests with a different JVM
+```
+bash tests/docker/ducker-ak up -j 'openjdk:11'; tests/docker/run_tests.sh
+```
 
 * Notes
   - The scripts to run tests creates and destroys docker network named *knw*.
@@ -461,6 +465,7 @@ the test driver machine.
         ec2_instance_type = "..." # Pick something appropriate for your
                                   # test. Note that the default m3.medium has
                                   # a small disk.
+        ec2_spot_max_price = "0.123"  # On-demand price for instance type
         enable_hostmanager = false
         num_zookeepers = 0
         num_kafka = 0

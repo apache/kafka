@@ -15,6 +15,8 @@
 
 import org.ajoberstar.grgit.Grgit
 
+import java.nio.charset.StandardCharsets
+
 buildscript {
   repositories {
     mavenCentral()
@@ -28,12 +30,12 @@ buildscript {
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar:grgit:1.9.3"
-    classpath 'com.github.ben-manes:gradle-versions-plugin:0.17.0'
-    classpath 'org.scoverage:gradle-scoverage:2.3.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:2.0.4'
-    classpath 'org.owasp:dependency-check-gradle:3.2.1'
-    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.10.0"
-    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.3"
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.20.0'
+    classpath 'org.scoverage:gradle-scoverage:2.5.0'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.3'
+    classpath 'org.owasp:dependency-check-gradle:4.0.2'
+    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.17.0"
+    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.9"
   }
 }
 
@@ -89,7 +91,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "4.10"
+  gradleVersion = "5.1.1"
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
 
@@ -139,6 +141,7 @@ if (file('.git').exists()) {
   }
 }
 
+
 subprojects {
   apply plugin: 'java'
   // apply the eclipse plugin only to subprojects that hold code. 'connect' is just a folder.
@@ -149,15 +152,19 @@ subprojects {
   apply plugin: 'maven'
   apply plugin: 'signing'
   apply plugin: 'checkstyle'
-  if (!JavaVersion.current().isJava11Compatible())
-    apply plugin: "com.github.spotbugs"
+  apply plugin: "com.github.spotbugs"
 
   sourceCompatibility = minJavaVersion
   targetCompatibility = minJavaVersion
 
-  compileJava {
+  tasks.withType(JavaCompile) {
     options.encoding = 'UTF-8'
-    options.compilerArgs << "-Xlint:deprecation,unchecked"
+    options.compilerArgs << "-Xlint:all"
+    // temporary exclusions until all the warnings are fixed
+    options.compilerArgs << "-Xlint:-rawtypes"
+    options.compilerArgs << "-Xlint:-serial"
+    options.compilerArgs << "-Xlint:-try"
+    options.compilerArgs << "-Werror"
     // --release is the recommended way to select the target release, but it's only supported in Java 9 so we also
     // set --source and --target via `sourceCompatibility` and `targetCompatibility`. If/when Gradle supports `--release`
     // natively (https://github.com/gradle/gradle/issues/2510), we should switch to that.
@@ -200,6 +207,65 @@ subprojects {
   def testLoggingEvents = ["passed", "skipped", "failed"]
   def testShowStandardStreams = false
   def testExceptionFormat = 'full'
+  // Gradle built-in logging only supports sending test output to stdout, which generates a lot
+  // of noise, especially for passing tests. We really only want output for failed tests. This
+  // hooks into the output and logs it (so we don't have to buffer it all in memory) and only
+  // saves the output for failing tests. Directory and filenames are such that you can, e.g.,
+  // create a Jenkins rule to collect failed test output.
+  def logTestStdout = {
+    def testId = { TestDescriptor descriptor ->
+      "${descriptor.className}.${descriptor.name}".toString()
+    }
+
+    def logFiles = new HashMap<String, File>()
+    def logStreams = new HashMap<String, FileOutputStream>()
+    beforeTest { TestDescriptor td ->
+      def tid = testId(td)
+      def logFile = new File(
+          "${projectDir}/build/reports/testOutput/${tid}.test.stdout")
+      logFile.parentFile.mkdirs()
+      logFiles.put(tid, logFile)
+      logStreams.put(tid, new FileOutputStream(logFile))
+    }
+    onOutput { TestDescriptor td, TestOutputEvent toe ->
+      def tid = testId(td)
+      // Some output can happen outside the context of a specific test (e.g. at the class level)
+      // and beforeTest/afterTest seems to not be invoked for these cases (and similarly, there's
+      // a TestDescriptor hierarchy that includes the thread executing the test, Gradle tasks,
+      // etc). We see some of these in practice and it seems like something buggy in the Gradle
+      // test runner since we see it *before* any tests and it is frequently not related to any
+      // code in the test (best guess is that it is tail output from last test). We won't have
+      // an output file for these, so simply ignore them. If they become critical for debugging,
+      // they can be seen with showStandardStreams.
+      if (td.name == td.className) {
+        return
+      }
+      try {
+        logStreams.get(tid).write(toe.message.getBytes(StandardCharsets.UTF_8))
+      } catch (Exception e) {
+        println "ERROR: Failed to write output for test ${tid}"
+        e.printStackTrace()
+      }
+    }
+    afterTest { TestDescriptor td, TestResult tr ->
+      def tid = testId(td)
+      try {
+        logStreams.get(tid).close()
+        if (tr.resultType != TestResult.ResultType.FAILURE) {
+          logFiles.get(tid).delete()
+        } else {
+          def file = logFiles.get(tid)
+          println "${tid} failed, log available in ${file}"
+        }
+      } catch (Exception e) {
+        println "ERROR: Failed to close stdout file for ${tid}"
+        e.printStackTrace()
+      } finally {
+        logFiles.remove(tid)
+        logStreams.remove(tid)
+      }
+    }
+  }
 
   test {
     maxParallelForks = userMaxForks ?: Runtime.runtime.availableProcessors()
@@ -212,7 +278,7 @@ subprojects {
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
     }
-
+    logTestStdout.rehydrate(delegate, owner, this)()
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
@@ -226,6 +292,7 @@ subprojects {
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
     }
+    logTestStdout.rehydrate(delegate, owner, this)()
 
     useJUnit {
       includeCategories 'org.apache.kafka.test.IntegrationTest'
@@ -244,11 +311,13 @@ subprojects {
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
       exceptionFormat = testExceptionFormat
     }
+    logTestStdout.rehydrate(delegate, owner, this)()
 
-    useJUnit {
-      excludeCategories 'org.apache.kafka.test.IntegrationTest'
+    if (it.project.name != 'generator') {
+      useJUnit {
+        excludeCategories 'org.apache.kafka.test.IntegrationTest'
+      }
     }
-    
   }
 
   jar {
@@ -365,23 +434,31 @@ subprojects {
     configProperties = checkstyleConfigProperties("import-control.xml")
     toolVersion = '8.10'
   }
+
+  configure(checkstyleMain) {
+    group = 'Verification'
+    description = 'Run checkstyle on all main Java sources'
+  }
+
+  configure(checkstyleTest) {
+    group = 'Verification'
+    description = 'Run checkstyle on all test Java sources'
+  }
+
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
-  if (!JavaVersion.current().isJava11Compatible()) {
-    spotbugs {
-      // 3.1.6 has a regression that breaks our build, seems to be https://github.com/spotbugs/spotbugs/pull/688
-      toolVersion = '3.1.5'
-      excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
-      ignoreFailures = false
-    }
-    test.dependsOn('spotbugsMain')
+  spotbugs {
+    toolVersion = '3.1.8'
+    excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
+    ignoreFailures = false
+  }
+  test.dependsOn('spotbugsMain')
 
-    tasks.withType(com.github.spotbugs.SpotBugsTask) {
-      reports {
-        // Continue supporting `xmlFindBugsReport` for compatibility
-        xml.enabled(project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport'))
-        html.enabled(!project.hasProperty('xmlSpotBugsReport') && !project.hasProperty('xmlFindBugsReport'))
-      }
+  tasks.withType(com.github.spotbugs.SpotBugsTask) {
+    reports {
+      // Continue supporting `xmlFindBugsReport` for compatibility
+      xml.enabled(project.hasProperty('xmlSpotBugsReport') || project.hasProperty('xmlFindBugsReport'))
+      html.enabled(!project.hasProperty('xmlSpotBugsReport') && !project.hasProperty('xmlFindBugsReport'))
     }
   }
 
@@ -561,6 +638,7 @@ project(':core') {
   dependencies {
     compile project(':clients')
     compile libs.jacksonDatabind
+    compile libs.jacksonJDK8Datatypes
     compile libs.joptSimple
     compile libs.metrics
     compile libs.scalaLibrary
@@ -581,6 +659,7 @@ project(':core') {
 
     testCompile project(':clients').sourceSets.test.output
     testCompile libs.bcpkix
+    testCompile libs.mockitoCore
     testCompile libs.easymock
     testCompile(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
@@ -809,6 +888,23 @@ project(':examples') {
   }
 }
 
+project(':generator') {
+  dependencies {
+    compile libs.jacksonDatabind
+    compile libs.jacksonJDK8Datatypes
+    compile libs.jacksonJaxrsJsonProvider
+    testCompile libs.junit
+  }
+
+  integrationTest {
+    enabled = false
+  }
+
+  javadoc {
+    enabled = false
+  }
+}
+
 project(':clients') {
   archivesBaseName = "kafka-clients"
 
@@ -820,21 +916,23 @@ project(':clients') {
   conf2ScopeMappings.addMapping(1000, configurations.jacksonDatabindConfig, "provided")
 
   dependencies {
+    compile libs.zstd
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
+    compileOnly libs.jacksonJDK8Datatypes
 
     jacksonDatabindConfig libs.jacksonDatabind // to publish as provided scope dependency.
 
     testCompile libs.bcpkix
     testCompile libs.junit
-    testCompile libs.easymock
-    testCompile libs.powermockJunit4
-    testCompile libs.powermockEasymock
+    testCompile libs.mockitoCore
 
     testRuntime libs.slf4jlog4j
     testRuntime libs.jacksonDatabind
+    testRuntime libs.jacksonJDK8Datatypes
+    testCompile libs.jacksonJaxrsJsonProvider
   }
 
   task determineCommitId {
@@ -883,6 +981,29 @@ project(':clients') {
     delete "$buildDir/kafka/"
   }
 
+  task processMessages(type:JavaExec) {
+    main = "org.apache.kafka.message.MessageGenerator"
+    classpath = project(':generator').sourceSets.main.runtimeClasspath
+    args = [ "src/generated/java/org/apache/kafka/common/message", "src/main/resources/common/message" ]
+    inputs.dir("src/main/resources/common/message")
+    outputs.dir("src/generated/java/org/apache/kafka/common/message")
+  }
+
+  sourceSets {
+    main {
+      java {
+        srcDirs = ["src/generated/java", "src/main/java"]
+      }
+    }
+    test {
+      java {
+        srcDirs = ["src/generated/java", "src/test/java"]
+      }
+    }
+  }
+
+  compileJava.dependsOn 'processMessages'
+
   javadoc {
     include "**/org/apache/kafka/clients/admin/*"
     include "**/org/apache/kafka/clients/consumer/*"
@@ -914,6 +1035,7 @@ project(':tools') {
     compile project(':log4j-appender')
     compile libs.argparse4j
     compile libs.jacksonDatabind
+    compile libs.jacksonJDK8Datatypes
     compile libs.slf4jApi
 
     compile libs.jacksonJaxrsJsonProvider
@@ -961,7 +1083,13 @@ project(':streams') {
 
   dependencies {
     compile project(':clients')
-    compile project(':connect:json')  // this dependency should be removed after we unify data API
+
+    // this dependency should be removed after we unify data API
+    compile(project(':connect:json')) {
+      // this transitive dependency is not used in Streams, and it breaks SBT builds
+      exclude module: 'javax.ws.rs-api'
+    }
+
     compile libs.slf4jApi
     compile libs.rocksDBJni
 
@@ -974,6 +1102,7 @@ project(':streams') {
     testCompile libs.junit
     testCompile libs.easymock
     testCompile libs.bcpkix
+    testCompile libs.hamcrest
 
     testRuntimeOnly project(':streams:test-utils')
     testRuntime libs.slf4jlog4j
@@ -1201,6 +1330,18 @@ project(':streams:upgrade-system-tests-20') {
   }
 }
 
+project(':streams:upgrade-system-tests-21') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-21"
+
+  dependencies {
+    testCompile libs.kafkaStreams_21
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.github.johnrengelman.shadow'
@@ -1342,6 +1483,7 @@ project(':connect:json') {
   dependencies {
     compile project(':connect:api')
     compile libs.jacksonDatabind
+    compile libs.jacksonJDK8Datatypes
     compile libs.slf4jApi
 
     testCompile libs.easymock
@@ -1404,8 +1546,11 @@ project(':connect:runtime') {
     testCompile libs.junit
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
+    testCompile libs.httpclient
 
     testCompile project(':clients').sourceSets.test.output
+    testCompile project(':core')
+    testCompile project(':core').sourceSets.test.output
 
     testRuntime libs.slf4jlog4j
   }

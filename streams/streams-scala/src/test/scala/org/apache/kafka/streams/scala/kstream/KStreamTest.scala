@@ -18,6 +18,8 @@
  */
 package org.apache.kafka.streams.scala.kstream
 
+import java.time.Duration.ofSeconds
+
 import org.apache.kafka.streams.kstream.JoinWindows
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.Serdes._
@@ -100,7 +102,7 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
     val sinkTopic = "sink"
 
     var acc = ""
-    builder.stream[String, String](sourceTopic).peek((k, v) => acc += v).to(sinkTopic)
+    builder.stream[String, String](sourceTopic).peek((_, v) => acc += v).to(sinkTopic)
 
     val testDriver = createTestDriver(builder)
 
@@ -143,12 +145,15 @@ class KStreamTest extends FlatSpec with Matchers with TestDriver {
 
     val stream1 = builder.stream[String, String](sourceTopic1)
     val stream2 = builder.stream[String, String](sourceTopic2)
-    stream1.join(stream2)((a, b) => s"$a-$b", JoinWindows.of(1000)).to(sinkTopic)
+    stream1.join(stream2)((a, b) => s"$a-$b", JoinWindows.of(ofSeconds(1))).to(sinkTopic)
 
-    val testDriver = createTestDriver(builder)
+    val now = System.currentTimeMillis()
 
-    testDriver.pipeRecord(sourceTopic1, ("1", "topic1value1"))
-    testDriver.pipeRecord(sourceTopic2, ("1", "topic2value1"))
+    val testDriver = createTestDriver(builder, now)
+
+    testDriver.pipeRecord(sourceTopic1, ("1", "topic1value1"), now)
+    testDriver.pipeRecord(sourceTopic2, ("1", "topic2value1"), now)
+
     testDriver.readRecord[String, String](sinkTopic).value shouldBe "topic1value1-topic2value1"
 
     testDriver.readRecord[String, String](sinkTopic) shouldBe null

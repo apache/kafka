@@ -219,13 +219,13 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         for (Entry<String, Subscription> entry: subscriptions.entrySet()) {
             String consumer = entry.getKey();
             consumer2AllPotentialPartitions.put(consumer, new ArrayList<TopicPartition>());
-            for (String topic: entry.getValue().topics()) {
+            entry.getValue().topics().stream().filter(topic -> partitionsPerTopic.get(topic) != null).forEach(topic -> {
                 for (int i = 0; i < partitionsPerTopic.get(topic); ++i) {
                     TopicPartition topicPartition = new TopicPartition(topic, i);
                     consumer2AllPotentialPartitions.get(consumer).add(topicPartition);
                     partition2AllPotentialConsumers.get(topicPartition).add(consumer);
                 }
-            }
+            });
 
             // add this consumer to currentAssignment (with an empty topic partition assignment) if it does not already exist
             if (!currentAssignment.containsKey(consumer))
@@ -334,7 +334,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             List<TopicPartition> topicPartitions = entry.getValue();
             for (TopicPartition topicPartition: topicPartitions) {
                 if (allPartitions.containsKey(topicPartition))
-                    log.error(topicPartition + " is assigned to more than one consumer.");
+                    log.error("{} is assigned to more than one consumer.", topicPartition);
                 allPartitions.put(topicPartition, entry.getKey());
             }
         }
@@ -356,7 +356,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                     String otherConsumer = allPartitions.get(topicPartition);
                     int otherConsumerPartitionCount = currentAssignment.get(otherConsumer).size();
                     if (consumerPartitionCount < otherConsumerPartitionCount) {
-                        log.debug(topicPartition + " can be moved from consumer " + otherConsumer + " to consumer " + consumer + " for a more balanced assignment.");
+                        log.debug("{} can be moved from consumer {} to consumer {} for a more balanced assignment.",
+                                topicPartition, otherConsumer, consumer);
                         return false;
                     }
                 }
@@ -499,7 +500,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         int currentAssignmentSize = currentPartitions.size();
         int maxAssignmentSize = consumer2AllPotentialPartitions.get(consumer).size();
         if (currentAssignmentSize > maxAssignmentSize)
-            log.error("The consumer " + consumer + " is assigned more partitions than the maximum possible.");
+            log.error("The consumer {} is assigned more partitions than the maximum possible.", consumer);
 
         if (currentAssignmentSize < maxAssignmentSize)
             // if a consumer is not assigned all its potential partitions it is subject to reassignment
@@ -598,12 +599,12 @@ public class StickyAssignor extends AbstractPartitionAssignor {
 
                 // the partition must have at least two consumers
                 if (partition2AllPotentialConsumers.get(partition).size() <= 1)
-                    log.error("Expected more than one potential consumer for partition '" + partition + "'");
+                    log.error("Expected more than one potential consumer for partition '{}'", partition);
 
                 // the partition must have a current consumer
                 String consumer = currentPartitionConsumer.get(partition);
                 if (consumer == null)
-                    log.error("Expected partition '" + partition + "' to be assigned to a consumer");
+                    log.error("Expected partition '{}' to be assigned to a consumer", partition);
 
                 // check if a better-suited consumer exist for the partition; if so, reassign it
                 for (String otherConsumer: partition2AllPotentialConsumers.get(partition)) {
@@ -704,6 +705,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
      */
     private <T> boolean hasIdenticalListElements(Collection<List<T>> col) {
         Iterator<List<T>> it = col.iterator();
+        if (!it.hasNext())
+            return true;
         List<T> cur = it.next();
         while (it.hasNext()) {
             List<T> next = it.next();
@@ -879,7 +882,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                 List<String> path = new ArrayList<>(Collections.singleton(pair.srcMemberId));
                 if (isLinked(pair.dstMemberId, pair.srcMemberId, reducedPairs, path) && !in(path, cycles)) {
                     cycles.add(new ArrayList<>(path));
-                    log.error("A cycle of length " + (path.size() - 1) + " was found: " + path.toString());
+                    log.error("A cycle of length {} was found: {}", path.size() - 1, path.toString());
                 }
             }
 
@@ -896,9 +899,9 @@ public class StickyAssignor extends AbstractPartitionAssignor {
             for (Map.Entry<String, Map<ConsumerPair, Set<TopicPartition>>> topicMovements: this.partitionMovementsByTopic.entrySet()) {
                 Set<ConsumerPair> topicMovementPairs = topicMovements.getValue().keySet();
                 if (hasCycles(topicMovementPairs)) {
-                    log.error("Stickiness is violated for topic " + topicMovements.getKey()
+                    log.error("Stickiness is violated for topic {}"
                             + "\nPartition movements for this topic occurred among the following consumer pairs:"
-                            + "\n" + topicMovements.getValue().toString());
+                            + "\n{}", topicMovements.getKey(), topicMovements.getValue().toString());
                     return false;
                 }
             }

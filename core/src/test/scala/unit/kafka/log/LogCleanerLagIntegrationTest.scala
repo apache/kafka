@@ -41,9 +41,10 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
   val time = new MockTime(1400000000000L, 1000L)  // Tue May 13 16:53:20 UTC 2014 for `currentTimeMs`
   val cleanerBackOffMs = 200L
   val segmentSize = 512
-  var counter = 0
+
+  override def codec: CompressionType = CompressionType.forName(compressionCodecName)
+
   val topicPartitions = Array(new TopicPartition("log", 0), new TopicPartition("log", 1), new TopicPartition("log", 2))
-  val compressionCodec = CompressionType.forName(compressionCodecName)
 
   @Test
   def cleanerTest(): Unit = {
@@ -55,7 +56,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
 
     // t = T0
     val T0 = time.milliseconds
-    val appends0 = writeDups(numKeys = 100, numDups = 3, log, compressionCodec, timestamp = T0)
+    val appends0 = writeDups(numKeys = 100, numDups = 3, log, codec, timestamp = T0)
     val startSizeBlock0 = log.size
     debug(s"total log size at T0: $startSizeBlock0")
 
@@ -78,7 +79,7 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
     val T1 = time.milliseconds
 
     // write another block of data
-    val appends1 = appends0 ++ writeDups(numKeys = 100, numDups = 3, log, compressionCodec, timestamp = T1)
+    val appends1 = appends0 ++ writeDups(numKeys = 100, numDups = 3, log, codec, timestamp = T1)
     val firstBlock1SegmentBaseOffset = activeSegAtT0.baseOffset
 
     // the first block should get cleaned
@@ -111,11 +112,10 @@ class LogCleanerLagIntegrationTest(compressionCodecName: String) extends Abstrac
       val count = counter
       log.appendAsLeader(TestUtils.singletonRecords(value = counter.toString.getBytes, codec = codec,
               key = key.toString.getBytes, timestamp = timestamp), leaderEpoch = 0)
-      counter += 1
+      incCounter()
       (key, count)
     }
   }
-
 }
 
 object LogCleanerLagIntegrationTest {

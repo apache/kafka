@@ -860,6 +860,11 @@ public class SslTransportLayerTest {
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
         NetworkTestUtils.waitForChannelReady(selector, node);
+        // `waitForChannelReady` waits for client-side channel to be ready. This is sufficient for other tests
+        // operating on the client-side channel. But here, we are muting the server-side channel below, so we
+        // need to wait for the server-side channel to be ready as well.
+        TestUtils.waitForCondition(() -> server.selector().channels().stream().allMatch(KafkaChannel::ready),
+                "Channel not ready");
 
         final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
         server.outputChannel(Channels.newChannel(bytesOut));
@@ -893,7 +898,7 @@ public class SslTransportLayerTest {
         TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-                false, securityProtocol, config, null, null);
+                false, securityProtocol, config, null, null, time);
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, time);
         server.start();
@@ -953,7 +958,7 @@ public class SslTransportLayerTest {
         TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
         ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
         ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
-                false, securityProtocol, config, null, null);
+                false, securityProtocol, config, null, null, time);
         server = new NioEchoServer(listenerName, securityProtocol, config,
                 "localhost", serverChannelBuilder, null, time);
         server.start();
@@ -1073,7 +1078,6 @@ public class SslTransportLayerTest {
             SocketChannel socketChannel = (SocketChannel) key.channel();
             SSLEngine sslEngine = sslFactory.createSslEngine(host, socketChannel.socket().getPort());
             TestSslTransportLayer transportLayer = newTransportLayer(id, key, sslEngine);
-            transportLayer.startHandshake();
             return transportLayer;
         }
 
@@ -1146,6 +1150,12 @@ public class SslTransportLayerTest {
                     return false;
                 resetDelayedFlush();
                 return super.flush(buf);
+            }
+
+            @Override
+            protected void startHandshake() throws IOException {
+                assertTrue("SSL handshake initialized too early", socketChannel().isConnected());
+                super.startHandshake();
             }
 
             private void resetDelayedFlush() {

@@ -21,6 +21,8 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertNotNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyZeroInteractions;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -40,7 +42,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.auth.SaslExtensions;
-import org.easymock.EasyMock;
 import org.junit.Test;
 
 public class OAuthBearerLoginModuleTest {
@@ -124,12 +125,10 @@ public class OAuthBearerLoginModuleTest {
         Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
-            EasyMock.mock(OAuthBearerToken.class), EasyMock.mock(OAuthBearerToken.class)};
-        SaslExtensions[] extensions = new SaslExtensions[] {EasyMock.mock(SaslExtensions.class),
-            EasyMock.mock(SaslExtensions.class), EasyMock.mock(SaslExtensions.class)};
-        EasyMock.replay(tokens[0], tokens[1], tokens[2]); // expect nothing
-        EasyMock.replay(extensions[0], extensions[2]);
+        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
+            mock(OAuthBearerToken.class), mock(OAuthBearerToken.class)};
+        SaslExtensions[] extensions = new SaslExtensions[] {mock(SaslExtensions.class),
+            mock(SaslExtensions.class), mock(SaslExtensions.class)};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login modules
@@ -207,6 +206,9 @@ public class OAuthBearerLoginModuleTest {
         assertEquals(1, publicCredentials.size());
         assertSame(tokens[2], privateCredentials.iterator().next());
         assertSame(extensions[2], publicCredentials.iterator().next());
+
+        verifyZeroInteractions((Object[]) tokens);
+        verifyZeroInteractions((Object[]) extensions);
     }
 
     @Test
@@ -220,12 +222,10 @@ public class OAuthBearerLoginModuleTest {
         Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
-            EasyMock.mock(OAuthBearerToken.class)};
-        SaslExtensions[] extensions = new SaslExtensions[] {EasyMock.mock(SaslExtensions.class),
-            EasyMock.mock(SaslExtensions.class)};
-        EasyMock.replay(tokens[0], tokens[1]); // expect nothing
-        EasyMock.replay(extensions[0], extensions[1]);
+        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
+            mock(OAuthBearerToken.class)};
+        SaslExtensions[] extensions = new SaslExtensions[] {mock(SaslExtensions.class),
+            mock(SaslExtensions.class)};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login modules
@@ -268,6 +268,9 @@ public class OAuthBearerLoginModuleTest {
         // Should have nothing again
         assertEquals(0, privateCredentials.size());
         assertEquals(0, publicCredentials.size());
+
+        verifyZeroInteractions((Object[]) tokens);
+        verifyZeroInteractions((Object[]) extensions);
     }
 
     @Test
@@ -280,12 +283,10 @@ public class OAuthBearerLoginModuleTest {
         Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
-            EasyMock.mock(OAuthBearerToken.class)};
-        SaslExtensions[] extensions = new SaslExtensions[] {EasyMock.mock(SaslExtensions.class),
-            EasyMock.mock(SaslExtensions.class)};
-        EasyMock.replay(tokens[0], tokens[1]); // expect nothing
-        EasyMock.replay(extensions[0], extensions[1]);
+        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
+            mock(OAuthBearerToken.class)};
+        SaslExtensions[] extensions = new SaslExtensions[] {mock(SaslExtensions.class),
+            mock(SaslExtensions.class)};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login module
@@ -319,6 +320,9 @@ public class OAuthBearerLoginModuleTest {
         // Should have nothing again
         assertEquals(0, privateCredentials.size());
         assertEquals(0, publicCredentials.size());
+
+        verifyZeroInteractions((Object[]) tokens);
+        verifyZeroInteractions((Object[]) extensions);
     }
 
     @Test
@@ -332,12 +336,10 @@ public class OAuthBearerLoginModuleTest {
         Set<Object> publicCredentials = subject.getPublicCredentials();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
-            EasyMock.mock(OAuthBearerToken.class), EasyMock.mock(OAuthBearerToken.class)};
-        SaslExtensions[] extensions = new SaslExtensions[] {EasyMock.mock(SaslExtensions.class),
-            EasyMock.mock(SaslExtensions.class), EasyMock.mock(SaslExtensions.class)};
-        EasyMock.replay(tokens[0], tokens[1], tokens[2]); // expect nothing
-        EasyMock.replay(extensions[0], extensions[1], extensions[2]);
+        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
+            mock(OAuthBearerToken.class), mock(OAuthBearerToken.class)};
+        SaslExtensions[] extensions = new SaslExtensions[] {mock(SaslExtensions.class),
+            mock(SaslExtensions.class), mock(SaslExtensions.class)};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, extensions);
 
         // Create login modules
@@ -402,6 +404,9 @@ public class OAuthBearerLoginModuleTest {
         assertSame(tokens[2], privateCredentials.iterator().next());
         assertEquals(1, publicCredentials.size());
         assertSame(extensions[2], publicCredentials.iterator().next());
+
+        verifyZeroInteractions((Object[]) tokens);
+        verifyZeroInteractions((Object[]) extensions);
     }
 
     /**
@@ -413,9 +418,8 @@ public class OAuthBearerLoginModuleTest {
         Subject subject = new Subject();
 
         // Create callback handler
-        OAuthBearerToken[] tokens = new OAuthBearerToken[] {EasyMock.mock(OAuthBearerToken.class),
-                EasyMock.mock(OAuthBearerToken.class), EasyMock.mock(OAuthBearerToken.class)};
-        EasyMock.replay(tokens[0], tokens[1], tokens[2]); // expect nothing
+        OAuthBearerToken[] tokens = new OAuthBearerToken[] {mock(OAuthBearerToken.class),
+                mock(OAuthBearerToken.class), mock(OAuthBearerToken.class)};
         TestCallbackHandler testTokenCallbackHandler = new TestCallbackHandler(tokens, new SaslExtensions[] {RAISE_UNSUPPORTED_CB_EXCEPTION_FLAG});
 
         // Create login modules
@@ -429,5 +433,7 @@ public class OAuthBearerLoginModuleTest {
         SaslExtensions extensions = subject.getPublicCredentials(SaslExtensions.class).iterator().next();
         assertNotNull(extensions);
         assertTrue(extensions.map().isEmpty());
+
+        verifyZeroInteractions((Object[]) tokens);
     }
 }

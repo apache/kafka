@@ -27,8 +27,8 @@ import java.util.{Collections, Locale, Properties, Random}
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.common.MessageFormatter
-import kafka.utils._
 import kafka.utils.Implicits._
+import kafka.utils._
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, KafkaConsumer}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException, WakeupException}
@@ -65,6 +65,7 @@ object ConsoleConsumer extends Logging {
   def run(conf: ConsumerConfig) {
     val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
     val consumer = new KafkaConsumer(consumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
+
     val consumerWrapper =
       if (conf.partitionArg.isDefined)
         new ConsumerWrapper(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
@@ -151,7 +152,8 @@ object ConsoleConsumer extends Logging {
     props ++= config.extraConsumerProps
     setAutoOffsetResetValue(config, props)
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
-    props.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, config.isolationLevel)
+    CommandLineUtils.maybeMergeOptions(
+      props, ConsumerConfig.ISOLATION_LEVEL_CONFIG, config.options, config.isolationLevelOpt)
     props
   }
 
@@ -188,13 +190,12 @@ object ConsoleConsumer extends Logging {
     }
   }
 
-  class ConsumerConfig(args: Array[String]) {
-    val parser = new OptionParser(false)
+  class ConsumerConfig(args: Array[String]) extends CommandDefaultOptions(args) {
     val topicIdOpt = parser.accepts("topic", "The topic id to consume on.")
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val whitelistOpt = parser.accepts("whitelist", "Whitelist of topics to include for consumption.")
+    val whitelistOpt = parser.accepts("whitelist", "Regular expression specifying whitelist of topics to include for consumption.")
       .withRequiredArg
       .describedAs("whitelist")
       .ofType(classOf[String])
@@ -274,11 +275,11 @@ object ConsoleConsumer extends Logging {
       .describedAs("consumer group id")
       .ofType(classOf[String])
 
-    if (args.length == 0)
-      CommandLineUtils.printUsageAndDie(parser, "The console consumer is a tool that reads data from Kafka and outputs it to standard output.")
+    options = tryParse(parser, args)
+
+    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from Kafka topics and outputs it to standard output.")
 
     var groupIdPassed = true
-    val options: OptionSet = tryParse(parser, args)
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
     // topic must be specified.
@@ -300,8 +301,7 @@ object ConsoleConsumer extends Logging {
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
     val keyDeserializer = options.valueOf(keyDeserializerOpt)
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
-    val isolationLevel = options.valueOf(isolationLevelOpt).toString
-    val formatter: MessageFormatter = messageFormatterClass.newInstance().asInstanceOf[MessageFormatter]
+    val formatter: MessageFormatter = messageFormatterClass.getDeclaredConstructor().newInstance().asInstanceOf[MessageFormatter]
 
     if (keyDeserializer != null && !keyDeserializer.isEmpty) {
       formatterArgs.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer)
@@ -355,7 +355,7 @@ object ConsoleConsumer extends Logging {
     val groupIdsProvided = Set(
       Option(options.valueOf(groupIdOpt)), // via --group
       Option(consumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)), // via --consumer-property
-      Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --cosumer.config
+      Option(extraConsumerProps.get(ConsumerConfig.GROUP_ID_CONFIG)) // via --consumer.config
     ).flatten
 
     if (groupIdsProvided.size > 1) {
@@ -375,6 +375,9 @@ object ConsoleConsumer extends Logging {
           consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
         groupIdPassed = false
     }
+
+    if (groupIdPassed && partitionArg.isDefined)
+      CommandLineUtils.printUsageAndDie(parser, "Options group and partition cannot be specified together.")
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
       try
@@ -450,9 +453,6 @@ object ConsoleConsumer extends Logging {
       this.consumer.close()
     }
 
-    def commitSync() {
-      this.consumer.commitSync()
-    }
   }
 }
 
@@ -479,12 +479,14 @@ class DefaultMessageFormatter extends MessageFormatter {
       lineSeparator = props.getProperty("line.separator").getBytes(StandardCharsets.UTF_8)
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
     if (props.containsKey("key.deserializer")) {
-      keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
+      keyDeserializer = Some(Class.forName(props.getProperty("key.deserializer")).getDeclaredConstructor()
+        .newInstance().asInstanceOf[Deserializer[_]])
       keyDeserializer.get.configure(propertiesWithKeyPrefixStripped("key.deserializer.", props).asScala.asJava, true)
     }
     // Note that `toString` will be called on the instance returned by `Deserializer.deserialize`
     if (props.containsKey("value.deserializer")) {
-      valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).newInstance().asInstanceOf[Deserializer[_]])
+      valueDeserializer = Some(Class.forName(props.getProperty("value.deserializer")).getDeclaredConstructor()
+        .newInstance().asInstanceOf[Deserializer[_]])
       valueDeserializer.get.configure(propertiesWithKeyPrefixStripped("value.deserializer.", props).asScala.asJava, false)
     }
   }
@@ -507,9 +509,9 @@ class DefaultMessageFormatter extends MessageFormatter {
         output.write(lineSeparator)
     }
 
-    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte]) {
+    def write(deserializer: Option[Deserializer[_]], sourceBytes: Array[Byte], topic: String) {
       val nonNullBytes = Option(sourceBytes).getOrElse("null".getBytes(StandardCharsets.UTF_8))
-      val convertedBytes = deserializer.map(_.deserialize(null, nonNullBytes).toString.
+      val convertedBytes = deserializer.map(_.deserialize(topic, nonNullBytes).toString.
         getBytes(StandardCharsets.UTF_8)).getOrElse(nonNullBytes)
       output.write(convertedBytes)
     }
@@ -525,12 +527,12 @@ class DefaultMessageFormatter extends MessageFormatter {
     }
 
     if (printKey) {
-      write(keyDeserializer, key)
+      write(keyDeserializer, key, topic)
       writeSeparator(printValue)
     }
 
     if (printValue) {
-      write(valueDeserializer, value)
+      write(valueDeserializer, value, topic)
       output.write(lineSeparator)
     }
   }

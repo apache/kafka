@@ -113,10 +113,12 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   def createConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
                            valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
-                           configOverrides: Properties = new Properties): KafkaConsumer[K, V] = {
+                           configOverrides: Properties = new Properties,
+                           configsToRemove: List[String] = List()): KafkaConsumer[K, V] = {
     val props = new Properties
     props ++= consumerConfig
     props ++= configOverrides
+    configsToRemove.foreach(props.remove(_))
     val consumer = new KafkaConsumer[K, V](props, keyDeserializer, valueDeserializer)
     consumers += consumer
     consumer
@@ -124,7 +126,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   @After
   override def tearDown() {
-    producers.foreach(_.close(0, TimeUnit.MILLISECONDS))
+    producers.foreach(_.close(Duration.ZERO))
     consumers.foreach(_.wakeup())
     consumers.foreach(_.close(Duration.ZERO))
     producers.clear()

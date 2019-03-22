@@ -24,6 +24,7 @@ import java.util.concurrent.locks.{Lock, ReadWriteLock}
 import java.lang.management._
 import java.util.{Base64, Properties, UUID}
 
+import com.typesafe.scalalogging.Logger
 import javax.management._
 
 import scala.collection._
@@ -45,7 +46,8 @@ import org.slf4j.event.Level
  * 2. It is the most general possible utility, not just the thing you needed in one particular place
  * 3. You have tests for it if it is nontrivial in any way
  */
-object CoreUtils extends Logging {
+object CoreUtils {
+  private val logger = Logger(getClass)
 
   /**
    * Return the smallest element in `traversable` if it is not empty. Otherwise return `ifEmpty`.
@@ -147,7 +149,7 @@ object CoreUtils extends Logging {
       }
     } catch {
       case e: Exception => {
-        error("Failed to register Mbean " + name, e)
+        logger.error(s"Failed to register Mbean $name", e)
         false
       }
     }

@@ -22,7 +22,7 @@ package kstream
 
 import org.apache.kafka.streams.kstream.{KGroupedStream => KGroupedStreamJ, _}
 import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.FunctionConversions._
+import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 
 /**
  * Wraps the Java class KGroupedStream and delegates method calls to the underlying Java object.

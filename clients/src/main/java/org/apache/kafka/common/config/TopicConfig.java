@@ -18,11 +18,11 @@
 package org.apache.kafka.common.config;
 
 /**
- * Keys that can be used to configure a topic.  These keys are useful when creating or reconfiguring a
+ * <p>Keys that can be used to configure a topic. These keys are useful when creating or reconfiguring a
  * topic using the AdminClient.
  *
- * The intended pattern is for broker configs to include a `log.` prefix. For example, to set the default broker
- * cleanup policy, one would set log.cleanup.policy instead of cleanup.policy. Unfortunately, there are many cases
+ * <p>The intended pattern is for broker configs to include a <code>`log.`</code> prefix. For example, to set the default broker
+ * cleanup policy, one would set <code>log.cleanup.policy</code> instead of <code>cleanup.policy</code>. Unfortunately, there are many cases
  * where this pattern is not followed.
  */
 // This is a public API, so we should not remove or alter keys without a discussion and a deprecation period.
@@ -117,7 +117,7 @@ public class TopicConfig {
     public static final String CLEANUP_POLICY_COMPACT = "compact";
     public static final String CLEANUP_POLICY_DELETE = "delete";
     public static final String CLEANUP_POLICY_DOC = "A string that is either \"" + CLEANUP_POLICY_DELETE +
-        "\" or \"" + CLEANUP_POLICY_COMPACT + "\". This string designates the retention policy to use on " +
+        "\" or \"" + CLEANUP_POLICY_COMPACT + "\" or both. This string designates the retention policy to use on " +
         "old log segments. The default policy (\"delete\") will discard old segments when their retention " +
         "time or size limit has been reached. The \"compact\" setting will enable <a href=\"#compaction\">log " +
         "compaction</a> on the topic.";
@@ -140,7 +140,7 @@ public class TopicConfig {
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. " +
-        "This configuration accepts the standard compression codecs ('gzip', 'snappy', lz4). It additionally " +
+        "This configuration accepts the standard compression codecs ('gzip', 'snappy', 'lz4', 'zstd'). It additionally " +
         "accepts 'uncompressed' which is equivalent to no compression; and 'producer' which means retain the " +
         "original compression codec set by the producer.";
 

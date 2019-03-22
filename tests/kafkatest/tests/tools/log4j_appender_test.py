@@ -66,7 +66,7 @@ class Log4jAppenderTest(Test):
 
     def start_consumer(self):
         self.consumer = ConsoleConsumer(self.test_context, num_nodes=self.num_brokers, kafka=self.kafka, topic=TOPIC,
-                                        consumer_timeout_ms=1000,
+                                        consumer_timeout_ms=10000,
                                         message_validator=self.custom_message_validator)
         self.consumer.start()
 
@@ -87,7 +87,7 @@ class Log4jAppenderTest(Test):
         node = self.consumer.nodes[0]
 
         wait_until(lambda: self.consumer.alive(node),
-            timeout_sec=10, backoff_sec=.2, err_msg="Consumer was too slow to start")
+            timeout_sec=20, backoff_sec=.2, err_msg="Consumer was too slow to start")
 
         # Verify consumed messages count
         wait_until(lambda: self.messages_received_count == MAX_MESSAGES, timeout_sec=10,

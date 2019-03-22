@@ -35,7 +35,7 @@ import static org.junit.Assert.assertEquals;
 public class SerializationTest {
 
     final private String topic = "testTopic";
-    final private Map<Class<Object>, List<Object>> testData = new HashMap() {
+    final private Map<Class<?>, List<Object>> testData = new HashMap<Class<?>, List<Object>>() {
         {
             put(String.class, Arrays.asList("my string"));
             put(Short.class, Arrays.asList((short) 32767, (short) -32768));
@@ -53,10 +53,11 @@ public class SerializationTest {
     private class DummyClass {
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void allSerdesShouldRoundtripInput() {
-        for (Map.Entry<Class<Object>, List<Object>> test : testData.entrySet()) {
-            try (Serde<Object> serde = Serdes.serdeFrom(test.getKey())) {
+        for (Map.Entry<Class<?>, List<Object>> test : testData.entrySet()) {
+            try (Serde<Object> serde = Serdes.serdeFrom((Class<Object>) test.getKey())) {
                 for (Object value : test.getValue()) {
                     assertEquals("Should get the original " + test.getKey().getSimpleName() +
                                     " after serialization and deserialization", value,

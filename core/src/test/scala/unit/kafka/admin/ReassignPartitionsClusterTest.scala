@@ -51,8 +51,12 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
   }
 
   def startBrokers(brokerIds: Seq[Int]) {
-    servers = brokerIds.map(i => createBrokerConfig(i, zkConnect, enableControlledShutdown = false, logDirCount = 3))
-      .map(c => createServer(KafkaConfig.fromProps(c)))
+    servers = brokerIds.map { i =>
+      val props = createBrokerConfig(i, zkConnect, enableControlledShutdown = false, logDirCount = 3)
+      // shorter backoff to reduce test durations when no active partitions are eligible for fetching due to throttling
+      props.put(KafkaConfig.ReplicaFetchBackoffMsProp, "100")
+      props
+    }.map(c => createServer(KafkaConfig.fromProps(c)))
   }
 
   def createAdminClient(servers: Seq[KafkaServer]): JAdminClient = {
@@ -99,12 +103,13 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
       "broker 101 should be the new leader", pause = 1L
     )
 
-    assertEquals(100, newLeaderServer.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset)
+    assertEquals(100, newLeaderServer.replicaManager.localReplicaOrException(topicPartition)
+      .highWatermark.messageOffset)
     val newFollowerServer = servers.find(_.config.brokerId == 102).get
-    TestUtils.waitUntilTrue(() => newFollowerServer.replicaManager.getReplicaOrException(topicPartition).highWatermark.messageOffset == 100,
+    TestUtils.waitUntilTrue(() => newFollowerServer.replicaManager.localReplicaOrException(topicPartition)
+      .highWatermark.messageOffset == 100,
       "partition follower's highWatermark should be 100")
   }
-
 
   @Test
   def shouldMoveSinglePartition(): Unit = {

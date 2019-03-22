@@ -130,6 +130,7 @@ public class FetchSessionHandlerTest {
         }
     }
 
+    @SafeVarargs
     private static void assertMapsEqual(Map<TopicPartition, FetchRequest.PartitionData> expected,
                                         Map<TopicPartition, FetchRequest.PartitionData>... actuals) {
         for (Map<TopicPartition, FetchRequest.PartitionData> actual : actuals) {

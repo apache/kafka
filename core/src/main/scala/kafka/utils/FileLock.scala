@@ -36,7 +36,7 @@ class FileLock(val file: File) extends Logging {
    */
   def lock() {
     this synchronized {
-      trace("Acquiring lock on " + file.getAbsolutePath)
+      trace(s"Acquiring lock on ${file.getAbsolutePath}")
       flock = channel.lock()
     }
   }
@@ -46,7 +46,7 @@ class FileLock(val file: File) extends Logging {
    */
   def tryLock(): Boolean = {
     this synchronized {
-      trace("Acquiring lock on " + file.getAbsolutePath)
+      trace(s"Acquiring lock on ${file.getAbsolutePath}")
       try {
         // weirdly this method will return null if the lock is held by another
         // process, but will throw an exception if the lock is held by this process
@@ -64,7 +64,7 @@ class FileLock(val file: File) extends Logging {
    */
   def unlock() {
     this synchronized {
-      trace("Releasing lock on " + file.getAbsolutePath)
+      trace(s"Releasing lock on ${file.getAbsolutePath}")
       if(flock != null)
         flock.release()
     }

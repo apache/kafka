@@ -142,7 +142,7 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     val topic = "test.topic"
 
     // simulate the ZK interactions that can happen when a topic is concurrently created by multiple processes
-    val zkMock = EasyMock.createNiceMock(classOf[ZkUtils])
+    val zkMock: ZkUtils = EasyMock.createNiceMock(classOf[ZkUtils])
     EasyMock.expect(zkMock.pathExists(s"/brokers/topics/$topic")).andReturn(false)
     EasyMock.expect(zkMock.getAllTopics).andReturn(Seq("some.topic", topic, "some.other.topic"))
     EasyMock.replay(zkMock)
@@ -169,14 +169,14 @@ class AdminTest extends ZooKeeperTestHarness with Logging with RackAwareTest {
     zkUtils.updatePersistentPath(ConfigEntityZNode.path(ConfigType.Client, clientId), Json.encodeAsString(map.asJava))
 
     val configInZk: Map[String, Properties] = AdminUtils.fetchAllEntityConfigs(zkUtils, ConfigType.Client)
-    assertEquals("Must have 1 overriden client config", 1, configInZk.size)
+    assertEquals("Must have 1 overridden client config", 1, configInZk.size)
     assertEquals(props, configInZk(clientId))
 
     // Test that the existing clientId overrides are read
     val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
     servers = Seq(server)
-    assertEquals(new Quota(1000, true), server.apis.quotas.produce.quota("ANONYMOUS", clientId))
-    assertEquals(new Quota(2000, true), server.apis.quotas.fetch.quota("ANONYMOUS", clientId))
+    assertEquals(new Quota(1000, true), server.dataPlaneRequestProcessor.quotas.produce.quota("ANONYMOUS", clientId))
+    assertEquals(new Quota(2000, true), server.dataPlaneRequestProcessor.quotas.fetch.quota("ANONYMOUS", clientId))
   }
 
   @Test

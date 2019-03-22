@@ -28,7 +28,7 @@
   <p>
   Topics are added and modified using the topic tool:
   <pre class="brush: bash;">
-  &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --create --topic my_topic_name
+  &gt; bin/kafka-topics.sh --bootstrap-server broker_host:port --create --topic my_topic_name \
         --partitions 20 --replication-factor 3 --config x=y
   </pre>
   The replication factor controls how many servers will replicate each message that is written. If you have a replication factor of 3 then up to 2 servers can fail before you will lose access to your data. We recommend you use a replication factor of 2 or 3 so that you can transparently bounce machines without interrupting data consumption.
@@ -45,22 +45,22 @@
   <p>
   To add partitions you can do
   <pre class="brush: bash;">
-  &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --alter --topic my_topic_name
+  &gt; bin/kafka-topics.sh --bootstrap-server broker_host:port --alter --topic my_topic_name \
         --partitions 40
   </pre>
   Be aware that one use case for partitions is to semantically partition data, and adding partitions doesn't change the partitioning of existing data so this may disturb consumers if they rely on that partition. That is if data is partitioned by <code>hash(key) % number_of_partitions</code> then this partitioning will potentially be shuffled by adding partitions but Kafka will not attempt to automatically redistribute data in any way.
   <p>
   To add configs:
   <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --zookeeper zk_host:port/chroot --entity-type topics --entity-name my_topic_name --alter --add-config x=y
+  &gt; bin/kafka-configs.sh --bootstrap-server broker_host:port --entity-type topics --entity-name my_topic_name --alter --add-config x=y
   </pre>
   To remove a config:
   <pre class="brush: bash;">
-  &gt; bin/kafka-configs.sh --zookeeper zk_host:port/chroot --entity-type topics --entity-name my_topic_name --alter --delete-config x
+  &gt; bin/kafka-configs.sh --bootstrap-server broker_host:port --entity-type topics --entity-name my_topic_name --alter --delete-config x
   </pre>
   And finally deleting a topic:
   <pre class="brush: bash;">
-  &gt; bin/kafka-topics.sh --zookeeper zk_host:port/chroot --delete --topic my_topic_name
+  &gt; bin/kafka-topics.sh --bootstrap-server broker_host:port --delete --topic my_topic_name
   </pre>
   <p>
   Kafka does not currently support reducing the number of partitions for a topic.
@@ -257,7 +257,7 @@
     </li>
   </ul>
 
-  Please note, that out of range offsets will be adjusted to available offset end. For example, if offset end is at 10 and offset shift request is 
+  Please note, that out of range offsets will be adjusted to available offset end. For example, if offset end is at 10 and offset shift request is
   of 15, then, offset at 10 will actually be selected.
 
   <p>
@@ -442,7 +442,7 @@
   </pre>
   You can also verify the increase in replication factor with the kafka-topics tool:
   <pre class="brush: bash;">
-  > bin/kafka-topics.sh --zookeeper localhost:2181 --topic foo --describe
+  > bin/kafka-topics.sh --bootstrap-server localhost:9092 --topic foo --describe
   Topic:foo	PartitionCount:1	ReplicationFactor:3	Configs:
     Topic: foo	Partition: 0	Leader: 5	Replicas: 5,6,7	Isr: 5,6,7
   </pre>
@@ -969,6 +969,16 @@
         <td>between 0 and 1, ideally &gt 0.3</td>
       </tr>
       <tr>
+        <td>The number of connections disconnected on a processor due to a client not re-authenticating and then using the connection beyond its expiration time for anything other than re-authentication</td>
+        <td>kafka.server:type=socket-server-metrics,listener=[SASL_PLAINTEXT|SASL_SSL],networkProcessor=&lt;#&gt;,name=expired-connections-killed-count</td>
+        <td>ideally 0 when re-authentication is enabled, implying there are no longer any older, pre-2.2.0 clients connecting to this (listener, processor) combination</td>
+      </tr>
+      <tr>
+        <td>The total number of connections disconnected, across all processors, due to a client not re-authenticating and then using the connection beyond its expiration time for anything other than re-authentication</td>
+        <td>kafka.network:type=SocketServer,name=ExpiredConnectionsKilledCount</td>
+        <td>ideally 0 when re-authentication is enabled, implying there are no longer any older, pre-2.2.0 clients connecting to this broker</td>
+      </tr>
+      <tr>
         <td>The average fraction of time the request handler threads are idle</td>
         <td>kafka.server:type=KafkaRequestHandlerPool,name=RequestHandlerAvgIdlePercent</td>
         <td>between 0 and 1, ideally &gt 0.3</td>
@@ -1152,6 +1162,41 @@
         <td>Total connections that failed authentication.</td>
         <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>successful-reauthentication-rate</td>
+        <td>Connections per second that were successfully re-authenticated using SASL.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>successful-reauthentication-total</td>
+        <td>Total connections that were successfully re-authenticated using SASL.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>reauthentication-latency-max</td>
+        <td>The maximum latency in ms observed due to re-authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>reauthentication-latency-avg</td>
+        <td>The average latency in ms observed due to re-authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-reauthentication-rate</td>
+        <td>Connections per second that failed re-authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>failed-reauthentication-total</td>
+        <td>Total connections that failed re-authentication.</td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>successful-authentication-no-reauth-total</td>
+        <td>Total connections that were successfully authenticated by older, pre-2.2.0 SASL clients that do not support re-authentication.  May only be non-zero </td>
+        <td>kafka.[producer|consumer|connect]:type=[producer|consumer|connect]-metrics,client-id=([-.\w]+)</td>
+      </tr>
     </tbody>
   </table>
 
@@ -1169,62 +1214,62 @@
       <tr>
         <td>outgoing-byte-rate</td>
         <td>The average number of outgoing bytes sent per second for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>outgoing-byte-total</td>
         <td>The total number of outgoing bytes sent for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>request-rate</td>
         <td>The average number of requests sent per second for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>request-total</td>
         <td>The total number of requests sent for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>request-size-avg</td>
         <td>The average size of all requests in the window for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>request-size-max</td>
         <td>The maximum size of any request sent in the window for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>incoming-byte-rate</td>
         <td>The average number of bytes received per second for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>incoming-byte-total</td>
         <td>The total number of bytes received for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>request-latency-avg</td>
         <td>The average request latency in ms for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>request-latency-max</td>
         <td>The maximum request latency in ms for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>response-rate</td>
         <td>Responses received per second for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
       <tr>
         <td>response-total</td>
         <td>Total responses received for a node.</td>
-        <td>kafka.producer:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
+        <td>kafka.[producer|consumer|connect]:type=[consumer|producer|connect]-node-metrics,client-id=([-.\w]+),node-id=([0-9]+)</td>
       </tr>
     </tbody>
   </table>
@@ -1396,7 +1441,7 @@
 <pre>metrics.recording.level="info"</pre>
 
 <h5><a id="kafka_streams_thread_monitoring" href="#kafka_streams_thread_monitoring">Thread Metrics</a></h5>
-All the following metrics have a recording level of ``info``:
+All the following metrics have a recording level of <code>info</code>:
 <table class="data-table">
     <tbody>
       <tr>
@@ -1518,7 +1563,7 @@ All the following metrics have a recording level of ``info``:
 </table>
 
 <h5><a id="kafka_streams_task_monitoring" href="#kafka_streams_task_monitoring">Task Metrics</a></h5>
-All the following metrics have a recording level of ``debug``:
+All the following metrics have a recording level of <code>debug</code>:
  <table class="data-table">
       <tbody>
       <tr>
@@ -1546,11 +1591,21 @@ All the following metrics have a recording level of ``debug``:
         <td>The total number of commit calls. </td>
         <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>record-lateness-avg</td>
+        <td>The average observed lateness of records.</td>
+        <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>record-lateness-max</td>
+        <td>The max observed lateness of records.</td>
+        <td>kafka.streams:type=stream-task-metrics,client-id=([-.\w]+),task-id=([-.\w]+)</td>
+      </tr>
  </tbody>
 </table>
 
  <h5><a id="kafka_streams_node_monitoring" href="#kafka_streams_node_monitoring">Processor Node Metrics</a></h5>
- All the following metrics have a recording level of ``debug``:
+ All the following metrics have a recording level of <code>debug</code>:
  <table class="data-table">
       <tbody>
       <tr>
@@ -1648,13 +1703,36 @@ All the following metrics have a recording level of ``debug``:
         <td>The total number of of records being forwarded downstream, from source nodes only. </td>
         <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
       </tr>
+      <tr>
+        <td>suppression-emit-rate</td>
+        <td>
+          The rate at which records that have been emitted downstream from suppression operation nodes.
+          Compare with the <code>process-rate</code> metric to determine how many updates are being suppressed.
+        </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-emit-total</td>
+        <td>
+          The total number of records that have been emitted downstream from suppression operation nodes.
+          Compare with the <code>process-total</code> metric to determine how many updates are being suppressed.
+        </td>
+        <td>kafka.streams:type=stream-processor-node-metrics,client-id=([-.\w]+),task-id=([-.\w]+),processor-node-id=([-.\w]+)</td>
+      </tr>
  </tbody>
  </table>
 
  <h5><a id="kafka_streams_store_monitoring" href="#kafka_streams_store_monitoring">State Store Metrics</a></h5>
- All the following metrics have a recording level of ``debug``. Note that the ``store-scope`` value is specified in <code>StoreSupplier#metricsScope()</code> for user's customized
- state stores; for built-in state stores, currently we have <code>in-memory-state</code>, <code>in-memory-lru-state</code>, <code>rocksdb-state</code> (for RocksDB backed key-value store),
-  <code>rocksdb-window-state</code> (for RocksDB backed window store) and <code>rocksdb-session-state</code> (for RocksDB backed session store).
+ All the following metrics have a recording level of <code>debug</code>. Note that the <code>store-scope</code> value is specified in <code>StoreSupplier#metricsScope()</code> for user's customized
+ state stores; for built-in state stores, currently we have:
+  <ul>
+    <li><code>in-memory-state</code></li>
+    <li><code>in-memory-lru-state</code></li>
+    <li><code>in-memory-window-state</code></li>
+    <li><code>rocksdb-state</code> (for RocksDB backed key-value store)</li>
+    <li><code>rocksdb-window-state</code> (for RocksDB backed window store)</li>
+    <li><code>rocksdb-session-state</code> (for RocksDB backed session store)</li>
+  </ul>
 
   <table class="data-table">
       <tbody>
@@ -1847,7 +1925,7 @@ All the following metrics have a recording level of ``debug``:
  </table>
 
   <h5><a id="kafka_streams_cache_monitoring" href="#kafka_streams_cache_monitoring">Record Cache Metrics</a></h5>
-  All the following metrics have a recording level of ``debug``:
+  All the following metrics have a recording level of <code>debug</code>:
 
   <table class="data-table">
       <tbody>
@@ -1874,14 +1952,49 @@ All the following metrics have a recording level of ``debug``:
     </tbody>
  </table>
 
+  <h5><a id="kafka_streams_buffer_monitoring" href="#kafka_streams_buffer_monitoring">Suppression Buffer Metrics</a></h5>
+  All the following metrics have a recording level of <code>debug</code>:
+
+  <table class="data-table">
+      <tbody>
+      <tr>
+        <td>suppression-buffer-size-current</td>
+        <td>The current total size, in bytes, of the buffered data.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-avg</td>
+        <td>The average total size, in bytes, of the buffered data over the sampling window.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-max</td>
+        <td>The maximum total size, in bytes, of the buffered data over the sampling window.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-count-current</td>
+        <td>The current number of records buffered.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-avg</td>
+        <td>The average number of records buffered over the sampling window.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>suppression-buffer-size-max</td>
+        <td>The maximum number of records buffered over the sampling window.</td>
+        <td>kafka.streams:type=stream-buffer-metrics,client-id=([-.\w]+),task-id=([-.\w]+),buffer-id=([-.\w]+)</td>
+      </tr>
+    </tbody>
+ </table>
+
   <h4><a id="others_monitoring" href="#others_monitoring">Others</a></h4>
 
   We recommend monitoring GC time and other stats and various server stats such as CPU utilization, I/O service time, etc.
 
   On the client side, we recommend monitoring the message/byte rate (global and per topic), request rate/size/time, and on the consumer side, max lag in messages among all partitions and min fetch request rate. For a consumer to keep up, max lag needs to be less than a threshold and min fetch rate needs to be larger than 0.
-
-  <h4><a id="basic_ops_audit" href="#basic_ops_audit">Audit</a></h4>
-  The final alerting we do is on the correctness of the data delivery. We audit that every message that is sent is consumed by all consumers and measure the lag for this to occur. For important topics we alert if a certain completeness is not achieved in a certain time period. The details of this are discussed in KAFKA-260.
 
   <h3><a id="zk" href="#zk">6.7 ZooKeeper</a></h3>
 

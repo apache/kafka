@@ -16,11 +16,19 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
 
 /**
- * Interface for storing the aggregated values of sessions
+ * Interface for storing the aggregated values of sessions.
+ * <p>
+ * The key is internally represented as {@link Windowed Windowed&lt;K&gt;} that comprises the plain key
+ * and the {@link Window} that represents window start- and end-timestamp.
+ * <p>
+ * If two sessions are merged, a new session with new start- and end-timestamp must be inserted into the store
+ * while the two old sessions must be deleted.
+ *
  * @param <K>   type of the record keys
  * @param <AGG> type of the aggregated values
  */
@@ -54,6 +62,17 @@ public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K
      * @throws NullPointerException If null is used for any key.
      */
     KeyValueIterator<Windowed<K>, AGG> findSessions(final K keyFrom, final K keyTo, long earliestSessionEndTime, final long latestSessionStartTime);
+
+    /**
+     * Get the value of key from a single session.
+     *
+     * @param key            the key to fetch
+     * @param startTime      start timestamp of the session
+     * @param endTime        end timestamp of the session
+     * @return The value or {@code null} if no session associated with the key can be found
+     * @throws NullPointerException If {@code null} is used for any key.
+     */
+    AGG fetchSession(K key, long startTime, long endTime);
 
     /**
      * Remove the session aggregated with provided {@link Windowed} key from the store

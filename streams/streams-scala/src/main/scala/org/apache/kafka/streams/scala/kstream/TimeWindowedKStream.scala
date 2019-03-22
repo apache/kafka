@@ -22,7 +22,7 @@ package kstream
 
 import org.apache.kafka.streams.kstream.{TimeWindowedKStream => TimeWindowedKStreamJ, _}
 import org.apache.kafka.streams.scala.ImplicitConversions._
-import org.apache.kafka.streams.scala.FunctionConversions._
+import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 
 /**
  * Wraps the Java class TimeWindowedKStream and delegates method calls to the underlying Java object.

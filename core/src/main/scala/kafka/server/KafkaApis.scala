@@ -18,6 +18,7 @@
 package kafka.server
 
 import java.lang.{Long => JLong}
+import java.lang.{Byte => JByte}
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.ConcurrentHashMap
@@ -27,11 +28,11 @@ import java.util.{Collections, Optional, Properties}
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
 import kafka.cluster.Partition
-import kafka.common.{OffsetAndMetadata, OffsetMetadata}
+import kafka.common.OffsetAndMetadata
 import kafka.controller.KafkaController
 import kafka.coordinator.group.{GroupCoordinator, JoinGroupResult}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
-import kafka.log.{Log, LogManager, TimestampOffset}
+import kafka.message.ZStdCompressionCodec
 import kafka.network.RequestChannel
 import kafka.security.SecurityUtils
 import kafka.security.auth.{Resource, _}
@@ -43,10 +44,19 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
+import org.apache.kafka.common.message.CreateTopicsResponseData
+import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultSet}
+import org.apache.kafka.common.message.DescribeGroupsResponseData
+import org.apache.kafka.common.message.ElectPreferredLeadersResponseData
+import org.apache.kafka.common.message.JoinGroupResponseData
+import org.apache.kafka.common.message.LeaveGroupResponseData
+import org.apache.kafka.common.message.SaslAuthenticateResponseData
+import org.apache.kafka.common.message.SaslHandshakeResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{BaseRecords, ControlRecordType, EndTransactionMarker, LazyDownConversionRecords, MemoryRecords, MultiRecordsSend, RecordBatch, RecordConversionStats, Records}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
@@ -63,7 +73,6 @@ import scala.collection.JavaConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
-import org.apache.kafka.common.requests.CreateTopicsRequest.TopicDetails
 
 /**
  * Logic to handle the various Kafka requests
@@ -146,6 +155,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request)
+        case ApiKeys.ELECT_PREFERRED_LEADERS => handleElectPreferredReplicaLeader(request)
       }
     } catch {
       case e: FatalExitError => throw e
@@ -181,12 +191,16 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    if (isAuthorizedClusterAction(request)) {
+    authorizeClusterAction(request)
+    if (isBrokerEpochStale(leaderAndIsrRequest.brokerEpoch())) {
+      // When the broker restarts very quickly, it is possible for this broker to receive request intended
+      // for its previous generation so the broker should skip the stale request.
+      info("Received LeaderAndIsr request with broker epoch " +
+        s"${leaderAndIsrRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
+      sendResponseExemptThrottle(request, leaderAndIsrRequest.getErrorResponse(0, Errors.STALE_BROKER_EPOCH.exception))
+    } else {
       val response = replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest, onLeadershipChange)
       sendResponseExemptThrottle(request, response)
-    } else {
-      sendResponseMaybeThrottle(request, throttleTimeMs => leaderAndIsrRequest.getErrorResponse(throttleTimeMs,
-        Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     }
   }
 
@@ -195,8 +209,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     // We can't have the ensureTopicExists check here since the controller sends it as an advisory to all brokers so they
     // stop serving data to clients for the topic being deleted
     val stopReplicaRequest = request.body[StopReplicaRequest]
-
-    if (isAuthorizedClusterAction(request)) {
+    authorizeClusterAction(request)
+    if (isBrokerEpochStale(stopReplicaRequest.brokerEpoch())) {
+      // When the broker restarts very quickly, it is possible for this broker to receive request intended
+      // for its previous generation so the broker should skip the stale request.
+      info("Received stop replica request with broker epoch " +
+        s"${stopReplicaRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
+      sendResponseExemptThrottle(request, new StopReplicaResponse(Errors.STALE_BROKER_EPOCH, Map.empty[TopicPartition, Errors].asJava))
+    } else {
       val (result, error) = replicaManager.stopReplicas(stopReplicaRequest)
       // Clearing out the cache for groups that belong to an offsets topic partition for which this broker was the leader,
       // since this broker is no longer a replica for that offsets topic partition.
@@ -210,10 +230,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
       sendResponseExemptThrottle(request, new StopReplicaResponse(error, result.asJava))
-    } else {
-      val result = stopReplicaRequest.partitions.asScala.map((_, Errors.CLUSTER_AUTHORIZATION_FAILED)).toMap
-      sendResponseMaybeThrottle(request, _ =>
-        new StopReplicaResponse(Errors.CLUSTER_AUTHORIZATION_FAILED, result.asJava))
     }
 
     CoreUtils.swallow(replicaManager.replicaFetcherManager.shutdownIdleFetcherThreads(), this)
@@ -223,7 +239,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     val correlationId = request.header.correlationId
     val updateMetadataRequest = request.body[UpdateMetadataRequest]
 
-    if (isAuthorizedClusterAction(request)) {
+    authorizeClusterAction(request)
+    if (isBrokerEpochStale(updateMetadataRequest.brokerEpoch())) {
+      // When the broker restarts very quickly, it is possible for this broker to receive request intended
+      // for its previous generation so the broker should skip the stale request.
+      info("Received update metadata request with broker epoch " +
+        s"${updateMetadataRequest.brokerEpoch()} smaller than the current broker epoch ${controller.brokerEpoch}")
+      sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.STALE_BROKER_EPOCH))
+    } else {
       val deletedPartitions = replicaManager.maybeUpdateMetadataCache(correlationId, updateMetadataRequest)
       if (deletedPartitions.nonEmpty)
         groupCoordinator.handleDeletedPartitions(deletedPartitions)
@@ -240,9 +263,12 @@ class KafkaApis(val requestChannel: RequestChannel,
           quotas.request.updateQuotaMetricConfigs()
         }
       }
+      if (replicaManager.hasDelayedElectionOperations) {
+        updateMetadataRequest.partitionStates.asScala.foreach { case (tp, ps) =>
+          replicaManager.tryCompleteElection(new TopicPartitionOperationKey(tp.topic(), tp.partition()))
+        }
+      }
       sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.NONE))
-    } else {
-      sendResponseMaybeThrottle(request, _ => new UpdateMetadataResponse(Errors.CLUSTER_AUTHORIZATION_FAILED))
     }
   }
 
@@ -263,7 +289,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       sendResponseExemptThrottle(request, response)
     }
-    controller.controlledShutdown(controlledShutdownRequest.brokerId, controlledShutdownCallback)
+    controller.controlledShutdown(controlledShutdownRequest.brokerId, controlledShutdownRequest.brokerEpoch, controlledShutdownCallback)
   }
 
   /**
@@ -332,18 +358,19 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         // for version 1 and beyond store offsets in offset manager
 
-        // commit timestamp is always set to now.
         // "default" expiration timestamp is now + retention (and retention may be overridden if v2)
         // expire timestamp is computed differently for v1 and v2.
         //   - If v1 and no explicit commit timestamp is provided we treat it the same as v5.
-        //   - If v1 and explicit commit timestamp is provided we calculate retention from that explicit commit timestamp
+        //   - If v1 and explicit retention time is provided we calculate expiration timestamp based on that
         //   - If v2/v3/v4 (no explicit commit timestamp) we treat it the same as v5.
         //   - For v5 and beyond there is no per partition expiration timestamp, so this field is no longer in effect
         val currentTimestamp = time.milliseconds
         val partitionData = authorizedTopicRequestInfo.mapValues { partitionData =>
-          val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
+          val metadata = if (partitionData.metadata == null) OffsetAndMetadata.NoMetadata else partitionData.metadata
           new OffsetAndMetadata(
-            offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
+            offset = partitionData.offset,
+            leaderEpoch = partitionData.leaderEpoch,
+            metadata = metadata,
             commitTimestamp = partitionData.timestamp match {
               case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimestamp
               case customTimestamp => customTimestamp
@@ -376,20 +403,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     val produceRequest = request.body[ProduceRequest]
     val numBytesAppended = request.header.toStruct.sizeOf + request.sizeOfBodyInBytes
 
-    if (produceRequest.isTransactional) {
-      if (!authorize(request.session, Write, Resource(TransactionalId, produceRequest.transactionalId, LITERAL))) {
+    if (produceRequest.hasTransactionalRecords) {
+      val isAuthorizedTransactional = produceRequest.transactionalId != null &&
+        authorize(request.session, Write, Resource(TransactionalId, produceRequest.transactionalId, LITERAL))
+      if (!isAuthorizedTransactional) {
         sendErrorResponseMaybeThrottle(request, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception)
         return
       }
       // Note that authorization to a transactionalId implies ProducerId authorization
 
-    } else if (produceRequest.isIdempotent && !authorize(request.session, IdempotentWrite, Resource.ClusterResource)) {
+    } else if (produceRequest.hasIdempotentRecords && !authorize(request.session, IdempotentWrite, Resource.ClusterResource)) {
       sendErrorResponseMaybeThrottle(request, Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
       return
     }
 
     val unauthorizedTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val nonExistingTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
+    val invalidRequestResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val authorizedRequestInfo = mutable.Map[TopicPartition, MemoryRecords]()
 
     for ((topicPartition, memoryRecords) <- produceRequest.partitionRecordsOrFail.asScala) {
@@ -398,12 +428,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       else if (!metadataCache.contains(topicPartition))
         nonExistingTopicResponses += topicPartition -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
       else
-        authorizedRequestInfo += (topicPartition -> memoryRecords)
+        try {
+          ProduceRequest.validateRecords(request.header.apiVersion(), memoryRecords)
+          authorizedRequestInfo += (topicPartition -> memoryRecords)
+        } catch {
+          case e: ApiException =>
+            invalidRequestResponses += topicPartition -> new PartitionResponse(Errors.forException(e))
+        }
     }
 
     // the callback for sending a produce response
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]) {
-      val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses
+      val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses ++ invalidRequestResponses
       var errorInResponse = false
 
       mergedResponseStatus.foreach { case (topicPartition, status) =>
@@ -493,10 +529,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val versionId = request.header.apiVersion
     val clientId = request.header.clientId
     val fetchRequest = request.body[FetchRequest]
-    val fetchContext = fetchManager.newContext(fetchRequest.metadata(),
-          fetchRequest.fetchData(),
-          fetchRequest.toForget(),
-          fetchRequest.isFromFollower())
+    val fetchContext = fetchManager.newContext(
+      fetchRequest.metadata,
+      fetchRequest.fetchData,
+      fetchRequest.toForget,
+      fetchRequest.isFromFollower)
 
     def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
       new FetchResponse.PartitionData[T](error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
@@ -505,7 +542,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val erroneous = mutable.ArrayBuffer[(TopicPartition, FetchResponse.PartitionData[Records])]()
     val interesting = mutable.ArrayBuffer[(TopicPartition, FetchRequest.PartitionData)]()
-    if (fetchRequest.isFromFollower()) {
+    if (fetchRequest.isFromFollower) {
       // The follower must have ClusterAction on ClusterResource in order to fetch partition data.
       if (authorize(request.session, ClusterAction, Resource.ClusterResource)) {
         fetchContext.foreachPartition { (topicPartition, data) =>
@@ -533,42 +570,56 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def maybeConvertFetchedData(tp: TopicPartition,
                                 partitionData: FetchResponse.PartitionData[Records]): FetchResponse.PartitionData[BaseRecords] = {
-      // Down-conversion of the fetched records is needed when the stored magic version is
-      // greater than that supported by the client (as indicated by the fetch request version). If the
-      // configured magic version for the topic is less than or equal to that supported by the version of the
-      // fetch request, we skip the iteration through the records in order to check the magic version since we
-      // know it must be supported. However, if the magic version is changed from a higher version back to a
-      // lower version, this check will no longer be valid and we will fail to down-convert the messages
-      // which were written in the new format prior to the version downgrade.
-      val unconvertedRecords = partitionData.records
       val logConfig = replicaManager.getLogConfig(tp)
-      val downConvertMagic =
-        logConfig.map(_.messageFormatVersion.recordVersion.value).flatMap { magic =>
-          if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
-            Some(RecordBatch.MAGIC_VALUE_V0)
-          else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
-            Some(RecordBatch.MAGIC_VALUE_V1)
-          else
-            None
-        }
 
-      // For fetch requests from clients, check if down-conversion is disabled for the particular partition
-      if (downConvertMagic.isDefined && !fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
-        trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
-        errorResponse(Errors.UNSUPPORTED_VERSION)
+      if (logConfig.exists(_.compressionType == ZStdCompressionCodec.name) && versionId < 10) {
+        trace(s"Fetching messages is disabled for ZStandard compressed partition $tp. Sending unsupported version response to $clientId.")
+        errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
       } else {
-        val convertedRecords =
-          downConvertMagic.map { magic =>
-            trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
-            // Because down-conversion is extremely memory intensive, we want to try and delay the down-conversion as much
-            // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
-            // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
-            // client.
-            new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time)
-          }.getOrElse(unconvertedRecords)
-        new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-          FetchResponse.INVALID_LAST_STABLE_OFFSET, partitionData.logStartOffset, partitionData.abortedTransactions,
-          convertedRecords)
+        // Down-conversion of the fetched records is needed when the stored magic version is
+        // greater than that supported by the client (as indicated by the fetch request version). If the
+        // configured magic version for the topic is less than or equal to that supported by the version of the
+        // fetch request, we skip the iteration through the records in order to check the magic version since we
+        // know it must be supported. However, if the magic version is changed from a higher version back to a
+        // lower version, this check will no longer be valid and we will fail to down-convert the messages
+        // which were written in the new format prior to the version downgrade.
+        val unconvertedRecords = partitionData.records
+        val downConvertMagic =
+          logConfig.map(_.messageFormatVersion.recordVersion.value).flatMap { magic =>
+            if (magic > RecordBatch.MAGIC_VALUE_V0 && versionId <= 1 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V0))
+              Some(RecordBatch.MAGIC_VALUE_V0)
+            else if (magic > RecordBatch.MAGIC_VALUE_V1 && versionId <= 3 && !unconvertedRecords.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1))
+              Some(RecordBatch.MAGIC_VALUE_V1)
+            else
+              None
+          }
+
+        downConvertMagic match {
+          case Some(magic) =>
+            // For fetch requests from clients, check if down-conversion is disabled for the particular partition
+            if (!fetchRequest.isFromFollower && !logConfig.forall(_.messageDownConversionEnable)) {
+              trace(s"Conversion to message format ${downConvertMagic.get} is disabled for partition $tp. Sending unsupported version response to $clientId.")
+              errorResponse(Errors.UNSUPPORTED_VERSION)
+            } else {
+              try {
+                trace(s"Down converting records from partition $tp to message format version $magic for fetch request from $clientId")
+                // Because down-conversion is extremely memory intensive, we want to try and delay the down-conversion as much
+                // as possible. With KIP-283, we have the ability to lazily down-convert in a chunked manner. The lazy, chunked
+                // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
+                // client.
+                new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
+                  partitionData.lastStableOffset, partitionData.logStartOffset, partitionData.abortedTransactions,
+                  new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
+              } catch {
+                case e: UnsupportedCompressionTypeException =>
+                  trace("Received unsupported compression type error during down-conversion", e)
+                  errorResponse(Errors.UNSUPPORTED_COMPRESSION_TYPE)
+              }
+            }
+          case None => new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
+            partitionData.lastStableOffset, partitionData.logStartOffset, partitionData.abortedTransactions,
+            unconvertedRecords)
+        }
       }
     }
 
@@ -655,7 +706,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         } else {
           // Get the actual response. This will update the fetch context.
           unconvertedFetchResponse = fetchContext.updateAndGenerateResponseData(partitions)
-          trace(s"Sending Fetch response with partitions.size=${responseSize}, metadata=${unconvertedFetchResponse.sessionId()}")
+          trace(s"Sending Fetch response with partitions.size=$responseSize, metadata=${unconvertedFetchResponse.sessionId}")
         }
 
         // Send the response immediately.
@@ -745,27 +796,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val responseMap = authorizedRequestInfo.map {case (topicPartition, partitionData) =>
       try {
-        // ensure leader exists
-        val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
-          replicaManager.getLeaderReplicaIfLocal(topicPartition)
-        else
-          replicaManager.getReplicaOrException(topicPartition)
-        val offsets = {
-          val allOffsets = fetchOffsets(replicaManager.logManager,
-            topicPartition,
-            partitionData.timestamp,
-            partitionData.maxNumOffsets)
-          if (offsetRequest.replicaId != ListOffsetRequest.CONSUMER_REPLICA_ID) {
-            allOffsets
-          } else {
-            val hw = localReplica.highWatermark.messageOffset
-            if (allOffsets.exists(_ > hw))
-              hw +: allOffsets.dropWhile(_ > hw)
-            else
-              allOffsets
-          }
-        }
-        (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE, offsets.map(new JLong(_)).asJava))
+        val offsets = replicaManager.legacyFetchOffsetsForTimestamp(
+          topicPartition = topicPartition,
+          timestamp = partitionData.timestamp,
+          maxNumOffsets = partitionData.maxNumOffsets,
+          isFromConsumer = offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID,
+          fetchOnlyFromLeader = offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
+        (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE, offsets.map(JLong.valueOf).asJava))
       } catch {
         // NOTE: UnknownTopicOrPartitionException and NotLeaderForPartitionException are special cased since these error messages
         // are typically transient and there is no value in logging the entire stack trace for the same
@@ -800,7 +837,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     })
 
     val responseMap = authorizedRequestInfo.map { case (topicPartition, partitionData) =>
-      if (offsetRequest.duplicatePartitions().contains(topicPartition)) {
+      if (offsetRequest.duplicatePartitions.contains(topicPartition)) {
         debug(s"OffsetRequest with correlation id $correlationId from client $clientId on partition $topicPartition " +
             s"failed because the partition is duplicated in the request.")
         (topicPartition, new ListOffsetResponse.PartitionData(Errors.INVALID_REQUEST,
@@ -808,125 +845,65 @@ class KafkaApis(val requestChannel: RequestChannel,
           ListOffsetResponse.UNKNOWN_OFFSET,
           Optional.empty()))
       } else {
-        try {
-          // ensure leader exists
-          val localReplica = if (offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID)
-            replicaManager.getLeaderReplicaIfLocal(topicPartition)
-          else
-            replicaManager.getReplicaOrException(topicPartition)
 
-          val fromConsumer = offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
-          val found = if (fromConsumer) {
-            val lastFetchableOffset = offsetRequest.isolationLevel match {
-              case IsolationLevel.READ_COMMITTED => localReplica.lastStableOffset.messageOffset
-              case IsolationLevel.READ_UNCOMMITTED => localReplica.highWatermark.messageOffset
-            }
-
-            if (partitionData.timestamp == ListOffsetRequest.LATEST_TIMESTAMP)
-              TimestampOffset(RecordBatch.NO_TIMESTAMP, lastFetchableOffset)
-            else {
-              def allowed(timestampOffset: TimestampOffset): Boolean =
-                partitionData.timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP || timestampOffset.offset < lastFetchableOffset
-
-              fetchOffsetForTimestamp(topicPartition, partitionData.timestamp)
-                .filter(allowed).getOrElse(TimestampOffset.Unknown)
-            }
-          } else {
-            fetchOffsetForTimestamp(topicPartition, partitionData.timestamp)
-              .getOrElse(TimestampOffset.Unknown)
-          }
-
-          (topicPartition, new ListOffsetResponse.PartitionData(Errors.NONE, found.timestamp, found.offset,
+        def buildErrorResponse(e: Errors): (TopicPartition, ListOffsetResponse.PartitionData) = {
+          (topicPartition, new ListOffsetResponse.PartitionData(
+            e,
+            ListOffsetResponse.UNKNOWN_TIMESTAMP,
+            ListOffsetResponse.UNKNOWN_OFFSET,
             Optional.empty()))
+        }
+
+        try {
+          val fetchOnlyFromLeader = offsetRequest.replicaId != ListOffsetRequest.DEBUGGING_REPLICA_ID
+          val isClientRequest = offsetRequest.replicaId == ListOffsetRequest.CONSUMER_REPLICA_ID
+          val isolationLevelOpt = if (isClientRequest)
+            Some(offsetRequest.isolationLevel)
+          else
+            None
+
+          val foundOpt = replicaManager.fetchOffsetForTimestamp(topicPartition,
+            partitionData.timestamp,
+            isolationLevelOpt,
+            partitionData.currentLeaderEpoch,
+            fetchOnlyFromLeader)
+
+          val response = foundOpt match {
+            case Some(found) =>
+              new ListOffsetResponse.PartitionData(Errors.NONE, found.timestamp, found.offset, found.leaderEpoch)
+            case None =>
+              new ListOffsetResponse.PartitionData(Errors.NONE, ListOffsetResponse.UNKNOWN_TIMESTAMP,
+                ListOffsetResponse.UNKNOWN_OFFSET, Optional.empty())
+          }
+          (topicPartition, response)
         } catch {
           // NOTE: These exceptions are special cased since these error messages are typically transient or the client
           // would have received a clear exception and there is no value in logging the entire stack trace for the same
           case e @ (_ : UnknownTopicOrPartitionException |
                     _ : NotLeaderForPartitionException |
+                    _ : UnknownLeaderEpochException |
+                    _ : FencedLeaderEpochException |
                     _ : KafkaStorageException |
                     _ : UnsupportedForMessageFormatException) =>
             debug(s"Offset request with correlation id $correlationId from client $clientId on " +
                 s"partition $topicPartition failed due to ${e.getMessage}")
-            (topicPartition, new ListOffsetResponse.PartitionData(Errors.forException(e),
-              ListOffsetResponse.UNKNOWN_TIMESTAMP,
-              ListOffsetResponse.UNKNOWN_OFFSET,
-              Optional.empty()))
+            buildErrorResponse(Errors.forException(e))
+
+          // Only V5 and newer ListOffset calls should get OFFSET_NOT_AVAILABLE
+          case e: OffsetNotAvailableException =>
+            if(request.header.apiVersion >= 5) {
+              buildErrorResponse(Errors.forException(e))
+            } else {
+              buildErrorResponse(Errors.LEADER_NOT_AVAILABLE)
+            }
+
           case e: Throwable =>
             error("Error while responding to offset request", e)
-            (topicPartition, new ListOffsetResponse.PartitionData(Errors.forException(e),
-              ListOffsetResponse.UNKNOWN_TIMESTAMP,
-              ListOffsetResponse.UNKNOWN_OFFSET,
-              Optional.empty()))
+            buildErrorResponse(Errors.forException(e))
         }
       }
     }
     responseMap ++ unauthorizedResponseStatus
-  }
-
-  def fetchOffsets(logManager: LogManager, topicPartition: TopicPartition, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    logManager.getLog(topicPartition) match {
-      case Some(log) =>
-        fetchOffsetsBefore(log, timestamp, maxNumOffsets)
-      case None =>
-        if (timestamp == ListOffsetRequest.LATEST_TIMESTAMP || timestamp == ListOffsetRequest.EARLIEST_TIMESTAMP)
-          Seq(0L)
-        else
-          Nil
-    }
-  }
-
-  private def fetchOffsetForTimestamp(topicPartition: TopicPartition, timestamp: Long): Option[TimestampOffset] = {
-    replicaManager.getLog(topicPartition) match {
-      case Some(log) =>
-        log.fetchOffsetsByTimestamp(timestamp)
-      case None =>
-        throw new UnknownTopicOrPartitionException(s"$topicPartition does not exist on the broker.")
-    }
-  }
-
-  private[server] def fetchOffsetsBefore(log: Log, timestamp: Long, maxNumOffsets: Int): Seq[Long] = {
-    // Cache to avoid race conditions. `toBuffer` is faster than most alternatives and provides
-    // constant time access while being safe to use with concurrent collections unlike `toArray`.
-    val segments = log.logSegments.toBuffer
-    val lastSegmentHasSize = segments.last.size > 0
-
-    val offsetTimeArray =
-      if (lastSegmentHasSize)
-        new Array[(Long, Long)](segments.length + 1)
-      else
-        new Array[(Long, Long)](segments.length)
-
-    for (i <- segments.indices)
-      offsetTimeArray(i) = (math.max(segments(i).baseOffset, log.logStartOffset), segments(i).lastModified)
-    if (lastSegmentHasSize)
-      offsetTimeArray(segments.length) = (log.logEndOffset, time.milliseconds)
-
-    var startIndex = -1
-    timestamp match {
-      case ListOffsetRequest.LATEST_TIMESTAMP =>
-        startIndex = offsetTimeArray.length - 1
-      case ListOffsetRequest.EARLIEST_TIMESTAMP =>
-        startIndex = 0
-      case _ =>
-        var isFound = false
-        debug("Offset time array = " + offsetTimeArray.foreach(o => "%d, %d".format(o._1, o._2)))
-        startIndex = offsetTimeArray.length - 1
-        while (startIndex >= 0 && !isFound) {
-          if (offsetTimeArray(startIndex)._2 <= timestamp)
-            isFound = true
-          else
-            startIndex -= 1
-        }
-    }
-
-    val retSize = maxNumOffsets.min(startIndex + 1)
-    val ret = new Array[Long](retSize)
-    for (j <- 0 until retSize) {
-      ret(j) = offsetTimeArray(startIndex)._1
-      startIndex -= 1
-    }
-    // ensure that the returned seq is in descending order of offsets
-    ret.toSeq.sortBy(-_)
   }
 
   private def createTopic(topic: String,
@@ -1020,19 +997,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     val metadataRequest = request.body[MetadataRequest]
     val requestVersion = request.header.apiVersion
 
-    val topics =
-      // Handle old metadata request logic. Version 0 has no way to specify "no topics".
-      if (requestVersion == 0) {
-        if (metadataRequest.topics() == null || metadataRequest.topics.isEmpty)
-          metadataCache.getAllTopics()
-        else
-          metadataRequest.topics.asScala.toSet
-      } else {
-        if (metadataRequest.isAllTopics)
-          metadataCache.getAllTopics()
-        else
-          metadataRequest.topics.asScala.toSet
-      }
+    val topics = if (metadataRequest.isAllTopics)
+      metadataCache.getAllTopics()
+    else
+      metadataRequest.topics.asScala.toSet
 
     var (authorizedTopics, unauthorizedForDescribeTopics) =
       topics.partition(topic => authorize(request.session, Describe, Resource(Topic, topic, LITERAL)))
@@ -1077,6 +1045,20 @@ class KafkaApis(val requestChannel: RequestChannel,
         getTopicMetadata(metadataRequest.allowAutoTopicCreation, authorizedTopics, request.context.listenerName,
           errorUnavailableEndpoints, errorUnavailableListeners)
 
+    var clusterAuthorizedOperations = 0
+
+    if (request.header.apiVersion >= 8) {
+      // get cluster authorized operations
+      if (metadataRequest.data().includeClusterAuthorizedOperations() &&
+        authorize(request.session, Describe, Resource.ClusterResource))
+        clusterAuthorizedOperations = authorizedOperations(request.session, Resource.ClusterResource)
+      // get topic authorized operations
+      if (metadataRequest.data().includeTopicAuthorizedOperations())
+        topicMetadata.foreach(topicData => {
+          topicData.authorizedOperations(authorizedOperations(request.session, Resource(Topic, topicData.topic(), LITERAL)))
+        })
+    }
+
     val completeTopicMetadata = topicMetadata ++ unauthorizedForCreateTopicMetadata ++ unauthorizedForDescribeTopicMetadata
 
     val brokers = metadataCache.getAliveBrokers
@@ -1085,12 +1067,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       brokers.mkString(","), request.header.correlationId, request.header.clientId))
 
     sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new MetadataResponse(
-        requestThrottleMs,
-        brokers.flatMap(_.getNode(request.context.listenerName)).asJava,
-        clusterId,
-        metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
-        completeTopicMetadata.asJava
+       MetadataResponse.prepareResponse(
+         requestThrottleMs,
+         brokers.flatMap(_.getNode(request.context.listenerName)).asJava,
+         clusterId,
+         metadataCache.getControllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         completeTopicMetadata.asJava,
+         clusterAuthorizedOperations
       ))
   }
 
@@ -1222,24 +1205,65 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeGroupRequest(request: RequestChannel.Request) {
-    val describeRequest = request.body[DescribeGroupsRequest]
 
-    val groups = describeRequest.groupIds.asScala.map { groupId =>
-      if (!authorize(request.session, Describe, Resource(Group, groupId, LITERAL))) {
-        groupId -> DescribeGroupsResponse.GroupMetadata.forError(Errors.GROUP_AUTHORIZATION_FAILED)
+    def sendResponseCallback(describeGroupsResponseData: DescribeGroupsResponseData): Unit = {
+      def createResponse(requestThrottleMs: Int): AbstractResponse = {
+        describeGroupsResponseData.setThrottleTimeMs(requestThrottleMs)
+        new DescribeGroupsResponse(describeGroupsResponseData)
+      }
+      sendResponseMaybeThrottle(request, createResponse)
+    }
+
+    val describeRequest = request.body[DescribeGroupsRequest]
+    val describeGroupsResponseData = new DescribeGroupsResponseData()
+
+    describeRequest.data().groups().asScala.foreach { groupId =>
+      val resource = Resource(Group, groupId, LITERAL)
+      if (!authorize(request.session, Describe, resource)) {
+        describeGroupsResponseData.groups().add(DescribeGroupsResponse.forError(groupId, Errors.GROUP_AUTHORIZATION_FAILED))
       } else {
         val (error, summary) = groupCoordinator.handleDescribeGroup(groupId)
         val members = summary.members.map { member =>
-          val metadata = ByteBuffer.wrap(member.metadata)
-          val assignment = ByteBuffer.wrap(member.assignment)
-          new DescribeGroupsResponse.GroupMember(member.memberId, member.clientId, member.clientHost, metadata, assignment)
+          new DescribeGroupsResponseData.DescribedGroupMember()
+            .setMemberId(member.memberId)
+            .setClientId(member.clientId)
+            .setClientHost(member.clientHost)
+            .setMemberAssignment(member.assignment)
+            .setMemberMetadata(member.assignment)
         }
-        groupId -> new DescribeGroupsResponse.GroupMetadata(error, summary.state, summary.protocolType,
-          summary.protocol, members.asJava)
-      }
-    }.toMap
 
-    sendResponseMaybeThrottle(request, requestThrottleMs => new DescribeGroupsResponse(requestThrottleMs, groups.asJava))
+        val describedGroup = new DescribeGroupsResponseData.DescribedGroup()
+          .setErrorCode(error.code())
+          .setGroupId(groupId)
+          .setGroupState(summary.state)
+          .setProtocolType(summary.protocolType)
+          .setProtocolData(summary.protocol)
+          .setMembers(members.asJava)
+
+        if (request.header.apiVersion >= 3) {
+          if (error == Errors.NONE && describeRequest.data().includeAuthorizedOperations()) {
+            describedGroup.setAuthorizedOperations(authorizedOperations(request.session, resource))
+          } else {
+            describedGroup.setAuthorizedOperations(0)
+          }
+        }
+
+        describeGroupsResponseData.groups().add(describedGroup)
+      }
+    }
+
+    sendResponseCallback(describeGroupsResponseData)
+  }
+
+
+  private def authorizedOperations(session: RequestChannel.Session, resource: Resource): Int = {
+    val authorizedOps = authorizer match {
+      case None => resource.resourceType.supportedOperations
+      case Some(auth) => resource.resourceType.supportedOperations
+        .filter(operation => authorize(session, operation, resource))
+    }
+
+    Utils.to32BitField(authorizedOps.map(operation => operation.toJava.code().asInstanceOf[JByte]).asJava)
   }
 
   def handleListGroupsRequest(request: RequestChannel.Request) {
@@ -1260,10 +1284,23 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for sending a join-group response
     def sendResponseCallback(joinResult: JoinGroupResult) {
-      val members = joinResult.members map { case (memberId, metadataArray) => (memberId, ByteBuffer.wrap(metadataArray)) }
+      val members = joinResult.members map { case (memberId, metadataArray) =>
+        new JoinGroupResponseData.JoinGroupResponseMember()
+          .setMemberId(memberId)
+          .setMetadata(metadataArray)
+      }
+
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val responseBody = new JoinGroupResponse(requestThrottleMs, joinResult.error, joinResult.generationId,
-          joinResult.subProtocol, joinResult.memberId, joinResult.leaderId, members.asJava)
+        val responseBody = new JoinGroupResponse(
+          new JoinGroupResponseData()
+            .setThrottleTimeMs(requestThrottleMs)
+            .setErrorCode(joinResult.error.code())
+            .setGenerationId(joinResult.generationId)
+            .setProtocolName(joinResult.subProtocol)
+            .setLeader(joinResult.leaderId)
+            .setMemberId(joinResult.memberId)
+            .setMembers(members.toSeq.asJava)
+        )
 
         trace("Sending join group response %s for correlation id %d to client %s."
           .format(responseBody, request.header.correlationId, request.header.clientId))
@@ -1272,29 +1309,35 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, createResponse)
     }
 
-    if (!authorize(request.session, Read, Resource(Group, joinGroupRequest.groupId(), LITERAL))) {
+    if (!authorize(request.session, Read, Resource(Group, joinGroupRequest.data().groupId(), LITERAL))) {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new JoinGroupResponse(
-          requestThrottleMs,
-          Errors.GROUP_AUTHORIZATION_FAILED,
-          JoinGroupResponse.UNKNOWN_GENERATION_ID,
-          JoinGroupResponse.UNKNOWN_PROTOCOL,
-          JoinGroupResponse.UNKNOWN_MEMBER_ID, // memberId
-          JoinGroupResponse.UNKNOWN_MEMBER_ID, // leaderId
-          Collections.emptyMap())
+          new JoinGroupResponseData()
+            .setThrottleTimeMs(requestThrottleMs)
+            .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())
+            .setGenerationId(JoinGroupResponse.UNKNOWN_GENERATION_ID)
+            .setProtocolName(JoinGroupResponse.UNKNOWN_PROTOCOL)
+            .setLeader(JoinGroupResponse.UNKNOWN_MEMBER_ID)
+            .setMemberId(JoinGroupResponse.UNKNOWN_MEMBER_ID)
+            .setMembers(Collections.emptyList())
+        )
       )
     } else {
+      // Only return MEMBER_ID_REQUIRED error if joinGroupRequest version is >= 4
+      val requireKnownMemberId = joinGroupRequest.version >= 4
+
       // let the coordinator handle join-group
-      val protocols = joinGroupRequest.groupProtocols().asScala.map(protocol =>
-        (protocol.name, Utils.toArray(protocol.metadata))).toList
+      val protocols = joinGroupRequest.data().protocols().asScala.map(protocol =>
+        (protocol.name, protocol.metadata)).toList
       groupCoordinator.handleJoinGroup(
-        joinGroupRequest.groupId,
-        joinGroupRequest.memberId,
+        joinGroupRequest.data().groupId,
+        joinGroupRequest.data().memberId,
+        requireKnownMemberId,
         request.header.clientId,
         request.session.clientAddress.toString,
-        joinGroupRequest.rebalanceTimeout,
-        joinGroupRequest.sessionTimeout,
-        joinGroupRequest.protocolType,
+        joinGroupRequest.data().rebalanceTimeoutMs,
+        joinGroupRequest.data().sessionTimeoutMs,
+        joinGroupRequest.data().protocolType,
         protocols,
         sendResponseCallback)
     }
@@ -1369,33 +1412,40 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a leave-group response
     def sendResponseCallback(error: Errors) {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val response = new LeaveGroupResponse(requestThrottleMs, error)
+        val response = new LeaveGroupResponse(new LeaveGroupResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+          .setErrorCode(error.code()))
         trace("Sending leave group response %s for correlation id %d to client %s."
-                    .format(response, request.header.correlationId, request.header.clientId))
+          .format(response, request.header.correlationId, request.header.clientId))
         response
       }
       sendResponseMaybeThrottle(request, createResponse)
     }
 
-    if (!authorize(request.session, Read, Resource(Group, leaveGroupRequest.groupId, LITERAL))) {
+    if (!authorize(request.session, Read, Resource(Group, leaveGroupRequest.data().groupId(), LITERAL))) {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new LeaveGroupResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED))
+        new LeaveGroupResponse(new LeaveGroupResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())))
     } else {
       // let the coordinator to handle leave-group
       groupCoordinator.handleLeaveGroup(
-        leaveGroupRequest.groupId,
-        leaveGroupRequest.memberId,
+        leaveGroupRequest.data().groupId(),
+        leaveGroupRequest.data().memberId(),
         sendResponseCallback)
     }
   }
 
   def handleSaslHandshakeRequest(request: RequestChannel.Request) {
-    sendResponseMaybeThrottle(request, _ => new SaslHandshakeResponse(Errors.ILLEGAL_SASL_STATE, Collections.emptySet()))
+    val responseData = new SaslHandshakeResponseData().setErrorCode(Errors.ILLEGAL_SASL_STATE.code)
+    sendResponseMaybeThrottle(request, _ => new SaslHandshakeResponse(responseData))
   }
 
   def handleSaslAuthenticateRequest(request: RequestChannel.Request) {
-    sendResponseMaybeThrottle(request, _ => new SaslAuthenticateResponse(Errors.ILLEGAL_SASL_STATE,
-      "SaslAuthenticate request received after successful authentication"))
+    val responseData = new SaslAuthenticateResponseData()
+      .setErrorCode(Errors.ILLEGAL_SASL_STATE.code)
+      .setErrorMessage("SaslAuthenticate request received after successful authentication")
+    sendResponseMaybeThrottle(request, _ => new SaslAuthenticateResponse(responseData))
   }
 
   def handleApiVersionsRequest(request: RequestChannel.Request) {
@@ -1417,60 +1467,61 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleCreateTopicsRequest(request: RequestChannel.Request) {
-    val createTopicsRequest = request.body[CreateTopicsRequest]
-
-    def sendResponseCallback(results: Map[String, ApiError]): Unit = {
+    def sendResponseCallback(results: CreatableTopicResultSet): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val responseBody = new CreateTopicsResponse(requestThrottleMs, results.asJava)
-        trace(s"Sending create topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
+        val responseData = new CreateTopicsResponseData().
+          setThrottleTimeMs(requestThrottleMs).
+          setTopics(results)
+        val responseBody = new CreateTopicsResponse(responseData)
+        trace(s"Sending create topics response $responseData for correlation id " +
+          s"${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
       }
       sendResponseMaybeThrottle(request, createResponse)
     }
 
+    val createTopicsRequest = request.body[CreateTopicsRequest]
+    val results = new CreatableTopicResultSet(createTopicsRequest.data().topics().size())
     if (!controller.isActive) {
-      val results = createTopicsRequest.topics.asScala.map { case (topic, _) =>
-        (topic, new ApiError(Errors.NOT_CONTROLLER, null))
+      createTopicsRequest.data.topics.asScala.foreach { case topic =>
+        results.add(new CreatableTopicResult().setName(topic.name()).
+          setErrorCode(Errors.NOT_CONTROLLER.code()))
       }
       sendResponseCallback(results)
     } else {
-      val (validTopics, duplicateTopics) = createTopicsRequest.topics.asScala.partition { case (topic, _) =>
-        !createTopicsRequest.duplicateTopics.contains(topic)
+      createTopicsRequest.data.topics.asScala.foreach { case topic =>
+        results.add(new CreatableTopicResult().setName(topic.name()))
       }
-
-      val (authorizedTopics, unauthorizedTopics) =
-        if (authorize(request.session, Create, Resource.ClusterResource)) {
-          (validTopics, Map[String, TopicDetails]())
-        } else {
-          validTopics.partition { case (topic, _) =>
-            authorize(request.session, Create, new Resource(Topic, topic, PatternType.LITERAL))
-          }
+      val hasClusterAuthorization = authorize(request.session, Create, Resource.ClusterResource)
+      results.asScala.foreach(topic => {
+        if (results.findAll(topic.name()).size() > 1) {
+          topic.setErrorCode(Errors.INVALID_REQUEST.code())
+          topic.setErrorMessage("Found multiple entries for this topic.")
+        } else if ((!hasClusterAuthorization) && (!authorize(request.session, Create,
+              new Resource(Topic, topic.name(), PatternType.LITERAL)))) {
+          topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code())
+          topic.setErrorMessage("Authorization failed.")
         }
-
-      // Special handling to add duplicate topics to the response
-      def sendResponseWithDuplicatesCallback(results: Map[String, ApiError]): Unit = {
-
-        val duplicatedTopicsResults =
-          if (duplicateTopics.nonEmpty) {
-            val errorMessage = s"Create topics request from client `${request.header.clientId}` contains multiple entries " +
-              s"for the following topics: ${duplicateTopics.keySet.mkString(",")}"
-            // We can send the error message in the response for version 1, so we don't have to log it any more
-            if (request.header.apiVersion == 0)
-              warn(errorMessage)
-            duplicateTopics.keySet.map((_, new ApiError(Errors.INVALID_REQUEST, errorMessage))).toMap
-          } else Map.empty
-
-        val unauthorizedTopicsResults = unauthorizedTopics.keySet.map(_ -> new ApiError(Errors.TOPIC_AUTHORIZATION_FAILED, null))
-        val completeResults = results ++ duplicatedTopicsResults ++ unauthorizedTopicsResults
-        sendResponseCallback(completeResults)
+      })
+      val toCreate = mutable.Map[String, CreatableTopic]()
+      createTopicsRequest.data.topics.asScala.foreach { case topic =>
+        if (results.find(topic.name()).errorCode() == 0) {
+          toCreate += topic.name() -> topic
+        }
       }
-
-      adminManager.createTopics(
-        createTopicsRequest.timeout,
-        createTopicsRequest.validateOnly,
-        authorizedTopics,
-        sendResponseWithDuplicatesCallback
-      )
+      def handleCreateTopicsResults(errors: Map[String, ApiError]): Unit = {
+        errors.foreach {
+          case (topicName, error) =>
+            results.find(topicName).
+              setErrorCode(error.error().code()).
+              setErrorMessage(error.message())
+        }
+        sendResponseCallback(results)
+      }
+      adminManager.createTopics(createTopicsRequest.data.timeoutMs(),
+          createTopicsRequest.data.validateOnly(),
+          toCreate,
+          handleCreateTopicsResults)
     }
   }
 
@@ -1908,15 +1959,15 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def convertTxnOffsets(offsetsMap: immutable.Map[TopicPartition, TxnOffsetCommitRequest.CommittedOffset]): immutable.Map[TopicPartition, OffsetAndMetadata] = {
-    val offsetRetention = groupCoordinator.offsetConfig.offsetsRetentionMs
     val currentTimestamp = time.milliseconds
-    val defaultExpireTimestamp = offsetRetention + currentTimestamp
     offsetsMap.map { case (topicPartition, partitionData) =>
-      val metadata = if (partitionData.metadata == null) OffsetMetadata.NoMetadata else partitionData.metadata
+      val metadata = if (partitionData.metadata == null) OffsetAndMetadata.NoMetadata else partitionData.metadata
       topicPartition -> new OffsetAndMetadata(
-        offsetMetadata = OffsetMetadata(partitionData.offset, metadata),
+        offset = partitionData.offset,
+        leaderEpoch = partitionData.leaderEpoch,
+        metadata = metadata,
         commitTimestamp = currentTimestamp,
-        expireTimestamp = Some(defaultExpireTimestamp))
+        expireTimestamp = None)
     }
   }
 
@@ -2261,6 +2312,48 @@ class KafkaApis(val requestChannel: RequestChannel,
       true
   }
 
+  def handleElectPreferredReplicaLeader(request: RequestChannel.Request): Unit = {
+
+    val electionRequest = request.body[ElectPreferredLeadersRequest]
+    val partitions =
+      if (electionRequest.data().topicPartitions() == null) {
+        metadataCache.getAllPartitions()
+      } else {
+        electionRequest.data().topicPartitions().asScala.flatMap{tp =>
+          tp.partitionId().asScala.map(partitionId => new TopicPartition(tp.topic, partitionId))}.toSet
+      }
+    def sendResponseCallback(result: Map[TopicPartition, ApiError]): Unit = {
+      sendResponseMaybeThrottle(request, requestThrottleMs => {
+        val results = result.
+          groupBy{case (tp, error) => tp.topic}.
+          map{case (topic, ps) => new ElectPreferredLeadersResponseData.ReplicaElectionResult()
+            .setTopic(topic)
+            .setPartitionResult(ps.map{
+            case (tp, error) =>
+              new ElectPreferredLeadersResponseData.PartitionResult()
+                .setErrorCode(error.error.code)
+                .setErrorMessage(error.message())
+                .setPartitionId(tp.partition)}.toList.asJava)}
+        val data = new ElectPreferredLeadersResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+          .setReplicaElectionResults(results.toList.asJava)
+        new ElectPreferredLeadersResponse(data)})
+    }
+    if (!authorize(request.session, Alter, Resource.ClusterResource)) {
+      val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null);
+      val partitionErrors =
+      if (electionRequest.data().topicPartitions() == null) {
+        // Don't leak the set of partitions if the client lack authz
+        Map.empty[TopicPartition, ApiError]
+      } else {
+        partitions.map(partition => partition -> error).toMap
+      }
+      sendResponseCallback(partitionErrors)
+    } else {
+      replicaManager.electPreferredLeaders(controller, partitions, sendResponseCallback, electionRequest.data().timeoutMs())
+    }
+  }
+
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {
     if (!isAuthorizedClusterAction(request))
       throw new ClusterAuthorizationException(s"Request $request is not authorized.")
@@ -2383,6 +2476,18 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def sendResponse(response: RequestChannel.Response): Unit = {
     requestChannel.sendResponse(response)
+  }
+
+  private def isBrokerEpochStale(brokerEpochInRequest: Long): Boolean = {
+    // Broker epoch in LeaderAndIsr/UpdateMetadata/StopReplica request is unknown
+    // if the controller hasn't been upgraded to use KIP-380
+    if (brokerEpochInRequest == AbstractControlRequest.UNKNOWN_BROKER_EPOCH) false
+    else {
+      val curBrokerEpoch = controller.brokerEpoch
+      if (brokerEpochInRequest < curBrokerEpoch) true
+      else if (brokerEpochInRequest == curBrokerEpoch) false
+      else throw new IllegalStateException(s"Epoch $brokerEpochInRequest larger than current broker epoch $curBrokerEpoch")
+    }
   }
 
 }

@@ -53,7 +53,7 @@ public class To {
      * @return a new {@link To} instance configured for all downstream processor
      */
     public static To all() {
-        return new To((String) null, -1);
+        return new To(null, -1);
     }
 
     /**

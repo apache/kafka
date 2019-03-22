@@ -25,6 +25,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class AbstractLegacyRecordBatchTest {
 
@@ -206,6 +207,43 @@ public class AbstractLegacyRecordBatchTest {
         long expectedTimestamp = 1L;
         for (Record record : records.records())
             assertEquals(expectedTimestamp++, record.timestamp());
+    }
+
+    @Test
+    public void testZStdCompressionTypeWithV0OrV1() {
+        SimpleRecord[] simpleRecords = new SimpleRecord[] {
+            new SimpleRecord(1L, "a".getBytes(), "1".getBytes()),
+            new SimpleRecord(2L, "b".getBytes(), "2".getBytes()),
+            new SimpleRecord(3L, "c".getBytes(), "3".getBytes())
+        };
+
+        // Check V0
+        try {
+            MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V0, 0L,
+                CompressionType.ZSTD, TimestampType.CREATE_TIME, simpleRecords);
+
+            ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+            batch.setLastOffset(1L);
+
+            batch.iterator();
+            fail("Can't reach here");
+        } catch (IllegalArgumentException e) {
+            assertEquals("ZStandard compression is not supported for magic 0", e.getMessage());
+        }
+
+        // Check V1
+        try {
+            MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V1, 0L,
+                CompressionType.ZSTD, TimestampType.CREATE_TIME, simpleRecords);
+
+            ByteBufferLegacyRecordBatch batch = new ByteBufferLegacyRecordBatch(records.buffer());
+            batch.setLastOffset(1L);
+
+            batch.iterator();
+            fail("Can't reach here");
+        } catch (IllegalArgumentException e) {
+            assertEquals("ZStandard compression is not supported for magic 1", e.getMessage());
+        }
     }
 
 }

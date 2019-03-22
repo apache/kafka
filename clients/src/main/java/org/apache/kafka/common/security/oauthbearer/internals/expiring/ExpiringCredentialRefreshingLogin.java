@@ -37,7 +37,7 @@ import org.slf4j.LoggerFactory;
  * server when the login is a type that has a limited lifetime/will expire. The
  * credentials for the login must implement {@link ExpiringCredential}.
  */
-public abstract class ExpiringCredentialRefreshingLogin {
+public abstract class ExpiringCredentialRefreshingLogin implements AutoCloseable {
     /**
      * Class that can be overridden for testing
      */
@@ -80,6 +80,13 @@ public abstract class ExpiringCredentialRefreshingLogin {
                 if (nextRefreshMs == null) {
                     loginContextFactory.refresherThreadDone();
                     return;
+                }
+                // safety check motivated by KAFKA-7945,
+                // should generally never happen except due to a bug
+                if (nextRefreshMs.longValue() < nowMs) {
+                    log.warn("[Principal={}]: Expiring credential re-login sleep time was calculated to be in the past! Will explicitly adjust. ({})", principalLogText(),
+                            new Date(nextRefreshMs));
+                    nextRefreshMs = Long.valueOf(nowMs + 10 * 1000); // refresh in 10 seconds
                 }
                 log.info("[Principal={}]: Expiring credential re-login sleeping until: {}", principalLogText(),
                         new Date(nextRefreshMs));
@@ -307,7 +314,7 @@ public abstract class ExpiringCredentialRefreshingLogin {
             return null;
         }
         Long optionalStartTime = expiringCredential.startTimeMs();
-        long startMs = optionalStartTime != null ? optionalStartTime.longValue() : currentMs();
+        long startMs = optionalStartTime != null ? optionalStartTime.longValue() : relativeToMs;
         log.info("[Principal={}]: Expiring credential valid from {} to {}", expiringCredential.principalName(),
                 new java.util.Date(startMs), new java.util.Date(expireTimeMs));
 
@@ -320,7 +327,7 @@ public abstract class ExpiringCredentialRefreshingLogin {
         long refreshMinPeriodSeconds = expiringCredentialRefreshConfig.loginRefreshMinPeriodSeconds();
         long clientRefreshBufferSeconds = expiringCredentialRefreshConfig.loginRefreshBufferSeconds();
         if (relativeToMs + 1000L * (refreshMinPeriodSeconds + clientRefreshBufferSeconds) > expireTimeMs) {
-            long retvalRefreshMs = startMs + (long) ((expireTimeMs - startMs) * pct);
+            long retvalRefreshMs = relativeToMs + (long) ((expireTimeMs - relativeToMs) * pct);
             log.warn(
                     "[Principal={}]: Expiring credential expires at {}, so buffer times of {} and {} seconds"
                             + " at the front and back, respectively, cannot be accommodated.  We will refresh at {}.",
@@ -375,13 +382,21 @@ public abstract class ExpiringCredentialRefreshingLogin {
              */
             ExpiringCredential optionalCredentialToLogout = expiringCredential;
             LoginContext optionalLoginContextToLogout = loginContext;
-            loginContext = loginContextFactory.createLoginContext(ExpiringCredentialRefreshingLogin.this);
-            log.info("Initiating re-login for {}, logout() still needs to be called on a previous login = {}",
-                    principalName, optionalCredentialToLogout != null);
-            loginContext.login();
-            // Perform a logout() on any original credential if necessary
-            if (optionalCredentialToLogout != null)
-                optionalLoginContextToLogout.logout();
+            boolean cleanLogin = false; // remember to restore the original if necessary
+            try {
+                loginContext = loginContextFactory.createLoginContext(ExpiringCredentialRefreshingLogin.this);
+                log.info("Initiating re-login for {}, logout() still needs to be called on a previous login = {}",
+                        principalName, optionalCredentialToLogout != null);
+                loginContext.login();
+                cleanLogin = true; // no need to restore the original
+                // Perform a logout() on any original credential if necessary
+                if (optionalCredentialToLogout != null)
+                    optionalLoginContextToLogout.logout();
+            } finally {
+                if (!cleanLogin)
+                    // restore the original
+                    loginContext = optionalLoginContextToLogout;
+            }
             /*
              * Get the new credential and make sure it is not any old one that required a
              * logout() after the login()

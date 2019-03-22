@@ -16,6 +16,8 @@
  */
 package kafka.admin
 
+import java.util.Properties
+
 import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
@@ -47,15 +49,15 @@ class PreferredReplicaElectionCommandTest extends ZooKeeperTestHarness with Logg
 
   @Test
   def testBasicPreferredReplicaElection() {
-    val expectedReplicaAssignment = Map(1  -> List(0, 1, 2))
+    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
-    val partition = 1
+    val partition = 0
     val preferredReplica = 0
     // create brokers
     val brokerRack = Map(0 -> "rack0", 1 -> "rack1", 2 -> "rack2")
     val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false, rackInfo = brokerRack).map(KafkaConfig.fromProps)
     // create the topic
-    adminZkClient.createOrUpdateTopicPartitionAssignmentPathInZK(topic, expectedReplicaAssignment)
+    adminZkClient.createTopicWithAssignment(topic, config = new Properties, expectedReplicaAssignment)
     servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
     // broker 2 should be the leader since it was started first
     val currentLeader = TestUtils.waitUntilLeaderIsElectedOrChanged(zkClient, topic, partition, oldLeaderOpt = None)

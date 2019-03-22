@@ -40,7 +40,6 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable.HashMap
 import scala.collection.{Set, mutable}
 
-
 object ControllerChannelManager {
   val QueueSizeMetricName = "QueueSize"
   val RequestRateAndQueueTimeMetricName = "RequestRateAndQueueTimeMs"
@@ -76,7 +75,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     }
   }
 
-  def sendRequest(brokerId: Int, apiKey: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest],
+  def sendRequest(brokerId: Int, apiKey: ApiKeys, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                   callback: AbstractResponse => Unit = null) {
     brokerLock synchronized {
       val stateInfoOpt = brokerStateInfo.get(brokerId)
@@ -108,15 +107,18 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
   private def addNewBroker(broker: Broker) {
     val messageQueue = new LinkedBlockingQueue[QueueItem]
     debug(s"Controller ${config.brokerId} trying to connect to broker ${broker.id}")
-    val brokerNode = broker.node(config.interBrokerListenerName)
+    val controllerToBrokerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
+    val controllerToBrokerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
+    val brokerNode = broker.node(controllerToBrokerListenerName)
     val logContext = new LogContext(s"[Controller id=${config.brokerId}, targetBrokerId=${brokerNode.idString}] ")
     val networkClient = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
-        config.interBrokerSecurityProtocol,
+        controllerToBrokerSecurityProtocol,
         JaasContext.Type.SERVER,
         config,
-        config.interBrokerListenerName,
+        controllerToBrokerListenerName,
         config.saslMechanismInterBrokerProtocol,
+        time,
         config.saslInterBrokerHandshakeRequestEnable
       )
       val selector = new Selector(
@@ -140,6 +142,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         Selectable.USE_DEFAULT_BUFFER_SIZE,
         config.requestTimeoutMs,
+        ClientDnsLookup.DEFAULT,
         time,
         false,
         new ApiVersions,
@@ -197,7 +200,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
   }
 }
 
-case class QueueItem(apiKey: ApiKeys, request: AbstractRequest.Builder[_ <: AbstractRequest],
+case class QueueItem(apiKey: ApiKeys, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                      callback: AbstractResponse => Unit, enqueueTimeMs: Long)
 
 class RequestSendThread(val controllerId: Int,
@@ -291,6 +294,13 @@ class RequestSendThread(val controllerId: Int,
     }
   }
 
+  override def initiateShutdown(): Boolean = {
+    if (super.initiateShutdown()) {
+      networkClient.initiateClose()
+      true
+    } else
+      false
+  }
 }
 
 class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogger: StateChangeLogger) extends  Logging {
@@ -312,7 +322,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
     if (updateMetadataRequestBrokerSet.nonEmpty)
       throw new IllegalStateException("Controller to broker state change requests batch is not empty while creating a " +
         s"new one. Some UpdateMetadata state changes to brokers $updateMetadataRequestBrokerSet with partition info " +
-        s"updateMetadataRequestPartitionInfoMap might be lost ")
+        s"$updateMetadataRequestPartitionInfoMap might be lost ")
   }
 
   def clear() {
@@ -343,7 +353,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
 
   def addStopReplicaRequestForBrokers(brokerIds: Seq[Int], topicPartition: TopicPartition, deletePartition: Boolean,
                                       callback: (AbstractResponse, Int) => Unit) {
-    brokerIds.filter(b => b >= 0).foreach { brokerId =>
+    brokerIds.filter(_ >= 0).foreach { brokerId =>
       stopReplicaRequestMap.getOrElseUpdate(brokerId, Seq.empty[StopReplicaRequestInfo])
       val v = stopReplicaRequestMap(brokerId)
       stopReplicaRequestMap(brokerId) = v :+ StopReplicaRequestInfo(PartitionAndReplica(topicPartition, brokerId),
@@ -382,13 +392,8 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
       }
     }
 
-    val givenPartitions = if (partitions.isEmpty)
-      controllerContext.partitionLeadershipInfo.keySet
-    else
-      partitions
-
     updateMetadataRequestBrokerSet ++= brokerIds.filter(_ >= 0)
-    givenPartitions.foreach(partition => updateMetadataRequestPartitionInfo(partition,
+    partitions.foreach(partition => updateMetadataRequestPartitionInfo(partition,
       beingDeleted = controller.topicDeletionManager.topicsToBeDeleted.contains(partition.topic)))
   }
 
@@ -397,24 +402,29 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
       val stateChangeLog = stateChangeLogger.withControllerEpoch(controllerEpoch)
 
       val leaderAndIsrRequestVersion: Short =
-        if (controller.config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 1
+        if (controller.config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 2
+        else if (controller.config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 1
         else 0
 
-      leaderAndIsrRequestMap.foreach { case (broker, leaderAndIsrPartitionStates) =>
-        leaderAndIsrPartitionStates.foreach { case (topicPartition, state) =>
-          val typeOfRequest =
-            if (broker == state.basePartitionState.leader) "become-leader"
-            else "become-follower"
-          stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
-        }
-        val leaderIds = leaderAndIsrPartitionStates.map(_._2.basePartitionState.leader).toSet
-        val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
-          _.node(controller.config.interBrokerListenerName)
-        }
-        val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId,
-          controllerEpoch, leaderAndIsrPartitionStates.asJava, leaders.asJava)
-        controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, leaderAndIsrRequestBuilder,
-          (r: AbstractResponse) => controller.eventManager.put(controller.LeaderAndIsrResponseReceived(r, broker)))
+      leaderAndIsrRequestMap.filterKeys(controllerContext.liveOrShuttingDownBrokerIds.contains).foreach {
+        case (broker, leaderAndIsrPartitionStates) =>
+          leaderAndIsrPartitionStates.foreach {
+            case (topicPartition, state) =>
+              val typeOfRequest =
+                if (broker == state.basePartitionState.leader) "become-leader"
+                else "become-follower"
+              stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
+          }
+          val leaderIds = leaderAndIsrPartitionStates.map(_._2.basePartitionState.leader).toSet
+          val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
+            _.node(controller.config.interBrokerListenerName)
+          }
+          val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
+          val leaderAndIsrRequestBuilder = new LeaderAndIsrRequest.Builder(leaderAndIsrRequestVersion, controllerId, controllerEpoch,
+            brokerEpoch, leaderAndIsrPartitionStates.asJava, leaders.asJava)
+          controller.sendRequest(broker, ApiKeys.LEADER_AND_ISR, leaderAndIsrRequestBuilder,
+            (r: AbstractResponse) => controller.eventManager.put(controller.LeaderAndIsrResponseReceived(r, broker)))
+
       }
       leaderAndIsrRequestMap.clear()
 
@@ -425,58 +435,64 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
 
       val partitionStates = Map.empty ++ updateMetadataRequestPartitionInfoMap
       val updateMetadataRequestVersion: Short =
-        if (controller.config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 4
+        if (controller.config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 5
+        else if (controller.config.interBrokerProtocolVersion >= KAFKA_1_0_IV0) 4
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_2_IV0) 3
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_10_0_IV1) 2
         else if (controller.config.interBrokerProtocolVersion >= KAFKA_0_9_0) 1
         else 0
 
-      val updateMetadataRequest = {
-        val liveBrokers = if (updateMetadataRequestVersion == 0) {
-          // Version 0 of UpdateMetadataRequest only supports PLAINTEXT.
-          controllerContext.liveOrShuttingDownBrokers.map { broker =>
-            val securityProtocol = SecurityProtocol.PLAINTEXT
-            val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
-            val node = broker.node(listenerName)
-            val endPoints = Seq(new EndPoint(node.host, node.port, securityProtocol, listenerName))
-            new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
-          }
-        } else {
-          controllerContext.liveOrShuttingDownBrokers.map { broker =>
-            val endPoints = broker.endPoints.map { endPoint =>
-              new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port, endPoint.securityProtocol, endPoint.listenerName)
-            }
-            new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
-          }
+      val liveBrokers = if (updateMetadataRequestVersion == 0) {
+        // Version 0 of UpdateMetadataRequest only supports PLAINTEXT.
+        controllerContext.liveOrShuttingDownBrokers.map { broker =>
+          val securityProtocol = SecurityProtocol.PLAINTEXT
+          val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
+          val node = broker.node(listenerName)
+          val endPoints = Seq(new EndPoint(node.host, node.port, securityProtocol, listenerName))
+          new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
         }
-        new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch, partitionStates.asJava,
-          liveBrokers.asJava)
+      } else {
+        controllerContext.liveOrShuttingDownBrokers.map { broker =>
+          val endPoints = broker.endPoints.map { endPoint =>
+            new UpdateMetadataRequest.EndPoint(endPoint.host, endPoint.port, endPoint.securityProtocol, endPoint.listenerName)
+          }
+          new UpdateMetadataRequest.Broker(broker.id, endPoints.asJava, broker.rack.orNull)
+        }
       }
 
-      updateMetadataRequestBrokerSet.foreach { broker =>
+      updateMetadataRequestBrokerSet.intersect(controllerContext.liveOrShuttingDownBrokerIds).foreach { broker =>
+        val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
+        val updateMetadataRequest = new UpdateMetadataRequest.Builder(updateMetadataRequestVersion, controllerId, controllerEpoch,
+          brokerEpoch, partitionStates.asJava, liveBrokers.asJava)
         controller.sendRequest(broker, ApiKeys.UPDATE_METADATA, updateMetadataRequest, null)
       }
       updateMetadataRequestBrokerSet.clear()
       updateMetadataRequestPartitionInfoMap.clear()
 
-      stopReplicaRequestMap.foreach { case (broker, replicaInfoList) =>
+      val stopReplicaRequestVersion: Short =
+        if (controller.config.interBrokerProtocolVersion >= KAFKA_2_2_IV0) 1
+        else 0
+
+      stopReplicaRequestMap.filterKeys(controllerContext.liveOrShuttingDownBrokerIds.contains).foreach { case (broker, replicaInfoList) =>
         val stopReplicaWithDelete = replicaInfoList.filter(_.deletePartition).map(_.replica).toSet
         val stopReplicaWithoutDelete = replicaInfoList.filterNot(_.deletePartition).map(_.replica).toSet
         debug(s"The stop replica request (delete = true) sent to broker $broker is ${stopReplicaWithDelete.mkString(",")}")
         debug(s"The stop replica request (delete = false) sent to broker $broker is ${stopReplicaWithoutDelete.mkString(",")}")
 
         val (replicasToGroup, replicasToNotGroup) = replicaInfoList.partition(r => !r.deletePartition && r.callback == null)
+        val brokerEpoch = controllerContext.liveBrokerIdAndEpochs(broker)
 
         // Send one StopReplicaRequest for all partitions that require neither delete nor callback. This potentially
         // changes the order in which the requests are sent for the same partitions, but that's OK.
-        val stopReplicaRequest = new StopReplicaRequest.Builder(controllerId, controllerEpoch, false,
+        val stopReplicaRequest = new StopReplicaRequest.Builder(stopReplicaRequestVersion, controllerId, controllerEpoch,
+          brokerEpoch, false,
           replicasToGroup.map(_.replica.topicPartition).toSet.asJava)
         controller.sendRequest(broker, ApiKeys.STOP_REPLICA, stopReplicaRequest)
 
         replicasToNotGroup.foreach { r =>
-          val stopReplicaRequest = new StopReplicaRequest.Builder(
-              controllerId, controllerEpoch, r.deletePartition,
-              Set(r.replica.topicPartition).asJava)
+          val stopReplicaRequest = new StopReplicaRequest.Builder(stopReplicaRequestVersion,
+            controllerId, controllerEpoch, brokerEpoch, r.deletePartition,
+            Set(r.replica.topicPartition).asJava)
           controller.sendRequest(broker, ApiKeys.STOP_REPLICA, stopReplicaRequest, r.callback)
         }
       }
@@ -485,15 +501,15 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
       case e: Throwable =>
         if (leaderAndIsrRequestMap.nonEmpty) {
           error("Haven't been able to send leader and isr requests, current state of " +
-              s"the map is $leaderAndIsrRequestMap. Exception message: $e")
+            s"the map is $leaderAndIsrRequestMap. Exception message: $e")
         }
         if (updateMetadataRequestBrokerSet.nonEmpty) {
           error(s"Haven't been able to send metadata update requests to brokers $updateMetadataRequestBrokerSet, " +
-                s"current state of the partition info is $updateMetadataRequestPartitionInfoMap. Exception message: $e")
+            s"current state of the partition info is $updateMetadataRequestPartitionInfoMap. Exception message: $e")
         }
         if (stopReplicaRequestMap.nonEmpty) {
           error("Haven't been able to send stop replica requests, current state of " +
-              s"the map is $stopReplicaRequestMap. Exception message: $e")
+            s"the map is $stopReplicaRequestMap. Exception message: $e")
         }
         throw new IllegalStateException(e)
     }

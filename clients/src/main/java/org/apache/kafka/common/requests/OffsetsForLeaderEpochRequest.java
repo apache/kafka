@@ -79,20 +79,11 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     }
 
     public static class Builder extends AbstractRequest.Builder<OffsetsForLeaderEpochRequest> {
-        private Map<TopicPartition, PartitionData> epochsByPartition;
-
-        public Builder(short version) {
-            this(version, new HashMap<>());
-        }
+        private final Map<TopicPartition, PartitionData> epochsByPartition;
 
         public Builder(short version, Map<TopicPartition, PartitionData> epochsByPartition) {
             super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
             this.epochsByPartition = epochsByPartition;
-        }
-
-        public Builder add(TopicPartition topicPartition, Optional<Integer> currentEpoch, int leaderEpoch) {
-            epochsByPartition.put(topicPartition, new PartitionData(currentEpoch, leaderEpoch));
-            return this;
         }
 
         @Override
@@ -107,8 +98,8 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
-            bld.append("(type=OffsetForLeaderEpochRequest, ").
-                    append("epochsByTopic=").append(epochsByPartition).
+            bld.append("OffsetsForLeaderEpochRequest(").
+                    append("epochsByPartition=").append(epochsByPartition).
                     append(")");
             return bld.toString();
         }
@@ -189,5 +180,13 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             this.leaderEpoch = leaderEpoch;
         }
 
+        @Override
+        public String toString() {
+            StringBuilder bld = new StringBuilder();
+            bld.append("(currentLeaderEpoch=").append(currentLeaderEpoch).
+                append(", leaderEpoch=").append(leaderEpoch).
+                append(")");
+            return bld.toString();
+        }
     }
 }

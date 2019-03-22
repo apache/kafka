@@ -45,7 +45,6 @@ public class RecordDeserializerTest {
         new byte[0],
         headers);
 
-
     @SuppressWarnings("deprecation")
     @Test
     public void shouldReturnConsumerRecordWithDeserializedValueWhenNoExceptions() {
@@ -81,7 +80,7 @@ public class RecordDeserializerTest {
                       final boolean valueThrowsException,
                       final Object key,
                       final Object value) {
-            super("", Collections.<String>emptyList(), null, null);
+            super("", Collections.emptyList(), null, null);
             this.keyThrowsException = keyThrowsException;
             this.valueThrowsException = valueThrowsException;
             this.key = key;
