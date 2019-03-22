@@ -102,10 +102,14 @@ class RequestQuotaTest extends BaseRequestTest {
     quotaProps.put(DynamicConfig.Client.RequestPercentageOverrideProp, "0.01")
     adminZkClient.changeClientIdConfig(Sanitizer.sanitize(smallQuotaConsumerClientId), quotaProps)
 
-    TestUtils.retry(10000) {
+    TestUtils.retry(20000) {
       val quotaManager = servers.head.dataPlaneRequestProcessor.quotas.request
       assertEquals(s"Default request quota not set", Quota.upperBound(0.01), quotaManager.quota("some-user", "some-client"))
       assertEquals(s"Request quota override not set", Quota.upperBound(2000), quotaManager.quota("some-user", unthrottledClientId))
+      val produceQuotaManager = servers.head.dataPlaneRequestProcessor.quotas.produce
+      assertEquals(s"Produce quota override not set", Quota.upperBound(1), produceQuotaManager.quota("some-user", smallQuotaProducerClientId))
+      val consumeQuotaManager = servers.head.dataPlaneRequestProcessor.quotas.fetch
+      assertEquals(s"Consume quota override not set", Quota.upperBound(1), consumeQuotaManager.quota("some-user", smallQuotaConsumerClientId))
     }
   }
 
@@ -416,7 +420,10 @@ class RequestQuotaTest extends BaseRequestTest {
     override def toString: String = {
       val requestTime = requestTimeMetricValue(clientId)
       val throttleTime = throttleTimeMetricValue(clientId)
-      s"Client $clientId apiKey $apiKey requests $correlationId requestTime $requestTime throttleTime $throttleTime"
+      val produceThrottleTime = throttleTimeMetricValueForQuotaType(clientId, QuotaType.Produce)
+      val consumeThrottleTime = throttleTimeMetricValueForQuotaType(clientId, QuotaType.Fetch)
+      s"Client $clientId apiKey $apiKey requests $correlationId requestTime $requestTime " +
+      s"throttleTime $throttleTime produceThrottleTime $produceThrottleTime consumeThrottleTime $consumeThrottleTime"
     }
   }
 
@@ -519,7 +526,7 @@ class RequestQuotaTest extends BaseRequestTest {
     val throttled = smallQuotaConsumerClient.runUntil(response => responseThrottleTime(apiKey, response) > 0)
 
     assertTrue(s"Response not throttled: $smallQuotaConsumerClientId", throttled)
-    assertTrue(s"Throttle time metrics for consumer quota not updated: $smallQuotaConsumerClientId",
+    assertTrue(s"Throttle time metrics for consumer quota not updated: $smallQuotaConsumerClient",
       throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Fetch) > 0)
     assertTrue(s"Throttle time metrics for request quota updated: $smallQuotaConsumerClient",
       throttleTimeMetricValueForQuotaType(smallQuotaConsumerClientId, QuotaType.Request).isNaN)

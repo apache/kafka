@@ -14,14 +14,32 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
+package org.apache.kafka.streams.kstream.internals;
 
-/**
- * Interface to wrap actions that are required to wait until a condition is met
- * for testing purposes.  Note that this is not intended to do any assertions.
- */
-@FunctionalInterface
-public interface TestCondition {
+import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.Joined;
 
-    boolean conditionMet() throws InterruptedException;
+public class JoinedInternal<K, V, VO> extends Joined<K, V, VO>  {
+
+    JoinedInternal(final Joined<K, V, VO> joined) {
+        super(joined);
+    }
+
+    public Serde<K> keySerde() {
+        return keySerde;
+    }
+
+    public Serde<V> valueSerde() {
+        return valueSerde;
+    }
+
+    public Serde<VO> otherValueSerde() {
+        return otherValueSerde;
+    }
+
+    @Override // TODO remove annotation when super.name() is removed
+    @SuppressWarnings("deprecation") // this method should not be removed if super.name() is removed
+    public String name() {
+        return name;
+    }
 }
