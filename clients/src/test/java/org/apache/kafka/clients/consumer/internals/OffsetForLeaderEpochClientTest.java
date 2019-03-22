@@ -66,6 +66,25 @@ public class OffsetForLeaderEpochClientTest {
     }
 
     @Test
+    public void testUnexpectedEmptyResponse() {
+        Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
+        positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),
+                new Metadata.LeaderAndEpoch(Node.noNode(), Optional.of(1))));
+
+        OffsetsForLeaderEpochClient offsetClient = newOffsetClient();
+        RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future =
+                offsetClient.sendAsyncRequest(Node.noNode(), positionMap);
+
+        OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(Collections.emptyMap());
+        client.prepareResponse(resp);
+        consumerClient.pollNoWakeup();
+
+        OffsetsForLeaderEpochClient.OffsetForEpochResult result = future.value();
+        assertTrue(result.partitionsToRetry().isEmpty());
+        assertTrue(result.endOffsets().isEmpty());
+    }
+
+    @Test
     public void testOkResponse() {
         Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = new HashMap<>();
         positionMap.put(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1),

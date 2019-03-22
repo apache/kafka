@@ -711,6 +711,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         regrouped.forEach((node, dataMap) -> {
             subscriptions.setNextAllowedRetry(dataMap.keySet(), time.milliseconds() + requestTimeoutMs);
 
+            final Map<TopicPartition, Metadata.LeaderAndEpoch> cachedLeaderAndEpochs = positionMap.keySet()
+                    .stream()
+                    .collect(Collectors.toMap(Function.identity(), metadata::leaderAndEpoch));
+
             RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future = offsetsForLeaderEpochClient.sendAsyncRequest(node, positionMap);
             future.addListener(new RequestFutureListener<OffsetsForLeaderEpochClient.OffsetForEpochResult>() {
                 @Override
@@ -725,11 +729,16 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     // for the partition. If so, it means we have experienced log truncation and need to reposition
                     // that partition's offset.
                     offsetsResult.endOffsets().forEach((respTopicPartition, respEndOffset) -> {
+                        Metadata.LeaderAndEpoch currentLeader = metadata.leaderAndEpoch(respTopicPartition);
+                        if (!currentLeader.equals(cachedLeaderAndEpochs.get(respTopicPartition))) {
+                            return;
+                        }
+
+
                         if (subscriptions.awaitingValidation(respTopicPartition)) {
                             SubscriptionState.FetchPosition currentPosition = subscriptions.position(respTopicPartition);
                             if (respEndOffset.endOffset() < currentPosition.offset) {
                                 if (subscriptions.hasDefaultOffsetResetPolicy()) {
-                                    Metadata.LeaderAndEpoch currentLeader = metadata.leaderAndEpoch(respTopicPartition);
                                     SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
                                             respEndOffset.endOffset(), Optional.of(respEndOffset.leaderEpoch()), currentLeader);
                                     log.info("Truncation detected for partition {}, resetting offset to {}", respTopicPartition, newPosition);
