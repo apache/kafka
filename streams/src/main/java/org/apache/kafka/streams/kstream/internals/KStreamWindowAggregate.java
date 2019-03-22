@@ -27,7 +27,6 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
-import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,22 +69,21 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
     public class KStreamWindowAggregateProcessor extends AbstractProcessor<K, V> {
 
-        private StreamsMetricsImpl metrics;
         private WindowStore<K, Agg> windowStore;
         private TupleForwarder<Windowed<K>, Agg> tupleForwarder;
-        private InternalProcessorContext internalProcessorContext;
-        private Sensor lateRecordDropSensor;
+        private Sensor droppedLateRecordSensor;
+        private Sensor skippedRecordSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
-            internalProcessorContext = (InternalProcessorContext) context;
 
-            metrics = (StreamsMetricsImpl) context.metrics();
+            final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
 
-            lateRecordDropSensor = internalProcessorContext.currentNode().nodeMetrics().lateRecordsDropRateSensor();
+            droppedLateRecordSensor = internalProcessorContext.currentNode().nodeMetrics().lateRecordsDropRateSensor();
+            skippedRecordSensor  = internalProcessorContext.currentNode().nodeMetrics().skippedRecordsRateSensor();
 
             windowStore = (WindowStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<>(context), sendOldValues);
@@ -98,7 +96,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     value, context().topic(), context().partition(), context().offset()
                 );
-                metrics.threadLevelSensor("skipped-records").record();
+                skippedRecordSensor.record();
                 return;
             }
 
@@ -127,10 +125,10 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                     tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, sendOldValues ? oldAgg : null);
                 } else {
                     log.debug(
-                        "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{}) expiration=[{}]",
+                        "Dropping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{}) expiration=[{}]",
                         key, context().topic(), context().partition(), context().offset(), context().timestamp(), windowStart, windowEnd, closeTime
                     );
-                    lateRecordDropSensor.record();
+                    droppedLateRecordSensor.record();
                 }
             }
         }

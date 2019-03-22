@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -27,6 +28,8 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 
 import java.util.ArrayDeque;
+
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.SKIPPED_RECORDS;
 
 
 /**
@@ -45,6 +48,7 @@ public class RecordQueue {
     private final TimestampExtractor timestampExtractor;
     private final RecordDeserializer recordDeserializer;
     private final ArrayDeque<ConsumerRecord<byte[], byte[]>> fifoQueue;
+    private final Sensor skippedRecordsRateSensor;
 
     private long partitionTime = UNKNOWN;
     private StampedRecord headRecord = null;
@@ -59,11 +63,12 @@ public class RecordQueue {
         this.partition = partition;
         this.fifoQueue = new ArrayDeque<>();
         this.timestampExtractor = timestampExtractor;
+        this.skippedRecordsRateSensor = processorContext.metrics().taskLevelSensor(SKIPPED_RECORDS, processorContext.taskId().toString(), Sensor.RecordingLevel.INFO);
         this.recordDeserializer = new RecordDeserializer(
             source,
             deserializationExceptionHandler,
             logContext,
-            processorContext.metrics().threadLevelSensor("skipped-records")
+            skippedRecordsRateSensor
         );
         this.processorContext = processorContext;
         this.log = logContext.logger(RecordQueue.class);
@@ -182,7 +187,7 @@ public class RecordQueue {
                         "Skipping record due to negative extracted timestamp. topic=[{}] partition=[{}] offset=[{}] extractedTimestamp=[{}] extractor=[{}]",
                         deserialized.topic(), deserialized.partition(), deserialized.offset(), timestamp, timestampExtractor.getClass().getCanonicalName()
                 );
-                ((StreamsMetricsImpl) processorContext.metrics()).threadLevelSensor("skipped-records").record();
+                skippedRecordsRateSensor.record();
                 continue;
             }
 

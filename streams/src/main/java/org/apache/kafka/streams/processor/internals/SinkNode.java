@@ -57,7 +57,6 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
     public void init(final InternalProcessorContext context) {
         super.init(context);
         this.context = context;
-        this.nodeMetrics = new NodeMetrics(context.metrics(), null, name, context);
 
         // if serializers are null, get the default ones from the context
         if (keySerializer == null) {

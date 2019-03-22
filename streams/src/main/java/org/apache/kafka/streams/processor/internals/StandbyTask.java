@@ -31,6 +31,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_CLOSED;
+
 /**
  * A StandbyTask
  */
@@ -147,7 +149,7 @@ public class StandbyTask extends AbstractTask {
             closeStateManager(true);
         }
 
-        metrics.threadLevelSensor("task-closed").record();
+        metrics.threadLevelSensor(TASK_CLOSED).record();
 
         taskClosed = true;
     }

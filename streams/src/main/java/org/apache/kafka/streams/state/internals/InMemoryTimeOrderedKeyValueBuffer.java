@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.metrics.Sensors;
 
@@ -44,6 +45,8 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.BUFFER_STRING;
 
 public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
     private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
@@ -62,6 +65,8 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
     private String changelogTopic;
     private Sensor bufferSizeSensor;
     private Sensor bufferCountSensor;
+
+    private StoreMetrics storeMetrics;
 
     private volatile boolean open;
 
@@ -184,6 +189,7 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
+        storeMetrics = new StoreMetrics(context, BUFFER_STRING, storeName, (StreamsMetricsImpl) context.metrics());
         bufferSizeSensor = Sensors.createBufferSizeSensor(this, internalProcessorContext);
         bufferCountSensor = Sensors.createBufferCountSensor(this, internalProcessorContext);
 

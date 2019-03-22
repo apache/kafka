@@ -20,7 +20,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
@@ -30,8 +29,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATE_RECORD_DROP;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.DROPPRED_LATE_RECORDS;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESS;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.SKIPPED_RECORDS;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STREAM_PROCESSOR_NODE_METRICS;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.SUPPRESSION_EMIT_RECORDS;
 
 public class ProcessorNode<K, V> {
 
@@ -79,10 +81,10 @@ public class ProcessorNode<K, V> {
     }
 
     public void init(final InternalProcessorContext context) {
+        context.setCurrentNode(this);
         try {
-            nodeMetrics = new NodeMetrics(context.metrics(), processor, name, context);
+            nodeMetrics = new NodeMetrics(context, context.metrics());
             if (processor != null) {
-                context.setCurrentNode(this);
                 processor.init(context);
             }
         } catch (final Exception e) {
@@ -151,19 +153,24 @@ public class ProcessorNode<K, V> {
         private final String processorNodeName;
         private final String taskName;
 
-        NodeMetrics(final StreamsMetricsImpl metrics,
-                    final Processor<?, ?> processor,
-                    final String processorNodeName,
-                    final ProcessorContext context) {
+        NodeMetrics(final InternalProcessorContext context,
+                    final StreamsMetricsImpl metrics) {
             this.metrics = metrics;
 
-            this.processorNodeName = processorNodeName;
+            this.processorNodeName = context.currentNode().name;
             this.taskName = context.taskId().toString();
 
             this.tagMap = StreamsMetricsImpl.nodeLevelTagMap(Thread.currentThread().getName(), context.taskId().toString(), processorNodeName);
 
-            processRateSensor = metrics.nodeLevelSensor("process-latency", processorNodeName, taskName, Sensor.RecordingLevel.DEBUG);
-            StreamsMetricsImpl.addInvocationRateAndCount(processRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, "process");
+            if (context.currentNode() instanceof SourceNode) {
+                // only register the parent for source nodes
+                final Sensor taskLevelSensor = metrics.taskLevelSensor(PROCESS, context.taskId().toString(), Sensor.RecordingLevel.DEBUG);
+                processRateSensor = metrics.nodeLevelSensor(PROCESS, processorNodeName, taskName, Sensor.RecordingLevel.DEBUG, taskLevelSensor);
+            } else {
+                processRateSensor = metrics.nodeLevelSensor(PROCESS, processorNodeName, taskName, Sensor.RecordingLevel.DEBUG);
+            }
+
+            StreamsMetricsImpl.addInvocationRateAndCount(processRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, PROCESS);
         }
 
         Sensor processRateSensor() {
@@ -172,8 +179,8 @@ public class ProcessorNode<K, V> {
 
         public Sensor suppressionEmitRateSensor() {
             if (suppressionEmitRateSensor == null) {
-                suppressionEmitRateSensor = metrics.nodeLevelSensor("suppression-emit", processorNodeName, taskName, Sensor.RecordingLevel.DEBUG);
-                StreamsMetricsImpl.addInvocationRateAndCount(suppressionEmitRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, "suppression-emit");
+                suppressionEmitRateSensor = metrics.nodeLevelSensor(SUPPRESSION_EMIT_RECORDS, processorNodeName, taskName, Sensor.RecordingLevel.DEBUG);
+                StreamsMetricsImpl.addInvocationRateAndCount(suppressionEmitRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, SUPPRESSION_EMIT_RECORDS);
             }
 
             return suppressionEmitRateSensor;
@@ -181,17 +188,20 @@ public class ProcessorNode<K, V> {
 
         public Sensor lateRecordsDropRateSensor() {
             if (lateRecordsDropRateSensor == null) {
-                lateRecordsDropRateSensor = metrics.nodeLevelSensor(LATE_RECORD_DROP, processorNodeName, taskName, Sensor.RecordingLevel.INFO);
-                StreamsMetricsImpl.addInvocationRateAndCount(lateRecordsDropRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, LATE_RECORD_DROP);
+                lateRecordsDropRateSensor = metrics.nodeLevelSensor(DROPPRED_LATE_RECORDS, processorNodeName, taskName, Sensor.RecordingLevel.INFO);
+                StreamsMetricsImpl.addInvocationRateAndCount(lateRecordsDropRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, DROPPRED_LATE_RECORDS);
             }
 
             return lateRecordsDropRateSensor;
         }
 
-        private Sensor skippedRecordsRateSensor() {
+        public Sensor skippedRecordsRateSensor() {
             if (skippedRecordsRateSensor == null) {
-                skippedRecordsRateSensor = metrics.nodeLevelSensor("skipped-records", processorNodeName, taskName, Sensor.RecordingLevel.INFO);
-                StreamsMetricsImpl.addInvocationRateAndCount(skippedRecordsRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, "skipped-records");
+                // keep the task-level parent sensor
+                final Sensor taskLevelSensor = metrics.taskLevelSensor(SKIPPED_RECORDS, taskName, Sensor.RecordingLevel.INFO);
+
+                skippedRecordsRateSensor = metrics.nodeLevelSensor(SKIPPED_RECORDS, processorNodeName, taskName, Sensor.RecordingLevel.INFO, taskLevelSensor);
+                StreamsMetricsImpl.addInvocationRateAndCount(skippedRecordsRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, SKIPPED_RECORDS);
             }
 
             return skippedRecordsRateSensor;

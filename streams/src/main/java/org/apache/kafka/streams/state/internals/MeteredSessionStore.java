@@ -30,11 +30,14 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
-import java.util.Map;
 import java.util.Objects;
 
-import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
-import static org.apache.kafka.streams.state.internals.metrics.Sensors.createTaskAndStoreLatencyAndThroughputSensors;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.DELETE;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.FLUSH;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.GET;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PUT;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RANGE;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RESTORE;
 
 public class MeteredSessionStore<K, V>
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, Windowed<K>, V>
@@ -45,12 +48,12 @@ public class MeteredSessionStore<K, V>
     private final Serde<V> valueSerde;
     private final Time time;
     private StateSerdes<K, V> serdes;
-    private StreamsMetricsImpl metrics;
+    private StoreMetrics storeMetrics;
     private Sensor putTime;
-    private Sensor fetchTime;
+    private Sensor getTime;
+    private Sensor rangeTime;
     private Sensor flushTime;
-    private Sensor removeTime;
-    private String taskName;
+    private Sensor deleteTime;
 
     MeteredSessionStore(final SessionStore<Bytes, byte[]> inner,
                         final String metricScope,
@@ -68,31 +71,31 @@ public class MeteredSessionStore<K, V>
     @Override
     public void init(final ProcessorContext context,
                      final StateStore root) {
-        //noinspection unchecked
+        storeMetrics = new StoreMetrics(context, metricScope, name(), (StreamsMetricsImpl) context.metrics());
+
+        initStoreSerde(context);
+
+        putTime = storeMetrics.addSensor(PUT);
+        getTime = storeMetrics.addSensor(GET);
+        rangeTime = storeMetrics.addSensor(RANGE);
+        flushTime = storeMetrics.addSensor(FLUSH);
+        deleteTime = storeMetrics.addSensor(DELETE);
+
+        // register and possibly restore the state from the logs
+        final Sensor restoreTime = storeMetrics.addSensor(RESTORE);
+        StreamsMetricsImpl.maybeMeasureLatency(() -> {
+                super.init(context, root);
+            },
+            time,
+            restoreTime);
+    }
+
+    @SuppressWarnings("unchecked")
+    void initStoreSerde(final ProcessorContext context) {
         serdes = new StateSerdes<>(
             ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
             keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
             valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
-        metrics = (StreamsMetricsImpl) context.metrics();
-
-        taskName = context.taskId().toString();
-        final String metricsGroup = "stream-" + metricScope + "-metrics";
-        final Map<String, String> taskTags = metrics.tagMap("task-id", taskName, metricScope + "-id", "all");
-        final Map<String, String> storeTags = metrics.tagMap("task-id", taskName, metricScope + "-id", name());
-
-        putTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        fetchTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "fetch", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        flushTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "flush", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        removeTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "remove", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-        final Sensor restoreTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "restore", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
-
-        // register and possibly restore the state from the logs
-        final long startNs = time.nanoseconds();
-        try {
-            super.init(context, root);
-        } finally {
-            restoreTime.record(time.nanoseconds() - startNs);
-        }
     }
 
     @SuppressWarnings("unchecked")
@@ -117,46 +120,47 @@ public class MeteredSessionStore<K, V>
     public void put(final Windowed<K> sessionKey,
                     final V aggregate) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
-        final long startNs = time.nanoseconds();
+
         try {
-            final Bytes key = keyBytes(sessionKey.key());
-            wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
+            StreamsMetricsImpl.maybeMeasureLatency(() -> {
+                    final Bytes key = keyBytes(sessionKey.key());
+                    wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
+                },
+                time,
+                putTime);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), sessionKey.key(), aggregate);
             throw new ProcessorStateException(message, e);
-        } finally {
-            putTime.record(time.nanoseconds() - startNs);
         }
     }
 
     @Override
     public void remove(final Windowed<K> sessionKey) {
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
-        final long startNs = time.nanoseconds();
+
         try {
-            final Bytes key = keyBytes(sessionKey.key());
-            wrapped().remove(new Windowed<>(key, sessionKey.window()));
+            StreamsMetricsImpl.maybeMeasureLatency(() -> {
+                    final Bytes key = keyBytes(sessionKey.key());
+                    wrapped().remove(new Windowed<>(key, sessionKey.window()));
+                },
+                time,
+                deleteTime);
         } catch (final ProcessorStateException e) {
             final String message = String.format(e.getMessage(), sessionKey.key());
             throw new ProcessorStateException(message, e);
-        } finally {
-            removeTime.record(time.nanoseconds() - startNs);
         }
     }
 
     @Override
     public V fetchSession(final K key, final long startTime, final long endTime) {
         Objects.requireNonNull(key, "key cannot be null");
-        final V value;
-        final Bytes bytesKey = keyBytes(key);
-        final long startNs = time.nanoseconds();
-        try {
-            value = serdes.valueFrom(wrapped().fetchSession(bytesKey, startTime, endTime));
-        } finally {
-            fetchTime.record(time.nanoseconds() - startNs);
-        }
 
-        return value;
+        return StreamsMetricsImpl.maybeMeasureLatency(() -> {
+                final Bytes bytesKey = keyBytes(key);
+                return serdes.valueFrom(wrapped().fetchSession(bytesKey, startTime, endTime));
+            },
+            time,
+            getTime);
     }
 
     @Override
@@ -184,7 +188,7 @@ public class MeteredSessionStore<K, V>
                 bytesKey,
                 earliestSessionEndTime,
                 latestSessionStartTime),
-            fetchTime,
+            rangeTime,
             serdes,
             time);
     }
@@ -204,25 +208,20 @@ public class MeteredSessionStore<K, V>
                 bytesKeyTo,
                 earliestSessionEndTime,
                 latestSessionStartTime),
-            fetchTime,
+            rangeTime,
             serdes,
             time);
     }
 
     @Override
     public void flush() {
-        final long startNs = time.nanoseconds();
-        try {
-            super.flush();
-        } finally {
-            flushTime.record(time.nanoseconds() - startNs);
-        }
+        StreamsMetricsImpl.maybeMeasureLatency(super::flush, time, flushTime);
     }
 
     @Override
     public void close() {
         super.close();
-        metrics.removeAllStoreLevelSensors(taskName, name());
+        storeMetrics.removeAllSensors();
     }
 
     private Bytes keyBytes(final K key) {
