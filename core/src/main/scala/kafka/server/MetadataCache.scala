@@ -51,10 +51,9 @@ class MetadataCache(brokerId: Int) extends Logging {
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
 
   // This method is the main hotspot when it comes to the performance of metadata requests,
-  // we should be careful about adding additional logic here.
+  // we should be careful about adding additional logic here. Relatedly, `brokers` is
+  // `Iterable[Integer]` instead of `Seq[Int]` to avoid a collection copy.
   // filterUnavailableEndpoints exists to support v0 MetadataResponses
-  // brokers is Iterable[j.l.Integer] and not a native scala type because the data is stored as a java collection
-  // and converting it to a scala collection for this invocation causes performance degradation
   private def getEndpoints(snapshot: MetadataSnapshot, brokers: Iterable[java.lang.Integer], listenerName: ListenerName, filterUnavailableEndpoints: Boolean): Seq[Node] = {
     val result = new mutable.ArrayBuffer[Node](math.min(snapshot.aliveBrokers.size, brokers.size))
     brokers.foreach { brokerId =>
