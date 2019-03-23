@@ -198,7 +198,7 @@ public class AssignmentInfo {
                     break;
                 default:
                     throw new IllegalStateException("Unknown metadata version: " + usedVersion
-                            + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
+                        + "; latest supported version: " + LATEST_SUPPORTED_VERSION);
             }
 
             out.flush();
@@ -209,7 +209,6 @@ public class AssignmentInfo {
             throw new TaskAssignmentException("Failed to encode AssignmentInfo", ex);
         }
     }
-
 
     private void encodeVersionOne(final DataOutputStream out) throws IOException {
         encodeActiveAndStandbyTaskAssignment(out);
@@ -279,14 +278,11 @@ public class AssignmentInfo {
 
     private void encodeVersionThree(final DataOutputStream out) throws IOException {
         out.writeInt(LATEST_SUPPORTED_VERSION);
-        encodeActiveAndStandbyTaskAssignment(out);
-        encodePartitionsByHost(out);
+        encodeVersionTwo(out);
     }
 
     private void encodeVersionFour(final DataOutputStream out) throws IOException {
-        out.writeInt(LATEST_SUPPORTED_VERSION);
-        encodeActiveAndStandbyTaskAssignment(out);
-        encodePartitionsByHost(out);
+        encodeVersionThree(out);
         out.writeInt(errCode);
     }
 
@@ -459,14 +455,13 @@ public class AssignmentInfo {
     public boolean equals(final Object o) {
         if (o instanceof AssignmentInfo) {
             final AssignmentInfo other = (AssignmentInfo) o;
-            final boolean result = usedVersion == other.usedVersion &&
+            return usedVersion == other.usedVersion &&
                     latestSupportedVersion == other.latestSupportedVersion &&
                     errCode == other.errCode &&
                     activeTasks.equals(other.activeTasks) &&
                     standbyTasks.equals(other.standbyTasks) &&
-                    partitionsByHost.equals(other.partitionsByHost);
-
-            return result && tasksByHost.equals(other.tasksByHost);
+                    partitionsByHost.equals(other.partitionsByHost) &&
+                    tasksByHost.equals(other.tasksByHost);
         } else {
             return false;
         }

@@ -773,15 +773,15 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 }
 
                 assignment.put(consumerId, new Assignment(
-                        assignedPartitions,
-                        new AssignmentInfo(
-                                minUserMetadataVersion,
-                                activeTasks,
-                                standbyTasks,
-                                Collections.emptyMap(),
-                                partitionsByHostState,
-                                0)
-                                .encode()
+                    assignedPartitions,
+                    new AssignmentInfo(
+                        minUserMetadataVersion,
+                        activeTasks,
+                        standbyTasks,
+                        Collections.emptyMap(),
+                        partitionsByHostState,
+                        0)
+                        .encode()
                 ));
             }
         }
@@ -789,8 +789,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         // add empty assignment for "future version" clients (ie, empty version probing response)
         for (final String consumerId : futureConsumers) {
             assignment.put(consumerId, new Assignment(
-                    Collections.emptyList(),
-                    new AssignmentInfo().encode()
+                Collections.emptyList(),
+                new AssignmentInfo().encode()
             ));
         }
         log.info("VersionProbingAssignment . Total hosts in this assignment are " + clientsMetadata.size());
@@ -979,8 +979,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         for (final Set<TopicPartition> value : partitionsByHost.values()) {
             for (final TopicPartition topicPartition : value) {
                 topicToPartitionInfo.put(
-                        topicPartition,
-                        new PartitionInfo(topicPartition.topic(), topicPartition.partition(), null, new Node[0], new Node[0]));
+                    topicPartition,
+                    new PartitionInfo(topicPartition.topic(), topicPartition.partition(), null, new Node[0], new Node[0]));
             }
         }
     }
@@ -1012,10 +1012,10 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 for (final String topic : topicGroups.get(taskId.topicGroupId).sourceTopics) {
                     final TopicPartition topicPartition = new TopicPartition(topic, taskId.partition);
                     topicToPartitionInfo.put(topicPartition, new PartitionInfo(topicPartition.topic(),
-                            topicPartition.partition(),
-                            null,
-                            new Node[0],
-                            new Node[0]));
+                        topicPartition.partition(),
+                        null,
+                        new Node[0],
+                        new Node[0]));
                 }
             }
         }
