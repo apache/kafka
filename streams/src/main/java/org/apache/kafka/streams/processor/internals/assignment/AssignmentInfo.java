@@ -77,6 +77,10 @@ public class AssignmentInfo {
             0);
     }
 
+    public Map<HostInfo, Set<TopicPartition>> getPartitionsByHost() {
+        return partitionsByHost;
+    }
+
     public AssignmentInfo(final int version,
                           final List<TaskId> activeTasks,
                           final Map<TaskId, Set<TopicPartition>> standbyTasks,

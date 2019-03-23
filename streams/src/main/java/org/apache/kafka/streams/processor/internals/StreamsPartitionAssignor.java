@@ -835,7 +835,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final int receivedAssignmentMetadataVersion = info.version();
         final int leaderSupportedVersion = info.latestSupportedVersion();
 
-        log.info("Assignment received {}", receivedAssignmentMetadataVersion);
+        log.info("Assignment received with version {}", receivedAssignmentMetadataVersion);
 
         if (receivedAssignmentMetadataVersion > usedSubscriptionMetadataVersion) {
             throw new IllegalStateException("Sent a version " + usedSubscriptionMetadataVersion
@@ -869,15 +869,16 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         // version 2 fields
         final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
         final Map<HostInfo, Set<TaskId>> tasksByHosts;
+        final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
         switch (receivedAssignmentMetadataVersion) {
             case VERSION_ONE:
                 processVersionOneAssignment(info, partitions, activeTasks);
-                tasksByHosts = Collections.emptyMap();
+                partitionsByHost = Collections.emptyMap();
                 break;
             case VERSION_TWO:
                 processVersionTwoAssignment(info, partitions, activeTasks, topicToPartitionInfo);
-                tasksByHosts = info.tasksByHost();
+                partitionsByHost = info.getPartitionsByHost();
                 break;
             case VERSION_THREE:
                 if (leaderSupportedVersion > usedSubscriptionMetadataVersion) {
@@ -889,7 +890,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     usedSubscriptionMetadataVersion = leaderSupportedVersion;
                 }
                 processVersionThreeAssignment(info, partitions, activeTasks, topicToPartitionInfo);
-                tasksByHosts = info.tasksByHost();
+                partitionsByHost = info.getPartitionsByHost();
                 break;
             case VERSION_FOUR:
                 if (leaderSupportedVersion > usedSubscriptionMetadataVersion) {
@@ -901,7 +902,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     usedSubscriptionMetadataVersion = leaderSupportedVersion;
                 }
                 processVersionFourAssignment(info, partitions, activeTasks, topicToPartitionInfo);
-                tasksByHosts = info.tasksByHost();
+                partitionsByHost = info.getPartitionsByHost();
                 break;
             case VERSION_FIVE:
                 if (leaderSupportedVersion > usedSubscriptionMetadataVersion) {
@@ -914,37 +915,38 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 }
                 processVersionFiveAssignment(info, partitions, activeTasks, topicToPartitionInfo);
                 tasksByHosts = info.tasksByHost();
+
+                final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = taskManager.builder().topicGroups();
+                final Map<Integer, Set<String>> sourceTopicsByGroup = new HashMap<>();
+                for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
+                    sourceTopicsByGroup.put(entry.getKey(), entry.getValue().sourceTopics);
+                }
+
+                final Cluster fullMetadata = Cluster.empty().withPartitions(topicToPartitionInfo);
+
+                partitionsByHost = new HashMap<>();
+                if (userEndPoint != null && !(userEndPoint.isEmpty()) && receivedAssignmentMetadataVersion >= 5) {
+                    final Map<TaskId, Set<TopicPartition>> partitionsForTask = partitionGrouper.partitionGroups(sourceTopicsByGroup, fullMetadata);
+
+                    for (final Map.Entry<HostInfo, Set<TaskId>> entry : tasksByHosts.entrySet()) {
+                        final Set<TopicPartition> topicPartitions = new HashSet<>();
+                        for (final TaskId taskId : entry.getValue()) {
+                            topicPartitions.addAll(partitionsForTask.get(taskId));
+                        }
+                        partitionsByHost.put(entry.getKey(), topicPartitions);
+                    }
+                }
                 break;
             default:
                 throw new IllegalStateException("This code should never be reached. Please file a bug report at https://issues.apache.org/jira/projects/KAFKA/");
         }
 
-
-        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = taskManager.builder().topicGroups();
-
-        final Map<Integer, Set<String>> sourceTopicsByGroup = new HashMap<>();
-        for (final Map.Entry<Integer, InternalTopologyBuilder.TopicsInfo> entry : topicGroups.entrySet()) {
-            sourceTopicsByGroup.put(entry.getKey(), entry.getValue().sourceTopics);
-        }
-
         final Cluster fullMetadata = Cluster.empty().withPartitions(topicToPartitionInfo);
-
-        final Map<TaskId, Set<TopicPartition>> partitionsForTask = partitionGrouper.partitionGroups(sourceTopicsByGroup, fullMetadata);
-        final Map<HostInfo, Set<TopicPartition>> partitionsByHost = new HashMap<>();
-
-        for (final Map.Entry<HostInfo, Set<TaskId>> entry : tasksByHosts.entrySet()) {
-            final Set<TopicPartition> topicPartitions = new HashSet<>();
-            for (final TaskId taskId : entry.getValue()) {
-                topicPartitions.addAll(partitionsForTask.get(taskId));
-            }
-            partitionsByHost.put(entry.getKey(), topicPartitions);
-        }
 
         taskManager.setClusterMetadata(fullMetadata);
         taskManager.setPartitionsByHostState(partitionsByHost);
         taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
         taskManager.updateSubscriptionsFromAssignment(partitions);
-        log.info("Assignment working fine on the machine {}", this.userEndPoint);
     }
 
     private void processVersionOneAssignment(final AssignmentInfo info,
@@ -972,18 +974,13 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                                              final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
         processVersionOneAssignment(info, partitions, activeTasks);
 
-        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = taskManager.builder().topicGroups();
         // process partitions by host
-        for (final Set<TaskId> value : info.tasksByHost().values()) {
-            for (final TaskId taskId : value) {
-                for (final String topic : topicGroups.get(taskId.topicGroupId).sourceTopics) {
-                    final TopicPartition topicPartition = new TopicPartition(topic, taskId.partition);
-                    topicToPartitionInfo.put(topicPartition, new PartitionInfo(topicPartition.topic(),
-                            topicPartition.partition(),
-                            null,
-                            new Node[0],
-                            new Node[0]));
-                }
+        final Map<HostInfo, Set<TopicPartition>> partitionsByHost = info.getPartitionsByHost();
+        for (final Set<TopicPartition> value : partitionsByHost.values()) {
+            for (final TopicPartition topicPartition : value) {
+                topicToPartitionInfo.put(
+                        topicPartition,
+                        new PartitionInfo(topicPartition.topic(), topicPartition.partition(), null, new Node[0], new Node[0]));
             }
         }
     }
@@ -1006,7 +1003,22 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                                               final List<TopicPartition> partitions,
                                               final Map<TaskId, Set<TopicPartition>> activeTasks,
                                               final Map<TopicPartition, PartitionInfo> topicToPartitionInfo) {
-        processVersionFourAssignment(info, partitions, activeTasks, topicToPartitionInfo);
+        processVersionOneAssignment(info, partitions, activeTasks);
+
+        final Map<Integer, InternalTopologyBuilder.TopicsInfo> topicGroups = taskManager.builder().topicGroups();
+        // process tasks by host
+        for (final Set<TaskId> value : info.tasksByHost().values()) {
+            for (final TaskId taskId : value) {
+                for (final String topic : topicGroups.get(taskId.topicGroupId).sourceTopics) {
+                    final TopicPartition topicPartition = new TopicPartition(topic, taskId.partition);
+                    topicToPartitionInfo.put(topicPartition, new PartitionInfo(topicPartition.topic(),
+                            topicPartition.partition(),
+                            null,
+                            new Node[0],
+                            new Node[0]));
+                }
+            }
+        }
     }
 
     // for testing

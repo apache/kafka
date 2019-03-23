@@ -125,6 +125,7 @@ public class StreamsPartitionAssignorTest {
         final Map<String, Object> configurationMap = new HashMap<>();
         configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, userEndPoint);
+        configurationMap.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:9090");
         configurationMap.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         configurationMap.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, new AtomicInteger());
         return configurationMap;
@@ -198,7 +199,7 @@ public class StreamsPartitionAssignorTest {
         final Set<TaskId> standbyTasks = new HashSet<>(cachedTasks);
         standbyTasks.removeAll(prevTasks);
 
-        final SubscriptionInfo info = new SubscriptionInfo(processId, prevTasks, standbyTasks, null);
+        final SubscriptionInfo info = new SubscriptionInfo(processId, prevTasks, standbyTasks, "localhost:9090");
         assertEquals(info.encode(), subscription.userData());
     }
 
@@ -1028,7 +1029,6 @@ public class StreamsPartitionAssignorTest {
         builder.addSource(null, "source", null, null, null, "topic");
         builder.addProcessor("processor", new MockProcessorSupplier(), "source");
         EasyMock.expect(taskManager.builder()).andReturn(builder).anyTimes();
-
         taskManager.setPartitionsByHostState(hostStatePartitions);
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager);

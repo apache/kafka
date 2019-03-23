@@ -211,9 +211,9 @@ public class SubscriptionInfo {
     private ByteBuffer encodeVersionThree() {
         final byte[] endPointBytes = prepareUserEndPoint();
 
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
+        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourAndFiveByteLength(endPointBytes));
 
-        buf.putInt(3); // used version
+        buf.putInt(usedVersion); // used version
         buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
         encodeClientUUID(buf);
         encodeTasks(buf, prevTasks);
@@ -224,36 +224,14 @@ public class SubscriptionInfo {
     }
 
     private ByteBuffer encodeVersionFour() {
-        final byte[] endPointBytes = prepareUserEndPoint();
-
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
-
-        buf.putInt(4); // used version
-        buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
-        encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks);
-        encodeTasks(buf, standbyTasks);
-        encodeUserEndPoint(buf, endPointBytes);
-
-        return buf;
+        return encodeVersionThree();
     }
 
     private ByteBuffer encodeVersionFive() {
-        final byte[] endPointBytes = prepareUserEndPoint();
-
-        final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
-
-        buf.putInt(5); // used version
-        buf.putInt(LATEST_SUPPORTED_VERSION); // supported version
-        encodeClientUUID(buf);
-        encodeTasks(buf, prevTasks);
-        encodeTasks(buf, standbyTasks);
-        encodeUserEndPoint(buf, endPointBytes);
-
-        return buf;
+        return encodeVersionFour();
     }
 
-    protected int getVersionThreeAndFourByteLength(final byte[] endPointBytes) {
+    protected int getVersionThreeAndFourAndFiveByteLength(final byte[] endPointBytes) {
         return 4 + // used version
                4 + // latest supported version version
                16 + // client ID

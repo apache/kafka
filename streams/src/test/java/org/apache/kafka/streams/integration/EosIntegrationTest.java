@@ -161,7 +161,6 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
         properties.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
-        properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + String.valueOf(Math.round(Math.random() * 4460)));
         for (int i = 0; i < numberOfRestarts; ++i) {
             final Properties config = StreamsTestUtils.getStreamsConfig(
                 applicationId,
@@ -519,7 +518,7 @@ public class EosIntegrationTest {
                     && streams1.allMetadata().iterator().next().topicPartitions().size() == 1
                     && streams2.allMetadata().iterator().next().topicPartitions().size() == 1,
                 MAX_WAIT_TIME_MS,
-                "Should have rebalanced.");
+                    "Should have rebalanced.");
 
             writeInputData(dataAfterSecondRebalance);
 
@@ -648,7 +647,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);
-
+        properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + String.valueOf(Math.round(Math.random() * 4460)));
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
             CLUSTER.bootstrapServers(),

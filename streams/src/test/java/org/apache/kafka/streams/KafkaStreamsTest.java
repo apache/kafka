@@ -102,7 +102,6 @@ public class KafkaStreamsTest {
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
         props.put(StreamsConfig.CLIENT_ID_CONFIG, "clientId");
-        props.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + String.valueOf(Math.round(Math.random() * 4460)));
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.put(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
