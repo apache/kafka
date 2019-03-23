@@ -48,3 +48,8 @@ tests/venv
 docs/generated/
 
 .release-settings.json
+
+kafkatest.egg-info/
+systest/
+*.swp
+clients/src/generated
