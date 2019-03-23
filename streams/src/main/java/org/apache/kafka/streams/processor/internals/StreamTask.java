@@ -50,16 +50,11 @@ import java.util.Map;
 
 import static java.lang.String.format;
 import static java.util.Collections.singleton;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.COMMIT;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ENFORCED_PROCESSING;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.COMMIT;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.PROCESS;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.PUNCTUATE;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.TASK_CLOSED;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESS;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PUNCTUATE;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RECORD_LATENESS;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.SKIPPED_RECORDS;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STREAM_PROCESSOR_NODE_METRICS;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STREAM_TASK_NODE_METRICS;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_CLOSED;
 
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
@@ -100,9 +95,15 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         private final Sensor enforcedProcessRateSensor;
         private final Sensor skippedRecordsRateSensor;
 
+        public static final String SKIPPED_RECORDS = "skipped-records";
+        private static final String RECORD_LATENESS = "record-lateness";
+        private static final String ENFORCED_PROCESSING = "enforced-processing";
+
         private static final String PROCESS_LATENCY = PROCESS + LATENCY_SUFFIX;
         private static final String PUNCTUATE_LATENCY = PUNCTUATE + LATENCY_SUFFIX;
         private static final String COMMIT_LATENCY = COMMIT + LATENCY_SUFFIX;
+
+        private static final String STREAM_TASK_NODE_METRICS = "stream-task-metrics";
 
         TaskMetrics(final TaskId id, final StreamsMetricsImpl metrics) {
             this.metrics = metrics;
@@ -131,7 +132,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             StreamsMetricsImpl.addInvocationRateAndCount(enforcedProcessRateSensor, STREAM_TASK_NODE_METRICS, tagMap, ENFORCED_PROCESSING);
 
             skippedRecordsRateSensor = metrics.taskLevelSensor(SKIPPED_RECORDS, taskName, Sensor.RecordingLevel.INFO);
-            StreamsMetricsImpl.addInvocationRateAndCount(skippedRecordsRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, SKIPPED_RECORDS);
+            StreamsMetricsImpl.addInvocationRateAndCount(skippedRecordsRateSensor, STREAM_TASK_NODE_METRICS, tagMap, SKIPPED_RECORDS);
         }
 
         void removeAllSensors() {

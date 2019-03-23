@@ -29,11 +29,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.DROPPRED_LATE_RECORDS;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESS;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.SKIPPED_RECORDS;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STREAM_PROCESSOR_NODE_METRICS;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.SUPPRESSION_EMIT_RECORDS;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.SKIPPED_RECORDS;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.PROCESS;
 
 public class ProcessorNode<K, V> {
 
@@ -152,6 +149,12 @@ public class ProcessorNode<K, V> {
         private final Map<String, String> tagMap;
         private final String processorNodeName;
         private final String taskName;
+
+        private static final String DROPPRED_LATE_RECORDS = "dropped-late-records";
+        private static final String SUPPRESSION_EMIT_RECORDS = "suppression-emit-records";
+
+
+        private static final String STREAM_PROCESSOR_NODE_METRICS = "stream-processor-node-metrics";
 
         NodeMetrics(final InternalProcessorContext context,
                     final StreamsMetricsImpl metrics) {

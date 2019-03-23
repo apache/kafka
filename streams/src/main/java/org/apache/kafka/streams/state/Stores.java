@@ -29,6 +29,7 @@ import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplie
 import org.apache.kafka.streams.state.internals.RocksDbSessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
+import org.apache.kafka.streams.state.internals.StoreMetrics;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
 import java.time.Duration;
@@ -108,7 +109,7 @@ public class Stores {
 
             @Override
             public String metricsScope() {
-                return "in-memory-state";
+                return StoreMetrics.IN_MEMORY_STATE;
             }
         };
     }
@@ -138,7 +139,7 @@ public class Stores {
 
             @Override
             public String metricsScope() {
-                return "in-memory-lru-state";
+                return StoreMetrics.IN_MEMORY_LRU;
             }
         };
     }

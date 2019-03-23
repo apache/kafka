@@ -25,14 +25,8 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.Test;
 
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.STREAM_PROCESSOR_NODE_METRICS;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueAvgAndMax;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.greaterThan;
@@ -70,58 +64,6 @@ public class StreamsMetricsImplTest {
 
         final Sensor sensor3 = streamsMetrics.addThroughputSensor(scope, entity, operation, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor3);
-    }
-
-    @Test
-    public void testMutiLevelSensorRemoval() {
-        final Metrics registry = new Metrics();
-        final StreamsMetricsImpl metrics = new StreamsMetricsImpl(registry, "");
-        for (final MetricName defaultMetric : registry.metrics().keySet()) {
-            registry.removeMetric(defaultMetric);
-        }
-
-        final String taskName = "taskName";
-        final String operation = "operation";
-        final Map<String, String> taskTags = mkMap(mkEntry("tkey", "value"));
-
-        final String processorNodeName = "processorNodeName";
-        final Map<String, String> nodeTags = mkMap(mkEntry("nkey", "value"));
-
-        final Sensor parent1 = metrics.taskLevelSensor(taskName, operation, Sensor.RecordingLevel.DEBUG);
-        addValueAvgAndMax(parent1, STREAM_PROCESSOR_NODE_METRICS, taskTags, operation);
-        addInvocationRateAndCount(parent1, STREAM_PROCESSOR_NODE_METRICS, taskTags, operation);
-
-        final int numberOfTaskMetrics = registry.metrics().size();
-
-        final Sensor sensor1 = metrics.nodeLevelSensor(taskName, processorNodeName, operation, Sensor.RecordingLevel.DEBUG, parent1);
-        addValueAvgAndMax(sensor1, STREAM_PROCESSOR_NODE_METRICS, nodeTags, operation);
-        addInvocationRateAndCount(sensor1, STREAM_PROCESSOR_NODE_METRICS, nodeTags, operation);
-
-        assertThat(registry.metrics().size(), greaterThan(numberOfTaskMetrics));
-
-        metrics.removeAllNodeLevelSensors(taskName, processorNodeName);
-
-        assertThat(registry.metrics().size(), equalTo(numberOfTaskMetrics));
-
-        final Sensor parent2 = metrics.taskLevelSensor(taskName, operation, Sensor.RecordingLevel.DEBUG);
-        addValueAvgAndMax(parent2, STREAM_PROCESSOR_NODE_METRICS, taskTags, operation);
-        addInvocationRateAndCount(parent2, STREAM_PROCESSOR_NODE_METRICS, taskTags, operation);
-
-        assertThat(registry.metrics().size(), equalTo(numberOfTaskMetrics));
-
-        final Sensor sensor2 = metrics.nodeLevelSensor(taskName, processorNodeName, operation, Sensor.RecordingLevel.DEBUG, parent2);
-        addValueAvgAndMax(sensor2, STREAM_PROCESSOR_NODE_METRICS, nodeTags, operation);
-        addInvocationRateAndCount(sensor2, STREAM_PROCESSOR_NODE_METRICS, nodeTags, operation);
-
-        assertThat(registry.metrics().size(), greaterThan(numberOfTaskMetrics));
-
-        metrics.removeAllNodeLevelSensors(taskName, processorNodeName);
-
-        assertThat(registry.metrics().size(), equalTo(numberOfTaskMetrics));
-
-        metrics.removeAllTaskLevelSensors(taskName);
-
-        assertThat(registry.metrics().size(), equalTo(0));
     }
 
     @Test

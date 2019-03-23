@@ -41,11 +41,8 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 import java.util.NoSuchElementException;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.EXPIRED_WINDOW_RECORD_DROP;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreKeyBytes;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.extractStoreTimestamp;
-
 
 public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
@@ -54,19 +51,19 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     private final String name;
     private final String metricScope;
+    private final long retentionPeriod;
+    private final long windowSize;
+    private final boolean retainDuplicates;
+    private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap;
+    private final Set<InMemoryWindowStoreIteratorWrapper> openIterators;
+    private volatile boolean open = false;
+
     private InternalProcessorContext context;
+    private StoreMetrics storeMetrics;
     private Sensor expiredRecordSensor;
     private int seqnum = 0;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
-    private final long retentionPeriod;
-    private final long windowSize;
-    private final boolean retainDuplicates;
-
-    private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, byte[]>> segmentMap;
-    private final Set<InMemoryWindowStoreIteratorWrapper> openIterators;
-
-    private volatile boolean open = false;
 
     InMemoryWindowStore(final String name,
                         final long retentionPeriod,
@@ -89,24 +86,11 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = (InternalProcessorContext) context;
+        this.storeMetrics = new StoreMetrics(context, metricScope, name, (StreamsMetricsImpl) context.metrics());
 
-        final StreamsMetricsImpl metrics = this.context.metrics();
-        final String taskName = context.taskId().toString();
-        expiredRecordSensor = metrics.storeLevelSensor(
-            taskName,
-            name(),
-            EXPIRED_WINDOW_RECORD_DROP,
-            Sensor.RecordingLevel.INFO
-        );
-        addInvocationRateAndCount(
-            expiredRecordSensor,
-            "stream-" + metricScope + "-metrics",
-            metrics.tagMap("task-id", taskName, metricScope + "-id", name()),
-            EXPIRED_WINDOW_RECORD_DROP
-        );
+        expiredRecordSensor = storeMetrics.addExpiredRecordSensor();
 
         if (root != null) {
             context.register(root, (key, value) -> {
@@ -240,6 +224,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     @Override
     public void close() {
         this.segmentMap.clear();
+        storeMetrics.removeAllSensors();
         this.open = false;
     }
 

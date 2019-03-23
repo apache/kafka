@@ -40,18 +40,17 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.EXPIRED_WINDOW_RECORD_DROP;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
-
 public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     private static final Logger LOG = LoggerFactory.getLogger(RocksDBSegmentedBytesStore.class);
+
     private final String name;
     private final KeyValueSegments segments;
     private final String metricScope;
     private final KeySchema keySchema;
-    private InternalProcessorContext context;
     private volatile boolean open;
+    private InternalProcessorContext context;
     private Set<KeyValueSegment> bulkLoadSegments;
+    private StoreMetrics storeMetrics;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
@@ -150,23 +149,9 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = (InternalProcessorContext) context;
+        this.storeMetrics = new StoreMetrics(context, metricScope, name, (StreamsMetricsImpl) context.metrics());
 
-        final StreamsMetricsImpl metrics = this.context.metrics();
-
-        final String taskName = context.taskId().toString();
-
-        expiredRecordSensor = metrics.storeLevelSensor(
-            taskName,
-            name(),
-            EXPIRED_WINDOW_RECORD_DROP,
-            Sensor.RecordingLevel.INFO
-        );
-        addInvocationRateAndCount(
-            expiredRecordSensor,
-            "stream-" + metricScope + "-metrics",
-            metrics.tagMap("task-id", taskName, metricScope + "-id", name()),
-            EXPIRED_WINDOW_RECORD_DROP
-        );
+        expiredRecordSensor = storeMetrics.addExpiredRecordSensor();
 
         segments.openExisting(this.context, observedStreamTime);
 
@@ -185,8 +170,9 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
 
     @Override
     public void close() {
-        open = false;
         segments.close();
+        storeMetrics.removeAllSensors();
+        open = false;
     }
 
     @Override

@@ -90,17 +90,17 @@ public class MeteredKeyValueStore<K, V>
 
         initStoreSerde(context);
 
-        putTime = storeMetrics.addSensor(PUT);
-        putIfAbsentTime = storeMetrics.addSensor(PUT_IF_ABSENT);
-        putAllTime = storeMetrics.addSensor(PUT_ALL);
-        getTime = storeMetrics.addSensor(GET);
-        allTime = storeMetrics.addSensor(ALL);
-        rangeTime = storeMetrics.addSensor(RANGE);
-        flushTime = storeMetrics.addSensor(FLUSH);
-        deleteTime = storeMetrics.addSensor(DELETE);
+        putTime = storeMetrics.addOperationLatencySensor(PUT);
+        putIfAbsentTime = storeMetrics.addOperationLatencySensor(PUT_IF_ABSENT);
+        putAllTime = storeMetrics.addOperationLatencySensor(PUT_ALL);
+        getTime = storeMetrics.addOperationLatencySensor(GET);
+        allTime = storeMetrics.addOperationLatencySensor(ALL);
+        rangeTime = storeMetrics.addOperationLatencySensor(RANGE);
+        flushTime = storeMetrics.addOperationLatencySensor(FLUSH);
+        deleteTime = storeMetrics.addOperationLatencySensor(DELETE);
 
         // register and possibly restore the state from the logs
-        final Sensor restoreTime = storeMetrics.addSensor(RESTORE);
+        final Sensor restoreTime = storeMetrics.addOperationLatencySensor(RESTORE);
         StreamsMetricsImpl.maybeMeasureLatency(() -> {
                 super.init(context, root);
             },

@@ -78,13 +78,13 @@ public class MeteredWindowStore<K, V>
 
         initStoreSerde(context);
 
-        putTime = storeMetrics.addSensor(PUT);
-        getTime = storeMetrics.addSensor(GET);
-        rangeTime = storeMetrics.addSensor(RANGE);
-        flushTime = storeMetrics.addSensor(FLUSH);
+        putTime = storeMetrics.addOperationLatencySensor(PUT);
+        getTime = storeMetrics.addOperationLatencySensor(GET);
+        rangeTime = storeMetrics.addOperationLatencySensor(RANGE);
+        flushTime = storeMetrics.addOperationLatencySensor(FLUSH);
 
         // register and possibly restore the state from the logs
-        final Sensor restoreTime = storeMetrics.addSensor(RESTORE);
+        final Sensor restoreTime = storeMetrics.addOperationLatencySensor(RESTORE);
         StreamsMetricsImpl.maybeMeasureLatency(() -> {
                 super.init(context, root);
             },

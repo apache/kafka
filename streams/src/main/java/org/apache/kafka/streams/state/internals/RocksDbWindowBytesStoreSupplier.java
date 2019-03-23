@@ -61,7 +61,7 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
 
     @Override
     public String metricsScope() {
-        return "rocksdb-window-state";
+        return StoreMetrics.WINDOW_ROCKSDB_STATE;
     }
 
     @Deprecated

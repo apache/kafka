@@ -62,14 +62,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addValueAvgAndMax;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.COMMIT;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.POLL;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESS;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PUNCTUATE;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_CLOSED;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_CREATED;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_METRICS_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.threadLevelTagMap;
 
 
@@ -256,35 +249,45 @@ public class StreamThread extends Thread {
         private final Sensor taskCreatedRateSensor;
         private final Sensor taskClosedRateSensor;
 
+        private static final String POLL = "poll";
+        public static final String COMMIT = "commit";
+        public static final String PROCESS = "process";
+        public static final String PUNCTUATE = "punctuate";
+        private static final String TASK_CREATED = "task-created";
+        public static final String TASK_CLOSED = "task-closed";
+
+
         private static final String PROCESS_LATENCY = PROCESS + LATENCY_SUFFIX;
         private static final String PUNCTUATE_LATENCY = PUNCTUATE + LATENCY_SUFFIX;
         private static final String COMMIT_LATENCY = COMMIT + LATENCY_SUFFIX;
         private static final String POLL_LATENCY = POLL + LATENCY_SUFFIX;
 
+        private static final String STREAM_THREAD_METRICS_GROUP = "stream-thread-metrics";
+
         StreamThreadMetrics(final String threadName, final StreamsMetricsImpl metrics) {
             this.metrics = metrics;
 
             processLatencySensor = metrics.threadLevelSensor(PROCESS, threadName, Sensor.RecordingLevel.INFO);
-            addValueAvgAndMax(processLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), PROCESS_LATENCY);
-            addInvocationRateAndCount(processLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), PROCESS);
+            addValueAvgAndMax(processLatencySensor, STREAM_THREAD_METRICS_GROUP, threadLevelTagMap(threadName), PROCESS_LATENCY);
+            addInvocationRateAndCount(processLatencySensor, STREAM_THREAD_METRICS_GROUP, threadLevelTagMap(threadName), PROCESS);
 
             punctuateTimeSensor = metrics.threadLevelSensor(PUNCTUATE, threadName, Sensor.RecordingLevel.INFO);
-            addValueAvgAndMax(punctuateTimeSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), PUNCTUATE_LATENCY);
-            addInvocationRateAndCount(punctuateTimeSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), PUNCTUATE);
+            addValueAvgAndMax(punctuateTimeSensor, STREAM_THREAD_METRICS_GROUP, threadLevelTagMap(threadName), PUNCTUATE_LATENCY);
+            addInvocationRateAndCount(punctuateTimeSensor, STREAM_THREAD_METRICS_GROUP, threadLevelTagMap(threadName), PUNCTUATE);
 
             commitLatencySensor = metrics.threadLevelSensor(COMMIT, threadName, Sensor.RecordingLevel.INFO);
-            addValueAvgAndMax(commitLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), COMMIT_LATENCY);
-            addInvocationRateAndCount(commitLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), COMMIT);
+            addValueAvgAndMax(commitLatencySensor, STREAM_THREAD_METRICS_GROUP, threadLevelTagMap(threadName), COMMIT_LATENCY);
+            addInvocationRateAndCount(commitLatencySensor, STREAM_THREAD_METRICS_GROUP, threadLevelTagMap(threadName), COMMIT);
 
             pollLatencySensor = metrics.threadLevelSensor(POLL, threadName, Sensor.RecordingLevel.INFO);
-            addValueAvgAndMax(pollLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), POLL_LATENCY);
-            addInvocationRateAndCount(pollLatencySensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), POLL);
+            addValueAvgAndMax(pollLatencySensor, STREAM_THREAD_METRICS_GROUP, threadLevelTagMap(threadName), POLL_LATENCY);
+            addInvocationRateAndCount(pollLatencySensor, STREAM_THREAD_METRICS_GROUP, threadLevelTagMap(threadName), POLL);
 
             taskCreatedRateSensor = metrics.threadLevelSensor(TASK_CREATED, threadName, Sensor.RecordingLevel.INFO);
-            addInvocationRateAndCount(taskCreatedRateSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), TASK_CREATED);
+            addInvocationRateAndCount(taskCreatedRateSensor, STREAM_THREAD_METRICS_GROUP, threadLevelTagMap(threadName), TASK_CREATED);
 
             taskClosedRateSensor = metrics.threadLevelSensor(TASK_CLOSED, threadName, Sensor.RecordingLevel.INFO);
-            addInvocationRateAndCount(taskClosedRateSensor, THREAD_METRICS_GROUP, threadLevelTagMap(threadName), TASK_CLOSED);
+            addInvocationRateAndCount(taskClosedRateSensor, STREAM_THREAD_METRICS_GROUP, threadLevelTagMap(threadName), TASK_CLOSED);
         }
 
         StreamsMetricsImpl streamsMetrics() {
