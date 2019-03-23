@@ -311,22 +311,7 @@ public class SslTransportLayer implements TransportLayer {
                 log.trace("SSLHandshake NEED_WRAP channelId {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {}",
                           channelId, appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position());
                 handshakeResult = handshakeWrap(write);
-                if (handshakeResult.getStatus() == Status.BUFFER_OVERFLOW) {
-                    int currentNetWriteBufferSize = netWriteBufferSize();
-                    netWriteBuffer.compact();
-                    netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, currentNetWriteBufferSize);
-                    netWriteBuffer.flip();
-                    if (netWriteBuffer.limit() >= currentNetWriteBufferSize) {
-                        throw new IllegalStateException("Buffer overflow when available data size (" + netWriteBuffer.limit() +
-                                                        ") >= network buffer size (" + currentNetWriteBufferSize + ")");
-                    }
-                } else if (handshakeResult.getStatus() == Status.BUFFER_UNDERFLOW) {
-                    throw new IllegalStateException("Should not have received BUFFER_UNDERFLOW during handshake WRAP.");
-                } else if (handshakeResult.getStatus() == Status.CLOSED) {
-                    throw new EOFException();
-                }
-                log.trace("SSLHandshake NEED_WRAP channelId {}, handshakeResult {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {}",
-                       channelId, handshakeResult, appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position());
+                handleHandshake();
                 //if handshake status is not NEED_UNWRAP or unable to flush netWriteBuffer contents
                 //we will break here otherwise we can do need_unwrap in the same call.
                 if (handshakeStatus != HandshakeStatus.NEED_UNWRAP || !flush(netWriteBuffer)) {
@@ -379,6 +364,25 @@ public class SslTransportLayer implements TransportLayer {
             default:
                 throw new IllegalStateException(String.format("Unexpected status [%s]", handshakeStatus));
         }
+    }
+
+    private void handleHandshake() throws IOException {
+        if (handshakeResult.getStatus() == Status.BUFFER_OVERFLOW) {
+            int currentNetWriteBufferSize = netWriteBufferSize();
+            netWriteBuffer.compact();
+            netWriteBuffer = Utils.ensureCapacity(netWriteBuffer, currentNetWriteBufferSize);
+            netWriteBuffer.flip();
+            if (netWriteBuffer.limit() >= currentNetWriteBufferSize) {
+                throw new IllegalStateException("Buffer overflow when available data size (" + netWriteBuffer.limit() +
+                        ") >= network buffer size (" + currentNetWriteBufferSize + ")");
+            }
+        } else if (handshakeResult.getStatus() == Status.BUFFER_UNDERFLOW) {
+            throw new IllegalStateException("Should not have received BUFFER_UNDERFLOW during handshake WRAP.");
+        } else if (handshakeResult.getStatus() == Status.CLOSED) {
+            throw new EOFException();
+        }
+        log.trace("SSLHandshake NEED_WRAP channelId {}, handshakeResult {}, appReadBuffer pos {}, netReadBuffer pos {}, netWriteBuffer pos {}",
+                channelId, handshakeResult, appReadBuffer.position(), netReadBuffer.position(), netWriteBuffer.position());
     }
 
     private SSLHandshakeException renegotiationException() {
