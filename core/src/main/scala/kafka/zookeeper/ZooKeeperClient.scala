@@ -44,6 +44,7 @@ import scala.collection.mutable.Set
  * @param sessionTimeoutMs session timeout in milliseconds
  * @param connectionTimeoutMs connection timeout in milliseconds
  * @param maxInFlightRequests maximum number of unacknowledged requests the client will send before blocking.
+ * @param name name of the client instance
  */
 class ZooKeeperClient(connectString: String,
                       sessionTimeoutMs: Int,
@@ -51,8 +52,23 @@ class ZooKeeperClient(connectString: String,
                       maxInFlightRequests: Int,
                       time: Time,
                       metricGroup: String,
-                      metricType: String) extends Logging with KafkaMetricsGroup {
-  this.logIdent = "[ZooKeeperClient] "
+                      metricType: String,
+                      name: Option[String]) extends Logging with KafkaMetricsGroup {
+
+  def this(connectString: String,
+           sessionTimeoutMs: Int,
+           connectionTimeoutMs: Int,
+           maxInFlightRequests: Int,
+           time: Time,
+           metricGroup: String,
+           metricType: String) = {
+    this(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests, time, metricGroup, metricType, None)
+  }
+
+  this.logIdent = name match {
+    case Some(n) => s"[ZooKeeperClient $n] "
+    case _ => "[ZooKeeperClient] "
+  }
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()
