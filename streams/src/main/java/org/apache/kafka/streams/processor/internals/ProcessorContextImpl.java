@@ -518,7 +518,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
-        @SuppressWarnings("deprecation")
+        @Deprecated
         public void put(final K key,
                         final V value) {
             wrapped().put(key, value);
