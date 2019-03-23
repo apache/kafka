@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.Collection;
 import java.util.Collections;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 public class TransformerSupplierAdapter<KIn, VIn, KOut, VOut> implements TransformerSupplier<KIn, VIn, Iterable<KeyValue<KOut, VOut>>> {
 
@@ -56,5 +58,10 @@ public class TransformerSupplierAdapter<KIn, VIn, KOut, VOut> implements Transfo
                 transformer.close();
             }
         };
+    }
+
+    @Override
+    public Collection<StoreBuilder> stateStores() {
+        return transformerSupplier.stateStores();
     }
 }

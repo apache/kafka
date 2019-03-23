@@ -31,7 +31,7 @@ package org.apache.kafka.streams.kstream;
  * @see TransformerSupplier
  * @see KStream#transform(TransformerSupplier, String...)
  */
-public interface ValueTransformerSupplier<V, VR> {
+public interface ValueTransformerSupplier<V, VR> extends StateStoresSupplier {
 
     /**
      * Return a new {@link ValueTransformer} instance.

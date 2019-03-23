@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.StateStoresSupplier;
 
 /**
  * A processor supplier that can create one or more {@link Processor} instances.
@@ -28,7 +29,7 @@ import org.apache.kafka.streams.Topology;
  * @param <K> the type of keys
  * @param <V> the type of values
  */
-public interface ProcessorSupplier<K, V> {
+public interface ProcessorSupplier<K, V> extends StateStoresSupplier {
 
     /**
      * Return a new {@link Processor} instance.

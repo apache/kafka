@@ -55,11 +55,7 @@ import org.apache.kafka.streams.state.WindowStore;
 
 import java.lang.reflect.Array;
 import java.time.Duration;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashSet;
-import java.util.Objects;
-import java.util.Set;
+import java.util.*;
 
 public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K, V> {
 
@@ -442,10 +438,17 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     private <K1, V1> KStream<K1, V1> doFlatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
                                                      final String... stateStoreNames) {
         final String name = builder.newProcessorName(TRANSFORM_NAME);
+
+        List<String> allStateStoreNames = new ArrayList<>(Arrays.asList(stateStoreNames));
+        for (StoreBuilder storeBuilder : transformerSupplier.stateStores()) {
+            allStateStoreNames.add(storeBuilder.name());
+            builder.addStateStore(storeBuilder);
+        }
+
         final StatefulProcessorNode<? super K, ? super V> transformNode = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(new KStreamFlatTransform<>(transformerSupplier), name),
-            stateStoreNames
+            allStateStoreNames.toArray(new String[]{})
         );
 
         transformNode.keyChangingOperation(true);
@@ -489,10 +492,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                                                   final String... stateStoreNames) {
         final String name = builder.newProcessorName(TRANSFORMVALUES_NAME);
 
+        List<String> allStateStoreNames = new ArrayList<>(Arrays.asList(stateStoreNames));
+        for (StoreBuilder storeBuilder : valueTransformerWithKeySupplier.stateStores()) {
+            allStateStoreNames.add(storeBuilder.name());
+            builder.addStateStore(storeBuilder);
+        }
+
         final StatefulProcessorNode<? super K, ? super V> transformNode = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(new KStreamTransformValues<>(valueTransformerWithKeySupplier), name),
-            stateStoreNames
+            allStateStoreNames.toArray(new String[]{})
         );
 
         transformNode.setValueChangingOperation(true);
@@ -509,10 +518,16 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(processorSupplier, "ProcessSupplier cant' be null");
         final String name = builder.newProcessorName(PROCESSOR_NAME);
 
+        List<String> allStateStoreNames = new ArrayList<>(Arrays.asList(stateStoreNames));
+        for (StoreBuilder storeBuilder : processorSupplier.stateStores()) {
+            allStateStoreNames.add(storeBuilder.name());
+            builder.addStateStore(storeBuilder);
+        }
+
         final StatefulProcessorNode<? super K, ? super V> processNode = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(processorSupplier, name),
-            stateStoreNames
+            allStateStoreNames.toArray(new String[]{})
         );
 
         builder.addGraphNode(this.streamsGraphNode, processNode);

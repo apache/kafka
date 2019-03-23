@@ -28,6 +28,6 @@ package org.apache.kafka.streams.kstream;
  * @see TransformerSupplier
  * @see KStream#transform(TransformerSupplier, String...)
  */
-public interface ValueTransformerWithKeySupplier<K, V, VR> {
+public interface ValueTransformerWithKeySupplier<K, V, VR> extends StateStoresSupplier {
     ValueTransformerWithKey<K, V, VR> get();
 }
