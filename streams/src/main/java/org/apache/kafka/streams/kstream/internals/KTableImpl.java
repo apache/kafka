@@ -119,16 +119,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String queryableStoreName;
         final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
 
-        // we can inherit parent key and value serde if user do not provide specific overrides, more specifically:
-        // we preserve the key following the order of 1) materialized, 2) parent
-        // we preserve the value following the order of 1) materialized, 2) parent
         if (materializedInternal != null) {
             // we actually do not need to generate store names at all since if it is not specified, we will not
             // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
             if (materializedInternal.storeName() == null) {
                 builder.newStoreName(FILTER_NAME);
             }
+            // we can inherit parent key and value serde if user do not provide specific overrides, more specifically:
+            // we preserve the key following the order of 1) materialized, 2) parent
             keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
+            // we preserve the value following the order of 1) materialized, 2) parent
             valueSerde = materializedInternal.valueSerde() != null ? materializedInternal.valueSerde() : this.valSerde;
             queryableStoreName = materializedInternal.queryableStoreName();
             // only materialize if materialized is specified and it has queryable name
@@ -152,7 +152,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StreamsGraphNode tableNode = new TableProcessorNode<>(
             name,
             processorParameters,
-            null,
             storeBuilder
         );
 
@@ -223,7 +222,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StreamsGraphNode tableNode = new TableProcessorNode<>(
             name,
             processorParameters,
-            null,
             storeBuilder
         );
 
@@ -316,8 +314,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StreamsGraphNode tableNode = new TableProcessorNode<>(
             name,
             processorParameters,
-            stateStoreNames,
-            storeBuilder
+            storeBuilder,
+            stateStoreNames
         );
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);

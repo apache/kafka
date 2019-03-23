@@ -26,26 +26,31 @@ import java.util.Arrays;
 public class TableProcessorNode<K, V> extends StreamsGraphNode {
 
     private final ProcessorParameters<K, V> processorParameters;
-    private final String[] storeNames;
     private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+    private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V> processorParameters,
-                              final String[] storeNames,
                               final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+        this(nodeName, processorParameters, storeBuilder, null);
+    }
 
+    public TableProcessorNode(final String nodeName,
+                              final ProcessorParameters<K, V> processorParameters,
+                              final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+                              final String[] storeNames) {
         super(nodeName);
         this.processorParameters = processorParameters;
-        this.storeNames = storeNames != null ? storeNames : new String[]{};
         this.storeBuilder = storeBuilder;
+        this.storeNames = storeNames != null ? storeNames : new String[] {};
     }
 
     @Override
     public String toString() {
         return "TableProcessorNode{" +
-               ", processorParameters=" + processorParameters +
-               ", storeNames=" + Arrays.toString(storeNames) +
-               "} " + super.toString();
+            ", processorParameters=" + processorParameters +
+            ", storeNames=" + Arrays.toString(storeNames) +
+            "} " + super.toString();
     }
 
     @SuppressWarnings("unchecked")
@@ -59,8 +64,8 @@ public class TableProcessorNode<K, V> extends StreamsGraphNode {
         }
 
         // TODO: we are enforcing this as a keyvalue store, but it should go beyond any type of stores
-        if (this.storeBuilder != null) {
-            topologyBuilder.addStateStore(this.storeBuilder, processorName);
+        if (storeBuilder != null) {
+            topologyBuilder.addStateStore(storeBuilder, processorName);
         }
     }
 }
