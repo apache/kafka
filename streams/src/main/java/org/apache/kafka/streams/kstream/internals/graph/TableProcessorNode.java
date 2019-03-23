@@ -28,7 +28,6 @@ public class TableProcessorNode<K, V> extends StreamsGraphNode {
     private final ProcessorParameters<K, V> processorParameters;
     private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
     private final String[] storeNames;
-    private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V> processorParameters,
