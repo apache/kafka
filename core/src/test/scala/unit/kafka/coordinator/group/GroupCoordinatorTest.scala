@@ -17,7 +17,7 @@
 
 package kafka.coordinator.group
 
-import java.util.Optional
+import java.util.{Collections, Optional}
 
 import kafka.common.OffsetAndMetadata
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, ReplicaManager}
@@ -35,6 +35,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.cluster.Partition
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
 import org.scalatest.junit.JUnitSuite
@@ -459,7 +460,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(joinGroupResult,
       Errors.NONE,
       rebalanceResult.generation, // The group should be at the same generation
-      expectedMemberSize = 2,
+      Set(leaderInstanceId, followerInstanceId),
       groupId,
       Stable)
 
@@ -490,7 +491,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(joinGroupResult,
       Errors.NONE,
       rebalanceResult.generation + 1, // The group has promoted to the new generation.
-      expectedMemberSize = 1,
+      Set(leaderInstanceId),
       groupId,
       CompletingRebalance,
       rebalanceResult.leaderId,
@@ -534,7 +535,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(joinGroupResult,
       Errors.NONE,
       rebalanceResult.generation + 1, // The group has promoted to the new generation, and leader has changed because old one times out.
-      expectedMemberSize = 1,
+      Set(followerInstanceId),
       groupId,
       CompletingRebalance,
       rebalanceResult.followerId,
@@ -554,7 +555,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(joinGroupResult,
       Errors.NONE,
       rebalanceResult.generation,
-      expectedMemberSize = 0,
+      Set(),
       groupId,
       Stable)
 
@@ -592,7 +593,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(await(leaderRejoinGroupFuture, 1),
       Errors.NONE,
       rebalanceResult.generation + 1, // The group has promoted to the new generation.
-      2,
+      Set(leaderInstanceId, followerInstanceId),
       groupId,
       CompletingRebalance,
       rebalanceResult.leaderId,
@@ -601,7 +602,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(await(followerRejoinWithFuture, 1),
       Errors.NONE,
       rebalanceResult.generation + 1, // The group has promoted to the new generation.
-      0,
+      Set(),
       groupId,
       CompletingRebalance,
       rebalanceResult.leaderId,
@@ -617,7 +618,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(await(followerRejoinWithProtocolChangeFuture, 1),
       Errors.NONE,
       rebalanceResult.generation + 2, // The group has promoted to the new generation.
-      1,
+      Set(followerInstanceId),
       groupId,
       CompletingRebalance,
       rebalanceResult.followerId,
@@ -637,7 +638,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(joinGroupResult,
       Errors.NONE,
       rebalanceResult.generation, // The group has no change.
-      0,
+      Set(),
       groupId,
       Stable)
 
@@ -660,7 +661,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(joinGroupResult,
       Errors.NONE,
       rebalanceResult.generation, // The group has no change.
-      0,
+      Set(),
       groupId,
       Stable,
       rebalanceResult.leaderId,
@@ -755,14 +756,16 @@ class GroupCoordinatorTest extends JUnitSuite {
   private def checkJoinGroupResult(joinGroupResult: JoinGroupResult,
                                    expectedError: Errors,
                                    expectedGeneration: Int,
-                                   expectedMemberSize: Int,
+                                   expectedGroupInstanceIds: Set[String],
                                    groupId: String,
                                    expectedGroupState: GroupState,
                                    expectedLeaderId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID,
                                    expectedMemberId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID) {
     assertEquals(Errors.NONE, joinGroupResult.error)
     assertEquals(expectedGeneration, joinGroupResult.generationId)
-    assertEquals(expectedMemberSize, joinGroupResult.members.size)
+    assertEquals(expectedGroupInstanceIds.size, joinGroupResult.members.size)
+    val resultedGroupInstanceIds = joinGroupResult.members.map(member => member.groupInstanceId()).toSet
+    assertEquals(expectedGroupInstanceIds, resultedGroupInstanceIds)
     assertTrue(getGroup(groupId).is(expectedGroupState))
 
     if (!expectedLeaderId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID)) {

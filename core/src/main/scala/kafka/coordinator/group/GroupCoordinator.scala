@@ -1082,7 +1082,6 @@ case class GroupConfig(groupMinSessionTimeoutMs: Int,
                        groupMaxSize: Int,
                        groupInitialRebalanceDelayMs: Int)
 
-//case class JoinGroupResult(members: Map[String, Array[Byte]],
 case class JoinGroupResult(members: List[JoinGroupResponseMember],
                            memberId: String,
                            generationId: Int,
