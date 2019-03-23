@@ -278,8 +278,6 @@ public class GlobalStreamThread extends Thread {
             setState(State.DEAD);
 
             log.warn("Error happened during initialization of the global state store; this thread has shutdown");
-            metrics.removeAllThreadLevelSensors();
-
             return;
         }
         setState(State.RUNNING);
@@ -301,8 +299,6 @@ public class GlobalStreamThread extends Thread {
             } catch (final IOException e) {
                 log.error("Failed to close state maintainer due to the following error:", e);
             }
-
-            metrics.removeAllThreadLevelSensors();
 
             setState(DEAD);
 

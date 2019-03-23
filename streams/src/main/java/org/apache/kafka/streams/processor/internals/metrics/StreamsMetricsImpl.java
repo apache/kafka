@@ -29,12 +29,8 @@ import org.apache.kafka.common.metrics.stats.Value;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsMetrics;
 
-import java.util.Arrays;
 import java.util.Collections;
-import java.util.Deque;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
-import java.util.LinkedList;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -46,12 +42,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 public class StreamsMetricsImpl implements StreamsMetrics {
     private final Metrics metrics;
 
-    private final Deque<String> threadLevelSensors = new LinkedList<>();
-    private final Map<String, Deque<String>> taskLevelSensors = new HashMap<>();
-    private final Map<String, Deque<String>> nodeLevelSensors = new HashMap<>();
-    private final Map<String, Deque<String>> cacheLevelSensors = new HashMap<>();
-    private final Map<String, Deque<String>> storeLevelSensors = new HashMap<>();
-
+    // delimiters
     private static final String SENSOR_PREFIX_DELIMITER = ".";
     private static final String SENSOR_NAME_DELIMITER = ".s.";
 
@@ -62,6 +53,8 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private static final String CACHE_STRING = "cache";
     public static final String BUFFER_STRING = "buffer";
     private static final String INTERNAL_STRING = "internal";
+    private static final String EXTERNAL_STRING = "external";
+    private static final String ENTITY_STRING = "entity";
 
     // metric tag names;
     // for state stores the tags are constructed dynamically and hence not listed here
@@ -78,12 +71,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RATE_SUFFIX = "-rate";
     public static final String TOTAL_SUFFIX = "-total";
     public static final String CURRENT_SUFFIX = "-current";
-    private static final String ID_SUFFIX = "-id";
-    private static final String STREAM_PREFIX = "stream-";
-    private static final String METRICS_SUFFIX = "-metrics";
-
-
-
+    public static final String ID_SUFFIX = "-id";
+    public static final String STREAM_PREFIX = "stream-";
+    public static final String METRICS_SUFFIX = "-metrics";
 
     public StreamsMetricsImpl(final Metrics metrics) {
         Objects.requireNonNull(metrics, "Metrics cannot be null");
@@ -167,78 +157,29 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return sensor;
     }
 
+    // -------- user-defined external sensors ----------- //
+
     private Map<String, String> constructTags(final String scopeName, final String entityName, final String... tags) {
         final Map<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put(scopeName + ID_SUFFIX, entityName);
-        final String[] updatedTags = Arrays.copyOf(tags, tags.length + 2);
 
-        for ()
-        updatedTags[tags.length] = scopeName + ID_SUFFIX;
-        updatedTags[tags.length + 1] = entityName;
-        return tagMap(updatedTags);
-    }
+        if (tags != null) {
+            if ((tags.length % 2) != 0) {
+                throw new IllegalArgumentException("Tags needs to be specified in key-value pairs");
+            }
 
-    public final Map<String, String> tagMap(final String... tags) {
-        final Map<String, String> tagMap = new LinkedHashMap<>();
-        tagMap.put("client-id", threadName);
+            for (int i = 0; i < tags.length; i += 2) {
+                tagMap.put(tags[i], tags[i + 1]);
+            }
+        }
+
         return tagMap;
     }
 
-
     private String externalSensorName(final String operationName, final String entityName) {
-        return "external" + SENSOR_PREFIX_DELIMITER + threadName
-            + SENSOR_PREFIX_DELIMITER + "entity" + SENSOR_PREFIX_DELIMITER + entityName
+        return EXTERNAL_STRING + SENSOR_PREFIX_DELIMITER + Thread.currentThread().getName()
+            + SENSOR_PREFIX_DELIMITER + ENTITY_STRING + SENSOR_PREFIX_DELIMITER + entityName
             + SENSOR_NAME_DELIMITER + operationName;
-    }
-
-    public final void removeAllThreadLevelSensors() {
-        synchronized (threadLevelSensors) {
-            while (!threadLevelSensors.isEmpty()) {
-                metrics.removeSensor(threadLevelSensors.pop());
-            }
-        }
-    }
-
-    public static <R> R maybeMeasureLatency(final Supplier<R> action,
-                                            final Time time,
-                                            final Sensor sensor) {
-        if (sensor.shouldRecord()) {
-            final long startNs = time.nanoseconds();
-            try {
-                return action.get();
-            } finally {
-                sensor.record(time.nanoseconds() - startNs);
-            }
-        } else {
-            return action.get();
-        }
-    }
-
-    public static void maybeMeasureLatency(final Runnable runnable,
-                                           final Time time,
-                                           final Sensor sensor) {
-        if (sensor.shouldRecord()) {
-            final long startNs = time.nanoseconds();
-            try {
-                runnable.run();
-            } finally {
-                sensor.record(time.nanoseconds() - startNs);
-            }
-        } else {
-            runnable.run();
-        }
-    }
-
-
-
-    public final void removeAllCacheLevelSensors(final String taskName, final String cacheName) {
-        final String key = cacheSensorPrefix(taskName, cacheName);
-        synchronized (cacheLevelSensors) {
-            final Deque<String> strings = cacheLevelSensors.remove(key);
-            while (strings != null && !strings.isEmpty()) {
-                metrics.removeSensor(strings.pop());
-            }
-        }
     }
 
     // -------- thread level sensors ----------- //
@@ -322,8 +263,6 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return metrics.sensor(fullSensorName, recordingLevel);
     }
 
-
-
     // -------- cache level sensors ----------- //
 
     public static Map<String, String> cacheLevelTagMap(final String taskName, final String cacheName) {
@@ -345,9 +284,37 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return metrics.sensor(fullSensorName, recordingLevel);
     }
 
+    // -------- util functions ----------- //
 
+    public static <R> R maybeMeasureLatency(final Supplier<R> action,
+                                            final Time time,
+                                            final Sensor sensor) {
+        if (sensor.shouldRecord()) {
+            final long startNs = time.nanoseconds();
+            try {
+                return action.get();
+            } finally {
+                sensor.record(time.nanoseconds() - startNs);
+            }
+        } else {
+            return action.get();
+        }
+    }
 
-
+    public static void maybeMeasureLatency(final Runnable runnable,
+                                           final Time time,
+                                           final Sensor sensor) {
+        if (sensor.shouldRecord()) {
+            final long startNs = time.nanoseconds();
+            try {
+                runnable.run();
+            } finally {
+                sensor.record(time.nanoseconds() - startNs);
+            }
+        } else {
+            runnable.run();
+        }
+    }
 
     public static void addValueAvgMinMax(final Sensor sensor,
                                          final String group,
@@ -402,7 +369,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
-    public static void addInvocationRate(final Sensor sensor,
+    private static void addInvocationRate(final Sensor sensor,
                                          final String group,
                                          final Map<String, String> tags,
                                          final String operation) {
@@ -434,7 +401,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         );
     }
 
-    private static String groupNameFromScope(final String scopeName) {
-        return "stream-" + scopeName + "-metrics";
+    public static String groupNameFromScope(final String scopeName) {
+        return STREAM_PREFIX + scopeName + METRICS_SUFFIX;
     }
 }
