@@ -100,51 +100,7 @@ public class ScramSaslServer implements SaslServer {
                 case RECEIVE_CLIENT_FIRST_MESSAGE:
                     this.clientFirstMessage = new ClientFirstMessage(response);
                     this.scramExtensions = clientFirstMessage.extensions();
-                    if (!SUPPORTED_EXTENSIONS.containsAll(scramExtensions.map().keySet())) {
-                        log.debug("Unsupported extensions will be ignored, supported {}, provided {}",
-                                SUPPORTED_EXTENSIONS, scramExtensions.map().keySet());
-                    }
-                    String serverNonce = formatter.secureRandomString();
-                    try {
-                        String saslName = clientFirstMessage.saslName();
-                        this.username = formatter.username(saslName);
-                        NameCallback nameCallback = new NameCallback("username", username);
-                        ScramCredentialCallback credentialCallback;
-                        if (scramExtensions.tokenAuthenticated()) {
-                            DelegationTokenCredentialCallback tokenCallback = new DelegationTokenCredentialCallback();
-                            credentialCallback = tokenCallback;
-                            callbackHandler.handle(new Callback[]{nameCallback, tokenCallback});
-                            if (tokenCallback.tokenOwner() == null)
-                                throw new SaslException("Token Authentication failed: Invalid tokenId : " + username);
-                            this.authorizationId = tokenCallback.tokenOwner();
-                            this.tokenExpiryTimestamp = tokenCallback.tokenExpiryTimestamp();
-                        } else {
-                            credentialCallback = new ScramCredentialCallback();
-                            callbackHandler.handle(new Callback[]{nameCallback, credentialCallback});
-                            this.authorizationId = username;
-                            this.tokenExpiryTimestamp = null;
-                        }
-                        this.scramCredential = credentialCallback.scramCredential();
-                        if (scramCredential == null)
-                            throw new SaslException("Authentication failed: Invalid user credentials");
-                        String authorizationIdFromClient = clientFirstMessage.authorizationId();
-                        if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
-                            throw new SaslAuthenticationException("Authentication failed: Client requested an authorization id that is different from username");
-
-                        if (scramCredential.iterations() < mechanism.minIterations())
-                            throw new SaslException("Iterations " + scramCredential.iterations() +  " is less than the minimum " + mechanism.minIterations() + " for " + mechanism);
-                        this.serverFirstMessage = new ServerFirstMessage(clientFirstMessage.nonce(),
-                                serverNonce,
-                                scramCredential.salt(),
-                                scramCredential.iterations());
-                        setState(State.RECEIVE_CLIENT_FINAL_MESSAGE);
-                        return serverFirstMessage.toBytes();
-                    } catch (SaslException | AuthenticationException e) {
-                        throw e;
-                    } catch (Throwable e) {
-                        throw new SaslException("Authentication failed: Credentials could not be obtained", e);
-                    }
-
+                    return this.getServerFirstMessage();
                 case RECEIVE_CLIENT_FINAL_MESSAGE:
                     try {
                         ClientFinalMessage clientFinalMessage = new ClientFinalMessage(response);
@@ -166,6 +122,53 @@ public class ScramSaslServer implements SaslServer {
             clearCredentials();
             setState(State.FAILED);
             throw e;
+        }
+    }
+
+    private byte[] getServerFirstMessage() throws SaslException, SaslAuthenticationException {
+        if (!SUPPORTED_EXTENSIONS.containsAll(scramExtensions.map().keySet())) {
+            log.debug("Unsupported extensions will be ignored, supported {}, provided {}",
+                    SUPPORTED_EXTENSIONS, scramExtensions.map().keySet());
+        }
+        String serverNonce = formatter.secureRandomString();
+        try {
+            String saslName = clientFirstMessage.saslName();
+            this.username = formatter.username(saslName);
+            NameCallback nameCallback = new NameCallback("username", username);
+            ScramCredentialCallback credentialCallback;
+            if (scramExtensions.tokenAuthenticated()) {
+                DelegationTokenCredentialCallback tokenCallback = new DelegationTokenCredentialCallback();
+                credentialCallback = tokenCallback;
+                callbackHandler.handle(new Callback[]{nameCallback, tokenCallback});
+                if (tokenCallback.tokenOwner() == null)
+                    throw new SaslException("Token Authentication failed: Invalid tokenId : " + username);
+                this.authorizationId = tokenCallback.tokenOwner();
+                this.tokenExpiryTimestamp = tokenCallback.tokenExpiryTimestamp();
+            } else {
+                credentialCallback = new ScramCredentialCallback();
+                callbackHandler.handle(new Callback[]{nameCallback, credentialCallback});
+                this.authorizationId = username;
+                this.tokenExpiryTimestamp = null;
+            }
+            this.scramCredential = credentialCallback.scramCredential();
+            if (scramCredential == null)
+                throw new SaslException("Authentication failed: Invalid user credentials");
+            String authorizationIdFromClient = clientFirstMessage.authorizationId();
+            if (!authorizationIdFromClient.isEmpty() && !authorizationIdFromClient.equals(username))
+                throw new SaslAuthenticationException("Authentication failed: Client requested an authorization id that is different from username");
+
+            if (scramCredential.iterations() < mechanism.minIterations())
+                throw new SaslException("Iterations " + scramCredential.iterations() +  " is less than the minimum " + mechanism.minIterations() + " for " + mechanism);
+            this.serverFirstMessage = new ServerFirstMessage(clientFirstMessage.nonce(),
+                    serverNonce,
+                    scramCredential.salt(),
+                    scramCredential.iterations());
+            setState(State.RECEIVE_CLIENT_FINAL_MESSAGE);
+            return serverFirstMessage.toBytes();
+        } catch (SaslException | AuthenticationException e) {
+            throw e;
+        } catch (Throwable e) {
+            throw new SaslException("Authentication failed: Credentials could not be obtained", e);
         }
     }
 
