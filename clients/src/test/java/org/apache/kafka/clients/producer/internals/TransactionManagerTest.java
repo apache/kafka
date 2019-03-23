@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.producer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.RecordMetadata;
@@ -42,7 +41,6 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AddOffsetsToTxnRequest;
 import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
@@ -76,6 +74,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -102,11 +101,11 @@ public class TransactionManagerTest {
     private TopicPartition tp0 = new TopicPartition(topic, 0);
     private TopicPartition tp1 = new TopicPartition(topic, 1);
     private MockTime time = new MockTime();
-    private MockClient client = new MockClient(time);
+    private ProducerMetadata metadata = new ProducerMetadata(0, Long.MAX_VALUE, new LogContext(),
+            new ClusterResourceListeners(), time);
+    private MockClient client = new MockClient(time, metadata);
 
-    private Metadata metadata = new Metadata(0, Long.MAX_VALUE, true, true, new ClusterResourceListeners());
     private ApiVersions apiVersions = new ApiVersions();
-    private Cluster cluster = TestUtils.singletonCluster("test", 2);
     private RecordAccumulator accumulator = null;
     private Sender sender = null;
     private TransactionManager transactionManager = null;
@@ -133,8 +132,8 @@ public class TransactionManagerTest {
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL,
                 MAX_RETRIES, senderMetrics, this.time, REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
-        this.metadata.update(this.cluster, Collections.<String>emptySet(), time.milliseconds());
-        client.setNode(brokerNode);
+        this.metadata.add("test");
+        this.client.updateMetadata(TestUtils.metadataUpdateWith(1, singletonMap("test", 2)));
     }
 
     @Test
@@ -565,18 +564,24 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.isSendToPartitionAllowed(tp0));
     }
 
-    @Test(expected = IllegalStateException.class)
-    public void testInvalidSequenceIncrement() {
-        TransactionManager transactionManager = new TransactionManager();
-        transactionManager.incrementSequenceNumber(tp0, 3333);
-    }
-
     @Test
     public void testDefaultSequenceNumber() {
         TransactionManager transactionManager = new TransactionManager();
         assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
         transactionManager.incrementSequenceNumber(tp0, 3);
         assertEquals((int) transactionManager.sequenceNumber(tp0), 3);
+    }
+
+    @Test
+    public void testSequenceNumberOverflow() {
+        TransactionManager transactionManager = new TransactionManager();
+        assertEquals((int) transactionManager.sequenceNumber(tp0), 0);
+        transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
+        assertEquals((int) transactionManager.sequenceNumber(tp0), Integer.MAX_VALUE);
+        transactionManager.incrementSequenceNumber(tp0, 100);
+        assertEquals((int) transactionManager.sequenceNumber(tp0), 99);
+        transactionManager.incrementSequenceNumber(tp0, Integer.MAX_VALUE);
+        assertEquals((int) transactionManager.sequenceNumber(tp0), 98);
     }
 
     @Test
@@ -636,7 +641,7 @@ public class TransactionManagerTest {
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
         prepareTxnOffsetCommitResponse(consumerGroupId, pid, epoch, txnOffsetCommitResponse);
 
-        assertEquals(null, transactionManager.coordinator(CoordinatorType.GROUP));
+        assertNull(transactionManager.coordinator(CoordinatorType.GROUP));
         sender.run(time.milliseconds());  // try to send TxnOffsetCommitRequest, but find we don't have a group coordinator.
         sender.run(time.milliseconds());  // send find coordinator for group request
         assertNotNull(transactionManager.coordinator(CoordinatorType.GROUP));
@@ -673,14 +678,11 @@ public class TransactionManagerTest {
     @Test
     public void testUnsupportedFindCoordinator() {
         transactionManager.initializeTransactions();
-        client.prepareUnsupportedVersionResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
-                assertEquals(findCoordinatorRequest.coordinatorType(), CoordinatorType.TRANSACTION);
-                assertEquals(findCoordinatorRequest.coordinatorKey(), transactionalId);
-                return true;
-            }
+        client.prepareUnsupportedVersionResponse(body -> {
+            FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
+            assertEquals(findCoordinatorRequest.coordinatorType(), CoordinatorType.TRANSACTION);
+            assertEquals(findCoordinatorRequest.coordinatorKey(), transactionalId);
+            return true;
         });
 
         sender.run(time.milliseconds()); // InitProducerRequest is queued
@@ -699,14 +701,11 @@ public class TransactionManagerTest {
         assertFalse(transactionManager.hasError());
         assertNotNull(transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
-        client.prepareUnsupportedVersionResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
-                assertEquals(initProducerIdRequest.transactionalId(), transactionalId);
-                assertEquals(initProducerIdRequest.transactionTimeoutMs(), transactionTimeoutMs);
-                return true;
-            }
+        client.prepareUnsupportedVersionResponse(body -> {
+            InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
+            assertEquals(initProducerIdRequest.transactionalId(), transactionalId);
+            assertEquals(initProducerIdRequest.transactionTimeoutMs(), transactionTimeoutMs);
+            return true;
         });
 
         sender.run(time.milliseconds()); // InitProducerRequest is dequeued
@@ -761,7 +760,7 @@ public class TransactionManagerTest {
         // FindCoordinator and InitPid requests.
         sender.run(time.milliseconds());
 
-        assertEquals(null, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        assertNull(transactionManager.coordinator(CoordinatorType.TRANSACTION));
         assertFalse(initPidResult.isCompleted());
         assertFalse(transactionManager.hasProducerId());
 
@@ -797,7 +796,7 @@ public class TransactionManagerTest {
         sender.run(time.milliseconds());
         time.sleep(110);  // waiting for the blackout period for the node to expire.
 
-        assertEquals(null, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        assertNull(transactionManager.coordinator(CoordinatorType.TRANSACTION));
         assertFalse(initPidResult.isCompleted());
         assertFalse(transactionManager.hasProducerId());
 
@@ -829,7 +828,7 @@ public class TransactionManagerTest {
         prepareInitPidResponse(Errors.NOT_COORDINATOR, false, pid, epoch);
         sender.run(time.milliseconds());  // send pid, get not coordinator. Should resend the FindCoordinator and InitPid requests
 
-        assertEquals(null, transactionManager.coordinator(CoordinatorType.TRANSACTION));
+        assertNull(transactionManager.coordinator(CoordinatorType.TRANSACTION));
         assertFalse(initPidResult.isCompleted());
         assertFalse(transactionManager.hasProducerId());
 
@@ -1404,6 +1403,7 @@ public class TransactionManagerTest {
             commitResult.await();
             fail();  // the get() must throw an exception.
         } catch (KafkaException e) {
+            // Expected
         }
 
         try {
@@ -1837,7 +1837,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void shouldNotSendAbortTxnRequestWhenOnlyAddOffsetsRequestFailed() throws Exception {
+    public void shouldNotSendAbortTxnRequestWhenOnlyAddOffsetsRequestFailed() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -1863,7 +1863,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void shouldFailAbortIfAddOffsetsFailsWithFatalError() throws Exception {
+    public void shouldFailAbortIfAddOffsetsFailsWithFatalError() {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -1910,7 +1910,7 @@ public class TransactionManagerTest {
         PartitionInfo part2 = new PartitionInfo(topic, 1, node2, null, null);
 
         Cluster cluster = new Cluster(null, Arrays.asList(node1, node2), Arrays.asList(part1, part2),
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+                Collections.emptySet(), Collections.emptySet());
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
         nodes.add(node2);
@@ -1947,8 +1947,8 @@ public class TransactionManagerTest {
         // Try to drain a message destined for tp1, it should get drained.
         Node node1 = new Node(1, "localhost", 1112);
         PartitionInfo part1 = new PartitionInfo(topic, 1, node1, null, null);
-        Cluster cluster = new Cluster(null, Arrays.asList(node1), Arrays.asList(part1),
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+        Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
+                Collections.emptySet(), Collections.emptySet());
         accumulator.append(tp1, time.milliseconds(), "key".getBytes(),
                 "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
         Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, Collections.singleton(node1),
@@ -1974,8 +1974,8 @@ public class TransactionManagerTest {
         Node node1 = new Node(0, "localhost", 1111);
         PartitionInfo part1 = new PartitionInfo(topic, 0, node1, null, null);
 
-        Cluster cluster = new Cluster(null, Arrays.asList(node1), Arrays.asList(part1),
-                Collections.<String>emptySet(), Collections.<String>emptySet());
+        Cluster cluster = new Cluster(null, Collections.singletonList(node1), Collections.singletonList(part1),
+                Collections.emptySet(), Collections.emptySet());
         Set<Node> nodes = new HashSet<>();
         nodes.add(node1);
         Map<Integer, List<ProducerBatch>> drainedBatches = accumulator.drain(cluster, nodes, Integer.MAX_VALUE,
@@ -2014,7 +2014,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransitionToAbortableErrorOnBatchExpiry() throws InterruptedException, ExecutionException {
+    public void testTransitionToAbortableErrorOnBatchExpiry() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -2042,7 +2042,7 @@ public class TransactionManagerTest {
         time.sleep(10000);
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
-        Node clusterNode = this.cluster.nodes().get(0);
+        Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
         client.blackout(clusterNode, 100);
 
@@ -2060,7 +2060,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransitionToAbortableErrorOnMultipleBatchExpiry() throws InterruptedException, ExecutionException {
+    public void testTransitionToAbortableErrorOnMultipleBatchExpiry() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -2098,7 +2098,7 @@ public class TransactionManagerTest {
         time.sleep(10000);
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
-        Node clusterNode = this.cluster.nodes().get(0);
+        Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
         client.blackout(clusterNode, 100);
 
@@ -2125,7 +2125,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testDropCommitOnBatchExpiry() throws InterruptedException, ExecutionException {
+    public void testDropCommitOnBatchExpiry() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -2155,7 +2155,7 @@ public class TransactionManagerTest {
         time.sleep(10000);
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
-        Node clusterNode = this.cluster.nodes().get(0);
+        Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
         client.blackout(clusterNode, 100);
 
@@ -2192,7 +2192,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException, ExecutionException {
+    public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -2226,7 +2226,7 @@ public class TransactionManagerTest {
         time.sleep(10000);
         // Disconnect the target node for the pending produce request. This will ensure that sender will try to
         // expire the batch.
-        Node clusterNode = this.cluster.nodes().get(0);
+        Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
         client.blackout(clusterNode, 100);
 
@@ -2251,7 +2251,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testShouldResetProducerStateAfterResolvingSequences() throws InterruptedException, ExecutionException {
+    public void testShouldResetProducerStateAfterResolvingSequences() {
         // Create a TransactionManager without a transactionalId to test
         // shouldResetProducerStateAfterResolvingSequences.
         TransactionManager manager = new TransactionManager(logContext, null, transactionTimeoutMs,
@@ -2277,6 +2277,69 @@ public class TransactionManagerTest {
         assertTrue(manager.shouldResetProducerStateAfterResolvingSequences());
     }
 
+    @Test
+    public void testRetryAbortTransaction() throws InterruptedException {
+        verifyCommitOrAbortTranscationRetriable(TransactionResult.ABORT, TransactionResult.ABORT);
+    }
+
+    @Test
+    public void testRetryCommitTransaction() throws InterruptedException {
+        verifyCommitOrAbortTranscationRetriable(TransactionResult.COMMIT, TransactionResult.COMMIT);
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testRetryAbortTransactionAfterCommitTimeout() throws InterruptedException {
+        verifyCommitOrAbortTranscationRetriable(TransactionResult.COMMIT, TransactionResult.ABORT);
+    }
+
+    @Test(expected = KafkaException.class)
+    public void testRetryCommitTransactionAfterAbortTimeout() throws InterruptedException {
+        verifyCommitOrAbortTranscationRetriable(TransactionResult.ABORT, TransactionResult.COMMIT);
+    }
+
+    private void verifyCommitOrAbortTranscationRetriable(TransactionResult firstTransactionResult,
+                                                         TransactionResult retryTransactionResult)
+            throws InterruptedException {
+        final long pid = 13131L;
+        final short epoch = 1;
+
+        doInitTransactions(pid, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartitionToTransaction(tp0);
+
+        accumulator.append(tp0, time.milliseconds(), "key".getBytes(),
+                "value".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT);
+
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, pid);
+
+        prepareProduceResponse(Errors.NONE, pid, epoch);
+        sender.run(time.milliseconds());  // send addPartitions.
+        sender.run(time.milliseconds());  // send produce request.
+
+        TransactionalRequestResult result = firstTransactionResult == TransactionResult.COMMIT ?
+                transactionManager.beginCommit() : transactionManager.beginAbort();
+        prepareEndTxnResponse(Errors.NONE, firstTransactionResult, pid, epoch, true);
+        sender.run(time.milliseconds());
+        assertFalse(result.isCompleted());
+
+        try {
+            result.await(MAX_BLOCK_TIMEOUT, TimeUnit.MILLISECONDS);
+            fail("Should have raised TimeoutException");
+        } catch (TimeoutException e) {
+        }
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
+        sender.run(time.milliseconds());
+        TransactionalRequestResult retryResult = retryTransactionResult == TransactionResult.COMMIT ?
+                transactionManager.beginCommit() : transactionManager.beginAbort();
+        assertEquals(retryResult, result); // check if cached result is reused.
+        prepareEndTxnResponse(Errors.NONE, retryTransactionResult, pid, epoch, false);
+        sender.run(time.milliseconds());
+        assertTrue(retryResult.isCompleted());
+        assertFalse(transactionManager.hasOngoingTransaction());
+    }
+
     private void verifyAddPartitionsFailsWithPartitionLevelError(final Errors error) throws InterruptedException {
         final long pid = 1L;
         final short epoch = 1;
@@ -2296,13 +2359,10 @@ public class TransactionManagerTest {
     }
 
     private void prepareAddPartitionsToTxn(final Map<TopicPartition, Errors> errors) {
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                AddPartitionsToTxnRequest request = (AddPartitionsToTxnRequest) body;
-                assertEquals(new HashSet<>(request.partitions()), new HashSet<>(errors.keySet()));
-                return true;
-            }
+        client.prepareResponse(body -> {
+            AddPartitionsToTxnRequest request = (AddPartitionsToTxnRequest) body;
+            assertEquals(new HashSet<>(request.partitions()), new HashSet<>(errors.keySet()));
+            return true;
         }, new AddPartitionsToTxnResponse(0, errors));
     }
 
@@ -2313,26 +2373,20 @@ public class TransactionManagerTest {
     private void prepareFindCoordinatorResponse(Errors error, boolean shouldDisconnect,
                                                 final CoordinatorType coordinatorType,
                                                 final String coordinatorKey) {
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
-                assertEquals(findCoordinatorRequest.coordinatorType(), coordinatorType);
-                assertEquals(findCoordinatorRequest.coordinatorKey(), coordinatorKey);
-                return true;
-            }
+        client.prepareResponse(body -> {
+            FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
+            assertEquals(findCoordinatorRequest.coordinatorType(), coordinatorType);
+            assertEquals(findCoordinatorRequest.coordinatorKey(), coordinatorKey);
+            return true;
         }, new FindCoordinatorResponse(error, brokerNode), shouldDisconnect);
     }
 
     private void prepareInitPidResponse(Errors error, boolean shouldDisconnect, long pid, short epoch) {
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
-                assertEquals(initProducerIdRequest.transactionalId(), transactionalId);
-                assertEquals(initProducerIdRequest.transactionTimeoutMs(), transactionTimeoutMs);
-                return true;
-            }
+        client.prepareResponse(body -> {
+            InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
+            assertEquals(initProducerIdRequest.transactionalId(), transactionalId);
+            assertEquals(initProducerIdRequest.transactionTimeoutMs(), transactionTimeoutMs);
+            return true;
         }, new InitProducerIdResponse(0, error, pid, epoch), shouldDisconnect);
     }
 
@@ -2344,22 +2398,19 @@ public class TransactionManagerTest {
         client.prepareResponse(produceRequestMatcher(pid, epoch), produceResponse(tp0, 0, error, 0));
     }
     private MockClient.RequestMatcher produceRequestMatcher(final long pid, final short epoch) {
-        return new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                ProduceRequest produceRequest = (ProduceRequest) body;
-                MemoryRecords records = produceRequest.partitionRecordsOrFail().get(tp0);
-                assertNotNull(records);
-                Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
-                assertTrue(batchIterator.hasNext());
-                MutableRecordBatch batch = batchIterator.next();
-                assertFalse(batchIterator.hasNext());
-                assertTrue(batch.isTransactional());
-                assertEquals(pid, batch.producerId());
-                assertEquals(epoch, batch.producerEpoch());
-                assertEquals(transactionalId, produceRequest.transactionalId());
-                return true;
-            }
+        return body -> {
+            ProduceRequest produceRequest = (ProduceRequest) body;
+            MemoryRecords records = produceRequest.partitionRecordsOrFail().get(tp0);
+            assertNotNull(records);
+            Iterator<MutableRecordBatch> batchIterator = records.batches().iterator();
+            assertTrue(batchIterator.hasNext());
+            MutableRecordBatch batch = batchIterator.next();
+            assertFalse(batchIterator.hasNext());
+            assertTrue(batch.isTransactional());
+            assertEquals(pid, batch.producerId());
+            assertEquals(epoch, batch.producerEpoch());
+            assertEquals(transactionalId, produceRequest.transactionalId());
+            return true;
         };
     }
 
@@ -2377,21 +2428,26 @@ public class TransactionManagerTest {
 
     private MockClient.RequestMatcher addPartitionsRequestMatcher(final TopicPartition topicPartition,
                                                                   final short epoch, final long pid) {
-        return new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                AddPartitionsToTxnRequest addPartitionsToTxnRequest = (AddPartitionsToTxnRequest) body;
-                assertEquals(pid, addPartitionsToTxnRequest.producerId());
-                assertEquals(epoch, addPartitionsToTxnRequest.producerEpoch());
-                assertEquals(singletonList(topicPartition), addPartitionsToTxnRequest.partitions());
-                assertEquals(transactionalId, addPartitionsToTxnRequest.transactionalId());
-                return true;
-            }
+        return body -> {
+            AddPartitionsToTxnRequest addPartitionsToTxnRequest = (AddPartitionsToTxnRequest) body;
+            assertEquals(pid, addPartitionsToTxnRequest.producerId());
+            assertEquals(epoch, addPartitionsToTxnRequest.producerEpoch());
+            assertEquals(singletonList(topicPartition), addPartitionsToTxnRequest.partitions());
+            assertEquals(transactionalId, addPartitionsToTxnRequest.transactionalId());
+            return true;
         };
     }
 
     private void prepareEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {
-        client.prepareResponse(endTxnMatcher(result, pid, epoch), new EndTxnResponse(0, error));
+        this.prepareEndTxnResponse(error, result, pid, epoch, false);
+    }
+
+    private void prepareEndTxnResponse(Errors error,
+                                       final TransactionResult result,
+                                       final long pid,
+                                       final short epoch,
+                                       final boolean shouldDisconnect) {
+        client.prepareResponse(endTxnMatcher(result, pid, epoch), new EndTxnResponse(0, error), shouldDisconnect);
     }
 
     private void sendEndTxnResponse(Errors error, final TransactionResult result, final long pid, final short epoch) {
@@ -2399,16 +2455,13 @@ public class TransactionManagerTest {
     }
 
     private MockClient.RequestMatcher endTxnMatcher(final TransactionResult result, final long pid, final short epoch) {
-        return new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                EndTxnRequest endTxnRequest = (EndTxnRequest) body;
-                assertEquals(transactionalId, endTxnRequest.transactionalId());
-                assertEquals(pid, endTxnRequest.producerId());
-                assertEquals(epoch, endTxnRequest.producerEpoch());
-                assertEquals(result, endTxnRequest.command());
-                return true;
-            }
+        return body -> {
+            EndTxnRequest endTxnRequest = (EndTxnRequest) body;
+            assertEquals(transactionalId, endTxnRequest.transactionalId());
+            assertEquals(pid, endTxnRequest.producerId());
+            assertEquals(epoch, endTxnRequest.producerEpoch());
+            assertEquals(result, endTxnRequest.command());
+            return true;
         };
     }
 
@@ -2416,16 +2469,13 @@ public class TransactionManagerTest {
                                                 final String consumerGroupId,
                                                 final long producerId,
                                                 final short producerEpoch) {
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                AddOffsetsToTxnRequest addOffsetsToTxnRequest = (AddOffsetsToTxnRequest) body;
-                assertEquals(consumerGroupId, addOffsetsToTxnRequest.consumerGroupId());
-                assertEquals(transactionalId, addOffsetsToTxnRequest.transactionalId());
-                assertEquals(producerId, addOffsetsToTxnRequest.producerId());
-                assertEquals(producerEpoch, addOffsetsToTxnRequest.producerEpoch());
-                return true;
-            }
+        client.prepareResponse(body -> {
+            AddOffsetsToTxnRequest addOffsetsToTxnRequest = (AddOffsetsToTxnRequest) body;
+            assertEquals(consumerGroupId, addOffsetsToTxnRequest.consumerGroupId());
+            assertEquals(transactionalId, addOffsetsToTxnRequest.transactionalId());
+            assertEquals(producerId, addOffsetsToTxnRequest.producerId());
+            assertEquals(producerEpoch, addOffsetsToTxnRequest.producerEpoch());
+            return true;
         }, new AddOffsetsToTxnResponse(0, error));
     }
 

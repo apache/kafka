@@ -18,15 +18,18 @@
 package org.apache.kafka.connect.transforms;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.connect.data.Decimal;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.data.Timestamp;
+import org.apache.kafka.connect.data.Values;
 import org.apache.kafka.connect.errors.DataException;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.After;
 import org.junit.Test;
 
+import java.math.BigDecimal;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -39,6 +42,7 @@ import static org.junit.Assert.assertTrue;
 public class CastTest {
     private final Cast<SourceRecord> xformKey = new Cast.Key<>();
     private final Cast<SourceRecord> xformValue = new Cast.Value<>();
+    private static final long MILLIS_PER_DAY = 24 * 60 * 60 * 1000;
 
     @After
     public void teardown() {
@@ -59,6 +63,11 @@ public class CastTest {
     @Test(expected = ConfigException.class)
     public void testConfigInvalidTargetType() {
         xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:array"));
+    }
+
+    @Test(expected = ConfigException.class)
+    public void testUnsupportedTargetType() {
+        xformKey.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "foo:bytes"));
     }
 
     @Test(expected = ConfigException.class)
@@ -169,6 +178,28 @@ public class CastTest {
 
         assertEquals(Schema.Type.STRING, transformed.valueSchema().type());
         assertEquals("42", transformed.value());
+    }
+
+    @Test
+    public void castWholeBigDecimalRecordValueWithSchemaString() {
+        BigDecimal bigDecimal = new BigDecimal(42);
+        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "string"));
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
+                Decimal.schema(bigDecimal.scale()), bigDecimal));
+
+        assertEquals(Schema.Type.STRING, transformed.valueSchema().type());
+        assertEquals("42", transformed.value());
+    }
+
+    @Test
+    public void castWholeDateRecordValueWithSchemaString() {
+        Date timestamp = new Date(MILLIS_PER_DAY + 1); // day + 1msec to get a timestamp formatting.
+        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "string"));
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", 0,
+                Timestamp.SCHEMA, timestamp));
+
+        assertEquals(Schema.Type.STRING, transformed.valueSchema().type());
+        assertEquals(Values.dateFormatFor(timestamp).format(timestamp), transformed.value());
     }
 
     @Test
@@ -292,7 +323,8 @@ public class CastTest {
 
     @Test
     public void castFieldsWithSchema() {
-        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32,optional:int32"));
+        Date day = new Date(MILLIS_PER_DAY);
+        xformValue.configure(Collections.singletonMap(Cast.SPEC_CONFIG, "int8:int16,int16:int32,int32:int64,int64:boolean,float32:float64,float64:boolean,boolean:int8,string:int32,bigdecimal:string,date:string,optional:int32"));
 
         // Include an optional fields and fields with defaults to validate their values are passed through properly
         SchemaBuilder builder = SchemaBuilder.struct();
@@ -305,6 +337,8 @@ public class CastTest {
         builder.field("float64", SchemaBuilder.float64().defaultValue(-1.125).build());
         builder.field("boolean", Schema.BOOLEAN_SCHEMA);
         builder.field("string", Schema.STRING_SCHEMA);
+        builder.field("bigdecimal", Decimal.schema(new BigDecimal(42).scale()));
+        builder.field("date", Timestamp.SCHEMA);
         builder.field("optional", Schema.OPTIONAL_FLOAT32_SCHEMA);
         builder.field("timestamp", Timestamp.SCHEMA);
         Schema supportedTypesSchema = builder.build();
@@ -317,6 +351,8 @@ public class CastTest {
         recordValue.put("float32", 32.f);
         recordValue.put("float64", -64.);
         recordValue.put("boolean", true);
+        recordValue.put("bigdecimal", new BigDecimal(42));
+        recordValue.put("date", day);
         recordValue.put("string", "42");
         recordValue.put("timestamp", new Date(0));
         // optional field intentionally omitted
@@ -335,6 +371,8 @@ public class CastTest {
         assertEquals(true, ((Struct) transformed.value()).schema().field("float64").schema().defaultValue());
         assertEquals((byte) 1, ((Struct) transformed.value()).get("boolean"));
         assertEquals(42, ((Struct) transformed.value()).get("string"));
+        assertEquals("42", ((Struct) transformed.value()).get("bigdecimal"));
+        assertEquals(Values.dateFormatFor(day).format(day), ((Struct) transformed.value()).get("date"));
         assertEquals(new Date(0), ((Struct) transformed.value()).get("timestamp"));
         assertNull(((Struct) transformed.value()).get("optional"));
 
@@ -347,6 +385,8 @@ public class CastTest {
         assertEquals(Schema.BOOLEAN_SCHEMA.type(), transformedSchema.field("float64").schema().type());
         assertEquals(Schema.INT8_SCHEMA.type(), transformedSchema.field("boolean").schema().type());
         assertEquals(Schema.INT32_SCHEMA.type(), transformedSchema.field("string").schema().type());
+        assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("bigdecimal").schema().type());
+        assertEquals(Schema.STRING_SCHEMA.type(), transformedSchema.field("date").schema().type());
         assertEquals(Schema.OPTIONAL_INT32_SCHEMA.type(), transformedSchema.field("optional").schema().type());
         // The following fields are not changed
         assertEquals(Timestamp.SCHEMA.type(), transformedSchema.field("timestamp").schema().type());

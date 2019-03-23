@@ -17,14 +17,14 @@
 package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
-
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
-import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
+import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorPluginsResource;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
@@ -45,10 +45,13 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.servlets.CrossOriginFilter;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.glassfish.jersey.server.ResourceConfig;
+import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.servlet.ServletContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.servlet.DispatcherType;
+import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -58,9 +61,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import javax.servlet.DispatcherType;
-import javax.ws.rs.core.UriBuilder;
 
 /**
  * Embedded server for the REST API that provides the control plane for Kafka Connect workers.
@@ -77,7 +77,7 @@ public class RestServer {
     private final WorkerConfig config;
     private Server jettyServer;
 
-    private List<ConnectRestExtension> connectRestExtensions = Collections.EMPTY_LIST;
+    private List<ConnectRestExtension> connectRestExtensions = Collections.emptyList();
 
     /**
      * Create a REST server for this herder using the specified configs.
@@ -92,6 +92,7 @@ public class RestServer {
         createConnectors(listeners);
     }
 
+    @SuppressWarnings("deprecation")
     List<String> parseListeners() {
         List<String> listeners = config.getList(WorkerConfig.LISTENERS_CONFIG);
         if (listeners == null || listeners.size() == 0) {
@@ -159,19 +160,20 @@ public class RestServer {
         return connector;
     }
 
-    public void start(Herder herder) {
+    public void start(HerderProvider herderProvider, Plugins plugins) {
         log.info("Starting REST server");
 
         ResourceConfig resourceConfig = new ResourceConfig();
         resourceConfig.register(new JacksonJsonProvider());
 
-        resourceConfig.register(new RootResource(herder));
-        resourceConfig.register(new ConnectorsResource(herder, config));
-        resourceConfig.register(new ConnectorPluginsResource(herder));
+        resourceConfig.register(new RootResource(herderProvider));
+        resourceConfig.register(new ConnectorsResource(herderProvider, config));
+        resourceConfig.register(new ConnectorPluginsResource(herderProvider));
 
         resourceConfig.register(ConnectExceptionMapper.class);
+        resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
 
-        registerRestExtensions(herder, resourceConfig);
+        registerRestExtensions(herderProvider, plugins, resourceConfig);
 
         ServletContainer servletContainer = new ServletContainer(resourceConfig);
         ServletHolder servletHolder = new ServletHolder(servletContainer);
@@ -217,7 +219,9 @@ public class RestServer {
         log.info("REST server listening at " + jettyServer.getURI() + ", advertising URL " + advertisedUrl());
     }
 
-
+    public URI serverUrl() {
+        return jettyServer.getURI();
+    }
 
     public void stop() {
         log.info("Stopping REST server");
@@ -261,7 +265,7 @@ public class RestServer {
         Integer advertisedPort = config.getInt(WorkerConfig.REST_ADVERTISED_PORT_CONFIG);
         if (advertisedPort != null)
             builder.port(advertisedPort);
-        else if (serverConnector != null)
+        else if (serverConnector != null && serverConnector.getPort() > 0)
             builder.port(serverConnector.getPort());
 
         log.info("Advertised URI: {}", builder.build());
@@ -299,15 +303,15 @@ public class RestServer {
         return null;
     }
 
-    void registerRestExtensions(Herder herder, ResourceConfig resourceConfig) {
-        connectRestExtensions = herder.plugins().newPlugins(
+    void registerRestExtensions(HerderProvider provider, Plugins plugins, ResourceConfig resourceConfig) {
+        connectRestExtensions = plugins.newPlugins(
             config.getList(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG),
             config, ConnectRestExtension.class);
 
         ConnectRestExtensionContext connectRestExtensionContext =
             new ConnectRestExtensionContextImpl(
                 new ConnectRestConfigurable(resourceConfig),
-                new ConnectClusterStateImpl(herder)
+                new ConnectClusterStateImpl(provider)
             );
         for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
             connectRestExtension.register(connectRestExtensionContext);

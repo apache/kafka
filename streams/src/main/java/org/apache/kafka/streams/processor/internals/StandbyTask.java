@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
@@ -38,7 +37,6 @@ import java.util.Map;
 public class StandbyTask extends AbstractTask {
 
     private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
-    private final StandbyContextImpl standbyContext;
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -61,7 +59,7 @@ public class StandbyTask extends AbstractTask {
                 final StateDirectory stateDirectory) {
         super(id, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
 
-        processorContext = standbyContext = new StandbyContextImpl(id, config, stateMgr, metrics);
+        processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
     }
 
     @Override
@@ -69,7 +67,7 @@ public class StandbyTask extends AbstractTask {
         log.trace("Initializing state stores");
         registerStateStores();
         checkpointedOffsets = Collections.unmodifiableMap(stateMgr.checkpointed());
-        processorContext.initialized();
+        processorContext.initialize();
         taskInitialized = true;
         return true;
     }
@@ -121,7 +119,7 @@ public class StandbyTask extends AbstractTask {
 
     private void flushAndCheckpointState() {
         stateMgr.flush();
-        stateMgr.checkpoint(Collections.<TopicPartition, Long>emptyMap());
+        stateMgr.checkpoint(Collections.emptyMap());
     }
 
     /**
@@ -129,8 +127,6 @@ public class StandbyTask extends AbstractTask {
      * - {@link #commit()}
      * - close state
      * <pre>
-     * @param clean ignored by {@code StandbyTask} as it can always try to close cleanly
-     *              (ie, commit, flush, and write checkpoint file)
      * @param isZombie ignored by {@code StandbyTask} as it can never be a zombie
      */
     @Override
@@ -140,14 +136,12 @@ public class StandbyTask extends AbstractTask {
             return;
         }
         log.debug("Closing");
-        boolean committedSuccessfully = false;
         try {
             if (clean) {
                 commit();
-                committedSuccessfully = true;
             }
         } finally {
-            closeStateManager(committedSuccessfully);
+            closeStateManager(true);
         }
 
         taskClosed = true;
@@ -171,16 +165,13 @@ public class StandbyTask extends AbstractTask {
         final long limit = stateMgr.offsetLimit(partition);
 
         long lastOffset = -1L;
-        final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>(records.size());
+        final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>(records.size());
         final List<ConsumerRecord<byte[], byte[]>> remainingRecords = new ArrayList<>();
 
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             if (record.offset() < limit) {
-                restoreRecords.add(KeyValue.pair(record.key(), record.value()));
+                restoreRecords.add(record);
                 lastOffset = record.offset();
-                // ideally, we'd use the stream time at the time of the change logging, but we'll settle for
-                // record timestamp for now.
-                standbyContext.updateStreamTime(record.timestamp());
             } else {
                 remainingRecords.add(record);
             }

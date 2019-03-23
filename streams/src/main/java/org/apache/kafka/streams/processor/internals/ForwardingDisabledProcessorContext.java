@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 
@@ -85,10 +86,18 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     }
 
     @Override
+    @Deprecated
     public Cancellable schedule(final long intervalMs,
                                 final PunctuationType type,
                                 final Punctuator callback) {
         return delegate.schedule(intervalMs, type, callback);
+    }
+
+    @Override
+    public Cancellable schedule(final Duration interval,
+                                final PunctuationType type,
+                                final Punctuator callback) throws IllegalArgumentException {
+        return delegate.schedule(interval, type, callback);
     }
 
     @Override
@@ -101,14 +110,14 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
         throw new StreamsException("ProcessorContext#forward() not supported.");
     }
 
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         throw new StreamsException("ProcessorContext#forward() not supported.");
     }
 
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final String childName) {
         throw new StreamsException("ProcessorContext#forward() not supported.");
     }

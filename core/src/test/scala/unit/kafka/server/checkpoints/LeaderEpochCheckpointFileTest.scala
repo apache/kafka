@@ -24,7 +24,6 @@ import org.junit.Assert._
 import org.junit.Test
 import org.scalatest.junit.JUnitSuite
 
-
 class LeaderEpochCheckpointFileTest extends JUnitSuite with Logging{
 
   @Test

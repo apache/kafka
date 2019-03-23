@@ -34,8 +34,7 @@ public class StreamSinkNode<K, V> extends StreamsGraphNode {
                           final TopicNameExtractor<K, V> topicNameExtractor,
                           final ProducedInternal<K, V> producedInternal) {
 
-        super(nodeName,
-              false);
+        super(nodeName);
 
         this.topicNameExtractor = topicNameExtractor;
         this.producedInternal = producedInternal;
@@ -58,6 +57,7 @@ public class StreamSinkNode<K, V> extends StreamsGraphNode {
         final String[] parentNames = parentNodeNames();
 
         if (partitioner == null && keySerializer instanceof WindowedSerializer) {
+            @SuppressWarnings("unchecked")
             final StreamPartitioner<K, V> windowedPartitioner = (StreamPartitioner<K, V>) new WindowedStreamPartitioner<Object, V>((WindowedSerializer) keySerializer);
             topologyBuilder.addSink(nodeName(), topicNameExtractor, keySerializer, valSerializer, windowedPartitioner, parentNames);
         } else {

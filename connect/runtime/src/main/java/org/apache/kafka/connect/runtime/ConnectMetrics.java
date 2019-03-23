@@ -232,7 +232,7 @@ public class ConnectMetrics {
      * the {@link Metrics} class, so that the sensor names are made to be unique (based on the group name)
      * and so the sensors are removed when this group is {@link #close() closed}.
      */
-    public class MetricGroup {
+    public class MetricGroup implements AutoCloseable {
         private final MetricGroupId groupId;
         private final Set<String> sensorNames = new HashSet<>();
         private final String sensorPrefix;

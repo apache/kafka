@@ -38,7 +38,9 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -54,8 +56,10 @@ import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class ProcessorTopologyTest {
 
@@ -345,6 +349,32 @@ public class ProcessorTopologyTest {
     }
 
     @Test
+    public void shouldConsiderModifiedTimeStampsForMultipleProcessors() {
+        final int partition = 10;
+        driver = new TopologyTestDriver(createMultiProcessorTimestampTopology(partition), props);
+
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1", 10L));
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition, 10L);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1", partition, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition, 15L);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1", partition, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", partition, 12L);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key1", "value1", partition, 22L);
+        assertNoOutputRecord(OUTPUT_TOPIC_1);
+        assertNoOutputRecord(OUTPUT_TOPIC_2);
+
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2", 20L));
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition, 20L);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2", partition, 30L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition, 25L);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2", partition, 30L);
+        assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", partition, 22L);
+        assertNextOutputRecord(OUTPUT_TOPIC_2, "key2", "value2", partition, 32L);
+        assertNoOutputRecord(OUTPUT_TOPIC_1);
+        assertNoOutputRecord(OUTPUT_TOPIC_2);
+    }
+
+    @Test
     public void shouldConsiderHeaders() {
         final int partition = 10;
         driver = new TopologyTestDriver(createSimpleTopology(partition), props);
@@ -365,6 +395,58 @@ public class ProcessorTopologyTest {
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key1", "value1", HEADERS, 10L);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key2", "value2", HEADERS, 20L);
         assertNextOutputRecord(OUTPUT_TOPIC_1, "key3", "value3", HEADERS, 30L);
+    }
+
+    @Test
+    public void statelessTopologyShouldNotHavePersistentStore() {
+        final TopologyWrapper topology = new TopologyWrapper();
+        final ProcessorTopology processorTopology = topology.getInternalBuilder("anyAppId").build();
+        assertFalse(processorTopology.hasPersistentLocalStore());
+        assertFalse(processorTopology.hasPersistentGlobalStore());
+    }
+
+    @Test
+    public void inMemoryStoreShouldNotResultInPersistentLocalStore() {
+        final ProcessorTopology processorTopology = createLocalStoreTopology(Stores.inMemoryKeyValueStore("my-store"));
+        assertFalse(processorTopology.hasPersistentLocalStore());
+    }
+
+    @Test
+    public void persistentLocalStoreShouldBeDetected() {
+        final ProcessorTopology processorTopology = createLocalStoreTopology(Stores.persistentKeyValueStore("my-store"));
+        assertTrue(processorTopology.hasPersistentLocalStore());
+    }
+
+    @Test
+    public void inMemoryStoreShouldNotResultInPersistentGlobalStore() {
+        final ProcessorTopology processorTopology = createGlobalStoreTopology(Stores.inMemoryKeyValueStore("my-store"));
+        assertFalse(processorTopology.hasPersistentGlobalStore());
+    }
+
+    @Test
+    public void persistentGlobalStoreShouldBeDetected() {
+        final ProcessorTopology processorTopology = createGlobalStoreTopology(Stores.persistentKeyValueStore("my-store"));
+        assertTrue(processorTopology.hasPersistentGlobalStore());
+    }
+
+    private ProcessorTopology createLocalStoreTopology(final KeyValueBytesStoreSupplier storeSupplier) {
+        final TopologyWrapper topology = new TopologyWrapper();
+        final String processor = "processor";
+        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
+                Stores.keyValueStoreBuilder(storeSupplier, Serdes.String(), Serdes.String());
+        topology.addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic")
+                .addProcessor(processor, () -> new StatefulProcessor(storeSupplier.name()), "source")
+                .addStateStore(storeBuilder, processor);
+        return topology.getInternalBuilder("anyAppId").build();
+    }
+
+    private ProcessorTopology createGlobalStoreTopology(final KeyValueBytesStoreSupplier storeSupplier) {
+        final TopologyWrapper topology = new TopologyWrapper();
+        final StoreBuilder<KeyValueStore<String, String>> storeBuilder =
+                Stores.keyValueStoreBuilder(storeSupplier, Serdes.String(), Serdes.String()).withLoggingDisabled();
+        topology.addGlobalStore(storeBuilder, "global", STRING_DESERIALIZER, STRING_DESERIALIZER, "topic", "processor",
+                define(new StatefulProcessor(storeSupplier.name())));
+        return topology.getInternalBuilder("anyAppId").build();
     }
 
     private void assertNextOutputRecord(final String topic,
@@ -416,12 +498,7 @@ public class ProcessorTopologyTest {
     }
 
     private StreamPartitioner<Object, Object> constantPartitioner(final Integer partition) {
-        return new StreamPartitioner<Object, Object>() {
-            @Override
-            public Integer partition(final String topic, final Object key, final Object value, final int numPartitions) {
-                return partition;
-            }
-        };
+        return (topic, key, value, numPartitions) -> partition;
     }
 
     private Topology createSimpleTopology(final int partition) {
@@ -436,6 +513,16 @@ public class ProcessorTopologyTest {
             .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
             .addProcessor("processor", define(new TimestampProcessor()), "source")
             .addSink("sink", OUTPUT_TOPIC_1, constantPartitioner(partition), "processor");
+    }
+
+    private Topology createMultiProcessorTimestampTopology(final int partition) {
+        return topology
+            .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+            .addProcessor("processor", define(new FanOutTimestampProcessor("child1", "child2")), "source")
+            .addProcessor("child1", define(new ForwardingProcessor()), "processor")
+            .addProcessor("child2", define(new TimestampProcessor()), "processor")
+            .addSink("sink1", OUTPUT_TOPIC_1, constantPartitioner(partition), "child1")
+            .addSink("sink2", OUTPUT_TOPIC_2, constantPartitioner(partition), "child2");
     }
 
     private Topology createMultiplexingTopology() {
@@ -531,6 +618,25 @@ public class ProcessorTopologyTest {
         }
     }
 
+    protected static class FanOutTimestampProcessor extends AbstractProcessor<String, String> {
+        private final String firstChild;
+        private final String secondChild;
+
+        FanOutTimestampProcessor(final String firstChild,
+                                 final String secondChild) {
+            this.firstChild = firstChild;
+            this.secondChild = secondChild;
+        }
+
+        @Override
+        public void process(final String key, final String value) {
+            context().forward(key, value);
+            context().forward(key, value, To.child(firstChild).withTimestamp(context().timestamp() + 5));
+            context().forward(key, value, To.child(secondChild));
+            context().forward(key, value, To.all().withTimestamp(context().timestamp() + 2));
+        }
+    }
+
     protected static class AddHeaderProcessor extends AbstractProcessor<String, String> {
         @Override
         public void process(final String key, final String value) {
@@ -560,7 +666,7 @@ public class ProcessorTopologyTest {
             this.numChildren = numChildren;
         }
 
-        @SuppressWarnings("deprecation")
+        @SuppressWarnings("deprecation") // need to test deprecated code until removed
         @Override
         public void process(final String key, final String value) {
             for (int i = 0; i != numChildren; ++i) {
@@ -580,7 +686,7 @@ public class ProcessorTopologyTest {
             this.numChildren = numChildren;
         }
 
-        @SuppressWarnings("deprecation")
+        @SuppressWarnings("deprecation") // need to test deprecated code until removed
         @Override
         public void process(final String key, final String value) {
             for (int i = 0; i != numChildren; ++i) {
@@ -611,20 +717,10 @@ public class ProcessorTopologyTest {
         public void process(final String key, final String value) {
             store.put(key, value);
         }
-
-        @Override
-        public void close() {
-            store.close();
-        }
     }
 
     private <K, V> ProcessorSupplier<K, V> define(final Processor<K, V> processor) {
-        return new ProcessorSupplier<K, V>() {
-            @Override
-            public Processor<K, V> get() {
-                return processor;
-            }
-        };
+        return () -> processor;
     }
 
     /**
@@ -636,11 +732,13 @@ public class ProcessorTopologyTest {
 
         @Override
         public long extract(final ConsumerRecord<Object, Object> record, final long previousTimestamp) {
-            if (record.value().toString().matches(".*@[0-9]+"))
+            if (record.value().toString().matches(".*@[0-9]+")) {
                 return Long.parseLong(record.value().toString().split("@")[1]);
+            }
 
-            if (record.timestamp() >= 0L)
+            if (record.timestamp() >= 0L) {
                 return record.timestamp();
+            }
 
             return DEFAULT_TIMESTAMP;
         }

@@ -89,6 +89,7 @@ public class Crc32 implements Checksum {
         crc = 0xffffffff;
     }
 
+    @SuppressWarnings("fallthrough")
     @Override
     public void update(byte[] b, int off, int len) {
         if (off < 0 || len < 0 || off > b.length - len)

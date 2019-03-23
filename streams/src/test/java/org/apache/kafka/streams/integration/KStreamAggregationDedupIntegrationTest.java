@@ -31,13 +31,13 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedStream;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.kstream.Serialized;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
@@ -52,6 +52,8 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+
+import static java.time.Duration.ofMillis;
 
 /**
  * Similar to KStreamAggregationIntegrationTest but with dedupping enabled
@@ -77,7 +79,6 @@ public class KStreamAggregationDedupIntegrationTest {
     private Reducer<String> reducer;
     private KStream<Integer, String> stream;
 
-
     @Before
     public void before() throws InterruptedException {
         testNo++;
@@ -95,10 +96,7 @@ public class KStreamAggregationDedupIntegrationTest {
 
         final KeyValueMapper<Integer, String, String> mapper = MockMapper.selectValueMapper();
         stream = builder.stream(streamOneInput, Consumed.with(Serdes.Integer(), Serdes.String()));
-        groupedStream = stream
-            .groupBy(
-                mapper,
-                Serialized.with(Serdes.String(), Serdes.String()));
+        groupedStream = stream.groupBy(mapper, Grouped.with(Serdes.String(), Serdes.String()));
 
         reducer = (value1, value2) -> value1 + ":" + value2;
     }
@@ -144,7 +142,7 @@ public class KStreamAggregationDedupIntegrationTest {
         produceMessages(secondBatchTimestamp);
 
         groupedStream
-            .windowedBy(TimeWindows.of(500L))
+            .windowedBy(TimeWindows.of(ofMillis(500L)))
             .reduce(reducer, Materialized.as("reduce-time-windows"))
             .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start())
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
@@ -178,8 +176,8 @@ public class KStreamAggregationDedupIntegrationTest {
         produceMessages(timestamp);
         produceMessages(timestamp);
 
-        stream.groupByKey(Serialized.with(Serdes.Integer(), Serdes.String()))
-            .windowedBy(TimeWindows.of(500L))
+        stream.groupByKey(Grouped.with(Serdes.Integer(), Serdes.String()))
+            .windowedBy(TimeWindows.of(ofMillis(500L)))
             .count(Materialized.as("count-windows"))
             .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start())
             .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));

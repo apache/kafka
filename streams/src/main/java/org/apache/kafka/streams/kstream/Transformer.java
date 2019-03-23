@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import java.time.Duration;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
@@ -29,7 +30,7 @@ import org.apache.kafka.streams.processor.To;
  * This is a stateful record-by-record operation, i.e, {@link #transform(Object, Object)} is invoked individually for
  * each record of a stream and can access and modify a state that is available beyond a single call of
  * {@link #transform(Object, Object)} (cf. {@link KeyValueMapper} for stateless record transformation).
- * Additionally, this {@code Transformer} can {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule}
+ * Additionally, this {@code Transformer} can {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) schedule}
  * a method to be {@link Punctuator#punctuate(long) called periodically} with the provided context.
  * <p>
  * Use {@link TransformerSupplier} to provide new instances of {@code Transformer} to Kafka Stream's runtime.
@@ -55,7 +56,7 @@ public interface Transformer<K, V, R> {
      * framework may later re-use the transformer by calling {@link #init(ProcessorContext)} again.
      * <p>
      * The provided {@link ProcessorContext context} can be used to access topology and record meta data, to
-     * {@link ProcessorContext#schedule(long, PunctuationType, Punctuator) schedule} a method to be
+     * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) schedule} a method to be
      * {@link Punctuator#punctuate(long) called periodically} and to access attached {@link StateStore}s.
      * <p>
      * Note, that {@link ProcessorContext} is updated in the background with the current record's meta data.
@@ -71,9 +72,13 @@ public interface Transformer<K, V, R> {
      * attached} to this operator can be accessed and modified
      * arbitrarily (cf. {@link ProcessorContext#getStateStore(String)}).
      * <p>
-     * If more than one output record should be forwarded downstream {@link ProcessorContext#forward(Object, Object)}
+     * If only one record should be forward downstream, {@code transform} can return a new {@link KeyValue}. If
+     * more than one output record should be forwarded downstream, {@link ProcessorContext#forward(Object, Object)}
      * and {@link ProcessorContext#forward(Object, Object, To)} can be used.
-     * If record should not be forwarded downstream, {@code transform} can return {@code null}.
+     * If no record should be forwarded downstream, {@code transform} can return {@code null}.
+     *
+     * Note that returning a new {@link KeyValue} is merely for convenience. The same can be achieved by using
+     * {@link ProcessorContext#forward(Object, Object)} and returning {@code null}.
      *
      * @param key the key for the record
      * @param value the value for the record

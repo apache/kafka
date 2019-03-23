@@ -44,14 +44,16 @@ import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.Topology.AutoOffsetReset;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("unchecked")
 public class InternalStreamsBuilderTest {
 
     private static final String APP_ID = "app-id";
@@ -59,11 +61,7 @@ public class InternalStreamsBuilderTest {
     private final InternalStreamsBuilder builder = new InternalStreamsBuilder(new InternalTopologyBuilder());
     private final ConsumedInternal<String, String> consumed = new ConsumedInternal<>();
     private final String storePrefix = "prefix-";
-    private final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(Materialized.as("test-store"));
-
-    {
-        materialized.generateStoreNameIfNeeded(builder, storePrefix);
-    }
+    private final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(Materialized.as("test-store"), builder, storePrefix);
 
     @Test
     public void testNewName() {
@@ -122,14 +120,13 @@ public class InternalStreamsBuilderTest {
         merged.groupByKey().count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("my-table"));
         builder.buildAndOptimizeTopology();
         final Map<String, List<String>> actual = builder.internalTopologyBuilder.stateStoreNameToSourceTopics();
-        assertEquals(Utils.mkList("topic-1", "topic-2", "topic-3"), actual.get("my-table"));
+        assertEquals(asList("topic-1", "topic-2", "topic-3"), actual.get("my-table"));
     }
 
     @Test
-    public void shouldStillMaterializeSourceKTableIfMaterializedIsntQueryable() {
+    public void shouldNotMaterializeSourceKTableIfNotRequired() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(Materialized.with(null, null));
-        materializedInternal.generateStoreNameIfNeeded(builder, storePrefix);
+            new MaterializedInternal<>(Materialized.with(null, null), builder, storePrefix);
         final KTable table1 = builder.table("topic2", consumed, materializedInternal);
 
         builder.buildAndOptimizeTopology();
@@ -137,20 +134,15 @@ public class InternalStreamsBuilderTest {
             .rewriteTopology(new StreamsConfig(StreamsTestUtils.getStreamsConfig(APP_ID)))
             .build(null);
 
-        assertEquals(1, topology.stateStores().size());
-        final String storeName = "prefix-STATE-STORE-0000000000";
-        assertEquals(storeName, topology.stateStores().get(0).name());
-
-        assertEquals(1, topology.storeToChangelogTopic().size());
-        assertEquals("app-id-prefix-STATE-STORE-0000000000-changelog", topology.storeToChangelogTopic().get(storeName));
+        assertEquals(0, topology.stateStores().size());
+        assertEquals(0, topology.storeToChangelogTopic().size());
         assertNull(table1.queryableStoreName());
     }
     
     @Test
     public void shouldBuildGlobalTableWithNonQueryableStoreName() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(Materialized.with(null, null));
-        materializedInternal.generateStoreNameIfNeeded(builder, storePrefix);
+            new MaterializedInternal<>(Materialized.with(null, null), builder, storePrefix);
 
         final GlobalKTable<String, String> table1 = builder.globalTable("topic2", consumed, materializedInternal);
 
@@ -160,8 +152,7 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldBuildGlobalTableWithQueryaIbleStoreName() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(Materialized.as("globalTable"));
-        materializedInternal.generateStoreNameIfNeeded(builder, storePrefix);
+            new MaterializedInternal<>(Materialized.as("globalTable"), builder, storePrefix);
         final GlobalKTable<String, String> table1 = builder.globalTable("topic2", consumed, materializedInternal);
 
         assertEquals("globalTable", table1.queryableStoreName());
@@ -170,8 +161,7 @@ public class InternalStreamsBuilderTest {
     @Test
     public void shouldBuildSimpleGlobalTableTopology() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(Materialized.as("globalTable"));
-        materializedInternal.generateStoreNameIfNeeded(builder, storePrefix);
+            new MaterializedInternal<>(Materialized.as("globalTable"), builder, storePrefix);
         builder.globalTable("table",
                             consumed,
             materializedInternal);
@@ -202,14 +192,12 @@ public class InternalStreamsBuilderTest {
     public void shouldBuildGlobalTopologyWithAllGlobalTables() {
         {
             final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
-                new MaterializedInternal<>(Materialized.as("global1"));
-            materializedInternal.generateStoreNameIfNeeded(builder, storePrefix);
+                new MaterializedInternal<>(Materialized.as("global1"), builder, storePrefix);
             builder.globalTable("table", consumed, materializedInternal);
         }
         {
             final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
-                new MaterializedInternal<>(Materialized.as("global2"));
-            materializedInternal.generateStoreNameIfNeeded(builder, storePrefix);
+                new MaterializedInternal<>(Materialized.as("global2"), builder, storePrefix);
             builder.globalTable("table2", consumed, materializedInternal);
         }
 
@@ -223,18 +211,15 @@ public class InternalStreamsBuilderTest {
         final String two = "globalTable2";
 
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(Materialized.as(one));
-        materializedInternal.generateStoreNameIfNeeded(builder, storePrefix);
+            new MaterializedInternal<>(Materialized.as(one), builder, storePrefix);
         final GlobalKTable<String, String> globalTable = builder.globalTable("table", consumed, materializedInternal);
 
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal2 =
-            new MaterializedInternal<>(Materialized.as(two));
-        materializedInternal2.generateStoreNameIfNeeded(builder, storePrefix);
+            new MaterializedInternal<>(Materialized.as(two), builder, storePrefix);
         final GlobalKTable<String, String> globalTable2 = builder.globalTable("table2", consumed, materializedInternal2);
 
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternalNotGlobal =
-            new MaterializedInternal<>(Materialized.as("not-global"));
-        materializedInternalNotGlobal.generateStoreNameIfNeeded(builder, storePrefix);
+            new MaterializedInternal<>(Materialized.as("not-global"), builder, storePrefix);
         builder.table("not-global", consumed, materializedInternalNotGlobal);
 
         final KeyValueMapper<String, String, String> kvMapper = (key, value) -> value;
@@ -264,8 +249,7 @@ public class InternalStreamsBuilderTest {
         final KStream<String, String> playEvents = builder.stream(Collections.singleton("events"), consumed);
 
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(Materialized.as("table-store"));
-        materializedInternal.generateStoreNameIfNeeded(builder, storePrefix);
+            new MaterializedInternal<>(Materialized.as("table-store"), builder, storePrefix);
         final KTable<String, String> table = builder.table("table-topic", consumed, materializedInternal);
 
 

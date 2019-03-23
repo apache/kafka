@@ -30,10 +30,12 @@ import org.apache.kafka.common.errors.DelegationTokenDisabledException;
 import org.apache.kafka.common.errors.DelegationTokenExpiredException;
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException;
 import org.apache.kafka.common.errors.DelegationTokenOwnerMismatchException;
+import org.apache.kafka.common.errors.FencedLeaderEpochException;
 import org.apache.kafka.common.errors.ListenerNotFoundException;
 import org.apache.kafka.common.errors.FetchSessionIdNotFoundException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
+import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.IllegalSaslStateException;
@@ -58,6 +60,7 @@ import org.apache.kafka.common.errors.InvalidTxnTimeoutException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
+import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
@@ -65,10 +68,12 @@ import org.apache.kafka.common.errors.NotEnoughReplicasAfterAppendException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.NotLeaderForPartitionException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
+import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.ReassignmentInProgressException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
@@ -84,14 +89,17 @@ import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.TransactionCoordinatorFencedException;
+import org.apache.kafka.common.errors.UnknownLeaderEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownProducerIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedByAuthenticationException;
+import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -116,7 +124,7 @@ public enum Errors {
     NONE(0, null, message -> null),
     OFFSET_OUT_OF_RANGE(1, "The requested offset is not within the range of offsets maintained by the server.",
             OffsetOutOfRangeException::new),
-    CORRUPT_MESSAGE(2, "This message has failed its CRC checksum, exceeds the valid size, or is otherwise corrupt.",
+    CORRUPT_MESSAGE(2, "This message has failed its CRC checksum, exceeds the valid size, has a null key for a compacted topic, or is otherwise corrupt.",
             CorruptRecordException::new),
     UNKNOWN_TOPIC_OR_PARTITION(3, "This server does not host this topic-partition.",
             UnknownTopicOrPartitionException::new),
@@ -278,7 +286,23 @@ public enum Errors {
             "metadata request was processed.",
             ListenerNotFoundException::new),
     TOPIC_DELETION_DISABLED(73, "Topic deletion is disabled.",
-            TopicDeletionDisabledException::new);
+            TopicDeletionDisabledException::new),
+    FENCED_LEADER_EPOCH(74, "The leader epoch in the request is older than the epoch on the broker",
+            FencedLeaderEpochException::new),
+    UNKNOWN_LEADER_EPOCH(75, "The leader epoch in the request is newer than the epoch on the broker",
+            UnknownLeaderEpochException::new),
+    UNSUPPORTED_COMPRESSION_TYPE(76, "The requesting client does not support the compression type of given partition.",
+            UnsupportedCompressionTypeException::new),
+    STALE_BROKER_EPOCH(77, "Broker epoch has changed",
+            StaleBrokerEpochException::new),
+    OFFSET_NOT_AVAILABLE(78, "The leader high watermark has not caught up from a recent leader " +
+            "election so the offsets cannot be guaranteed to be monotonically increasing",
+            OffsetNotAvailableException::new),
+    MEMBER_ID_REQUIRED(79, "The group member needs to have a valid member id before actually entering a consumer group",
+            MemberIdRequiredException::new),
+    PREFERRED_LEADER_NOT_AVAILABLE(80, "The preferred leader was not available",
+            PreferredLeaderNotAvailableException::new),
+    GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.", GroupMaxSizeReachedException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
@@ -287,7 +311,10 @@ public enum Errors {
 
     static {
         for (Errors error : Errors.values()) {
-            codeToError.put(error.code(), error);
+            if (codeToError.put(error.code(), error) != null)
+                throw new ExceptionInInitializerError("Code " + error.code() + " for error " +
+                        error + " has already been used");
+
             if (error.exception != null)
                 classToError.put(error.exception.getClass(), error);
         }

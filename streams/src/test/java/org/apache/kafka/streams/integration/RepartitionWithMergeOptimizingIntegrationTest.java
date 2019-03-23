@@ -18,6 +18,8 @@
 package org.apache.kafka.streams.integration;
 
 
+import java.time.Duration;
+import kafka.utils.MockTime;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -45,11 +47,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
-import kafka.utils.MockTime;
 
 import static org.junit.Assert.assertEquals;
 
@@ -168,7 +167,7 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
         final List<KeyValue<String, String>> expectedStringCountKeyValues = Arrays.asList(KeyValue.pair("A", "6"), KeyValue.pair("B", "6"), KeyValue.pair("C", "6"));
         IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerConfig2, COUNT_STRING_TOPIC, expectedStringCountKeyValues);
 
-        streams.close(5, TimeUnit.SECONDS);
+        streams.close(Duration.ofSeconds(5));
     }
 
 
@@ -214,11 +213,11 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
                                                               + "    Processor: KSTREAM-FILTER-0000000021 (stores: [])\n"
                                                               + "      --> KSTREAM-SINK-0000000020\n"
                                                               + "      <-- KSTREAM-MERGE-0000000004\n"
-                                                              + "    Sink: KSTREAM-SINK-0000000020 (topic: KSTREAM-MERGE-0000000004-optimized-repartition)\n"
+                                                              + "    Sink: KSTREAM-SINK-0000000020 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition)\n"
                                                               + "      <-- KSTREAM-FILTER-0000000021\n"
                                                               + "\n"
                                                               + "  Sub-topology: 1\n"
-                                                              + "    Source: KSTREAM-SOURCE-0000000022 (topics: [KSTREAM-MERGE-0000000004-optimized-repartition])\n"
+                                                              + "    Source: KSTREAM-SOURCE-0000000022 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition])\n"
                                                               + "      --> KSTREAM-AGGREGATE-0000000006, KSTREAM-AGGREGATE-0000000013\n"
                                                               + "    Processor: KSTREAM-AGGREGATE-0000000013 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000012])\n"
                                                               + "      --> KTABLE-TOSTREAM-0000000017\n"

@@ -31,10 +31,10 @@ import org.apache.kafka.trogdor.task.TaskSpec;
     include = JsonTypeInfo.As.PROPERTY,
     property = "state")
 @JsonSubTypes({
-        @JsonSubTypes.Type(value = TaskPending.class, name = "PENDING"),
-        @JsonSubTypes.Type(value = TaskRunning.class, name = "RUNNING"),
-        @JsonSubTypes.Type(value = TaskStopping.class, name = "STOPPING"),
-        @JsonSubTypes.Type(value = TaskDone.class, name = "DONE")
+        @JsonSubTypes.Type(value = TaskPending.class, name = TaskStateType.Constants.PENDING_VALUE),
+        @JsonSubTypes.Type(value = TaskRunning.class, name = TaskStateType.Constants.RUNNING_VALUE),
+        @JsonSubTypes.Type(value = TaskStopping.class, name = TaskStateType.Constants.STOPPING_VALUE),
+        @JsonSubTypes.Type(value = TaskDone.class, name = TaskStateType.Constants.DONE_VALUE)
     })
 public abstract class TaskState extends Message {
     private final TaskSpec spec;
@@ -55,4 +55,6 @@ public abstract class TaskState extends Message {
     public JsonNode status() {
         return status;
     }
+
+    public abstract TaskStateType stateType();
 }

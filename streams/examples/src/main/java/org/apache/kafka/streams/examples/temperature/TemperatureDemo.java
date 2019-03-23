@@ -28,9 +28,9 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 
+import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Demonstrates, using the high-level KStream DSL, how to implement an IoT demo application
@@ -43,11 +43,11 @@ import java.util.concurrent.TimeUnit;
  *
  * Before running this example you must create the input topic for temperature values in the following way :
  *
- * bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic iot-temperature
+ * bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic iot-temperature
  *
  * and at same time the output topic for filtered values :
  *
- * bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic iot-temperature-max
+ * bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic iot-temperature-max
  *
  * After that, a console consumer can be started in order to read filtered values from the "iot-temperature-max" topic :
  *
@@ -88,12 +88,13 @@ public class TemperatureDemo {
             // to group and reduce them, a key is needed ("temp" has been chosen)
             .selectKey((key, value) -> "temp")
             .groupByKey()
-            .windowedBy(TimeWindows.of(TimeUnit.SECONDS.toMillis(TEMPERATURE_WINDOW_SIZE)))
+            .windowedBy(TimeWindows.of(Duration.ofSeconds(TEMPERATURE_WINDOW_SIZE)))
             .reduce((value1, value2) -> {
-                if (Integer.parseInt(value1) > Integer.parseInt(value2))
+                if (Integer.parseInt(value1) > Integer.parseInt(value2)) {
                     return value1;
-                else
+                } else {
                     return value2;
+                }
             })
             .toStream()
             .filter((key, value) -> Integer.parseInt(value) > TEMPERATURE_THRESHOLD);

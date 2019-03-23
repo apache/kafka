@@ -230,6 +230,31 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testControlPlaneListenerName() = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
+    props.put("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:5000")
+    props.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLLER:SSL")
+    props.put("control.plane.listener.name", "CONTROLLER")
+    assertTrue(isValidKafkaConfig(props))
+
+    val serverConfig = KafkaConfig.fromProps(props)
+    val controlEndpoint = serverConfig.controlPlaneListener.get
+    assertEquals("localhost", controlEndpoint.host)
+    assertEquals(5000, controlEndpoint.port)
+    assertEquals(SecurityProtocol.SSL, controlEndpoint.securityProtocol)
+
+    //advertised listener should contain control-plane listener
+    val advertisedEndpoints = serverConfig.advertisedListeners
+    assertFalse(advertisedEndpoints.filter { endpoint =>
+      endpoint.securityProtocol == controlEndpoint.securityProtocol && endpoint.listenerName.value().equals(controlEndpoint.listenerName.value())
+    }.isEmpty)
+
+    // interBrokerListener name should be different from control-plane listener name
+    val interBrokerListenerName = serverConfig.interBrokerListenerName
+    assertFalse(interBrokerListenerName.value().equals(controlEndpoint.listenerName.value()))
+  }
+
+  @Test
   def testBadListenerProtocol() {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, "1")
@@ -644,6 +669,7 @@ class KafkaConfigTest {
         case KafkaConfig.GroupMinSessionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.GroupMaxSessionTimeoutMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.GroupInitialRebalanceDelayMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
+        case KafkaConfig.GroupMaxSizeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0", "-1")
         case KafkaConfig.OffsetMetadataMaxSizeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number")
         case KafkaConfig.OffsetsLoadBufferSizeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.OffsetsTopicReplicationFactorProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
@@ -674,6 +700,7 @@ class KafkaConfigTest {
         case KafkaConfig.RackProp => // ignore string
         //SSL Configs
         case KafkaConfig.PrincipalBuilderClassProp =>
+        case KafkaConfig.ConnectionsMaxReauthMsProp =>
         case KafkaConfig.SslProtocolProp => // ignore string
         case KafkaConfig.SslProviderProp => // ignore string
         case KafkaConfig.SslEnabledProtocolsProp =>
@@ -690,6 +717,7 @@ class KafkaConfigTest {
         case KafkaConfig.SslEndpointIdentificationAlgorithmProp => // ignore string
         case KafkaConfig.SslSecureRandomImplementationProp => // ignore string
         case KafkaConfig.SslCipherSuitesProp => // ignore string
+        case KafkaConfig.SslPrincipalMappingRulesProp => // ignore string
 
         //Sasl Configs
         case KafkaConfig.SaslMechanismInterBrokerProtocolProp => // ignore
@@ -723,6 +751,10 @@ class KafkaConfigTest {
         case KafkaConfig.DelegationTokenMaxLifeTimeProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryTimeMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
         case KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "0")
+
+        //Kafka Yammer metrics reporter configs
+        case KafkaConfig.KafkaMetricsReporterClassesProp => // ignore
+        case KafkaConfig.KafkaMetricsPollingIntervalSecondsProp => //ignore
 
         case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }

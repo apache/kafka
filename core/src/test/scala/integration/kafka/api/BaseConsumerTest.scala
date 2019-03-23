@@ -12,13 +12,14 @@
  */
 package kafka.api
 
+import java.time.Duration
 import java.util
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
-import kafka.utils.ShutdownableThread
+import kafka.utils.{ShutdownableThread, TestUtils}
 import kafka.server.KafkaConfig
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -51,7 +52,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
   this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100") // set small enough session timeout
   this.serverConfig.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, "30000")
-  this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+  this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "10")
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
   this.consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, consumerClientId)
@@ -83,9 +84,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0)
 
     // check async commit callbacks
-    val commitCallback = new CountConsumerCommitCallback()
-    consumer.commitAsync(commitCallback)
-    awaitCommitCallback(consumer, commitCallback)
+    sendAndAwaitAsyncCommit(consumer)
   }
 
   @Test
@@ -98,8 +97,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     consumer.subscribe(List(topic).asJava, listener)
 
     // the initial subscription should cause a callback execution
-    consumer.poll(2000)
-
+    awaitRebalance(consumer, listener)
     assertEquals(1, listener.callsToAssigned)
 
     // get metadata for the topic
@@ -113,11 +111,8 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     val coordinator = parts.head.leader().id()
     this.servers(coordinator).shutdown()
 
-    consumer.poll(5000)
-
     // the failover should not cause a rebalance
-    assertEquals(1, listener.callsToAssigned)
-    assertEquals(1, listener.callsToRevoked)
+    ensureNoRebalance(consumer, listener)
   }
 
   protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {
@@ -183,38 +178,77 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
                                      numRecords: Int,
                                      maxPollRecords: Int = Int.MaxValue): ArrayBuffer[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]
-    val maxIters = numRecords * 300
-    var iters = 0
-    while (records.size < numRecords) {
-      val polledRecords = consumer.poll(50).asScala
-      assertTrue(polledRecords.size <= maxPollRecords)
-      for (record <- polledRecords)
-        records += record
-      if (iters > maxIters)
-        throw new IllegalStateException("Failed to consume the expected records after " + iters + " iterations.")
-      iters += 1
+    def pollAction(polledRecords: ConsumerRecords[K, V]): Boolean = {
+      assertTrue(polledRecords.asScala.size <= maxPollRecords)
+      records ++= polledRecords.asScala
+      records.size >= numRecords
     }
+    TestUtils.pollRecordsUntilTrue(consumer, pollAction, waitTimeMs = 60000,
+      msg = s"Timed out before consuming expected $numRecords records. " +
+        s"The number consumed was ${records.size}.")
     records
   }
 
-  protected def awaitCommitCallback[K, V](consumer: Consumer[K, V],
-                                          commitCallback: CountConsumerCommitCallback,
-                                          count: Int = 1): Unit = {
-    val started = System.currentTimeMillis()
-    while (commitCallback.successCount < count && System.currentTimeMillis() - started < 10000)
-      consumer.poll(50)
-    assertEquals(count, commitCallback.successCount)
+  protected def sendAndAwaitAsyncCommit[K, V](consumer: Consumer[K, V],
+                                              offsetsOpt: Option[Map[TopicPartition, OffsetAndMetadata]] = None): Unit = {
+
+    def sendAsyncCommit(callback: OffsetCommitCallback) = {
+      offsetsOpt match {
+        case Some(offsets) => consumer.commitAsync(offsets.asJava, callback)
+        case None => consumer.commitAsync(callback)
+      }
+    }
+
+    class RetryCommitCallback extends OffsetCommitCallback {
+      var isComplete = false
+      var error: Option[Exception] = None
+
+      override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = {
+        exception match {
+          case e: RetriableCommitFailedException =>
+            sendAsyncCommit(this)
+          case e =>
+            isComplete = true
+            error = Option(e)
+        }
+      }
+    }
+
+    val commitCallback = new RetryCommitCallback
+
+    sendAsyncCommit(commitCallback)
+    TestUtils.pollUntilTrue(consumer, () => commitCallback.isComplete,
+      "Failed to observe commit callback before timeout", waitTimeMs = 10000)
+
+    assertEquals(None, commitCallback.error)
+  }
+
+  protected def awaitRebalance(consumer: Consumer[_, _], rebalanceListener: TestConsumerReassignmentListener): Unit = {
+    val numReassignments = rebalanceListener.callsToAssigned
+    TestUtils.pollUntilTrue(consumer, () => rebalanceListener.callsToAssigned > numReassignments,
+      "Timed out before expected rebalance completed")
+  }
+
+  protected def ensureNoRebalance(consumer: Consumer[_, _], rebalanceListener: TestConsumerReassignmentListener): Unit = {
+    // The best way to verify that the current membership is still active is to commit offsets.
+    // This would fail if the group had rebalanced.
+    val initialRevokeCalls = rebalanceListener.callsToRevoked
+    sendAndAwaitAsyncCommit(consumer)
+    assertEquals(initialRevokeCalls, rebalanceListener.callsToRevoked)
   }
 
   protected class CountConsumerCommitCallback extends OffsetCommitCallback {
     var successCount = 0
     var failCount = 0
+    var lastError: Option[Exception] = None
 
     override def onComplete(offsets: util.Map[TopicPartition, OffsetAndMetadata], exception: Exception): Unit = {
-      if (exception == null)
+      if (exception == null) {
         successCount += 1
-      else
+      } else {
         failCount += 1
+        lastError = Some(exception)
+      }
     }
   }
 
@@ -274,7 +308,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
         subscriptionChanged = false
       }
       try {
-        consumer.poll(50)
+        consumer.poll(Duration.ofMillis(50))
       } catch {
         case _: WakeupException => // ignore for shutdown
       }
@@ -297,7 +331,6 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     val allNonEmptyAssignments = assignments.forall(assignment => assignment.nonEmpty)
     if (!allNonEmptyAssignments) {
       // at least one consumer got empty assignment
-      val uniqueAssignedPartitions = (Set[TopicPartition]() /: assignments) (_ ++ _)
       return false
     }
 

@@ -18,10 +18,11 @@ package org.apache.kafka.streams.state;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
 import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
@@ -30,7 +31,10 @@ import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 
+import java.time.Duration;
 import java.util.Objects;
+
+import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
 /**
  * Factory for creating state stores in Kafka Streams.
@@ -80,7 +84,7 @@ public class Stores {
      */
     public static KeyValueBytesStoreSupplier persistentKeyValueStore(final String name) {
         Objects.requireNonNull(name, "name cannot be null");
-        return new RocksDbKeyValueBytesStoreSupplier(name);
+        return new RocksDbKeyValueBytesStoreSupplier(name, false);
     }
 
     /**
@@ -99,7 +103,7 @@ public class Stores {
 
             @Override
             public KeyValueStore<Bytes, byte[]> get() {
-                return new InMemoryKeyValueStore<>(name, Serdes.Bytes(), Serdes.ByteArray());
+                return new InMemoryKeyValueStore(name);
             }
 
             @Override
@@ -129,7 +133,7 @@ public class Stores {
 
             @Override
             public KeyValueStore<Bytes, byte[]> get() {
-                return new MemoryNavigableLRUCache<>(name, maxCacheSize, Serdes.Bytes(), Serdes.ByteArray());
+                return new MemoryNavigableLRUCache(name, maxCacheSize);
             }
 
             @Override
@@ -137,6 +141,43 @@ public class Stores {
                 return "in-memory-lru-state";
             }
         };
+    }
+
+    /**
+     * Create an in-memory {@link WindowBytesStoreSupplier}.
+     * @param name                  name of the store (cannot be {@code null})
+     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
+     *                              Note that the retention period must be at least long enough to contain the
+     *                              windowed data's entire life cycle, from window-start through window-end,
+     *                              and for the entire grace period.
+     * @param windowSize            size of the windows (cannot be negative)
+     * @return an instance of {@link WindowBytesStoreSupplier}
+     * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
+     */
+    public static WindowBytesStoreSupplier inMemoryWindowStore(final String name,
+                                                               final Duration retentionPeriod,
+                                                               final Duration windowSize,
+                                                               final boolean retainDuplicates) throws IllegalArgumentException {
+        Objects.requireNonNull(name, "name cannot be null");
+        final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        final long retentionMs = ApiUtils.validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
+        final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
+        final long windowSizeMs = ApiUtils.validateMillisecondDuration(windowSize, wsMsgPrefix);
+
+        Objects.requireNonNull(name, "name cannot be null");
+        if (retentionMs < 0L) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        if (windowSizeMs < 0L) {
+            throw new IllegalArgumentException("windowSize cannot be negative");
+        }
+        if (windowSizeMs > retentionMs) {
+            throw new IllegalArgumentException("The retention period of the window store "
+                + name + " must be no smaller than its window size. Got size=["
+                + windowSize + "], retention=[" + retentionPeriod + "]");
+        }
+
+        return new InMemoryWindowBytesStoreSupplier(name, retentionMs, windowSizeMs, retainDuplicates);
     }
 
     /**
@@ -153,16 +194,16 @@ public class Stores {
      *                              careful to set it the same as the windowed keys you're actually storing.
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
-     * @deprecated since 2.1 Use {@link Stores#persistentWindowStore(String, long, long, boolean, long)} instead
+     * @deprecated since 2.1 Use {@link Stores#persistentWindowStore(String, Duration, Duration, boolean)} instead
      */
-    @Deprecated
+    @Deprecated // continuing to support Windows#maintainMs/segmentInterval in fallback mode
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
                                                                  final long retentionPeriod,
                                                                  final int numSegments,
                                                                  final long windowSize,
                                                                  final boolean retainDuplicates) {
         if (numSegments < 2) {
-            throw new IllegalArgumentException("numSegments cannot must smaller than 2");
+            throw new IllegalArgumentException("numSegments cannot be smaller than 2");
         }
 
         final long legacySegmentInterval = Math.max(retentionPeriod / (numSegments - 1), 60_000L);
@@ -186,33 +227,28 @@ public class Stores {
      * @param windowSize            size of the windows (cannot be negative)
      * @param retainDuplicates      whether or not to retain duplicates.
      * @return an instance of {@link WindowBytesStoreSupplier}
+     * @throws IllegalArgumentException if {@code retentionPeriod} or {@code windowSize} can't be represented as {@code long milliseconds}
      */
     public static WindowBytesStoreSupplier persistentWindowStore(final String name,
-                                                                 final long retentionPeriod,
-                                                                 final long windowSize,
-                                                                 final boolean retainDuplicates) {
-        // we're arbitrarily defaulting to segments no smaller than one minute.
-        final long defaultSegmentInterval = Math.max(retentionPeriod / 2, 60_000L);
-        return persistentWindowStore(name, retentionPeriod, windowSize, retainDuplicates, defaultSegmentInterval);
+                                                                 final Duration retentionPeriod,
+                                                                 final Duration windowSize,
+                                                                 final boolean retainDuplicates) throws IllegalArgumentException {
+        Objects.requireNonNull(name, "name cannot be null");
+        final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        final long retentionMs = ApiUtils.validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
+        final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
+        final long windowSizeMs = ApiUtils.validateMillisecondDuration(windowSize, wsMsgPrefix);
+
+        final long defaultSegmentInterval = Math.max(retentionMs / 2, 60_000L);
+
+        return persistentWindowStore(name, retentionMs, windowSizeMs, retainDuplicates, defaultSegmentInterval);
     }
 
-    /**
-     * Create a persistent {@link WindowBytesStoreSupplier}.
-     * @param name                  name of the store (cannot be {@code null})
-     * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
-     *                              Note that the retention period must be at least long enough to contain the
-     *                              windowed data's entire life cycle, from window-start through window-end,
-     *                              and for the entire grace period.
-     * @param segmentInterval       size of segments in ms (cannot be negative)
-     * @param windowSize            size of the windows (cannot be negative)
-     * @param retainDuplicates      whether or not to retain duplicates.
-     * @return an instance of {@link WindowBytesStoreSupplier}
-     */
-    public static WindowBytesStoreSupplier persistentWindowStore(final String name,
-                                                                 final long retentionPeriod,
-                                                                 final long windowSize,
-                                                                 final boolean retainDuplicates,
-                                                                 final long segmentInterval) {
+    private static WindowBytesStoreSupplier persistentWindowStore(final String name,
+                                                                  final long retentionPeriod,
+                                                                  final long windowSize,
+                                                                  final boolean retainDuplicates,
+                                                                  final long segmentInterval) {
         Objects.requireNonNull(name, "name cannot be null");
         if (retentionPeriod < 0L) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
@@ -235,19 +271,37 @@ public class Stores {
     /**
      * Create a persistent {@link SessionBytesStoreSupplier}.
      * @param name              name of the store (cannot be {@code null})
+     * @param retentionPeriodMs length ot time to retain data in the store (cannot be negative)
+     *                          Note that the retention period must be at least long enough to contain the
+     *                          windowed data's entire life cycle, from window-start through window-end,
+     *                          and for the entire grace period.
+     * @return an instance of a {@link  SessionBytesStoreSupplier}
+     * @deprecated since 2.1 Use {@link Stores#persistentSessionStore(String, Duration)} instead
+     */
+    @Deprecated // continuing to support Windows#maintainMs/segmentInterval in fallback mode
+    public static SessionBytesStoreSupplier persistentSessionStore(final String name,
+                                                                   final long retentionPeriodMs) {
+        Objects.requireNonNull(name, "name cannot be null");
+        if (retentionPeriodMs < 0) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriodMs);
+    }
+
+    /**
+     * Create a persistent {@link SessionBytesStoreSupplier}.
+     * @param name              name of the store (cannot be {@code null})
      * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
      *                          Note that the retention period must be at least long enough to contain the
      *                          windowed data's entire life cycle, from window-start through window-end,
      *                          and for the entire grace period.
      * @return an instance of a {@link  SessionBytesStoreSupplier}
      */
+    @SuppressWarnings("deprecation") // removing #persistentSessionStore(String name, long retentionPeriodMs) will fix this
     public static SessionBytesStoreSupplier persistentSessionStore(final String name,
-                                                                   final long retentionPeriod) {
-        Objects.requireNonNull(name, "name cannot be null");
-        if (retentionPeriod < 0) {
-            throw new IllegalArgumentException("retentionPeriod cannot be negative");
-        }
-        return new RocksDbSessionBytesStoreSupplier(name, retentionPeriod);
+                                                                   final Duration retentionPeriod) {
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        return persistentSessionStore(name, ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix));
     }
 
 

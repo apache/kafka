@@ -25,7 +25,7 @@ import java.util.NoSuchElementException;
 /**
  * Optimized {@link KeyValueIterator} used when the same element could be peeked multiple times.
  */
-class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator<K, V>, PeekingKeyValueIterator<K, V> {
+public class DelegatingPeekingKeyValueIterator<K, V> implements KeyValueIterator<K, V>, PeekingKeyValueIterator<K, V> {
     private final KeyValueIterator<K, V> underlying;
     private final String storeName;
     private KeyValue<K, V> next;

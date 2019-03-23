@@ -20,11 +20,13 @@ package org.apache.kafka.trogdor.coordinator;
 import com.fasterxml.jackson.core.type.TypeReference;
 import net.sourceforge.argparse4j.ArgumentParsers;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
-import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
 import net.sourceforge.argparse4j.inf.Namespace;
+import net.sourceforge.argparse4j.inf.Subparser;
+import net.sourceforge.argparse4j.inf.Subparsers;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.trogdor.common.JsonUtil;
+import org.apache.kafka.trogdor.common.StringFormatter;
 import org.apache.kafka.trogdor.rest.CoordinatorStatusResponse;
 import org.apache.kafka.trogdor.rest.CreateTaskRequest;
 import org.apache.kafka.trogdor.rest.DestroyTaskRequest;
@@ -32,15 +34,39 @@ import org.apache.kafka.trogdor.rest.Empty;
 import org.apache.kafka.trogdor.rest.JsonRestServer;
 import org.apache.kafka.trogdor.rest.JsonRestServer.HttpResponse;
 import org.apache.kafka.trogdor.rest.StopTaskRequest;
+import org.apache.kafka.trogdor.rest.TaskDone;
+import org.apache.kafka.trogdor.rest.TaskPending;
+import org.apache.kafka.trogdor.rest.TaskRequest;
+import org.apache.kafka.trogdor.rest.TaskRunning;
+import org.apache.kafka.trogdor.rest.TaskStateType;
+import org.apache.kafka.trogdor.rest.TaskStopping;
 import org.apache.kafka.trogdor.rest.TasksRequest;
+import org.apache.kafka.trogdor.rest.TaskState;
 import org.apache.kafka.trogdor.rest.TasksResponse;
+import org.apache.kafka.trogdor.task.TaskSpec;
+import org.apache.kafka.trogdor.rest.UptimeResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.UriBuilder;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.TreeMap;
+import java.util.regex.Pattern;
+import java.util.regex.PatternSyntaxException;
+
+import static net.sourceforge.argparse4j.impl.Arguments.append;
 import static net.sourceforge.argparse4j.impl.Arguments.store;
 import static net.sourceforge.argparse4j.impl.Arguments.storeTrue;
+import static org.apache.kafka.trogdor.common.StringFormatter.dateString;
+import static org.apache.kafka.trogdor.common.StringFormatter.durationString;
 
 /**
  * A client for the Trogdor coordinator.
@@ -115,6 +141,13 @@ public class CoordinatorClient {
         return resp.body();
     }
 
+    public UptimeResponse uptime() throws Exception {
+        HttpResponse<UptimeResponse> resp =
+            JsonRestServer.httpRequest(url("/coordinator/uptime"), "GET",
+                null, new TypeReference<UptimeResponse>() { }, maxTries);
+        return resp.body();
+    }
+
     public void createTask(CreateTaskRequest request) throws Exception {
         HttpResponse<Empty> resp =
             JsonRestServer.httpRequest(log, url("/coordinator/task/create"), "POST",
@@ -145,9 +178,19 @@ public class CoordinatorClient {
         uriBuilder.queryParam("lastStartMs", request.lastStartMs());
         uriBuilder.queryParam("firstEndMs", request.firstEndMs());
         uriBuilder.queryParam("lastEndMs", request.lastEndMs());
+        if (request.state().isPresent()) {
+            uriBuilder.queryParam("state", request.state().get().toString());
+        }
         HttpResponse<TasksResponse> resp =
             JsonRestServer.httpRequest(log, uriBuilder.build().toString(), "GET",
                 null, new TypeReference<TasksResponse>() { }, maxTries);
+        return resp.body();
+    }
+
+    public TaskState task(TaskRequest request) throws Exception {
+        String uri = UriBuilder.fromPath(url("/coordinator/tasks/{taskId}")).build(request.taskId()).toString();
+        HttpResponse<TaskState> resp = JsonRestServer.httpRequest(log, uri, "GET",
+            null, new TypeReference<TaskState>() { }, maxTries);
         return resp.body();
     }
 
@@ -158,96 +201,309 @@ public class CoordinatorClient {
         resp.body();
     }
 
-    public static void main(String[] args) throws Exception {
-        ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("trogdor-coordinator-client")
-            .defaultHelp(true)
-            .description("The Trogdor fault injection coordinator client.");
-        parser.addArgument("target")
+    private static void addTargetArgument(ArgumentParser parser) {
+        parser.addArgument("--target", "-t")
             .action(store())
             .required(true)
             .type(String.class)
             .dest("target")
             .metavar("TARGET")
             .help("A colon-separated host and port pair.  For example, example.com:8889");
-        MutuallyExclusiveGroup actions = parser.addMutuallyExclusiveGroup();
-        actions.addArgument("--status")
-            .action(storeTrue())
-            .type(Boolean.class)
-            .dest("status")
-            .help("Get coordinator status.");
-        actions.addArgument("--show-tasks")
-            .action(storeTrue())
-            .type(Boolean.class)
-            .dest("show_tasks")
-            .help("Show coordinator tasks.");
-        actions.addArgument("--create-task")
-            .action(store())
-            .type(String.class)
-            .dest("create_task")
-            .metavar("TASK_SPEC_JSON")
-            .help("Create a new task from a task spec.");
-        actions.addArgument("--stop-task")
-            .action(store())
-            .type(String.class)
-            .dest("stop_task")
-            .metavar("TASK_ID")
-            .help("Stop a task.");
-        actions.addArgument("--destroy-task")
-            .action(store())
-            .type(String.class)
-            .dest("destroy_task")
-            .metavar("TASK_ID")
-            .help("Destroy a task.");
-        actions.addArgument("--shutdown")
-            .action(storeTrue())
-            .type(Boolean.class)
-            .dest("shutdown")
-            .help("Trigger coordinator shutdown");
+    }
 
-        Namespace res = null;
-        try {
-            res = parser.parseArgs(args);
-        } catch (ArgumentParserException e) {
-            if (args.length == 0) {
-                parser.printHelp();
-                Exit.exit(0);
-            } else {
-                parser.handleError(e);
-                Exit.exit(1);
-            }
-        }
+    private static void addJsonArgument(ArgumentParser parser) {
+        parser.addArgument("--json")
+            .action(storeTrue())
+            .dest("json")
+            .metavar("JSON")
+            .help("Show the full response as JSON.");
+    }
+
+    public static void main(String[] args) throws Exception {
+        ArgumentParser rootParser = ArgumentParsers
+            .newArgumentParser("trogdor-coordinator-client")
+            .description("The Trogdor coordinator client.");
+        Subparsers subParsers = rootParser.addSubparsers().
+            dest("command");
+        Subparser uptimeParser = subParsers.addParser("uptime")
+            .help("Get the coordinator uptime.");
+        addTargetArgument(uptimeParser);
+        addJsonArgument(uptimeParser);
+        Subparser statusParser = subParsers.addParser("status")
+            .help("Get the coordinator status.");
+        addTargetArgument(statusParser);
+        addJsonArgument(statusParser);
+        Subparser showTaskParser = subParsers.addParser("showTask")
+            .help("Show a coordinator task.");
+        addTargetArgument(showTaskParser);
+        addJsonArgument(showTaskParser);
+        showTaskParser.addArgument("--id", "-i")
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .dest("taskId")
+            .metavar("TASK_ID")
+            .help("The task ID to show.");
+        showTaskParser.addArgument("--verbose", "-v")
+            .action(storeTrue())
+            .dest("verbose")
+            .metavar("VERBOSE")
+            .help("Print out everything.");
+        showTaskParser.addArgument("--show-status", "-S")
+            .action(storeTrue())
+            .dest("showStatus")
+            .metavar("SHOW_STATUS")
+            .help("Show the task status.");
+        Subparser showTasksParser = subParsers.addParser("showTasks")
+            .help("Show many coordinator tasks.  By default, all tasks are shown, but " +
+                "command-line options can be specified as filters.");
+        addTargetArgument(showTasksParser);
+        addJsonArgument(showTasksParser);
+        MutuallyExclusiveGroup idGroup = showTasksParser.addMutuallyExclusiveGroup();
+        idGroup.addArgument("--id", "-i")
+            .action(append())
+            .type(String.class)
+            .dest("taskIds")
+            .metavar("TASK_IDS")
+            .help("Show only this task ID.  This option may be specified multiple times.");
+        idGroup.addArgument("--id-pattern")
+            .action(store())
+            .type(String.class)
+            .dest("taskIdPattern")
+            .metavar("TASK_ID_PATTERN")
+            .help("Only display tasks which match the given ID pattern.");
+        showTasksParser.addArgument("--state", "-s")
+            .type(TaskStateType.class)
+            .dest("taskStateType")
+            .metavar("TASK_STATE_TYPE")
+            .help("Show only tasks in this state.");
+        Subparser createTaskParser = subParsers.addParser("createTask")
+            .help("Create a new task.");
+        addTargetArgument(createTaskParser);
+        createTaskParser.addArgument("--id", "-i")
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .dest("taskId")
+            .metavar("TASK_ID")
+            .help("The task ID to create.");
+        createTaskParser.addArgument("--spec", "-s")
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .dest("taskSpec")
+            .metavar("TASK_SPEC")
+            .help("The task spec to create, or a path to a file containing the task spec.");
+        Subparser stopTaskParser = subParsers.addParser("stopTask")
+            .help("Stop a task.");
+        addTargetArgument(stopTaskParser);
+        stopTaskParser.addArgument("--id", "-i")
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .dest("taskId")
+            .metavar("TASK_ID")
+            .help("The task ID to create.");
+        Subparser destroyTaskParser = subParsers.addParser("destroyTask")
+            .help("Destroy a task.");
+        addTargetArgument(destroyTaskParser);
+        destroyTaskParser.addArgument("--id", "-i")
+            .action(store())
+            .required(true)
+            .type(String.class)
+            .dest("taskId")
+            .metavar("TASK_ID")
+            .help("The task ID to destroy.");
+        Subparser shutdownParser = subParsers.addParser("shutdown")
+            .help("Shut down the coordinator.");
+        addTargetArgument(shutdownParser);
+
+        Namespace res = rootParser.parseArgsOrFail(args);
         String target = res.getString("target");
         CoordinatorClient client = new Builder().
             maxTries(3).
             target(target).
             build();
-        if (res.getBoolean("status")) {
-            System.out.println("Got coordinator status: " +
-                JsonUtil.toPrettyJsonString(client.status()));
-        } else if (res.getBoolean("show_tasks")) {
-            System.out.println("Got coordinator tasks: " +
-                JsonUtil.toPrettyJsonString(client.tasks(
-                    new TasksRequest(null, 0, 0, 0, 0))));
-        } else if (res.getString("create_task") != null) {
-            CreateTaskRequest req = JsonUtil.JSON_SERDE.
-                readValue(res.getString("create_task"), CreateTaskRequest.class);
-            client.createTask(req);
-            System.out.printf("Sent CreateTaskRequest for task %s.", req.id());
-        } else if (res.getString("stop_task") != null) {
-            String taskId = res.getString("stop_task");
-            client.stopTask(new StopTaskRequest(taskId));
-            System.out.printf("Sent StopTaskRequest for task %s.%n", taskId);
-        } else if (res.getString("destroy_task") != null) {
-            String taskId = res.getString("destroy_task");
-            client.destroyTask(new DestroyTaskRequest(taskId));
-            System.out.printf("Sent DestroyTaskRequest for task %s.%n", taskId);
-        } else if (res.getBoolean("shutdown")) {
-            client.shutdown();
-            System.out.println("Sent ShutdownRequest.");
-        } else {
-            System.out.println("You must choose an action. Type --help for help.");
-            Exit.exit(1);
+        ZoneOffset localOffset = OffsetDateTime.now().getOffset();
+        switch (res.getString("command")) {
+            case "uptime": {
+                UptimeResponse uptime = client.uptime();
+                if (res.getBoolean("json")) {
+                    System.out.println(JsonUtil.toJsonString(uptime));
+                } else {
+                    System.out.printf("Coordinator is running at %s.%n", target);
+                    System.out.printf("\tStart time: %s%n",
+                        dateString(uptime.serverStartMs(), localOffset));
+                    System.out.printf("\tCurrent server time: %s%n",
+                        dateString(uptime.nowMs(), localOffset));
+                    System.out.printf("\tUptime: %s%n",
+                        durationString(uptime.nowMs() - uptime.serverStartMs()));
+                }
+                break;
+            }
+            case "status": {
+                CoordinatorStatusResponse response = client.status();
+                if (res.getBoolean("json")) {
+                    System.out.println(JsonUtil.toJsonString(response));
+                } else {
+                    System.out.printf("Coordinator is running at %s.%n", target);
+                    System.out.printf("\tStart time: %s%n", dateString(response.serverStartMs(), localOffset));
+                }
+                break;
+            }
+            case "showTask": {
+                String taskId = res.getString("taskId");
+                TaskRequest req = new TaskRequest(taskId);
+                TaskState taskState = null;
+                try {
+                    taskState = client.task(req);
+                } catch (NotFoundException e) {
+                    System.out.printf("Task %s was not found.%n", taskId);
+                    Exit.exit(1);
+                }
+                if (res.getBoolean("json")) {
+                    System.out.println(JsonUtil.toJsonString(taskState));
+                } else {
+                    System.out.printf("Task %s of type %s is %s. %s%n", taskId,
+                        taskState.spec().getClass().getCanonicalName(),
+                        taskState.stateType(), prettyPrintTaskInfo(taskState, localOffset));
+                    if (taskState instanceof TaskDone) {
+                        TaskDone taskDone = (TaskDone) taskState;
+                        if ((taskDone.error() != null) && (!taskDone.error().isEmpty())) {
+                            System.out.printf("Error: %s%n", taskDone.error());
+                        }
+                    }
+                    if (res.getBoolean("verbose")) {
+                        System.out.printf("Spec: %s%n%n", JsonUtil.toPrettyJsonString(taskState.spec()));
+                    }
+                    if (res.getBoolean("verbose") || res.getBoolean("showStatus")) {
+                        System.out.printf("Status: %s%n%n", JsonUtil.toPrettyJsonString(taskState.status()));
+                    }
+                }
+                break;
+            }
+            case "showTasks": {
+                TaskStateType taskStateType = res.<TaskStateType>get("taskStateType");
+                List<String> taskIds = new ArrayList<>();
+                Pattern taskIdPattern = null;
+                if (res.getList("taskIds") != null) {
+                    for (Object taskId : res.getList("taskIds")) {
+                        taskIds.add((String) taskId);
+                    }
+                } else if (res.getString("taskIdPattern") != null) {
+                    try {
+                        taskIdPattern = Pattern.compile(res.getString("taskIdPattern"));
+                    } catch (PatternSyntaxException e) {
+                        System.out.println("Invalid task ID regular expression " + res.getString("taskIdPattern"));
+                        e.printStackTrace();
+                        Exit.exit(1);
+                    }
+                }
+                TasksRequest req = new TasksRequest(taskIds, 0, 0, 0, 0,
+                    Optional.ofNullable(taskStateType));
+                TasksResponse response = client.tasks(req);
+                if (taskIdPattern != null) {
+                    TreeMap<String, TaskState> filteredTasks = new TreeMap<>();
+                    for (Map.Entry<String, TaskState> entry : response.tasks().entrySet()) {
+                        if (taskIdPattern.matcher(entry.getKey()).matches()) {
+                            filteredTasks.put(entry.getKey(), entry.getValue());
+                        }
+                    }
+                    response = new TasksResponse(filteredTasks);
+                }
+                if (res.getBoolean("json")) {
+                    System.out.println(JsonUtil.toJsonString(response));
+                } else {
+                    System.out.println(prettyPrintTasksResponse(response, localOffset));
+                }
+                if (response.tasks().isEmpty()) {
+                    Exit.exit(1);
+                }
+                break;
+            }
+            case "createTask": {
+                String taskId = res.getString("taskId");
+                TaskSpec taskSpec = JsonUtil.
+                    objectFromCommandLineArgument(res.getString("taskSpec"), TaskSpec.class);
+                CreateTaskRequest req = new CreateTaskRequest(taskId, taskSpec);
+                client.createTask(req);
+                System.out.printf("Sent CreateTaskRequest for task %s.%n", req.id());
+                break;
+            }
+            case "stopTask": {
+                String taskId = res.getString("taskId");
+                StopTaskRequest req = new StopTaskRequest(taskId);
+                client.stopTask(req);
+                System.out.printf("Sent StopTaskRequest for task %s.%n", taskId);
+                break;
+            }
+            case "destroyTask": {
+                String taskId = res.getString("taskId");
+                DestroyTaskRequest req = new DestroyTaskRequest(taskId);
+                client.destroyTask(req);
+                System.out.printf("Sent DestroyTaskRequest for task %s.%n", taskId);
+                break;
+            }
+            case "shutdown": {
+                client.shutdown();
+                System.out.println("Sent ShutdownRequest.");
+                break;
+            }
+            default: {
+                System.out.println("You must choose an action. Type --help for help.");
+                Exit.exit(1);
+            }
         }
     }
-};
+
+    static String prettyPrintTasksResponse(TasksResponse response, ZoneOffset zoneOffset) {
+        if (response.tasks().isEmpty()) {
+            return "No matching tasks found.";
+        }
+        List<List<String>> lines = new ArrayList<>();
+        List<String> header = new ArrayList<>(
+            Arrays.asList("ID", "TYPE", "STATE", "INFO"));
+        lines.add(header);
+        for (Map.Entry<String, TaskState> entry : response.tasks().entrySet()) {
+            String taskId = entry.getKey();
+            TaskState taskState = entry.getValue();
+            List<String> cols = new ArrayList<>();
+            cols.add(taskId);
+            cols.add(taskState.spec().getClass().getCanonicalName());
+            cols.add(taskState.stateType().toString());
+            cols.add(prettyPrintTaskInfo(taskState, zoneOffset));
+            lines.add(cols);
+        }
+        return StringFormatter.prettyPrintGrid(lines);
+    }
+
+    static String prettyPrintTaskInfo(TaskState taskState, ZoneOffset zoneOffset) {
+        if (taskState instanceof TaskPending) {
+            return "Will start at " + dateString(taskState.spec().startMs(), zoneOffset);
+        } else if (taskState instanceof TaskRunning) {
+            TaskRunning runState = (TaskRunning) taskState;
+            return "Started " + dateString(runState.startedMs(), zoneOffset) +
+                "; will stop after " + durationString(taskState.spec().durationMs());
+        } else if (taskState instanceof TaskStopping) {
+            TaskStopping stoppingState = (TaskStopping) taskState;
+            return "Started " + dateString(stoppingState.startedMs(), zoneOffset);
+        } else if (taskState instanceof TaskDone) {
+            TaskDone doneState = (TaskDone) taskState;
+            String status = null;
+            if (doneState.error() == null || doneState.error().isEmpty()) {
+                if (doneState.cancelled()) {
+                    status = "CANCELLED";
+                } else {
+                    status = "FINISHED";
+                }
+            } else {
+                status = "FAILED";
+            }
+            return String.format("%s at %s after %s", status,
+                dateString(doneState.doneMs(), zoneOffset),
+                durationString(doneState.doneMs() - doneState.startedMs()));
+        } else {
+            throw new RuntimeException("Unknown task state type " + taskState.stateType());
+        }
+    }
+}

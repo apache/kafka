@@ -22,6 +22,7 @@ import java.io.{Closeable, File, FileWriter}
 import java.nio.file.{Files, Paths, StandardCopyOption}
 import java.lang.management.ManagementFactory
 import java.security.KeyStore
+import java.time.Duration
 import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent._
@@ -31,7 +32,6 @@ import com.yammer.metrics.Metrics
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
 import kafka.api.{KafkaSasl, SaslSetup}
-import kafka.coordinator.group.OffsetConfig
 import kafka.log.LogConfig
 import kafka.message.ProducerCompressionCodec
 import kafka.network.{Processor, RequestChannel}
@@ -132,7 +132,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     }
 
     TestUtils.createTopic(zkClient, topic, numPartitions, replicationFactor = numServers, servers)
-    TestUtils.createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, OffsetConfig.DefaultOffsetsTopicNumPartitions,
+    TestUtils.createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, servers.head.config.offsetsTopicPartitions,
       replicationFactor = numServers, servers, servers.head.groupCoordinator.offsetsTopicConfigs)
 
     createAdminClient(SecurityProtocol.SSL, SecureInternal)
@@ -146,8 +146,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     clientThreads.foreach(_.initiateShutdown())
     clientThreads.foreach(_.join(5 * 1000))
     executors.foreach(_.shutdownNow())
-    producers.foreach(_.close(0, TimeUnit.MILLISECONDS))
-    consumers.foreach(_.close(0, TimeUnit.MILLISECONDS))
+    producers.foreach(_.close(Duration.ZERO))
+    consumers.foreach(_.close(Duration.ofMillis(0)))
     adminClients.foreach(_.close())
     TestUtils.shutdownServers(servers)
     super.tearDown()
@@ -300,6 +300,15 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       (s"$prefix$SSL_TRUSTSTORE_LOCATION_CONFIG", sslProperties1.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)))
     verifyAuthenticationFailure(producerBuilder.keyStoreProps(sslProperties2).build())
     verifySslProduceConsume(sslProperties1, "alter-truststore-3")
+
+    // Update same truststore file to contain both certificates without changing any configs.
+    // Clients should connect successfully with either keystore after admin client AlterConfigsRequest completes.
+    Files.copy(Paths.get(combinedStoreProps.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)),
+      Paths.get(sslProperties1.getProperty(SSL_TRUSTSTORE_LOCATION_CONFIG)),
+      StandardCopyOption.REPLACE_EXISTING)
+    TestUtils.alterConfigs(servers, adminClients.head, oldTruststoreProps, perBrokerConfig = true).all.get()
+    verifySslProduceConsume(sslProperties1, "alter-truststore-4")
+    verifySslProduceConsume(sslProperties2, "alter-truststore-5")
   }
 
   @Test
@@ -382,7 +391,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
     // Verify that configs of existing logs have been updated
     val newLogConfig = LogConfig(KafkaServer.copyKafkaConfigToLog(servers.head.config))
-    assertEquals(newLogConfig, servers.head.logManager.currentDefaultConfig)
+    TestUtils.waitUntilTrue(() => servers.head.logManager.currentDefaultConfig == newLogConfig,
+      "Config not updated in LogManager")
+
     val log = servers.head.logManager.getLog(new TopicPartition(topic, 0)).getOrElse(throw new IllegalStateException("Log not found"))
     TestUtils.waitUntilTrue(() => log.config.segmentSize == 4000, "Existing topic config using defaults not updated")
     props.asScala.foreach { case (k, v) =>
@@ -435,8 +446,14 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   @Test
   def testUncleanLeaderElectionEnable(): Unit = {
+    val controller = servers.find(_.config.brokerId == TestUtils.waitUntilControllerElected(zkClient)).get
+    val controllerId = controller.config.brokerId
+
+    // Create a topic with two replicas on brokers other than the controller
     val topic = "testtopic2"
-    TestUtils.createTopic(zkClient, topic, 1, replicationFactor = 2, servers)
+    val assignment = Map(0 -> Seq((controllerId + 1) % servers.size, (controllerId + 2) % servers.size))
+    TestUtils.createTopic(zkClient, topic, assignment, servers)
+
     val producer = ProducerBuilder().acks(1).build()
     val consumer = ConsumerBuilder("unclean-leader-test").enableAutoCommit(false).topic(topic).build()
     verifyProduceConsume(producer, consumer, numRecords = 10, topic)
@@ -462,7 +479,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     leaderBroker.shutdown()
     leaderBroker.awaitShutdown()
     followerBroker.startup()
-    val controller = servers.find(_.config.brokerId == TestUtils.waitUntilControllerElected(zkClient)).get
 
     // Verify that new leader is not elected with unclean leader disabled since there are no ISRs
     TestUtils.waitUntilTrue(() => partitionInfo.leader == null, "Unclean leader elected")
@@ -491,8 +507,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
   @Test
   def testThreadPoolResize(): Unit = {
-    val requestHandlerPrefix = "kafka-request-handler-"
-    val networkThreadPrefix = "kafka-network-thread-"
+    val requestHandlerPrefix = "data-plane-kafka-request-handler-"
+    val networkThreadPrefix = "data-plane-kafka-network-thread-"
     val fetcherThreadPrefix = "ReplicaFetcherThread-"
     // Executor threads and recovery threads are not verified since threads may not be running
     // For others, thread count should be configuredCount * threadMultiplier * numBrokers
@@ -567,7 +583,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       "", mayReceiveDuplicates = false)
     verifyThreadPoolResize(KafkaConfig.NumNetworkThreadsProp, config.numNetworkThreads,
       networkThreadPrefix, mayReceiveDuplicates = true)
-    verifyThreads("kafka-socket-acceptor-", config.listeners.size)
+    verifyThreads("data-plane-kafka-socket-acceptor-", config.listeners.size)
 
     verifyProcessorMetrics()
     verifyMarkPartitionsForTruncation()
@@ -613,10 +629,10 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         val replicaFetcherManager = servers(i).replicaManager.replicaFetcherManager
         val truncationOffset = tp.partition
         replicaFetcherManager.markPartitionsForTruncation(leaderId, tp, truncationOffset)
-        val fetcherThreads = replicaFetcherManager.fetcherThreadMap.filter(_._2.partitionStates.contains(tp))
+        val fetcherThreads = replicaFetcherManager.fetcherThreadMap.filter(_._2.fetchState(tp).isDefined)
         assertEquals(1, fetcherThreads.size)
-        assertEquals(replicaFetcherManager.getFetcherId(tp.topic, tp.partition), fetcherThreads.head._1.fetcherId)
-        assertEquals(truncationOffset, fetcherThreads.head._2.partitionStates.stateValue(tp).fetchOffset)
+        assertEquals(replicaFetcherManager.getFetcherId(tp), fetcherThreads.head._1.fetcherId)
+        assertEquals(Some(truncationOffset), fetcherThreads.head._2.fetchState(tp).map(_.fetchOffset))
       }
     }
   }
@@ -894,6 +910,8 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def verifyAddListener(listenerName: String, securityProtocol: SecurityProtocol,
                                 saslMechanisms: Seq[String]): Unit = {
     addListener(servers, listenerName, securityProtocol, saslMechanisms)
+    TestUtils.waitUntilTrue(() => servers.forall(hasListenerMetric(_, listenerName)),
+      "Processors not started for new listener")
     if (saslMechanisms.nonEmpty)
       saslMechanisms.foreach { mechanism =>
         verifyListener(securityProtocol, Some(mechanism), s"add-listener-group-$securityProtocol-$mechanism")
@@ -917,8 +935,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       .autoOffsetReset("latest")
       .build()
     verifyProduceConsume(producer1, consumer1, numRecords = 10, topic)
-    // send another message to check consumer later
-    producer1.send(new ProducerRecord(topic, "key", "value")).get(100, TimeUnit.MILLISECONDS)
 
     val config = servers.head.config
     val existingListenerCount = config.listeners.size
@@ -940,6 +956,10 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
     TestUtils.waitUntilTrue(() => servers.forall(server => server.config.listeners.size == existingListenerCount - 1),
       "Listeners not updated")
+    // Wait until metrics of the listener have been removed to ensure that processors have been shutdown before
+    // verifying that connections to the removed listener fail.
+    TestUtils.waitUntilTrue(() => !servers.exists(hasListenerMetric(_, listenerName)),
+      "Processors not shutdown for removed listener")
 
     // Test that connections using deleted listener don't work
     val producerFuture = verifyConnectionFailure(producer1)
@@ -978,16 +998,18 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     verifyProduceConsume(producer, consumer, numRecords = 10, topic)
   }
 
+  private def hasListenerMetric(server: KafkaServer, listenerName: String): Boolean = {
+    server.socketServer.metrics.metrics.keySet.asScala.exists(_.tags.get("listener") == listenerName)
+  }
+
   private def fetchBrokerConfigsFromZooKeeper(server: KafkaServer): Properties = {
     val props = adminZkClient.fetchEntityConfig(ConfigType.Broker, server.config.brokerId.toString)
     server.config.dynamicConfig.fromPersistentProps(props, perBrokerConfig = true)
   }
 
   private def awaitInitialPositions(consumer: KafkaConsumer[_, _]): Unit = {
-    do {
-      consumer.poll(1)
-    } while (consumer.assignment.isEmpty)
-    consumer.assignment.asScala.foreach(tp => consumer.position(tp))
+    TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Timed out while waiting for assignment")
+    consumer.assignment.asScala.foreach(consumer.position)
   }
 
   private def clientProps(securityProtocol: SecurityProtocol, saslMechanism: Option[String] = None): Properties = {
@@ -1016,12 +1038,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
                                    topic: String): Unit = {
     val producerRecords = (1 to numRecords).map(i => new ProducerRecord(topic, s"key$i", s"value$i"))
     producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
-    var received = 0
-    TestUtils.waitUntilTrue(() => {
-      received += consumer.poll(50).count
-      received >= numRecords
-    }, s"Consumed $received records until timeout instead of the expected $numRecords records")
-    assertEquals(numRecords, received)
+    TestUtils.pollUntilAtLeastNumRecords(consumer, numRecords)
   }
 
   private def verifyAuthenticationFailure(producer: KafkaProducer[_, _]): Unit = {
@@ -1298,7 +1315,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     executors += executor
     val future = executor.submit(new Runnable() {
       def run() {
-        assertEquals(0, consumer.poll(100).count)
+        consumer.commitSync()
       }
     })
     verifyTimeout(future)
@@ -1410,10 +1427,11 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, _enableAutoCommit.toString)
 
       val consumer = new KafkaConsumer[String, String](consumerProps, new StringDeserializer, new StringDeserializer)
+      consumers += consumer
+
       consumer.subscribe(Collections.singleton(_topic))
       if (_autoOffsetReset == "latest")
         awaitInitialPositions(consumer)
-      consumers += consumer
       consumer
     }
   }
@@ -1452,7 +1470,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     override def doWork(): Unit = {
       try {
         while (isRunning || (lastReceived != producerThread.lastSent && System.currentTimeMillis < endTimeMs)) {
-          val records = consumer.poll(50)
+          val records = consumer.poll(Duration.ofMillis(50L))
           received += records.count
           if (!records.isEmpty) {
             lastBatch = records

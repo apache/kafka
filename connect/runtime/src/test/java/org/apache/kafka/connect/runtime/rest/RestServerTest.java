@@ -16,41 +16,44 @@
  */
 package org.apache.kafka.connect.runtime.rest;
 
+import org.apache.http.HttpHost;
+import org.apache.http.HttpRequest;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpOptions;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
-import org.easymock.IAnswer;
 import org.junit.After;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.powermock.api.easymock.PowerMock;
 import org.powermock.api.easymock.annotation.MockStrict;
+import org.powermock.core.classloader.annotations.PowerMockIgnore;
 import org.powermock.modules.junit4.PowerMockRunner;
 
-import java.net.URI;
-import java.net.URISyntaxException;
+import javax.ws.rs.core.MediaType;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-import javax.ws.rs.client.Client;
-import javax.ws.rs.client.ClientBuilder;
-import javax.ws.rs.client.Invocation;
-import javax.ws.rs.client.WebTarget;
-import javax.ws.rs.core.Response;
-
-import static org.junit.Assert.assertEquals;
-
 @RunWith(PowerMockRunner.class)
+@PowerMockIgnore({"javax.net.ssl.*", "javax.security.*"})
 public class RestServerTest {
 
     @MockStrict
@@ -64,6 +67,7 @@ public class RestServerTest {
         server.stop();
     }
 
+    @SuppressWarnings("deprecation")
     private Map<String, String> baseWorkerProps() {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(DistributedConfig.STATUS_STORAGE_TOPIC_CONFIG, "status-topic");
@@ -80,15 +84,16 @@ public class RestServerTest {
     }
 
     @Test
-    public void testCORSEnabled() {
+    public void testCORSEnabled() throws IOException {
         checkCORSRequest("*", "http://bar.com", "http://bar.com", "PUT");
     }
 
     @Test
-    public void testCORSDisabled() {
+    public void testCORSDisabled() throws IOException {
         checkCORSRequest("", "http://bar.com", null, null);
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testParseListeners() {
         // Use listeners field
@@ -108,6 +113,7 @@ public class RestServerTest {
         Assert.assertArrayEquals(new String[] {"http://my-hostname:8080"}, server.parseListeners().toArray());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void testAdvertisedUri() {
         // Advertised URI from listeenrs without protocol
@@ -155,91 +161,94 @@ public class RestServerTest {
         Assert.assertEquals("http://my-hostname:8080/", server.advertisedUrl().toString());
     }
 
-    public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method) {
-        // To be able to set the Origin, we need to toggle this flag
+    @Test
+    public void testOptionsDoesNotIncludeWadlOutput() throws IOException {
+        Map<String, String> configMap = new HashMap<>(baseWorkerProps());
+        DistributedConfig workerConfig = new DistributedConfig(configMap);
 
+        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
+            workerConfig,
+            ConnectRestExtension.class))
+            .andStubReturn(Collections.emptyList());
+        PowerMock.replayAll();
+
+        server = new RestServer(workerConfig);
+        server.start(new HerderProvider(herder), herder.plugins());
+
+        HttpOptions request = new HttpOptions("/connectors");
+        request.addHeader("Content-Type", MediaType.WILDCARD);
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
+        HttpHost httpHost = new HttpHost(
+            server.advertisedUrl().getHost(),
+            server.advertisedUrl().getPort()
+        );
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        Assert.assertEquals(MediaType.TEXT_PLAIN, response.getEntity().getContentType().getValue());
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        response.getEntity().writeTo(baos);
+        Assert.assertArrayEquals(
+            request.getAllowedMethods(response).toArray(),
+            new String(baos.toByteArray(), StandardCharsets.UTF_8).split(", ")
+        );
+        PowerMock.verifyAll();
+    }
+
+    public void checkCORSRequest(String corsDomain, String origin, String expectedHeader, String method)
+        throws IOException {
         Map<String, String> workerProps = baseWorkerProps();
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_ORIGIN_CONFIG, corsDomain);
         workerProps.put(WorkerConfig.ACCESS_CONTROL_ALLOW_METHODS_CONFIG, method);
         WorkerConfig workerConfig = new DistributedConfig(workerProps);
-        System.setProperty("sun.net.http.allowRestrictedHeaders", "true");
 
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-        EasyMock.expect(plugins.newPlugins(Collections.EMPTY_LIST,
+        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
                                            workerConfig,
                                            ConnectRestExtension.class))
-            .andStubReturn(Collections.EMPTY_LIST);
+            .andStubReturn(Collections.emptyList());
 
         final Capture<Callback<Collection<String>>> connectorsCallback = EasyMock.newCapture();
         herder.connectors(EasyMock.capture(connectorsCallback));
-        PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
-            @Override
-            public Object answer() throws Throwable {
-                connectorsCallback.getValue().onCompletion(null, Arrays.asList("a", "b"));
-                return null;
-            }
+        PowerMock.expectLastCall().andAnswer(() -> {
+            connectorsCallback.getValue().onCompletion(null, Arrays.asList("a", "b"));
+            return null;
         });
 
         PowerMock.replayAll();
 
-
         server = new RestServer(workerConfig);
-        server.start(herder);
+        server.start(new HerderProvider(herder), herder.plugins());
+        HttpRequest request = new HttpGet("/connectors");
+        request.addHeader("Referer", origin + "/page");
+        request.addHeader("Origin", origin);
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
+        HttpHost httpHost = new HttpHost(
+            server.advertisedUrl().getHost(),
+            server.advertisedUrl().getPort()
+        );
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
 
-        Response response = request("/connectors")
-                .header("Referer", origin + "/page")
-                .header("Origin", origin)
-                .get();
-        assertEquals(200, response.getStatus());
+        Assert.assertEquals(200, response.getStatusLine().getStatusCode());
 
-        assertEquals(expectedHeader, response.getHeaderString("Access-Control-Allow-Origin"));
+        if (expectedHeader != null) {
+            Assert.assertEquals(expectedHeader,
+                response.getFirstHeader("Access-Control-Allow-Origin").getValue());
+        }
 
-        response = request("/connector-plugins/FileStreamSource/validate")
-            .header("Referer", origin + "/page")
-            .header("Origin", origin)
-            .header("Access-Control-Request-Method", method)
-            .options();
-        assertEquals(404, response.getStatus());
-        assertEquals(expectedHeader, response.getHeaderString("Access-Control-Allow-Origin"));
-        assertEquals(method, response.getHeaderString("Access-Control-Allow-Methods"));
+        request = new HttpOptions("/connector-plugins/FileStreamSource/validate");
+        request.addHeader("Referer", origin + "/page");
+        request.addHeader("Origin", origin);
+        request.addHeader("Access-Control-Request-Method", method);
+        response = httpClient.execute(httpHost, request);
+        Assert.assertEquals(404, response.getStatusLine().getStatusCode());
+        if (expectedHeader != null) {
+            Assert.assertEquals(expectedHeader,
+                response.getFirstHeader("Access-Control-Allow-Origin").getValue());
+        }
+        if (method != null) {
+            Assert.assertEquals(method,
+                response.getFirstHeader("Access-Control-Allow-Methods").getValue());
+        }
         PowerMock.verifyAll();
-    }
-
-    protected Invocation.Builder request(String path) {
-        return request(path, null, null, null);
-    }
-
-    protected Invocation.Builder request(String path, Map<String, String> queryParams) {
-        return request(path, null, null, queryParams);
-    }
-
-    protected Invocation.Builder request(String path, String templateName, Object templateValue) {
-        return request(path, templateName, templateValue, null);
-    }
-
-    protected Invocation.Builder request(String path, String templateName, Object templateValue,
-                                         Map<String, String> queryParams) {
-        Client client = ClientBuilder.newClient();
-        WebTarget target;
-        URI pathUri = null;
-        try {
-            pathUri = new URI(path);
-        } catch (URISyntaxException e) {
-            // Ignore, use restConnect and assume this is a valid path part
-        }
-        if (pathUri != null && pathUri.isAbsolute()) {
-            target = client.target(path);
-        } else {
-            target = client.target(server.advertisedUrl()).path(path);
-        }
-        if (templateName != null && templateValue != null) {
-            target = target.resolveTemplate(templateName, templateValue);
-        }
-        if (queryParams != null) {
-            for (Map.Entry<String, String> queryParam : queryParams.entrySet()) {
-                target = target.queryParam(queryParam.getKey(), queryParam.getValue());
-            }
-        }
-        return target.request();
     }
 }

@@ -269,7 +269,7 @@ public class StreamsMetadataStateTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowWhenSerializerIsNull() {
-        metadataState.getMetadataWithKey("table-three", "key", (Serializer) null);
+        metadataState.getMetadataWithKey("table-three", "key", (Serializer<Object>) null);
     }
 
     @Test(expected = NullPointerException.class)

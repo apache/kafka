@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.CommonFields;
 import org.apache.kafka.common.protocol.Errors;
@@ -24,6 +25,7 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.Field;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.InvalidRecordException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MutableRecordBatch;
@@ -113,9 +115,14 @@ public class ProduceRequest extends AbstractRequest {
      */
     private static final Schema PRODUCE_REQUEST_V6 = PRODUCE_REQUEST_V5;
 
+    /**
+     * V7 bumped up to indicate ZStandard capability. (see KIP-110)
+     */
+    private static final Schema PRODUCE_REQUEST_V7 = PRODUCE_REQUEST_V6;
+
     public static Schema[] schemaVersions() {
         return new Schema[] {PRODUCE_REQUEST_V0, PRODUCE_REQUEST_V1, PRODUCE_REQUEST_V2, PRODUCE_REQUEST_V3,
-            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5, PRODUCE_REQUEST_V6};
+            PRODUCE_REQUEST_V4, PRODUCE_REQUEST_V5, PRODUCE_REQUEST_V6, PRODUCE_REQUEST_V7};
     }
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
@@ -151,12 +158,12 @@ public class ProduceRequest extends AbstractRequest {
             return new Builder(minVersion, maxVersion, acks, timeout, partitionRecords, transactionalId);
         }
 
-        private Builder(short minVersion,
-                        short maxVersion,
-                        short acks,
-                        int timeout,
-                        Map<TopicPartition, MemoryRecords> partitionRecords,
-                        String transactionalId) {
+        public Builder(short minVersion,
+                       short maxVersion,
+                       short acks,
+                       int timeout,
+                       Map<TopicPartition, MemoryRecords> partitionRecords,
+                       String transactionalId) {
             super(ApiKeys.PRODUCE, minVersion, maxVersion);
             this.acks = acks;
             this.timeout = timeout;
@@ -166,6 +173,21 @@ public class ProduceRequest extends AbstractRequest {
 
         @Override
         public ProduceRequest build(short version) {
+            return build(version, true);
+        }
+
+        // Visible for testing only
+        public ProduceRequest buildUnsafe(short version) {
+            return build(version, false);
+        }
+
+        private ProduceRequest build(short version, boolean validate) {
+            if (validate) {
+                // Validate the given records first
+                for (MemoryRecords records : partitionRecords.values()) {
+                    ProduceRequest.validateRecords(version, records);
+                }
+            }
             return new ProduceRequest(version, acks, timeout, partitionRecords, transactionalId);
         }
 
@@ -192,8 +214,8 @@ public class ProduceRequest extends AbstractRequest {
     // put in the purgatory (due to client throttling, it can take a while before the response is sent).
     // Care should be taken in methods that use this field.
     private volatile Map<TopicPartition, MemoryRecords> partitionRecords;
-    private boolean transactional = false;
-    private boolean idempotent = false;
+    private boolean hasTransactionalRecords = false;
+    private boolean hasIdempotentRecords = false;
 
     private ProduceRequest(short version, short acks, int timeout, Map<TopicPartition, MemoryRecords> partitionRecords, String transactionalId) {
         super(ApiKeys.PRODUCE, version);
@@ -204,8 +226,9 @@ public class ProduceRequest extends AbstractRequest {
         this.partitionRecords = partitionRecords;
         this.partitionSizes = createPartitionSizes(partitionRecords);
 
-        for (MemoryRecords records : partitionRecords.values())
-            validateRecords(version, records);
+        for (MemoryRecords records : partitionRecords.values()) {
+            setFlags(records);
+        }
     }
 
     private static Map<TopicPartition, Integer> createPartitionSizes(Map<TopicPartition, MemoryRecords> partitionRecords) {
@@ -225,7 +248,7 @@ public class ProduceRequest extends AbstractRequest {
                 Struct partitionResponse = (Struct) partitionResponseObj;
                 int partition = partitionResponse.get(PARTITION_ID);
                 MemoryRecords records = (MemoryRecords) partitionResponse.getRecords(RECORD_SET_KEY_NAME);
-                validateRecords(version, records);
+                setFlags(records);
                 partitionRecords.put(new TopicPartition(topic, partition), records);
             }
         }
@@ -235,28 +258,11 @@ public class ProduceRequest extends AbstractRequest {
         transactionalId = struct.getOrElse(NULLABLE_TRANSACTIONAL_ID, null);
     }
 
-    private void validateRecords(short version, MemoryRecords records) {
-        if (version >= 3) {
-            Iterator<MutableRecordBatch> iterator = records.batches().iterator();
-            if (!iterator.hasNext())
-                throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
-                        "one record batch");
-
-            MutableRecordBatch entry = iterator.next();
-            if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
-                throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
-                        "contain record batches with magic version 2");
-
-            if (iterator.hasNext())
-                throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
-                        "contain exactly one record batch");
-            idempotent = entry.hasProducerId();
-            transactional = entry.isTransactional();
-        }
-
-        // Note that we do not do similar validation for older versions to ensure compatibility with
-        // clients which send the wrong magic version in the wrong version of the produce request. The broker
-        // did not do this validation before, so we maintain that behavior here.
+    private void setFlags(MemoryRecords records) {
+        Iterator<MutableRecordBatch> iterator = records.batches().iterator();
+        MutableRecordBatch entry = iterator.next();
+        hasIdempotentRecords = hasIdempotentRecords || entry.hasProducerId();
+        hasTransactionalRecords = hasTransactionalRecords || entry.isTransactional();
     }
 
     /**
@@ -330,6 +336,7 @@ public class ProduceRequest extends AbstractRequest {
             case 4:
             case 5:
             case 6:
+            case 7:
                 return new ProduceResponse(responseMap, throttleTimeMs);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
@@ -359,12 +366,12 @@ public class ProduceRequest extends AbstractRequest {
         return transactionalId;
     }
 
-    public boolean isTransactional() {
-        return transactional;
+    public boolean hasTransactionalRecords() {
+        return hasTransactionalRecords;
     }
 
-    public boolean isIdempotent() {
-        return idempotent;
+    public boolean hasIdempotentRecords() {
+        return hasIdempotentRecords;
     }
 
     /**
@@ -381,6 +388,32 @@ public class ProduceRequest extends AbstractRequest {
 
     public void clearPartitionRecords() {
         partitionRecords = null;
+    }
+
+    public static void validateRecords(short version, MemoryRecords records) {
+        if (version >= 3) {
+            Iterator<MutableRecordBatch> iterator = records.batches().iterator();
+            if (!iterator.hasNext())
+                throw new InvalidRecordException("Produce requests with version " + version + " must have at least " +
+                    "one record batch");
+
+            MutableRecordBatch entry = iterator.next();
+            if (entry.magic() != RecordBatch.MAGIC_VALUE_V2)
+                throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
+                    "contain record batches with magic version 2");
+            if (version < 7 && entry.compressionType() == CompressionType.ZSTD) {
+                throw new UnsupportedCompressionTypeException("Produce requests with version " + version + " are not allowed to " +
+                    "use ZStandard compression");
+            }
+
+            if (iterator.hasNext())
+                throw new InvalidRecordException("Produce requests with version " + version + " are only allowed to " +
+                    "contain exactly one record batch");
+        }
+
+        // Note that we do not do similar validation for older versions to ensure compatibility with
+        // clients which send the wrong magic version in the wrong version of the produce request. The broker
+        // did not do this validation before, so we maintain that behavior here.
     }
 
     public static ProduceRequest parse(ByteBuffer buffer, short version) {
@@ -400,6 +433,7 @@ public class ProduceRequest extends AbstractRequest {
             case 4:
             case 5:
             case 6:
+            case 7:
                 return RecordBatch.MAGIC_VALUE_V2;
 
             default:

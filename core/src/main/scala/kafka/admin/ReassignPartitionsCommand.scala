@@ -19,7 +19,6 @@ package kafka.admin
 import java.util.Properties
 import java.util.concurrent.ExecutionException
 
-import joptsimple.OptionParser
 import kafka.common.AdminCommandFailedException
 import kafka.log.LogConfig
 import kafka.log.LogConfig._
@@ -29,12 +28,11 @@ import kafka.utils.json.JsonValue
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo
 import org.apache.kafka.clients.admin.{AdminClientConfig, AlterReplicaLogDirsOptions, AdminClient => JAdminClient}
-import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.errors.ReplicaNotAvailableException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{TopicPartition, TopicPartitionReplica}
 import org.apache.zookeeper.KeeperException.NodeExistsException
-import org.apache.kafka.common.TopicPartition
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -47,6 +45,8 @@ object ReassignPartitionsCommand extends Logging {
   private[admin] val AnyLogDir = "any"
 
   private[admin] val EarliestVersion = 1
+
+  val helpText = "This tool helps to moves topic partitions between replicas."
 
   def main(args: Array[String]): Unit = {
     val opts = validateAndParseArgs(args)
@@ -415,8 +415,7 @@ object ReassignPartitionsCommand extends Logging {
   def validateAndParseArgs(args: Array[String]): ReassignPartitionsCommandOptions = {
     val opts = new ReassignPartitionsCommandOptions(args)
 
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "This command moves topic partitions between replicas.")
+    CommandLineUtils.printHelpAndExitIfNeeded(opts, helpText)
 
     // Should have exactly one action
     val actions = Seq(opts.generateOpt, opts.executeOpt, opts.verifyOpt).count(opts.options.has _)
@@ -444,10 +443,9 @@ object ReassignPartitionsCommand extends Logging {
     opts
   }
 
-  class ReassignPartitionsCommandOptions(args: Array[String]) {
-    val parser = new OptionParser(false)
+  class ReassignPartitionsCommandOptions(args: Array[String]) extends CommandDefaultOptions(args)  {
     val bootstrapServerOpt = parser.accepts("bootstrap-server", "the server(s) to use for bootstrapping. REQUIRED if " +
-                      "an absolution path of the log directory is specified for any replica in the reassignment json file")
+                      "an absolute path of the log directory is specified for any replica in the reassignment json file")
                       .withRequiredArg
                       .describedAs("Server(s) to use for bootstrapping")
                       .ofType(classOf[String])
@@ -468,8 +466,7 @@ object ReassignPartitionsCommand extends Logging {
                       "The format to use is - \n" +
                       "{\"partitions\":\n\t[{\"topic\": \"foo\",\n\t  \"partition\": 1,\n\t  \"replicas\": [1,2,3],\n\t  \"log_dirs\": [\"dir1\",\"dir2\",\"dir3\"] }],\n\"version\":1\n}\n" +
                       "Note that \"log_dirs\" is optional. When it is specified, its length must equal the length of the replicas list. The value in this list " +
-                      "can be either \"any\" or the absolution path of the log directory on the broker. If absolute log directory path is specified, it is currently required that " +
-                      "the replica has not already been created on that broker. The replica will then be created in the specified log directory on the broker later.")
+                      "can be either \"any\" or the absolution path of the log directory on the broker. If absolute log directory path is specified, the replica will be moved to the specified log directory on the broker.")
                       .withRequiredArg
                       .describedAs("manual assignment json file path")
                       .ofType(classOf[String])
@@ -500,7 +497,7 @@ object ReassignPartitionsCommand extends Logging {
                       .describedAs("timeout")
                       .ofType(classOf[Long])
                       .defaultsTo(10000)
-    val options = parser.parse(args : _*)
+    options = parser.parse(args : _*)
   }
 }
 

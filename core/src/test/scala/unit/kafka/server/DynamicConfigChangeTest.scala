@@ -59,6 +59,33 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
+  @Test
+  def testDynamicTopicConfigChange() {
+    val tp = new TopicPartition("test", 0)
+    val oldSegmentSize = 1000
+    val logProps = new Properties()
+    logProps.put(SegmentBytesProp, oldSegmentSize.toString)
+    createTopic(tp.topic, 1, 1, logProps)
+    TestUtils.retry(10000) {
+      val logOpt = this.servers.head.logManager.getLog(tp)
+      assertTrue(logOpt.isDefined)
+      assertEquals(oldSegmentSize, logOpt.get.config.segmentSize)
+    }
+
+    val log = servers.head.logManager.getLog(tp).get
+
+    val newSegmentSize = 2000
+    logProps.put(SegmentBytesProp, newSegmentSize.toString)
+    adminZkClient.changeTopicConfig(tp.topic, logProps)
+    TestUtils.retry(10000) {
+      assertEquals(newSegmentSize, log.config.segmentSize)
+    }
+
+    (1 to 50).foreach(i => TestUtils.produceMessage(servers, tp.topic, i.toString))
+    // Verify that the new config is used for all segments
+    assertTrue("Log segment size change not applied", log.logSegments.forall(_.size > 1000))
+  }
+
   private def testQuotaConfigChange(user: String, clientId: String, rootEntityType: String, configEntityName: String) {
     assertTrue("Should contain a ConfigHandler for " + rootEntityType ,
                this.servers.head.dynamicConfigHandlers.contains(rootEntityType))
@@ -66,7 +93,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     props.put(DynamicConfig.Client.ProducerByteRateOverrideProp, "1000")
     props.put(DynamicConfig.Client.ConsumerByteRateOverrideProp, "2000")
 
-    val quotaManagers = servers.head.apis.quotas
+    val quotaManagers = servers.head.dataPlaneRequestProcessor.quotas
     rootEntityType match {
       case ConfigType.Client => adminZkClient.changeClientIdConfig(configEntityName, props)
       case _ => adminZkClient.changeUserOrUserClientIdConfig(configEntityName, props)
@@ -152,7 +179,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     // Remove config change znodes to force quota initialization only through loading of user/client quotas
     zkClient.getChildren(ConfigEntityChangeNotificationZNode.path).foreach { p => zkClient.deletePath(ConfigEntityChangeNotificationZNode.path + "/" + p) }
     server.startup()
-    val quotaManagers = server.apis.quotas
+    val quotaManagers = server.dataPlaneRequestProcessor.quotas
 
     assertEquals(Quota.upperBound(1000),  quotaManagers.produce.quota("someuser", "overriddenClientId"))
     assertEquals(Quota.upperBound(2000),  quotaManagers.fetch.quota("someuser", "overriddenClientId"))
@@ -183,7 +210,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     // Create a mock ConfigHandler to record config changes it is asked to process
     val entityArgument = EasyMock.newCapture[String]
     val propertiesArgument = EasyMock.newCapture[Properties]
-    val handler = EasyMock.createNiceMock(classOf[ConfigHandler])
+    val handler: ConfigHandler = EasyMock.createNiceMock(classOf[ConfigHandler])
     handler.processConfigChanges(
       EasyMock.and(EasyMock.capture(entityArgument), EasyMock.isA(classOf[String])),
       EasyMock.and(EasyMock.capture(propertiesArgument), EasyMock.isA(classOf[Properties])))

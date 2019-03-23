@@ -14,60 +14,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package org.apache.kafka.common.requests;
 
-
+import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.ArrayOf;
-import org.apache.kafka.common.protocol.types.Field;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
-import static org.apache.kafka.common.protocol.CommonFields.ERROR_MESSAGE;
-import static org.apache.kafka.common.protocol.CommonFields.THROTTLE_TIME_MS;
-import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
-
 public class CreateTopicsResponse extends AbstractResponse {
-    private static final String TOPIC_ERRORS_KEY_NAME = "topic_errors";
-
-    private static final Schema TOPIC_ERROR_CODE = new Schema(
-            TOPIC_NAME,
-            ERROR_CODE);
-
-    // Improves on TOPIC_ERROR_CODE by adding an error_message to complement the error_code
-    private static final Schema TOPIC_ERROR = new Schema(
-            TOPIC_NAME,
-            ERROR_CODE,
-            ERROR_MESSAGE);
-
-    private static final Schema CREATE_TOPICS_RESPONSE_V0 = new Schema(
-            new Field(TOPIC_ERRORS_KEY_NAME, new ArrayOf(TOPIC_ERROR_CODE), "An array of per topic error codes."));
-
-    private static final Schema CREATE_TOPICS_RESPONSE_V1 = new Schema(
-            new Field(TOPIC_ERRORS_KEY_NAME, new ArrayOf(TOPIC_ERROR), "An array of per topic errors."));
-
-    private static final Schema CREATE_TOPICS_RESPONSE_V2 = new Schema(
-            THROTTLE_TIME_MS,
-            new Field(TOPIC_ERRORS_KEY_NAME, new ArrayOf(TOPIC_ERROR), "An array of per topic errors."));
-
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema CREATE_TOPICS_RESPONSE_V3 = CREATE_TOPICS_RESPONSE_V2;
-
-    public static Schema[] schemaVersions() {
-        return new Schema[]{CREATE_TOPICS_RESPONSE_V0, CREATE_TOPICS_RESPONSE_V1, CREATE_TOPICS_RESPONSE_V2,
-            CREATE_TOPICS_RESPONSE_V3};
-    }
-
     /**
      * Possible error codes:
      *
@@ -84,63 +44,43 @@ public class CreateTopicsResponse extends AbstractResponse {
      * POLICY_VIOLATION(44)
      */
 
-    private final Map<String, ApiError> errors;
-    private final int throttleTimeMs;
+    private final CreateTopicsResponseData data;
 
-    public CreateTopicsResponse(Map<String, ApiError> errors) {
-        this(DEFAULT_THROTTLE_TIME, errors);
+    public CreateTopicsResponse(CreateTopicsResponseData data) {
+        this.data = data;
     }
 
-    public CreateTopicsResponse(int throttleTimeMs, Map<String, ApiError> errors) {
-        this.throttleTimeMs = throttleTimeMs;
-        this.errors = errors;
+    public CreateTopicsResponse(Struct struct, short version) {
+        this.data = new CreateTopicsResponseData(struct, version);
     }
 
-    public CreateTopicsResponse(Struct struct) {
-        Object[] topicErrorStructs = struct.getArray(TOPIC_ERRORS_KEY_NAME);
-        Map<String, ApiError> errors = new HashMap<>();
-        for (Object topicErrorStructObj : topicErrorStructs) {
-            Struct topicErrorStruct = (Struct) topicErrorStructObj;
-            String topic = topicErrorStruct.get(TOPIC_NAME);
-            errors.put(topic, new ApiError(topicErrorStruct));
-        }
-
-        this.throttleTimeMs = struct.getOrElse(THROTTLE_TIME_MS, DEFAULT_THROTTLE_TIME);
-        this.errors = errors;
+    public CreateTopicsResponseData data() {
+        return data;
     }
 
     @Override
     protected Struct toStruct(short version) {
-        Struct struct = new Struct(ApiKeys.CREATE_TOPICS.responseSchema(version));
-        struct.setIfExists(THROTTLE_TIME_MS, throttleTimeMs);
-
-        List<Struct> topicErrorsStructs = new ArrayList<>(errors.size());
-        for (Map.Entry<String, ApiError> topicError : errors.entrySet()) {
-            Struct topicErrorsStruct = struct.instance(TOPIC_ERRORS_KEY_NAME);
-            topicErrorsStruct.set(TOPIC_NAME, topicError.getKey());
-            topicError.getValue().write(topicErrorsStruct);
-            topicErrorsStructs.add(topicErrorsStruct);
-        }
-        struct.set(TOPIC_ERRORS_KEY_NAME, topicErrorsStructs.toArray());
-        return struct;
+        return data.toStruct(version);
     }
 
     @Override
     public int throttleTimeMs() {
-        return throttleTimeMs;
-    }
-
-    public Map<String, ApiError> errors() {
-        return errors;
+        return data.throttleTimeMs();
     }
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        return apiErrorCounts(errors);
+        HashMap<Errors, Integer> counts = new HashMap<>();
+        for (CreatableTopicResult result : data.topics()) {
+            Errors error = Errors.forCode(result.errorCode());
+            counts.put(error, counts.getOrDefault(error, 0) + 1);
+        }
+        return counts;
     }
 
     public static CreateTopicsResponse parse(ByteBuffer buffer, short version) {
-        return new CreateTopicsResponse(ApiKeys.CREATE_TOPICS.responseSchema(version).read(buffer));
+        return new CreateTopicsResponse(
+            ApiKeys.CREATE_TOPICS.responseSchema(version).read(buffer), version);
     }
 
     @Override

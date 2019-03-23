@@ -81,8 +81,8 @@ class DemoCallBack implements Callback {
 
     /**
      * A callback method the user can implement to provide asynchronous handling of request completion. This method will
-     * be called when the record sent to the server has been acknowledged. Exactly one of the arguments will be
-     * non-null.
+     * be called when the record sent to the server has been acknowledged. When exception is not null in the callback,
+     * metadata will contain the special -1 value for all fields except for topicPartition, which will be valid.
      *
      * @param metadata  The metadata for the record that was sent (i.e. the partition and offset). Null if an error
      *                  occurred.

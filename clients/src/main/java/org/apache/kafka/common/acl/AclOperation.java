@@ -25,19 +25,19 @@ import java.util.Locale;
 /**
  * Represents an operation which an ACL grants or denies permission to perform.
  *
- * Some operations imply other operations.
+ * Some operations imply other operations:
+ * <ul>
+ * <li><code>ALLOW ALL</code> implies <code>ALLOW</code> everything
+ * <li><code>DENY ALL</code> implies <code>DENY</code> everything
  *
- * ALLOW ALL implies ALLOW everything
- * DENY ALL implies DENY everything
+ * <li><code>ALLOW READ</code> implies <code>ALLOW DESCRIBE</code>
+ * <li><code>ALLOW WRITE</code> implies <code>ALLOW DESCRIBE</code>
+ * <li><code>ALLOW DELETE</code> implies <code>ALLOW DESCRIBE</code>
  *
- * ALLOW READ implies ALLOW DESCRIBE
- * ALLOW WRITE implies ALLOW DESCRIBE
- * ALLOW DELETE implies ALLOW DESCRIBE
+ * <li><code>ALLOW ALTER</code> implies <code>ALLOW DESCRIBE</code>
  *
- * ALLOW ALTER implies ALLOW DESCRIBE
- *
- * ALLOW ALTER_CONFIGS implies ALLOW DESCRIBE_CONFIGS
- *
+ * <li><code>ALLOW ALTER_CONFIGS</code> implies <code>ALLOW DESCRIBE_CONFIGS</code>
+ * </ul>
  * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
 @InterfaceStability.Evolving

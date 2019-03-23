@@ -86,6 +86,7 @@ abstract class NumberConverter<T extends Number> implements Converter, HeaderCon
         configure(conf);
     }
 
+    @SuppressWarnings("unchecked")
     protected T cast(Object value) {
         return (T) value;
     }

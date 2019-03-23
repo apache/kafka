@@ -197,6 +197,9 @@ public class ProducerBatchTest {
                 if (compressionType == CompressionType.NONE && magic < MAGIC_VALUE_V2)
                     continue;
 
+                if (compressionType == CompressionType.ZSTD && magic < MAGIC_VALUE_V2)
+                    continue;
+
                 MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), magic,
                         compressionType, TimestampType.CREATE_TIME, 0L);
 

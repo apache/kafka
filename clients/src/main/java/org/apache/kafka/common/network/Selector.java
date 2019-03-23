@@ -27,6 +27,7 @@ import org.apache.kafka.common.metrics.stats.Count;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.metrics.stats.SampledStat;
+import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -249,10 +250,11 @@ public class Selector implements Selectable, AutoCloseable {
     public void connect(String id, InetSocketAddress address, int sendBufferSize, int receiveBufferSize) throws IOException {
         ensureNotRegistered(id);
         SocketChannel socketChannel = SocketChannel.open();
+        SelectionKey key = null;
         try {
             configureSocketChannel(socketChannel, sendBufferSize, receiveBufferSize);
             boolean connected = doConnect(socketChannel, address);
-            SelectionKey key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
+            key = registerChannel(id, socketChannel, SelectionKey.OP_CONNECT);
 
             if (connected) {
                 // OP_CONNECT won't trigger for immediately connected channels
@@ -261,6 +263,9 @@ public class Selector implements Selectable, AutoCloseable {
                 key.interestOps(0);
             }
         } catch (IOException | RuntimeException e) {
+            if (key != null)
+                immediatelyConnectedKeys.remove(key);
+            channels.remove(id);
             socketChannel.close();
             throw e;
         }
@@ -315,10 +320,12 @@ public class Selector implements Selectable, AutoCloseable {
             throw new IllegalStateException("There is already a connection for id " + id + " that is still being closed");
     }
 
-    private SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
+    protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
         SelectionKey key = socketChannel.register(nioSelector, interestedOps);
         KafkaChannel channel = buildAndAttachKafkaChannel(socketChannel, id, key);
         this.channels.put(id, channel);
+        if (idleExpiryManager != null)
+            idleExpiryManager.update(channel.id(), time.nanoseconds());
         return key;
     }
 
@@ -526,14 +533,29 @@ public class Selector implements Selectable, AutoCloseable {
 
                 /* if channel is not ready finish prepare */
                 if (channel.isConnected() && !channel.ready()) {
-                    try {
-                        channel.prepare();
-                    } catch (AuthenticationException e) {
-                        sensors.failedAuthentication.record();
-                        throw e;
+                    channel.prepare();
+                    if (channel.ready()) {
+                        long readyTimeMs = time.milliseconds();
+                        boolean isReauthentication = channel.successfulAuthentications() > 1;
+                        if (isReauthentication) {
+                            sensors.successfulReauthentication.record(1.0, readyTimeMs);
+                            if (channel.reauthenticationLatencyMs() == null)
+                                log.warn(
+                                    "Should never happen: re-authentication latency for a re-authenticated channel was null; continuing...");
+                            else
+                                sensors.reauthenticationLatency
+                                    .record(channel.reauthenticationLatencyMs().doubleValue(), readyTimeMs);
+                        } else {
+                            sensors.successfulAuthentication.record(1.0, readyTimeMs);
+                            if (!channel.connectedClientSupportsReauthentication())
+                                sensors.successfulAuthenticationNoReauth.record(1.0, readyTimeMs);
+                        }
+                        log.debug("Successfully {}authenticated with {}", isReauthentication ?
+                            "re-" : "", channel.socketDescription());
                     }
-                    if (channel.ready())
-                        sensors.successfulAuthentication.record();
+                    List<NetworkReceive> responsesReceivedDuringReauthentication = channel
+                            .getAndClearResponsesReceivedDuringReauthentication();
+                    responsesReceivedDuringReauthentication.forEach(receive -> addToStagedReceives(channel, receive));
                 }
 
                 attemptRead(key, channel);
@@ -549,7 +571,8 @@ public class Selector implements Selectable, AutoCloseable {
                 }
 
                 /* if channel is ready write to any sockets that have space in their buffer and for which we have data */
-                if (channel.ready() && key.isWritable()) {
+                if (channel.ready() && key.isWritable() && !channel.maybeBeginClientReauthentication(
+                    () -> channelStartTimeNanos != 0 ? channelStartTimeNanos : currentTimeNanos)) {
                     Send send;
                     try {
                         send = channel.write();
@@ -569,12 +592,22 @@ public class Selector implements Selectable, AutoCloseable {
 
             } catch (Exception e) {
                 String desc = channel.socketDescription();
-                if (e instanceof IOException)
+                if (e instanceof IOException) {
                     log.debug("Connection with {} disconnected", desc, e);
-                else if (e instanceof AuthenticationException) // will be logged later as error by clients
-                    log.debug("Connection with {} disconnected due to authentication exception", desc, e);
-                else
+                } else if (e instanceof AuthenticationException) {
+                    boolean isReauthentication = channel.successfulAuthentications() > 0;
+                    if (isReauthentication)
+                        sensors.failedReauthentication.record();
+                    else
+                        sensors.failedAuthentication.record();
+                    String exceptionMessage = e.getMessage();
+                    if (e instanceof DelayedResponseAuthenticationException)
+                        exceptionMessage = e.getCause().getMessage();
+                    log.info("Failed {}authentication with {} ({})", isReauthentication ? "re-" : "",
+                        desc, exceptionMessage);
+                } else {
                     log.warn("Unexpected error from {}; closing connection", desc, e);
+                }
 
                 if (e instanceof DelayedResponseAuthenticationException)
                     maybeDelayCloseOnAuthenticationFailure(channel);
@@ -887,6 +920,28 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     /**
+     * Returns the lowest priority channel chosen using the following sequence:
+     *   1) If one or more channels are in closing state, return any one of them
+     *   2) If idle expiry manager is enabled, return the least recently updated channel
+     *   3) Otherwise return any of the channels
+     *
+     * This method is used to close a channel to accommodate a new channel on the inter-broker listener
+     * when broker-wide `max.connections` limit is enabled.
+     */
+    public KafkaChannel lowestPriorityChannel() {
+        KafkaChannel channel = null;
+        if (!closingChannels.isEmpty()) {
+            channel = closingChannels.values().iterator().next();
+        } else if (idleExpiryManager != null && !idleExpiryManager.lruConnections.isEmpty()) {
+            String channelId = idleExpiryManager.lruConnections.keySet().iterator().next();
+            channel = channel(channelId);
+        } else if (!channels.isEmpty()) {
+            channel = channels.values().iterator().next();
+        }
+        return channel;
+    }
+
+    /**
      * Get the channel associated with selectionKey
      */
     private KafkaChannel channel(SelectionKey key) {
@@ -959,7 +1014,7 @@ public class Selector implements Selectable, AutoCloseable {
         return deque == null ? 0 : deque.size();
     }
 
-    private class SelectorMetrics {
+    private class SelectorMetrics implements AutoCloseable {
         private final Metrics metrics;
         private final String metricGrpPrefix;
         private final Map<String, String> metricTags;
@@ -968,7 +1023,11 @@ public class Selector implements Selectable, AutoCloseable {
         public final Sensor connectionClosed;
         public final Sensor connectionCreated;
         public final Sensor successfulAuthentication;
+        public final Sensor successfulReauthentication;
+        public final Sensor successfulAuthenticationNoReauth;
+        public final Sensor reauthenticationLatency;
         public final Sensor failedAuthentication;
+        public final Sensor failedReauthentication;
         public final Sensor bytesTransferred;
         public final Sensor bytesSent;
         public final Sensor bytesReceived;
@@ -1005,9 +1064,34 @@ public class Selector implements Selectable, AutoCloseable {
             this.successfulAuthentication.add(createMeter(metrics, metricGrpName, metricTags,
                     "successful-authentication", "connections with successful authentication"));
 
+            this.successfulReauthentication = sensor("successful-reauthentication:" + tagsSuffix);
+            this.successfulReauthentication.add(createMeter(metrics, metricGrpName, metricTags,
+                    "successful-reauthentication", "successful re-authentication of connections"));
+
+            this.successfulAuthenticationNoReauth = sensor("successful-authentication-no-reauth:" + tagsSuffix);
+            MetricName successfulAuthenticationNoReauthMetricName = metrics.metricName(
+                    "successful-authentication-no-reauth-total", metricGrpName,
+                    "The total number of connections with successful authentication where the client does not support re-authentication",
+                    metricTags);
+            this.successfulAuthenticationNoReauth.add(successfulAuthenticationNoReauthMetricName, new Total());
+
             this.failedAuthentication = sensor("failed-authentication:" + tagsSuffix);
             this.failedAuthentication.add(createMeter(metrics, metricGrpName, metricTags,
                     "failed-authentication", "connections with failed authentication"));
+
+            this.failedReauthentication = sensor("failed-reauthentication:" + tagsSuffix);
+            this.failedReauthentication.add(createMeter(metrics, metricGrpName, metricTags,
+                    "failed-reauthentication", "failed re-authentication of connections"));
+
+            this.reauthenticationLatency = sensor("reauthentication-latency:" + tagsSuffix);
+            MetricName reauthenticationLatencyMaxMetricName = metrics.metricName("reauthentication-latency-max",
+                    metricGrpName, "The max latency observed due to re-authentication",
+                    metricTags);
+            this.reauthenticationLatency.add(reauthenticationLatencyMaxMetricName, new Max());
+            MetricName reauthenticationLatencyAvgMetricName = metrics.metricName("reauthentication-latency-avg",
+                    metricGrpName, "The average latency observed due to re-authentication",
+                    metricTags);
+            this.reauthenticationLatency.add(reauthenticationLatencyAvgMetricName, new Avg());
 
             this.bytesTransferred = sensor("bytes-sent-received:" + tagsSuffix);
             bytesTransferred.add(createMeter(metrics, metricGrpName, metricTags, new Count(),

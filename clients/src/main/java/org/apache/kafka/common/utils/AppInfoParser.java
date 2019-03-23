@@ -41,7 +41,7 @@ public class AppInfoParser {
         try (InputStream resourceStream = AppInfoParser.class.getResourceAsStream("/kafka/kafka-version.properties")) {
             props.load(resourceStream);
         } catch (Exception e) {
-            log.warn("Error while loading kafka-version.properties :" + e.getMessage());
+            log.warn("Error while loading kafka-version.properties: {}", e.getMessage());
         }
         VERSION = props.getProperty("version", "unknown").trim();
         COMMIT_ID = props.getProperty("commitId", "unknown").trim();
@@ -106,8 +106,8 @@ public class AppInfoParser {
     public static class AppInfo implements AppInfoMBean {
 
         public AppInfo() {
-            log.info("Kafka version : " + AppInfoParser.getVersion());
-            log.info("Kafka commitId : " + AppInfoParser.getCommitId());
+            log.info("Kafka version: {}", AppInfoParser.getVersion());
+            log.info("Kafka commitId: {}", AppInfoParser.getCommitId());
         }
 
         @Override

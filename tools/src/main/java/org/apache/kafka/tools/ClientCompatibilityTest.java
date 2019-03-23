@@ -52,6 +52,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -260,63 +261,66 @@ public class ClientCompatibilityTest {
                     nodes.size(), testConfig.numClusterNodes);
             }
             tryFeature("createTopics", testConfig.createTopicsSupported,
-                new Invoker() {
-                    @Override
-                    public void invoke() throws Throwable {
-                        try {
-                            client.createTopics(Collections.singleton(
-                                new NewTopic("newtopic", 1, (short) 1))).all().get();
-                        } catch (ExecutionException e) {
-                            throw e.getCause();
-                        }
+                () -> {
+                    try {
+                        client.createTopics(Collections.singleton(
+                            new NewTopic("newtopic", 1, (short) 1))).all().get();
+                    } catch (ExecutionException e) {
+                        throw e.getCause();
                     }
                 },
-                new ResultTester() {
-                    @Override
-                    public void test() throws Throwable {
-                        while (true) {
-                            try {
-                                client.describeTopics(Collections.singleton("newtopic")).all().get();
-                                break;
-                            } catch (ExecutionException e) {
-                                if (e.getCause() instanceof UnknownTopicOrPartitionException)
-                                    continue;
-                                throw e;
-                            }
-                        }
-                    }
-                });
+                () ->  createTopicsResultTest(client, Collections.singleton("newtopic"))
+            );
+
             while (true) {
                 Collection<TopicListing> listings = client.listTopics().listings().get();
                 if (!testConfig.createTopicsSupported)
                     break;
-                boolean foundNewTopic = false;
-                for (TopicListing listing : listings) {
-                    if (listing.name().equals("newtopic")) {
-                        if (listing.isInternal())
-                            throw new KafkaException("Did not expect newtopic to be an internal topic.");
-                        foundNewTopic = true;
-                    }
-                }
-                if (foundNewTopic)
+
+                if (topicExists(listings, "newtopic"))
                     break;
+
                 Thread.sleep(1);
                 log.info("Did not see newtopic.  Retrying listTopics...");
             }
+
             tryFeature("describeAclsSupported", testConfig.describeAclsSupported,
-                new Invoker() {
-                    @Override
-                    public void invoke() throws Throwable {
-                        try {
-                            client.describeAcls(AclBindingFilter.ANY).values().get();
-                        } catch (ExecutionException e) {
-                            if (e.getCause() instanceof SecurityDisabledException)
-                                return;
-                            throw e.getCause();
-                        }
+                () -> {
+                    try {
+                        client.describeAcls(AclBindingFilter.ANY).values().get();
+                    } catch (ExecutionException e) {
+                        if (e.getCause() instanceof SecurityDisabledException)
+                            return;
+                        throw e.getCause();
                     }
                 });
         }
+    }
+
+    private void createTopicsResultTest(AdminClient client, Collection<String> topics)
+            throws InterruptedException, ExecutionException {
+        while (true) {
+            try {
+                client.describeTopics(topics).all().get();
+                break;
+            } catch (ExecutionException e) {
+                if (e.getCause() instanceof UnknownTopicOrPartitionException)
+                    continue;
+                throw e;
+            }
+        }
+    }
+
+    private boolean topicExists(Collection<TopicListing> listings, String topicName) {
+        boolean foundTopic = false;
+        for (TopicListing listing : listings) {
+            if (listing.name().equals(topicName)) {
+                if (listing.isInternal())
+                    throw new KafkaException(String.format("Did not expect %s to be an internal topic.", topicName));
+                foundTopic = true;
+            }
+        }
+        return foundTopic;
     }
 
     private static class OffsetsForTime {
@@ -336,18 +340,8 @@ public class ClientCompatibilityTest {
         }
 
         @Override
-        public void configure(Map<String, ?> configs, boolean isKey) {
-            // nothing to do
-        }
-
-        @Override
         public byte[] deserialize(String topic, byte[] data) {
             return data;
-        }
-
-        @Override
-        public void close() {
-            // nothing to do
         }
 
         @Override
@@ -383,18 +377,8 @@ public class ClientCompatibilityTest {
             }
             final OffsetsForTime offsetsForTime = new OffsetsForTime();
             tryFeature("offsetsForTimes", testConfig.offsetsForTimesSupported,
-                    new Invoker() {
-                        @Override
-                        public void invoke() {
-                            offsetsForTime.result = consumer.offsetsForTimes(timestampsToSearch);
-                        }
-                    },
-                    new ResultTester() {
-                        @Override
-                        public void test() {
-                            log.info("offsetsForTime = {}", offsetsForTime.result);
-                        }
-                    });
+                () -> offsetsForTime.result = consumer.offsetsForTimes(timestampsToSearch),
+                () -> log.info("offsetsForTime = {}", offsetsForTime.result));
             // Whether or not offsetsForTimes works, beginningOffsets and endOffsets
             // should work.
             consumer.beginningOffsets(timestampsToSearch.keySet());
@@ -413,7 +397,7 @@ public class ClientCompatibilityTest {
                         if (curTime - prodTimeMs > TIMEOUT_MS)
                             throw new RuntimeException("Timed out after " + TIMEOUT_MS + " ms.");
                         if (recordIter == null) {
-                            ConsumerRecords<byte[], byte[]> records = consumer.poll(100);
+                            ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
                             recordIter = records.iterator();
                         }
                         if (recordIter.hasNext())
@@ -485,11 +469,7 @@ public class ClientCompatibilityTest {
     }
 
     private void tryFeature(String featureName, boolean supported, Invoker invoker) throws Throwable {
-        tryFeature(featureName, supported, invoker, new ResultTester() {
-                @Override
-                public void test() {
-                }
-            });
+        tryFeature(featureName, supported, invoker, () -> { });
     }
 
     private void tryFeature(String featureName, boolean supported, Invoker invoker, ResultTester resultTester)

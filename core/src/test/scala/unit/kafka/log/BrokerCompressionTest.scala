@@ -25,7 +25,7 @@ import org.junit.Assert._
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
 import java.util.{Collection, Properties}
 
@@ -64,7 +64,11 @@ class BrokerCompressionTest(messageCompression: String, brokerCompression: Strin
     log.appendAsLeader(MemoryRecords.withRecords(CompressionType.forId(messageCompressionCode.codec), 0,
           new SimpleRecord("hello".getBytes), new SimpleRecord("there".getBytes)), leaderEpoch = 0)
 
-    def readBatch(offset: Int) = log.readUncommitted(offset, 4096).records.batches.iterator.next()
+    def readBatch(offset: Int): RecordBatch = {
+      val fetchInfo = log.read(offset, 4096, maxOffset = None,
+        includeAbortedTxns = false, minOneMessage = true)
+      fetchInfo.records.batches.iterator.next()
+    }
 
     if (!brokerCompression.equals("producer")) {
       val brokerCompressionCode = BrokerCompressionCodec.getCompressionCodec(brokerCompression)

@@ -24,7 +24,7 @@ import org.junit.Assert._
 
 class ProducerIdManagerTest {
 
-  private val zkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+  private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
 
   @After
   def tearDown(): Unit = {

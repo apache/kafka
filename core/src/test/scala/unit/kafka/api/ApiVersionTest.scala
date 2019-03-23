@@ -80,9 +80,25 @@ class ApiVersionTest {
     assertEquals(KAFKA_2_0_IV0, ApiVersion("2.0-IV0"))
     assertEquals(KAFKA_2_0_IV1, ApiVersion("2.0-IV1"))
 
-    assertEquals(KAFKA_2_1_IV1, ApiVersion("2.1"))
+    assertEquals(KAFKA_2_1_IV2, ApiVersion("2.1"))
     assertEquals(KAFKA_2_1_IV0, ApiVersion("2.1-IV0"))
     assertEquals(KAFKA_2_1_IV1, ApiVersion("2.1-IV1"))
+    assertEquals(KAFKA_2_1_IV2, ApiVersion("2.1-IV2"))
+
+    assertEquals(KAFKA_2_2_IV1, ApiVersion("2.2"))
+    assertEquals(KAFKA_2_2_IV0, ApiVersion("2.2-IV0"))
+    assertEquals(KAFKA_2_2_IV1, ApiVersion("2.2-IV1"))
+  }
+
+  @Test
+  def testApiVersionUniqueIds(): Unit = {
+    val allIds: Seq[Int] = ApiVersion.allVersions.map(apiVersion => {
+      apiVersion.id
+    })
+
+    val uniqueIds: Set[Int] = allIds.toSet
+
+    assertEquals(allIds.size, uniqueIds.size)
   }
 
   @Test
@@ -101,6 +117,13 @@ class ApiVersionTest {
     assertEquals("0.8.0", KAFKA_0_8_0.shortVersion)
     assertEquals("0.10.0", KAFKA_0_10_0_IV0.shortVersion)
     assertEquals("0.11.0", KAFKA_0_11_0_IV0.shortVersion)
+  }
+
+  @Test
+  def testApiVersionValidator(): Unit = {
+    val str = ApiVersionValidator.toString
+    val apiVersions = str.slice(1, str.length).split(",")
+    assertEquals(ApiVersion.allVersions.size, apiVersions.length)
   }
 
 }

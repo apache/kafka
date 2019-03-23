@@ -42,7 +42,7 @@ class ThrottledChannel(val request: RequestChannel.Request, val time: Time, val 
 
   // Notify the socket server that throttling has been done for this channel.
   def notifyThrottlingDone(): Unit = {
-    trace("Channel throttled for: " + throttleTimeMs + " ms")
+    trace(s"Channel throttled for: $throttleTimeMs ms")
     channelThrottlingCallback(new network.RequestChannel.EndThrottlingResponse(request))
   }
 

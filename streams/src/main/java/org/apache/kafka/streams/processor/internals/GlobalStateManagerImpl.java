@@ -25,15 +25,14 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -197,7 +196,13 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
             }
         }
         try {
-            restoreState(stateRestoreCallback, topicPartitions, highWatermarks, store.name());
+            restoreState(
+                stateRestoreCallback,
+                topicPartitions,
+                highWatermarks,
+                store.name(),
+                converterForStore(store)
+            );
             globalStores.put(store.name(), store);
         } finally {
             globalConsumer.unsubscribe();
@@ -251,7 +256,8 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     private void restoreState(final StateRestoreCallback stateRestoreCallback,
                               final List<TopicPartition> topicPartitions,
                               final Map<TopicPartition, Long> highWatermarks,
-                              final String storeName) {
+                              final String storeName,
+                              final RecordConverter recordConverter) {
         for (final TopicPartition topicPartition : topicPartitions) {
             globalConsumer.assign(Collections.singletonList(topicPartition));
             final Long checkpoint = checkpointableOffsets.get(topicPartition);
@@ -263,11 +269,8 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
             long offset = globalConsumer.position(topicPartition);
             final Long highWatermark = highWatermarks.get(topicPartition);
-            final BatchingStateRestoreCallback stateRestoreAdapter =
-                (BatchingStateRestoreCallback) ((stateRestoreCallback instanceof
-                                                     BatchingStateRestoreCallback)
-                                                ? stateRestoreCallback
-                                                : new WrappedBatchingStateRestoreCallback(stateRestoreCallback));
+            final RecordBatchingStateRestoreCallback stateRestoreAdapter =
+                StateRestoreCallbackAdapter.adapt(stateRestoreCallback);
 
             stateRestoreListener.onRestoreStart(topicPartition, storeName, offset, highWatermark);
             long restoreCount = 0L;
@@ -275,14 +278,14 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
             while (offset < highWatermark) {
                 try {
                     final ConsumerRecords<byte[], byte[]> records = globalConsumer.poll(pollTime);
-                    final List<KeyValue<byte[], byte[]>> restoreRecords = new ArrayList<>();
-                    for (final ConsumerRecord<byte[], byte[]> record : records) {
+                    final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
+                    for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
                         if (record.key() != null) {
-                            restoreRecords.add(KeyValue.pair(record.key(), record.value()));
+                            restoreRecords.add(recordConverter.convert(record));
                         }
                     }
                     offset = globalConsumer.position(topicPartition);
-                    stateRestoreAdapter.restoreAll(restoreRecords);
+                    stateRestoreAdapter.restoreBatch(restoreRecords);
                     stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreRecords.size());
                     restoreCount += restoreRecords.size();
                 } catch (final InvalidOffsetException recoverableException) {
@@ -315,7 +318,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
 
     @Override
-    public void close(final Map<TopicPartition, Long> offsets) throws IOException {
+    public void close(final boolean clean) throws IOException {
         try {
             if (globalStores.isEmpty()) {
                 return;
@@ -338,7 +341,6 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
             if (closeFailed.length() > 0) {
                 throw new ProcessorStateException("Exceptions caught during close of 1 or more global state globalStores\n" + closeFailed);
             }
-            checkpoint(offsets);
         } finally {
             stateDirectory.unlockGlobalState();
         }

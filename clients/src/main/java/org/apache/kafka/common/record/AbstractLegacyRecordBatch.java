@@ -29,7 +29,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayDeque;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
@@ -322,6 +321,8 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
                 throw new InvalidRecordException("Invalid wrapper magic found in legacy deep record iterator " + wrapperMagic);
 
             CompressionType compressionType = wrapperRecord.compressionType();
+            if (compressionType == CompressionType.ZSTD)
+                throw new InvalidRecordException("Invalid wrapper compressionType found in legacy deep record iterator " + wrapperMagic);
             ByteBuffer wrapperValue = wrapperRecord.value();
             if (wrapperValue == null)
                 throw new InvalidRecordException("Found invalid compressed record set with null value (magic = " +
@@ -528,10 +529,10 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
 
         LegacyFileChannelRecordBatch(long offset,
                                      byte magic,
-                                     FileChannel channel,
+                                     FileRecords fileRecords,
                                      int position,
                                      int batchSize) {
-            super(offset, magic, channel, position, batchSize);
+            super(offset, magic, fileRecords, position, batchSize);
         }
 
         @Override

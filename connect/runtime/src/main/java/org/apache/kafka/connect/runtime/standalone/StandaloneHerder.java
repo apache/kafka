@@ -42,7 +42,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Executors;
@@ -135,7 +134,7 @@ public class StandaloneHerder extends AbstractHerder {
     private ConnectorInfo createConnectorInfo(String connector) {
         if (!configState.contains(connector))
             return null;
-        Map<String, String> config = configState.connectorConfig(connector);
+        Map<String, String> config = configState.rawConnectorConfig(connector);
         return new ConnectorInfo(connector, config, configState.tasks(connector),
             connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
     }
@@ -233,7 +232,7 @@ public class StandaloneHerder extends AbstractHerder {
 
         List<TaskInfo> result = new ArrayList<>();
         for (ConnectorTaskId taskId : configState.tasks(connName))
-            result.add(new TaskInfo(taskId, configState.taskConfig(taskId)));
+            result.add(new TaskInfo(taskId, configState.rawTaskConfig(taskId)));
         callback.onCompletion(null, result);
     }
 
@@ -258,13 +257,6 @@ public class StandaloneHerder extends AbstractHerder {
             cb.onCompletion(null, null);
         else
             cb.onCompletion(new ConnectException("Failed to start task: " + taskId), null);
-    }
-
-    @Override
-    public ConfigReloadAction connectorConfigReloadAction(final String connName) {
-        return ConfigReloadAction.valueOf(
-                configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG)
-                        .toUpperCase(Locale.ROOT));
     }
 
     @Override
@@ -326,7 +318,7 @@ public class StandaloneHerder extends AbstractHerder {
 
     private void updateConnectorTasks(String connName) {
         if (!worker.isRunning(connName)) {
-            log.info("Skipping reconfiguration of connector {} since it is not running", connName);
+            log.info("Skipping update of connector {} since it is not running", connName);
             return;
         }
 

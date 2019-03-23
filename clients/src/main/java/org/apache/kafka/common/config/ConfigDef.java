@@ -53,7 +53,7 @@ import java.util.regex.Pattern;
  * defs.define(&quot;config_with_validator&quot;, Type.INT, 42, Range.atLeast(0), &quot;Configuration with user provided validator.&quot;);
  * defs.define(&quot;config_with_dependents&quot;, Type.INT, &quot;Configuration with dependents.&quot;, &quot;group&quot;, 1, &quot;Config With Dependents&quot;, Arrays.asList(&quot;config_with_default&quot;,&quot;config_with_validator&quot;));
  *
- * Map&lt;String, String&gt; props = new HashMap&lt;&gt();
+ * Map&lt;String, String&gt; props = new HashMap&lt;&gt;();
  * props.put(&quot;config_with_default&quot;, &quot;some value&quot;);
  * props.put(&quot;config_with_dependents&quot;, &quot;some other value&quot;);
  *
@@ -1133,7 +1133,7 @@ public class ConfigDef {
      * If <code>dynamicUpdateModes</code> is non-empty, a "Dynamic Update Mode" column
      * will be included n the table with the value of the update mode. Default
      * mode is "read-only".
-     * @param dynamicUpdateModes Config name -> update mode mapping
+     * @param dynamicUpdateModes Config name -&gt; update mode mapping
      */
     public String toHtmlTable(Map<String, String> dynamicUpdateModes) {
         boolean hasUpdateModes = !dynamicUpdateModes.isEmpty();

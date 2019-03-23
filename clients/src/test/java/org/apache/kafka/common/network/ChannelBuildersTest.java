@@ -23,9 +23,7 @@ import org.apache.kafka.common.security.auth.AuthenticationContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
 import org.apache.kafka.common.security.auth.PlaintextAuthenticationContext;
-import org.apache.kafka.common.security.auth.PrincipalBuilder;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.easymock.EasyMock;
 import org.junit.Test;
 
 import java.net.InetAddress;
@@ -35,17 +33,18 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
 
 public class ChannelBuildersTest {
 
     @Test
     public void testCreateOldPrincipalBuilder() throws Exception {
-        TransportLayer transportLayer = EasyMock.mock(TransportLayer.class);
-        Authenticator authenticator = EasyMock.mock(Authenticator.class);
+        TransportLayer transportLayer = mock(TransportLayer.class);
+        Authenticator authenticator = mock(Authenticator.class);
 
         Map<String, Object> configs = new HashMap<>();
         configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, OldPrincipalBuilder.class);
-        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, authenticator, null);
+        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, transportLayer, authenticator, null, null);
 
         // test old principal builder is properly configured and delegated to
         assertTrue(OldPrincipalBuilder.configured);
@@ -60,13 +59,13 @@ public class ChannelBuildersTest {
     public void testCreateConfigurableKafkaPrincipalBuilder() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, ConfigurableKafkaPrincipalBuilder.class);
-        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, null);
+        KafkaPrincipalBuilder builder = ChannelBuilders.createPrincipalBuilder(configs, null, null, null, null);
         assertTrue(builder instanceof ConfigurableKafkaPrincipalBuilder);
         assertTrue(((ConfigurableKafkaPrincipalBuilder) builder).configured);
     }
 
     @SuppressWarnings("deprecation")
-    public static class OldPrincipalBuilder implements PrincipalBuilder {
+    public static class OldPrincipalBuilder implements org.apache.kafka.common.security.auth.PrincipalBuilder {
         private static boolean configured = false;
         private static final String PRINCIPAL_NAME = "bob";
 

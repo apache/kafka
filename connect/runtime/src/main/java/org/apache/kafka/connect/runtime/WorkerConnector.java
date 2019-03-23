@@ -141,6 +141,7 @@ public class WorkerConnector {
         return state == State.STARTED;
     }
 
+    @SuppressWarnings("fallthrough")
     private void pause() {
         try {
             switch (state) {
@@ -231,7 +232,7 @@ public class WorkerConnector {
                        '}';
     }
 
-    class ConnectorMetricsGroup implements ConnectorStatus.Listener {
+    class ConnectorMetricsGroup implements ConnectorStatus.Listener, AutoCloseable {
         /**
          * Use {@link AbstractStatus.State} since it has all of the states we want,
          * unlike {@link WorkerConnector.State}.

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
@@ -54,14 +53,13 @@ public class KeyValueStoreMaterializerTest {
     @Test
     public void shouldCreateBuilderThatBuildsMeteredStoreWithCachingAndLoggingEnabled() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized =
-            new MaterializedInternal<>(Materialized.as("store"));
-        materialized.generateStoreNameIfNeeded(nameProvider, storePrefix);
+            new MaterializedInternal<>(Materialized.as("store"), nameProvider, storePrefix);
 
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         final StoreBuilder<KeyValueStore<String, String>> builder = materializer.materialize();
         final KeyValueStore<String, String> store = builder.build();
-        final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrappedStore();
-        final StateStore logging = caching.wrappedStore();
+        final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
+        final StateStore logging = caching.wrapped();
         assertThat(store, instanceOf(MeteredKeyValueStore.class));
         assertThat(caching, instanceOf(CachedStateStore.class));
         assertThat(logging, instanceOf(ChangeLoggingKeyValueBytesStore.class));
@@ -70,42 +68,37 @@ public class KeyValueStoreMaterializerTest {
     @Test
     public void shouldCreateBuilderThatBuildsStoreWithCachingDisabled() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
-            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store").withCachingDisabled()
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store").withCachingDisabled(), nameProvider, storePrefix
         );
-        materialized.generateStoreNameIfNeeded(nameProvider, storePrefix);
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         final StoreBuilder<KeyValueStore<String, String>> builder = materializer.materialize();
         final KeyValueStore<String, String> store = builder.build();
-        final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrappedStore();
+        final WrappedStateStore logging = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         assertThat(logging, instanceOf(ChangeLoggingKeyValueBytesStore.class));
     }
 
     @Test
     public void shouldCreateBuilderThatBuildsStoreWithLoggingDisabled() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
-            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store")
-                                                     .withLoggingDisabled()
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store").withLoggingDisabled(), nameProvider, storePrefix
         );
-        materialized.generateStoreNameIfNeeded(nameProvider, storePrefix);
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         final StoreBuilder<KeyValueStore<String, String>> builder = materializer.materialize();
         final KeyValueStore<String, String> store = builder.build();
-        final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrappedStore();
+        final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         assertThat(caching, instanceOf(CachedStateStore.class));
-        assertThat(caching.wrappedStore(), not(instanceOf(ChangeLoggingKeyValueBytesStore.class)));
+        assertThat(caching.wrapped(), not(instanceOf(ChangeLoggingKeyValueBytesStore.class)));
     }
 
     @Test
     public void shouldCreateBuilderThatBuildsStoreWithCachingAndLoggingDisabled() {
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized = new MaterializedInternal<>(
-            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store")
-                                                     .withCachingDisabled()
-                                                     .withLoggingDisabled());
-        materialized.generateStoreNameIfNeeded(nameProvider, storePrefix);
+            Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("store").withCachingDisabled().withLoggingDisabled(), nameProvider, storePrefix
+        );
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
         final StoreBuilder<KeyValueStore<String, String>> builder = materializer.materialize();
         final KeyValueStore<String, String> store = builder.build();
-        final StateStore wrapped = ((WrappedStateStore) store).wrappedStore();
+        final StateStore wrapped = ((WrappedStateStore) store).wrapped();
         assertThat(wrapped, not(instanceOf(CachedStateStore.class)));
         assertThat(wrapped, not(instanceOf(ChangeLoggingKeyValueBytesStore.class)));
     }
@@ -113,20 +106,18 @@ public class KeyValueStoreMaterializerTest {
     @Test
     public void shouldCreateKeyValueStoreWithTheProvidedInnerStore() {
         final KeyValueBytesStoreSupplier supplier = EasyMock.createNiceMock(KeyValueBytesStoreSupplier.class);
-        final InMemoryKeyValueStore<Bytes, byte[]> store = new InMemoryKeyValueStore<>("name", Serdes.Bytes(), Serdes.ByteArray());
+        final InMemoryKeyValueStore store = new InMemoryKeyValueStore("name");
         EasyMock.expect(supplier.name()).andReturn("name").anyTimes();
         EasyMock.expect(supplier.get()).andReturn(store);
         EasyMock.replay(supplier);
 
         final MaterializedInternal<String, Integer, KeyValueStore<Bytes, byte[]>> materialized =
-            new MaterializedInternal<>(Materialized.as(supplier));
-        materialized.generateStoreNameIfNeeded(nameProvider, storePrefix);
+            new MaterializedInternal<>(Materialized.as(supplier), nameProvider, storePrefix);
         final KeyValueStoreMaterializer<String, Integer> materializer = new KeyValueStoreMaterializer<>(materialized);
         final StoreBuilder<KeyValueStore<String, Integer>> builder = materializer.materialize();
         final KeyValueStore<String, Integer> built = builder.build();
-        final StateStore inner = ((WrappedStateStore) built).inner();
 
-        assertThat(inner, CoreMatchers.<StateStore>equalTo(store));
+        assertThat(store.name(), CoreMatchers.equalTo(built.name()));
     }
 
 }
