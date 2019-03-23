@@ -343,7 +343,6 @@ public class CachingWindowStoreTest {
         assertNull(cacheListener.forwarded.get(windowedKey).oldValue);
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldSetFlushListener() {
         assertTrue(cachingStore.setFlushListener(null, true));
