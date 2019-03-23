@@ -94,6 +94,7 @@ class ChangeLoggingWindowBytesStore
         return wrapped().fetchAll(timeFrom, timeTo);
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api, this call uses the 3 params
     @Override
     public void put(final Bytes key, final byte[] value) {
         // Note: It's incorrect to bypass the wrapped store here by delegating to another method,

@@ -123,6 +123,7 @@ public class MeteredWindowStore<K, V>
         return false;
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api, this call uses the 3 params
     @Override
     public void put(final K key,
                     final V value) {

@@ -316,6 +316,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             super(inner);
         }
 
+        @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api, not supported here
         @Override
         public void put(final K key,
                         final V value) {
@@ -476,6 +477,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
+        @Deprecated
         public void put(final K key,
                         final V value) {
             wrapped().put(key, value);

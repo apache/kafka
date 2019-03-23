@@ -59,6 +59,7 @@ public class WindowStoreFacadeTest {
         verify(mockedWindowTimestampStore);
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void shouldPutWithUnknownTimestamp() {
         mockedWindowTimestampStore.put("key", ValueAndTimestamp.make("value", ConsumerRecord.NO_TIMESTAMP));

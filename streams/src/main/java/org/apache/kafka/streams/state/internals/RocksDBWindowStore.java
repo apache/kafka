@@ -48,6 +48,7 @@ public class RocksDBWindowStore
         super.init(context, root);
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api, this call uses the 3 params
     @Override
     public void put(final Bytes key, final byte[] value) {
         put(key, value, context.timestamp());

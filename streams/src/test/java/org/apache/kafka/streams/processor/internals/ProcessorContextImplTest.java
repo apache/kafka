@@ -176,7 +176,7 @@ public class ProcessorContextImplTest {
             assertEquals(VALUE, store.approximateNumEntries());
         });
     }
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void globalWindowStoreShouldBeReadOnly() {
         doTest("GlobalWindowStore", (Consumer<WindowStore<String, Long>>) store -> {
@@ -194,6 +194,8 @@ public class ProcessorContextImplTest {
         });
     }
 
+
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void globalTimestampedWindowStoreShouldBeReadOnly() {
         doTest("GlobalTimestampedWindowStore", (Consumer<TimestampedWindowStore<String, Long>>) store -> {
@@ -299,7 +301,7 @@ public class ProcessorContextImplTest {
             assertEquals(iters.get(2), store.all());
         });
     }
-
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void localTimestampedWindowStoreShouldNotAllowInitOrClose() {
         doTest("LocalTimestampedWindowStore", (Consumer<TimestampedWindowStore<String, Long>>) store -> {
@@ -385,6 +387,7 @@ public class ProcessorContextImplTest {
         return keyValueStoreMock;
     }
 
+    @SuppressWarnings("unchecked")
     @Deprecated
     private TimestampedKeyValueStore<String, Long> timestampedKeyValueStoreMock() {
         final TimestampedKeyValueStore<String, Long> timestampedKeyValueStoreMock = mock(TimestampedKeyValueStore.class);
@@ -427,7 +430,7 @@ public class ProcessorContextImplTest {
         return timestampedKeyValueStoreMock;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"deprecation", "unchecked"})// continuing to support WindowStore#put(K, V) as internal api
     private WindowStore<String, Long> windowStoreMock() {
         final WindowStore<String, Long> windowStore = mock(WindowStore.class);
 
@@ -450,7 +453,7 @@ public class ProcessorContextImplTest {
         return windowStore;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"deprecation", "unchecked"})// continuing to support WindowStore#put(K, V) as internal api
     private TimestampedWindowStore<String, Long> timestampedWindowStoreMock() {
         final TimestampedWindowStore<String, Long> windowStore = mock(TimestampedWindowStore.class);
 

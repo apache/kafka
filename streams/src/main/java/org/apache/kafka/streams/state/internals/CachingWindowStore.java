@@ -121,6 +121,7 @@ class CachingWindowStore
         return true;
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api, this call uses the 3 params
     @Override
     public synchronized void put(final Bytes key,
                                  final byte[] value) {

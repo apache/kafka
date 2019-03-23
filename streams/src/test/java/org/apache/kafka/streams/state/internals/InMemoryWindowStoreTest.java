@@ -142,6 +142,7 @@ public class InMemoryWindowStoreTest {
         return KeyValue.pair(new Windowed<>(key, WindowKeySchema.timeWindowForSize(timestamp, windowSize)), value);
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void testSingleFetch() {
         windowStore = createInMemoryWindowStore(context, false);
@@ -163,6 +164,7 @@ public class InMemoryWindowStoreTest {
         assertEquals("three", windowStore.fetch(1, 4 * windowSize));
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void testDeleteAndUpdate() {
         windowStore = createInMemoryWindowStore(context, false);
@@ -180,6 +182,7 @@ public class InMemoryWindowStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void testFetchAll() {
         windowStore = createInMemoryWindowStore(context, false);
@@ -212,6 +215,7 @@ public class InMemoryWindowStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void testAll() {
         windowStore = createInMemoryWindowStore(context, false);
@@ -241,6 +245,7 @@ public class InMemoryWindowStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void testTimeRangeFetch() {
 
@@ -275,6 +280,7 @@ public class InMemoryWindowStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void testKeyRangeFetch() {
 
@@ -308,6 +314,7 @@ public class InMemoryWindowStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void testFetchDuplicates() {
         windowStore = createInMemoryWindowStore(context, true);
@@ -336,6 +343,7 @@ public class InMemoryWindowStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void testSegmentExpiration() {
         windowStore = createInMemoryWindowStore(context, false);
@@ -386,6 +394,7 @@ public class InMemoryWindowStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void testWindowIteratorPeek() {
         windowStore = createInMemoryWindowStore(context, false);
@@ -400,6 +409,7 @@ public class InMemoryWindowStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void testValueIteratorPeek() {
         windowStore = createInMemoryWindowStore(context, false);
@@ -436,6 +446,7 @@ public class InMemoryWindowStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void shouldLogAndMeasureExpiredRecords() {
         LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
@@ -483,6 +494,7 @@ public class InMemoryWindowStoreTest {
         assertThat(messages, hasItem("Skipping record for expired segment."));
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void testIteratorMultiplePeekAndHasNext() {
         windowStore = createInMemoryWindowStore(context, false);
@@ -512,6 +524,7 @@ public class InMemoryWindowStoreTest {
         assertFalse(iterator.hasNext());
     }
 
+    @SuppressWarnings("deprecation")// continuing to support WindowStore#put(K, V) as internal api
     @Test
     public void shouldNotThrowConcurrentModificationException() {
         windowStore = createInMemoryWindowStore(context, false);
