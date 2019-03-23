@@ -17,6 +17,7 @@ import org.ajoberstar.grgit.Grgit
 
 buildscript {
   repositories {
+    maven {url 'http://maven.aliyun.com/nexus/content/groups/public/'}
     mavenCentral()
     jcenter()
     maven {
@@ -50,6 +51,7 @@ apply from: "$rootDir/gradle/dependencies.gradle"
 allprojects {
 
   repositories {
+    maven {url 'http://maven.aliyun.com/nexus/content/groups/public/'}
     mavenCentral()
   }
   
