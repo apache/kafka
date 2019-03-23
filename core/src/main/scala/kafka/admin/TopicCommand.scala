@@ -318,8 +318,8 @@ object TopicCommand extends Logging {
         }
 
         if(tp.hasPartitions) {
-          if (topic == Topic.GROUP_METADATA_TOPIC_NAME) {
-            throw new IllegalArgumentException("The number of partitions for the offsets topic cannot be changed.")
+          if (Topic.INTERNAL_TOPICS.contains(topic)) {
+            throw new IllegalArgumentException(s"The number of partitions for the internal topics${Topic.INTERNAL_TOPICS} cannot be changed.")
           }
           println("WARNING: If partitions are increased for a topic that has a key, the partition " +
             "logic or ordering of the messages will be affected")
@@ -559,7 +559,8 @@ object TopicCommand extends Logging {
 
     private val disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment")
 
-    private val forceOpt = parser.accepts("force", "Suppress console prompts")
+    // This is not currently used, but we keep it for compatibility
+    parser.accepts("force", "Suppress console prompts")
 
     private val excludeInternalTopicOpt = parser.accepts("exclude-internal", "exclude internal topics when running list or describe command. The internal topics will be listed by default")
 

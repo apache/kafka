@@ -34,14 +34,14 @@ import java.util.Properties;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamMapTest {
-
-    private String topicName = "topic";
-    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
+    private final ConsumerRecordFactory<Integer, String> recordFactory =
+        new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void testMap() {
         final StreamsBuilder builder = new StreamsBuilder();
+        final String topicName = "topic";
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
@@ -54,10 +54,8 @@ public class KStreamMapTest {
             }
         }
 
+        final String[] expected = new String[]{"V0:0 (ts: 0)", "V1:1 (ts: 0)", "V2:2 (ts: 0)", "V3:3 (ts: 0)"};
         assertEquals(4, supplier.theCapturedProcessor().processed.size());
-
-        final String[] expected = new String[]{"V0:0", "V1:1", "V2:2", "V3:3"};
-
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
         }

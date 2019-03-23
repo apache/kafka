@@ -14,8 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.streams.kstream.internals.suppress;
 
-public interface TimestampSupplier {
-    long get();
+import org.apache.kafka.streams.kstream.Suppressed;
+
+/**
+ * Internally-facing interface to work around the fact that all Suppressed config objects
+ * are name-able, but do not present a getter (for consistency with other config objects).
+ * If we allow getters on config objects in the future, we can delete this interface.
+ */
+public interface NamedSuppressed<K> extends Suppressed<K> {
+    String name();
 }

@@ -20,17 +20,13 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
-import org.apache.kafka.streams.state.StateSerdes;
 
-class WrappedSessionStoreIterator<K, V> implements KeyValueIterator<Windowed<K>, V> {
+class WrappedSessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 
     private final KeyValueIterator<Bytes, byte[]> bytesIterator;
-    private final StateSerdes<K, V> serdes;
 
-    WrappedSessionStoreIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator,
-                                final StateSerdes<K, V> serdes) {
+    WrappedSessionStoreIterator(final KeyValueIterator<Bytes, byte[]> bytesIterator) {
         this.bytesIterator = bytesIterator;
-        this.serdes = serdes;
     }
 
     @Override
@@ -39,9 +35,8 @@ class WrappedSessionStoreIterator<K, V> implements KeyValueIterator<Windowed<K>,
     }
 
     @Override
-    public Windowed<K> peekNextKey() {
-        final Bytes bytes = bytesIterator.peekNextKey();
-        return SessionKeySchema.from(bytes.get(), serdes.keyDeserializer(), serdes.topic());
+    public Windowed<Bytes> peekNextKey() {
+        return SessionKeySchema.from(bytesIterator.peekNextKey());
     }
 
     @Override
@@ -50,9 +45,9 @@ class WrappedSessionStoreIterator<K, V> implements KeyValueIterator<Windowed<K>,
     }
 
     @Override
-    public KeyValue<Windowed<K>, V> next() {
+    public KeyValue<Windowed<Bytes>, byte[]> next() {
         final KeyValue<Bytes, byte[]> next = bytesIterator.next();
-        return KeyValue.pair(SessionKeySchema.from(next.key.get(), serdes.keyDeserializer(), serdes.topic()), serdes.valueFrom(next.value));
+        return KeyValue.pair(SessionKeySchema.from(next.key), next.value);
     }
 
     @Override

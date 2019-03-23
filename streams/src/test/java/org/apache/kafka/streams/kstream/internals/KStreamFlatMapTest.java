@@ -36,25 +36,22 @@ import java.util.Properties;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamFlatMapTest {
-
-    private String topicName = "topic";
-    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
+    private final ConsumerRecordFactory<Integer, String> recordFactory =
+        new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void testFlatMap() {
         final StreamsBuilder builder = new StreamsBuilder();
+        final String topicName = "topic";
 
         final KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>> mapper =
-            new KeyValueMapper<Number, Object, Iterable<KeyValue<String, String>>>() {
-                @Override
-                public Iterable<KeyValue<String, String>> apply(final Number key, final Object value) {
-                    final ArrayList<KeyValue<String, String>> result = new ArrayList<>();
-                    for (int i = 0; i < key.intValue(); i++) {
-                        result.add(KeyValue.pair(Integer.toString(key.intValue() * 10 + i), value.toString()));
-                    }
-                    return result;
+            (key, value) -> {
+                final ArrayList<KeyValue<String, String>> result = new ArrayList<>();
+                for (int i = 0; i < key.intValue(); i++) {
+                    result.add(KeyValue.pair(Integer.toString(key.intValue() * 10 + i), value.toString()));
                 }
+                return result;
             };
 
         final int[] expectedKeys = {0, 1, 2, 3};
@@ -74,7 +71,7 @@ public class KStreamFlatMapTest {
 
         assertEquals(6, supplier.theCapturedProcessor().processed.size());
 
-        final String[] expected = {"10:V1", "20:V2", "21:V2", "30:V3", "31:V3", "32:V3"};
+        final String[] expected = {"10:V1 (ts: 0)", "20:V2 (ts: 0)", "21:V2 (ts: 0)", "30:V3 (ts: 0)", "31:V3 (ts: 0)", "32:V3 (ts: 0)"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));

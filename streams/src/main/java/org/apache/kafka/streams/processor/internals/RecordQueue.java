@@ -36,7 +36,7 @@ import java.util.ArrayDeque;
  */
 public class RecordQueue {
 
-    static final long UNKNOWN = -1L;
+    static final long UNKNOWN = ConsumerRecord.NO_TIMESTAMP;
 
     private final Logger log;
     private final SourceNode source;

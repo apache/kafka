@@ -51,13 +51,14 @@ class ReplicaAlterLogDirsThread(name: String,
   private val replicaId = brokerConfig.brokerId
   private val maxBytes = brokerConfig.replicaFetchResponseMaxBytes
   private val fetchSize = brokerConfig.replicaFetchMaxBytes
+  private var inProgressPartition: Option[TopicPartition] = None
 
   override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
     replicaMgr.futureLocalReplicaOrException(topicPartition).latestEpoch
   }
 
   override protected def logEndOffset(topicPartition: TopicPartition): Long = {
-    replicaMgr.futureLocalReplicaOrException(topicPartition).logEndOffset.messageOffset
+    replicaMgr.futureLocalReplicaOrException(topicPartition).logEndOffset
   }
 
   override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
@@ -102,12 +103,12 @@ class ReplicaAlterLogDirsThread(name: String,
     val partition = replicaMgr.getPartition(topicPartition).get
     val records = toMemoryRecords(partitionData.records)
 
-    if (fetchOffset != futureReplica.logEndOffset.messageOffset)
+    if (fetchOffset != futureReplica.logEndOffset)
       throw new IllegalStateException("Offset mismatch for the future replica %s: fetched offset = %d, log end offset = %d.".format(
-        topicPartition, fetchOffset, futureReplica.logEndOffset.messageOffset))
+        topicPartition, fetchOffset, futureReplica.logEndOffset))
 
     val logAppendInfo = partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = true)
-    val futureReplicaHighWatermark = futureReplica.logEndOffset.messageOffset.min(partitionData.highWatermark)
+    val futureReplicaHighWatermark = futureReplica.logEndOffset.min(partitionData.highWatermark)
     futureReplica.highWatermark = new LogOffsetMetadata(futureReplicaHighWatermark)
     futureReplica.maybeIncrementLogStartOffset(partitionData.logStartOffset)
 
@@ -185,32 +186,53 @@ class ReplicaAlterLogDirsThread(name: String,
     partition.truncateFullyAndStartAt(offset, isFuture = true)
   }
 
-  def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[FetchRequest.Builder]] = {
-    // Only include replica in the fetch request if it is not throttled.
-    val maxPartitionOpt = partitionMap.filter { case (_, partitionFetchState) =>
-      partitionFetchState.isReadyForFetch && !quota.isQuotaExceeded
+  private def nextReadyPartition(partitionMap: Map[TopicPartition, PartitionFetchState]): Option[(TopicPartition, PartitionFetchState)] = {
+    partitionMap.filter { case (_, partitionFetchState) =>
+      partitionFetchState.isReadyForFetch
     }.reduceLeftOption { (left, right) =>
-      if ((left._1.topic > right._1.topic()) || (left._1.topic == right._1.topic() && left._1.partition() >= right._1.partition()))
+      if ((left._1.topic < right._1.topic) || (left._1.topic == right._1.topic && left._1.partition < right._1.partition))
         left
       else
         right
     }
+  }
 
-    // Only move one replica at a time to increase its catch-up rate and thus reduce the time spent on moving any given replica
-    // Replicas are ordered by their TopicPartition
+  private def selectPartitionToFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): Option[(TopicPartition, PartitionFetchState)] = {
+    // Only move one partition at a time to increase its catch-up rate and thus reduce the time spent on
+    // moving any given replica. Replicas are selected in ascending order (lexicographically by topic) from the
+    // partitions that are ready to fetch. Once selected, we will continue fetching the same partition until it
+    // becomes unavailable or is removed.
+
+    inProgressPartition.foreach { tp =>
+      val fetchStateOpt = partitionMap.get(tp)
+      fetchStateOpt.filter(_.isReadyForFetch).foreach { fetchState =>
+        return Some((tp, fetchState))
+      }
+    }
+
+    inProgressPartition = None
+
+    val nextPartitionOpt = nextReadyPartition(partitionMap)
+    nextPartitionOpt.foreach { case (tp, fetchState) =>
+      inProgressPartition = Some(tp)
+      info(s"Beginning/resuming copy of partition $tp from offset ${fetchState.fetchOffset}. " +
+        s"Including this partition, there are ${partitionMap.size} remaining partitions to copy by this thread.")
+    }
+    nextPartitionOpt
+  }
+
+  private def buildFetchForPartition(tp: TopicPartition, fetchState: PartitionFetchState): ResultWithPartitions[Option[FetchRequest.Builder]] = {
     val requestMap = new util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData]
     val partitionsWithError = mutable.Set[TopicPartition]()
 
-    if (maxPartitionOpt.nonEmpty) {
-      val (topicPartition, partitionFetchState) = maxPartitionOpt.get
-      try {
-        val logStartOffset = replicaMgr.futureLocalReplicaOrException(topicPartition).logStartOffset
-        requestMap.put(topicPartition, new FetchRequest.PartitionData(partitionFetchState.fetchOffset, logStartOffset,
-          fetchSize, Optional.of(partitionFetchState.currentLeaderEpoch)))
-      } catch {
-        case _: KafkaStorageException =>
-          partitionsWithError += topicPartition
-      }
+    try {
+      val logStartOffset = replicaMgr.futureLocalReplicaOrException(tp).logStartOffset
+      requestMap.put(tp, new FetchRequest.PartitionData(fetchState.fetchOffset, logStartOffset,
+        fetchSize, Optional.of(fetchState.currentLeaderEpoch)))
+    } catch {
+      case e: KafkaStorageException =>
+        debug(s"Failed to build fetch for $tp", e)
+        partitionsWithError += tp
     }
 
     val fetchRequestOpt = if (requestMap.isEmpty) {
@@ -221,7 +243,22 @@ class ReplicaAlterLogDirsThread(name: String,
       Some(FetchRequest.Builder.forReplica(ApiKeys.FETCH.latestVersion, replicaId, 0, 0, requestMap)
         .setMaxBytes(maxBytes))
     }
+
     ResultWithPartitions(fetchRequestOpt, partitionsWithError)
+  }
+
+  def buildFetch(partitionMap: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[FetchRequest.Builder]] = {
+    // Only include replica in the fetch request if it is not throttled.
+    if (quota.isQuotaExceeded) {
+      ResultWithPartitions(None, Set.empty)
+    } else {
+      selectPartitionToFetch(partitionMap) match {
+        case Some((tp, fetchState)) =>
+          buildFetchForPartition(tp, fetchState)
+        case None =>
+          ResultWithPartitions(None, Set.empty)
+      }
+    }
   }
 
 }

@@ -29,6 +29,8 @@ import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -44,7 +46,6 @@ import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
-import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
@@ -86,7 +87,7 @@ import java.util.concurrent.atomic.AtomicReference;
  *
  * To leverage this protocol, an implementation must define the format of metadata provided by each
  * member for group registration in {@link #metadata()} and the format of the state assignment provided
- * by the leader in {@link #performAssignment(String, String, Map)} and becomes available to members in
+ * by the leader in {@link #performAssignment(String, String, List)} and becomes available to members in
  * {@link #onJoinComplete(int, String, String, ByteBuffer)}.
  *
  * Note on locking: this class shares state between the caller and a background thread which is
@@ -183,7 +184,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * on the preference).
      * @return Non-empty map of supported protocols and metadata
      */
-    protected abstract List<ProtocolMetadata> metadata();
+    protected abstract JoinGroupRequestData.JoinGroupRequestProtocolSet metadata();
 
     /**
      * Invoked prior to each group join or rejoin. This is typically used to perform any
@@ -202,7 +203,7 @@ public abstract class AbstractCoordinator implements Closeable {
      */
     protected abstract Map<String, ByteBuffer> performAssignment(String leaderId,
                                                                  String protocol,
-                                                                 Map<String, ByteBuffer> allMemberMetadata);
+                                                                 List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata);
 
     /**
      * Invoked when a group member has successfully joined a group. If this call fails with an exception,
@@ -476,7 +477,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     /**
      * Join the group and return the assignment for the next generation. This function handles both
-     * JoinGroup and SyncGroup, delegating to {@link #performAssignment(String, String, Map)} if
+     * JoinGroup and SyncGroup, delegating to {@link #performAssignment(String, String, List)} if
      * elected leader by the coordinator.
      *
      * NOTE: This is visible only for testing
@@ -490,11 +491,14 @@ public abstract class AbstractCoordinator implements Closeable {
         // send a join group request to the coordinator
         log.info("(Re-)joining group");
         JoinGroupRequest.Builder requestBuilder = new JoinGroupRequest.Builder(
-                groupId,
-                this.sessionTimeoutMs,
-                this.generation.memberId,
-                protocolType(),
-                metadata()).setRebalanceTimeout(this.rebalanceTimeoutMs);
+                new JoinGroupRequestData()
+                        .setGroupId(groupId)
+                        .setSessionTimeoutMs(this.sessionTimeoutMs)
+                        .setMemberId(this.generation.memberId)
+                        .setProtocolType(protocolType())
+                        .setProtocols(metadata())
+                        .setRebalanceTimeoutMs(this.rebalanceTimeoutMs)
+        );
 
         log.debug("Sending JoinGroup ({}) to coordinator {}", requestBuilder, this.coordinator);
 
@@ -520,8 +524,8 @@ public abstract class AbstractCoordinator implements Closeable {
                         // the group. In this case, we do not want to continue with the sync group.
                         future.raise(new UnjoinedGroupException());
                     } else {
-                        AbstractCoordinator.this.generation = new Generation(joinResponse.generationId(),
-                                joinResponse.memberId(), joinResponse.groupProtocol());
+                        AbstractCoordinator.this.generation = new Generation(joinResponse.data().generationId(),
+                                joinResponse.data().memberId(), joinResponse.data().protocolName());
                         if (joinResponse.isLeader()) {
                             onJoinLeader(joinResponse).chain(future);
                         } else {
@@ -562,7 +566,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // and send another join group request in next cycle.
                 synchronized (AbstractCoordinator.this) {
                     AbstractCoordinator.this.generation = new Generation(OffsetCommitRequest.DEFAULT_GENERATION_ID,
-                        joinResponse.memberId(), null);
+                        joinResponse.data().memberId(), null);
                     AbstractCoordinator.this.rejoinNeeded = true;
                     AbstractCoordinator.this.state = MemberState.UNJOINED;
                 }
@@ -587,8 +591,8 @@ public abstract class AbstractCoordinator implements Closeable {
     private RequestFuture<ByteBuffer> onJoinLeader(JoinGroupResponse joinResponse) {
         try {
             // perform the leader synchronization and send back the assignment for the group
-            Map<String, ByteBuffer> groupAssignment = performAssignment(joinResponse.leaderId(), joinResponse.groupProtocol(),
-                    joinResponse.members());
+            Map<String, ByteBuffer> groupAssignment = performAssignment(joinResponse.data().leader(), joinResponse.data().protocolName(),
+                    joinResponse.data().members());
 
             SyncGroupRequest.Builder requestBuilder =
                     new SyncGroupRequest.Builder(groupId, generation.generationId, generation.memberId, groupAssignment);
@@ -760,6 +764,15 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     /**
+     * @return true if the current generation's member ID is valid, false otherwise
+     */
+    // Visible for testing
+    final synchronized boolean hasValidMemberId() {
+        return generation != null && generation.hasMemberId();
+    }
+
+
+    /**
      * Reset the generation and memberId because we have fallen out of the group.
      */
     protected synchronized void resetGeneration() {
@@ -807,10 +820,10 @@ public abstract class AbstractCoordinator implements Closeable {
      * Leave the current group and reset local generation/memberId.
      */
     public synchronized void maybeLeaveGroup() {
-        if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation.isValid()) {
+        if (!coordinatorUnknown() && state != MemberState.UNJOINED && generation.hasMemberId()) {
             // this is a minimal effort attempt to leave the group. we do not
             // attempt any resending if the request fails or times out.
-            log.info("Sending LeaveGroup request to coordinator {}", coordinator);
+            log.info("Member {} sending LeaveGroup request to coordinator {}", generation.memberId, coordinator);
             LeaveGroupRequest.Builder request = new LeaveGroupRequest.Builder(new LeaveGroupRequestData()
                     .setGroupId(groupId).setMemberId(generation.memberId));
             client.send(coordinator, request)
@@ -1121,8 +1134,12 @@ public abstract class AbstractCoordinator implements Closeable {
             this.protocol = protocol;
         }
 
-        public boolean isValid() {
-            return generationId != OffsetCommitRequest.DEFAULT_GENERATION_ID;
+        /**
+         * @return true if this generation has a valid member id, false otherwise. A member might have an id before
+         * it becomes part of a group generation.
+         */
+        public boolean hasMemberId() {
+            return !memberId.isEmpty();
         }
 
         @Override
@@ -1138,6 +1155,15 @@ public abstract class AbstractCoordinator implements Closeable {
         @Override
         public int hashCode() {
             return Objects.hash(generationId, memberId, protocol);
+        }
+
+        @Override
+        public String toString() {
+            return "Generation{" +
+                    "generationId=" + generationId +
+                    ", memberId='" + memberId + '\'' +
+                    ", protocol='" + protocol + '\'' +
+                    '}';
         }
     }
 

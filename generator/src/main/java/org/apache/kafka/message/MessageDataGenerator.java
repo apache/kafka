@@ -1198,7 +1198,16 @@ public final class MessageDataGenerator {
                 return field.defaultString() + "L";
             }
         } else if (field.type() instanceof FieldType.StringFieldType) {
-            return "\"" + field.defaultString() + "\"";
+            if (field.defaultString().equals("null")) {
+                if (!(field.nullableVersions().contains(field.versions()))) {
+                    throw new RuntimeException("null cannot be the default for field " +
+                        field.name() + ", because not all versions of this field are " +
+                        "nullable.");
+                }
+                return "null";
+            } else {
+                return "\"" + field.defaultString() + "\"";
+            }
         } else if (field.type().isBytes()) {
             if (!field.defaultString().isEmpty()) {
                 throw new RuntimeException("Invalid default for bytes field " +

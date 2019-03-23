@@ -14,6 +14,7 @@
 
 package kafka.api
 
+import java.time.Duration
 import java.util.{Collections, HashMap, Properties}
 
 import kafka.api.QuotaTestClients._
@@ -140,7 +141,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     val endTimeMs = System.currentTimeMillis + 10000
     var throttled = false
     while ((!throttled || quotaTestClients.exemptRequestMetric == null) && System.currentTimeMillis < endTimeMs) {
-      consumer.poll(100)
+      consumer.poll(Duration.ofMillis(100L))
       val throttleMetric = quotaTestClients.throttleMetric(QuotaType.Request, consumerClientId)
       throttled = throttleMetric != null && metricValue(throttleMetric) > 0
     }
@@ -197,7 +198,7 @@ abstract class QuotaTestClients(topic: String,
     var numConsumed = 0
     var throttled = false
     do {
-      numConsumed += consumer.poll(100).count
+      numConsumed += consumer.poll(Duration.ofMillis(100L)).count
       val metric = throttleMetric(QuotaType.Fetch, consumerClientId)
       throttled = metric != null && metricValue(metric) > 0
     }  while (numConsumed < maxRecords && !throttled)
@@ -206,7 +207,7 @@ abstract class QuotaTestClients(topic: String,
     if (throttled && numConsumed < maxRecords && waitForRequestCompletion) {
       val minRecords = numConsumed + 1
       while (numConsumed < minRecords)
-        numConsumed += consumer.poll(100).count
+        numConsumed += consumer.poll(Duration.ofMillis(100L)).count
     }
     numConsumed
   }

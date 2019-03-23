@@ -55,10 +55,6 @@ class DelayedElectPreferredLeader(delayMs: Long,
     responseCallback(timedout ++ fullResults)
   }
 
-  private def timeoutWaiting = {
-    waitingPartitions.map(partition => partition -> new ApiError(Errors.REQUEST_TIMED_OUT, null)).toMap
-  }
-
   /**
     * Try to complete the delayed operation by first checking if the operation
     * can be completed by now. If yes execute the completion logic by calling
