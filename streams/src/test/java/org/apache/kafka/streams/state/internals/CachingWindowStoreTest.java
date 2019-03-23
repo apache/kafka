@@ -139,7 +139,7 @@ public class CachingWindowStoreTest {
 
                     assertThat(count, equalTo(0));
                 }
-                //@SuppressWarnings("deprecation")
+
                 @Override
                 public KeyValue<String, String> transform(final String key, final String value) {
                     int count = 0;
@@ -199,7 +199,7 @@ public class CachingWindowStoreTest {
             driver.pipeInput(recordFactory.create(topic, UUID.randomUUID().toString(), UUID.randomUUID().toString()));
         }
     }
-    @SuppressWarnings("deprecation")
+
     @Test
     public void shouldPutFetchFromCache() {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
@@ -234,7 +234,6 @@ public class CachingWindowStoreTest {
         return Bytes.wrap(key.getBytes());
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldPutFetchRangeFromCache() {
         cachingStore.put(bytesKey("a"), bytesValue("a"));
@@ -377,7 +376,6 @@ public class CachingWindowStoreTest {
         cacheListener.forwarded.clear();
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldForwardOldValuesWhenDisabled() {
         final Windowed<String> windowedKey =
