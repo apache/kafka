@@ -277,6 +277,7 @@ class RequestQuotaTest extends BaseRequestTest {
               )
               .setRebalanceTimeoutMs(100)
           )
+
         case ApiKeys.HEARTBEAT =>
           new HeartbeatRequest.Builder("test-group", 1, "")
 

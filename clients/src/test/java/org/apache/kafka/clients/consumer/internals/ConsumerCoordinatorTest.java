@@ -1411,7 +1411,6 @@ public class ConsumerCoordinatorTest {
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
                 true, groupInstanceId);
 
-
         subscriptions.assignFromUser(singleton(t1p));
         subscriptions.seek(t1p, 100);
 

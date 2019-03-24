@@ -501,7 +501,6 @@ public abstract class AbstractCoordinator implements Closeable {
                         .setRebalanceTimeoutMs(this.rebalanceTimeoutMs)
         );
 
-
         log.debug("Sending JoinGroup ({}) to coordinator {}", requestBuilder, this.coordinator);
 
         // Note that we override the request timeout using the rebalance timeout since that is the

@@ -27,7 +27,6 @@ import java.util.Collections;
 
 public class JoinGroupRequest extends AbstractRequest {
 
-
     public static class Builder extends AbstractRequest.Builder<JoinGroupRequest> {
 
         private final JoinGroupRequestData data;

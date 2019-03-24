@@ -17,7 +17,7 @@
 
 package kafka.coordinator.group
 
-import java.util.{Collections, Optional}
+import java.util.Optional
 
 import kafka.common.OffsetAndMetadata
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig, ReplicaManager}
@@ -35,7 +35,6 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.cluster.Partition
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
 import org.scalatest.junit.JUnitSuite
@@ -555,7 +554,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(joinGroupResult,
       Errors.NONE,
       rebalanceResult.generation,
-      Set(),
+      Set.empty,
       groupId,
       Stable)
 
@@ -602,7 +601,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(await(followerRejoinWithFuture, 1),
       Errors.NONE,
       rebalanceResult.generation + 1, // The group has promoted to the new generation.
-      Set(),
+      Set.empty,
       groupId,
       CompletingRebalance,
       rebalanceResult.leaderId,
@@ -638,7 +637,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(joinGroupResult,
       Errors.NONE,
       rebalanceResult.generation, // The group has no change.
-      Set(),
+      Set.empty,
       groupId,
       Stable)
 
@@ -661,7 +660,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(joinGroupResult,
       Errors.NONE,
       rebalanceResult.generation, // The group has no change.
-      Set(),
+      Set.empty,
       groupId,
       Stable,
       rebalanceResult.leaderId,

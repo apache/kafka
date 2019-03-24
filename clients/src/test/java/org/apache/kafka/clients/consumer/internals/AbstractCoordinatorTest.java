@@ -92,8 +92,8 @@ public class AbstractCoordinatorTest {
     }
 
     private void setupCoordinator(int retryBackoffMs, int rebalanceTimeoutMs, String groupInstanceId) {
-        this.mockTime = new MockTime();
         LogContext logContext = new LogContext();
+        this.mockTime = new MockTime();
         ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, 60 * 60 * 1000L,
                 false, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST),
                 logContext, new ClusterResourceListeners());
@@ -305,7 +305,7 @@ public class AbstractCoordinatorTest {
             coordinator.ensureActiveGroup();
             coordinator.close();
             if (coordinator.isDynamicMember()) {
-                fail("Expected leavegroup to raise an error");
+                fail("Expected leavegroup to raise an error.");
             }
         } catch (RuntimeException exception) {
             if (coordinator.isDynamicMember()) {
