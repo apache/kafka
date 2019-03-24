@@ -31,6 +31,7 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
 import static org.junit.Assert.assertEquals;
@@ -44,11 +45,12 @@ public class ConnectClusterStateImplTest {
     protected HerderProvider herderProvider;
     protected ConnectClusterStateImpl connectClusterState;
     protected Collection<String> expectedConnectors;
+    protected long herderRequestTimeoutMs = TimeUnit.SECONDS.toMillis(10);
     
     @Before
     public void setUp() {
         herderProvider = new HerderProvider(herder);
-        connectClusterState = new ConnectClusterStateImpl(herderProvider);
+        connectClusterState = new ConnectClusterStateImpl(herderRequestTimeoutMs, herderProvider);
         expectedConnectors = Arrays.asList("sink1", "source1", "source2");
     }
     
@@ -67,6 +69,7 @@ public class ConnectClusterStateImplTest {
         assertEquals(expectedConnectors, connectClusterState.connectors());
     }
 
+    @Test
     public void connectorsFailure() {
         Capture<Callback<Collection<String>>> callback = EasyMock.newCapture();
         herder.connectors(EasyMock.capture(callback));

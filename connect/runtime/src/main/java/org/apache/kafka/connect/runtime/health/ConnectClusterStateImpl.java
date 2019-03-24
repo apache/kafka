@@ -37,11 +37,11 @@ import java.util.concurrent.TimeoutException;
 
 public class ConnectClusterStateImpl implements ConnectClusterState {
     
-    private static final long CONNECTORS_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(10);
+    private final long herderRequestTimeoutMs;
+    private final HerderProvider herderProvider;
 
-    private HerderProvider herderProvider;
-
-    public ConnectClusterStateImpl(HerderProvider herderProvider) {
+    public ConnectClusterStateImpl(long connectorsTimeoutMs, HerderProvider herderProvider) {
+        this.herderRequestTimeoutMs = connectorsTimeoutMs;
         this.herderProvider = herderProvider;
     }
 
@@ -50,7 +50,7 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
         FutureCallback<Collection<String>> connectorsCallback = new FutureCallback<>();
         herderProvider.get().connectors(connectorsCallback);
         try {
-            return connectorsCallback.get(CONNECTORS_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            return connectorsCallback.get(herderRequestTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             throw new ConnectException("Failed to retrieve list of connectors", e);
         }
