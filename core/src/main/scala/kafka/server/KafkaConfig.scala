@@ -67,6 +67,10 @@ object Defaults {
   /************* Authorizer Configuration ***********/
   val AuthorizerClassName = ""
 
+  /** ********* Broker-side configuration ***********/
+  val ObserverClassName = "kafka.server.NoOpObserver"
+  val ObserverShutdownTimeoutMs = 2000
+
   /** ********* Socket Server Configuration ***********/
   val Port = 9092
   val HostName: String = new String("")
@@ -294,6 +298,11 @@ object KafkaConfig {
   val ProducerBatchDecompressionEnableProp = "producer.batch.decompression.enable"
   /************* Authorizer Configuration ***********/
   val AuthorizerClassNameProp = "authorizer.class.name"
+
+  /** ********* Broker-side observer Configuration ****************/
+  val ObserverClassNameProp = "observer.class.name"
+  val ObserverShutdownTimeoutMsProp = "observer.shutdown.timeout"
+
   /** ********* Socket Server Configuration ***********/
   val PortProp = "port"
   val HostNameProp = "host.name"
@@ -872,6 +881,12 @@ object KafkaConfig {
   val PasswordEncoderKeyLengthDoc =  "The key length used for encoding dynamically configured passwords."
   val PasswordEncoderIterationsDoc =  "The iteration count used for encoding dynamically configured passwords."
 
+  /** *********  Broker-side Observer Configuration *********/
+  val ObserverClassNameDoc = "The name of the observer class that is used to observe requests and/or response on broker."
+  val ObserverShutdownTimeoutMsDoc = "The maximum time of closing/shutting down an observer. This property can not be less than or equal to " +
+    "zero. When closing/shutting down an observer, most time is spent on flushing the observed stats. The reasonable timeout should be close to " +
+    "the time it takes to flush the stats."
+
   private val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
@@ -906,6 +921,10 @@ object KafkaConfig {
 
       /************* Authorizer Configuration ***********/
       .define(AuthorizerClassNameProp, STRING, Defaults.AuthorizerClassName, LOW, AuthorizerClassNameDoc)
+
+      /************* Broker-side Observer Configuration ***********/
+      .define(ObserverClassNameProp, STRING, Defaults.ObserverClassName, MEDIUM, ObserverClassNameDoc)
+      .define(ObserverShutdownTimeoutMsProp, LONG, Defaults.ObserverShutdownTimeoutMs, atLeast(1), MEDIUM, ObserverShutdownTimeoutMsDoc)
 
       /** ********* Socket Server Configuration ***********/
       .define(PortProp, INT, Defaults.Port, HIGH, PortDoc)
@@ -1222,6 +1241,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
       Some(authZ)
     }
   }
+
+  /************* Broker-side Observer Configuration ********/
+  val ObserverClassName: String = getString(KafkaConfig.ObserverClassNameProp)
+  val ObserverShutdownTimeoutMs: Long = getLong(KafkaConfig.ObserverShutdownTimeoutMsProp)
 
   /** ********* Socket Server Configuration ***********/
   val hostName = getString(KafkaConfig.HostNameProp)
