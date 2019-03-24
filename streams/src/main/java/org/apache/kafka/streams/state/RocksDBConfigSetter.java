@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.rocksdb.ColumnFamilyOptions;
+import org.rocksdb.DBOptions;
 import org.rocksdb.Options;
 
 import java.util.Map;
