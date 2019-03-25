@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
@@ -127,7 +128,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
 
     @Override
     public ThreadCache getCache() {
-        return null;
+        return new ThreadCache(new LogContext(), 32_000L, metrics());
     }
 
     @Override

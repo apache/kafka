@@ -35,6 +35,8 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreSupplier;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.ClassRule;
@@ -188,7 +190,22 @@ public class SuppressionIntegrationTest {
 
         valueCounts
             // this is a bit brittle, but I happen to know that the entries are a little over 100 bytes in size.
-            .suppress(untilTimeLimit(ofMillis(scaledTime(10L)), maxBytes(200L).spillToDiskWhenFull()))
+            .suppress(untilTimeLimit(ofMillis(scaledTime(10L)), maxBytes(200L).spillToDiskWhenFull(new StoreSupplier<KeyValueStore<Bytes, byte[]>>() {
+                @Override
+                public String name() {
+                    return "test-inner";
+                }
+
+                @Override
+                public KeyValueStore<Bytes, byte[]> get() {
+                    return Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("test-r-inner"), Serdes.Bytes(), Serdes.ByteArray()).withCachingEnabled().build();
+                }
+
+                @Override
+                public String metricsScope() {
+                    return "test-inner";
+                }
+            })))
             .toStream()
             .foreach((key, value) -> results.add(new KeyValue<>(key, value)));
 

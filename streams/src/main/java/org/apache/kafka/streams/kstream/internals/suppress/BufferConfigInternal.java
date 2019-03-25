@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Suppressed;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreSupplier;
 
 import static org.apache.kafka.streams.kstream.internals.suppress.BufferFullStrategy.SHUT_DOWN;
 import static org.apache.kafka.streams.kstream.internals.suppress.BufferFullStrategy.SPILL_TO_DISK;
@@ -28,6 +31,8 @@ public abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC
 
     @SuppressWarnings("unused")
     public abstract BufferFullStrategy bufferFullStrategy();
+
+    public abstract StoreSupplier<KeyValueStore<Bytes, byte[]>> bytesStoreSupplier();
 
     @Override
     public Suppressed.StrictBufferConfig withNoBound() {
@@ -46,6 +51,11 @@ public abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC
     @Override
     public Suppressed.StrictBufferConfig spillToDiskWhenFull() {
         return new StrictBufferConfigImpl(maxRecords(), maxBytes(), SPILL_TO_DISK);
+    }
+
+    @Override
+    public Suppressed.StrictBufferConfig spillToDiskWhenFull(final StoreSupplier<KeyValueStore<Bytes, byte[]>> bytesStoreSupplier) {
+        return new StrictBufferConfigImpl(maxRecords(), maxBytes(), bytesStoreSupplier);
     }
 
     @Override

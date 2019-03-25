@@ -16,10 +16,13 @@
  */
 package org.apache.kafka.streams.kstream;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.internals.suppress.EagerBufferConfigImpl;
 import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
 import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImpl;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreSupplier;
 
 import java.time.Duration;
 
@@ -106,6 +109,8 @@ public interface Suppressed<K> {
          * TODO docs
          */
         StrictBufferConfig spillToDiskWhenFull();
+
+        StrictBufferConfig spillToDiskWhenFull(final StoreSupplier<KeyValueStore<Bytes, byte[]>> bytesStoreSupplier);
 
         /**
          * Set the buffer to just emit the oldest records when any of its constraints are violated.

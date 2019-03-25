@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Suppressed;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreSupplier;
 
 import java.util.Objects;
 
@@ -27,6 +30,14 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
     private final long maxRecords;
     private final long maxBytes;
     private final BufferFullStrategy bufferFullStrategy;
+    private final StoreSupplier<KeyValueStore<Bytes, byte[]>> bytesStoreSupplier;
+
+    public StrictBufferConfigImpl() {
+        maxRecords = Long.MAX_VALUE;
+        maxBytes = Long.MAX_VALUE;
+        bufferFullStrategy = SHUT_DOWN;
+        bytesStoreSupplier = null;
+    }
 
     public StrictBufferConfigImpl(final long maxRecords,
                                   final long maxBytes,
@@ -34,12 +45,17 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
         this.bufferFullStrategy = bufferFullStrategy;
+        bytesStoreSupplier = null;
     }
 
-    public StrictBufferConfigImpl() {
-        this.maxRecords = Long.MAX_VALUE;
-        this.maxBytes = Long.MAX_VALUE;
-        this.bufferFullStrategy = SHUT_DOWN;
+    public StrictBufferConfigImpl(final long maxRecords,
+                                  final long maxBytes,
+                                  final StoreSupplier<KeyValueStore<Bytes, byte[]>> bytesStoreSupplier) {
+        this.maxRecords = maxRecords;
+        this.maxBytes = maxBytes;
+        bufferFullStrategy = BufferFullStrategy.SPILL_TO_DISK;
+        this.bytesStoreSupplier = bytesStoreSupplier;
+
     }
 
     @Override
@@ -65,6 +81,11 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
     @Override
     public BufferFullStrategy bufferFullStrategy() {
         return bufferFullStrategy;
+    }
+
+    @Override
+    public StoreSupplier<KeyValueStore<Bytes, byte[]>> bytesStoreSupplier() {
+        return bytesStoreSupplier;
     }
 
     @Override

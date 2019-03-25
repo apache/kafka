@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.streams.kstream.internals.suppress;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Suppressed;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreSupplier;
 
 import java.util.Objects;
 
@@ -53,6 +56,11 @@ public class EagerBufferConfigImpl extends BufferConfigInternal {
     @Override
     public BufferFullStrategy bufferFullStrategy() {
         return BufferFullStrategy.EMIT;
+    }
+
+    @Override
+    public StoreSupplier<KeyValueStore<Bytes, byte[]>> bytesStoreSupplier() {
+        return null;
     }
 
     @Override

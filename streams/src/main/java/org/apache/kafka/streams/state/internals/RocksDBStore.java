@@ -204,7 +204,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
 
         // value getter should always read directly from rocksDB
         // since it is only for values that are already flushed
-        context.register(root, batchingStateRestoreCallback);
+        if (root != null) {
+            context.register(root, batchingStateRestoreCallback);
+        }
     }
 
     // visible for testing

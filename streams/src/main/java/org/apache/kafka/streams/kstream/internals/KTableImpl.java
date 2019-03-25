@@ -370,7 +370,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
-            suppressedInternal.bufferConfig().bufferFullStrategy().equals(BufferFullStrategy.SPILL_TO_DISK) ?
+            suppressedInternal.bufferConfig().bufferFullStrategy() == BufferFullStrategy.SPILL_TO_DISK ?
                 new RocksDBTimeOrderedKeyValueBuffer.Builder(storeName, suppressedInternal.bufferConfig()) :
                 new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName)
         );

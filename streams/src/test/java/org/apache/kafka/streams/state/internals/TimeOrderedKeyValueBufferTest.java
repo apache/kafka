@@ -29,6 +29,8 @@ import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImp
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockInternalProcessorContext.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
@@ -36,13 +38,9 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Properties;
@@ -68,19 +66,67 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
     public static Collection<Object[]> parameters() {
         return asList(
             new Object[] {
-                InMemoryTimeOrderedKeyValueBuffer.class.getSimpleName(),
+                "in-memory buffer",
                 (Function<String, InMemoryTimeOrderedKeyValueBuffer>) name ->
                     (InMemoryTimeOrderedKeyValueBuffer) new InMemoryTimeOrderedKeyValueBuffer
                         .Builder(name)
                         .build()
             },
             new Object[] {
-                RocksDBTimeOrderedKeyValueBuffer.class.getSimpleName(),
+                "rocks bytes store",
                 (Function<String, RocksDBTimeOrderedKeyValueBuffer>) name ->
                     (RocksDBTimeOrderedKeyValueBuffer) new RocksDBTimeOrderedKeyValueBuffer
                         .Builder(name, new StrictBufferConfigImpl(-1L,
                                                                   32_000L,
                                                                   BufferFullStrategy.SPILL_TO_DISK))
+                        .build()
+            },
+            new Object[] {
+                "in-memory bytes store",
+                (Function<String, RocksDBTimeOrderedKeyValueBuffer>) name ->
+                    (RocksDBTimeOrderedKeyValueBuffer) new RocksDBTimeOrderedKeyValueBuffer
+                        .Builder(name, new StrictBufferConfigImpl(-1L,
+                                                                  32_000L,
+                                                                  new StoreSupplier<KeyValueStore<Bytes, byte[]>>() {
+                                                                      @Override
+                                                                      public String name() {
+                                                                          return "test-inner";
+                                                                      }
+
+                                                                      @Override
+                                                                      public KeyValueStore<Bytes, byte[]> get() {
+                                                                          return new InMemoryKeyValueStore("test-inner");
+                                                                      }
+
+                                                                      @Override
+                                                                      public String metricsScope() {
+                                                                          return "test-inner";
+                                                                      }
+                                                                  }))
+                        .build()
+            },
+            new Object[] {
+                "cached rocks bytes store",
+                (Function<String, RocksDBTimeOrderedKeyValueBuffer>) name ->
+                    (RocksDBTimeOrderedKeyValueBuffer) new RocksDBTimeOrderedKeyValueBuffer
+                        .Builder(name, new StrictBufferConfigImpl(-1L,
+                                                                  32_000L,
+                                                                  new StoreSupplier<KeyValueStore<Bytes, byte[]>>() {
+                                                                      @Override
+                                                                      public String name() {
+                                                                          return "test-inner";
+                                                                      }
+
+                                                                      @Override
+                                                                      public KeyValueStore<Bytes, byte[]> get() {
+                                                                          return new CachingKeyValueStore(new RocksDBStore("test-r-inner", "rocksdb-buffer", 32_000L));
+                                                                      }
+
+                                                                      @Override
+                                                                      public String metricsScope() {
+                                                                          return "test-inner";
+                                                                      }
+                                                                  }))
                         .build()
             }
         );
@@ -127,7 +173,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        buffer.put(0, getBytes("asdf"), getRecord("2p93nf"));
+        putRecord(buffer, context, "2p93nf", 0, "asdf");
         cleanup(context, buffer);
     }
 
@@ -164,7 +210,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        buffer.put(0, getBytes("asdf"), getRecord("qwer"));
+        putRecord(buffer, context, "qwer", 0, "asdf");
         assertThat(buffer.numRecords(), is(1));
         buffer.evictWhile(() -> true, kv -> { });
         assertThat(buffer.numRecords(), is(0));
@@ -178,8 +224,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         buffer.init(context, buffer);
         final Bytes firstKey = getBytes("asdf");
         final ContextualRecord firstRecord = getRecord("eyt");
-        buffer.put(0, firstKey, firstRecord);
-        buffer.put(1, getBytes("zxcv"), getRecord("rtg"));
+        putRecord(0, buffer, context, firstRecord, firstKey);
+        putRecord(buffer, context, "rtg", 1, "zxcv");
         assertThat(buffer.numRecords(), is(2));
         final List<KeyValue<Bytes, ContextualRecord>> evicted = new LinkedList<>();
         buffer.evictWhile(() -> buffer.numRecords() > 1, evicted::add);
@@ -193,11 +239,11 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        buffer.put(0, getBytes("asdf"), getRecord("oin"));
+        putRecord(buffer, context, "oin", 0, "asdf");
         assertThat(buffer.numRecords(), is(1));
-        buffer.put(1, getBytes("asdf"), getRecord("wekjn"));
+        putRecord(buffer, context, "wekjn", 1, "asdf");
         assertThat(buffer.numRecords(), is(1));
-        buffer.put(0, getBytes("zxcv"), getRecord("24inf"));
+        putRecord(buffer, context, "24inf", 0, "zxcv");
         assertThat(buffer.numRecords(), is(2));
         cleanup(context, buffer);
     }
@@ -207,11 +253,11 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        buffer.put(0, getBytes("asdf"), getRecord("23roni"));
+        putRecord(buffer, context, "23roni", 0, "asdf");
         assertThat(buffer.bufferSize(), is(43L));
-        buffer.put(1, getBytes("asdf"), getRecord("3l"));
+        putRecord(buffer, context, "3l", 1, "asdf");
         assertThat(buffer.bufferSize(), is(39L));
-        buffer.put(0, getBytes("zxcv"), getRecord("qfowin"));
+        putRecord(buffer, context, "qfowin", 0, "zxcv");
         assertThat(buffer.bufferSize(), is(82L));
         cleanup(context, buffer);
     }
@@ -221,11 +267,24 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        buffer.put(1, getBytes("asdf"), getRecord("2093j"));
+        putRecord(buffer, context, "2093j", 1, "asdf");
         assertThat(buffer.minTimestamp(), is(1L));
-        buffer.put(0, getBytes("zxcv"), getRecord("3gon4i"));
+        putRecord(buffer, context, "3gon4i", 0, "zxcv");
         assertThat(buffer.minTimestamp(), is(0L));
         cleanup(context, buffer);
+    }
+
+    private static void putRecord(final TimeOrderedKeyValueBuffer buffer,
+                                  final MockInternalProcessorContext context,
+                                  final String value,
+                                  final int time,
+                                  final String key) {
+        putRecord(time, buffer, context, getRecord(value), getBytes(key));
+    }
+
+    private static void putRecord(final int time, final TimeOrderedKeyValueBuffer buffer, final MockInternalProcessorContext context, final ContextualRecord firstRecord, final Bytes firstKey) {
+        context.setRecordContext(firstRecord.recordContext());
+        buffer.put(time, firstKey, firstRecord);
     }
 
     @Test
@@ -234,12 +293,12 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
 
-        buffer.put(1, getBytes("zxcv"), getRecord("o23i4"));
+        putRecord(buffer, context, "o23i4", 1, "zxcv");
         assertThat(buffer.numRecords(), is(1));
         assertThat(buffer.bufferSize(), is(42L));
         assertThat(buffer.minTimestamp(), is(1L));
 
-        buffer.put(0, getBytes("asdf"), getRecord("3ng"));
+        putRecord(buffer, context, "3ng", 0, "asdf");
         assertThat(buffer.numRecords(), is(2));
         assertThat(buffer.bufferSize(), is(82L));
         assertThat(buffer.minTimestamp(), is(0L));
@@ -279,9 +338,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        buffer.put(2, getBytes("asdf"), getRecord("2093j"));
-        buffer.put(1, getBytes("zxcv"), getRecord("3gon4i"));
-        buffer.put(0, getBytes("deleteme"), getRecord("deadbeef"));
+        putRecord(buffer, context, "2093j", 2, "asdf");
+        putRecord(buffer, context, "3gon4i", 1, "zxcv");
+        putRecord(buffer, context, "deadbeef", 0, "deleteme");
         buffer.evictWhile(() -> buffer.minTimestamp() < 1, kv -> { });
         buffer.flush();
 
@@ -349,6 +408,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
 
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
+
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, ""));
 
         stateRestoreCallback.restoreBatch(asList(
             new ConsumerRecord<>("topic",

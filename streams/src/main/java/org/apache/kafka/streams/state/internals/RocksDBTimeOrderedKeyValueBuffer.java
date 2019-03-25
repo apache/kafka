@@ -35,6 +35,7 @@ import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.internals.metrics.Sensors;
 
 import java.io.File;
@@ -57,7 +58,7 @@ public final class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyVal
     private final Set<Bytes> dirtyKeys = new HashSet<>();
     private final String storeName;
     private final boolean loggingEnabled;
-    private final RocksDBStore bytesStore;
+    private final KeyValueStore<Bytes, byte[]> bytesStore;
     private final IndexFacade index;
     private final StorageFacade sortedMap;
 
@@ -69,6 +70,7 @@ public final class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyVal
     private Sensor bufferCountSensor;
 
     private volatile boolean open;
+    private InternalProcessorContext internalProcessorContext;
 
     private static final class IndexFacade {
         private static final byte INDEX_FLAGS = 0;
@@ -117,7 +119,7 @@ public final class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyVal
     private static final class StorageFacade {
         private static final byte STORAGE_FLAGS = 1;
         // concrete because we need to guarantee iteration in lexicographic order
-        private final RocksDBStore bytesStore;
+        private final KeyValueStore<Bytes, byte[]> bytesStore;
 
         private static Bytes packKey(final BufferKey key) {
             final byte[] keyBytes = key.serialize();
@@ -172,7 +174,7 @@ public final class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyVal
         }
 
 
-        private StorageFacade(final RocksDBStore bytesStore) {
+        private StorageFacade(final KeyValueStore<Bytes, byte[]> bytesStore) {
             this.bytesStore = bytesStore;
         }
 
@@ -208,11 +210,13 @@ public final class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyVal
 
         private final String storeName;
         private final long memLimit;
+        private final StoreSupplier<KeyValueStore<Bytes, byte[]>> bytesStoreSupplier;
         private boolean loggingEnabled = true;
 
         public Builder(final String storeName, final BufferConfigInternal<?> bufferConfigInternal) {
             this.storeName = storeName;
             memLimit = bufferConfigInternal.maxBytes();
+            bytesStoreSupplier = bufferConfigInternal.bytesStoreSupplier();
         }
 
         /**
@@ -252,7 +256,7 @@ public final class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyVal
 
         @Override
         public StateStore build() {
-            return new RocksDBTimeOrderedKeyValueBuffer(storeName, loggingEnabled, memLimit);
+            return new RocksDBTimeOrderedKeyValueBuffer(storeName, loggingEnabled, memLimit, bytesStoreSupplier);
         }
 
         @Override
@@ -299,10 +303,13 @@ public final class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyVal
         }
     }
 
-    private RocksDBTimeOrderedKeyValueBuffer(final String storeName, final boolean loggingEnabled, final long memLimit) {
+    private RocksDBTimeOrderedKeyValueBuffer(final String storeName,
+                                             final boolean loggingEnabled,
+                                             final long memLimit,
+                                             final StoreSupplier<KeyValueStore<Bytes, byte[]>> bytesStoreSupplier) {
         this.storeName = storeName;
         this.loggingEnabled = loggingEnabled;
-        bytesStore = new RocksDBStore(storeName, "rocksdb-buffer", memLimit);
+        bytesStore = bytesStoreSupplier == null ? new RocksDBStore(storeName, "rocksdb-buffer", memLimit): bytesStoreSupplier.get();
         index = new IndexFacade(bytesStore);
         sortedMap = new StorageFacade(bytesStore);
     }
@@ -320,7 +327,7 @@ public final class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyVal
 
     @Override
     public void init(final ProcessorContext context, final StateStore root) {
-        final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
+        this.internalProcessorContext = (InternalProcessorContext) context;
         bufferSizeSensor = Sensors.createBufferSizeSensor(this, internalProcessorContext);
         bufferCountSensor = Sensors.createBufferCountSensor(this, internalProcessorContext);
 
@@ -331,7 +338,7 @@ public final class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyVal
         } catch (final IOException e) {
             throw new RuntimeException(e);
         }
-        bytesStore.openDB(context);
+        bytesStore.init(context, null);
 
         context.register(root, (RecordBatchingStateRestoreCallback) this::restoreBatch);
         if (loggingEnabled) {
@@ -413,20 +420,27 @@ public final class RocksDBTimeOrderedKeyValueBuffer implements TimeOrderedKeyVal
                 final byte[] value = new byte[record.value().length - 8];
                 timeAndValue.get(value);
 
+                final ProcessorRecordContext oldContext = internalProcessorContext.recordContext();
+
+                final ProcessorRecordContext recordContext = new ProcessorRecordContext(
+                    record.timestamp(),
+                    record.offset(),
+                    record.partition(),
+                    record.topic(),
+                    record.headers()
+                );
+                internalProcessorContext.setRecordContext(recordContext);
+
                 cleanPut(
                     time,
                     key,
                     new ContextualRecord(
                         value,
-                        new ProcessorRecordContext(
-                            record.timestamp(),
-                            record.offset(),
-                            record.partition(),
-                            record.topic(),
-                            record.headers()
-                        )
+                        recordContext
                     )
                 );
+
+                internalProcessorContext.setRecordContext(oldContext);
             }
         }
         updateBufferMetrics();
