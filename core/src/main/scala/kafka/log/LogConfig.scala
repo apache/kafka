@@ -34,8 +34,9 @@ import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
-  val MinTopicSegmentSize = 
+  val MinTopicSegmentSize = kafka.server.Defaults.MinLogSegmentBytes
   val SegmentMs = kafka.server.Defaults.LogRollHours * 60 * 60 * 1000L
+  val MinTopicSegmentMs = kafka.server.Defaults.LogRollHours
   val SegmentJitterMs = kafka.server.Defaults.LogRollJitterHours * 60 * 60 * 1000L
   val FlushInterval = kafka.server.Defaults.LogFlushIntervalMessages
   val FlushMs = kafka.server.Defaults.LogFlushSchedulerIntervalMs
@@ -143,7 +144,9 @@ object LogConfig {
   val FollowerReplicationThrottledReplicasProp = "follower.replication.throttled.replicas"
 
   val SegmentSizeDoc = TopicConfig.SEGMENT_BYTES_DOC
+  val MinTopicSegmentBytesDoc = TopicConfig.MIN_TOPIC_SEGMENT_BYTES_DOC
   val SegmentMsDoc = TopicConfig.SEGMENT_MS_DOC
+  val MinTopicSegmentMsDoc = TopicConfig.MIN_TOPIC_SEGMENT_MS_DOC
   val SegmentJitterMsDoc = TopicConfig.SEGMENT_JITTER_MS_DOC
   val MaxIndexSizeDoc = TopicConfig.SEGMENT_INDEX_BYTES_DOC
   val FlushIntervalDoc = TopicConfig.FLUSH_MESSAGES_INTERVAL_DOC
@@ -221,8 +224,12 @@ object LogConfig {
     new LogConfigDef()
       .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
         SegmentSizeDoc, KafkaConfig.LogSegmentBytesProp)
+      .define(MinTopicSegmentBytesProp, INT, Defaults.MinTopicSegmentSize, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
+        MinTopicSegmentBytesDoc, KafkaConfig.MinLogSegmentBytesProp)
       .define(SegmentMsProp, LONG, Defaults.SegmentMs, atLeast(1), MEDIUM, SegmentMsDoc,
         KafkaConfig.LogRollTimeMillisProp)
+      .define(MinTopicSegmentMsProp, LONG, Defaults.MinTopicSegmentMs, atLeast(1), MEDIUM, MinTopicSegmentMsDoc,
+        KafkaConfig.MinLogSegmentMsProp)
       .define(SegmentJitterMsProp, LONG, Defaults.SegmentJitterMs, atLeast(0), MEDIUM, SegmentJitterMsDoc,
         KafkaConfig.LogRollTimeJitterMillisProp)
       .define(SegmentIndexBytesProp, INT, Defaults.MaxIndexSize, atLeast(0), MEDIUM, MaxIndexSizeDoc,
