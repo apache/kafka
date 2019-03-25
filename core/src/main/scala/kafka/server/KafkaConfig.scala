@@ -84,7 +84,8 @@ object Defaults {
   val NumPartitions = 1
   val LogDir = "/tmp/kafka-logs"
   val LogSegmentBytes = 1 * 1024 * 1024 * 1024
-  val MinLogSegmentBytes = 1 * 1024 * 1024
+  val MinTopicSegmentBytes = 1 * 1024 * 1024
+  val MinTopicSegmentMs = 60 * 60 * 1000
   val LogRollHours = 24 * 7
   val LogRollJitterHours = 0
   val LogRetentionHours = 24 * 7
@@ -305,10 +306,10 @@ object KafkaConfig {
   val LogDirsProp = "log.dirs"
   val LogDirProp = "log.dir"
   val LogSegmentBytesProp = "log.segment.bytes"
-  val MinLogSegmentBytesProp = "min.log.segment.bytes"
+  val MinTopicSegmentBytesProp = "min.topic.segment.bytes"
 
   val LogRollTimeMillisProp = "log.roll.ms"
-  val MinLogSegmentMsProp = "min.log.roll.ms"
+  val MinTopicSegmentMsProp = "min.topic.segment.ms"
   val LogRollTimeHoursProp = "log.roll.hours"
 
   val LogRollTimeJitterMillisProp = "log.roll.jitter.ms"
@@ -594,6 +595,10 @@ object KafkaConfig {
   val LogDirDoc = "The directory in which the log data is kept (supplemental for " + LogDirsProp + " property)"
   val LogDirsDoc = "The directories in which the log data is kept. If not set, the value in " + LogDirProp + " is used"
   val LogSegmentBytesDoc = "The maximum size of a single log file"
+  val MinTopicSegmentBytesDoc = "The minimum value for segment.bytes. When someone sets topic configuration segment." +
+    "bytes to a value lower than this, Kafka throws an error INVALID VALUE."
+  val MinTopicSegmentMsDoc = "The minimum value for segment.ms. When someone sets topic configuration segment." +
+    "ms to a value lower than this, Kafka throws an error INVALID VALUE."
   val LogRollTimeMillisDoc = "The maximum time before a new log segment is rolled out (in milliseconds). If not set, the value in " + LogRollTimeHoursProp + " is used"
   val LogRollTimeHoursDoc = "The maximum time before a new log segment is rolled out (in hours), secondary to " + LogRollTimeMillisProp + " property"
 
@@ -895,8 +900,10 @@ object KafkaConfig {
       .define(NumPartitionsProp, INT, Defaults.NumPartitions, atLeast(1), MEDIUM, NumPartitionsDoc)
       .define(LogDirProp, STRING, Defaults.LogDir, HIGH, LogDirDoc)
       .define(LogDirsProp, STRING, null, HIGH, LogDirsDoc)
+      .define(MinTopicSegmentBytesProp, INT, Defaults.LogSegmentBytes, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), HIGH, MinTopicSegmentBytesDoc)
       .define(LogSegmentBytesProp, INT, Defaults.LogSegmentBytes, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), HIGH, LogSegmentBytesDoc)
 
+      .define(MinTopicSegmentMsProp, LONG, null, HIGH, MinTopicSegmentMsDoc)
       .define(LogRollTimeMillisProp, LONG, null, HIGH, LogRollTimeMillisDoc)
       .define(LogRollTimeHoursProp, INT, Defaults.LogRollHours, atLeast(1), HIGH, LogRollTimeHoursDoc)
 
@@ -1188,6 +1195,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val numPartitions = getInt(KafkaConfig.NumPartitionsProp)
   val logDirs = CoreUtils.parseCsvList(Option(getString(KafkaConfig.LogDirsProp)).getOrElse(getString(KafkaConfig.LogDirProp)))
   def logSegmentBytes = getInt(KafkaConfig.LogSegmentBytesProp)
+  val minTopicSegmentBytes = getInt(KafkaConfig.MinTopicSegmentBytesProp)
+  val minTopicSegmentMs = getInt(KafkaConfig.MinTopicSegmentMsProp)
   def logFlushIntervalMessages = getLong(KafkaConfig.LogFlushIntervalMessagesProp)
   val logCleanerThreads = getInt(KafkaConfig.LogCleanerThreadsProp)
   def numRecoveryThreadsPerDataDir = getInt(KafkaConfig.NumRecoveryThreadsPerDataDirProp)

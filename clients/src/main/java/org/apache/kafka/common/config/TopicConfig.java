@@ -33,20 +33,10 @@ public class TopicConfig {
         "the log. Retention and cleaning is always done a file at a time so a larger segment size means " +
         "fewer files but less granular control over retention.";
 
-    public static final String MIN_TOPIC_SEGMENT_BYTES_CONFIG = "min.topic.segment.bytes";
-    public static final String MIN_TOPIC_SEGMENT_BYTES_DOC = "The minimum value for segment.bytes. " +
-        "When someone sets topic configuration segment.bytes to a value lower than this, " +
-        "Kafka throws an error INVALID VALUE.";
-
     public static final String SEGMENT_MS_CONFIG = "segment.ms";
     public static final String SEGMENT_MS_DOC = "This configuration controls the period of time after " +
         "which Kafka will force the log to roll even if the segment file isn't full to ensure that retention " +
         "can delete or compact old data.";
-
-    public static final String MIN_TOPIC_SEGMENT_MS_CONFIG = "min.topic.segment.ms";
-    public static final String MIN_TOPIC_SEGMENT_MS_DOC = "The minimum value for segment.ms. " +
-        "When someone sets topic configuration segment.ms to a value lower than this, " +
-        "Kafka throws an error INVALID VALUE.";
 
     public static final String SEGMENT_JITTER_MS_CONFIG = "segment.jitter.ms";
     public static final String SEGMENT_JITTER_MS_DOC = "The maximum random jitter subtracted from the scheduled " +

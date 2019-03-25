@@ -34,7 +34,7 @@ import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
-  val MinTopicSegmentSize = kafka.server.Defaults.MinLogSegmentBytes
+  val MinTopicSegmentSize = kafka.server.Defaults.MinTopicSegmentBytes
   val SegmentMs = kafka.server.Defaults.LogRollHours * 60 * 60 * 1000L
   val MinTopicSegmentMs = kafka.server.Defaults.LogRollHours
   val SegmentJitterMs = kafka.server.Defaults.LogRollJitterHours * 60 * 60 * 1000L
@@ -112,9 +112,7 @@ object LogConfig {
   }
 
   val SegmentBytesProp = TopicConfig.SEGMENT_BYTES_CONFIG
-  val MinTopicSegmentBytesProp = TopicConfig.MIN_TOPIC_SEGMENT_BYTES_CONFIG
   val SegmentMsProp = TopicConfig.SEGMENT_MS_CONFIG
-  val MinTopicSegmentMsProp = TopicConfig.MIN_TOPIC_SEGMENT_MS_CONFIG
   val SegmentJitterMsProp = TopicConfig.SEGMENT_JITTER_MS_CONFIG
   val SegmentIndexBytesProp = TopicConfig.SEGMENT_INDEX_BYTES_CONFIG
   val FlushMessagesProp = TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG
@@ -144,9 +142,7 @@ object LogConfig {
   val FollowerReplicationThrottledReplicasProp = "follower.replication.throttled.replicas"
 
   val SegmentSizeDoc = TopicConfig.SEGMENT_BYTES_DOC
-  val MinTopicSegmentBytesDoc = TopicConfig.MIN_TOPIC_SEGMENT_BYTES_DOC
   val SegmentMsDoc = TopicConfig.SEGMENT_MS_DOC
-  val MinTopicSegmentMsDoc = TopicConfig.MIN_TOPIC_SEGMENT_MS_DOC
   val SegmentJitterMsDoc = TopicConfig.SEGMENT_JITTER_MS_DOC
   val MaxIndexSizeDoc = TopicConfig.SEGMENT_INDEX_BYTES_DOC
   val FlushIntervalDoc = TopicConfig.FLUSH_MESSAGES_INTERVAL_DOC
@@ -222,14 +218,10 @@ object LogConfig {
     import org.apache.kafka.common.config.ConfigDef.ValidString._
 
     new LogConfigDef()
-      .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
+      .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(kafka.server.Defaults.MinTopicSegmentBytes), MEDIUM,
         SegmentSizeDoc, KafkaConfig.LogSegmentBytesProp)
-      .define(MinTopicSegmentBytesProp, INT, Defaults.MinTopicSegmentSize, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
-        MinTopicSegmentBytesDoc, KafkaConfig.MinLogSegmentBytesProp)
-      .define(SegmentMsProp, LONG, Defaults.SegmentMs, atLeast(1), MEDIUM, SegmentMsDoc,
+      .define(SegmentMsProp, LONG, Defaults.SegmentMs, atLeast(kafka.server.Defaults.MinTopicSegmentMs), MEDIUM, SegmentMsDoc,
         KafkaConfig.LogRollTimeMillisProp)
-      .define(MinTopicSegmentMsProp, LONG, Defaults.MinTopicSegmentMs, atLeast(1), MEDIUM, MinTopicSegmentMsDoc,
-        KafkaConfig.MinLogSegmentMsProp)
       .define(SegmentJitterMsProp, LONG, Defaults.SegmentJitterMs, atLeast(0), MEDIUM, SegmentJitterMsDoc,
         KafkaConfig.LogRollTimeJitterMillisProp)
       .define(SegmentIndexBytesProp, INT, Defaults.MaxIndexSize, atLeast(0), MEDIUM, MaxIndexSizeDoc,
