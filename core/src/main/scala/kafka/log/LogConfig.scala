@@ -34,9 +34,7 @@ import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList, Validator
 
 object Defaults {
   val SegmentSize = kafka.server.Defaults.LogSegmentBytes
-  val MinTopicSegmentSize = kafka.server.Defaults.MinTopicSegmentBytes
   val SegmentMs = kafka.server.Defaults.LogRollHours * 60 * 60 * 1000L
-  val MinTopicSegmentMs = kafka.server.Defaults.LogRollHours
   val SegmentJitterMs = kafka.server.Defaults.LogRollJitterHours * 60 * 60 * 1000L
   val FlushInterval = kafka.server.Defaults.LogFlushIntervalMessages
   val FlushMs = kafka.server.Defaults.LogFlushSchedulerIntervalMs
@@ -220,7 +218,7 @@ object LogConfig {
     new LogConfigDef()
       .define(SegmentBytesProp, INT, Defaults.SegmentSize, atLeast(kafka.server.Defaults.MinTopicSegmentBytes), MEDIUM,
         SegmentSizeDoc, KafkaConfig.LogSegmentBytesProp)
-      .define(SegmentMsProp, LONG, Defaults.SegmentMs, atLeast(kafka.server.Defaults.MinTopicSegmentMs), MEDIUM, SegmentMsDoc,
+      .define(SegmentMsProp, LONG, Defaults.SegmentMs, atLeast(1), MEDIUM, SegmentMsDoc,
         KafkaConfig.LogRollTimeMillisProp)
       .define(SegmentJitterMsProp, LONG, Defaults.SegmentJitterMs, atLeast(0), MEDIUM, SegmentJitterMsDoc,
         KafkaConfig.LogRollTimeJitterMillisProp)

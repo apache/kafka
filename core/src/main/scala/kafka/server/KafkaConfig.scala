@@ -310,6 +310,7 @@ object KafkaConfig {
 
   val LogRollTimeMillisProp = "log.roll.ms"
   val MinTopicSegmentMsProp = "min.topic.segment.ms"
+
   val LogRollTimeHoursProp = "log.roll.hours"
 
   val LogRollTimeJitterMillisProp = "log.roll.jitter.ms"
@@ -1195,8 +1196,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   val numPartitions = getInt(KafkaConfig.NumPartitionsProp)
   val logDirs = CoreUtils.parseCsvList(Option(getString(KafkaConfig.LogDirsProp)).getOrElse(getString(KafkaConfig.LogDirProp)))
   def logSegmentBytes = getInt(KafkaConfig.LogSegmentBytesProp)
-  val minTopicSegmentBytes = getInt(KafkaConfig.MinTopicSegmentBytesProp)
-  val minTopicSegmentMs = getInt(KafkaConfig.MinTopicSegmentMsProp)
+  def minTopicSegmentBytes = getInt(KafkaConfig.MinTopicSegmentBytesProp)
+  def minTopicSegmentMs = getInt(KafkaConfig.MinTopicSegmentMsProp)
   def logFlushIntervalMessages = getLong(KafkaConfig.LogFlushIntervalMessagesProp)
   val logCleanerThreads = getInt(KafkaConfig.LogCleanerThreadsProp)
   def numRecoveryThreadsPerDataDir = getInt(KafkaConfig.NumRecoveryThreadsPerDataDirProp)
@@ -1472,6 +1473,7 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
     require(logRollTimeMillis >= 1, "log.roll.ms must be equal or greater than 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be equal or greater than 0")
     require(logRetentionTimeMillis >= 1 || logRetentionTimeMillis == -1, "log.retention.ms must be unlimited (-1) or, equal or greater than 1")
+    require(minTopicSegmentBytes <= logSegmentBytes, "log.segment.bytes must be greater than min.topic.segment.bytes")
     require(logDirs.nonEmpty, "At least one log directory must be defined via log.dirs or log.dir.")
     require(logCleanerDedupeBufferSize / logCleanerThreads > 1024 * 1024, "log.cleaner.dedupe.buffer.size must be at least 1MB per cleaner thread.")
     require(replicaFetchWaitMaxMs <= replicaSocketTimeoutMs, "replica.socket.timeout.ms should always be at least replica.fetch.wait.max.ms" +
