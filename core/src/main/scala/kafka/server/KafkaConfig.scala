@@ -84,6 +84,7 @@ object Defaults {
   val NumPartitions = 1
   val LogDir = "/tmp/kafka-logs"
   val LogSegmentBytes = 1 * 1024 * 1024 * 1024
+  val MinLogSegmentBytes = 1 * 1024 * 1024
   val LogRollHours = 24 * 7
   val LogRollJitterHours = 0
   val LogRetentionHours = 24 * 7
@@ -304,8 +305,10 @@ object KafkaConfig {
   val LogDirsProp = "log.dirs"
   val LogDirProp = "log.dir"
   val LogSegmentBytesProp = "log.segment.bytes"
+  val MinLogSegmentBytesProp = "min.log.segment.bytes"
 
   val LogRollTimeMillisProp = "log.roll.ms"
+  val MinLogSegmentMsProp = "min.log.roll.ms"
   val LogRollTimeHoursProp = "log.roll.hours"
 
   val LogRollTimeJitterMillisProp = "log.roll.jitter.ms"
