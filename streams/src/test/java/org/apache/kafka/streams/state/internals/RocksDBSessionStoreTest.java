@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.Stores;
@@ -68,7 +68,7 @@ public class RocksDBSessionStoreTest {
             new ThreadCache(
                 new LogContext("testCache "),
                 0,
-                new MockStreamsMetrics(new Metrics())));
+                new StreamsMetricsImpl(new Metrics())));
 
         sessionStore.init(context, sessionStore);
     }

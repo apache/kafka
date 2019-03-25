@@ -101,7 +101,8 @@ public class MeteredKeyValueStore<K, V>
 
         // register and possibly restore the state from the logs
         final Sensor restoreTime = storeMetrics.addOperationLatencySensor(RESTORE);
-        StreamsMetricsImpl.maybeMeasureLatency(() -> {
+        StreamsMetricsImpl.maybeMeasureLatency(
+            () -> {
                 super.init(context, root);
             },
             time,
@@ -137,7 +138,8 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V get(final K key) {
         try {
-            return StreamsMetricsImpl.maybeMeasureLatency(() ->
+            return StreamsMetricsImpl.maybeMeasureLatency(
+                () ->
                     outerValue(wrapped().get(keyBytes(key))),
                 time,
                 getTime);
@@ -151,7 +153,8 @@ public class MeteredKeyValueStore<K, V>
     public void put(final K key,
                     final V value) {
         try {
-            StreamsMetricsImpl.maybeMeasureLatency(() -> {
+            StreamsMetricsImpl.maybeMeasureLatency(
+                () -> {
                     wrapped().put(keyBytes(key), serdes.rawValue(value));
                 },
                 time,
@@ -165,7 +168,8 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V putIfAbsent(final K key,
                          final V value) {
-        return StreamsMetricsImpl.maybeMeasureLatency(() ->
+        return StreamsMetricsImpl.maybeMeasureLatency(
+            () ->
                 outerValue(wrapped().putIfAbsent(keyBytes(key), serdes.rawValue(value))),
             time,
             putIfAbsentTime);
@@ -173,7 +177,8 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public void putAll(final List<KeyValue<K, V>> entries) {
-        StreamsMetricsImpl.maybeMeasureLatency(() -> {
+        StreamsMetricsImpl.maybeMeasureLatency(
+            () -> {
                 wrapped().putAll(innerEntries(entries));
             },
             time,
@@ -183,7 +188,8 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public V delete(final K key) {
         try {
-            return StreamsMetricsImpl.maybeMeasureLatency(() ->
+            return StreamsMetricsImpl.maybeMeasureLatency(
+                () ->
                     outerValue(wrapped().delete(keyBytes(key))),
                 time,
                 deleteTime);
@@ -219,7 +225,7 @@ public class MeteredKeyValueStore<K, V>
     @Override
     public void close() {
         super.close();
-        storeMetrics.removeAllSensors();
+        storeMetrics.clear();
     }
 
     private V outerValue(final byte[] value) {

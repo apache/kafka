@@ -171,7 +171,7 @@ public class RocksDBSegmentedBytesStore implements SegmentedBytesStore {
     @Override
     public void close() {
         segments.close();
-        storeMetrics.removeAllSensors();
+        storeMetrics.clear();
         open = false;
     }
 

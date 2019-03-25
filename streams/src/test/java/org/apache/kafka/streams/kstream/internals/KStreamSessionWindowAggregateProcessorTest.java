@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
@@ -29,8 +28,8 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.To;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -51,8 +50,11 @@ import java.util.Arrays;
 import java.util.List;
 
 import static java.time.Duration.ofMillis;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.ProcessorNode.NodeMetrics.DROPPED_LATE_RECORDS;
+import static org.apache.kafka.streams.processor.internals.ProcessorNode.NodeMetrics.STREAM_PROCESSOR_NODE_METRICS;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.SKIPPED_RECORDS;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.is;
@@ -60,6 +62,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 public class KStreamSessionWindowAggregateProcessorTest {
@@ -82,21 +85,20 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private final Processor<String, String> processor = sessionAggregator.get();
     private SessionStore<String, Long> sessionStore;
     private InternalMockProcessorContext context;
-    private Metrics metrics;
 
     @Before
     public void initializeStore() {
         final File stateDir = TestUtils.tempDirectory();
-        metrics = new Metrics();
-        final MockStreamsMetrics metrics = new MockStreamsMetrics(KStreamSessionWindowAggregateProcessorTest.this.metrics);
+        final Metrics metrics = new Metrics();
+        final StreamsMetricsImpl streamMetrics = new StreamsMetricsImpl(metrics);
         context = new InternalMockProcessorContext(
             stateDir,
             Serdes.String(),
             Serdes.String(),
-            metrics,
+            streamMetrics,
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             NoOpRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 100000, metrics)
+            new ThreadCache(new LogContext("testCache "), 100000, streamMetrics)
         ) {
             @Override
             public <K, V> void forward(final K key, final V value, final To to) {
@@ -320,16 +322,13 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process(null, "1");
         LogCaptureAppender.unregister(appender);
 
-        assertEquals(
-            1.0,
-            getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
-        assertThat(
-            appender.getMessages(),
-            hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-3] offset=[-2]"));
+        assertEquals(1.0, getMetricByName(context.metrics().metrics(), SKIPPED_RECORDS + TOTAL_SUFFIX, STREAM_PROCESSOR_NODE_METRICS).metricValue());
+        assertNotEquals(0.0, getMetricByName(context.metrics().metrics(), SKIPPED_RECORDS + RATE_SUFFIX, STREAM_PROCESSOR_NODE_METRICS).metricValue());
+        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. value=[1] topic=[topic] partition=[-3] offset=[-2]"));
     }
 
     @Test
-    public void shouldLogAndMeterWhenSkippingLateRecord() {
+    public void shouldLogAndMeterWhenDroppingLateRecord() {
         LogCaptureAppender.setClassLoggerToDebug(KStreamSessionWindowAggregate.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
         final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
@@ -353,33 +352,13 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process("A", "1");
         LogCaptureAppender.unregister(appender);
 
-        final MetricName dropMetric = new MetricName(
-            "late-record-drop-total",
-            "stream-processor-node-metrics",
-            "The total number of occurrence of late-record-drop operations.",
-            mkMap(
-                mkEntry("client-id", "test"),
-                mkEntry("task-id", "0_0"),
-                mkEntry("processor-node-id", "TESTING_NODE")
-            )
-        );
-
-        assertThat(metrics.metrics().get(dropMetric).metricValue(), is(2.0));
-
-        final MetricName dropRate = new MetricName(
-            "late-record-drop-rate",
-            "stream-processor-node-metrics",
-            "The average number of occurrence of late-record-drop operations.",
-            mkMap(
-                mkEntry("client-id", "test"),
-                mkEntry("task-id", "0_0"),
-                mkEntry("processor-node-id", "TESTING_NODE")
-            )
-        );
-
         assertThat(
-            (Double) metrics.metrics().get(dropRate).metricValue(),
+            getMetricByName(context.metrics().metrics(), DROPPED_LATE_RECORDS + TOTAL_SUFFIX, STREAM_PROCESSOR_NODE_METRICS).metricValue(),
+            is(2.0));
+        assertThat(
+            (Double) getMetricByName(context.metrics().metrics(), DROPPED_LATE_RECORDS + RATE_SUFFIX, STREAM_PROCESSOR_NODE_METRICS).metricValue(),
             greaterThan(0.0));
+
         assertThat(
             appender.getMessages(),
             hasItem("Skipping record for expired window. key=[A] topic=[topic] partition=[-3] offset=[-2] timestamp=[0] window=[0,0) expiration=[10]"));

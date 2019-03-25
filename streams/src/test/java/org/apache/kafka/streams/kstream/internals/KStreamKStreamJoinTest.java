@@ -41,10 +41,15 @@ import java.util.Properties;
 import java.util.Set;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.SKIPPED_RECORDS;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.STREAM_TASK_METRICS;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 public class KStreamKStreamJoinTest {
     final private String topic1 = "topic1";
@@ -78,7 +83,8 @@ public class KStreamKStreamJoinTest {
 
             assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[A] value=[null] topic=[left] partition=[0] offset=[0]"));
 
-            assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
+            assertEquals(1.0, getMetricByName(driver.metrics(), SKIPPED_RECORDS + TOTAL_SUFFIX, STREAM_TASK_METRICS).metricValue());
+            assertNotEquals(0.0, getMetricByName(driver.metrics(), SKIPPED_RECORDS + RATE_SUFFIX, STREAM_TASK_METRICS).metricValue());
         }
     }
 

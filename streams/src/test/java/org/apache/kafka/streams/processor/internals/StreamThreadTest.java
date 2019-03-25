@@ -30,7 +30,6 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
@@ -90,8 +89,23 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.processor.internals.AbstractStateManager.CHECKPOINT_FILE_NAME;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.SKIPPED_RECORDS;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.STREAM_TASK_METRICS;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.COMMIT;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.POLL;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.PROCESS;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.PUNCTUATE;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.STREAM_THREAD_METRICS;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.TASK_CLOSED;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.TASK_CREATED;
 import static org.apache.kafka.streams.processor.internals.StreamThread.getSharedAdminClientId;
 import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.AVG_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.MAX_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -252,36 +266,32 @@ public class StreamThreadTest {
     @Test
     public void testMetricsCreatedAtStartup() {
         final StreamThread thread = createStreamThread(clientId, config, false);
-        final String defaultGroupName = "stream-metrics";
-        final Map<String, String> defaultTags = Collections.singletonMap("client-id", thread.getName());
 
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-avg", defaultGroupName, "The average commit time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-latency-max", defaultGroupName, "The maximum commit time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-rate", defaultGroupName, "The average per-second number of commit calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("commit-total", defaultGroupName, "The total number of commit calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-avg", defaultGroupName, "The average poll time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-latency-max", defaultGroupName, "The maximum poll time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-rate", defaultGroupName, "The average per-second number of record-poll calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("poll-total", defaultGroupName, "The total number of record-poll calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-avg", defaultGroupName, "The average process time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-latency-max", defaultGroupName, "The maximum process time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-rate", defaultGroupName, "The average per-second number of process calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("process-total", defaultGroupName, "The total number of process calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-avg", defaultGroupName, "The average punctuate time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-latency-max", defaultGroupName, "The maximum punctuate time in ms", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-rate", defaultGroupName, "The average per-second number of punctuate calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("punctuate-total", defaultGroupName, "The total number of punctuate calls", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-rate", defaultGroupName, "The average per-second number of newly created tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-created-total", defaultGroupName, "The total number of newly created tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-rate", defaultGroupName, "The average per-second number of closed tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("task-closed-total", defaultGroupName, "The total number of closed tasks", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-rate", defaultGroupName, "The average per-second number of skipped records.", defaultTags)));
-        assertNotNull(metrics.metrics().get(metrics.metricName("skipped-records-total", defaultGroupName, "The total number of skipped records.", defaultTags)));
+        assertNotNull(getMetricByName(metrics.metrics(), PROCESS + LATENCY_SUFFIX + MAX_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), PROCESS + LATENCY_SUFFIX + AVG_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), PROCESS + RATE_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), PROCESS + TOTAL_SUFFIX, STREAM_THREAD_METRICS));
 
-        final JmxReporter reporter = new JmxReporter("kafka.streams");
-        metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,client-id=%s",
-                defaultGroupName, thread.getName())));
+        assertNotNull(getMetricByName(metrics.metrics(), PUNCTUATE + LATENCY_SUFFIX + MAX_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), PUNCTUATE + LATENCY_SUFFIX + AVG_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), PUNCTUATE + RATE_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), PUNCTUATE + TOTAL_SUFFIX, STREAM_THREAD_METRICS));
+
+        assertNotNull(getMetricByName(metrics.metrics(), COMMIT + LATENCY_SUFFIX + MAX_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), COMMIT + LATENCY_SUFFIX + AVG_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), COMMIT + RATE_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), COMMIT + TOTAL_SUFFIX, STREAM_THREAD_METRICS));
+
+        assertNotNull(getMetricByName(metrics.metrics(), POLL + LATENCY_SUFFIX + MAX_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), POLL + LATENCY_SUFFIX + AVG_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), POLL + RATE_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), POLL + TOTAL_SUFFIX, STREAM_THREAD_METRICS));
+
+        assertNotNull(getMetricByName(metrics.metrics(), TASK_CREATED + RATE_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), TASK_CREATED + TOTAL_SUFFIX, STREAM_THREAD_METRICS));
+
+        assertNotNull(getMetricByName(metrics.metrics(), TASK_CLOSED + RATE_SUFFIX, STREAM_THREAD_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), TASK_CLOSED + TOTAL_SUFFIX, STREAM_THREAD_METRICS));
     }
 
     @Test
@@ -1291,16 +1301,11 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce();
 
-        final MetricName skippedTotalMetric = metrics.metricName(
-            "skipped-records-total",
-            "stream-metrics",
-            Collections.singletonMap("client-id", thread.getName()));
-        final MetricName skippedRateMetric = metrics.metricName(
-            "skipped-records-rate",
-            "stream-metrics",
-            Collections.singletonMap("client-id", thread.getName()));
-        assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        final Metric skippedTotalMetric = getMetricByName(metrics.metrics(), SKIPPED_RECORDS + TOTAL_SUFFIX, STREAM_TASK_METRICS);
+        final Metric skippedRateMetric = getMetricByName(metrics.metrics(), SKIPPED_RECORDS + RATE_SUFFIX, STREAM_TASK_METRICS);
+
+        assertEquals(0.0, skippedTotalMetric.metricValue());
+        assertEquals(0.0, skippedRateMetric.metricValue());
 
         long offset = -1;
         mockConsumer.addRecord(new ConsumerRecord<>(
@@ -1325,8 +1330,8 @@ public class StreamThreadTest {
             new byte[0],
             "I am not an integer.".getBytes()));
         thread.runOnce();
-        assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        assertEquals(2.0, skippedTotalMetric.metricValue());
+        assertNotEquals(0.0, skippedRateMetric.metricValue());
 
         LogCaptureAppender.unregister(appender);
         final List<String> strings = appender.getMessages();
@@ -1362,37 +1367,32 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsAssigned(assignedPartitions);
         thread.runOnce();
 
-        final MetricName skippedTotalMetric = metrics.metricName(
-            "skipped-records-total",
-            "stream-metrics",
-            Collections.singletonMap("client-id", thread.getName()));
-        final MetricName skippedRateMetric = metrics.metricName(
-            "skipped-records-rate",
-            "stream-metrics",
-            Collections.singletonMap("client-id", thread.getName()));
-        assertEquals(0.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        final Metric skippedTotalMetric = getMetricByName(metrics.metrics(), SKIPPED_RECORDS + TOTAL_SUFFIX, STREAM_TASK_METRICS);
+        final Metric skippedRateMetric = getMetricByName(metrics.metrics(), SKIPPED_RECORDS + RATE_SUFFIX, STREAM_TASK_METRICS);
+
+        assertEquals(0.0, skippedTotalMetric.metricValue());
+        assertEquals(0.0, skippedRateMetric.metricValue());
 
         long offset = -1;
         addRecord(mockConsumer, ++offset);
         addRecord(mockConsumer, ++offset);
         thread.runOnce();
-        assertEquals(2.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        assertEquals(2.0, skippedTotalMetric.metricValue());
+        assertNotEquals(0.0, skippedRateMetric.metricValue());
 
         addRecord(mockConsumer, ++offset);
         addRecord(mockConsumer, ++offset);
         addRecord(mockConsumer, ++offset);
         addRecord(mockConsumer, ++offset);
         thread.runOnce();
-        assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        assertEquals(6.0, skippedTotalMetric.metricValue());
+        assertNotEquals(0.0, skippedRateMetric.metricValue());
 
         addRecord(mockConsumer, ++offset, 1L);
         addRecord(mockConsumer, ++offset, 1L);
         thread.runOnce();
-        assertEquals(6.0, metrics.metric(skippedTotalMetric).metricValue());
-        assertNotEquals(0.0, metrics.metric(skippedRateMetric).metricValue());
+        assertEquals(6.0, skippedTotalMetric.metricValue());
+        assertNotEquals(0.0, skippedRateMetric.metricValue());
 
         LogCaptureAppender.unregister(appender);
         final List<String> strings = appender.getMessages();

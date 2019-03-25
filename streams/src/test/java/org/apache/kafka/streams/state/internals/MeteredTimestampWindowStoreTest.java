@@ -38,7 +38,6 @@ import static org.junit.Assert.assertNull;
 
 public class MeteredTimestampWindowStoreTest {
     private InternalMockProcessorContext context;
-    @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
     private final MeteredTimestampedWindowStore<String, String> store = new MeteredTimestampedWindowStore<>(
         innerStoreMock,
@@ -56,7 +55,7 @@ public class MeteredTimestampWindowStoreTest {
 
     @Before
     public void setUp() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics);
 
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),

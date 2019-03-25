@@ -397,7 +397,7 @@ public class MockProcessorContextTest {
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass());
 
         final File dummyFile = new File("");
-        final MockProcessorContext context = new MockProcessorContext(config, new TaskId(1, 1), dummyFile);
+        final MockProcessorContext context = new MockProcessorContext(config, new TaskId(1, 1), "dummyProcessor", dummyFile);
 
         assertEquals("testFullConstructor", context.applicationId());
         assertEquals(new TaskId(1, 1), context.taskId());

@@ -84,7 +84,8 @@ public class MeteredSessionStore<K, V>
 
         // register and possibly restore the state from the logs
         final Sensor restoreTime = storeMetrics.addOperationLatencySensor(RESTORE);
-        StreamsMetricsImpl.maybeMeasureLatency(() -> {
+        StreamsMetricsImpl.maybeMeasureLatency(
+            () -> {
                 super.init(context, root);
             },
             time,
@@ -123,7 +124,8 @@ public class MeteredSessionStore<K, V>
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
 
         try {
-            StreamsMetricsImpl.maybeMeasureLatency(() -> {
+            StreamsMetricsImpl.maybeMeasureLatency(
+                () -> {
                     final Bytes key = keyBytes(sessionKey.key());
                     wrapped().put(new Windowed<>(key, sessionKey.window()), serdes.rawValue(aggregate));
                 },
@@ -140,7 +142,8 @@ public class MeteredSessionStore<K, V>
         Objects.requireNonNull(sessionKey, "sessionKey can't be null");
 
         try {
-            StreamsMetricsImpl.maybeMeasureLatency(() -> {
+            StreamsMetricsImpl.maybeMeasureLatency(
+                () -> {
                     final Bytes key = keyBytes(sessionKey.key());
                     wrapped().remove(new Windowed<>(key, sessionKey.window()));
                 },
@@ -156,7 +159,8 @@ public class MeteredSessionStore<K, V>
     public V fetchSession(final K key, final long startTime, final long endTime) {
         Objects.requireNonNull(key, "key cannot be null");
 
-        return StreamsMetricsImpl.maybeMeasureLatency(() -> {
+        return StreamsMetricsImpl.maybeMeasureLatency(
+            () -> {
                 final Bytes bytesKey = keyBytes(key);
                 return serdes.valueFrom(wrapped().fetchSession(bytesKey, startTime, endTime));
             },
@@ -222,7 +226,7 @@ public class MeteredSessionStore<K, V>
     @Override
     public void close() {
         super.close();
-        storeMetrics.removeAllSensors();
+        storeMetrics.clear();
     }
 
     private Bytes keyBytes(final K key) {

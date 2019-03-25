@@ -213,7 +213,7 @@ public class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuf
         memBufferSize = 0;
         minTimestamp = Long.MAX_VALUE;
         updateBufferMetrics();
-        storeMetrics.removeAllSensors();
+        storeMetrics.clear();
     }
 
     @Override

@@ -36,6 +36,7 @@ import java.util.Objects;
 
 import static java.util.Objects.requireNonNull;
 
+
 public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     private final long maxRecords;
     private final long maxBytes;
@@ -74,6 +75,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     public void init(final ProcessorContext context) {
         internalProcessorContext = (InternalProcessorContext) context;
         suppressionEmitSensor = internalProcessorContext.currentNode().nodeMetrics().suppressionEmitRateSensor();
+
         keySerde = keySerde == null ? (Serde<K>) context.keySerde() : keySerde;
         valueSerde = valueSerde == null ? FullChangeSerde.castOrWrap(context.valueSerde()) : valueSerde;
         buffer = Objects.requireNonNull((TimeOrderedKeyValueBuffer) context.getStateStore(storeName));

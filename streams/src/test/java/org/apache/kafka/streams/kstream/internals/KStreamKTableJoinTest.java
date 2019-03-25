@@ -41,10 +41,15 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.SKIPPED_RECORDS;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.STREAM_TASK_METRICS;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 
 public class KStreamKTableJoinTest {
     private final String streamTopic = "streamTopic";
@@ -181,7 +186,8 @@ public class KStreamKTableJoinTest {
         driver.pipeInput(recordFactory.create(streamTopic, null, "A"));
         LogCaptureAppender.unregister(appender);
 
-        assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertEquals(1.0, getMetricByName(driver.metrics(), SKIPPED_RECORDS + TOTAL_SUFFIX, STREAM_TASK_METRICS).metricValue());
+        assertNotEquals(0.0, getMetricByName(driver.metrics(), SKIPPED_RECORDS + RATE_SUFFIX, STREAM_TASK_METRICS).metricValue());
         assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[null] value=[A] topic=[streamTopic] partition=[0] offset=[0]"));
     }
 
@@ -191,7 +197,8 @@ public class KStreamKTableJoinTest {
         driver.pipeInput(recordFactory.create(streamTopic, 1, null));
         LogCaptureAppender.unregister(appender);
 
-        assertEquals(1.0, getMetricByName(driver.metrics(), "skipped-records-total", "stream-metrics").metricValue());
+        assertEquals(1.0, getMetricByName(driver.metrics(), SKIPPED_RECORDS + TOTAL_SUFFIX, STREAM_TASK_METRICS).metricValue());
+        assertNotEquals(0.0, getMetricByName(driver.metrics(), SKIPPED_RECORDS + RATE_SUFFIX, STREAM_TASK_METRICS).metricValue());
         assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[1] value=[null] topic=[streamTopic] partition=[0] offset=[0]"));
     }
 }

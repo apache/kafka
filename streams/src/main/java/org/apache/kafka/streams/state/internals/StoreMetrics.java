@@ -46,9 +46,9 @@ public class StoreMetrics {
     public static final String FLUSH = "flush";
     public static final String RESTORE = "restore";
 
-    private static final String SUPPRESSION_BUFFER_SIZE = "suppression-buffer-size";
-    private static final String SUPPRESSION_BUFFER_COUNT = "suppression-buffer-count";
-    private static final String EXPIRED_WINDOW_RECORD_DROP = "expired-window-record-drop";
+    public static final String SUPPRESSION_BUFFER_SIZE = "suppression-buffer-size";
+    public static final String SUPPRESSION_BUFFER_COUNT = "suppression-buffer-count";
+    public static final String EXPIRED_WINDOW_RECORD_DROP = "expired-window-record-drop";
 
     public static final String IN_MEMORY_STATE = "in-memory-state";
     public static final String IN_MEMORY_LRU = "in-memory-lru-state";
@@ -93,7 +93,7 @@ public class StoreMetrics {
     public Sensor addBufferCountSensor() {
         final Sensor sensor = metrics.storeLevelSensor(taskName, storeName, SUPPRESSION_BUFFER_COUNT, Sensor.RecordingLevel.DEBUG);
         StreamsMetricsImpl.addValueAvgAndMax(sensor, metricsGroupName, tagMap, SUPPRESSION_BUFFER_COUNT);
-        StreamsMetricsImpl.addCurrentValue(sensor, metricsGroupName, tagMap, SUPPRESSION_BUFFER_SIZE);
+        StreamsMetricsImpl.addCurrentValue(sensor, metricsGroupName, tagMap, SUPPRESSION_BUFFER_COUNT);
 
         sensors.add(sensor);
         return sensor;
@@ -107,7 +107,7 @@ public class StoreMetrics {
         return sensor;
     }
 
-    public void removeAllSensors() {
+    public void clear() {
         for (final Sensor sensor : sensors) {
             metrics.removeSensor(sensor);
         }

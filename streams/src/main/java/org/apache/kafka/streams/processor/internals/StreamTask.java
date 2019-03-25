@@ -81,7 +81,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     private boolean commitRequested = false;
     private boolean transactionInFlight = false;
 
-    static final class TaskMetrics {
+    public static final class TaskMetrics {
         private final StreamsMetricsImpl metrics;
 
         private final Map<String, String> tagMap;
@@ -96,14 +96,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         private final Sensor skippedRecordsRateSensor;
 
         public static final String SKIPPED_RECORDS = "skipped-records";
-        private static final String RECORD_LATENESS = "record-lateness";
-        private static final String ENFORCED_PROCESSING = "enforced-processing";
+        public static final String RECORD_LATENESS = "record-lateness";
+        public static final String ENFORCED_PROCESSING = "enforced-processing";
 
         private static final String PROCESS_LATENCY = PROCESS + LATENCY_SUFFIX;
         private static final String PUNCTUATE_LATENCY = PUNCTUATE + LATENCY_SUFFIX;
         private static final String COMMIT_LATENCY = COMMIT + LATENCY_SUFFIX;
 
-        private static final String STREAM_TASK_NODE_METRICS = "stream-task-metrics";
+        public static final String STREAM_TASK_METRICS = "stream-task-metrics";
 
         TaskMetrics(final TaskId id, final StreamsMetricsImpl metrics) {
             this.metrics = metrics;
@@ -112,30 +112,30 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
             // we have to separate the latency-max/avg from the rate/total since the latter would be recorded at child node-level
             processLatencySensor = metrics.taskLevelSensor(PROCESS_LATENCY, taskName, Sensor.RecordingLevel.DEBUG);
-            StreamsMetricsImpl.addValueAvgAndMax(processLatencySensor, STREAM_TASK_NODE_METRICS, tagMap, PROCESS_LATENCY);
+            StreamsMetricsImpl.addValueAvgAndMax(processLatencySensor, STREAM_TASK_METRICS, tagMap, PROCESS_LATENCY);
 
             processRateSensor = metrics.taskLevelSensor(PROCESS, taskName, Sensor.RecordingLevel.DEBUG);
-            StreamsMetricsImpl.addInvocationRateAndCount(processRateSensor, STREAM_TASK_NODE_METRICS, tagMap, PROCESS);
+            StreamsMetricsImpl.addInvocationRateAndCount(processRateSensor, STREAM_TASK_METRICS, tagMap, PROCESS);
 
             punctuateLatencySensor = metrics.taskLevelSensor(PUNCTUATE, taskName, Sensor.RecordingLevel.DEBUG);
-            StreamsMetricsImpl.addValueAvgAndMax(punctuateLatencySensor, STREAM_TASK_NODE_METRICS, tagMap, PUNCTUATE_LATENCY);
-            StreamsMetricsImpl.addInvocationRateAndCount(punctuateLatencySensor, STREAM_TASK_NODE_METRICS, tagMap, PUNCTUATE);
+            StreamsMetricsImpl.addValueAvgAndMax(punctuateLatencySensor, STREAM_TASK_METRICS, tagMap, PUNCTUATE_LATENCY);
+            StreamsMetricsImpl.addInvocationRateAndCount(punctuateLatencySensor, STREAM_TASK_METRICS, tagMap, PUNCTUATE);
 
             commitLatencySensor = metrics.taskLevelSensor(COMMIT, taskName, Sensor.RecordingLevel.DEBUG);
-            StreamsMetricsImpl.addValueAvgAndMax(commitLatencySensor, STREAM_TASK_NODE_METRICS, tagMap, COMMIT_LATENCY);
-            StreamsMetricsImpl.addInvocationRateAndCount(commitLatencySensor, STREAM_TASK_NODE_METRICS, tagMap, COMMIT);
+            StreamsMetricsImpl.addValueAvgAndMax(commitLatencySensor, STREAM_TASK_METRICS, tagMap, COMMIT_LATENCY);
+            StreamsMetricsImpl.addInvocationRateAndCount(commitLatencySensor, STREAM_TASK_METRICS, tagMap, COMMIT);
 
             recordLatenessSensor = metrics.taskLevelSensor(RECORD_LATENESS, taskName, Sensor.RecordingLevel.DEBUG);
-            StreamsMetricsImpl.addValueAvgAndMax(commitLatencySensor, STREAM_TASK_NODE_METRICS, tagMap, RECORD_LATENESS);
+            StreamsMetricsImpl.addValueAvgAndMax(recordLatenessSensor, STREAM_TASK_METRICS, tagMap, RECORD_LATENESS);
 
             enforcedProcessRateSensor = metrics.taskLevelSensor(ENFORCED_PROCESSING, taskName, Sensor.RecordingLevel.DEBUG);
-            StreamsMetricsImpl.addInvocationRateAndCount(enforcedProcessRateSensor, STREAM_TASK_NODE_METRICS, tagMap, ENFORCED_PROCESSING);
+            StreamsMetricsImpl.addInvocationRateAndCount(enforcedProcessRateSensor, STREAM_TASK_METRICS, tagMap, ENFORCED_PROCESSING);
 
             skippedRecordsRateSensor = metrics.taskLevelSensor(SKIPPED_RECORDS, taskName, Sensor.RecordingLevel.INFO);
-            StreamsMetricsImpl.addInvocationRateAndCount(skippedRecordsRateSensor, STREAM_TASK_NODE_METRICS, tagMap, SKIPPED_RECORDS);
+            StreamsMetricsImpl.addInvocationRateAndCount(skippedRecordsRateSensor, STREAM_TASK_METRICS, tagMap, SKIPPED_RECORDS);
         }
 
-        void removeAllSensors() {
+        void clear() {
             metrics.removeSensor(processLatencySensor);
             metrics.removeSensor(processRateSensor);
             metrics.removeSensor(punctuateLatencySensor);
@@ -352,7 +352,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
             updateProcessorContext(record, currNode);
 
-            StreamsMetricsImpl.maybeMeasureLatency(() -> {
+            StreamsMetricsImpl.maybeMeasureLatency(
+                () -> {
                     currNode.process(record.key(), record.value());
                 },
                 time,
@@ -418,7 +419,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         try {
-            StreamsMetricsImpl.maybeMeasureLatency(() -> {
+            StreamsMetricsImpl.maybeMeasureLatency(
+                () -> {
                     node.punctuate(timestamp, punctuator);
                 },
                 time,
@@ -467,7 +469,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     void commit(final boolean startNewTransaction) {
         log.debug("Committing");
 
-        StreamsMetricsImpl.maybeMeasureLatency(() -> {
+        StreamsMetricsImpl.maybeMeasureLatency(
+            () -> {
                 flushState();
 
                 if (!eosEnabled) {
@@ -687,7 +690,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
 
         partitionGroup.close();
-        taskMetrics.removeAllSensors();
+        taskMetrics.clear();
 
         metrics.threadLevelSensor(TASK_CLOSED).record();
 

@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+
 class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1, V1> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoinProcessor.class);
 
@@ -48,8 +49,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
     public void init(final ProcessorContext context) {
         super.init(context);
 
-        final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
-        skippedRecordSensor  = internalProcessorContext.currentNode().nodeMetrics().skippedRecordsRateSensor();
+        skippedRecordSensor = ((InternalProcessorContext) context).currentNode().nodeMetrics().skippedRecordsRateSensor();
 
         valueGetter.init(context);
     }

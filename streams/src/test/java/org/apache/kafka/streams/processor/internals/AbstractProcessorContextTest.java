@@ -29,6 +29,7 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.test.MockKeyValueStore;
@@ -46,7 +47,7 @@ import static org.junit.Assert.fail;
 
 public class AbstractProcessorContextTest {
 
-    private final MockStreamsMetrics metrics = new MockStreamsMetrics(new Metrics());
+    private final StreamsMetricsImpl metrics = new StreamsMetricsImpl(new Metrics());
     private final AbstractProcessorContext context = new TestProcessorContext(metrics);
     private final MockKeyValueStore stateStore = new MockKeyValueStore("store", false);
     private final Headers headers = new RecordHeaders(new Header[]{new RecordHeader("key", "value".getBytes())});
@@ -193,7 +194,7 @@ public class AbstractProcessorContextTest {
             config.put("user.supplied.config", "user-suppplied-value");
         }
 
-        TestProcessorContext(final MockStreamsMetrics metrics) {
+        TestProcessorContext(final StreamsMetricsImpl metrics) {
             super(new TaskId(0, 0), new StreamsConfig(config), metrics, new StateManagerStub(), new ThreadCache(new LogContext("name "), 0, metrics));
         }
 

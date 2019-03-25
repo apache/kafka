@@ -29,10 +29,10 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
@@ -81,7 +81,7 @@ public class RocksDBWindowStoreTest {
     private final ThreadCache cache = new ThreadCache(
         new LogContext("TestCache "),
         DEFAULT_CACHE_SIZE_BYTES,
-        new MockStreamsMetrics(new Metrics()));
+        new StreamsMetricsImpl(new Metrics()));
 
     private final Producer<byte[], byte[]> producer =
         new MockProducer<>(true, Serdes.ByteArray().serializer(), Serdes.ByteArray().serializer());

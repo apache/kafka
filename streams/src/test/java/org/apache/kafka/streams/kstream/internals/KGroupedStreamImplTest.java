@@ -54,6 +54,10 @@ import java.util.Map;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.SKIPPED_RECORDS;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.STREAM_TASK_METRICS;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -402,8 +406,8 @@ public class KGroupedStreamImplTest {
             LogCaptureAppender.unregister(appender);
 
             final Map<MetricName, ? extends Metric> metrics = driver.metrics();
-            assertEquals(1.0, getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue());
-            assertNotEquals(0.0, getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue());
+            assertEquals(1.0, getMetricByName(metrics, SKIPPED_RECORDS + TOTAL_SUFFIX, STREAM_TASK_METRICS).metricValue());
+            assertNotEquals(0.0, getMetricByName(metrics, SKIPPED_RECORDS + RATE_SUFFIX, STREAM_TASK_METRICS).metricValue());
             assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] offset=[6]"));
         }
     }
@@ -444,8 +448,8 @@ public class KGroupedStreamImplTest {
             LogCaptureAppender.unregister(appender);
 
             final Map<MetricName, ? extends Metric> metrics = driver.metrics();
-            assertEquals(1.0, getMetricByName(metrics, "skipped-records-total", "stream-metrics").metricValue());
-            assertNotEquals(0.0, getMetricByName(metrics, "skipped-records-rate", "stream-metrics").metricValue());
+            assertEquals(1.0, getMetricByName(metrics, SKIPPED_RECORDS + TOTAL_SUFFIX, STREAM_TASK_METRICS).metricValue());
+            assertNotEquals(0.0, getMetricByName(metrics, SKIPPED_RECORDS + RATE_SUFFIX, STREAM_TASK_METRICS).metricValue());
             assertThat(appender.getMessages(), hasItem("Skipping record due to null key or value. key=[3] value=[null] topic=[topic] partition=[0] offset=[6]"));
         }
     }

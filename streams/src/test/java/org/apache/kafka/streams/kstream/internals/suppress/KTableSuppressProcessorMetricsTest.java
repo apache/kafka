@@ -23,6 +23,7 @@ import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.hamcrest.Matcher;
@@ -36,6 +37,21 @@ import static org.apache.kafka.common.serialization.Serdes.String;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
+import static org.apache.kafka.streams.processor.internals.ProcessorNode.NodeMetrics.STREAM_PROCESSOR_NODE_METRICS;
+import static org.apache.kafka.streams.processor.internals.ProcessorNode.NodeMetrics.SUPPRESSION_EMIT_RECORDS;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.AVG_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.BUFFER_STRING;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.CURRENT_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ID_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.MAX_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_ID_TAG;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_ID_TAG;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_ID_TAG;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.SUPPRESSION_BUFFER_COUNT;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.SUPPRESSION_BUFFER_SIZE;
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.core.Is.is;
@@ -43,98 +59,100 @@ import static org.hamcrest.core.Is.is;
 @SuppressWarnings("PointlessArithmeticExpression")
 public class KTableSuppressProcessorMetricsTest {
     private static final long ARBITRARY_LONG = 5L;
+    private static final String TEST_NODE = "test-node";
+    private static final String TEST_STORE = "test-store";
 
     private static final MetricName EVICTION_TOTAL_METRIC = new MetricName(
-        "suppression-emit-total",
-        "stream-processor-node-metrics",
+        SUPPRESSION_EMIT_RECORDS + TOTAL_SUFFIX,
+        STREAM_PROCESSOR_NODE_METRICS,
         "The total number of occurrence of suppression-emit operations.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
-            mkEntry("task-id", "0_0"),
-            mkEntry("processor-node-id", "testNode")
+            mkEntry(THREAD_ID_TAG, "mock-processor-context-virtual-thread"),
+            mkEntry(TASK_ID_TAG, "0_0"),
+            mkEntry(PROCESSOR_NODE_ID_TAG, TEST_NODE)
         )
     );
 
     private static final MetricName EVICTION_RATE_METRIC = new MetricName(
-        "suppression-emit-rate",
-        "stream-processor-node-metrics",
+        SUPPRESSION_EMIT_RECORDS + RATE_SUFFIX,
+        STREAM_PROCESSOR_NODE_METRICS,
         "The average number of occurrence of suppression-emit operation per second.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
-            mkEntry("task-id", "0_0"),
-            mkEntry("processor-node-id", "testNode")
+            mkEntry(THREAD_ID_TAG, "mock-processor-context-virtual-thread"),
+            mkEntry(TASK_ID_TAG, "0_0"),
+            mkEntry(PROCESSOR_NODE_ID_TAG, TEST_NODE)
         )
     );
 
     private static final MetricName BUFFER_SIZE_AVG_METRIC = new MetricName(
-        "suppression-buffer-size-avg",
-        "stream-buffer-metrics",
+        SUPPRESSION_BUFFER_SIZE + AVG_SUFFIX,
+        StreamsMetricsImpl.groupNameFromScope(BUFFER_STRING),
         "The average size of buffered records.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
-            mkEntry("task-id", "0_0"),
-            mkEntry("buffer-id", "test-store")
+            mkEntry(THREAD_ID_TAG, "mock-processor-context-virtual-thread"),
+            mkEntry(TASK_ID_TAG, "0_0"),
+            mkEntry(BUFFER_STRING + ID_SUFFIX, TEST_STORE)
         )
     );
 
     private static final MetricName BUFFER_SIZE_CURRENT_METRIC = new MetricName(
-        "suppression-buffer-size-current",
-        "stream-buffer-metrics",
+        SUPPRESSION_BUFFER_SIZE + CURRENT_SUFFIX,
+        StreamsMetricsImpl.groupNameFromScope(BUFFER_STRING),
         "The current size of buffered records.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
-            mkEntry("task-id", "0_0"),
-            mkEntry("buffer-id", "test-store")
+            mkEntry(THREAD_ID_TAG, "mock-processor-context-virtual-thread"),
+            mkEntry(TASK_ID_TAG, "0_0"),
+            mkEntry(BUFFER_STRING + ID_SUFFIX, TEST_STORE)
         )
     );
 
     private static final MetricName BUFFER_SIZE_MAX_METRIC = new MetricName(
-        "suppression-buffer-size-max",
-        "stream-buffer-metrics",
+        SUPPRESSION_BUFFER_SIZE + MAX_SUFFIX,
+        StreamsMetricsImpl.groupNameFromScope(BUFFER_STRING),
         "The max size of buffered records.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
-            mkEntry("task-id", "0_0"),
-            mkEntry("buffer-id", "test-store")
+            mkEntry(THREAD_ID_TAG, "mock-processor-context-virtual-thread"),
+            mkEntry(TASK_ID_TAG, "0_0"),
+            mkEntry(BUFFER_STRING + ID_SUFFIX, TEST_STORE)
         )
     );
 
     private static final MetricName BUFFER_COUNT_AVG_METRIC = new MetricName(
-        "suppression-buffer-count-avg",
-        "stream-buffer-metrics",
+        SUPPRESSION_BUFFER_COUNT + AVG_SUFFIX,
+        StreamsMetricsImpl.groupNameFromScope(BUFFER_STRING),
         "The average count of buffered records.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
-            mkEntry("task-id", "0_0"),
-            mkEntry("buffer-id", "test-store")
+            mkEntry(THREAD_ID_TAG, "mock-processor-context-virtual-thread"),
+            mkEntry(TASK_ID_TAG, "0_0"),
+            mkEntry(BUFFER_STRING + ID_SUFFIX, TEST_STORE)
         )
     );
 
     private static final MetricName BUFFER_COUNT_CURRENT_METRIC = new MetricName(
-        "suppression-buffer-count-current",
-        "stream-buffer-metrics",
+        SUPPRESSION_BUFFER_COUNT + CURRENT_SUFFIX,
+        StreamsMetricsImpl.groupNameFromScope(BUFFER_STRING),
         "The current count of buffered records.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
-            mkEntry("task-id", "0_0"),
-            mkEntry("buffer-id", "test-store")
+            mkEntry(THREAD_ID_TAG, "mock-processor-context-virtual-thread"),
+            mkEntry(TASK_ID_TAG, "0_0"),
+            mkEntry(BUFFER_STRING + ID_SUFFIX, TEST_STORE)
         )
     );
 
     private static final MetricName BUFFER_COUNT_MAX_METRIC = new MetricName(
-        "suppression-buffer-count-max",
-        "stream-buffer-metrics",
+        SUPPRESSION_BUFFER_COUNT + MAX_SUFFIX,
+        StreamsMetricsImpl.groupNameFromScope(BUFFER_STRING),
         "The max count of buffered records.",
         mkMap(
-            mkEntry("client-id", "mock-processor-context-virtual-thread"),
-            mkEntry("task-id", "0_0"),
-            mkEntry("buffer-id", "test-store")
+            mkEntry(THREAD_ID_TAG, "mock-processor-context-virtual-thread"),
+            mkEntry(TASK_ID_TAG, "0_0"),
+            mkEntry(BUFFER_STRING + ID_SUFFIX, TEST_STORE)
         )
     );
 
     @Test
     public void shouldRecordMetrics() {
-        final String storeName = "test-store";
+        final String storeName = TEST_STORE;
 
         final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName)
             .withLoggingDisabled()
@@ -149,7 +167,9 @@ public class KTableSuppressProcessorMetricsTest {
             );
 
         final MockInternalProcessorContext context = new MockInternalProcessorContext();
-        context.setCurrentNode(new ProcessorNode("testNode"));
+        final ProcessorNode processorNode = new ProcessorNode(TEST_NODE);
+        context.setCurrentNode(processorNode);
+        processorNode.init(context);
 
         buffer.init(context, buffer);
         processor.init(context);
@@ -194,8 +214,6 @@ public class KTableSuppressProcessorMetricsTest {
     private <T> void verifyMetric(final Map<MetricName, ? extends Metric> metrics,
                                   final MetricName metricName,
                                   final Matcher<T> matcher) {
-        assertThat(metrics.get(metricName).metricName().description(), is(metricName.description()));
-        assertThat((T) metrics.get(metricName).metricValue(), matcher);
-
+        assertThat((T) getMetricByName(metrics, metricName.name(), metricName.group()).metricValue(), matcher);
     }
 }

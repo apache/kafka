@@ -16,38 +16,31 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import static java.time.Duration.ofMillis;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.streams.state.internals.WindowKeySchema.toStoreKeyBinary;
-import static org.hamcrest.CoreMatchers.hasItem;
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-
 import java.io.File;
 import java.util.ArrayList;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.Map;
+import java.util.Properties;
+
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Metric;
-import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -55,10 +48,25 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
+import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+
+import static java.time.Duration.ofMillis;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.EXPIRED_WINDOW_RECORD_DROP;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.WINDOW_IN_MEMORY;
+import static org.apache.kafka.streams.state.internals.WindowKeySchema.toStoreKeyBinary;
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
+import static org.hamcrest.CoreMatchers.hasItem;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+
 
 public class InMemoryWindowStoreTest {
 
@@ -73,7 +81,7 @@ public class InMemoryWindowStoreTest {
     private final List<KeyValue<byte[], byte[]>> changeLog = new ArrayList<>();
     private final ThreadCache cache = new ThreadCache(new LogContext("TestCache "),
                                                       DEFAULT_CACHE_SIZE_BYTES,
-                                                      new MockStreamsMetrics(new Metrics()));
+                                                      new StreamsMetricsImpl(new Metrics()));
 
     private final Producer<byte[], byte[]> producer =
         new MockProducer<>(true, Serdes.ByteArray().serializer(), Serdes.ByteArray().serializer());
@@ -98,7 +106,20 @@ public class InMemoryWindowStoreTest {
     };
 
     private final File baseDir = TestUtils.tempDirectory("test");
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(baseDir, Serdes.ByteArray(), Serdes.ByteArray(), recordCollector, cache);
+    private final Properties props = StreamsTestUtils.getStreamsConfig();
+    private final StreamsConfig config = new StreamsConfig(props);
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+        new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.forName(config.getString(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG))))
+    );
+
+    private final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        baseDir,
+        Serdes.ByteArray(),
+        Serdes.ByteArray(),
+        streamsMetrics,
+        config,
+        () -> recordCollector,
+        cache);
     private WindowStore<Integer, String> windowStore;
 
     private WindowStore<Integer, String> createInMemoryWindowStore(final ProcessorContext context, final boolean retainDuplicates) {
@@ -453,29 +474,15 @@ public class InMemoryWindowStoreTest {
 
         LogCaptureAppender.unregister(appender);
 
-        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
+        final Metric dropTotal = getMetricByName(
+            context.metrics().metrics(),
+            EXPIRED_WINDOW_RECORD_DROP + TOTAL_SUFFIX,
+            StreamsMetricsImpl.groupNameFromScope(WINDOW_IN_MEMORY));
 
-        final Metric dropTotal = metrics.get(new MetricName(
-            "expired-window-record-drop-total",
-            "stream-in-memory-window-state-metrics",
-            "The total number of occurrence of expired-window-record-drop operations.",
-            mkMap(
-                mkEntry("client-id", "mock"),
-                mkEntry("task-id", "0_0"),
-                mkEntry("in-memory-window-state-id", storeName)
-            )
-        ));
-
-        final Metric dropRate = metrics.get(new MetricName(
-            "expired-window-record-drop-rate",
-            "stream-in-memory-window-state-metrics",
-            "The average number of occurrence of expired-window-record-drop operation per second.",
-            mkMap(
-                mkEntry("client-id", "mock"),
-                mkEntry("task-id", "0_0"),
-                mkEntry("in-memory-window-state-id", storeName)
-            )
-        ));
+        final Metric dropRate = getMetricByName(
+            context.metrics().metrics(),
+            EXPIRED_WINDOW_RECORD_DROP + RATE_SUFFIX,
+            StreamsMetricsImpl.groupNameFromScope(WINDOW_IN_MEMORY));
 
         assertEquals(1.0, dropTotal.metricValue());
         assertNotEquals(0.0, dropRate.metricValue());
@@ -501,7 +508,6 @@ public class InMemoryWindowStoreTest {
 
         final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetch(1, 4, 0L, currentTime);
 
-        assertFalse(!iterator.hasNext());
         assertFalse(!iterator.hasNext());
         assertEquals(new Windowed<>(1, WindowKeySchema.timeWindowForSize(0L, windowSize)), iterator.peekNextKey());
         assertEquals(new Windowed<>(1, WindowKeySchema.timeWindowForSize(0L, windowSize)), iterator.peekNextKey());

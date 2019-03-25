@@ -17,9 +17,7 @@
 
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serdes;
@@ -30,7 +28,7 @@ import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.test.KeyValueIteratorStub;
@@ -42,10 +40,13 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.util.Collections;
-import java.util.Map;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.DELETE;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.PUT;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.RANGE;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.RESTORE;
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.aryEq;
 import static org.easymock.EasyMock.eq;
@@ -63,12 +64,6 @@ import static org.junit.Assert.assertTrue;
 public class MeteredSessionStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);
-    private final Map<String, String> tags = mkMap(
-        mkEntry("client-id", "test"),
-        mkEntry("task-id", taskId.toString()),
-        mkEntry("scope-id", "metered")
-    );
-    private final Metrics metrics = new Metrics();
     private MeteredSessionStore<String, String> metered;
     @Mock(type = MockType.NICE)
     private SessionStore<Bytes, byte[]> inner;
@@ -78,17 +73,19 @@ public class MeteredSessionStoreTest {
     private final String key = "a";
     private final byte[] keyBytes = key.getBytes();
     private final Windowed<Bytes> windowedKeyBytes = new Windowed<>(Bytes.wrap(keyBytes), new SessionWindow(0, 0));
+    private final Metrics metrics = new Metrics();
+    private final String scope = "scope";
 
     @Before
     public void before() {
         metered = new MeteredSessionStore<>(
             inner,
-            "scope",
+            scope,
             Serdes.String(),
             Serdes.String(),
             new MockTime());
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
-        expect(context.metrics()).andReturn(new MockStreamsMetrics(metrics));
+        expect(context.metrics()).andReturn(new StreamsMetricsImpl(metrics));
         expect(context.taskId()).andReturn(taskId);
         expect(inner.name()).andReturn("metered").anyTimes();
     }
@@ -99,17 +96,6 @@ public class MeteredSessionStoreTest {
     }
 
     @Test
-    public void testMetrics() {
-        init();
-        final JmxReporter reporter = new JmxReporter("kafka.streams");
-        metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
-                "scope", "test", taskId.toString(), "scope", "metered")));
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
-                "scope", "test", taskId.toString(), "scope", "all")));
-    }
-
-    @Test
     public void shouldWriteBytesToInnerStoreAndRecordPutMetric() {
         inner.put(eq(windowedKeyBytes), aryEq(keyBytes));
         expectLastCall();
@@ -117,7 +103,8 @@ public class MeteredSessionStoreTest {
 
         metered.put(new Windowed<>(key, new SessionWindow(0, 0)), key);
 
-        final KafkaMetric metric = metric("put-rate");
+        final Metric metric = getMetricByName(metrics.metrics(), PUT + RATE_SUFFIX, StreamsMetricsImpl.groupNameFromScope(scope));
+
         assertTrue(((Double) metric.metricValue()) > 0);
         verify(inner);
     }
@@ -134,7 +121,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
-        final KafkaMetric metric = metric("fetch-rate");
+        final Metric metric = getMetricByName(metrics.metrics(), RANGE + RATE_SUFFIX, StreamsMetricsImpl.groupNameFromScope(scope));
+
         assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
     }
@@ -151,7 +139,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
-        final KafkaMetric metric = metric("fetch-rate");
+        final Metric metric = getMetricByName(metrics.metrics(), RANGE + RATE_SUFFIX, StreamsMetricsImpl.groupNameFromScope(scope));
+
         assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
     }
@@ -165,7 +154,8 @@ public class MeteredSessionStoreTest {
 
         metered.remove(new Windowed<>(key, new SessionWindow(0, 0)));
 
-        final KafkaMetric metric = metric("remove-rate");
+        final Metric metric = getMetricByName(metrics.metrics(), DELETE + RATE_SUFFIX, StreamsMetricsImpl.groupNameFromScope(scope));
+
         assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
     }
@@ -182,7 +172,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
-        final KafkaMetric metric = metric("fetch-rate");
+        final Metric metric = getMetricByName(metrics.metrics(), RANGE + RATE_SUFFIX, StreamsMetricsImpl.groupNameFromScope(scope));
+
         assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
     }
@@ -199,7 +190,8 @@ public class MeteredSessionStoreTest {
         assertFalse(iterator.hasNext());
         iterator.close();
 
-        final KafkaMetric metric = metric("fetch-rate");
+        final Metric metric = getMetricByName(metrics.metrics(), RANGE + RATE_SUFFIX, StreamsMetricsImpl.groupNameFromScope(scope));
+
         assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
     }
@@ -207,7 +199,8 @@ public class MeteredSessionStoreTest {
     @Test
     public void shouldRecordRestoreTimeOnInit() {
         init();
-        final KafkaMetric metric = metric("restore-rate");
+        final Metric metric = getMetricByName(metrics.metrics(), RESTORE + RATE_SUFFIX, StreamsMetricsImpl.groupNameFromScope(scope));
+
         assertTrue((Double) metric.metricValue() > 0);
     }
 
@@ -263,7 +256,7 @@ public class MeteredSessionStoreTest {
 
         metered = new MeteredSessionStore<>(
             cachedSessionStore,
-            "scope",
+            scope,
             Serdes.String(),
             Serdes.String(),
             new MockTime());
@@ -276,9 +269,4 @@ public class MeteredSessionStoreTest {
     public void shouldNotSetFlushListenerOnWrappedNoneCachingStore() {
         assertFalse(metered.setFlushListener(null, false));
     }
-
-    private KafkaMetric metric(final String name) {
-        return this.metrics.metric(new MetricName(name, "stream-scope-metrics", "", this.tags));
-    }
-
 }

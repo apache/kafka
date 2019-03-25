@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.List;
 
+
 public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamSessionWindowAggregate.class);
 
@@ -77,7 +78,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
 
         private SessionStore<K, Agg> store;
         private TupleForwarder<Windowed<K>, Agg> tupleForwarder;
-        private Sensor lateRecordDropSensor;
+        private Sensor droppedLateRecordSensor;
         private Sensor skippedRecordSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
@@ -86,9 +87,8 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
         public void init(final ProcessorContext context) {
             super.init(context);
 
-            final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
-            skippedRecordSensor  = internalProcessorContext.currentNode().nodeMetrics().skippedRecordsRateSensor();
-            lateRecordDropSensor = internalProcessorContext.currentNode().nodeMetrics().lateRecordsDropRateSensor();
+            skippedRecordSensor = ((InternalProcessorContext) context).currentNode().nodeMetrics().skippedRecordsRateSensor();
+            droppedLateRecordSensor = ((InternalProcessorContext) context).currentNode().nodeMetrics().droppedLateRecordsRateSensor();
 
             store = (SessionStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<>(context), sendOldValues);
@@ -148,7 +148,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                     "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{}) expiration=[{}]",
                     key, context().topic(), context().partition(), context().offset(), context().timestamp(), mergedWindow.start(), mergedWindow.end(), closeTime
                 );
-                lateRecordDropSensor.record();
+                droppedLateRecordSensor.record();
             }
         }
     }

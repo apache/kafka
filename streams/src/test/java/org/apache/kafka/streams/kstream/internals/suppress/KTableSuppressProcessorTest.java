@@ -85,7 +85,9 @@ public class KTableSuppressProcessorTest {
                 );
 
             final MockInternalProcessorContext context = new MockInternalProcessorContext();
-            context.setCurrentNode(new ProcessorNode("testNode"));
+            final ProcessorNode processorNode = new ProcessorNode("testNode");
+            context.setCurrentNode(processorNode);
+            processorNode.init(context);
 
             buffer.init(context, buffer);
             processor.init(context);

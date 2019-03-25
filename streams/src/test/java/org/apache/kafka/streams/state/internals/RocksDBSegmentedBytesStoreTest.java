@@ -28,7 +28,7 @@ import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.StateRestoreListener;
-import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
@@ -57,9 +57,12 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.SimpleTimeZone;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ID_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.EXPIRED_WINDOW_RECORD_DROP;
 import static org.apache.kafka.streams.state.internals.WindowKeySchema.timeWindowForSize;
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -77,6 +80,7 @@ public class RocksDBSegmentedBytesStoreTest {
     private final long segmentInterval = 60_000L;
     private InternalMockProcessorContext context;
     private final String storeName = "bytes-store";
+    private final String scope = "scope";
     private RocksDBSegmentedBytesStore bytesStore;
     private File stateDir;
     private final Window[] windows = new Window[4];
@@ -119,7 +123,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
         bytesStore = new RocksDBSegmentedBytesStore(
             storeName,
-            "metrics-scope",
+            scope,
             retention,
             segmentInterval,
             schema
@@ -131,7 +135,7 @@ public class RocksDBSegmentedBytesStoreTest {
             Serdes.String(),
             Serdes.Long(),
             new NoOpRecordCollector(),
-            new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
+            new ThreadCache(new LogContext("testCache "), 0, new StreamsMetricsImpl(new Metrics()))
         );
         bytesStore.init(context, bytesStore);
     }
@@ -292,7 +296,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
         bytesStore = new RocksDBSegmentedBytesStore(
             storeName,
-            "metrics-scope",
+            scope,
             retention,
             segmentInterval,
             schema
@@ -329,7 +333,7 @@ public class RocksDBSegmentedBytesStoreTest {
 
         bytesStore = new RocksDBSegmentedBytesStore(
             storeName,
-            "metrics-scope",
+            scope,
             retention,
             segmentInterval,
             schema
@@ -437,27 +441,18 @@ public class RocksDBSegmentedBytesStoreTest {
 
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
 
-        final Metric dropTotal = metrics.get(new MetricName(
-            "expired-window-record-drop-total",
-            "stream-metrics-scope-metrics",
-            "The total number of occurrence of expired-window-record-drop operations.",
-            mkMap(
-                mkEntry("client-id", "mock"),
-                mkEntry("task-id", "0_0"),
-                mkEntry("metrics-scope-id", "bytes-store")
-            )
-        ));
+        final Metric dropTotal = getMetricByNameFilterByTags(
+            metrics,
+            EXPIRED_WINDOW_RECORD_DROP + TOTAL_SUFFIX,
+            StreamsMetricsImpl.groupNameFromScope(scope),
+            Collections.singletonMap(scope + ID_SUFFIX, storeName));
 
-        final Metric dropRate = metrics.get(new MetricName(
-            "expired-window-record-drop-rate",
-            "stream-metrics-scope-metrics",
-            "The average number of occurrence of expired-window-record-drop operation per second.",
-            mkMap(
-                mkEntry("client-id", "mock"),
-                mkEntry("task-id", "0_0"),
-                mkEntry("metrics-scope-id", "bytes-store")
-            )
-        ));
+        final Metric dropRate = getMetricByNameFilterByTags(
+            metrics,
+            EXPIRED_WINDOW_RECORD_DROP + RATE_SUFFIX,
+            StreamsMetricsImpl.groupNameFromScope(scope),
+            Collections.singletonMap(scope + ID_SUFFIX, storeName));
+
 
         assertEquals(1.0, dropTotal.metricValue());
         assertNotEquals(0.0, dropRate.metricValue());

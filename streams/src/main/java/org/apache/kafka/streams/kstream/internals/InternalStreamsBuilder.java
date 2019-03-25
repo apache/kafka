@@ -311,7 +311,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             final GroupedInternal groupedInternal = new GroupedInternal(getRepartitionSerdes(entry.getValue()));
 
             final String repartitionTopicName = getFirstRepartitionTopicName(entry.getValue());
-            //passing in the name of the first repartition topic, re-used to create the optimized repartition topic
+            // passing in the name of the first repartition topic, re-used to create the optimized repartition topic
             final StreamsGraphNode optimizedSingleRepartition = createRepartitionNode(repartitionTopicName,
                                                                                       groupedInternal.keySerde(),
                                                                                       groupedInternal.valueSerde());

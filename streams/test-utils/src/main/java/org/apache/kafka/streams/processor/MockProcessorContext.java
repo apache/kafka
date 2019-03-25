@@ -57,11 +57,15 @@ import java.util.Properties;
  */
 @InterfaceStability.Evolving
 public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
+    private static final TaskId DUMMY_TASK = new TaskId(0, 0);
+    private static final String DUMMY_PROCESSOR_NAME = "PROCESSOR";
+
     // Immutable fields ================================================
-    private final StreamsMetricsImpl metrics;
     private final TaskId taskId;
-    private final StreamsConfig config;
     private final File stateDir;
+    private final String processorName;
+    private final StreamsConfig config;
+    private final StreamsMetricsImpl metrics;
 
     // settable record metadata ================================================
     private String topic;
@@ -182,7 +186,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
                     put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "");
                 }
             },
-            new TaskId(0, 0),
+            DUMMY_TASK,
+            DUMMY_PROCESSOR_NAME,
             null);
     }
 
@@ -196,7 +201,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext(final Properties config) {
-        this(config, new TaskId(0, 0), null);
+        this(config, DUMMY_TASK, DUMMY_PROCESSOR_NAME, null);
     }
 
     /**
@@ -207,17 +212,15 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param stateDir a {@link File}, which the context makes available viw {@link MockProcessorContext#stateDir()}.
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
+    public MockProcessorContext(final Properties config, final TaskId taskId, final String processorName, final File stateDir) {
         final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
         this.taskId = taskId;
+        this.processorName = processorName;
         this.config = streamsConfig;
         this.stateDir = stateDir;
         final MetricConfig metricConfig = new MetricConfig();
         metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
-        this.metrics = new StreamsMetricsImpl(
-            new Metrics(metricConfig),
-            "mock-processor-context-virtual-thread"
-        );
+        this.metrics = new StreamsMetricsImpl(new Metrics(metricConfig));
     }
 
     @Override

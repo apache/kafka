@@ -29,6 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
+
 class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
@@ -62,8 +63,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         public void init(final ProcessorContext context) {
             super.init(context);
 
-            final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
-            skippedRecordSensor  = internalProcessorContext.currentNode().nodeMetrics().skippedRecordsRateSensor();
+            skippedRecordSensor = ((InternalProcessorContext) context).currentNode().nodeMetrics().skippedRecordsRateSensor();
 
             otherWindow = (WindowStore<K, V2>) context.getStateStore(otherWindowName);
         }

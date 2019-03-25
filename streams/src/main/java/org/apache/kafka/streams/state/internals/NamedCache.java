@@ -32,7 +32,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-class NamedCache {
+public class NamedCache {
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
     private final String name;
     private final NavigableMap<Bytes, LRUNode> cache = new ConcurrentSkipListMap<>();
@@ -298,7 +298,7 @@ class NamedCache {
         currentSizeBytes = 0;
         dirtyKeys.clear();
         cache.clear();
-        namedCacheMetrics.removeAllSensors();
+        namedCacheMetrics.clear();
     }
 
     /**
@@ -344,16 +344,16 @@ class NamedCache {
         }
     }
 
-    private static class NamedCacheMetrics {
+    public static class NamedCacheMetrics {
         private final StreamsMetricsImpl metrics;
 
         private final Sensor hitRatioSensor;
         private final String taskName;
         private final Map<String, String> tagMap;
 
-        private static final String HIT_RATIO = "hit-ratio";
+        public static final String HIT_RATIO = "hit-ratio";
 
-        private static final String STREAM_CACHE_NODE_METRICS = "stream-record-cache-metrics";
+        public static final String STREAM_RECORD_CACHE_METRICS = "stream-record-cache-metrics";
 
         private NamedCacheMetrics(final StreamsMetricsImpl metrics, final String cacheName) {
             this.metrics = metrics;
@@ -361,10 +361,10 @@ class NamedCache {
             this.tagMap = StreamsMetricsImpl.cacheLevelTagMap(taskName, cacheName);
 
             hitRatioSensor = metrics.cacheLevelSensor(taskName, cacheName, HIT_RATIO, Sensor.RecordingLevel.DEBUG);
-            StreamsMetricsImpl.addValueAvgMinMax(hitRatioSensor, STREAM_CACHE_NODE_METRICS, tagMap, HIT_RATIO);
+            StreamsMetricsImpl.addValueAvgMinMax(hitRatioSensor, STREAM_RECORD_CACHE_METRICS, tagMap, HIT_RATIO);
         }
 
-        private void removeAllSensors() {
+        private void clear() {
             metrics.removeSensor(hitRatioSensor);
         }
     }

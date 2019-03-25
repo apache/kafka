@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+
 public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
@@ -80,10 +81,8 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
         public void init(final ProcessorContext context) {
             super.init(context);
 
-            final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
-
-            droppedLateRecordSensor = internalProcessorContext.currentNode().nodeMetrics().lateRecordsDropRateSensor();
-            skippedRecordSensor  = internalProcessorContext.currentNode().nodeMetrics().skippedRecordsRateSensor();
+            skippedRecordSensor = ((InternalProcessorContext) context).currentNode().nodeMetrics().skippedRecordsRateSensor();
+            droppedLateRecordSensor = ((InternalProcessorContext) context).currentNode().nodeMetrics().droppedLateRecordsRateSensor();
 
             windowStore = (WindowStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(windowStore, context, new ForwardingCacheFlushListener<>(context), sendOldValues);

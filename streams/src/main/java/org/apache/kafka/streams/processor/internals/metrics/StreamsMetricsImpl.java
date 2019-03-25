@@ -43,25 +43,25 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     private final Metrics metrics;
 
     // delimiters
-    private static final String SENSOR_PREFIX_DELIMITER = ".";
-    private static final String SENSOR_NAME_DELIMITER = ".s.";
+    public static final String SENSOR_PREFIX_DELIMITER = ".";
+    public static final String SENSOR_NAME_DELIMITER = ".s.";
 
     // metric groups
-    private static final String TASK_STRING = "task";
-    private static final String NODE_STRING = "node";
-    private static final String STORE_STRING = "store";
-    private static final String CACHE_STRING = "cache";
+    public static final String TASK_STRING = "task";
+    public static final String NODE_STRING = "node";
+    public static final String STORE_STRING = "store";
+    public static final String CACHE_STRING = "cache";
     public static final String BUFFER_STRING = "buffer";
-    private static final String INTERNAL_STRING = "internal";
-    private static final String EXTERNAL_STRING = "external";
-    private static final String ENTITY_STRING = "entity";
+    public static final String INTERNAL_STRING = "internal";
+    public static final String EXTERNAL_STRING = "external";
+    public static final String ENTITY_STRING = "entity";
 
     // metric tag names;
     // for state stores the tags are constructed dynamically and hence not listed here
-    private static final String THREAD_ID_TAG = "thread-id";
-    private static final String TASK_ID_TAG = "task-id";
-    private static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
-    private static final String RECORD_CACHE_ID_TAG = "record-cache-id";
+    public static final String THREAD_ID_TAG = "thread-id";
+    public static final String TASK_ID_TAG = "task-id";
+    public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
+    public static final String RECORD_CACHE_ID_TAG = "record-cache-id";
 
     // metric name prefix and suffix
     public static final String AVG_SUFFIX = "-avg";

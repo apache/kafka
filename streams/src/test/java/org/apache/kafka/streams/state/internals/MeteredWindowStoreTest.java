@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -27,7 +26,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -41,6 +39,12 @@ import java.util.Map;
 
 import static java.time.Instant.ofEpochMilli;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ID_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.FLUSH;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.PUT;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.RANGE;
+import static org.apache.kafka.streams.state.internals.StoreMetrics.RESTORE;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByNameFilterByTags;
 import static org.easymock.EasyMock.anyObject;
 import static org.easymock.EasyMock.createNiceMock;
@@ -57,12 +61,13 @@ import static org.junit.Assert.assertTrue;
 
 public class MeteredWindowStoreTest {
     private InternalMockProcessorContext context;
-    @SuppressWarnings("unchecked")
+    private final String scope = "scope";
+    private final String storeName = "mocked-store";
     private final WindowStore<Bytes, byte[]> innerStoreMock = createNiceMock(WindowStore.class);
     private final MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
         innerStoreMock,
         10L, // any size
-        "scope",
+        scope,
         new MockTime(),
         Serdes.String(),
         new SerdeThatDoesntHandleNull()
@@ -70,12 +75,12 @@ public class MeteredWindowStoreTest {
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
 
     {
-        expect(innerStoreMock.name()).andReturn("mocked-store").anyTimes();
+        expect(innerStoreMock.name()).andReturn(storeName).anyTimes();
     }
 
     @Before
     public void setUp() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics);
 
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
@@ -89,26 +94,14 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void testMetrics() {
-        replay(innerStoreMock);
-        store.init(context, store);
-        final JmxReporter reporter = new JmxReporter("kafka.streams");
-        metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
-                "scope", "test", context.taskId().toString(), "scope", "mocked-store")));
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-%s-metrics,client-id=%s,task-id=%s,%s-id=%s",
-                "scope", "test", context.taskId().toString(), "scope", "all")));
-    }
-
-    @Test
     public void shouldRecordRestoreLatencyOnInit() {
         innerStoreMock.init(context, store);
         expectLastCall();
         replay(innerStoreMock);
         store.init(context, store);
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-        assertEquals(1.0, getMetricByNameFilterByTags(metrics, "restore-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
-        assertEquals(1.0, getMetricByNameFilterByTags(metrics, "restore-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());
+        assertEquals(1.0, getMetricByNameFilterByTags(metrics,
+            RESTORE + TOTAL_SUFFIX, StreamsMetricsImpl.groupNameFromScope(scope), singletonMap(scope + ID_SUFFIX, storeName)).metricValue());
     }
 
     @Test
@@ -121,34 +114,37 @@ public class MeteredWindowStoreTest {
         store.init(context, store);
         store.put("a", "a");
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-        assertEquals(1.0, getMetricByNameFilterByTags(metrics, "put-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
-        assertEquals(1.0, getMetricByNameFilterByTags(metrics, "put-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());
+        assertEquals(1.0, getMetricByNameFilterByTags(metrics,
+            PUT + TOTAL_SUFFIX, StreamsMetricsImpl.groupNameFromScope(scope), singletonMap(scope + ID_SUFFIX, storeName)).metricValue());
+
         verify(innerStoreMock);
     }
 
     @Test
     public void shouldRecordFetchLatency() {
-        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.emptyWindowStoreIterator());
         replay(innerStoreMock);
 
         store.init(context, store);
         store.fetch("a", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-        assertEquals(1.0, getMetricByNameFilterByTags(metrics, "fetch-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
-        assertEquals(1.0, getMetricByNameFilterByTags(metrics, "fetch-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());
+        assertEquals(1.0, getMetricByNameFilterByTags(metrics,
+            RANGE + TOTAL_SUFFIX, StreamsMetricsImpl.groupNameFromScope(scope), singletonMap(scope + ID_SUFFIX, storeName)).metricValue());
+
         verify(innerStoreMock);
     }
 
     @Test
     public void shouldRecordFetchRangeLatency() {
-        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.emptyIterator());
         replay(innerStoreMock);
 
         store.init(context, store);
         store.fetch("a", "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-        assertEquals(1.0, getMetricByNameFilterByTags(metrics, "fetch-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
-        assertEquals(1.0, getMetricByNameFilterByTags(metrics, "fetch-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());
+        assertEquals(1.0, getMetricByNameFilterByTags(metrics,
+            RANGE + TOTAL_SUFFIX, StreamsMetricsImpl.groupNameFromScope(scope), singletonMap(scope + ID_SUFFIX, storeName)).metricValue());
+
         verify(innerStoreMock);
     }
 
@@ -161,8 +157,9 @@ public class MeteredWindowStoreTest {
         store.init(context, store);
         store.flush();
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
-        assertEquals(1.0, getMetricByNameFilterByTags(metrics, "flush-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
-        assertEquals(1.0, getMetricByNameFilterByTags(metrics, "flush-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());
+        assertEquals(1.0, getMetricByNameFilterByTags(metrics,
+            FLUSH + TOTAL_SUFFIX, StreamsMetricsImpl.groupNameFromScope(scope), singletonMap(scope + ID_SUFFIX, storeName)).metricValue());
+
         verify(innerStoreMock);
     }
 

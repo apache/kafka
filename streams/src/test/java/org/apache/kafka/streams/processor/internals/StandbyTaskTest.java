@@ -45,6 +45,7 @@ import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -175,7 +176,15 @@ public class StandbyTaskTest {
     @Test
     public void testStorePartitions() throws IOException {
         final StreamsConfig config = createConfig(baseDir);
-        task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        task = new StandbyTask(
+            taskId,
+            topicPartitions,
+            topology,
+            consumer,
+            changelogReader,
+            config,
+            new StreamsMetricsImpl(new Metrics()),
+            stateDirectory);
         task.initializeStateStores();
         assertEquals(Utils.mkSet(partition2, partition1), new HashSet<>(task.checkpointedOffsets().keySet()));
     }
@@ -202,7 +211,15 @@ public class StandbyTaskTest {
     @Test
     public void testUpdate() throws IOException {
         final StreamsConfig config = createConfig(baseDir);
-        task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        task = new StandbyTask(
+            taskId,
+            topicPartitions,
+            topology,
+            consumer,
+            changelogReader,
+            config,
+            new StreamsMetricsImpl(new Metrics()),
+            stateDirectory);
         task.initializeStateStores();
         final Set<TopicPartition> partition = Collections.singleton(partition2);
         restoreStateConsumer.assign(partition);
@@ -260,7 +277,7 @@ public class StandbyTaskTest {
                 new LogContext("standby-task-test ")
             ),
             createConfig(baseDir),
-            new MockStreamsMetrics(new Metrics()),
+            new StreamsMetricsImpl(new Metrics()),
             stateDirectory
         );
 
@@ -353,7 +370,7 @@ public class StandbyTaskTest {
             consumer,
             changelogReader,
             createConfig(baseDir),
-            new MockStreamsMetrics(new Metrics()),
+            new StreamsMetricsImpl(new Metrics()),
             stateDirectory
         );
         task.initializeStateStores();
@@ -408,7 +425,7 @@ public class StandbyTaskTest {
             consumer,
             changelogReader,
             createConfig(baseDir),
-            null,
+            new StreamsMetricsImpl(new Metrics()),
             stateDirectory
         );
         task.initializeStateStores();
@@ -507,7 +524,7 @@ public class StandbyTaskTest {
             consumer,
             changelogReader,
             config,
-            new MockStreamsMetrics(new Metrics()),
+            new StreamsMetricsImpl(new Metrics()),
             stateDirectory
         );
 
@@ -538,7 +555,7 @@ public class StandbyTaskTest {
             consumer,
             changelogReader,
             config,
-            null,
+            new StreamsMetricsImpl(new Metrics()),
             stateDirectory
         );
         task.initializeStateStores();

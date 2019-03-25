@@ -21,12 +21,10 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -77,6 +75,19 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.ENFORCED_PROCESSING;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.RECORD_LATENESS;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.SKIPPED_RECORDS;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.STREAM_TASK_METRICS;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.COMMIT;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.PROCESS;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.PUNCTUATE;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.AVG_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.MAX_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
+import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
@@ -137,7 +148,7 @@ public class StreamTaskTest {
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
-    private final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(metrics);
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics);
     private final TaskId taskId00 = new TaskId(0, 0);
     private final MockTime time = new MockTime();
     private final File baseDir = TestUtils.tempDirectory();
@@ -197,7 +208,7 @@ public class StreamTaskTest {
 
         final ProcessorTopology topology = ProcessorTopology.withSources(
             asList(source1, source2, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source2))
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
         );
 
         source1.addChild(processorStreamTime);
@@ -246,7 +257,7 @@ public class StreamTaskTest {
 
         final ProcessorTopology topology = ProcessorTopology.withSources(
             asList(source1, source2, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source2))
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
         );
 
         source1.addChild(processorStreamTime);
@@ -370,27 +381,29 @@ public class StreamTaskTest {
     public void testMetrics() {
         task = createStatelessTask(createConfig(false));
 
-        assertNotNull(getMetric("%s-latency-avg", "The average latency of %s operation.", task.id().toString()));
-        assertNotNull(getMetric("%s-latency-max", "The max latency of %s operation.", task.id().toString()));
-        assertNotNull(getMetric("%s-rate", "The average number of occurrence of %s operation per second.", task.id().toString()));
+        assertNotNull(getMetricByName(metrics.metrics(), PROCESS + LATENCY_SUFFIX + MAX_SUFFIX, STREAM_TASK_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), PROCESS + LATENCY_SUFFIX + AVG_SUFFIX, STREAM_TASK_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), PROCESS + RATE_SUFFIX, STREAM_TASK_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), PROCESS + TOTAL_SUFFIX, STREAM_TASK_METRICS));
 
-        assertNotNull(getMetric("%s-latency-avg", "The average latency of %s operation.", "all"));
-        assertNotNull(getMetric("%s-latency-max", "The max latency of %s operation.", "all"));
-        assertNotNull(getMetric("%s-rate", "The average number of occurrence of %s operation per second.", "all"));
+        assertNotNull(getMetricByName(metrics.metrics(), PUNCTUATE + LATENCY_SUFFIX + MAX_SUFFIX, STREAM_TASK_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), PUNCTUATE + LATENCY_SUFFIX + AVG_SUFFIX, STREAM_TASK_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), PUNCTUATE + RATE_SUFFIX, STREAM_TASK_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), PUNCTUATE + TOTAL_SUFFIX, STREAM_TASK_METRICS));
 
-        final JmxReporter reporter = new JmxReporter("kafka.streams");
-        metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=stream-task-metrics,client-id=test,task-id=%s", task.id.toString())));
-        assertTrue(reporter.containsMbean("kafka.streams:type=stream-task-metrics,client-id=test,task-id=all"));
-    }
+        assertNotNull(getMetricByName(metrics.metrics(), COMMIT + LATENCY_SUFFIX + MAX_SUFFIX, STREAM_TASK_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), COMMIT + LATENCY_SUFFIX + AVG_SUFFIX, STREAM_TASK_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), COMMIT + RATE_SUFFIX, STREAM_TASK_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), COMMIT + TOTAL_SUFFIX, STREAM_TASK_METRICS));
 
-    private KafkaMetric getMetric(final String nameFormat, final String descriptionFormat, final String taskId) {
-        return metrics.metrics().get(metrics.metricName(
-            String.format(nameFormat, "commit"),
-            "stream-task-metrics",
-            String.format(descriptionFormat, "commit"),
-            mkMap(mkEntry("task-id", taskId), mkEntry("client-id", "test"))
-        ));
+        assertNotNull(getMetricByName(metrics.metrics(), RECORD_LATENESS + MAX_SUFFIX, STREAM_TASK_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), RECORD_LATENESS + AVG_SUFFIX, STREAM_TASK_METRICS));
+
+        assertNotNull(getMetricByName(metrics.metrics(), ENFORCED_PROCESSING + RATE_SUFFIX, STREAM_TASK_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), ENFORCED_PROCESSING + TOTAL_SUFFIX, STREAM_TASK_METRICS));
+
+        assertNotNull(getMetricByName(metrics.metrics(), SKIPPED_RECORDS + RATE_SUFFIX, STREAM_TASK_METRICS));
+        assertNotNull(getMetricByName(metrics.metrics(), SKIPPED_RECORDS + TOTAL_SUFFIX, STREAM_TASK_METRICS));
     }
 
     @SuppressWarnings("unchecked")
@@ -652,10 +665,10 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        final MetricName enforcedProcessMetric = metrics.metricName("enforced-processing-total", "stream-task-metrics", mkMap(mkEntry("client-id", "test"), mkEntry("task-id", taskId00.toString())));
+        final Metric enforcedProcessMetric = getMetricByName(metrics.metrics(), ENFORCED_PROCESSING + TOTAL_SUFFIX, STREAM_TASK_METRICS);
 
         assertFalse(task.isProcessable(0L));
-        assertEquals(0.0, metrics.metric(enforcedProcessMetric).metricValue());
+        assertEquals(0.0, enforcedProcessMetric.metricValue());
 
         final byte[] bytes = ByteBuffer.allocate(4).putInt(1).array();
 
@@ -666,28 +679,28 @@ public class StreamTaskTest {
         assertFalse(task.isProcessable(time.milliseconds() + 50L));
 
         assertTrue(task.isProcessable(time.milliseconds() + 100L));
-        assertEquals(1.0, metrics.metric(enforcedProcessMetric).metricValue());
+        assertEquals(1.0, enforcedProcessMetric.metricValue());
 
         // once decided to enforce, continue doing that
         assertTrue(task.isProcessable(time.milliseconds() + 101L));
-        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
+        assertEquals(2.0, enforcedProcessMetric.metricValue());
 
         task.addRecords(partition2, Collections.singleton(new ConsumerRecord<>(topic2, 1, 0, bytes, bytes)));
 
         assertTrue(task.isProcessable(time.milliseconds() + 130L));
-        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
+        assertEquals(2.0, enforcedProcessMetric.metricValue());
 
         // one resumed to normal processing, the timer should be reset
         task.process();
 
         assertFalse(task.isProcessable(time.milliseconds() + 150L));
-        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
+        assertEquals(2.0, enforcedProcessMetric.metricValue());
 
         assertFalse(task.isProcessable(time.milliseconds() + 249L));
-        assertEquals(2.0, metrics.metric(enforcedProcessMetric).metricValue());
+        assertEquals(2.0, enforcedProcessMetric.metricValue());
 
         assertTrue(task.isProcessable(time.milliseconds() + 250L));
-        assertEquals(3.0, metrics.metric(enforcedProcessMetric).metricValue());
+        assertEquals(3.0, enforcedProcessMetric.metricValue());
     }
 
 
@@ -808,7 +821,7 @@ public class StreamTaskTest {
     @Test
     public void shouldFlushRecordCollectorOnFlushState() {
         final AtomicBoolean flushed = new AtomicBoolean(false);
-        final StreamsMetricsImpl streamsMetrics = new MockStreamsMetrics(new Metrics());
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics());
         final StreamTask streamTask = new StreamTask(
             taskId00,
             partitions,

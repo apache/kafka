@@ -19,7 +19,9 @@ package org.apache.kafka.test;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -54,6 +56,7 @@ import java.util.Map;
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
 public class InternalMockProcessorContext extends AbstractProcessorContext implements RecordCollector.Supplier {
+    public final ProcessorNode node = new ProcessorNode("TESTING_NODE");
 
     private final File stateDir;
     private final RecordCollector.Supplier recordCollectorSupplier;
@@ -66,31 +69,24 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     private long timestamp = -1L;
 
     public InternalMockProcessorContext() {
-        this(null,
-            null,
-            null,
-            new StreamsMetricsImpl(new Metrics(), "mock"),
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-            null,
-            null
-        );
+        this(null, new StreamsConfig(StreamsTestUtils.getStreamsConfig()));
     }
 
     public InternalMockProcessorContext(final File stateDir,
                                         final StreamsConfig config) {
-        this(stateDir, null, null, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
+        this(stateDir, null, null, config);
+    }
+
+    public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
+                                        final RecordCollector collector) {
+        this(serdes, collector, new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG)));
     }
 
     public InternalMockProcessorContext(final File stateDir,
                                         final Serde<?> keySerde,
                                         final Serde<?> valSerde,
                                         final StreamsConfig config) {
-        this(stateDir, keySerde, valSerde, new StreamsMetricsImpl(new Metrics(), "mock"), config, null, null);
-    }
-
-    public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
-                                        final RecordCollector collector) {
-        this(null, serdes.keySerde(), serdes.valueSerde(), collector, null);
+        this(stateDir, keySerde, valSerde, new StreamsMetricsImpl(new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG))), config, null, null);
     }
 
     public InternalMockProcessorContext(final StateSerdes<?, ?> serdes,
@@ -100,7 +96,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             null,
             serdes.keySerde(),
             serdes.valueSerde(),
-            new StreamsMetricsImpl(metrics, "mock"),
+            new StreamsMetricsImpl(metrics),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             null
@@ -115,7 +111,7 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
         this(stateDir,
             keySerde,
             valSerde,
-            new StreamsMetricsImpl(new Metrics(), "mock"),
+            new StreamsMetricsImpl(new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG))),
             new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
             () -> collector,
             cache
@@ -134,7 +130,8 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
             metrics,
             null,
             cache);
-        super.setCurrentNode(new ProcessorNode("TESTING_NODE"));
+        node.init(this);
+        super.setCurrentNode(node);
         this.stateDir = stateDir;
         this.keySerde = keySerde;
         this.valSerde = valSerde;

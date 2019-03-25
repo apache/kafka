@@ -24,8 +24,6 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
@@ -42,6 +40,9 @@ import java.util.HashSet;
 import java.util.Properties;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.SKIPPED_RECORDS;
+import static org.apache.kafka.streams.processor.internals.StreamTask.TaskMetrics.STREAM_TASK_METRICS;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.apache.kafka.test.StreamsTestUtils.getMetricByName;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -134,34 +135,33 @@ public class KTableKTableInnerJoinTest {
         doTestNotSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Processor<String, Change<String>> join = new KTableKTableInnerJoin<>(
-            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
-            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
-            null
-        ).get();
+        final KTable<Integer, String> table1;
+        final KTable<Integer, String> table2;
 
-        final MockProcessorContext context = new MockProcessorContext();
-        context.setRecordMetadata("left", -1, -2, null, -3);
-        join.init(context);
+        table1 = builder.table(topic1, consumed);
+        table2 = builder.table(topic2, consumed);
+        table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
+
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        join.process(null, new Change<>("new", "old"));
-        LogCaptureAppender.unregister(appender);
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            driver.pipeInput(recordFactory.create(topic1, null, "value"));
 
-        assertEquals(1.0, getMetricByName(context.metrics().metrics(), "skipped-records-total", "stream-metrics").metricValue());
-        assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
+            assertEquals(1.0, getMetricByName(driver.metrics(), SKIPPED_RECORDS + TOTAL_SUFFIX, STREAM_TASK_METRICS).metricValue());
+            assertThat(appender.getMessages(), hasItem("Skipping record due to null key. topic=[topic1] partition=[0] offset=[0]"));
+        }
+        LogCaptureAppender.unregister(appender);
     }
 
     private void doTestNotSendingOldValues(final StreamsBuilder builder,
-                                        final int[] expectedKeys,
-                                        final KTable<Integer, String> table1,
-                                        final KTable<Integer, String> table2,
-                                        final MockProcessorSupplier<Integer, String> supplier,
-                                        final KTable<Integer, String> joined) {
+                                           final int[] expectedKeys,
+                                           final KTable<Integer, String> table1,
+                                           final KTable<Integer, String> table2,
+                                           final MockProcessorSupplier<Integer, String> supplier,
+                                           final KTable<Integer, String> joined) {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();

@@ -27,21 +27,20 @@ import org.junit.Test;
 
 import java.util.concurrent.TimeUnit;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.equalTo;
-import static org.hamcrest.Matchers.greaterThan;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ID_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
 import static org.junit.Assert.assertEquals;
 
 public class StreamsMetricsImplTest {
 
     @Test(expected = NullPointerException.class)
     public void testNullMetrics() {
-        new StreamsMetricsImpl(null, "");
+        new StreamsMetricsImpl(null);
     }
 
     @Test(expected = NullPointerException.class)
     public void testRemoveNullSensor() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics());
         streamsMetrics.removeSensor(null);
     }
 
@@ -51,7 +50,7 @@ public class StreamsMetricsImplTest {
         final String scope = "scope";
         final String entity = "entity";
         final String operation = "put";
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics());
 
         final Sensor sensor1 = streamsMetrics.addSensor(sensorName, Sensor.RecordingLevel.DEBUG);
         streamsMetrics.removeSensor(sensor1);
@@ -68,7 +67,7 @@ public class StreamsMetricsImplTest {
 
     @Test
     public void testLatencyAndThroughputMetrics() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics());
         final int defaultMetrics = streamsMetrics.metrics().size();
 
         final String scope = "scope";
@@ -87,7 +86,7 @@ public class StreamsMetricsImplTest {
 
     @Test
     public void testThroughputMetrics() {
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics());
         final int defaultMetrics = streamsMetrics.metrics().size();
 
         final String scope = "scope";
@@ -109,7 +108,7 @@ public class StreamsMetricsImplTest {
         final MockTime time = new MockTime(1);
         final MetricConfig config = new MetricConfig().timeWindow(1, TimeUnit.MILLISECONDS);
         final Metrics metrics = new Metrics(config, time);
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "");
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics);
 
         final String scope = "scope";
         final String entity = "entity";
@@ -124,13 +123,11 @@ public class StreamsMetricsImplTest {
 
         final double latency = 100.0;
         final MetricName totalMetricName = metrics.metricName(
-            "op-total",
-            "stream-scope-metrics",
+            operation + TOTAL_SUFFIX,
+            StreamsMetricsImpl.groupNameFromScope(scope),
             "",
-            "client-id",
-            "",
-            "scope-id",
-            "entity"
+            scope + ID_SUFFIX,
+            entity
         );
 
         final KafkaMetric totalMetric = metrics.metric(totalMetricName);

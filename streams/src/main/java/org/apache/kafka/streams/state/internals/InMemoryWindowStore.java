@@ -224,7 +224,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     @Override
     public void close() {
         this.segmentMap.clear();
-        storeMetrics.removeAllSensors();
+        storeMetrics.clear();
         this.open = false;
     }
 

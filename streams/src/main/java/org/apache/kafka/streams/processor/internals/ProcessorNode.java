@@ -78,8 +78,8 @@ public class ProcessorNode<K, V> {
     }
 
     public void init(final InternalProcessorContext context) {
-        context.setCurrentNode(this);
         try {
+            context.setCurrentNode(this);
             nodeMetrics = new NodeMetrics(context, context.metrics());
             if (processor != null) {
                 processor.init(context);
@@ -94,14 +94,10 @@ public class ProcessorNode<K, V> {
             if (processor != null) {
                 processor.close();
             }
-            nodeMetrics.removeAllSensors();
+            nodeMetrics.clear();
         } catch (final Exception e) {
             throw new StreamsException(String.format("failed to close processor %s", name), e);
         }
-    }
-
-    public NodeMetrics nodeMetrics() {
-        return Utils.notNull(nodeMetrics);
     }
 
     public void process(final K key, final V value) {
@@ -138,30 +134,33 @@ public class ProcessorNode<K, V> {
         return sb.toString();
     }
 
+    public NodeMetrics nodeMetrics() {
+        return Utils.notNull(nodeMetrics);
+    }
+
     public static final class NodeMetrics {
         private final StreamsMetricsImpl metrics;
 
         private final Sensor processRateSensor;
         private Sensor skippedRecordsRateSensor;
-        private Sensor lateRecordsDropRateSensor;
+        private Sensor droppedLateRecordsRateSensor;
         private Sensor suppressionEmitRateSensor;
 
         private final Map<String, String> tagMap;
         private final String processorNodeName;
         private final String taskName;
 
-        private static final String DROPPRED_LATE_RECORDS = "dropped-late-records";
-        private static final String SUPPRESSION_EMIT_RECORDS = "suppression-emit-records";
+        public static final String DROPPED_LATE_RECORDS = "dropped-late-records";
+        public static final String SUPPRESSION_EMIT_RECORDS = "suppression-emit-records";
 
-
-        private static final String STREAM_PROCESSOR_NODE_METRICS = "stream-processor-node-metrics";
+        public static final String STREAM_PROCESSOR_NODE_METRICS = "stream-processor-node-metrics";
 
         NodeMetrics(final InternalProcessorContext context,
                     final StreamsMetricsImpl metrics) {
             this.metrics = metrics;
 
-            this.processorNodeName = context.currentNode().name;
             this.taskName = context.taskId().toString();
+            this.processorNodeName = context.currentNode().name;
 
             this.tagMap = StreamsMetricsImpl.nodeLevelTagMap(Thread.currentThread().getName(), context.taskId().toString(), processorNodeName);
 
@@ -189,13 +188,13 @@ public class ProcessorNode<K, V> {
             return suppressionEmitRateSensor;
         }
 
-        public Sensor lateRecordsDropRateSensor() {
-            if (lateRecordsDropRateSensor == null) {
-                lateRecordsDropRateSensor = metrics.nodeLevelSensor(DROPPRED_LATE_RECORDS, processorNodeName, taskName, Sensor.RecordingLevel.INFO);
-                StreamsMetricsImpl.addInvocationRateAndCount(lateRecordsDropRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, DROPPRED_LATE_RECORDS);
+        public Sensor droppedLateRecordsRateSensor() {
+            if (droppedLateRecordsRateSensor == null) {
+                droppedLateRecordsRateSensor = metrics.nodeLevelSensor(DROPPED_LATE_RECORDS, processorNodeName, taskName, Sensor.RecordingLevel.INFO);
+                StreamsMetricsImpl.addInvocationRateAndCount(droppedLateRecordsRateSensor, STREAM_PROCESSOR_NODE_METRICS, tagMap, DROPPED_LATE_RECORDS);
             }
 
-            return lateRecordsDropRateSensor;
+            return droppedLateRecordsRateSensor;
         }
 
         public Sensor skippedRecordsRateSensor() {
@@ -210,7 +209,7 @@ public class ProcessorNode<K, V> {
             return skippedRecordsRateSensor;
         }
 
-        private void removeAllSensors() {
+        private void clear() {
             metrics.removeSensor(processRateSensor);
 
             if (skippedRecordsRateSensor != null) {
@@ -220,8 +219,8 @@ public class ProcessorNode<K, V> {
             if (suppressionEmitRateSensor != null) {
                 metrics.removeSensor(suppressionEmitRateSensor);
             }
-            if (lateRecordsDropRateSensor != null) {
-                metrics.removeSensor(lateRecordsDropRateSensor);
+            if (droppedLateRecordsRateSensor != null) {
+                metrics.removeSensor(droppedLateRecordsRateSensor);
             }
         }
     }

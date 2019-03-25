@@ -85,7 +85,8 @@ public class MeteredWindowStore<K, V>
 
         // register and possibly restore the state from the logs
         final Sensor restoreTime = storeMetrics.addOperationLatencySensor(RESTORE);
-        StreamsMetricsImpl.maybeMeasureLatency(() -> {
+        StreamsMetricsImpl.maybeMeasureLatency(
+            () -> {
                 super.init(context, root);
             },
             time,
@@ -129,7 +130,8 @@ public class MeteredWindowStore<K, V>
                     final V value,
                     final long windowStartTimestamp) {
         try {
-            StreamsMetricsImpl.maybeMeasureLatency(() -> {
+            StreamsMetricsImpl.maybeMeasureLatency(
+                () -> {
                     wrapped().put(keyBytes(key), serdes.rawValue(value), windowStartTimestamp);
                 },
                 time,
@@ -143,7 +145,8 @@ public class MeteredWindowStore<K, V>
     @Override
     public V fetch(final K key,
                    final long timestamp) {
-        return StreamsMetricsImpl.maybeMeasureLatency(() -> {
+        return StreamsMetricsImpl.maybeMeasureLatency(
+            () -> {
                 final byte[] result = wrapped().fetch(keyBytes(key), timestamp);
                 if (result == null) {
                     return null;
@@ -202,7 +205,7 @@ public class MeteredWindowStore<K, V>
     @Override
     public void close() {
         super.close();
-        storeMetrics.removeAllSensors();
+        storeMetrics.clear();
     }
 
     private Bytes keyBytes(final K key) {

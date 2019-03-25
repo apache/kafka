@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
@@ -33,8 +32,13 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertTrue;
+import static org.apache.kafka.streams.processor.internals.ProcessorNode.NodeMetrics.STREAM_PROCESSOR_NODE_METRICS;
+import static org.apache.kafka.streams.processor.internals.StreamThread.StreamThreadMetrics.PROCESS;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_ID_TAG;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_ID_TAG;
+import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_SUFFIX;
+
 
 public class ProcessorNodeTest {
 
@@ -69,23 +73,6 @@ public class ProcessorNodeTest {
         }
     }
 
-    private static class NoOpProcessor implements Processor<Object, Object> {
-        @Override
-        public void init(final ProcessorContext context) {
-
-        }
-
-        @Override
-        public void process(final Object key, final Object value) {
-
-        }
-
-        @Override
-        public void close() {
-
-        }
-    }
-
     @Test
     public void testMetrics() {
         final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
@@ -101,44 +88,16 @@ public class ProcessorNodeTest {
             ),
             metrics
         );
-        final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.<String>emptySet());
-        node.init(context);
 
-        final String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
-        final String throughputOperation = "forward";
-        final String groupName = "stream-processor-node-metrics";
+        final String[] latencyOperations = {PROCESS};
         final Map<String, String> metricTags = new LinkedHashMap<>();
-        metricTags.put("processor-node-id", node.name());
-        metricTags.put("task-id", context.taskId().toString());
-        metricTags.put("client-id", "mock");
+        metricTags.put(PROCESSOR_NODE_ID_TAG, context.node.name);
+        metricTags.put(TASK_ID_TAG, context.taskId().toString());
 
         for (final String opName : latencyOperations) {
-            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-avg", groupName, metricTags);
-            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-max", groupName, metricTags);
-            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-rate", groupName, metricTags);
-            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-total", groupName, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + RATE_SUFFIX, STREAM_PROCESSOR_NODE_METRICS, metricTags);
+            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + TOTAL_SUFFIX, STREAM_PROCESSOR_NODE_METRICS, metricTags);
         }
-        assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate", groupName,
-                                                               "The average number of occurrence of " + throughputOperation + " operation per second.",
-                                                               metricTags)));
-
-        // test "all"
-        metricTags.put("processor-node-id", "all");
-        for (final String opName : latencyOperations) {
-            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-avg", groupName, metricTags);
-            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-latency-max", groupName, metricTags);
-            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-rate", groupName, metricTags);
-            StreamsTestUtils.getMetricByNameFilterByTags(metrics.metrics(), opName + "-total", groupName, metricTags);
-        }
-        assertNotNull(metrics.metrics().get(metrics.metricName(throughputOperation + "-rate",
-                                                               groupName,
-                                                               "The average number of occurrence of " + throughputOperation + " operation per second.",
-                                                               metricTags)));
-
-        final JmxReporter reporter = new JmxReporter("kafka.streams");
-        metrics.addReporter(reporter);
-        assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,client-id=mock,task-id=%s,processor-node-id=%s",
-                groupName, context.taskId().toString(), node.name())));
     }
 
 }
