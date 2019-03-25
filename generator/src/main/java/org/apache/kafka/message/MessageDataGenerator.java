@@ -416,9 +416,8 @@ public final class MessageDataGenerator {
             buffer.printf("int arrayLength = readable.readInt();%n");
             buffer.printf("if (arrayLength < 0) {%n");
             buffer.incrementIndent();
-            buffer.printf("this.%s.clear(%s);%n",
-                field.camelCaseName(),
-                hasKeys ? "0" : "");
+            buffer.printf("this.%s = null;%n",
+                field.camelCaseName());
             buffer.decrementIndent();
             buffer.printf("} else {%n");
             buffer.incrementIndent();
@@ -1069,8 +1068,14 @@ public final class MessageDataGenerator {
                 prefix, field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isArray()) {
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
-            buffer.printf("+ \"%s%s=\" + MessageUtil.deepToString(%s.iterator())%n",
-                prefix, field.camelCaseName(), field.camelCaseName());
+            if (field.nullableVersions().empty()) {
+                buffer.printf("+ \"%s%s=\" + MessageUtil.deepToString(%s.iterator())%n",
+                    prefix, field.camelCaseName(), field.camelCaseName());
+            } else {
+                buffer.printf("+ \"%s%s=\" + ((%s == null) ? \"null\" : " +
+                    "MessageUtil.deepToString(%s.iterator()))%n",
+                    prefix, field.camelCaseName(), field.camelCaseName(), field.camelCaseName());
+            }
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
         }
