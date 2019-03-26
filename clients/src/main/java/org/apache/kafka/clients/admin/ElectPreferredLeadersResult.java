@@ -62,10 +62,12 @@ public class ElectPreferredLeadersResult {
                     result.completeExceptionally(new UnknownTopicOrPartitionException(
                             "Preferred leader election for partition \"" + partition +
                                     "\" was not attempted"));
+                } else if (partitions == null && topicPartitions.isEmpty()) {
+                    // If partitions is null, we requested information about all partitions.  In
+                    // that case, if topicPartitions is empty, that indicates a
+                    // CLUSTER_AUTHORIZATION_FAILED error.
+                    result.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
                 } else {
-                    if (partitions == null && topicPartitions.isEmpty()) {
-                        result.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
-                    }
                     ApiException exception = topicPartitions.get(partition).exception();
                     if (exception == null) {
                         result.complete(null);

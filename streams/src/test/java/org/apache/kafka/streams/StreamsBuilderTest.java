@@ -232,14 +232,14 @@ public class StreamsBuilderTest {
         source.process(processorSupplier);
 
         final ConsumerRecordFactory<String, String> recordFactory =
-            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create("topic-source", "A", "aa"));
         }
 
         // no exception was thrown
-        assertEquals(Collections.singletonList("A:aa"), processorSupplier.theCapturedProcessor().processed);
+        assertEquals(Collections.singletonList("A:aa (ts: 0)"), processorSupplier.theCapturedProcessor().processed);
     }
 
     @Test
@@ -254,14 +254,14 @@ public class StreamsBuilderTest {
         through.process(throughProcessorSupplier);
 
         final ConsumerRecordFactory<String, String> recordFactory =
-            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create("topic-source", "A", "aa"));
         }
 
-        assertEquals(Collections.singletonList("A:aa"), sourceProcessorSupplier.theCapturedProcessor().processed);
-        assertEquals(Collections.singletonList("A:aa"), throughProcessorSupplier.theCapturedProcessor().processed);
+        assertEquals(Collections.singletonList("A:aa (ts: 0)"), sourceProcessorSupplier.theCapturedProcessor().processed);
+        assertEquals(Collections.singletonList("A:aa (ts: 0)"), throughProcessorSupplier.theCapturedProcessor().processed);
     }
     
     @Test
@@ -277,7 +277,7 @@ public class StreamsBuilderTest {
         merged.process(processorSupplier);
 
         final ConsumerRecordFactory<String, String> recordFactory =
-            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create(topic1, "A", "aa"));
@@ -286,7 +286,7 @@ public class StreamsBuilderTest {
             driver.pipeInput(recordFactory.create(topic1, "D", "dd"));
         }
 
-        assertEquals(asList("A:aa", "B:bb", "C:cc", "D:dd"), processorSupplier.theCapturedProcessor().processed);
+        assertEquals(asList("A:aa (ts: 0)", "B:bb (ts: 0)", "C:cc (ts: 0)", "D:dd (ts: 0)"), processorSupplier.theCapturedProcessor().processed);
     }
 
     @Test

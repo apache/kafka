@@ -14,14 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
+package org.apache.kafka.connect.util.clusters;
+
+import org.apache.kafka.common.KafkaException;
 
 /**
- * Interface to wrap actions that are required to wait until a condition is met
- * for testing purposes.  Note that this is not intended to do any assertions.
+ * An exception that can be used from within an {@code Exit.Procedure} to mask exit or halt calls
+ * and signify that the service terminated abruptly. It's intended to be used only from within
+ * integration tests.
  */
-@FunctionalInterface
-public interface TestCondition {
+public class UngracefulShutdownException extends KafkaException {
+    public UngracefulShutdownException(String s) {
+        super(s);
+    }
 
-    boolean conditionMet() throws InterruptedException;
+    public UngracefulShutdownException(String s, Throwable throwable) {
+        super(s, throwable);
+    }
+
+    public UngracefulShutdownException(Throwable throwable) {
+        super(throwable);
+    }
 }

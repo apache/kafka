@@ -14,14 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.test;
+package org.apache.kafka.streams.kstream;
 
 /**
- * Interface to wrap actions that are required to wait until a condition is met
- * for testing purposes.  Note that this is not intended to do any assertions.
+ * Default interface which can be used to personalized the named of operations, internal topics or store.
  */
-@FunctionalInterface
-public interface TestCondition {
+interface NamedOperation<T extends NamedOperation<T>> {
 
-    boolean conditionMet() throws InterruptedException;
+    /**
+     * Sets the name to be used for an operation.
+     *
+     * @param name  the name to use.
+     * @return an instance of {@link NamedOperation}
+     */
+    T withName(final String name);
+
 }
