@@ -131,9 +131,7 @@ public class MeteredKeyValueStore<K, V>
             usedValueSerde.configure(conf, false);
         }
         serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-                usedKeySerde,
-                usedValueSerde);
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()), usedKeySerde, usedValueSerde);
     }
 
     @SuppressWarnings("unchecked")

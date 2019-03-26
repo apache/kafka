@@ -52,16 +52,22 @@ class MeteredTimestampedWindowStore<K, V>
     @SuppressWarnings("unchecked")
     @Override
     void initStoreSerde(final ProcessorContext context) {
+        final Serde<K> usedKeySerde;
+        final Serde<ValueAndTimestamp<V>> usedValueSerde;
         final Map<String, Object> conf = context.appConfigs();
-        if (keySerde != null) {
-            keySerde.configure(conf, true);
+        if (keySerde == null) {
+            usedKeySerde = (Serde<K>) context.keySerde();
+        } else {
+            usedKeySerde = keySerde;
+            usedKeySerde.configure(conf, true);
         }
-        if (valueSerde != null) {
-            valueSerde.configure(conf, false);
+        if (valueSerde == null) {
+            usedValueSerde = (Serde<ValueAndTimestamp<V>>) context.valueSerde();
+        } else {
+            usedValueSerde = valueSerde;
+            usedValueSerde.configure(conf, false);
         }
         serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? new ValueAndTimestampSerde<>((Serde<V>) context.keySerde()) : valueSerde);
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()), usedKeySerde, usedValueSerde);
     }
 }
