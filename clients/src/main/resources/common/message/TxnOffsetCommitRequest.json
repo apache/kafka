@@ -24,15 +24,15 @@
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "0+",
       "about": "The ID of the transaction." },
-    { "name": "GroupId", "type": "string", "versions": "0+",
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The ID of the group." },
-    { "name": "ProducerId", "type": "int64", "versions": "0+",
+    { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId",
       "about": "The current producer ID in use by the transactional ID." },
     { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
       "about": "The current epoch associated with the producer ID." },
     { "name": "Topics", "type" : "[]TxnOffsetCommitRequestTopic", "versions": "0+",
       "about": "Each topic that we want to committ offsets for.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]TxnOffsetCommitRequestPartition", "versions": "0+",
         "about": "The partitions inside the topic that we want to committ offsets for.", "fields": [
