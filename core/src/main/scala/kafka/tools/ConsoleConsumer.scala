@@ -223,16 +223,22 @@ object ConsoleConsumer extends Logging {
       .ofType(classOf[String])
       .defaultsTo(classOf[DefaultMessageFormatter].getName)
     val messageFormatterArgOpt = parser.accepts("property",
-      "The properties to initialize the message formatter. Default properties include:\n" +
-        "\tprint.timestamp=true|false\n" +
-        "\tprint.key=true|false\n" +
-        "\tprint.value=true|false\n" +
-        "\tkey.separator=<key.separator>\n" +
-        "\tline.separator=<line.separator>\n" +
-        "\tkey.deserializer=<key.deserializer>\n" +
-        "\tvalue.deserializer=<value.deserializer>\n" +
-        "\nUsers can also pass in customized properties for their formatter; more specifically, users " +
-        "can pass in properties keyed with \'key.deserializer.\' and \'value.deserializer.\' prefixes to configure their deserializers.")
+      """The properties to initialize the message formatter. Default properties include:
+        |	print.timestamp=true|false
+        |	print.key=true|false
+        |	print.offset=true|false
+        |	print.partition=true|false
+        |	print.headers=true|false
+        |	print.value=true|false
+        |	key.separator=<key.separator>
+        |	line.separator=<line.separator>
+        |	headers.separator=<line.separator>
+        |	key.deserializer=<key.deserializer>
+        |	value.deserializer=<value.deserializer>
+        |	header.deserializer=<header.deserializer>
+        |
+        |Users can also pass in customized properties for their formatter; more specifically, users can pass in properties keyed with 'key.deserializer.', 'value.deserializer.' and 'headers.deserializer.' prefixes to configure their deserializers."""
+        .stripMargin)
       .withRequiredArg
       .describedAs("prop")
       .ofType(classOf[String])
@@ -464,7 +470,7 @@ class DefaultMessageFormatter extends MessageFormatter {
   var printHeaders = false
   var printValue = true
   var keySeparator = utfBytes("\t")
-  var headerSeparator = utfBytes(",")
+  var headersSeparator = utfBytes(",")
   var lineSeparator = utfBytes("\n")
 
   var keyDeserializer: Option[Deserializer[_]] = None
@@ -480,7 +486,7 @@ class DefaultMessageFormatter extends MessageFormatter {
     getPropertyIfExists(props, "print.value", getBoolProperty).foreach(printValue = _)
     getPropertyIfExists(props, "key.separator", getByteProperty).foreach(keySeparator = _)
     getPropertyIfExists(props, "line.separator", getByteProperty).foreach(lineSeparator = _)
-    getPropertyIfExists(props, "header.separator", getByteProperty).foreach(headerSeparator = _)
+    getPropertyIfExists(props, "headers.separator", getByteProperty).foreach(headersSeparator = _)
 
     keyDeserializer = getPropertyIfExists(props, "key.deserializer", getDeserializerProperty(true))
     valueDeserializer = getPropertyIfExists(props, "value.deserializer", getDeserializerProperty(false))
@@ -532,7 +538,7 @@ class DefaultMessageFormatter extends MessageFormatter {
           output.write(utfBytes(header.key() + ":"))
           output.write(deserialize(headersDeserializer, header.value(), topic))
           if(headersIt.hasNext) {
-            output.write(headerSeparator)
+            output.write(headersSeparator)
           }
         }
       } else {

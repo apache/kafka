@@ -124,7 +124,7 @@ object DefaultMessageFormatterTest {
         Map(
           "key.separator" -> "|",
           "line.separator" -> "^",
-          "header.separator" -> "#",
+          "headers.separator" -> "#",
           "print.key" -> "true",
           "print.timestamp" -> "true",
           "print.partition" -> "true",
