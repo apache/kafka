@@ -18,11 +18,11 @@ package org.apache.kafka.streams.state.internals;
 
 import org.rocksdb.Options;
 
-public class RocksDBSegmentedBytesStoreTest extends AbstractRocksDBSegmentedBytesStoreTest<KeyValueSegment> {
+public class RocksDBTimestampedSegmentedBytesStoreTest
+    extends AbstractRocksDBSegmentedBytesStoreTest<TimestampedSegment> {
 
-    @Override
-    RocksDBSegmentedBytesStore getBytesStore() {
-        return new RocksDBSegmentedBytesStore(
+    RocksDBTimestampedSegmentedBytesStore getBytesStore() {
+        return new RocksDBTimestampedSegmentedBytesStore(
             storeName,
             "metrics-scope",
             retention,
@@ -32,12 +32,12 @@ public class RocksDBSegmentedBytesStoreTest extends AbstractRocksDBSegmentedByte
     }
 
     @Override
-    KeyValueSegments newSegments() {
-        return new KeyValueSegments(storeName, retention, segmentInterval);
+    TimestampedSegments newSegments() {
+        return new TimestampedSegments(storeName, retention, segmentInterval);
     }
 
     @Override
-    Options getOptions(final KeyValueSegment segment) {
+    Options getOptions(final TimestampedSegment segment) {
         return segment.getOptions();
     }
 }

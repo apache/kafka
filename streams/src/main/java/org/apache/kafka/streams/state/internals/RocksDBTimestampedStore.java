@@ -54,6 +54,11 @@ public class RocksDBTimestampedStore extends RocksDBStore {
         super(name);
     }
 
+    RocksDBTimestampedStore(final String name,
+                            final String parentDir) {
+        super(name, parentDir);
+    }
+
     @Override
     void openRocksDB(final DBOptions dbOptions,
                      final ColumnFamilyOptions columnFamilyOptions) {
@@ -142,13 +147,7 @@ public class RocksDBTimestampedStore extends RocksDBStore {
                                  final WriteBatch batch) throws RocksDBException {
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
-                if (entry.value == null) {
-                    batch.delete(oldColumnFamily, entry.key.get());
-                    batch.delete(newColumnFamily, entry.key.get());
-                } else {
-                    batch.delete(oldColumnFamily, entry.key.get());
-                    batch.put(newColumnFamily, entry.key.get(), entry.value);
-                }
+                addToBatch(entry.key.get(), entry.value, batch);
             }
         }
 
@@ -223,13 +222,20 @@ public class RocksDBTimestampedStore extends RocksDBStore {
         public void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
                                            final WriteBatch batch) throws RocksDBException {
             for (final KeyValue<byte[], byte[]> record : records) {
-                if (record.value == null) {
-                    batch.delete(oldColumnFamily, record.key);
-                    batch.delete(newColumnFamily, record.key);
-                } else {
-                    batch.delete(oldColumnFamily, record.key);
-                    batch.put(newColumnFamily, record.key, record.value);
-                }
+                addToBatch(record.key, record.value, batch);
+            }
+        }
+
+        @Override
+        public void addToBatch(final byte[] key,
+                               final byte[] value,
+                               final WriteBatch batch) throws RocksDBException {
+            if (value == null) {
+                batch.delete(oldColumnFamily, key);
+                batch.delete(newColumnFamily, key);
+            } else {
+                batch.delete(oldColumnFamily, key);
+                batch.put(newColumnFamily, key, value);
             }
         }
 
