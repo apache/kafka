@@ -202,9 +202,11 @@ class ReplicaStateMachine(config: KafkaConfig,
           replicaState.put(replica, OnlineReplica)
         }
       case OfflineReplica =>
+        // Set callback to null so that controller will send one grouped request instead of one request for
+        // each topic partition
         validReplicas.foreach { replica =>
           controllerBrokerRequestBatch.addStopReplicaRequestForBrokers(Seq(replicaId), replica.topicPartition,
-            deletePartition = false, (_, _) => ())
+            deletePartition = false, null)
         }
         val (replicasWithLeadershipInfo, replicasWithoutLeadershipInfo) = validReplicas.partition { replica =>
           controllerContext.partitionLeadershipInfo.contains(replica.topicPartition)
