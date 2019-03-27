@@ -44,6 +44,7 @@ import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Locale;
@@ -719,13 +720,10 @@ public class StreamsConfig extends AbstractConfig {
         tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         tempConsumerDefaultOverrides.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         tempConsumerDefaultOverrides.put("internal.leave.group.on.close", false);
-        // MAX_POLL_INTERVAL_MS_CONFIG needs to be large for streams to handle cases when
-        // streams is recovering data from state stores. We may set it to Integer.MAX_VALUE since
-        // the streams code itself catches most exceptions and acts accordingly without needing
-        // this timeout. Note however that deadlocks are not detected (by definition) so we
-        // are losing the ability to detect them by setting this value to large. Hopefully
-        // deadlocks happen very rarely or never.
-        tempConsumerDefaultOverrides.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.toString(Integer.MAX_VALUE));
+        tempConsumerDefaultOverrides.put(
+            ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG,
+            Long.toString(Duration.ofMinutes(1).toMillis())
+        );
         CONSUMER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
