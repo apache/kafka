@@ -146,13 +146,13 @@ if (file('.git').exists()) {
 
 def shouldFilterFlakyTests = gradle.startParameter.taskNames.any{it.contains("FlakyRetry")}
 if (shouldFilterFlakyTests) {
-  println('''************************************************************************
+  logger.warn('''************************************************************************
   a FlakyRetry task was included in task list ->
   Failing tests will not cause a build failure. Test classes with failures will be run again to
   filter out flaky tests. Failures in this second run will cause build failure.
 ************************************************************************''')
 } else {
-  println("unitTestWithFlakyRetry was not included in task list, no anti-flaky steps are done, proceeding as normal upstream build")
+  logger.info("unitTestWithFlakyRetry was not included in task list, no anti-flaky steps are done, proceeding as normal upstream build")
 }
 
 subprojects {
@@ -298,7 +298,7 @@ subprojects {
 
     afterTest { TestDescriptor desc , TestResult result ->
       if (TestResult.ResultType.FAILURE == result.resultType) {
-        println("Found failing test $desc.parent - $desc.name, trying again in next turn of test execution")
+        logger.warn("Found failing test $desc.parent - $desc.name, trying again in next turn of test execution")
         failedTestsInFirstTestRun << desc
       }
     }
@@ -323,18 +323,18 @@ subprojects {
 
     doFirst {
       if (!failedTestsInFirstTestRun.isEmpty()) {
-        println("Executing failed tests again to filter out flaky tests")
-        println("Failed tests: " + failedTestsInFirstTestRun)
+        logger.warn("Executing failed tests again to filter out flaky tests")
+        logger.warn("Failed tests: " + failedTestsInFirstTestRun)
 
-        println("Successful results will overwrite stale failed test results from $testResultsDir to avoid jenkins reporting an UNSTABLE build")
+        logger.warn("Successful results will overwrite stale failed test results from $testResultsDir to avoid jenkins reporting an UNSTABLE build")
         def failedTestClasses = failedTestsInFirstTestRun.collect{
           it.className.replaceAll('\\.', '/') + ".*"
         } as Set
         // re-running complete classes to keep the integrity of the test results
-        println("Re-running $failedTestClasses")
+        logger.warn("Re-running $failedTestClasses")
         setIncludes(failedTestClasses)
       } else {
-        println("Yay, no failing tests, no need for a second run!")
+        logger.info("Yay, no failing tests, no need for a second run!")
         setExcludes(["**/*"])
       }
     }
@@ -349,7 +349,7 @@ subprojects {
         // Gradle seems to call afterSuite not only after suites but also when the executor finishes
         // no need to overwrite anything in this case
         if (testClassName != null) {
-          println("Second execution of $testClassName was successful, previous failures seem to be flaky. Marking test result to be overwritten.")
+          logger.info("Second execution of $testClassName was successful, previous failures seem to be flaky. Marking test result to be overwritten.")
           oldResultsToOverwite << testClassName
         }
       }
@@ -357,12 +357,12 @@ subprojects {
 
     doLast {
       if (oldResultsToOverwite.isEmpty()) {
-        println("No flaky tests were detected, no need to overwrite previous test results")
+        logger.info("No flaky tests were detected, no need to overwrite previous test results")
       } else {
         oldResultsToOverwite.each { testClassName ->
           def oldReportFile = "$testResultsDir/TEST-${testClassName}.xml"
           def newReportsFile = "$reports.junitXml.destination/TEST-${testClassName}.xml"
-          println("Overwriting old test result at $oldReportFile with $newReportsFile")
+          logger.warn("Overwriting old test result at $oldReportFile with $newReportsFile")
           Files.copy(Paths.get(newReportsFile), Paths.get(oldReportFile), StandardCopyOption.REPLACE_EXISTING)
         }
       }
@@ -411,7 +411,7 @@ subprojects {
 
     afterTest { TestDescriptor desc , TestResult result ->
       if (TestResult.ResultType.FAILURE == result.resultType) {
-        println("Found failing test $desc.parent - $desc.name, trying again in next turn of test execution")
+        logger.warn("Found failing test $desc.parent - $desc.name, trying again in next turn of test execution")
         failedTestsInFirstUnitRun << desc
       }
     }
@@ -433,16 +433,16 @@ subprojects {
 
     doFirst {
       if (!failedTestsInFirstUnitRun.isEmpty()) {
-        println("Executing failed tests again to filter out flaky tests")
-        println("Failed tests: " + failedTestsInFirstUnitRun)
+        logger.warn("Executing failed tests again to filter out flaky tests")
+        logger.warn("Failed tests: " + failedTestsInFirstUnitRun)
         def failedTestClasses = failedTestsInFirstUnitRun.collect{
           it.className.replaceAll('\\.', '/') + ".*"
         } as Set
         // re-running complete classes to keep the integrity of the test results
-        println("Re-running $failedTestClasses")
+        logger.warn("Re-running $failedTestClasses")
         setIncludes(failedTestClasses)
       } else {
-        println("Yay, no failing tests, no need for a second run!")
+        logger.info("Yay, no failing tests, no need for a second run!")
         setExcludes(["**/*"])
       }
     }
