@@ -18,6 +18,8 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
@@ -26,19 +28,31 @@ import java.util.Collection;
 import java.util.regex.Pattern;
 
 public class StreamSourceNode<K, V> extends StreamsGraphNode {
-
     private Collection<String> topicNames;
     private Pattern topicPattern;
     private final ConsumedInternal<K, V> consumedInternal;
-
+    private final boolean isWindowed;
+    private final ConsumedInternal<Windowed<K>, V> windowedConsumedInteral;
 
     public StreamSourceNode(final String nodeName,
                             final Collection<String> topicNames,
-                            final ConsumedInternal<K, V> consumedInternal) {
+                            final ConsumedInternal<K, V> consumedInternal,
+                            final boolean isWindowed) {
         super(nodeName);
 
         this.topicNames = topicNames;
         this.consumedInternal = consumedInternal;
+        this.isWindowed = isWindowed;
+        if (isWindowed) {
+            WindowedSerdes.TimeWindowedSerde<K> windowedSerde =
+                new WindowedSerdes.TimeWindowedSerde<>(consumedInternal.keySerde(), consumedInternal.windowSize())
+                    .forChangelog(true);
+            windowedConsumedInteral =
+                new ConsumedInternal<>(windowedSerde, consumedInternal.valueSerde(),
+                    consumedInternal.timestampExtractor(), consumedInternal.offsetResetPolicy());
+        } else {
+            windowedConsumedInteral = null;
+        }
     }
 
     public StreamSourceNode(final String nodeName,
@@ -49,6 +63,8 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
 
         this.topicPattern = topicPattern;
         this.consumedInternal = consumedInternal;
+        this.isWindowed = false;
+        this.windowedConsumedInteral = null;
     }
 
     public Collection<String> getTopicNames() {
@@ -59,8 +75,8 @@ public class StreamSourceNode<K, V> extends StreamsGraphNode {
         return topicPattern;
     }
 
-    public ConsumedInternal<K, V> consumedInternal() {
-        return consumedInternal;
+    public ConsumedInternal<?, V> consumedInternal() {
+        return isWindowed? windowedConsumedInteral : consumedInternal;
     }
 
     public Serde<K> keySerde() {

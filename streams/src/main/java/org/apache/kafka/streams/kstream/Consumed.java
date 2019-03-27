@@ -56,23 +56,28 @@ public class Consumed<K, V> {
     protected Serde<V> valueSerde;
     protected TimestampExtractor timestampExtractor;
     protected Topology.AutoOffsetReset resetPolicy;
+    protected long windowSize;
+
+    public static long DEFAULT_WINDOW_SIZE = -1;
 
     private Consumed(final Serde<K> keySerde,
                      final Serde<V> valueSerde,
                      final TimestampExtractor timestampExtractor,
-                     final Topology.AutoOffsetReset resetPolicy) {
+                     final Topology.AutoOffsetReset resetPolicy,
+                     final long windowSize) {
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.timestampExtractor = timestampExtractor;
         this.resetPolicy = resetPolicy;
+        this.windowSize = windowSize;
     }
 
     /**
      * Create an instance of {@link Consumed} from an existing instance.
-     * @param consumed  the instance of {@link Consumed} to copy
+     * @param consumed the instance of {@link Consumed} to copy
      */
     protected Consumed(final Consumed<K, V> consumed) {
-        this(consumed.keySerde, consumed.valueSerde, consumed.timestampExtractor, consumed.resetPolicy);
+        this(consumed.keySerde, consumed.valueSerde, consumed.timestampExtractor, consumed.resetPolicy, consumed.windowSize);
     }
 
     /**
@@ -90,7 +95,7 @@ public class Consumed<K, V> {
                                              final Serde<V> valueSerde,
                                              final TimestampExtractor timestampExtractor,
                                              final Topology.AutoOffsetReset resetPolicy) {
-        return new Consumed<>(keySerde, valueSerde, timestampExtractor, resetPolicy);
+        return new Consumed<>(keySerde, valueSerde, timestampExtractor, resetPolicy, DEFAULT_WINDOW_SIZE);
 
     }
 
@@ -105,7 +110,7 @@ public class Consumed<K, V> {
      */
     public static <K, V> Consumed<K, V> with(final Serde<K> keySerde,
                                              final Serde<V> valueSerde) {
-        return new Consumed<>(keySerde, valueSerde, null, null);
+        return new Consumed<>(keySerde, valueSerde, null, null, DEFAULT_WINDOW_SIZE);
     }
 
     /**
@@ -117,7 +122,7 @@ public class Consumed<K, V> {
      * @return a new instance of {@link Consumed}
      */
     public static <K, V> Consumed<K, V> with(final TimestampExtractor timestampExtractor) {
-        return new Consumed<>(null, null, timestampExtractor, null);
+        return new Consumed<>(null, null, timestampExtractor, null, DEFAULT_WINDOW_SIZE);
     }
 
     /**
@@ -129,7 +134,7 @@ public class Consumed<K, V> {
      * @return a new instance of {@link Consumed}
      */
     public static <K, V> Consumed<K, V> with(final Topology.AutoOffsetReset resetPolicy) {
-        return new Consumed<>(null, null, null, resetPolicy);
+        return new Consumed<>(null, null, null, resetPolicy, DEFAULT_WINDOW_SIZE);
     }
 
     /**
@@ -173,6 +178,11 @@ public class Consumed<K, V> {
      */
     public Consumed<K, V> withOffsetResetPolicy(final Topology.AutoOffsetReset resetPolicy) {
         this.resetPolicy = resetPolicy;
+        return this;
+    }
+
+    public Consumed<K, V> withWindowSize(final long windowSize) {
+        this.windowSize = windowSize;
         return this;
     }
 

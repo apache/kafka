@@ -22,19 +22,33 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
+import org.apache.kafka.streams.kstream.TimeWindows;
+import org.apache.kafka.streams.kstream.Window;
+import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
+import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockPredicate;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -60,6 +74,20 @@ public class StreamsBuilderTest {
 
         final StreamsBuilder builder = new StreamsBuilder();
         builder.build(properties);
+    }
+
+    private final Consumed<Long, String> consumed = Consumed.with(Serdes.Long(), Serdes.String());
+    private MaterializedInternal<Long, String, WindowStore<Bytes, byte[]>> materializedForTimeWindow;
+    private MaterializedInternal<Long, String, SessionStore<Bytes, byte[]>> materializedForSessionWindow;
+    private final TimeWindows timeWindows = TimeWindows.of(10L);
+    private final SessionWindows sessionWindows = SessionWindows.with(10L);
+
+    @Before
+    public void setUp() {
+        WindowBytesStoreSupplier timeWindowSupplier = Stores.persistentWindowStore("store", 10L, 3, 5L, false);
+        materializedForTimeWindow = new MaterializedInternal<>(Materialized.<Long, String>as(timeWindowSupplier).withKeySerde(Serdes.Long()).withValueSerde(Serdes.String()));
+        SessionBytesStoreSupplier sessionWindowSupplier = Stores.persistentSessionStore("store", 10L);
+        materializedForSessionWindow = new MaterializedInternal<>(Materialized.<Long, String>as(sessionWindowSupplier).withKeySerde(Serdes.Long()).withValueSerde(Serdes.String()));
     }
 
     @Test
@@ -334,6 +362,31 @@ public class StreamsBuilderTest {
         }
     }
 
+
+//    @Test
+//    public void shouldUseSerdesDefinedInMaterializedToConsumeWindowedTable() {
+//        final Map<Long, String> results = new HashMap<>();
+//        final String topic = "topic";
+//        final ForeachAction<Windowed<Long>, String> action =
+//            (windowedKey, value) -> results.put(windowedKey.key(), value);
+//
+//        builder.timeWindowedKTable(topic, consumed, materializedForTimeWindow, timeWindows).toStream().foreach(action);
+//
+//        Window window = new TimeWindow(0L, 1L);
+//
+//        final ConsumerRecordFactory<Windowed<Long>, String> recordFactory = new ConsumerRecordFactory<>(new TimeWindowedSerializer<>(new LongSerializer()), new StringSerializer());
+//        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+//            driver.pipeInput(recordFactory.create(topic, new Windowed<>(1L, window), "value1"));
+//            driver.pipeInput(recordFactory.create(topic, new Windowed<>(2L, window), "value2"));
+//
+//            final WindowStore<Long, String> store = driver.getWindowStore("store");
+//            assertThat(store.fetch(1L, 0L), equalTo("value1"));
+//            assertThat(store.fetch(2L, 0L), equalTo("value2"));
+//            assertThat(results.get(1L), equalTo("value1"));
+//            assertThat(results.get(2L), equalTo("value2"));
+//        }
+//    }
+
     @Test
     public void shouldNotMaterializeStoresIfNotRequired() {
         final String topic = "topic";
@@ -344,6 +397,50 @@ public class StreamsBuilderTest {
 
         assertThat(topology.stateStores().size(), equalTo(0));
     }
+
+//    @Test
+//    public void shouldUseDefaultNodeTimeWindowed() {
+//        final String topic = "topic";
+//
+//        builder.timeWindowedKTable(topic, consumed, materializedForTimeWindow, timeWindows);
+//
+//        final Iterator<TopologyDescription.Subtopology> subtopologies = builder.build().describe().subtopologies().iterator();
+//        final TopologyDescription.Subtopology subtopology = subtopologies.next();
+//
+//        final Iterator<TopologyDescription.Node> nodes = subtopology.nodes().iterator();
+//        TopologyDescription.Node node = nodes.next();
+//        assertThat(node.name(), equalTo("KSTREAM-SOURCE-0000000000"));
+//        node = nodes.next();
+//        assertThat(node.name(), equalTo("KTABLE-SOURCE-0000000001"));
+//        final Iterator<String> stores = ((TopologyDescription.Processor) node).stores().iterator();
+//        assertThat(stores.next(), equalTo("store"));
+//
+//        assertFalse(nodes.hasNext());
+//        assertFalse(stores.hasNext());
+//        assertFalse(subtopologies.hasNext());
+//    }
+//
+//    @Test
+//    public void shouldUseDefaultNodeSessionWindowed() {
+//        final String topic = "topic";
+//
+//        builder.sessionWindowedKTable(topic, consumed, materializedForSessionWindow, sessionWindows);
+//
+//        final Iterator<TopologyDescription.Subtopology> subtopologies = builder.build().describe().subtopologies().iterator();
+//        final TopologyDescription.Subtopology subtopology = subtopologies.next();
+//
+//        final Iterator<TopologyDescription.Node> nodes = subtopology.nodes().iterator();
+//        TopologyDescription.Node node = nodes.next();
+//        assertThat(node.name(), equalTo("KSTREAM-SOURCE-0000000000"));
+//        node = nodes.next();
+//        assertThat(node.name(), equalTo("KTABLE-SOURCE-0000000001"));
+//        final Iterator<String> stores = ((TopologyDescription.Processor) node).stores().iterator();
+//        assertThat(stores.next(), equalTo("store"));
+//
+//        assertFalse(nodes.hasNext());
+//        assertFalse(stores.hasNext());
+//        assertFalse(subtopologies.hasNext());
+//    }
 
     @Test
     public void shouldReuseSourceTopicAsChangelogsWithOptimization20() {
@@ -391,6 +488,14 @@ public class StreamsBuilderTest {
             internalTopologyBuilder.topicGroups().get(0).stateChangelogTopics.keySet(),
             equalTo(Collections.singleton("appId-store-changelog")));
     }
+
+//    @Test
+//    public void shouldReuseWindowSourceTopicAsChangelogs() {
+//        final String topic = "topic";
+//        builder.timeWindowedKTable(topic, consumed, materializedForTimeWindow, timeWindows);
+//        final InternalTopologyBuilder internalTopologyBuilder = TopologyWrapper.getInternalTopologyBuilder(builder.build());
+//        assertThat(internalTopologyBuilder.topicGroups().get(0).stateChangelogTopics.keySet(), equalTo(Collections.singleton("topic")));
+//    }
     
     @Test(expected = TopologyException.class)
     public void shouldThrowExceptionWhenNoTopicPresent() {

@@ -30,7 +30,6 @@ import org.apache.kafka.streams.state.internals.StateStoreProvider;
  * To access and query the {@link StateStore}s that are part of a {@link Topology}.
  */
 public final class QueryableStoreTypes {
-
     /**
      * A {@link QueryableStoreType} that accepts {@link ReadOnlyKeyValueStore}.
      *

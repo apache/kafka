@@ -34,7 +34,6 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 class ChangeLoggingWindowBytesStore
     extends WrappedStateStore<WindowStore<Bytes, byte[]>, byte[], byte[]>
     implements WindowStore<Bytes, byte[]> {
-
     private final boolean retainDuplicates;
     private ProcessorContext context;
     private int seqnum = 0;
