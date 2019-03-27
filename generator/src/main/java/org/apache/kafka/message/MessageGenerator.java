@@ -41,7 +41,7 @@ public final class MessageGenerator {
 
     static final String JAVA_SUFFIX = ".java";
 
-    static final String API_MESSAGE_FACTORY_JAVA = "ApiMessageFactory.java";
+    static final String API_MESSAGE_TYPE_JAVA = "ApiMessageType.java";
 
     static final String API_MESSAGE_CLASS = "org.apache.kafka.common.protocol.ApiMessage";
 
@@ -79,6 +79,10 @@ public final class MessageGenerator {
 
     static final String BYTES_CLASS = "org.apache.kafka.common.utils.Bytes";
 
+    static final String REQUEST_SUFFIX = "Request";
+
+    static final String RESPONSE_SUFFIX = "Response";
+
     /**
      * The Jackson serializer we use for JSON objects.
      */
@@ -95,7 +99,7 @@ public final class MessageGenerator {
     public static void processDirectories(String outputDir, String inputDir) throws Exception {
         Files.createDirectories(Paths.get(outputDir));
         int numProcessed = 0;
-        ApiMessageFactoryGenerator messageFactoryGenerator = new ApiMessageFactoryGenerator();
+        ApiMessageTypeGenerator messageTypeGenerator = new ApiMessageTypeGenerator();
         HashSet<String> outputFileNames = new HashSet<>();
         try (DirectoryStream<Path> directoryStream = Files
                 .newDirectoryStream(Paths.get(inputDir), JSON_GLOB)) {
@@ -112,17 +116,17 @@ public final class MessageGenerator {
                         generator.write(writer);
                     }
                     numProcessed++;
-                    messageFactoryGenerator.registerMessageType(spec);
+                    messageTypeGenerator.registerMessageType(spec);
                 } catch (Exception e) {
                     throw new RuntimeException("Exception while processing " + inputPath.toString(), e);
                 }
             }
         }
-        Path factoryOutputPath = Paths.get(outputDir, API_MESSAGE_FACTORY_JAVA);
-        outputFileNames.add(API_MESSAGE_FACTORY_JAVA);
+        Path factoryOutputPath = Paths.get(outputDir, API_MESSAGE_TYPE_JAVA);
+        outputFileNames.add(API_MESSAGE_TYPE_JAVA);
         try (BufferedWriter writer = Files.newBufferedWriter(factoryOutputPath)) {
-            messageFactoryGenerator.generate();
-            messageFactoryGenerator.write(writer);
+            messageTypeGenerator.generate();
+            messageTypeGenerator.write(writer);
         }
         numProcessed++;
         try (DirectoryStream<Path> directoryStream = Files.
@@ -179,6 +183,15 @@ public final class MessageGenerator {
             }
         }
         return bld.toString();
+    }
+
+    static String stripSuffix(String str, String suffix) {
+        if (str.endsWith(suffix)) {
+            return str.substring(0, str.length() - suffix.length());
+        } else {
+            throw new RuntimeException("String " + str + " does not end with the " +
+                "expected suffix " + suffix);
+        }
     }
 
     private final static String USAGE = "MessageGenerator: [output Java file] [input JSON file]";
