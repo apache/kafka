@@ -105,7 +105,7 @@ public class DeleteTopicsRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         DeleteTopicsResponseData response = new DeleteTopicsResponseData();
-        if (version >= 3) {
+        if (version >= 1) {
             response.setThrottleTimeMs(throttleTimeMs);
         }
         ApiError apiError = ApiError.fromThrowable(e);
