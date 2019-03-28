@@ -62,7 +62,7 @@ public class MessageGeneratorTest {
     public void stripSuffixTest() throws Exception {
         assertEquals("FooBa", MessageGenerator.stripSuffix("FooBar", "r"));
         assertEquals("", MessageGenerator.stripSuffix("FooBar", "FooBar"));
-        assertEquals("Bar", MessageGenerator.stripSuffix("FooBar", "Bar"));
+        assertEquals("Foo", MessageGenerator.stripSuffix("FooBar", "Bar"));
         try {
             MessageGenerator.stripSuffix("FooBar", "Baz");
             fail("expected exception");
