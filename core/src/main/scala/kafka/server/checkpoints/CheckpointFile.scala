@@ -67,6 +67,7 @@ class CheckpointFile[T](val file: File,
           fileOutputStream.getFD().sync()
         } finally {
           writer.close()
+          Utils.closeQuietly(fileOutputStream, tempPath.toString)
         }
 
         Utils.atomicMoveWithFallback(tempPath, path)
