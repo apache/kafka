@@ -23,6 +23,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.internals.KBranchedStream;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -403,6 +404,8 @@ public interface KStream<K, V> {
      */
     @SuppressWarnings("unchecked")
     KStream<K, V>[] branch(final Predicate<? super K, ? super V>... predicates);
+
+    KBranchedStream<K, V> branch();
 
     /**
      * Merge this stream and the given stream into one larger stream.

@@ -32,6 +32,7 @@ import org.junit.Test;
 
 import java.util.List;
 import java.util.Properties;
+import java.util.function.Consumer;
 
 import static org.junit.Assert.assertEquals;
 
@@ -92,6 +93,52 @@ public class KStreamBranchTest {
         assertEquals(2, processors.get(2).processed.size());
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testKStreamBranchFluent() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final Predicate<Integer, String> isEven = (key, value) -> (key % 2) == 0;
+        final Predicate<Integer, String> isMultipleOfThree = (key, value) -> (key % 3) == 0;
+        final Predicate<Integer, String> isOdd = (key, value) -> (key % 2) != 0;
+
+        final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6};
+
+        final MockProcessorSupplier<Integer, String> supplier = new MockProcessorSupplier<>();
+        final KStream stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
+
+        stream.branch()
+            .addBranch(isEven, new Consumer<KStream>() {
+                @Override
+                public void accept(final KStream kStream) {
+                    kStream.process(supplier);
+                }
+            })
+            .addBranch(isMultipleOfThree, new Consumer<KStream>() {
+                @Override
+                public void accept(final KStream kStream) {
+                    kStream.process(supplier);
+                }
+            })
+            .addBranch(isOdd, new Consumer<KStream>() {
+                @Override
+                public void accept(final KStream kStream) {
+                    kStream.process(supplier);
+                }
+            });
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            for (final int expectedKey : expectedKeys) {
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
+            }
+        }
+
+        final List<MockProcessor<Integer, String>> processors = supplier.capturedProcessors(3);
+        assertEquals(3, processors.get(0).processed.size());
+        assertEquals(1, processors.get(1).processed.size());
+        assertEquals(2, processors.get(2).processed.size());
+    }
+
     @Test
     public void testTypeVariance() {
         final Predicate<Number, Object> positive = new Predicate<Number, Object>() {
@@ -108,9 +155,8 @@ public class KStreamBranchTest {
             }
         };
 
-        @SuppressWarnings("unchecked")
-        final KStream<Integer, String>[] branches = new StreamsBuilder()
-            .<Integer, String>stream("empty")
-            .branch(positive, negative);
+        @SuppressWarnings("unchecked") final KStream<Integer, String>[] branches = new StreamsBuilder()
+                .<Integer, String>stream("empty")
+                .branch(positive, negative);
     }
 }

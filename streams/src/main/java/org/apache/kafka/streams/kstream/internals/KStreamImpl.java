@@ -56,8 +56,10 @@ import org.apache.kafka.streams.state.WindowStore;
 import java.lang.reflect.Array;
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -322,6 +324,22 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         }
 
         return branchChildren;
+    }
+
+    public KBranchedStream<K, V> branch() {
+        final String branchName = builder.newProcessorName(BRANCH_NAME);
+
+        // these must be passed in by reference so when the user adds a branch via KBranchedStream::addBranch they get added to
+        final List<Predicate<K, V>> predicates = new ArrayList<>();
+        final List<String> children = new ArrayList<>();
+
+        final KStreamLazyBranch<K, V> lazyBranch = new KStreamLazyBranch<>(predicates, children);
+        final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(lazyBranch, branchName);
+
+        final ProcessorGraphNode<K, V> branchNode = new ProcessorGraphNode<>(branchName, processorParameters);
+        builder.addGraphNode(this.streamsGraphNode, branchNode);
+
+        return new KBranchedStream<>(branchNode, predicates, children, keySerde, valSerde, sourceNodes, repartitionRequired, builder);
     }
 
     @Override
