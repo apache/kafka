@@ -357,7 +357,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
       stopReplicaRequestMap.getOrElseUpdate(brokerId, Seq.empty[StopReplicaRequestInfo])
       val v = stopReplicaRequestMap(brokerId)
       stopReplicaRequestMap(brokerId) = v :+ StopReplicaRequestInfo(PartitionAndReplica(topicPartition, brokerId),
-        deletePartition, (r: AbstractResponse) => callback(r, brokerId))
+        deletePartition, if (callback != null) (r: AbstractResponse) => callback(r, brokerId) else null)
     }
   }
 
