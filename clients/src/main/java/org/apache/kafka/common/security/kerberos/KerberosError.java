@@ -49,7 +49,7 @@ public enum KerberosError {
 
     static {
         try {
-            if (Java.isIbmJdk()) {
+            if (Java.isIbmJdk() && canLoad("com.ibm.security.krb5.internal.KrbException")) {
                 KRB_EXCEPTION_CLASS = Class.forName("com.ibm.security.krb5.internal.KrbException");
             } else {
                 KRB_EXCEPTION_CLASS = Class.forName("sun.security.krb5.KrbException");
@@ -57,6 +57,15 @@ public enum KerberosError {
             KRB_EXCEPTION_RETURN_CODE_METHOD = KRB_EXCEPTION_CLASS.getMethod("returnCode");
         } catch (Exception e) {
             throw new KafkaException("Kerberos exceptions could not be initialized", e);
+        }
+    }
+
+    private static boolean canLoad(String clazz) {
+        try {
+            Class.forName(clazz);
+            return true;
+        } catch (Exception e) {
+            return false;
         }
     }
 
