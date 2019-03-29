@@ -43,6 +43,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Before
   override def setUp() {
+    ZooKeeperTestHarness.verifyNoUnexpectedThreads("@Before")
     cleanMetricsRegistry()
     super.setUp()
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,
@@ -55,6 +56,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       zooKeeperClient.close()
     super.tearDown()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
+    ZooKeeperTestHarness.verifyNoUnexpectedThreads("@After")
   }
 
   @Test
@@ -82,8 +84,16 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
   @Test
   def testConnection(): Unit = {
-    new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time, "testMetricGroup",
-      "testMetricType").close()
+    val client = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time, "testMetricGroup",
+      "testMetricType")
+    try {
+      // Verify ZooKeeper event thread name. This is used in ZooKeeperTestHarness to verify that tests have closed ZK clients
+      val threads = Thread.getAllStackTraces.keySet.asScala.map(_.getName)
+      assertTrue(s"ZooKeeperClient event thread not found, threads=$threads",
+        threads.exists(_.contains(ZooKeeperTestHarness.ZkClientEventThreadSuffix)))
+    } finally {
+      client.close()
+    }
   }
 
   @Test
@@ -327,14 +337,15 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       }
     }
 
-    val client = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time,
+    zooKeeperClient.close()
+    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time,
       "testMetricGroup", "testMetricType")
-    client.registerStateChangeHandler(stateChangeHandler)
+    zooKeeperClient.registerStateChangeHandler(stateChangeHandler)
 
     val requestThread = new Thread() {
       override def run(): Unit = {
         try
-          client.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
+          zooKeeperClient.handleRequest(CreateRequest(mockPath, Array.empty[Byte],
             ZooDefs.Ids.OPEN_ACL_UNSAFE.asScala, CreateMode.PERSISTENT))
         finally
           latch.countDown()
@@ -343,7 +354,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
 
     val reinitializeThread = new Thread() {
       override def run(): Unit = {
-        client.forceReinitialize()
+        zooKeeperClient.forceReinitialize()
       }
     }
 
@@ -375,12 +386,13 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
       }
     }
 
-    val client = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time,
+    zooKeeperClient.close()
+    zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, Int.MaxValue, time,
       "testMetricGroup", "testMetricType")
-    client.registerStateChangeHandler(faultyHandler)
-    client.registerStateChangeHandler(goodHandler)
+    zooKeeperClient.registerStateChangeHandler(faultyHandler)
+    zooKeeperClient.registerStateChangeHandler(goodHandler)
 
-    client.forceReinitialize()
+    zooKeeperClient.forceReinitialize()
 
     assertEquals(1, goodCalls.get)
 
@@ -586,6 +598,7 @@ class ZooKeeperClientTest extends ZooKeeperTestHarness {
         }
       })
       assertFalse("Close completed without shutting down expiry scheduler gracefully", closeFuture.isDone)
+      assertTrue(zooKeeperClient.currentZooKeeper.getState.isAlive) // Client should be closed after expiry handler
       semaphore.release()
       closeFuture.get(10, TimeUnit.SECONDS)
       assertFalse("Expiry executor not shutdown", zooKeeperClient.expiryScheduler.isStarted)

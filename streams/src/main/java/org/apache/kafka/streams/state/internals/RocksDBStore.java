@@ -65,7 +65,7 @@ import java.util.regex.Pattern;
 /**
  * A persistent key-value store based on RocksDB.
  */
-public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
+public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingStore {
     private static final Logger log = LoggerFactory.getLogger(RocksDBStore.class);
 
     private static final Pattern SST_FILE_EXTENSION = Pattern.compile(".*\\.sst");
@@ -344,7 +344,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         }
     }
 
-    void toggleDbForBulkLoading(final boolean prepareForBulkload) {
+    @Override
+    public void toggleDbForBulkLoading(final boolean prepareForBulkload) {
         if (prepareForBulkload) {
             // if the store is not empty, we need to compact to get around the num.levels check for bulk loading
             final String[] sstFileNames = dbDir.list((dir, name) -> SST_FILE_EXTENSION.matcher(name).matches());
@@ -359,7 +360,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         openDB(internalProcessorContext);
     }
 
-    void write(final WriteBatch batch) throws RocksDBException {
+    @Override
+    public void addToBatch(final KeyValue<byte[], byte[]> record,
+                           final WriteBatch batch) throws RocksDBException {
+        dbAccessor.addToBatch(record.key, record.value, batch);
+    }
+
+    @Override
+    public void write(final WriteBatch batch) throws RocksDBException {
         db.write(wOptions, batch);
     }
 
@@ -428,6 +436,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
                                     final WriteBatch batch) throws RocksDBException;
 
+        void addToBatch(final byte[] key,
+                        final byte[] value,
+                        final WriteBatch batch) throws RocksDBException;
+
         void close();
 
         void toggleDbForBulkLoading();
@@ -465,11 +477,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
                                  final WriteBatch batch) throws RocksDBException {
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
-                if (entry.value == null) {
-                    batch.delete(columnFamily, entry.key.get());
-                } else {
-                    batch.put(columnFamily, entry.key.get(), entry.value);
-                }
+                addToBatch(entry.key.get(), entry.value, batch);
             }
         }
 
@@ -515,11 +523,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         public void prepareBatchForRestore(final Collection<KeyValue<byte[], byte[]>> records,
                                            final WriteBatch batch) throws RocksDBException {
             for (final KeyValue<byte[], byte[]> record : records) {
-                if (record.value == null) {
-                    batch.delete(columnFamily, record.key);
-                } else {
-                    batch.put(columnFamily, record.key, record.value);
-                }
+                addToBatch(record.key, record.value, batch);
+            }
+        }
+
+        @Override
+        public void addToBatch(final byte[] key,
+                               final byte[] value,
+                               final WriteBatch batch) throws RocksDBException {
+            if (value == null) {
+                batch.delete(columnFamily, key);
+            } else {
+                batch.put(columnFamily, key, value);
             }
         }
 

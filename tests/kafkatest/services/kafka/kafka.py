@@ -387,7 +387,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             output += line
         return output
 
-    def list_topics(self, topic, node=None):
+    def list_topics(self, topic=None, node=None):
         if node is None:
             node = self.nodes[0]
         cmd = "%s --zookeeper %s --list" % \
