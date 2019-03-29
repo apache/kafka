@@ -78,6 +78,21 @@ public class MockSelector implements Selectable {
         }
     }
 
+    @Override
+    public void closeOnGraceful(String id) {
+        // Note that there are no notifications for client-side disconnects
+
+        removeSendsForNode(id, completedSends);
+        removeSendsForNode(id, initiatedSends);
+
+        for (int i = 0; i < this.connected.size(); i++) {
+            if (this.connected.get(i).equals(id)) {
+                this.connected.remove(i);
+                break;
+            }
+        }
+    }
+
     /**
      * Simulate a server disconnect. This id will be present in {@link #disconnected()} on
      * the next {@link #poll(long)}.

@@ -57,6 +57,7 @@ public class NetworkClientTest {
     protected final Node node = TestUtils.singletonCluster().nodes().iterator().next();
     protected final long reconnectBackoffMsTest = 10 * 1000;
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
+    protected final long defaultConnectReadyTimeOutMs = 30 * 10000;
 
     private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
     private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
@@ -65,20 +66,20 @@ public class NetworkClientTest {
 
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
         return new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)), "mock", Integer.MAX_VALUE,
-                reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
+                reconnectBackoffMsTest, reconnectBackoffMaxMs, defaultConnectReadyTimeOutMs, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
         return new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)),
-                "mock-static", Integer.MAX_VALUE, 0, 0, 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
+                "mock-static", Integer.MAX_VALUE, 0, 0, defaultConnectReadyTimeOutMs, 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
         return new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)), "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
-                64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
+                defaultConnectReadyTimeOutMs, 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
     }
 
