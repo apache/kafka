@@ -801,6 +801,14 @@ public class Selector implements Selectable, AutoCloseable {
         }
     }
 
+    @Override
+    public void closeOnGraceful(String id) {
+        KafkaChannel channel = this.channels.get(id);
+        if (channel != null) {
+            close(channel, CloseMode.GRACEFUL);
+        }
+    }
+
     private void maybeDelayCloseOnAuthenticationFailure(KafkaChannel channel) {
         DelayedAuthenticationFailureClose delayedClose = new DelayedAuthenticationFailureClose(channel, failedAuthenticationDelayMs);
         if (delayedClosingChannels != null)

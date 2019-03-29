@@ -59,6 +59,10 @@ public class ProducerConfig extends AbstractConfig {
     public static final String METADATA_MAX_AGE_CONFIG = CommonClientConfigs.METADATA_MAX_AGE_CONFIG;
     private static final String METADATA_MAX_AGE_DOC = CommonClientConfigs.METADATA_MAX_AGE_DOC;
 
+    /** <code>connections.ready.timeout.ms</code> */
+    public static final String DEFAULT_CONNECT_READY_TIMEOUT_MS_CONFIG = CommonClientConfigs.DEFAULT_CONNECT_READY_TIMEOUT_MS_CONFIG;
+    private static final String DEFAULT_CONNECT_READY_TIMEOUT_MS_DOC = CommonClientConfigs.DEFAULT_CONNECT_READY_TIMEOUT_MS_DOC;
+
     /** <code>batch.size</code> */
     public static final String BATCH_SIZE_CONFIG = "batch.size";
     private static final String BATCH_SIZE_DOC = "The producer will attempt to batch records together into fewer requests whenever multiple records are being sent"
@@ -274,12 +278,14 @@ public class ProducerConfig extends AbstractConfig {
                                 .define(RECONNECT_BACKOFF_MS_CONFIG, Type.LONG, 50L, atLeast(0L), Importance.LOW, CommonClientConfigs.RECONNECT_BACKOFF_MS_DOC)
                                 .define(RECONNECT_BACKOFF_MAX_MS_CONFIG, Type.LONG, 1000L, atLeast(0L), Importance.LOW, CommonClientConfigs.RECONNECT_BACKOFF_MAX_MS_DOC)
                                 .define(RETRY_BACKOFF_MS_CONFIG, Type.LONG, 100L, atLeast(0L), Importance.LOW, CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+                                .define(DEFAULT_CONNECT_READY_TIMEOUT_MS_CONFIG, Type.LONG, 30000L, atLeast(0L), Importance.LOW, CommonClientConfigs.DEFAULT_CONNECT_READY_TIMEOUT_MS_DOC)
                                 .define(MAX_BLOCK_MS_CONFIG,
                                         Type.LONG,
                                         60 * 1000,
                                         atLeast(0),
                                         Importance.MEDIUM,
                                         MAX_BLOCK_MS_DOC)
+
                                 .define(REQUEST_TIMEOUT_MS_CONFIG,
                                         Type.INT,
                                         30 * 1000,

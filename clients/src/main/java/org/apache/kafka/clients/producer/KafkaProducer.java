@@ -448,6 +448,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 maxInflightRequests,
                 producerConfig.getLong(ProducerConfig.RECONNECT_BACKOFF_MS_CONFIG),
                 producerConfig.getLong(ProducerConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                producerConfig.getLong(ProducerConfig.DEFAULT_CONNECT_READY_TIMEOUT_MS_CONFIG),
                 producerConfig.getInt(ProducerConfig.SEND_BUFFER_CONFIG),
                 producerConfig.getInt(ProducerConfig.RECEIVE_BUFFER_CONFIG),
                 requestTimeoutMs,

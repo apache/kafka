@@ -20,6 +20,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.net.InetAddress;
@@ -348,6 +349,14 @@ final class ClusterConnectionStates {
         return state;
     }
 
+    public boolean checkReadyTimeOut(String id) {
+        NodeConnectionState nodeConnectionState = nodeState.get(id);
+        if (nodeConnectionState != null && Time.SYSTEM.milliseconds() - nodeConnectionState.lastReadyTime  > 30000) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      * The state of our connection to a node.
      */
@@ -364,7 +373,7 @@ final class ClusterConnectionStates {
         private int addressIndex;
         private final String host;
         private final ClientDnsLookup clientDnsLookup;
-
+        long lastReadyTime;
         private NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs,
                 String host, ClientDnsLookup clientDnsLookup) {
             this.state = state;
@@ -377,6 +386,7 @@ final class ClusterConnectionStates {
             this.throttleUntilTimeMs = 0;
             this.host = host;
             this.clientDnsLookup = clientDnsLookup;
+            this.lastReadyTime = Time.SYSTEM.milliseconds();
         }
 
         public String host() {
@@ -412,7 +422,7 @@ final class ClusterConnectionStates {
         }
 
         public String toString() {
-            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ", " + throttleUntilTimeMs + ")";
+            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ", " + throttleUntilTimeMs + ", " + lastReadyTime + ")";
         }
     }
 }
