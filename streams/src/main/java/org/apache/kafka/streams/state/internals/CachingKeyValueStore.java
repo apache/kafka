@@ -30,10 +30,14 @@ import java.util.Objects;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class CachingKeyValueStore
     extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
     implements KeyValueStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(CachingKeyValueStore.class);
 
     private CacheFlushListener<byte[], byte[]> flushListener;
     private boolean sendOldValues;
@@ -228,6 +232,12 @@ class CachingKeyValueStore
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
+        // Make sure this is a valid query
+        if (from.compareTo(to) > 0) {
+            LOG.debug("Returning empty iterator for range query with invalid range: keyFrom > keyTo.");
+            return KeyValueIterators.emptyIterator();
+        }
+
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().range(from, to);
         final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, from, to);

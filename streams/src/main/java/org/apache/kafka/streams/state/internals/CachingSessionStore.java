@@ -26,10 +26,14 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 
 import java.util.Objects;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 class CachingSessionStore
     extends WrappedStateStore<SessionStore<Bytes, byte[]>, byte[], byte[]>
     implements SessionStore<Bytes, byte[]>, CachedStateStore<byte[], byte[]> {
+
+    private static final Logger LOG = LoggerFactory.getLogger(CachingSessionStore.class);
 
     private final SessionKeySchema keySchema;
     private final SegmentedCacheFunction cacheFunction;
@@ -153,6 +157,12 @@ class CachingSessionStore
                                                                   final Bytes keyTo,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
+        // Make sure this is a valid query
+        if (keyFrom.compareTo(keyTo) > 0) {
+            LOG.debug("Returning empty iterator for findSessions call with invalid range: keyFrom > keyTo.");
+            return KeyValueIterators.emptyIterator();
+        }
+
         validateStoreOpen();
 
         final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
