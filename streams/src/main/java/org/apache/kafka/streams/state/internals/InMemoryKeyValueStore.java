@@ -28,11 +28,15 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Iterator;
 import java.util.Map;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final String name;
     private final ConcurrentNavigableMap<Bytes, byte[]> map;
     private volatile boolean open = false;
+
+    private static final Logger LOG = LoggerFactory.getLogger(InMemoryKeyValueStore.class);
 
     public InMemoryKeyValueStore(final String name) {
         this.name = name;
@@ -111,6 +115,12 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+        // Make sure this is a valid query
+        if (from.compareTo(to) > 0) {
+            LOG.debug("Returning empty iterator for range query with invalid range: keyFrom > keyTo.");
+            return KeyValueIterators.emptyIterator();
+        }
+
         return new DelegatingPeekingKeyValueIterator<>(
             name,
             new InMemoryKeyValueIterator(this.map.subMap(from, true, to, true).entrySet().iterator()));

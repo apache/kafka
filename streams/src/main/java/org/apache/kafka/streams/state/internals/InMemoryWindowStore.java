@@ -185,6 +185,12 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                                                            final long timeTo) {
         removeExpiredSegments();
 
+        // Make sure this is a valid query
+        if (from.compareTo(to) > 0) {
+            LOG.debug("Returning empty iterator for fetch with invalid range: keyFrom > keyTo.");
+            return KeyValueIterators.emptyIterator();
+        }
+
         // add one b/c records expire exactly retentionPeriod ms after created
         final long minTime = Math.max(timeFrom, this.observedStreamTime - this.retentionPeriod + 1);
 
