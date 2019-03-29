@@ -37,15 +37,18 @@ import java.util.Map;
 final class ClusterConnectionStates {
     private final long reconnectBackoffInitMs;
     private final long reconnectBackoffMaxMs;
+    private final long defaultConnectReadyTimeOutMs;
+
     private final static int RECONNECT_BACKOFF_EXP_BASE = 2;
     private final double reconnectBackoffMaxExp;
     private final Map<String, NodeConnectionState> nodeState;
     private final Logger log;
 
-    public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMaxMs, LogContext logContext) {
+    public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMaxMs, long defaultConnectReadyTimeOutMs, LogContext logContext) {
         this.log = logContext.logger(ClusterConnectionStates.class);
         this.reconnectBackoffInitMs = reconnectBackoffMs;
         this.reconnectBackoffMaxMs = reconnectBackoffMaxMs;
+        this.defaultConnectReadyTimeOutMs = defaultConnectReadyTimeOutMs;
         this.reconnectBackoffMaxExp = Math.log(this.reconnectBackoffMaxMs / (double) Math.max(reconnectBackoffMs, 1)) / Math.log(RECONNECT_BACKOFF_EXP_BASE);
         this.nodeState = new HashMap<>();
     }
@@ -351,7 +354,7 @@ final class ClusterConnectionStates {
 
     public boolean checkReadyTimeOut(String id) {
         NodeConnectionState nodeConnectionState = nodeState.get(id);
-        if (nodeConnectionState != null && Time.SYSTEM.milliseconds() - nodeConnectionState.lastReadyTime  > 30000) {
+        if (nodeConnectionState != null && Time.SYSTEM.milliseconds() - nodeConnectionState.lastReadyTime  > defaultConnectReadyTimeOutMs) {
             return true;
         }
         return false;

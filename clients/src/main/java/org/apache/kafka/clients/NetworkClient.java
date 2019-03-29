@@ -261,7 +261,7 @@ public class NetworkClient implements KafkaClient {
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, logContext);
+        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, defaultConnectReadyTimeOutMs, logContext);
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
