@@ -284,8 +284,7 @@ public class Stores {
      *                          and for the entire grace period.
      * @return an instance of a {@link  SessionBytesStoreSupplier}
      */
-    public static SessionBytesStoreSupplier inMemorySessionStore(final String name,
-                                                                   final Duration retentionPeriod) {
+    public static SessionBytesStoreSupplier inMemorySessionStore(final String name, final Duration retentionPeriod) {
         Objects.requireNonNull(name, "name cannot be null");
 
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");

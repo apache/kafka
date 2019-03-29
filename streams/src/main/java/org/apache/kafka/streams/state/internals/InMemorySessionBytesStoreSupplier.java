@@ -45,10 +45,10 @@ public class InMemorySessionBytesStoreSupplier implements SessionBytesStoreSuppl
         return "in-memory-session-state";
     }
 
+    // In-memory store is not *really* segmented, so just say it is 1 (for ordering consistency with caching enabled)
     @Override
     public long segmentIntervalMs() {
-        // Selected somewhat arbitrarily. Profiling may reveal a different value is preferable.
-        return Math.max(retentionPeriod / 2, 60_000L);
+        return 1;
     }
 
     @Override
