@@ -39,7 +39,7 @@ import scala.collection.mutable
 abstract class BaseConsumerTest extends BaseRequestTest {
 
   val epsilon = 0.1
-  override def serverCount: Int = 3
+  override def brokerCount: Int = 3
 
   val topic = "topic"
   val part = 0
@@ -49,7 +49,7 @@ abstract class BaseConsumerTest extends BaseRequestTest {
   val group = "my-test"
   val producerClientId = "ConsumerTestProducer"
   val consumerClientId = "ConsumerTestConsumer"
-  val GroupMaxSessionTimeoutMs = 30000L
+  val groupMaxSessionTimeoutMs = 30000L
 
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
@@ -64,7 +64,7 @@ abstract class BaseConsumerTest extends BaseRequestTest {
     properties.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
     properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
     properties.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100") // set small enough session timeout
-    properties.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, GroupMaxSessionTimeoutMs.toString)
+    properties.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, groupMaxSessionTimeoutMs.toString)
     properties.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "10")
   }
 
@@ -73,7 +73,7 @@ abstract class BaseConsumerTest extends BaseRequestTest {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
-    createTopic(topic, 2, serverCount)
+    createTopic(topic, 2, brokerCount)
   }
 
   @Test
@@ -97,7 +97,7 @@ abstract class BaseConsumerTest extends BaseRequestTest {
   @Test
   def testCoordinatorFailover() {
     val listener = new TestConsumerReassignmentListener()
-    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5000")
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "2000")
     val consumer = createConsumer()
 
@@ -137,10 +137,10 @@ abstract class BaseConsumerTest extends BaseRequestTest {
     }
   }
 
-
   protected def createConsumerWithGroupId(groupId: String): KafkaConsumer[Array[Byte], Array[Byte]] = {
-    consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
-    createConsumer()
+    val groupOverrideConfig = new Properties
+    groupOverrideConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    createConsumer(configOverrides = groupOverrideConfig)
   }
 
   protected def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
@@ -273,7 +273,7 @@ abstract class BaseConsumerTest extends BaseRequestTest {
     * @param consumerPollers current consumer pollers
     * @param topicsToSubscribe topics to which new consumers will subscribe to
     * @param subscriptions set of all topic partitions
-  */
+    */
   def addConsumersToGroup(numOfConsumersToAdd: Int,
                           consumerGroup: mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
                           consumerPollers: mutable.Buffer[ConsumerAssignmentPoller],
@@ -445,7 +445,7 @@ abstract class BaseConsumerTest extends BaseRequestTest {
 
   /**
    * Check whether partition assignment is valid
-   * Assumes partition assignment is valid if
+   * Assumes partition assignment is valid iff
    * 1. Every consumer got assigned at least one partition
    * 2. Each partition is assigned to only one consumer
    * 3. Every partition is assigned to one of the consumers

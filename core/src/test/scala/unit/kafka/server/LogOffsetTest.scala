@@ -38,7 +38,7 @@ class LogOffsetTest extends BaseRequestTest {
 
   private lazy val time = new MockTime
 
-  override def serverCount = 1
+  override def brokerCount = 1
 
   protected override def brokerTime(brokerId: Int) = time
 

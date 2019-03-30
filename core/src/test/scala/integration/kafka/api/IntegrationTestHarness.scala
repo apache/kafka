@@ -38,7 +38,7 @@ import scala.collection.mutable
  * A helper class for writing integration tests that involve producers, consumers, and servers
  */
 abstract class IntegrationTestHarness extends KafkaServerTestHarness {
-  protected def serverCount: Int
+  protected def brokerCount: Int
   protected def logDirCount: Int = 1
 
   val producerConfig = new Properties
@@ -56,7 +56,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
   }
 
   override def generateConfigs: Seq[KafkaConfig] = {
-    val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
+    val cfgs = TestUtils.createBrokerConfigs(brokerCount, zkConnect, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     modifyConfigs(cfgs)
     cfgs.map(KafkaConfig.fromProps)

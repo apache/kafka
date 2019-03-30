@@ -34,7 +34,7 @@ abstract class BaseRequestTest extends IntegrationTestHarness {
   private var correlationId = 0
 
   // If required, set number of brokers
-  override def serverCount: Int = 3
+  override def brokerCount: Int = 3
 
   // If required, override properties by mutating the passed Properties object
   protected def brokerPropertyOverrides(properties: Properties) {}
