@@ -18,13 +18,10 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
-import org.apache.kafka.common.message.JoinGroupRequestData;
-import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
-import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -45,6 +42,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
+import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolSet;
+import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
+import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COOPERATIVE;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
@@ -166,30 +166,30 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    public JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
+    public JoinGroupRequestProtocolCollection metadata() {
         configSnapshot = configStorage.snapshot();
         ExtendedWorkerState workerState = new ExtendedWorkerState(restUrl, configSnapshot.offset(), assignmentSnapshot);
         ByteBuffer metadata;
         switch (protocolCompatibility) {
             case EAGER:
                 metadata = ConnectProtocol.serializeMetadata(workerState);
-                return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(Collections.singleton(
-                        new JoinGroupRequestData.JoinGroupRequestProtocol()
+                return new JoinGroupRequestProtocolCollection(Collections.singleton(
+                        new JoinGroupRequestProtocol()
                                 .setName(protocolCompatibility.protocol())
                                 .setMetadata(metadata.array()))
                         .iterator());
             case COMPATIBLE:
-                return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(Arrays.asList(
-                        new JoinGroupRequestData.JoinGroupRequestProtocol()
+                return new JoinGroupRequestProtocolCollection(Arrays.asList(
+                        new JoinGroupRequestProtocol()
                                 .setName(protocolCompatibility.protocol())
                                 .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(workerState).array()),
-                        new JoinGroupRequestData.JoinGroupRequestProtocol()
+                        new JoinGroupRequestProtocol()
                                 .setName(protocolCompatibility.protocol())
                                 .setMetadata(ConnectProtocol.serializeMetadata(workerState).array()))
                         .iterator());
             case COOPERATIVE:
-                return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(Collections.singleton(
-                        new JoinGroupRequestData.JoinGroupRequestProtocol()
+                return new JoinGroupRequestProtocolCollection(Collections.singleton(
+                        new JoinGroupRequestProtocol()
                                 .setName(protocolCompatibility.protocol())
                                 .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(workerState).array()))
                         .iterator());
@@ -227,7 +227,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata) {
+    protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<JoinGroupResponseMember> allMemberMetadata) {
         return currentConnectProtocol == CONNECT_PROTOCOL_V0
                ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
                : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);

@@ -29,6 +29,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedWorkerState;
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.LeaderState;
@@ -49,12 +50,12 @@ public class EagerAssignor implements ConnectAssignor {
 
     @Override
     public Map<String, ByteBuffer> performAssignment(String leaderId, String protocol,
-                                                     Map<String, ByteBuffer> allMemberMetadata,
+                                                     List<JoinGroupResponseMember> allMemberMetadata,
                                                      WorkerCoordinator coordinator) {
         log.debug("Performing task assignment");
         Map<String, ExtendedWorkerState> memberConfigs = new HashMap<>();
-        for (Map.Entry<String, ByteBuffer> entry : allMemberMetadata.entrySet())
-            memberConfigs.put(entry.getKey(), IncrementalCooperativeConnectProtocol.deserializeMetadata(entry.getValue()));
+        for (JoinGroupResponseMember member : allMemberMetadata)
+            memberConfigs.put(member.memberId(), IncrementalCooperativeConnectProtocol.deserializeMetadata(ByteBuffer.wrap(member.metadata())));
 
         long maxOffset = findMaxMemberConfigOffset(memberConfigs, coordinator);
         Long leaderOffset = ensureLeaderConfig(maxOffset, coordinator);
