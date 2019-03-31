@@ -227,9 +227,7 @@ public class KStreamSerDesIntegrationTest {
     }
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldSendCorrectResults_NO_OPTIMIZATION() throws Exception {
-        final String optimizationConfig = StreamsConfig.NO_OPTIMIZATION;
-        final int expectedNumberRepartitionTopics = 1;
+    public void shouldInitializeForMaterialized() throws Exception {
         final Initializer<Integer> initializer = () -> 0;
         final Aggregator<String, String, Integer> aggregator = (k, v, agg) -> agg + v.length();
 
@@ -257,87 +255,8 @@ public class KStreamSerDesIntegrationTest {
                 Materialized.with(keyTestSerde, valueTestSerde))
                 .toStream().to(AGGREGATION_TOPIC, Produced.with(Serdes.String(), Serdes.Integer()));
 
-        // adding operators for case where the repartition node is further downstream
-        mappedStream.filter((k, v) -> true).peek((k, v) -> System.out.println(k + ":" + v)).groupByKey()
-                .reduce(reducer, Materialized.with(Serdes.String(), Serdes.String()))
-                .toStream().to(REDUCE_TOPIC, Produced.with(Serdes.String(), Serdes.String()));
-
-        mappedStream.filter((k, v) -> k.equals("A"))
-                .join(countStream, (v1, v2) -> v1 + ":" + v2.toString(),
-                        JoinWindows.of(ofMillis(5000)),
-                        Joined.with(Serdes.String(), Serdes.String(), Serdes.Long()))
-                .to(JOINED_TOPIC);
-        streamsConfiguration.setProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION, optimizationConfig);
-
-        final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), StringSerializer.class, StringSerializer.class);
-
         assertTrue(keyTestSerde.configured());
         assertTrue(valueTestSerde.configured());
-    }
-
-    @Test
-    @SuppressWarnings("unchecked")
-    public void shouldReduce() throws Exception {
-        produceMessages(System.currentTimeMillis());
-        final MyStringSerde keyTestSerde = new MyStringSerde();
-        final MyStringSerde valueTestSerde = new MyStringSerde();
-        groupedStream
-                .reduce(reducer, Materialized.as("reduce-by-key"))
-                .toStream()
-                .to(outputTopic, Produced.with(keyTestSerde, valueTestSerde));
-
-        startStreams();
-
-        produceMessages(System.currentTimeMillis());
-
-        assertTrue(keyTestSerde.configured());
-        assertTrue(valueTestSerde.configured());
-        validateReceivedMessages(
-                new StringDeserializer(),
-                new StringDeserializer(),
-                Arrays.asList(
-                        KeyValue.pair("A", "A:A"),
-                        KeyValue.pair("B", "B:B"),
-                        KeyValue.pair("C", "C:C"),
-                        KeyValue.pair("D", "D:D"),
-                        KeyValue.pair("E", "E:E")));
-    }
-
-    @Test
-    public void shouldReduceWindowed() throws Exception {
-        final long firstBatchTimestamp = System.currentTimeMillis() - 1000;
-        produceMessages(firstBatchTimestamp);
-        final long secondBatchTimestamp = System.currentTimeMillis();
-        produceMessages(secondBatchTimestamp);
-        produceMessages(secondBatchTimestamp);
-
-        groupedStream
-            .windowedBy(TimeWindows.of(ofMillis(500L)))
-            .reduce(reducer, Materialized.as("reduce-time-windows"))
-            .toStream((windowedKey, value) -> windowedKey.key() + "@" + windowedKey.window().start())
-            .to(outputTopic, Produced.with(Serdes.String(), Serdes.String()));
-
-        startStreams();
-
-        final long firstBatchWindow = firstBatchTimestamp / 500 * 500;
-        final long secondBatchWindow = secondBatchTimestamp / 500 * 500;
-
-        validateReceivedMessages(
-                new StringDeserializer(),
-                new StringDeserializer(),
-                Arrays.asList(
-                        new KeyValue<>("A@" + firstBatchWindow, "A"),
-                        new KeyValue<>("A@" + secondBatchWindow, "A:A"),
-                        new KeyValue<>("B@" + firstBatchWindow, "B"),
-                        new KeyValue<>("B@" + secondBatchWindow, "B:B"),
-                        new KeyValue<>("C@" + firstBatchWindow, "C"),
-                        new KeyValue<>("C@" + secondBatchWindow, "C:C"),
-                        new KeyValue<>("D@" + firstBatchWindow, "D"),
-                        new KeyValue<>("D@" + secondBatchWindow, "D:D"),
-                        new KeyValue<>("E@" + firstBatchWindow, "E"),
-                        new KeyValue<>("E@" + secondBatchWindow, "E:E")
-                )
-        );
     }
 
     static class MyIntSerializer extends IntegerSerializer {
@@ -402,37 +321,30 @@ public class KStreamSerDesIntegrationTest {
 
     @Test
     @SuppressWarnings("unchecked")
-    public void shouldGroupByKey() throws Exception {
+    public void shouldInitializeForProducedGrouped() throws Exception {
         final long timestamp = mockTime.milliseconds();
         produceMessages(timestamp);
         produceMessages(timestamp);
 
-        final MyIntegerSerde keyTestSerde = new MyIntegerSerde();
-        final MyStringSerde valueTestSerde = new MyStringSerde();
-        stream.groupByKey(Grouped.with(keyTestSerde, valueTestSerde))
+        final MyIntegerSerde keySerdeGrouped = new MyIntegerSerde();
+        final MyStringSerde valueSerdeGrouped = new MyStringSerde();
+        final MyStringSerde keySerdeProduced = new MyStringSerde();
+        final MyIntegerSerde valueSerdeProduced = new MyIntegerSerde();
+
+        stream.groupByKey(Grouped.with(keySerdeGrouped, valueSerdeGrouped))
             .windowedBy(TimeWindows.of(ofMillis(500L)))
             .count(Materialized.as("count-windows"))
             .toStream((windowedKey, value) -> ((Windowed<Integer>) windowedKey).key() + "@" +
                     ((Windowed<Integer>) windowedKey).window().start())
-            .to(outputTopic, Produced.with(Serdes.String(), Serdes.Long()));
+            .to(outputTopic, Produced.with(keySerdeProduced, valueSerdeProduced));
 
         startStreams();
 
-        final long window = timestamp / 500 * 500;
+        assertTrue(keySerdeGrouped.configured());
+        assertTrue(valueSerdeGrouped.configured());
 
-        validateReceivedMessages(
-                new StringDeserializer(),
-                new LongDeserializer(),
-                Arrays.asList(
-                        KeyValue.pair("1@" + window, 2L),
-                        KeyValue.pair("2@" + window, 2L),
-                        KeyValue.pair("3@" + window, 2L),
-                        KeyValue.pair("4@" + window, 2L),
-                        KeyValue.pair("5@" + window, 2L)
-                )
-        );
-        assertTrue(keyTestSerde.configured());
-        assertTrue(valueTestSerde.configured());
+        assertTrue(keySerdeProduced.configured());
+        assertTrue(valueSerdeProduced.configured());
     }
 
 
@@ -465,27 +377,4 @@ public class KStreamSerDesIntegrationTest {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration);
         kafkaStreams.start();
     }
-
-
-    private <K, V> void validateReceivedMessages(final Deserializer<K> keyDeserializer,
-                                                 final Deserializer<V> valueDeserializer,
-                                                 final List<KeyValue<K, V>> expectedRecords)
-        throws InterruptedException {
-        final Properties consumerProperties = new Properties();
-        consumerProperties
-            .setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kgroupedstream-test-" +
-            testNo);
-        consumerProperties.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        consumerProperties.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG,
-            keyDeserializer.getClass().getName());
-        consumerProperties.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG,
-            valueDeserializer.getClass().getName());
-
-        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(
-            consumerProperties,
-            outputTopic,
-            expectedRecords);
-    }
-
 }
