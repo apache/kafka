@@ -47,9 +47,9 @@ import static org.junit.Assert.assertNull;
 
 @SuppressWarnings("unchecked")
 public class KTableFilterTest {
-
     private final Consumed<String, Integer> consumed = Consumed.with(Serdes.String(), Serdes.Integer());
-    private final ConsumerRecordFactory<String, Integer> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new IntegerSerializer());
+    private final ConsumerRecordFactory<String, Integer> recordFactory =
+        new ConsumerRecordFactory<>(new StringSerializer(), new IntegerSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.Integer());
 
     @Before
@@ -79,14 +79,13 @@ public class KTableFilterTest {
 
         final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-        processors.get(0).checkAndClearProcessResult("A:null", "B:2", "C:null", "D:4", "A:null", "B:null");
-        processors.get(1).checkAndClearProcessResult("A:1", "B:null", "C:3", "D:null", "A:null", "B:null");
+        processors.get(0).checkAndClearProcessResult("A:null (ts: 0)", "B:2 (ts: 0)", "C:null (ts: 0)", "D:4 (ts: 0)", "A:null (ts: 0)", "B:null (ts: 0)");
+        processors.get(1).checkAndClearProcessResult("A:1 (ts: 0)", "B:null (ts: 0)", "C:3 (ts: 0)", "D:null (ts: 0)", "A:null (ts: 0)", "B:null (ts: 0)");
     }
 
     @Test
     public void shouldPassThroughWithoutMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String topic1 = "topic1";
 
         final KTable<String, Integer> table1 = builder.table(topic1, consumed);
@@ -103,7 +102,6 @@ public class KTableFilterTest {
     @Test
     public void shouldPassThroughOnMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String topic1 = "topic1";
 
         final KTable<String, Integer> table1 = builder.table(topic1, consumed);
@@ -132,7 +130,6 @@ public class KTableFilterTest {
         topologyBuilder.connectProcessorAndStateStores(table3.name, getterSupplier3.storeNames());
 
         try (final TopologyTestDriverWrapper driver = new TopologyTestDriverWrapper(topology, props)) {
-
             final KTableValueGetter<String, Integer> getter2 = getterSupplier2.get();
             final KTableValueGetter<String, Integer> getter3 = getterSupplier3.get();
 
@@ -188,7 +185,6 @@ public class KTableFilterTest {
     @Test
     public void shouldGetValuesOnMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String topic1 = "topic1";
 
         final KTableImpl<String, Integer, Integer> table1 =
@@ -225,25 +221,25 @@ public class KTableFilterTest {
 
             final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-            processors.get(0).checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
-            processors.get(1).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)", "C:(null<-null)");
+            processors.get(0).checkAndClearProcessResult("A:(1<-null) (ts: 0)", "B:(1<-null) (ts: 0)", "C:(1<-null) (ts: 0)");
+            processors.get(1).checkAndClearProcessResult("A:(null<-null) (ts: 0)", "B:(null<-null) (ts: 0)", "C:(null<-null) (ts: 0)");
 
             driver.pipeInput(recordFactory.create(topic1, "A", 2));
             driver.pipeInput(recordFactory.create(topic1, "B", 2));
 
-            processors.get(0).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
-            processors.get(1).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+            processors.get(0).checkAndClearProcessResult("A:(2<-null) (ts: 0)", "B:(2<-null) (ts: 0)");
+            processors.get(1).checkAndClearProcessResult("A:(2<-null) (ts: 0)", "B:(2<-null) (ts: 0)");
 
             driver.pipeInput(recordFactory.create(topic1, "A", 3));
 
-            processors.get(0).checkAndClearProcessResult("A:(3<-null)");
-            processors.get(1).checkAndClearProcessResult("A:(null<-null)");
+            processors.get(0).checkAndClearProcessResult("A:(3<-null) (ts: 0)");
+            processors.get(1).checkAndClearProcessResult("A:(null<-null) (ts: 0)");
 
             driver.pipeInput(recordFactory.create(topic1, "A", null));
             driver.pipeInput(recordFactory.create(topic1, "B", null));
 
-            processors.get(0).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
-            processors.get(1).checkAndClearProcessResult("A:(null<-null)", "B:(null<-null)");
+            processors.get(0).checkAndClearProcessResult("A:(null<-null) (ts: 0)", "B:(null<-null) (ts: 0)");
+            processors.get(1).checkAndClearProcessResult("A:(null<-null) (ts: 0)", "B:(null<-null) (ts: 0)");
         }
     }
 
@@ -251,7 +247,6 @@ public class KTableFilterTest {
     @Test
     public void shouldNotSendOldValuesWithoutMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String topic1 = "topic1";
 
         final KTableImpl<String, Integer, Integer> table1 =
@@ -264,7 +259,6 @@ public class KTableFilterTest {
     @Test
     public void shouldNotSendOldValuesOnMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String topic1 = "topic1";
 
         final KTableImpl<String, Integer, Integer> table1 =
@@ -288,39 +282,37 @@ public class KTableFilterTest {
         topology.addProcessor("proc2", supplier, table2.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
-
             driver.pipeInput(recordFactory.create(topic1, "A", 1));
             driver.pipeInput(recordFactory.create(topic1, "B", 1));
             driver.pipeInput(recordFactory.create(topic1, "C", 1));
 
             final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-            processors.get(0).checkAndClearProcessResult("A:(1<-null)", "B:(1<-null)", "C:(1<-null)");
+            processors.get(0).checkAndClearProcessResult("A:(1<-null) (ts: 0)", "B:(1<-null) (ts: 0)", "C:(1<-null) (ts: 0)");
             processors.get(1).checkEmptyAndClearProcessResult();
 
             driver.pipeInput(recordFactory.create(topic1, "A", 2));
             driver.pipeInput(recordFactory.create(topic1, "B", 2));
 
-            processors.get(0).checkAndClearProcessResult("A:(2<-1)", "B:(2<-1)");
-            processors.get(1).checkAndClearProcessResult("A:(2<-null)", "B:(2<-null)");
+            processors.get(0).checkAndClearProcessResult("A:(2<-1) (ts: 0)", "B:(2<-1) (ts: 0)");
+            processors.get(1).checkAndClearProcessResult("A:(2<-null) (ts: 0)", "B:(2<-null) (ts: 0)");
 
             driver.pipeInput(recordFactory.create(topic1, "A", 3));
 
-            processors.get(0).checkAndClearProcessResult("A:(3<-2)");
-            processors.get(1).checkAndClearProcessResult("A:(null<-2)");
+            processors.get(0).checkAndClearProcessResult("A:(3<-2) (ts: 0)");
+            processors.get(1).checkAndClearProcessResult("A:(null<-2) (ts: 0)");
 
             driver.pipeInput(recordFactory.create(topic1, "A", null));
             driver.pipeInput(recordFactory.create(topic1, "B", null));
 
-            processors.get(0).checkAndClearProcessResult("A:(null<-3)", "B:(null<-2)");
-            processors.get(1).checkAndClearProcessResult("B:(null<-2)");
+            processors.get(0).checkAndClearProcessResult("A:(null<-3) (ts: 0)", "B:(null<-2) (ts: 0)");
+            processors.get(1).checkAndClearProcessResult("B:(null<-2) (ts: 0)");
         }
     }
 
     @Test
     public void shouldSendOldValuesWhenEnabledWithoutMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String topic1 = "topic1";
 
         final KTableImpl<String, Integer, Integer> table1 =
@@ -334,7 +326,6 @@ public class KTableFilterTest {
     @Test
     public void shouldSendOldValuesWhenEnabledOnMaterialization() {
         final StreamsBuilder builder = new StreamsBuilder();
-
         final String topic1 = "topic1";
 
         final KTableImpl<String, Integer, Integer> table1 =
@@ -355,7 +346,8 @@ public class KTableFilterTest {
         topology.addProcessor("proc1", supplier, table1.name);
         topology.addProcessor("proc2", supplier, table2.name);
 
-        final ConsumerRecordFactory<String, String> stringRecordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        final ConsumerRecordFactory<String, String> stringRecordFactory =
+            new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
 
             driver.pipeInput(stringRecordFactory.create(topic1, "A", "reject"));
@@ -364,7 +356,7 @@ public class KTableFilterTest {
         }
 
         final List<MockProcessor<String, String>> processors = supplier.capturedProcessors(2);
-        processors.get(0).checkAndClearProcessResult("A:(reject<-null)", "B:(reject<-null)", "C:(reject<-null)");
+        processors.get(0).checkAndClearProcessResult("A:(reject<-null) (ts: 0)", "B:(reject<-null) (ts: 0)", "C:(reject<-null) (ts: 0)");
         processors.get(1).checkEmptyAndClearProcessResult();
     }
 

@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
@@ -84,7 +85,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         final StateStore global = stateManager.getGlobalStore(name);
         if (global != null) {
-            if (global instanceof KeyValueStore) {
+            if (global instanceof TimestampedKeyValueStore) {
+                return new TimestampedKeyValueStoreReadOnlyDecorator((TimestampedKeyValueStore) global);
+            } else if (global instanceof KeyValueStore) {
                 return new KeyValueStoreReadOnlyDecorator((KeyValueStore) global);
             } else if (global instanceof TimestampedWindowStore) {
                 return new TimestampedWindowStoreReadOnlyDecorator((TimestampedWindowStore) global);
@@ -108,7 +111,9 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         final StateStore store = stateManager.getStore(name);
-        if (store instanceof KeyValueStore) {
+        if (store instanceof TimestampedKeyValueStore) {
+            return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store);
+        } else if (store instanceof KeyValueStore) {
             return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
         } else if (store instanceof TimestampedWindowStore) {
             return new TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store);
@@ -291,6 +296,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public V delete(final K key) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+    }
+
+    private static class TimestampedKeyValueStoreReadOnlyDecorator<K, V>
+        extends KeyValueStoreReadOnlyDecorator<K, ValueAndTimestamp<V>>
+        implements TimestampedKeyValueStore<K, V> {
+
+        private TimestampedKeyValueStoreReadOnlyDecorator(final TimestampedKeyValueStore<K, V> inner) {
+            super(inner);
         }
     }
 
@@ -481,6 +495,15 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public V delete(final K key) {
             return wrapped().delete(key);
+        }
+    }
+
+    private static class TimestampedKeyValueStoreReadWriteDecorator<K, V>
+        extends KeyValueStoreReadWriteDecorator<K, ValueAndTimestamp<V>>
+        implements TimestampedKeyValueStore<K, V> {
+
+        private TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner) {
+            super(inner);
         }
     }
 

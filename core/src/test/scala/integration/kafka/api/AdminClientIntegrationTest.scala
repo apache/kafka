@@ -16,10 +16,10 @@
  */
 package kafka.api
 
-import java.util
+import java.{time, util}
 import java.util.{Collections, Properties}
 import java.util.Arrays.asList
-import java.util.concurrent.{ExecutionException, TimeUnit}
+import java.util.concurrent.{CountDownLatch, ExecutionException, TimeUnit}
 import java.io.File
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 
@@ -52,6 +52,7 @@ import kafka.zk.KafkaZkClient
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import java.lang.{Long => JLong}
+import java.time.{Duration => JDuration}
 
 import kafka.security.auth.{Cluster, Group, Topic}
 
@@ -1066,11 +1067,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val topics = Seq("mytopic", "mytopic2")
     val newTopics = topics.map(new NewTopic(_, 1, 1))
     val future = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
-    client.close(2, TimeUnit.HOURS)
+    client.close(time.Duration.ofHours(2))
     val future2 = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
     assertFutureExceptionTypeEquals(future2, classOf[TimeoutException])
     future.get
-    client.close(30, TimeUnit.MINUTES) // multiple close-with-timeout should have no effect
+    client.close(time.Duration.ofMinutes(30)) // multiple close-with-timeout should have no effect
   }
 
   /**
@@ -1086,7 +1087,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     // cancelled by the close operation.
     val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
       new CreateTopicsOptions().timeoutMs(900000)).all()
-    client.close(0, TimeUnit.MILLISECONDS)
+    client.close(time.Duration.ZERO)
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
   }
 
@@ -1158,19 +1159,28 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
       val consumer = createConsumer(configOverrides = newConsumerConfig)
+      val latch = new CountDownLatch(1)
       try {
         // Start a consumer in a thread that will subscribe to a new group.
         val consumerThread = new Thread {
           override def run {
             consumer.subscribe(Collections.singleton(testTopicName))
-            while (true) {
-              consumer.poll(5000)
-              consumer.commitSync()
+
+            try {
+              while (true) {
+                consumer.poll(JDuration.ofSeconds(5))
+                if (!consumer.assignment.isEmpty && latch.getCount > 0L)
+                  latch.countDown()
+                consumer.commitSync()
+              }
+            } catch {
+              case _: InterruptException => // Suppress the output to stderr
             }
           }
         }
         try {
           consumerThread.start
+          assertTrue(latch.await(30000, TimeUnit.MILLISECONDS))
           // Test that we can list the new group.
           TestUtils.waitUntilTrue(() => {
             val matching = client.listConsumerGroups.all.get().asScala.filter(_.groupId == testGroupId)

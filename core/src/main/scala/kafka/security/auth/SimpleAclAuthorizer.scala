@@ -98,7 +98,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     val time = Time.SYSTEM
     zkClient = KafkaZkClient(zkUrl, kafkaConfig.zkEnableSecureAcls, zkSessionTimeOutMs, zkConnectionTimeoutMs,
-      zkMaxInFlightRequests, time, "kafka.security", "SimpleAclAuthorizer")
+      zkMaxInFlightRequests, time, "kafka.security", "SimpleAclAuthorizer", name=Some("Simple ACL authorizer"))
     zkClient.createAclPaths()
 
     extendedAclSupport = kafkaConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1

@@ -105,6 +105,7 @@ Trogdor can run several workloads.  Workloads perform operations on the cluster 
 
 ### ProduceBench
 ProduceBench starts a Kafka producer on a single agent node, producing to several partitions.  The workload measures the average produce latency, as well as the median, 95th percentile, and 99th percentile latency.
+It can be configured to use a transactional producer which can commit transactions based on a set time interval or number of messages.
 
 ### RoundTripWorkload
 RoundTripWorkload tests both production and consumption.  The workload starts a Kafka producer and consumer on a single node.  The consumer will read back the messages that were produced by the producer.
