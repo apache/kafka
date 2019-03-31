@@ -128,6 +128,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     }
     private MyLongSerde longSerde = new MyLongSerde<>();
     private KStreamSerDesIntegrationTest.MyStringSerde stringSerde = new KStreamSerDesIntegrationTest.MyStringSerde();
+    @SuppressWarnings("unchecked")
     private Materialized<Long, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(storeName)
             .withKeySerde(longSerde)
             .withValueSerde(stringSerde)
