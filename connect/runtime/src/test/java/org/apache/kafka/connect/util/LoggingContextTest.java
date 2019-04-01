@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.util;
 
-import org.apache.kafka.connect.util.LoggingContext.Parameters;
 import org.apache.kafka.connect.util.LoggingContext.Scope;
 import org.junit.After;
 import org.junit.Before;
@@ -29,6 +28,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNull;
 
 public class LoggingContextTest {
 
@@ -153,9 +153,25 @@ public class LoggingContextTest {
     }
 
     protected void assertMdc(String connectorName, Integer taskId, Scope scope) {
-        assertEquals(connectorName, MDC.get(Parameters.CONNECTOR_NAME));
-        assertEquals(taskId == null ? null : Integer.toString(taskId), MDC.get(Parameters.CONNECTOR_TASK));
-        assertEquals(scope == null ? null : scope.toString(), MDC.get(Parameters.CONNECTOR_SCOPE));
+        String context = MDC.get(LoggingContext.CONNECTOR_CONTEXT);
+        if (context != null) {
+            assertEquals(
+                connectorName != null,
+                connectorName != null ? context.startsWith("[" + connectorName) : false
+            );
+            assertEquals(
+                scope != null,
+                scope != null ? context.contains(scope.toString()) : false
+            );
+            assertEquals(
+                taskId != null,
+                taskId != null ? context.contains(taskId.toString()) : false
+            );
+        } else {
+            assertNull("No logging context found, but expected it includes name of connector", connectorName);
+            assertNull("No logging context found, but expected it includes task ID", taskId);
+            assertNull("No logging context found, but expected it includes scope", scope);
+        }
     }
 
     protected void assertMdcExtrasUntouched() {

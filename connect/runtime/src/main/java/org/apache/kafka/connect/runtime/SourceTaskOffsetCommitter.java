@@ -107,7 +107,7 @@ class SourceTaskOffsetCommitter {
 
     private void commit(WorkerSourceTask workerTask) {
         log.debug("{} Committing offsets", workerTask);
-        try (LoggingContext loggingContext = LoggingContext.forOffsets(workerTask.id)) {
+        try {
             if (workerTask.commitOffsets()) {
                 return;
             }

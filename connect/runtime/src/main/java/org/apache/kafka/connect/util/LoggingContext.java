@@ -19,55 +19,57 @@ package org.apache.kafka.connect.util;
 import org.slf4j.MDC;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * A utility for defining Mapped Diagnostic Context (MDC) for SLF4J logs.
  *
- * <p>{@link LoggingContext} instances should be created in a try-with-resources block to ensure that the logging context is properly
- * closed. The only exception is the logging context created upon thread creation that is to be used for the entire lifetime of the thread.
+ * <p>{@link LoggingContext} instances should be created in a try-with-resources block to ensure
+ * that the logging context is properly closed. The only exception is the logging context created
+ * upon thread creation that is to be used for the entire lifetime of the thread.
+ *
+ * <p>Any logger created on the thread will inherit the MDC context, so this mechanism is ideal for
+ * providing additional information in the log messages without requiring connector
+ * implementations to use a specific Connect API or SLF4J API. {@link LoggingContext#close()}
+ * will also properly restore the MDC context to its state prior when the LoggingContext was
+ * created. Again, this is ideal since Connect threads will be calling connector-specific code,
+ * which might improperly set but not clear MDC context parameters.
+ *
+ * <p>Compare this approach to {@link org.apache.kafka.common.utils.LogContext}, which must be
+ * used to create a new {@link org.slf4j.Logger} instance pre-configured with the desired prefix.
+ * Currently LogContext does not allow the prefix to be changed, and it requires that all
+ * components use the LogContext to create their Logger instance.
  */
 public final class LoggingContext implements AutoCloseable {
 
     /**
-     * The parameter keys used by Connect.
+     * The name of the Mapped Diagnostic Context (MDC) key that defines the context for a connector.
      */
-    public static final class Parameters {
-
-        /**
-         * The name of the Mapped Diagnostic Context (MDC) key that defines the name of a <i>connector</i>.
-         */
-        public static final String CONNECTOR_NAME = "connector.name";
-
-        /**
-         * The name of the Mapped Diagnostic Context (MDC) key that defines the task number of a <i>connector</i>.
-         */
-        public static final String CONNECTOR_TASK = "connector.task";
-
-        /**
-         * The name of the Mapped Diagnostic Context (MDC) key that defines a <i>scope</i> within a connector.
-         */
-        public static final String CONNECTOR_SCOPE = "connector.scope";
-    }
+    public static final String CONNECTOR_CONTEXT = "connector.context";
 
     /**
-     * The {@link Parameters#CONNECTOR_SCOPE scope} values used by Connect.
+     * The Scope values used by Connect when specifying the context.
      */
     public enum Scope {
         /**
-         * The {@link Parameters#CONNECTOR_SCOPE scope} value for the worker as it starts a connector.
+         * The scope value for the worker as it starts a connector.
          */
         WORKER("worker"),
 
         /**
-         * The {@link Parameters#CONNECTOR_SCOPE scope} value for {@link org.apache.kafka.connect.connector.Task}
-         * implementations.
+         * The scope value for Task implementations.
          */
         TASK("task"),
 
         /**
-         * The {@link Parameters#CONNECTOR_SCOPE scope} value for committing offsets.
+         * The scope value for committing offsets.
          */
-        OFFSETS("offsets");
+        OFFSETS("offsets"),
+
+        /**
+         * The scope value for validating connector configurations.
+         */
+        VALIDATE("validate");
 
         private final String text;
         Scope(String value) {
@@ -81,46 +83,71 @@ public final class LoggingContext implements AutoCloseable {
     }
 
     /**
-     * Modify the current {@link MDC} logging context to set the {@link Parameters#CONNECTOR_NAME connector name} to the
-     * supplied name and the {@link Parameters#CONNECTOR_SCOPE scope} to {@link Scope#WORKER}.
+     * Modify the current {@link MDC} logging context to set the {@link #CONNECTOR_CONTEXT connector context} to include the
+     * supplied name and the {@link Scope#WORKER} scope.
      *
      * @param connectorName the connector name; may not be null
      */
     public static LoggingContext forConnector(String connectorName) {
+        Objects.requireNonNull(connectorName);
         LoggingContext context = new LoggingContext();
-        MDC.put(Parameters.CONNECTOR_NAME, connectorName);
-        MDC.remove(Parameters.CONNECTOR_TASK);
-        MDC.put(Parameters.CONNECTOR_SCOPE, Scope.WORKER.toString());
+        MDC.put(CONNECTOR_CONTEXT, prefixFor(connectorName, Scope.WORKER, null));
         return context;
     }
 
     /**
-     * Modify the current {@link MDC} logging context to set the {@link Parameters#CONNECTOR_NAME connector name} and
-     * {@link Parameters#CONNECTOR_TASK task number} to the same values in the supplied {@link ConnectorTaskId}.
+     * Modify the current {@link MDC} logging context to set the {@link #CONNECTOR_CONTEXT connector context} to include the
+     * supplied connector name and the {@link Scope#VALIDATE} scope.
+     *
+     * @param connectorName the connector name
+     */
+    public static LoggingContext forValidation(String connectorName) {
+        LoggingContext context = new LoggingContext();
+        MDC.put(CONNECTOR_CONTEXT, prefixFor(connectorName, Scope.VALIDATE, null));
+        return context;
+    }
+
+    /**
+     * Modify the current {@link MDC} logging context to set the {@link #CONNECTOR_CONTEXT connector context} to include the
+     * connector name and task number using the supplied {@link ConnectorTaskId}, and to set the scope to {@link Scope#TASK}.
      *
      * @param id the connector task ID; may not be null
      */
     public static LoggingContext forTask(ConnectorTaskId id) {
+        Objects.requireNonNull(id);
         LoggingContext context = new LoggingContext();
-        MDC.put(Parameters.CONNECTOR_NAME, id.connector());
-        MDC.put(Parameters.CONNECTOR_TASK, Integer.toString(id.task()));
-        MDC.put(Parameters.CONNECTOR_SCOPE, Scope.TASK.toString());
+        MDC.put(CONNECTOR_CONTEXT, prefixFor(id.connector(), Scope.TASK, id.task()));
         return context;
     }
 
     /**
-     * Modify the current {@link MDC} logging context to set the  {@link Parameters#CONNECTOR_NAME connector name},
-     * {@link Parameters#CONNECTOR_TASK task number} and to the same values in the supplied {@link ConnectorTaskId}, and to set
-     * the scope to {@link Scope#OFFSETS}.
+     * Modify the current {@link MDC} logging context to set the {@link #CONNECTOR_CONTEXT connector context} to include the
+     * connector name and task number using the supplied {@link ConnectorTaskId}, and to set the scope to {@link Scope#OFFSETS}.
      *
      * @param id the connector task ID; may not be null
      */
     public static LoggingContext forOffsets(ConnectorTaskId id) {
+        Objects.requireNonNull(id);
         LoggingContext context = new LoggingContext();
-        MDC.put(Parameters.CONNECTOR_NAME, id.connector());
-        MDC.put(Parameters.CONNECTOR_TASK, Integer.toString(id.task()));
-        MDC.put(Parameters.CONNECTOR_SCOPE, Scope.OFFSETS.toString());
+        MDC.put(CONNECTOR_CONTEXT, prefixFor(id.connector(), Scope.OFFSETS, id.task()));
         return context;
+    }
+
+    protected static String prefixFor(String connectorName, Scope scope, Integer taskNumber) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("[");
+        sb.append(connectorName);
+        if (taskNumber != null) {
+            sb.append("|");
+            sb.append(Scope.TASK.toString());
+            sb.append(taskNumber.toString());
+        }
+        if (scope != Scope.TASK) {
+            sb.append("|");
+            sb.append(scope.toString());
+        }
+        sb.append("] ");
+        return sb.toString();
     }
 
     private final Map<String, String> previous;
