@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.MetadataRequestData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.junit.Test;
 
 import java.util.Collections;
@@ -47,4 +48,21 @@ public class MetadataRequestTest {
         }
     }
 
+    @Test
+    public void testMetadataRequestVersion() {
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(Collections.singletonList("topic"), false);
+        assertEquals(ApiKeys.METADATA.oldestVersion(), builder.oldestAllowedVersion());
+        assertEquals(ApiKeys.METADATA.latestVersion(), builder.latestAllowedVersion());
+
+        short version = 5;
+        MetadataRequest.Builder builder2 = new MetadataRequest.Builder(Collections.singletonList("topic"), false, version);
+        assertEquals(version, builder2.oldestAllowedVersion());
+        assertEquals(version, builder2.latestAllowedVersion());
+
+        short minVersion = 1;
+        short maxVersion = 6;
+        MetadataRequest.Builder builder3 = new MetadataRequest.Builder(Collections.singletonList("topic"), false, minVersion, maxVersion);
+        assertEquals(minVersion, builder3.oldestAllowedVersion());
+        assertEquals(maxVersion, builder3.latestAllowedVersion());
+    }
 }

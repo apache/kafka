@@ -19,6 +19,7 @@
  */
 package org.apache.kafka.streams.scala
 
+import java.util.Properties
 import java.util.regex.Pattern
 
 import org.apache.kafka.streams.kstream.GlobalKTable
@@ -183,4 +184,14 @@ class StreamsBuilder(inner: StreamsBuilderJ = new StreamsBuilderJ) {
     inner.addGlobalStore(storeBuilder, topic, consumed, stateUpdateSupplier)
 
   def build(): Topology = inner.build()
+
+  /**
+   * Returns the `Topology` that represents the specified processing logic and accepts
+   * a `Properties` instance used to indicate whether to optimize topology or not.
+   *
+   * @param props the `Properties` used for building possibly optimized topology
+   * @return the `Topology` that represents the specified processing logic
+   * @see `org.apache.kafka.streams.StreamsBuilder#build`
+   */
+  def build(props: Properties): Topology = inner.build(props)
 }

@@ -178,7 +178,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     executor.schedule(new Runnable {
         def run() = createTopic(newtopic, numPartitions = numBrokers, replicationFactor = numBrokers)
       }, 2, TimeUnit.SECONDS)
-    consumer.poll(0)
+    consumer.poll(time.Duration.ZERO)
 
     val producer = createProducer()
 
@@ -481,14 +481,15 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
               revokeSemaphore.foreach(s => s.release())
             }
           })
-          consumer.poll(0)
+        // requires to used deprecated `poll(long)` to trigger metadata update
+          consumer.poll(0L)
         }, 0)
     }
 
     def waitForRebalance(timeoutMs: Long, future: Future[Any], otherConsumers: KafkaConsumer[Array[Byte], Array[Byte]]*) {
       val startMs = System.currentTimeMillis
       while (System.currentTimeMillis < startMs + timeoutMs && !future.isDone)
-          otherConsumers.foreach(consumer => consumer.poll(100))
+          otherConsumers.foreach(consumer => consumer.poll(time.Duration.ofMillis(100L)))
       assertTrue("Rebalance did not complete in time", future.isDone)
     }
 
@@ -569,7 +570,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
       val closeGraceTimeMs = 2000
       val startNanos = System.nanoTime
       info("Closing consumer with timeout " + closeTimeoutMs + " ms.")
-      consumer.close(closeTimeoutMs, TimeUnit.MILLISECONDS)
+      consumer.close(time.Duration.ofMillis(closeTimeoutMs))
       val timeTakenMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime - startNanos)
       maxCloseTimeMs.foreach { ms =>
         assertTrue("Close took too long " + timeTakenMs, timeTakenMs < ms + closeGraceTimeMs)
@@ -592,7 +593,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
       }
       def onPartitionsRevoked(partitions: Collection[TopicPartition]) {
       }})
-    consumer.poll(3000)
+    consumer.poll(time.Duration.ofSeconds(3L))
     assertTrue("Assignment did not complete on time", assignSemaphore.tryAcquire(1, TimeUnit.SECONDS))
     if (committedRecords > 0)
       assertEquals(committedRecords, consumer.committed(tp).offset)

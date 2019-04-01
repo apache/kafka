@@ -18,11 +18,12 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.JoinGroupRequest;
-import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.utils.CircularIterator;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -144,11 +145,16 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    public List<ProtocolMetadata> metadata() {
+    public JoinGroupRequestData.JoinGroupRequestProtocolSet metadata() {
         configSnapshot = configStorage.snapshot();
         ConnectProtocol.WorkerState workerState = new ConnectProtocol.WorkerState(restUrl, configSnapshot.offset());
         ByteBuffer metadata = ConnectProtocol.serializeMetadata(workerState);
-        return Collections.singletonList(new ProtocolMetadata(DEFAULT_SUBPROTOCOL, metadata));
+        return new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+                Collections.singleton(new JoinGroupRequestData.JoinGroupRequestProtocol()
+                        .setName(DEFAULT_SUBPROTOCOL)
+                        .setMetadata(metadata.array()))
+                        .iterator()
+        );
     }
 
     @Override
@@ -163,12 +169,12 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, Map<String, ByteBuffer> allMemberMetadata) {
+    protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata) {
         log.debug("Performing task assignment");
 
         Map<String, ConnectProtocol.WorkerState> memberConfigs = new HashMap<>();
-        for (Map.Entry<String, ByteBuffer> entry : allMemberMetadata.entrySet())
-            memberConfigs.put(entry.getKey(), ConnectProtocol.deserializeMetadata(entry.getValue()));
+        for (JoinGroupResponseData.JoinGroupResponseMember memberMetadata : allMemberMetadata)
+            memberConfigs.put(memberMetadata.memberId(), ConnectProtocol.deserializeMetadata(ByteBuffer.wrap(memberMetadata.metadata())));
 
         long maxOffset = findMaxMemberConfigOffset(memberConfigs);
         Long leaderOffset = ensureLeaderConfig(maxOffset);

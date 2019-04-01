@@ -26,17 +26,20 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
     private final long segmentInterval;
     private final long windowSize;
     private final boolean retainDuplicates;
+    private final boolean returnTimestampedStore;
 
     public RocksDbWindowBytesStoreSupplier(final String name,
                                            final long retentionPeriod,
                                            final long segmentInterval,
                                            final long windowSize,
-                                           final boolean retainDuplicates) {
+                                           final boolean retainDuplicates,
+                                           final boolean returnTimestampedStore) {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.segmentInterval = segmentInterval;
         this.windowSize = windowSize;
         this.retainDuplicates = retainDuplicates;
+        this.returnTimestampedStore = returnTimestampedStore;
     }
 
     @Override
@@ -46,13 +49,24 @@ public class RocksDbWindowBytesStoreSupplier implements WindowBytesStoreSupplier
 
     @Override
     public WindowStore<Bytes, byte[]> get() {
-        final RocksDBSegmentedBytesStore segmentedBytesStore = new RocksDBSegmentedBytesStore(
+        final SegmentedBytesStore segmentedBytesStore;
+        if (!returnTimestampedStore) {
+            segmentedBytesStore = new RocksDBSegmentedBytesStore(
                 name,
                 metricsScope(),
                 retentionPeriod,
                 segmentInterval,
                 new WindowKeySchema()
-        );
+            );
+        } else {
+            segmentedBytesStore = new RocksDBTimestampedSegmentedBytesStore(
+                name,
+                metricsScope(),
+                retentionPeriod,
+                segmentInterval,
+                new WindowKeySchema()
+            );
+        }
         return new RocksDBWindowStore(
             segmentedBytesStore,
             retainDuplicates,
