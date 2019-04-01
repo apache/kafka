@@ -20,6 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -75,10 +76,16 @@ public interface PartitionAssignor {
     class Subscription {
         private final List<String> topics;
         private final ByteBuffer userData;
+        private final List<TopicPartition> ownedPartitions;
 
-        public Subscription(List<String> topics, ByteBuffer userData) {
+        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
             this.topics = topics;
             this.userData = userData;
+            this.ownedPartitions = ownedPartitions;
+        }
+
+        public Subscription(List<String> topics, ByteBuffer userData) {
+            this(topics, userData, Collections.emptyList());
         }
 
         public Subscription(List<String> topics) {
@@ -87,6 +94,10 @@ public interface PartitionAssignor {
 
         public List<String> topics() {
             return topics;
+        }
+
+        public List<TopicPartition> ownedPartitions() {
+            return ownedPartitions;
         }
 
         public ByteBuffer userData() {
@@ -104,10 +115,18 @@ public interface PartitionAssignor {
     class Assignment {
         private final List<TopicPartition> partitions;
         private final ByteBuffer userData;
+        private final List<TopicPartition> revokedPartitions;
+        private final ConsumerProtocol.Errors error;
 
-        public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
+        public Assignment(List<TopicPartition> partitions, ByteBuffer userData, List<TopicPartition> revokedPartitions, ConsumerProtocol.Errors error) {
             this.partitions = partitions;
             this.userData = userData;
+            this.revokedPartitions = revokedPartitions;
+            this.error = error;
+        }
+
+        public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
+            this(partitions, userData, Collections.emptyList(), ConsumerProtocol.Errors.NONE);
         }
 
         public Assignment(List<TopicPartition> partitions) {
@@ -116,6 +135,14 @@ public interface PartitionAssignor {
 
         public List<TopicPartition> partitions() {
             return partitions;
+        }
+
+        public List<TopicPartition> revokedPartitions() {
+            return revokedPartitions;
+        }
+
+        public ConsumerProtocol.Errors error() {
+            return error;
         }
 
         public ByteBuffer userData() {
