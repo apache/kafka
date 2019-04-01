@@ -38,7 +38,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
-public class KeyValueSegmentIteratorTest {
+public class SegmentIteratorTest {
 
     private final KeyValueSegment segmentOne = new KeyValueSegment("one", "one", 0);
     private final KeyValueSegment segmentTwo = new KeyValueSegment("two", "window", 1);

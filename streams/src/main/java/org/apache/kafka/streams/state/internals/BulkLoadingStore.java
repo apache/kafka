@@ -16,28 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.rocksdb.Options;
+import org.apache.kafka.streams.KeyValue;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.WriteBatch;
 
-public class RocksDBSegmentedBytesStoreTest extends AbstractRocksDBSegmentedBytesStoreTest<KeyValueSegment> {
-
-    @Override
-    RocksDBSegmentedBytesStore getBytesStore() {
-        return new RocksDBSegmentedBytesStore(
-            storeName,
-            "metrics-scope",
-            retention,
-            segmentInterval,
-            schema
-        );
-    }
-
-    @Override
-    KeyValueSegments newSegments() {
-        return new KeyValueSegments(storeName, retention, segmentInterval);
-    }
-
-    @Override
-    Options getOptions(final KeyValueSegment segment) {
-        return segment.getOptions();
-    }
+public interface BulkLoadingStore {
+    void toggleDbForBulkLoading(final boolean prepareForBulkload);
+    void addToBatch(final KeyValue<byte[], byte[]> record,
+                    final WriteBatch batch) throws RocksDBException;
+    void write(final WriteBatch batch) throws RocksDBException;
 }

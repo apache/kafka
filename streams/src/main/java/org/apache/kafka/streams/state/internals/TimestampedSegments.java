@@ -19,26 +19,26 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 
 /**
- * Manages the {@link KeyValueSegment}s that are used by the {@link RocksDBSegmentedBytesStore}
+ * Manages the {@link TimestampedSegment}s that are used by the {@link RocksDBTimestampedSegmentedBytesStore}
  */
-class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
+class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
 
-    KeyValueSegments(final String name,
-                     final long retentionPeriod,
-                     final long segmentInterval) {
+    TimestampedSegments(final String name,
+                        final long retentionPeriod,
+                        final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
     }
 
     @Override
-    public KeyValueSegment getOrCreateSegment(final long segmentId,
-                                              final InternalProcessorContext context) {
+    public TimestampedSegment getOrCreateSegment(final long segmentId,
+                                                 final InternalProcessorContext context) {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
         } else {
-            final KeyValueSegment newSegment = new KeyValueSegment(segmentName(segmentId), name, segmentId);
+            final TimestampedSegment newSegment = new TimestampedSegment(segmentName(segmentId), name, segmentId);
 
             if (segments.put(segmentId, newSegment) != null) {
-                throw new IllegalStateException("KeyValueSegment already exists. Possible concurrent access.");
+                throw new IllegalStateException("TimestampedSegment already exists. Possible concurrent access.");
             }
 
             newSegment.openDB(context);
