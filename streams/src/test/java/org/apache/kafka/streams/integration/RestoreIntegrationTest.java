@@ -139,8 +139,8 @@ public class RestoreIntegrationTest {
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
-        KStreamSerDesIntegrationTest.MyIntegerSerde keySerde = new KStreamSerDesIntegrationTest.MyIntegerSerde<>();
-        KStreamSerDesIntegrationTest.MyIntegerSerde valueSerde = new KStreamSerDesIntegrationTest.MyIntegerSerde<>();
+        final KStreamSerDesIntegrationTest.MyIntegerSerde keySerde = new KStreamSerDesIntegrationTest.MyIntegerSerde<>();
+        final  KStreamSerDesIntegrationTest.MyIntegerSerde valueSerde = new KStreamSerDesIntegrationTest.MyIntegerSerde<>();
         builder.table(INPUT_STREAM, Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store").withKeySerde(keySerde).withValueSerde(valueSerde))
                 .toStream()
                 .foreach((key, value) -> {
