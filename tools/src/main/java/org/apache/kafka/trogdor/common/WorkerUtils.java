@@ -160,7 +160,7 @@ public final class WorkerUtils {
                 log.warn("Topic(s) {} already exist.", topicsExists);
                 throw new TopicExistsException("One or more topics already exist.");
             } else {
-                verifyTopics(log, adminClient, topicsExists, topics);
+                verifyTopics(log, adminClient, topicsExists, topics, 3, 2500);
             }
         }
     }
@@ -240,17 +240,35 @@ public final class WorkerUtils {
      * @param topicsToVerify     List of topics to verify
      * @param topicsInfo         Map of topic name to topic description, which includes topics in
      *                           'topicsToVerify' list.
+     * @param retryCount         The number of times to retry the fetching of the topics
+     * @param retryBackoffMs     The amount of time, in milliseconds, to wait in between retries
      * @throws UnknownTopicOrPartitionException If at least one topic contained in 'topicsInfo'
-     * does not exist
+     * does not exist after retrying.
      * @throws RuntimeException  If one or more topics have different number of partitions than
      * described in 'topicsInfo'
      */
     private static void verifyTopics(
         Logger log, AdminClient adminClient,
-        Collection<String> topicsToVerify, Map<String, NewTopic> topicsInfo) throws Throwable {
-        DescribeTopicsResult topicsResult = adminClient.describeTopics(
-            topicsToVerify, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
-        Map<String, TopicDescription> topicDescriptionMap = topicsResult.all().get();
+        Collection<String> topicsToVerify, Map<String, NewTopic> topicsInfo, int retryCount, long retryBackoffMs) throws Throwable {
+
+        Map<String, TopicDescription> topicDescriptionMap;
+        int retries = 0;
+        while (true) {
+            try {
+                DescribeTopicsResult topicsResult = adminClient.describeTopics(
+                        topicsToVerify, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
+                topicDescriptionMap = topicsResult.all().get();
+                break;
+            } catch (UnknownTopicOrPartitionException exception) {
+                if (retries >= retryCount) {
+                    throw exception;
+                } else {
+                    retries += 1;
+                    Thread.sleep(retryBackoffMs);
+                }
+            }
+        }
+
         for (TopicDescription desc: topicDescriptionMap.values()) {
             // map will always contain the topic since all topics in 'topicsExists' are in given
             // 'topics' map
