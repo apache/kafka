@@ -18,10 +18,7 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -71,10 +68,6 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
         bufferTimeDefinition = suppress.timeDefinition();
         bufferFullStrategy = suppress.bufferConfig().bufferFullStrategy();
         safeToDropTombstones = suppress.safeToDropTombstones();
-        System.out.println("time def: " + bufferTimeDefinition.type());
-        System.out.println("suppressDuration: " + suppressDurationMillis);
-        System.out.println("maxRecords: " + suppressDurationMillis);
-        System.out.println("stdt: " + safeToDropTombstones);
     }
 
     @SuppressWarnings("unchecked")
@@ -91,8 +84,6 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     @Override
     public void process(final K key, final Change<V> value) {
         observedStreamTime = Math.max(observedStreamTime, internalProcessorContext.timestamp());
-        System.out.println("set ost: " + observedStreamTime);
-        System.out.printf("KTSP.process %s : %s @ %d (%d) %s%n", key, value, observedStreamTime, internalProcessorContext.timestamp(), internalProcessorContext.recordContext());
         buffer(key, value);
         enforceConstraints();
     }
@@ -100,13 +91,6 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     private void buffer(final K key, final Change<V> value) {
         final long bufferTime = bufferTimeDefinition.time(internalProcessorContext, key);
         final ProcessorRecordContext recordContext = internalProcessorContext.recordContext();
-
-        recordContext.headers().add("buffering-provenance-thread", new StringSerializer().serialize(null, Thread.currentThread().getName()));
-        recordContext.headers().add("buffering-provenance-key-string", new StringSerializer().serialize(null, key.toString()));
-        recordContext.headers().add("buffering-provenance-topic", new StringSerializer().serialize(null, recordContext.topic()));
-        recordContext.headers().add("buffering-provenance-offset", new LongSerializer().serialize(null, recordContext.offset()));
-        recordContext.headers().add("buffering-provenance-partition", new IntegerSerializer().serialize(null, recordContext.partition()));
-        System.out.println("buffering " + key + " " + recordContext);
 
         final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(null, key));
         final byte[] serializedValue = valueSerde.serializer().serialize(null, value);
@@ -117,15 +101,10 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
     private void enforceConstraints() {
         final long streamTime = observedStreamTime;
         final long expiryTime = streamTime - suppressDurationMillis;
-        System.out.println("EMIT: expiry");
-        System.out.println("ost   : " + observedStreamTime);
-        System.out.println("expiry: " + expiryTime);
-        System.out.println("buffmt: " + buffer.minTimestamp());
 
         buffer.evictWhile(() -> buffer.minTimestamp() <= expiryTime, this::emit);
 
         if (overCapacity()) {
-            System.out.println("EMIT: capacity");
             switch (bufferFullStrategy) {
                 case EMIT:
                     buffer.evictWhile(this::overCapacity, this::emit);
@@ -152,17 +131,9 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
         final Change<V> value = valueSerde.deserializer().deserialize(null, toEmit.value.value());
         if (shouldForward(value)) {
             final ProcessorRecordContext prevRecordContext = internalProcessorContext.recordContext();
-            final ProcessorRecordContext recordContext = toEmit.value.recordContext();
-            recordContext.headers().add("direct-provenance-thread", new StringSerializer().serialize(null, Thread.currentThread().getName()));
-            recordContext.headers().add("direct-provenance-topic", new StringSerializer().serialize(null, recordContext.topic()));
-            recordContext.headers().add("direct-provenance-offset", new LongSerializer().serialize(null, recordContext.offset()));
-            recordContext.headers().add("direct-provenance-partition", new IntegerSerializer().serialize(null, recordContext.partition()));
-
-            internalProcessorContext.setRecordContext(recordContext);
+            internalProcessorContext.setRecordContext(toEmit.value.recordContext());
             try {
                 final K key = keySerde.deserializer().deserialize(null, toEmit.key.get());
-                System.out.printf("KTSP.emit %s : %s @ %d (%d) %s%n", key, value, observedStreamTime, recordContext.timestamp(), recordContext);
-
                 internalProcessorContext.forward(key, value);
                 suppressionEmitSensor.record();
             } finally {

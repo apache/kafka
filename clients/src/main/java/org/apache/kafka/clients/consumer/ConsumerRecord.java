@@ -22,8 +22,6 @@ import org.apache.kafka.common.record.DefaultRecord;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 
-import java.util.Arrays;
-import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -283,18 +281,7 @@ public class ConsumerRecord<K, V> {
                + ", serialized key size = "  + serializedKeySize
                + ", serialized value size = " + serializedValueSize
                + ", headers = " + headers
-               + ", key = " + str(key)
-               + ", value = " + str(value) + ")";
-    }
-
-
-    private String str(final Object o) {
-        if (o == null) {
-            return "null";
-        } else if (o instanceof byte[]) {
-            return Arrays.toString((byte[]) o);
-        } else {
-            return Objects.toString(o);
-        }
+               + ", key = " + key
+               + ", value = " + value + ")";
     }
 }

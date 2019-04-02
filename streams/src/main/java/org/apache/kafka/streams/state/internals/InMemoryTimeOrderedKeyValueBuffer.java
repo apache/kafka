@@ -20,15 +20,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.IntegerSerializer;
-import org.apache.kafka.common.serialization.LongSerializer;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -40,13 +33,14 @@ import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.metrics.Sensors;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
@@ -58,11 +52,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
     private final Map<Bytes, BufferKey> index = new HashMap<>();
     private final TreeMap<BufferKey, ContextualRecord> sortedMap = new TreeMap<>();
 
-    //    private final Set<Bytes> dirtyKeys = new HashSet<>();
+    private final Set<Bytes> dirtyKeys = new HashSet<>();
     private final String storeName;
     private final boolean loggingEnabled;
-    private final StringDeserializer stringDeserializer = new StringDeserializer();
-    private final Deserializer<Windowed<String>> windowedDeserializer = WindowedSerdes.timeWindowedSerdeFrom(String.class).deserializer();
 
     private long memBufferSize = 0L;
     private long minTimestamp = Long.MAX_VALUE;
@@ -173,14 +165,6 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
             final int timeComparison = Long.compare(time, o.time);
             return timeComparison == 0 ? key.compareTo(o.key) : timeComparison;
         }
-
-        @Override
-        public String toString() {
-            return "BufferKey{" +
-                "time=" + time +
-                ", key=" + Arrays.toString(key.get()) +
-                '}';
-        }
     }
 
     private InMemoryTimeOrderedKeyValueBuffer(final String storeName, final boolean loggingEnabled) {
@@ -225,7 +209,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
         open = false;
         index.clear();
         sortedMap.clear();
-//        dirtyKeys.clear();
+        dirtyKeys.clear();
         memBufferSize = 0;
         minTimestamp = Long.MAX_VALUE;
         updateBufferMetrics();
@@ -233,26 +217,23 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
 
     @Override
     public void flush() {
-//        if (loggingEnabled) {
-//            int count = 0;
-//            // counting on this getting called before the record collector's flush
-//            for (final Bytes key : dirtyKeys) {
-//
-//                final BufferKey bufferKey = index.get(key);
-//
-//                if (bufferKey == null) {
-//                    // The record was evicted from the buffer. Send a tombstone.
-//                    logTombstone(key);
-//                } else {
-//                    final ContextualRecord value = sortedMap.get(bufferKey);
-//
-//                    logValue(key, bufferKey, value);
-//                }
-//                count++;
-//            }
-//            dirtyKeys.clear();
-//            System.out.println("Flushed " + count);
-//        }
+        if (loggingEnabled) {
+            // counting on this getting called before the record collector's flush
+            for (final Bytes key : dirtyKeys) {
+
+                final BufferKey bufferKey = index.get(key);
+
+                if (bufferKey == null) {
+                    // The record was evicted from the buffer. Send a tombstone.
+                    logTombstone(key);
+                } else {
+                    final ContextualRecord value = sortedMap.get(bufferKey);
+
+                    logValue(key, bufferKey, value);
+                }
+            }
+            dirtyKeys.clear();
+        }
     }
 
     private void logValue(final Bytes key, final BufferKey bufferKey, final ContextualRecord value) {
@@ -264,16 +245,15 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
                                               .array();
 
         final ProcessorRecordContext recordContext = value.recordContext();
-        recordContext.headers().add("changelog-provenance-thread", new StringSerializer().serialize(null, Thread.currentThread().getName()));
-        recordContext.headers().add("changelog-provenance-offset", new LongSerializer().serialize(null, recordContext.offset()));
-        recordContext.headers().add("changelog-provenance-topic", new StringSerializer().serialize(null, recordContext.topic()));
-        recordContext.headers().add("changelog-provenance-partition", new IntegerSerializer().serialize(null, recordContext.partition()));
 
-        System.out.println("FLUSH: " + windowedDeserializer.deserialize(null, key.get()) +
-                               " aka " + Arrays.toString(key.get()) +
-                               " VALUE");
         if (recordContext.partition() != partition) {
-            throw new IllegalStateException(String.format("rp[%d] p[%d]", recordContext.partition(), partition));
+            throw new IllegalStateException(
+                String.format(
+                    "record partition [%d] is being handled by the wrong suppress partition [%d]",
+                    recordContext.partition(),
+                    partition
+                )
+            );
         }
 
         collector.send(
@@ -289,16 +269,11 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
     }
 
     private void logTombstone(final Bytes key) {
-        System.out.println("FLUSH: " + windowedDeserializer.deserialize(null, key.get()) +
-                               " aka " + Arrays.toString(key.get()) +
-                               " TOMBSTONE");
         collector.send(changelogTopic, key, null, null, partition, null, KEY_SERIALIZER, VALUE_SERIALIZER);
     }
 
     private void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> batch) {
-        long offset = -1;
         for (final ConsumerRecord<byte[], byte[]> record : batch) {
-            System.out.println("RESTORING " + record);
             final Bytes key = Bytes.wrap(record.key());
             if (record.value() == null) {
                 // This was a tombstone. Delete the record.
@@ -310,16 +285,18 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
                     }
                     if (bufferKey.time == minTimestamp) {
                         final BufferKey leastKey = sortedMap.firstKey();
-                        if (leastKey != null) {
-                            minTimestamp = leastKey.time;
-                        } else {
-                            minTimestamp = Long.MAX_VALUE;
-                        }
+                        minTimestamp = leastKey != null ? leastKey.time : Long.MAX_VALUE;
                     }
                 }
-                System.out.println("RESTORED TOMBSTONE OF " + windowedDeserializer.deserialize(null, key.get()) + " tpo:" + record.topic() + "," + record.partition() + "," + record.offset());
+
                 if (record.partition() != partition) {
-                    throw new IllegalStateException(String.format("rp[%d] p[%d]", record.partition(), partition));
+                    throw new IllegalStateException(
+                        String.format(
+                            "record partition [%d] is being restored by the wrong suppress partition [%d]",
+                            record.partition(),
+                            partition
+                        )
+                    );
                 }
             } else {
                 final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
@@ -328,26 +305,22 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
                 timeAndValue.get(value);
                 final ContextualRecord contextualRecord = ContextualRecord.deserialize(ByteBuffer.wrap(value));
 
-                final ProcessorRecordContext recordContext = contextualRecord.recordContext();
-                recordContext.headers().add("changelog-restore-provenance-thread", new StringSerializer().serialize(null, Thread.currentThread().getName()));
-                recordContext.headers().add("changelog-restore-provenance-offset", new LongSerializer().serialize(null, record.offset()));
-                recordContext.headers().add("changelog-restore-provenance-topic", new StringSerializer().serialize(null, record.topic()));
-                recordContext.headers().add("changelog-restore-provenance-partition", new IntegerSerializer().serialize(null, record.partition()));
-                recordContext.headers().add("changelog-restore-provenance-buffer-time", new LongSerializer().serialize(null, time));
-
                 cleanPut(
                     time,
                     key,
                     contextualRecord
                 );
-                System.out.println("RESTORED VALUE OF " + windowedDeserializer.deserialize(null, key.get()) + " tpo:" + record.topic() + "," + record.partition() + "," + record.offset() + " " + contextualRecord);
             }
-            offset = Math.max(offset, record.offset());
             if (record.partition() != partition) {
-                throw new IllegalStateException(String.format("rp[%d] p[%d]", record.partition(), partition));
+                throw new IllegalStateException(
+                    String.format(
+                        "record partition [%d] is being restored by the wrong suppress partition [%d]",
+                        record.partition(),
+                        partition
+                    )
+                );
             }
         }
-        System.out.println("RESTORED up to " + offset);
         updateBufferMetrics();
     }
 
@@ -366,17 +339,18 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
 
             // predicate being true means we read one record, call the callback, and then remove it
             while (next != null && predicate.get()) {
-                System.out.println("BUFF IT " + next.getKey() + " : " + next.getValue());
                 if (next.getKey().time != minTimestamp) {
-                    throw new IllegalStateException("minTimestamp[" + minTimestamp + "] did not match the actual min timestamp [" + next.getKey().time + "]");
+                    throw new IllegalStateException(
+                        "minTimestamp [" + minTimestamp + "] did not match the actual min timestamp [" +
+                            next.getKey().time + "]"
+                    );
                 }
                 callback.accept(new KeyValue<>(next.getKey().key, next.getValue()));
 
                 delegate.remove();
                 index.remove(next.getKey().key);
 
-//                dirtyKeys.add(next.getKey().key);
-                logTombstone(next.getKey().key);
+                dirtyKeys.add(next.getKey().key);
 
                 memBufferSize -= computeRecordSize(next.getKey().key, next.getValue());
 
@@ -406,13 +380,12 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
         } else if (contextualRecord.recordContext() == null) {
             throw new IllegalArgumentException("recordContext cannot be null");
         }
-        final BufferKey bufferKey = cleanPut(time, key, contextualRecord);
-//        dirtyKeys.add(key);
-        logValue(key, bufferKey, contextualRecord);
+        cleanPut(time, key, contextualRecord);
+        dirtyKeys.add(key);
         updateBufferMetrics();
     }
 
-    private BufferKey cleanPut(final long time, final Bytes key, final ContextualRecord value) {
+    private void cleanPut(final long time, final Bytes key, final ContextualRecord value) {
         // non-resetting semantics:
         // if there was a previous version of the same record,
         // then insert the new record in the same place in the priority queue
@@ -424,16 +397,12 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
             sortedMap.put(nextKey, value);
             minTimestamp = Math.min(minTimestamp, time);
             memBufferSize += computeRecordSize(key, value);
-            System.out.println("cleanPut " + windowedDeserializer.deserialize(null, key.get()) + " at " + time + " used " + nextKey);
-            return nextKey;
         } else {
             final ContextualRecord removedValue = sortedMap.put(previousKey, value);
             memBufferSize =
                 memBufferSize
                     + computeRecordSize(key, value)
                     - (removedValue == null ? 0 : computeRecordSize(key, removedValue));
-            System.out.println("cleanPut " + windowedDeserializer.deserialize(null, key.get()) + " at " + time + " re-used " + previousKey);
-            return previousKey;
         }
     }
 
