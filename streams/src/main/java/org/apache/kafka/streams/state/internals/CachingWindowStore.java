@@ -192,7 +192,7 @@ class CachingWindowStore
             cache.range(name,
                         cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, timeFrom)),
                         cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, timeTo))
-                        );
+            );
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(key, key, timeFrom, timeTo);
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> filteredCacheIterator = new FilteredCacheIterator(
@@ -221,8 +221,8 @@ class CachingWindowStore
         final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
             new CacheIteratorWrapper(from, to, timeFrom, timeTo) :
             cache.range(name,
-                cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
-                cacheFunction.cacheKey(keySchema.upperRange(to, timeTo))
+                        cacheFunction.cacheKey(keySchema.lowerRange(from, timeFrom)),
+                        cacheFunction.cacheKey(keySchema.upperRange(to, timeTo))
             );
 
         final HasNextCondition hasNextCondition = keySchema.hasNextCondition(from, to, timeFrom, timeTo);

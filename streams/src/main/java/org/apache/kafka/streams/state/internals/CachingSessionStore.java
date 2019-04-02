@@ -142,7 +142,12 @@ class CachingSessionStore
                                                                   final long latestSessionStartTime) {
         validateStoreOpen();
 
-        final CacheIteratorWrapper cacheIterator = new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
+            new CacheIteratorWrapper(key, earliestSessionEndTime, latestSessionStartTime) :
+            cache.range(cacheName,
+                        cacheFunction.cacheKey(keySchema.lowerRangeFixedSize(key, earliestSessionEndTime)),
+                        cacheFunction.cacheKey(keySchema.upperRangeFixedSize(key, latestSessionStartTime))
+            );
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(key,
                                                                                                earliestSessionEndTime,
@@ -163,7 +168,12 @@ class CachingSessionStore
                                                                   final long latestSessionStartTime) {
         validateStoreOpen();
 
-        final CacheIteratorWrapper cacheIterator = new CacheIteratorWrapper(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime);
+        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
+            new CacheIteratorWrapper(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime) :
+            cache.range(cacheName,
+                        cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime)),
+                        cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime))
+            );
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(
             keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime
