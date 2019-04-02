@@ -17,14 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.ApiVersions;
-import org.apache.kafka.clients.ClientDnsLookup;
-import org.apache.kafka.clients.ClientRequest;
-import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.ClientUtils;
-import org.apache.kafka.clients.KafkaClient;
-import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.StaleMetadataException;
+import org.apache.kafka.clients.*;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResult;
 import org.apache.kafka.clients.admin.DeleteAclsResult.FilterResults;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult.ReplicaLogDirInfo;
@@ -381,6 +374,7 @@ public class KafkaAdminClient extends AdminClient {
                 1,
                 config.getLong(AdminClientConfig.RECONNECT_BACKOFF_MS_CONFIG),
                 config.getLong(AdminClientConfig.RECONNECT_BACKOFF_MAX_MS_CONFIG),
+                config.getLong(CommonClientConfigs.DEFAULT_CONNECT_READY_TIMEOUT_MS_CONFIG),
                 config.getInt(AdminClientConfig.SEND_BUFFER_CONFIG),
                 config.getInt(AdminClientConfig.RECEIVE_BUFFER_CONFIG),
                 (int) TimeUnit.HOURS.toMillis(1),
