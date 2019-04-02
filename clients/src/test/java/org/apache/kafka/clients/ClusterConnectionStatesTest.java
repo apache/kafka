@@ -50,7 +50,7 @@ public class ClusterConnectionStatesTest {
 
     @Before
     public void setup() {
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, defaultConnectReadyTimeOutMs ,new LogContext());
+        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, defaultConnectReadyTimeOutMs, new LogContext());
     }
 
     @Test
