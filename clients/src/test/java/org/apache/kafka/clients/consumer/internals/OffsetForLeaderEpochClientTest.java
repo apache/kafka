@@ -80,7 +80,7 @@ public class OffsetForLeaderEpochClientTest {
         consumerClient.pollNoWakeup();
 
         OffsetsForLeaderEpochClient.OffsetForEpochResult result = future.value();
-        assertTrue(result.partitionsToRetry().isEmpty());
+        assertFalse(result.partitionsToRetry().isEmpty());
         assertTrue(result.endOffsets().isEmpty());
     }
 

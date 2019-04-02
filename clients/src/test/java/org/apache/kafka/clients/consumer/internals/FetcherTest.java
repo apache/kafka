@@ -950,12 +950,8 @@ public class FetcherTest {
         subscriptions.assignFromUser(singleton(tp0));
         client.updateMetadata(initialUpdateResponse);
 
-        // Metadata update with leader epochs
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1,
-                Collections.emptyMap(), Collections.singletonMap(topicName, 4), tp -> 99);
-        client.updateMetadata(metadataResponse);
-
-        subscriptions.seek(tp0, 0);
+        subscriptions.seek(tp0, new SubscriptionState.FetchPosition(10,  Optional.of(99),
+                new Metadata.LeaderAndEpoch(Node.noNode(), Optional.of(99))));
         assertEquals(1, fetcher.sendFetches());
 
         // Check for epoch in outgoing request
@@ -987,7 +983,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertEquals(0, fetcher.fetchedRecords().size());
         assertTrue(subscriptions.isOffsetResetNeeded(tp0));
-        assertEquals(null, subscriptions.position(tp0));
+        assertNotNull(subscriptions.position(tp0));
     }
 
     @Test
