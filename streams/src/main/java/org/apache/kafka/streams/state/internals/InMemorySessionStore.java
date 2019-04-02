@@ -133,8 +133,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         if (startTimeMap.isEmpty()) {
             keyMap.remove(sessionKey.key());
-            if (endTimeMap.isEmpty()) {
-                endTimeMap.clear();
+            if (keyMap.isEmpty()) {
+                endTimeMap.remove(sessionKey.window().end());
             }
         }
     }
