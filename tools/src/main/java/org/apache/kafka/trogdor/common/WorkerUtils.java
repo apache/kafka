@@ -44,6 +44,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.regex.Pattern;
 
@@ -251,23 +252,8 @@ public final class WorkerUtils {
         Logger log, AdminClient adminClient,
         Collection<String> topicsToVerify, Map<String, NewTopic> topicsInfo, int retryCount, long retryBackoffMs) throws Throwable {
 
-        Map<String, TopicDescription> topicDescriptionMap;
-        int retries = 0;
-        while (true) {
-            try {
-                DescribeTopicsResult topicsResult = adminClient.describeTopics(
-                        topicsToVerify, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
-                topicDescriptionMap = topicsResult.all().get();
-                break;
-            } catch (UnknownTopicOrPartitionException exception) {
-                if (retries >= retryCount) {
-                    throw exception;
-                } else {
-                    retries += 1;
-                    Thread.sleep(retryBackoffMs);
-                }
-            }
-        }
+        Map<String, TopicDescription> topicDescriptionMap = topicDescriptions(topicsToVerify, adminClient,
+                retryCount, retryBackoffMs);
 
         for (TopicDescription desc: topicDescriptionMap.values()) {
             // map will always contain the topic since all topics in 'topicsExists' are in given
@@ -281,6 +267,24 @@ public final class WorkerUtils {
                 throw new RuntimeException(str);
             }
         }
+    }
+
+    private static Map<String, TopicDescription> topicDescriptions(Collection<String> topicsToVerify,
+                                                                   AdminClient adminClient,
+                                                                   int retryCount, long retryBackoffMs)
+            throws ExecutionException, InterruptedException {
+        UnknownTopicOrPartitionException lastException = null;
+        for (int i = 0; i < retryCount; i++) {
+            try {
+                DescribeTopicsResult topicsResult = adminClient.describeTopics(
+                        topicsToVerify, new DescribeTopicsOptions().timeoutMs(ADMIN_REQUEST_TIMEOUT));
+                return topicsResult.all().get();
+            } catch (UnknownTopicOrPartitionException exception) {
+                lastException = exception;
+                Thread.sleep(retryBackoffMs);
+            }
+        }
+        throw lastException;
     }
 
     /**
