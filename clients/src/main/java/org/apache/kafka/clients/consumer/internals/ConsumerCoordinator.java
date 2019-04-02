@@ -301,7 +301,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-
+        
         switch (protocol) {
             case EAGER:
                 if (!ownedPartitions.isEmpty()) {
@@ -312,54 +312,69 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 try {
                     listener.onPartitionsAssigned(assignedPartitions);
                 } catch (WakeupException | InterruptException e) {
+                    // also clear the assigned partitions
+                    subscriptions.assignFromSubscribed(Collections.emptySet());
                     throw e;
                 } catch (Exception e) {
+                    subscriptions.assignFromSubscribed(Collections.emptySet());
                     log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
                 }
                 break;
 
             case COOPERATIVE:
-                Set<TopicPartition> addedPartitions = new HashSet<>(assignedPartitions);
-                addedPartitions.removeAll(ownedPartitions);
-
-                log.info("Updating with newly assigned partitions: {}, compare with already owned partitions: {}, " +
-                        "Newly added partitions: {}, required revoking partitions: {}",
-                    Utils.join(assignedPartitions, ", "),
-                    Utils.join(ownedPartitions, ", "),
-                    Utils.join(addedPartitions, ", "),
-                    Utils.join(assignment.revokedPartitions(), ", "));
-
-                try {
-                    listener.onPartitionsAssigned(addedPartitions);
-                } catch (WakeupException | InterruptException e) {
-                    throw e;
-                } catch (Exception e) {
-                    log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
-                }
-
-                Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions);
-                revokedPartitions.removeAll(assignedPartitions);
-
-                if (revokedPartitions.equals(new HashSet<>(assignment.revokedPartitions()))) {
-                    throw new IllegalStateException("Some partitions are no longer assigned, but not included in the revoked partitions list;" +
-                        "this should never happen");
-                }
-
-                if (!revokedPartitions.isEmpty()) {
-                    try {
-                        listener.onPartitionsRevoked(revokedPartitions);
-                    } catch (WakeupException | InterruptException e) {
-                        throw e;
-                    } catch (Exception e) {
-                        log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
-                    }
-                }
+                assignAndRevoke(listener, assignedPartitions, ownedPartitions);
 
                 if (assignment.error() == ConsumerProtocol.Errors.NEED_REJOIN) {
                     requestRejoin();
                 }
+
+                break;
         }
 
+    }
+
+    private void assignAndRevoke(final ConsumerRebalanceListener listener,
+                                 final Set<TopicPartition> assignedPartitions,
+                                 final Set<TopicPartition> ownedPartitions) {
+        Set<TopicPartition> addedPartitions = new HashSet<>(assignedPartitions);
+        Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions);
+        addedPartitions.removeAll(ownedPartitions);
+        revokedPartitions.removeAll(assignedPartitions);
+
+        // TODO: ignored assignment.revokedPartitions
+
+        log.info("Updating with newly assigned partitions: {}, compare with already owned partitions: {}, " +
+                "newly added partitions: {}, revoking partitions: {}",
+            Utils.join(assignedPartitions, ", "),
+            Utils.join(ownedPartitions, ", "),
+            Utils.join(addedPartitions, ", "),
+            Utils.join(revokedPartitions, ", "));
+
+        try {
+            listener.onPartitionsAssigned(addedPartitions);
+        } catch (WakeupException | InterruptException e) {
+            // reset the assigned to owned partitions
+            subscriptions.assignFromSubscribed(ownedPartitions);
+            throw e;
+        } catch (Exception e) {
+            // reset the assigned to owned partitions
+            subscriptions.assignFromSubscribed(ownedPartitions);
+            log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
+        }
+
+        if (!revokedPartitions.isEmpty()) {
+            try {
+                listener.onPartitionsRevoked(revokedPartitions);
+            } catch (WakeupException | InterruptException e) {
+                // reset the assigned to owned partitions
+                subscriptions.assignFromSubscribed(ownedPartitions);
+                throw e;
+            } catch (Exception e) {
+                // reset the assigned to owned partitions
+                subscriptions.assignFromSubscribed(ownedPartitions);
+                log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
+            }
+        }
     }
 
     void maybeUpdateSubscriptionMetadata() {
@@ -479,10 +494,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Set<String> allSubscribedTopics = new HashSet<>();
         Map<String, Subscription> subscriptions = new HashMap<>();
-        for (JoinGroupResponseData.JoinGroupResponseMember memberSubScription : allSubscriptions) {
-            Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberSubScription.metadata()));
-            subscriptions.put(memberSubScription.memberId(), subscription);
+        // collect all the owned partitions
+        Map<TopicPartition, String> ownedPartitions = new HashMap<>();
+        for (JoinGroupResponseData.JoinGroupResponseMember memberSubscription : allSubscriptions) {
+            Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberSubscription.metadata()));
+            subscriptions.put(memberSubscription.memberId(), subscription);
             allSubscribedTopics.addAll(subscription.topics());
+            ownedPartitions.putAll(subscription.ownedPartitions().stream().collect(Collectors.toMap(item -> item, item -> memberSubscription.memberId())));
         }
 
         // the leader will begin watching for changes to any of the topics the group is interested in,
@@ -493,7 +511,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         log.debug("Performing assignment using strategy {} with subscriptions {}", assignor.name(), subscriptions);
 
-        Map<String, Assignment> assignment = assignor.assign(metadata.fetch(), subscriptions);
+        Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), subscriptions);
+
+        switch (protocol) {
+            case EAGER:
+                break;
+
+            case COOPERATIVE:
+                adjustAssignment(ownedPartitions, assignments);
+                break;
+        }
 
         // user-customized assignor may have created some topics that are not in the subscription list
         // and assign their partitions to the members; in this case we would like to update the leader's
@@ -503,7 +530,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // TODO: this is a hack and not something we want to support long-term unless we push regex into the protocol
         //       we may need to modify the PartitionAssignor API to better support this case.
         Set<String> assignedTopics = new HashSet<>();
-        for (Assignment assigned : assignment.values()) {
+        for (Assignment assigned : assignments.values()) {
             for (TopicPartition tp : assigned.partitions())
                 assignedTopics.add(tp.topic());
         }
@@ -526,15 +553,34 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         assignmentSnapshot = metadataSnapshot;
 
-        log.debug("Finished assignment for group: {}", assignment);
+        log.debug("Finished assignment for group: {}", assignments);
 
         Map<String, ByteBuffer> groupAssignment = new HashMap<>();
-        for (Map.Entry<String, Assignment> assignmentEntry : assignment.entrySet()) {
+        for (Map.Entry<String, Assignment> assignmentEntry : assignments.entrySet()) {
             ByteBuffer buffer = ConsumerProtocol.serializeAssignment(assignmentEntry.getValue());
             groupAssignment.put(assignmentEntry.getKey(), buffer);
         }
 
         return groupAssignment;
+    }
+
+    private void adjustAssignment(final Map<TopicPartition, String> ownedPartitions,
+                                  final Map<String, Assignment> assignments) {
+        // update the assignment if the partition is owned by another different owner
+        Set<TopicPartition> assignedPartitions = new HashSet<>();
+        for (final Map.Entry<String, Assignment> entry : assignments.entrySet()) {
+            final Assignment assignment = entry.getValue();
+            assignedPartitions.addAll(assignment.partitions());
+            assignment.partitions().removeIf(tp -> ownedPartitions.containsKey(tp) && !entry.getKey().equals(ownedPartitions.get(tp)));
+        }
+
+        // for all owned but not assigned partitions, blindly add them to assignment
+        for (final Map.Entry<TopicPartition, String> entry : ownedPartitions.entrySet()) {
+            final TopicPartition tp = entry.getKey();
+            if (!assignedPartitions.contains(tp)) {
+                assignments.get(entry.getValue()).partitions().add(tp);
+            }
+        }
     }
 
     @Override
@@ -545,8 +591,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
 
-        // with EAGER protocol always revoke all the assigned partitions;
-        // with COOPERATIVE protocol we will not revoke any partitions.
         switch (protocol) {
             case EAGER:
                 Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
@@ -560,9 +604,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
 
                 // also clear the assigned partitions since all have been revoked
-                if (!subscriptions.assignFromSubscribed(Collections.emptySet())){
-                    throw new IllegalStateException("Revoking all assigned partitions does not match with subscriptions, this should never happen.");
-                }
+                subscriptions.assignFromSubscribed(Collections.emptySet());
 
                 break;
 
