@@ -843,6 +843,7 @@ public class KafkaStreams implements AutoCloseable {
     }
 
     private boolean close(final long timeoutMs) {
+        System.out.println("shutting down");
         if (!setState(State.PENDING_SHUTDOWN)) {
             // if transition failed, it means it was either in PENDING_SHUTDOWN
             // or NOT_RUNNING already; just check that all threads have been stopped
@@ -897,9 +898,10 @@ public class KafkaStreams implements AutoCloseable {
 
         if (waitOnState(State.NOT_RUNNING, timeoutMs)) {
             log.info("Streams client stopped completely");
+            System.out.println("Streams client stopped completely");
             return true;
         } else {
-            log.info("Streams client cannot stop completely within the timeout");
+            System.out.println("Streams client cannot stop completely within the timeout");
             return false;
         }
     }

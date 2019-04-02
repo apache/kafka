@@ -164,6 +164,7 @@ public class RecordCollectorImpl implements RecordCollector {
         final ProducerRecord<byte[], byte[]> serializedRecord = new ProducerRecord<>(topic, partition, timestamp, keyBytes, valBytes, headers);
 
         try {
+            System.out.println("producer send " + serializedRecord);
             producer.send(serializedRecord, new Callback() {
                 @Override
                 public void onCompletion(final RecordMetadata metadata,
