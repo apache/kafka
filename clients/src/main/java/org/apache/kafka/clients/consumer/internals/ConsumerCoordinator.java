@@ -301,7 +301,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        
+
         switch (protocol) {
             case EAGER:
                 if (!ownedPartitions.isEmpty()) {
@@ -566,12 +566,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     private void adjustAssignment(final Map<TopicPartition, String> ownedPartitions,
                                   final Map<String, Assignment> assignments) {
+        boolean revocationsNeeded = false;
         // update the assignment if the partition is owned by another different owner
         Set<TopicPartition> assignedPartitions = new HashSet<>();
         for (final Map.Entry<String, Assignment> entry : assignments.entrySet()) {
             final Assignment assignment = entry.getValue();
             assignedPartitions.addAll(assignment.partitions());
-            assignment.partitions().removeIf(tp -> ownedPartitions.containsKey(tp) && !entry.getKey().equals(ownedPartitions.get(tp)));
+
+            if (assignment.partitions().removeIf(tp -> ownedPartitions.containsKey(tp) && !entry.getKey().equals(ownedPartitions.get(tp)))) {
+                revocationsNeeded = true;
+            }
         }
 
         // for all owned but not assigned partitions, blindly add them to assignment
@@ -579,6 +583,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             final TopicPartition tp = entry.getKey();
             if (!assignedPartitions.contains(tp)) {
                 assignments.get(entry.getValue()).partitions().add(tp);
+            }
+        }
+
+        // if revocations are triggered, tell everyone to re-join immediately.
+        if (revocationsNeeded) {
+            for (final Assignment assignment : assignments.values()) {
+                assignment.setError(ConsumerProtocol.Errors.NEED_REJOIN);
             }
         }
     }

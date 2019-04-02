@@ -116,7 +116,7 @@ public interface PartitionAssignor {
         private final List<TopicPartition> partitions;
         private final ByteBuffer userData;
         private final List<TopicPartition> revokedPartitions;
-        private final ConsumerProtocol.Errors error;
+        private ConsumerProtocol.Errors error;
 
         public Assignment(List<TopicPartition> partitions, ByteBuffer userData, List<TopicPartition> revokedPartitions, ConsumerProtocol.Errors error) {
             this.partitions = partitions;
@@ -143,6 +143,10 @@ public interface PartitionAssignor {
 
         public ConsumerProtocol.Errors error() {
             return error;
+        }
+
+        public void setError(ConsumerProtocol.Errors error) {
+            this.error = error;
         }
 
         public ByteBuffer userData() {
