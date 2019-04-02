@@ -69,6 +69,7 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
             EpochEndOffset epochEndOffset = response.responses().get(topicPartition);
             if (epochEndOffset == null) {
                 log.warn("Missing partition {} from response, ignoring", topicPartition);
+                partitionsToRetry.add(topicPartition);
                 continue;
             }
             Errors error = epochEndOffset.error();

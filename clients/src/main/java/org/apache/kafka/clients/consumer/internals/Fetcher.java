@@ -670,7 +670,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 @Override
                 public void onSuccess(ListOffsetResult result) {
                     if (!result.partitionsToRetry.isEmpty()) {
-                        subscriptions.resetFailed(result.partitionsToRetry, time.milliseconds() + retryBackoffMs);
+                        subscriptions.requestFailed(result.partitionsToRetry, time.milliseconds() + retryBackoffMs);
                         metadata.requestUpdate();
                     }
 
@@ -684,7 +684,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    subscriptions.resetFailed(resetTimestamps.keySet(), time.milliseconds() + retryBackoffMs);
+                    subscriptions.requestFailed(resetTimestamps.keySet(), time.milliseconds() + retryBackoffMs);
                     metadata.requestUpdate();
 
                     if (!(e instanceof RetriableException) && !cachedListOffsetsException.compareAndSet(null, e))
@@ -762,7 +762,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                 @Override
                 public void onFailure(RuntimeException e) {
-                    subscriptions.resetFailed(dataMap.keySet(), time.milliseconds() + retryBackoffMs);
+                    subscriptions.requestFailed(dataMap.keySet(), time.milliseconds() + retryBackoffMs);
                     metadata.requestUpdate();
 
                     if (!(e instanceof RetriableException) && !cachedOffsetForLeaderException.compareAndSet(null, e)) {
@@ -841,7 +841,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 log.debug("Leader for partition {} is unknown for fetching offset", tp);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
-                continue; // TODO still do this?
             } else if (currentInfo.get().partitionInfo().leader() == null) {
                 log.debug("Leader for partition {} is unavailable for fetching offset", tp);
                 metadata.requestUpdate();
@@ -1027,7 +1026,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             } else if (client.hasPendingRequests(node)) {
                 log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
             } else {
-                // TODO safe to get leader-and-epoch here? Should we use the info in partitionInfoAndEpoch?
                 ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
                 SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
 

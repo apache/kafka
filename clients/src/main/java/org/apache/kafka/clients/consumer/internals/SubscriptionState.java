@@ -506,9 +506,9 @@ public class SubscriptionState {
         assignedState(tp).resume();
     }
 
-    public void resetFailed(Set<TopicPartition> partitions, long nextRetryTimeMs) {
+    public void requestFailed(Set<TopicPartition> partitions, long nextRetryTimeMs) {
         for (TopicPartition partition : partitions)
-            assignedState(partition).resetFailed(nextRetryTimeMs);
+            assignedState(partition).requestFailed(nextRetryTimeMs);
     }
 
     public void movePartitionToEnd(TopicPartition tp) {
@@ -613,7 +613,7 @@ public class SubscriptionState {
             this.nextRetryTimeMs = nextAllowedRetryTimeMs;
         }
 
-        private void resetFailed(long nextAllowedRetryTimeMs) {
+        private void requestFailed(long nextAllowedRetryTimeMs) {
             this.nextRetryTimeMs = nextAllowedRetryTimeMs;
         }
 

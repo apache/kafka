@@ -163,5 +163,4 @@ public class OffsetForLeaderEpochClientTest {
         consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,
                 100, 1000, Integer.MAX_VALUE);
     }
-
 }

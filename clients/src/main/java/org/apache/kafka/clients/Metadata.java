@@ -486,5 +486,13 @@ public class Metadata implements Closeable {
             result = 31 * result + epoch.hashCode();
             return result;
         }
+
+        @Override
+        public String toString() {
+            return "LeaderAndEpoch{" +
+                    "leader=" + leader +
+                    ", epoch=" + epoch.map(Number::toString).orElse("absent") +
+                    '}';
+        }
     }
 }

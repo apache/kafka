@@ -41,10 +41,10 @@ public class LogTruncationException extends OffsetOutOfRangeException {
     }
 
     /**
-     * Get the truncation offsets for the partitions which were truncated.
-     * This is the first offset which is known to diverge from what the consumer read.
+     * Get the offsets for the partitions which were truncated. This is the first offset which is known to diverge
+     * from what the consumer read.
      */
-    public Map<TopicPartition, OffsetAndMetadata> truncationOffsets() {
+    public Map<TopicPartition, OffsetAndMetadata> divergentOffsets() {
         return offsetOutOfRangePartitions;
     }
 }
