@@ -982,14 +982,18 @@ public class RequestResponseTest {
         ControlledShutdownRequestData data = new ControlledShutdownRequestData()
                 .setBrokerId(10)
                 .setBrokerEpoch(0L);
-        return new ControlledShutdownRequest.Builder(data).build();
+        return new ControlledShutdownRequest.Builder(
+                data,
+                ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build();
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest(int version) {
         ControlledShutdownRequestData data = new ControlledShutdownRequestData()
                 .setBrokerId(10)
                 .setBrokerEpoch(0L);
-        return new ControlledShutdownRequest.Builder(data).build((short) version);
+        return new ControlledShutdownRequest.Builder(
+                data,
+                ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build((short) version);
     }
 
     private ControlledShutdownResponse createControlledShutdownResponse() {

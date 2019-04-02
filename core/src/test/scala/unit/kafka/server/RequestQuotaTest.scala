@@ -248,7 +248,8 @@ class RequestQuotaTest extends BaseRequestTest {
           new ControlledShutdownRequest.Builder(
               new ControlledShutdownRequestData()
                 .setBrokerId(brokerId)
-                .setBrokerEpoch(Long.MaxValue))
+                .setBrokerEpoch(Long.MaxValue),
+              ApiKeys.CONTROLLED_SHUTDOWN.latestVersion)
 
         case ApiKeys.OFFSET_COMMIT =>
           new OffsetCommitRequest.Builder("test-group",

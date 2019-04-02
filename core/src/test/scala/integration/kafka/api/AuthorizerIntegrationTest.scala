@@ -365,7 +365,8 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def controlledShutdownRequest = new ControlledShutdownRequest.Builder(
       new ControlledShutdownRequestData()
         .setBrokerId(brokerId)
-        .setBrokerEpoch(Long.MaxValue)).build()
+        .setBrokerEpoch(Long.MaxValue),
+      ApiKeys.CONTROLLED_SHUTDOWN.latestVersion).build()
 
   private def createTopicsRequest =
     new CreateTopicsRequest.Builder(new CreateTopicsRequestData().setTopics(
