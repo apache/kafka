@@ -74,7 +74,7 @@ public class InMemorySessionStoreTest {
         new LogContext(storeName),
         new DefaultProductionExceptionHandler(),
         new Metrics().sensor("skipped-records")) {
-        
+
         @Override
         public <K1, V1> void send(final String topic,
             final K1 key,
@@ -227,7 +227,7 @@ public class InMemorySessionStoreTest {
     @Test
     public void shouldFetchExactKeys() {
         sessionStore = Stores.sessionStoreBuilder(
-            Stores.persistentSessionStore(
+            Stores.inMemorySessionStore(
                 "session-store",
                 ofMillis(0x7a00000000000000L)),
             Serdes.String(),
@@ -256,7 +256,7 @@ public class InMemorySessionStoreTest {
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
             sessionStore.findSessions("a", "aa", 0, Long.MAX_VALUE)
         ) {
-            assertThat(valuesToList(iterator), equalTo(Arrays.asList(1L, 3L, 2L, 4L, 5L)));
+            assertThat(valuesToList(iterator), equalTo(Arrays.asList(1L, 2L, 3L, 4L, 5L)));
         }
 
         try (final KeyValueIterator<Windowed<String>, Long> iterator =
