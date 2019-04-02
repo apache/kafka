@@ -47,6 +47,8 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANS
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultSet}
+import org.apache.kafka.common.message.DeleteTopicsResponseData
+import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultSet}
 import org.apache.kafka.common.message.DescribeGroupsResponseData
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData
 import org.apache.kafka.common.message.JoinGroupResponseData
@@ -1565,51 +1567,66 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDeleteTopicsRequest(request: RequestChannel.Request) {
-    val deleteTopicRequest = request.body[DeleteTopicsRequest]
-
-    val unauthorizedTopicErrors = mutable.Map[String, Errors]()
-    val nonExistingTopicErrors = mutable.Map[String, Errors]()
-    val authorizedForDeleteTopics =  mutable.Set[String]()
-
-    for (topic <- deleteTopicRequest.topics.asScala) {
-      if (!authorize(request.session, Delete, Resource(Topic, topic, LITERAL)))
-        unauthorizedTopicErrors += topic -> Errors.TOPIC_AUTHORIZATION_FAILED
-      else if (!metadataCache.contains(topic))
-        nonExistingTopicErrors += topic -> Errors.UNKNOWN_TOPIC_OR_PARTITION
-      else
-        authorizedForDeleteTopics.add(topic)
-    }
-
-    def sendResponseCallback(authorizedTopicErrors: Map[String, Errors]): Unit = {
+    def sendResponseCallback(results: DeletableTopicResultSet): Unit = {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val completeResults = unauthorizedTopicErrors ++ nonExistingTopicErrors ++ authorizedTopicErrors
-        val responseBody = new DeleteTopicsResponse(requestThrottleMs, completeResults.asJava)
+        val responseData = new DeleteTopicsResponseData()
+          .setThrottleTimeMs(requestThrottleMs)
+          .setResponses(results)
+        val responseBody = new DeleteTopicsResponse(responseData)
         trace(s"Sending delete topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
         responseBody
       }
       sendResponseMaybeThrottle(request, createResponse)
     }
 
+    val deleteTopicRequest = request.body[DeleteTopicsRequest]
+    val results = new DeletableTopicResultSet(deleteTopicRequest.data.topicNames.size)
+    val toDelete = mutable.Set[String]()
     if (!controller.isActive) {
-      val results = deleteTopicRequest.topics.asScala.map { topic =>
-        (topic, Errors.NOT_CONTROLLER)
-      }.toMap
+      deleteTopicRequest.data.topicNames.asScala.foreach { case topic =>
+        results.add(new DeletableTopicResult()
+          .setName(topic)
+          .setErrorCode(Errors.NOT_CONTROLLER.code))
+      }
       sendResponseCallback(results)
     } else if (!config.deleteTopicEnable) {
       val error = if (request.context.apiVersion < 3) Errors.INVALID_REQUEST else Errors.TOPIC_DELETION_DISABLED
-      val results = deleteTopicRequest.topics.asScala.map { topic =>
-        (topic, error)
-      }.toMap
+      deleteTopicRequest.data.topicNames.asScala.foreach { case topic =>
+        results.add(new DeletableTopicResult()
+          .setName(topic)
+          .setErrorCode(error.code))
+      }
       sendResponseCallback(results)
     } else {
+      deleteTopicRequest.data.topicNames.asScala.foreach { case topic =>
+        results.add(new DeletableTopicResult()
+          .setName(topic))
+      }
+      results.asScala.foreach(topic => {
+         if (!authorize(request.session, Delete, Resource(Topic, topic.name, LITERAL))) 
+           topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+         else if (!metadataCache.contains(topic.name))
+           topic.setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
+         else
+           toDelete += topic.name
+      })
       // If no authorized topics return immediately
-      if (authorizedForDeleteTopics.isEmpty)
-        sendResponseCallback(Map())
+      if (toDelete.isEmpty)
+        sendResponseCallback(results)
       else {
+        def handleDeleteTopicsResults(errors: Map[String, Errors]): Unit = {
+          errors.foreach {
+            case (topicName, error) =>
+              results.find(topicName)
+                .setErrorCode(error.code)
+          }
+          sendResponseCallback(results)
+        }
+
         adminManager.deleteTopics(
-          deleteTopicRequest.timeout.toInt,
-          authorizedForDeleteTopics,
-          sendResponseCallback
+          deleteTopicRequest.data.timeoutMs.toInt,
+          toDelete,
+          handleDeleteTopicsResults
         )
       }
     }

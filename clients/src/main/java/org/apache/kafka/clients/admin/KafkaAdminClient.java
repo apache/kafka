@@ -63,6 +63,8 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicSet;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DeleteTopicsRequestData;
+import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup;
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroupMember;
@@ -1365,14 +1367,16 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new DeleteTopicsRequest.Builder(new HashSet<>(validTopicNames), timeoutMs);
+                return new DeleteTopicsRequest.Builder(new DeleteTopicsRequestData()
+                        .setTopicNames(validTopicNames)
+                        .setTimeoutMs(timeoutMs));
             }
 
             @Override
             void handleResponse(AbstractResponse abstractResponse) {
                 DeleteTopicsResponse response = (DeleteTopicsResponse) abstractResponse;
                 // Check for controller change
-                for (Errors error : response.errors().values()) {
+                for (Errors error : response.errorCounts().keySet()) {
                     if (error == Errors.NOT_CONTROLLER) {
                         metadataManager.clearController();
                         metadataManager.requestUpdate();
@@ -1380,12 +1384,12 @@ public class KafkaAdminClient extends AdminClient {
                     }
                 }
                 // Handle server responses for particular topics.
-                for (Map.Entry<String, Errors> entry : response.errors().entrySet()) {
-                    KafkaFutureImpl<Void> future = topicFutures.get(entry.getKey());
+                for (DeletableTopicResult result : response.data().responses()) {
+                    KafkaFutureImpl<Void> future = topicFutures.get(result.name());
                     if (future == null) {
-                        log.warn("Server response mentioned unknown topic {}", entry.getKey());
+                        log.warn("Server response mentioned unknown topic {}", result.name());
                     } else {
-                        ApiException exception = entry.getValue().exception();
+                        ApiException exception = Errors.forCode(result.errorCode()).exception();
                         if (exception != null) {
                             future.completeExceptionally(exception);
                         } else {
