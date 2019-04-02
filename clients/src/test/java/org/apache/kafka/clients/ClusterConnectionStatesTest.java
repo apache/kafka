@@ -41,6 +41,7 @@ public class ClusterConnectionStatesTest {
     private final long reconnectBackoffMs = 10 * 1000;
     private final long reconnectBackoffMax = 60 * 1000;
     private final double reconnectBackoffJitter = 0.2;
+    private final long  defaultConnectReadyTimeOutMs = 14 * 1000;
     private final String nodeId1 = "1001";
     private final String nodeId2 = "2002";
     private final String hostTwoIps = "kafka.apache.org";
@@ -49,7 +50,7 @@ public class ClusterConnectionStatesTest {
 
     @Before
     public void setup() {
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, new LogContext());
+        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, defaultConnectReadyTimeOutMs ,new LogContext());
     }
 
     @Test
@@ -63,6 +64,7 @@ public class ClusterConnectionStatesTest {
         assertFalse(connectionStates.isReady(nodeId1, time.milliseconds()));
         assertFalse(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
         assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
+        assertFalse(connectionStates.checkReadyTimeOut(nodeId1));
 
         time.sleep(100);
 
@@ -74,6 +76,7 @@ public class ClusterConnectionStatesTest {
         assertFalse(connectionStates.isConnecting(nodeId1));
         assertFalse(connectionStates.isBlackedOut(nodeId1, time.milliseconds()));
         assertEquals(connectionStates.connectionDelay(nodeId1, time.milliseconds()), Long.MAX_VALUE);
+        assertFalse(connectionStates.checkReadyTimeOut(nodeId1));
 
         time.sleep(15000);
 
@@ -85,6 +88,7 @@ public class ClusterConnectionStatesTest {
         assertFalse(connectionStates.isConnecting(nodeId1));
         assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
         assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
+        assertTrue(connectionStates.checkReadyTimeOut(nodeId1));
 
         // After disconnecting we expect a backoff value equal to the reconnect.backoff.ms setting (plus minus 20% jitter)
         double backoffTolerance = reconnectBackoffMs * reconnectBackoffJitter;
