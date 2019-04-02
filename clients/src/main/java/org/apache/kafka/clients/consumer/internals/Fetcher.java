@@ -742,7 +742,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                                     SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
                                             respEndOffset.endOffset(), Optional.of(respEndOffset.leaderEpoch()), currentLeader);
                                     log.info("Truncation detected for partition {}, resetting offset to {}", respTopicPartition, newPosition);
-                                    subscriptions.position(respTopicPartition, newPosition);
+                                    subscriptions.seek(respTopicPartition, newPosition);
                                 } else {
                                     log.warn("Truncation detected for partition {}, but no reset policy is set", respTopicPartition);
                                     truncationWithoutResetPolicy.put(respTopicPartition, new OffsetAndMetadata(
@@ -1044,9 +1044,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     fetchable.put(leaderAndEpoch.leader, builder);
                 }
 
-                Optional<Integer> leaderEpoch = this.metadata.lastSeenLeaderEpoch(partition);
                 builder.add(partition, new FetchRequest.PartitionData(position.offset,
-                        FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize, leaderEpoch));
+                        FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize, position.currentLeader.epoch));
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", isolationLevel,
                     partition, position, leaderAndEpoch.leader);

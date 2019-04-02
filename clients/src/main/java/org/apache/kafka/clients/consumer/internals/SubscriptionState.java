@@ -568,7 +568,7 @@ public class SubscriptionState {
         private void reset(OffsetResetStrategy strategy) {
             this.state = FetchState.AWAIT_RESET;
             this.resetStrategy = strategy;
-            this.position = null;
+            //this.position = null;
             this.nextRetryTimeMs = null;
         }
 
