@@ -830,6 +830,7 @@ public class InternalTopologyBuilder {
             for (final String node : nodes) {
                 if (isGlobalSource(node)) {
                     globalGroups.addAll(nodes);
+                    break;
                 }
             }
         }
