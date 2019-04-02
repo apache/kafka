@@ -2142,7 +2142,8 @@ public class ConsumerCoordinatorTest {
                 autoCommitEnabled,
                 autoCommitIntervalMs,
                 null,
-                leaveGroup);
+                leaveGroup,
+                ConsumerCoordinator.RebalanceProtocol.EAGER);
     }
 
     private FindCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {

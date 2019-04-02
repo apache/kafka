@@ -758,6 +758,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             int maxPollIntervalMs = config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
             int sessionTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
             // no coordinator will be constructed for the default (null) group id
+            ConsumerCoordinator.RebalanceProtocol rebalanceProtocol = ConsumerCoordinator.RebalanceProtocol.valueOf(
+                config.getString(ConsumerConfig.REBALANCE_PROTOCOL_CONFIG).toUpperCase(Locale.ROOT));
             this.coordinator = groupId == null ? null :
                 new ConsumerCoordinator(logContext,
                         this.client,
@@ -775,7 +777,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         enableAutoCommit,
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                         this.interceptors,
-                        config.getBoolean(ConsumerConfig.LEAVE_GROUP_ON_CLOSE_CONFIG));
+                        config.getBoolean(ConsumerConfig.LEAVE_GROUP_ON_CLOSE_CONFIG),
+                        rebalanceProtocol);
             this.fetcher = new Fetcher<>(
                     logContext,
                     this.client,

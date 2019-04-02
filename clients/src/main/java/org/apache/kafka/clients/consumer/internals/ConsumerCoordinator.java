@@ -111,6 +111,33 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    public enum RebalanceProtocol {
+        EAGER((byte) 0), COOPERATIVE((byte) 1);
+
+        private final byte id;
+
+        RebalanceProtocol(byte id) {
+            this.id = id;
+        }
+
+        public byte id() {
+            return id;
+        }
+
+        public static RebalanceProtocol forId(byte id) {
+            switch (id) {
+                case 0:
+                    return EAGER;
+                case 1:
+                    return COOPERATIVE;
+                default:
+                    throw new IllegalArgumentException("Unknown isolation level " + id);
+            }
+        }
+    }
+
+    private final RebalanceProtocol protocol;
+
     /**
      * Initialize the coordination manager.
      */
@@ -130,7 +157,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
-                               final boolean leaveGroupOnClose) {
+                               final boolean leaveGroupOnClose,
+                               final RebalanceProtocol protocol) {
         super(logContext,
               client,
               groupId,
@@ -144,6 +172,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
               leaveGroupOnClose);
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
+        this.protocol = protocol;
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.updateVersion());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
@@ -249,6 +278,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
+        Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
         if (!subscriptions.assignFromSubscribed(assignment.partitions())) {
             handleAssignmentMismatch(assignment);
@@ -270,14 +301,65 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback after rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        log.info("Setting newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
-        try {
-            listener.onPartitionsAssigned(assignedPartitions);
-        } catch (WakeupException | InterruptException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
+
+        switch (protocol) {
+            case EAGER:
+                if (!ownedPartitions.isEmpty()) {
+                    throw new IllegalStateException("Some partitions are not revoked with EAGER rebalance protocol, this should never happen.");
+                }
+
+                log.info("Setting newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
+                try {
+                    listener.onPartitionsAssigned(assignedPartitions);
+                } catch (WakeupException | InterruptException e) {
+                    throw e;
+                } catch (Exception e) {
+                    log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
+                }
+                break;
+
+            case COOPERATIVE:
+                Set<TopicPartition> addedPartitions = new HashSet<>(assignedPartitions);
+                addedPartitions.removeAll(ownedPartitions);
+
+                log.info("Updating with newly assigned partitions: {}, compare with already owned partitions: {}, " +
+                        "Newly added partitions: {}, required revoking partitions: {}",
+                    Utils.join(assignedPartitions, ", "),
+                    Utils.join(ownedPartitions, ", "),
+                    Utils.join(addedPartitions, ", "),
+                    Utils.join(assignment.revokedPartitions(), ", "));
+
+                try {
+                    listener.onPartitionsAssigned(addedPartitions);
+                } catch (WakeupException | InterruptException e) {
+                    throw e;
+                } catch (Exception e) {
+                    log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
+                }
+
+                Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions);
+                revokedPartitions.removeAll(assignedPartitions);
+
+                if (revokedPartitions.equals(new HashSet<>(assignment.revokedPartitions()))) {
+                    throw new IllegalStateException("Some partitions are no longer assigned, but not included in the revoked partitions list;" +
+                        "this should never happen");
+                }
+
+                if (!revokedPartitions.isEmpty()) {
+                    try {
+                        listener.onPartitionsRevoked(revokedPartitions);
+                    } catch (WakeupException | InterruptException e) {
+                        throw e;
+                    } catch (Exception e) {
+                        log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
+                    }
+                }
+
+                if (assignment.error() == ConsumerProtocol.Errors.NEED_REJOIN) {
+                    requestRejoin();
+                }
         }
+
     }
 
     void maybeUpdateSubscriptionMetadata() {
@@ -462,15 +544,30 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        // copy since about to be handed to user code
-        Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
-        log.info("Revoking previously assigned partitions {}", revoked);
-        try {
-            listener.onPartitionsRevoked(revoked);
-        } catch (WakeupException | InterruptException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
+
+        // with EAGER protocol always revoke all the assigned partitions;
+        // with COOPERATIVE protocol we will not revoke any partitions.
+        switch (protocol) {
+            case EAGER:
+                Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
+                log.info("Revoking previously assigned partitions {}", revoked);
+                try {
+                    listener.onPartitionsRevoked(revoked);
+                } catch (WakeupException | InterruptException e) {
+                    throw e;
+                } catch (Exception e) {
+                    log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
+                }
+
+                // also clear the assigned partitions since all have been revoked
+                if (!subscriptions.assignFromSubscribed(Collections.emptySet())){
+                    throw new IllegalStateException("Revoking all assigned partitions does not match with subscriptions, this should never happen.");
+                }
+
+                break;
+
+            case COOPERATIVE:
+                break;
         }
 
         isLeader = false;

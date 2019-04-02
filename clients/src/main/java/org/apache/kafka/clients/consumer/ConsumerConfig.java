@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -262,6 +263,15 @@ public class ConsumerConfig extends AbstractConfig {
 
     public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT);
 
+    /** <code>rebalance.protocol</code> */
+    public static final String REBALANCE_PROTOCOL_CONFIG = "rebalance.protocol";
+    public static final String REBALANCE_PROTOCOL_DOC = "<p>Controls how consumer clients will participate in a rebalance. If set to <code>eager</code>, consumer will always revoke all its assigned partitions" +
+        " before sending the join group request. If set to <code>cooperative</code>, consumer will only revoke partitions as required in the previously received assignment information and then join group with the rest of the owned partitions" +
+        " encoded in the subscription information</p> <p>When upgrading consumer from versions older than 2.3 to versions equal or newer than 2.3, users should keep this config as <code>eager</code> during the first rolling bounce to upgrade" +
+        " to the newer version, and only consider changing this config to <code>cooperative</code> after that with a second rolling bounce</p>";
+
+    public static final String DEFAULT_REBALANCE_PROTOCOL = ConsumerCoordinator.RebalanceProtocol.EAGER.toString().toLowerCase(Locale.ROOT);
+
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -464,6 +474,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         in(IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT), IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT)),
                                         Importance.MEDIUM,
                                         ISOLATION_LEVEL_DOC)
+                                .define(REBALANCE_PROTOCOL_CONFIG,
+                                        Type.STRING,
+                                        DEFAULT_REBALANCE_PROTOCOL,
+                                        in(ConsumerCoordinator.RebalanceProtocol.EAGER.toString().toLowerCase(Locale.ROOT), ConsumerCoordinator.RebalanceProtocol.COOPERATIVE.toString().toLowerCase(Locale.ROOT)),
+                                        Importance.MEDIUM,
+                                        REBALANCE_PROTOCOL_DOC)
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,

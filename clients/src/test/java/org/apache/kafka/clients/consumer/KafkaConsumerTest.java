@@ -1870,7 +1870,8 @@ public class KafkaConsumerTest {
                 autoCommitEnabled,
                 autoCommitIntervalMs,
                 interceptors,
-                true);
+                true,
+                ConsumerCoordinator.RebalanceProtocol.EAGER);
 
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,

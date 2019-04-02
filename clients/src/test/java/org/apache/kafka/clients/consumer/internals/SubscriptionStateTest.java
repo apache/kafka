@@ -148,12 +148,7 @@ public class SubscriptionStateTest {
     @Test
     public void verifyAssignmentListener() {
         final AtomicReference<Set<TopicPartition>> assignmentRef = new AtomicReference<>();
-        state.addListener(new SubscriptionState.Listener() {
-            @Override
-            public void onAssignment(Set<TopicPartition> assignment) {
-                assignmentRef.set(assignment);
-            }
-        });
+        state.addListener(assignmentRef::set);
         Set<TopicPartition> userAssignment = Utils.mkSet(tp0, tp1);
         state.assignFromUser(userAssignment);
         assertEquals(userAssignment, assignmentRef.get());
