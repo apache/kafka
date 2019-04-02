@@ -111,7 +111,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case CREATE_TOPICS:
                 return new CreateTopicsResponse(struct, version);
             case DELETE_TOPICS:
-                return new DeleteTopicsResponse(struct);
+                return new DeleteTopicsResponse(struct, version);
             case DELETE_RECORDS:
                 return new DeleteRecordsResponse(struct);
             case INIT_PRODUCER_ID:

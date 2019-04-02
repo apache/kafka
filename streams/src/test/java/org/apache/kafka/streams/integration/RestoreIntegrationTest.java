@@ -146,7 +146,7 @@ public class RestoreIntegrationTest {
                     }
                 });
 
-        kafkaStreams = new KafkaStreams(builder.build(), props);
+        kafkaStreams = new KafkaStreams(builder.build(props), props);
         kafkaStreams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
                 startupLatch.countDown();
