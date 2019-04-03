@@ -34,6 +34,7 @@ public class MirrorClientConfig extends AbstractConfig {
     
     public static final String ADMIN_CLIENT_PREFIX = "admin.";
     public static final String CONSUMER_CLIENT_PREFIX = "consumer.";
+    public static final String PRODUCER_CLIENT_PREFIX = "producer.";
 
     static final String CHECKPOINTS_TOPIC = "checkpoints-internal"; // internal so not replicated
     static final String HEARTBEATS_TOPIC = "heartbeats";
@@ -57,6 +58,10 @@ public class MirrorClientConfig extends AbstractConfig {
 
     Map<String, Object> consumerConfig() {
         return valuesWithPrefixOverride(CONSUMER_CLIENT_PREFIX);
+    }
+
+    Map<String, Object> producerConfig() {
+        return valuesWithPrefixOverride(PRODUCER_CLIENT_PREFIX);
     }
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()

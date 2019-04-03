@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
-class SourceAndTarget {
+public class SourceAndTarget {
     private String source;
     private String target;
 

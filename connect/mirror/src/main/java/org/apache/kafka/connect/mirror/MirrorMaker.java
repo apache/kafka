@@ -19,6 +19,7 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.Exit;
+//import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.Worker;
@@ -42,7 +43,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 
@@ -68,13 +68,21 @@ public class MirrorMaker {
     private final Time time;
     private final MirrorMakerConfig config;
 
-    public MirrorMaker(Map<String, String> props, Time time) {
+    public MirrorMaker(MirrorMakerConfig config, Time time) {
         log.debug("Kafka MirrorMaker instance created");
         this.time = time;
         this.advertisedBaseUrl = "TODO";
-        this.config = new MirrorMakerConfig(props);
-        enabledClusterPairs().forEach(x -> addHerder(x, config.workerConfig(x)));
+        this.config = config;
+        config.enabledClusterPairs().forEach(x -> addHerder(x));
         shutdownHook = new ShutdownHook();
+    }
+
+    public MirrorMaker(Map<String, String> props, Time time) {
+        this(new MirrorMakerConfig(props), time);
+    }
+
+    public MirrorMaker(Map<String, String> props) {
+        this(props, Time.SYSTEM);
     }
 
     public void start() {
@@ -93,7 +101,7 @@ public class MirrorMaker {
             }
         }
         log.info("Starting connectors...");
-        enabledClusterPairs().forEach(x -> startConnectors(x));
+        config.enabledClusterPairs().forEach(x -> startConnectors(x));
         log.info("Kafka MirrorMaker started");
     }
 
@@ -158,22 +166,9 @@ public class MirrorMaker {
         CONNECTOR_CLASSES.forEach(x -> startConnector(sourceAndTarget, x));
     }
 
-    private List<SourceAndTarget> enabledClusterPairs() {
-        List<SourceAndTarget> pairs = new ArrayList<>();
-        for (String source : config.clusters()) {
-            for (String target : config.clusters()) {
-                SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
-                if (!source.equals(target) && config.enabled(sourceAndTarget)) {
-                    pairs.add(sourceAndTarget);
-                }
-            }
-        }
-        return pairs;
-    }
-
-    private void addHerder(SourceAndTarget sourceAndTarget, Map<String, String> workerProps) {
+    private void addHerder(SourceAndTarget sourceAndTarget) {
         log.info("creating herder for " + sourceAndTarget.toString());
-        MirrorMetrics.metricsFor(sourceAndTarget); // for side effect
+        Map<String, String> workerProps = config.workerConfig(sourceAndTarget);
         String advertisedUrl = advertisedBaseUrl + "/" + sourceAndTarget.source();
         String workerId = sourceAndTarget.toString();
         Plugins plugins = new Plugins(workerProps);
@@ -232,7 +227,6 @@ public class MirrorMaker {
                 Exit.exit(3);
             }
 
-                        // Shutdown will be triggered by Ctrl-C or via HTTP shutdown request
             mirrorMaker.awaitStop();
 
         } catch (Throwable t) {

@@ -61,9 +61,22 @@ public class MirrorSourceConnector extends SourceConnector {
     private TopicFilter topicFilter;
     private ConfigPropertyFilter configPropertyFilter;
     private List<TopicPartition> knownTopicPartitions = Collections.emptyList();
+    private Set<String> knownTargetTopics = Collections.emptySet();
     private ReplicationPolicy replicationPolicy;
     private AdminClient sourceAdminClient;
     private AdminClient targetAdminClient;
+
+    public MirrorSourceConnector() {
+        // nop
+    }
+
+    // visible for testing
+    MirrorSourceConnector(SourceAndTarget sourceAndTarget, ReplicationPolicy replicationPolicy,
+            TopicFilter topicFilter) {
+        this.sourceAndTarget = sourceAndTarget;
+        this.replicationPolicy = replicationPolicy;
+        this.topicFilter = topicFilter;
+    } 
 
     @Override
     public void start(Map<String, String> props) {
@@ -75,11 +88,11 @@ public class MirrorSourceConnector extends SourceConnector {
         replicationPolicy = config.replicationPolicy();
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
         targetAdminClient = AdminClient.create(config.targetAdminConfig());
-        log.info("Starting {} for {}.", connectorName, sourceAndTarget);
         scheduler = new Scheduler(MirrorSourceConnector.class);
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
         scheduler.scheduleRepeating(this::syncTopicAcls, config.syncTopicAclsInterval(), "syncing topic ACLs");
-        scheduler.scheduleRepeating(this::syncTopicConfigs, config.syncTopicConfigsInterval(), "syncing topic configs");
+        scheduler.scheduleRepeating(this::syncTopicConfigs, config.syncTopicConfigsInterval(),
+            "syncing topic configs");
         scheduler.scheduleRepeatingDelayed(this::refreshTopicPartitions, config.refreshTopicsInterval(),
             "refreshing topics");
         log.info("Started {} with {} topic-partitions.", connectorName, knownTopicPartitions.size());
@@ -87,7 +100,6 @@ public class MirrorSourceConnector extends SourceConnector {
 
     @Override
     public void stop() {
-        log.info("Stopping {}.", connectorName);
         scheduler.shutdown();
         synchronized (sourceAdminClient) {
             sourceAdminClient.close();
@@ -149,18 +161,29 @@ public class MirrorSourceConnector extends SourceConnector {
                     deadTopicPartitions.size(), knownTopicPartitions.size());
             knownTopicPartitions = topicPartitions;
             context.requestTaskReconfiguration();
+        } else {
+            knownTargetTopics = findExistingTargetTopics();
         }
     }
 
     private void loadTopicPartitions()
             throws InterruptedException, ExecutionException {
         knownTopicPartitions = findTopicPartitions();
+        knownTargetTopics = findExistingTargetTopics(); 
     }
 
-    Set<String> topicsToReplicate() {
+    private Set<String> findExistingTargetTopics()
+            throws InterruptedException, ExecutionException {
+        return listTopics(targetAdminClient).stream()
+            .filter(x -> sourceAndTarget.source().equals(replicationPolicy.topicSource(x)))
+            .collect(Collectors.toSet());
+    }
+
+    private Set<String> topicsBeingReplicated() {
         return knownTopicPartitions.stream()
             .map(x -> x.topic())
             .distinct()
+            .filter(x -> knownTargetTopics.contains(formatRemoteTopic(x)))
             .collect(Collectors.toSet());
     }
 
@@ -177,7 +200,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     private void syncTopicConfigs()
             throws InterruptedException, ExecutionException {
-        Map<String, Config> sourceConfigs = describeTopicConfigs(topicsToReplicate());
+        Map<String, Config> sourceConfigs = describeTopicConfigs(topicsBeingReplicated());
         Map<String, Config> targetConfigs = sourceConfigs.entrySet().stream()
             .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue())));
         updateTopicConfigs(targetConfigs);
@@ -208,7 +231,8 @@ public class MirrorSourceConnector extends SourceConnector {
             throws InterruptedException, ExecutionException {
         Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()
             .filter(x -> shouldReplicateTopicConfigurationProperty(x.getKey()))
-            .collect(Collectors.toMap(x -> new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), x -> x.getValue()));
+            .collect(Collectors.toMap(x ->
+                new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), x -> x.getValue()));
         log.info("Syncing configs for {} topics.", configs.size());
         synchronized (targetAdminClient) {
             targetAdminClient.alterConfigs(configs).values().forEach((k, v) -> v.whenComplete((x, e) -> {
@@ -262,7 +286,8 @@ public class MirrorSourceConnector extends SourceConnector {
     }
 
     boolean shouldReplicateTopic(String topic) {
-        return topicFilter.shouldReplicateTopic(topic) && !isCycle(topic);
+        return (topicFilter.shouldReplicateTopic(topic) || isHeartbeatTopic(topic))
+            && !replicationPolicy.isInternalTopic(topic) && !isCycle(topic);
     }
 
     boolean shouldReplicateTopicConfigurationProperty(String property) {
@@ -279,6 +304,11 @@ public class MirrorSourceConnector extends SourceConnector {
         } else {
             return isCycle(replicationPolicy.upstreamTopic(topic));
         }
+    }
+
+    // e.g. heartbeats, us-west.heartbeats
+    boolean isHeartbeatTopic(String topic) {
+        return MirrorClientConfig.HEARTBEATS_TOPIC.equals(replicationPolicy.originalTopic(topic));
     }
 
     String formatRemoteTopic(String topic) {

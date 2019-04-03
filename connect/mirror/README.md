@@ -144,56 +144,21 @@ and override `replication.policy.class` (default is
 
 MM2 is built on the Connect framework and inherits all of Connect's metrics, e.g.
 `source-record-poll-rate`. In addition, MM2 produces its own metrics under the
-`kafka.connect.mirror` metric group. Each metric is tagged with the source and
-target cluster aliases, so you can monitor each replication flow independently.
+`kafka.connect.mirror` metric group. Each metric is tagged as follows:
 
-MM2 emits 4 types of metrics: heartbeat, checkpoint, topic, and record metrics, as
-follows.
+    - *target*: alias of target cluster
+    - *topic*:  remote topic on target cluster 
+    - *partition*: partition being replicated
 
-*Heartbeat metrics* measure how fast MM2's internal heartbeat records propagate from
-cluster to cluster. 
+Metrics are tracked for each *remote* topic. The source cluster can be inferred
+from the topic name. For example, replicating `topic1` from `A->B` will yield metrics
+like:
 
-The following heartbeat metrics are emitted:
+    - `target=B`
+    - `topic=A.topic1`
+    - `partition=1`
 
-    # MBean: kafka.connect.mirror:type=heartbeat-metrics,source=([-.w]+),target=([-.w]+)
- 
-    heartbeat-count         # number of heartbeats emitted to target cluster
-    heartbeat-rate          # heartbeats/sec emitted to target cluster
-    heartbeat-lag-ms        # time it takes heartbeats to propagate source -> target
-    heartbeat-lag-ms-min
-    heartbeat-lag-ms-max
-    heartbeat-lag-ms-avg
-
-In order to capture heartbeat-lag, ensure MM2 is configured to replicate the
-`heartbeat` topic:
-
-    emit.heartbeats.enabled = true      # enabled by default
-    topics = heartbeat, topic1, topic2  # .* by default
-
-*Checkpoint metrics* capture how fast consumer group state is replicated from source
--> target cluster. The frequency and lag of checkpoints govern how far behind
-consumer groups will be after migrating between clusters. For example, if checkpoints
-are 30 seconds behind real-time, a migrated consumer would start consuming about
-30 seconds behind where it left off in the old cluster.
-
-N.B. checkpoints are only emitted for replicated consumer groups. If no consumer
-groups exist in the source cluster, no checkpoints will be emitted.
-
-The following checkpoint metrics are emitted:
-
-    # MBean: kafka.connect.mirror:type=checkpoint-metrics,source=([-.w]+),target=([-.w]+)
-
-    checkpoint-count        # number of checkpoints emitted to the target cluster
-    checkpoint-rate         # checkpoints/sec emitted to the target cluster
-    checkpoint-lag-ms       # how far checkpoints are behind real-time
-    checkpoint-lag-ms-min
-    checkpoint-lag-ms-max
-    checkpoint-lag-ms-avg
-
-These metrics do not take into account the time between upstream consumer commits.
-
-*Record metrics* capture how fast records are replicated across all topic-partitions.
-The following are emitted:
+The following metrics are emitted:
 
     # MBean: kafka.connect.mirror:type=record-metrics,source=([-.w]+),target=([-.w]+)
 
@@ -209,24 +174,5 @@ The following are emitted:
     byte-rate               # average number of bytes/sec in replicated records
 
 These metrics do not discern between created-at and log-append timestamps.
-
-*Topic metrics* capture how fast records are replicated across individual topics.
-The following are emitted:
-
-    # MBean: kafka.connect.mirror:type=topic-metrics,target=([-.w]+),topic=([-.w]+)
-
-    record-count            # number of records replicated to the topic
-    record-age-ms           # age of records when they are replicated
-    record-age-ms-min
-    record-age-ms-max
-    record-age-ms-avg
-    replication-lag-ms      # time it takes records to propagate to this topic
-    replication-lag-ms-min
-    replication-lag-ms-max
-    replication-lag-ms-avg
-    byte-rate               # average number of bytes/sec replicated to this topic
-
-These metrics are tracked for each remote topic. For example, replicating `topic1`
-from `A->B` will yield metrics with `target=B` and `topic=A.topic1`.
 
 

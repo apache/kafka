@@ -19,6 +19,8 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 
@@ -53,10 +55,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
         MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
 
-    public static final String SOURCE_CLUSTER_BOOTSTRAP_SERVERS = "source.cluster.bootstrap.servers";
-    private static final String SOURCE_CLUSTER_BOOTSTRAP_SERVERS_DOC = "source.cluster.bootstrap.servers";
-    public static final String TARGET_CLUSTER_BOOTSTRAP_SERVERS = "target.cluster.bootstrap.servers";
-    private static final String TARGET_CLUSTER_BOOTSTRAP_SERVERS_DOC = "target.cluster.bootstrap.servers";
     protected static final String TASK_TOPIC_PARTITIONS = "task.assigned.partitions";
     protected static final String TASK_TOPIC_PARTITIONS_DOC = "task.assigned.partitions";
     protected static final String TASK_CONSUMER_GROUPS = "task.assigned.groups";
@@ -119,6 +117,8 @@ public class MirrorConnectorConfig extends AbstractConfig {
         + " properties to replicate.";
     public static final Class CONFIG_PROPERTY_FILTER_CLASS_DEFAULT = DefaultConfigPropertyFilter.class;
 
+    protected static final String SOURCE_CLUSTER_PREFIX = MirrorMakerConfig.SOURCE_CLUSTER_PREFIX;
+    protected static final String TARGET_CLUSTER_PREFIX = MirrorMakerConfig.TARGET_CLUSTER_PREFIX;
     protected static final String PRODUCER_CLIENT_PREFIX = "producer.";
     protected static final String CONSUMER_CLIENT_PREFIX = "consumer.";
     protected static final String ADMIN_CLIENT_PREFIX = "admin.";
@@ -143,19 +143,15 @@ public class MirrorConnectorConfig extends AbstractConfig {
 
     Map<String, Object> sourceProducerConfig() {
         Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.putAll(originalsWithPrefix(PRODUCER_CLIENT_PREFIX));
-        if (props.get(BOOTSTRAP_SERVERS) == null) {
-            props.put(BOOTSTRAP_SERVERS, sourceClusterBootstrapServers());
-        }
         return props;
     }
 
     Map<String, Object> sourceConsumerConfig() {
         Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.putAll(originalsWithPrefix(CONSUMER_CLIENT_PREFIX));
-        if (props.get(BOOTSTRAP_SERVERS) == null) {
-            props.put(BOOTSTRAP_SERVERS, sourceClusterBootstrapServers());
-        }
         props.put("enable.auto.commit", "false");
         props.put("auto.offset.reset", "earliest");
         return props;
@@ -178,38 +174,39 @@ public class MirrorConnectorConfig extends AbstractConfig {
 
     Map<String, Object> targetAdminConfig() {
         Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(TARGET_CLUSTER_PREFIX));
         props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(TARGET_ADMIN_CLIENT_PREFIX));
-        if (props.get(BOOTSTRAP_SERVERS) == null) {
-            props.put(BOOTSTRAP_SERVERS, targetClusterBootstrapServers());
-        }
         return props;
     }
 
     Map<String, Object> sourceAdminConfig() {
         Map<String, Object> props = new HashMap<>();
+        props.putAll(originalsWithPrefix(SOURCE_CLUSTER_PREFIX));
         props.putAll(originalsWithPrefix(ADMIN_CLIENT_PREFIX));
         props.putAll(originalsWithPrefix(SOURCE_ADMIN_CLIENT_PREFIX));
-        if (props.get(BOOTSTRAP_SERVERS) == null) {
-            props.put(BOOTSTRAP_SERVERS, sourceClusterBootstrapServers());
-        }
         return props;
     }
 
+    List<MetricsReporter> metricsReporters() {
+        List<MetricsReporter> reporters = getConfiguredInstances(
+            CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MetricsReporter.class);
+        reporters.add(new JmxReporter("kafka.connect.mirror"));
+        return reporters;
+    }
+
+    MirrorMetrics metrics() {
+        MirrorMetrics metrics = new MirrorMetrics(targetClusterAlias());
+        metricsReporters().forEach(metrics::addReporter);
+        return metrics;
+    }
+ 
     String sourceClusterAlias() {
         return getString(SOURCE_CLUSTER_ALIAS);
     }
 
     String targetClusterAlias() {
         return getString(TARGET_CLUSTER_ALIAS);
-    }
-
-    String sourceClusterBootstrapServers() {
-        return getString(SOURCE_CLUSTER_BOOTSTRAP_SERVERS);
-    }
-
-    String targetClusterBootstrapServers() {
-        return getString(TARGET_CLUSTER_BOOTSTRAP_SERVERS);
     }
 
     String offsetSyncTopic() {
@@ -337,18 +334,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
             ConfigDef.Importance.HIGH,
             TARGET_CLUSTER_ALIAS_DOC)
         .define(
-            SOURCE_CLUSTER_BOOTSTRAP_SERVERS,
-            ConfigDef.Type.STRING,
-            null,
-            ConfigDef.Importance.HIGH,
-            SOURCE_CLUSTER_BOOTSTRAP_SERVERS_DOC)
-         .define(
-            TARGET_CLUSTER_BOOTSTRAP_SERVERS,
-            ConfigDef.Type.STRING,
-            null,
-            ConfigDef.Importance.HIGH,
-            TARGET_CLUSTER_BOOTSTRAP_SERVERS_DOC)
-        .define(
             CONSUMER_POLL_TIMEOUT_MILLIS,
             ConfigDef.Type.LONG,
             CONSUMER_POLL_TIMEOUT_MILLIS_DEFAULT,
@@ -437,6 +422,12 @@ public class MirrorConnectorConfig extends AbstractConfig {
             ConfigDef.Type.STRING,
             REPLICATION_POLICY_SEPARATOR_DEFAULT,
             ConfigDef.Importance.LOW,
-            REPLICATION_POLICY_SEPARATOR_DEFAULT);
+            REPLICATION_POLICY_SEPARATOR_DEFAULT)
+        .define(
+            CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
+            ConfigDef.Type.LIST,
+            null,
+            ConfigDef.Importance.LOW,
+            CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC);
 
 }

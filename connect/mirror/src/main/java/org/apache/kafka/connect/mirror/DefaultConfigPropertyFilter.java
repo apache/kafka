@@ -60,7 +60,7 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter, Config
                 CONFIG_PROPERTIES_BLACKLIST_DOC);
 
         ConfigPropertyFilterConfig(Map<?, ?> props) {
-            super(DEF, props);
+            super(DEF, props, false);
         }
 
         Pattern blacklistPattern() {

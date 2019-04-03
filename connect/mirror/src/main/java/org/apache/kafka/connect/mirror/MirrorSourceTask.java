@@ -70,7 +70,7 @@ public class MirrorSourceTask extends SourceTask {
         MirrorTaskConfig config = new MirrorTaskConfig(props);
         lock = new ReentrantLock();
         sourceClusterAlias = config.sourceClusterAlias();
-        metrics = MirrorMetrics.metricsFor(sourceClusterAlias, config.targetClusterAlias());
+        metrics = config.metrics();
         pollTimeout = config.consumerPollTimeout();
         maxOffsetLag = config.maxOffsetLag();
         replicationPolicy = config.replicationPolicy();
@@ -110,8 +110,9 @@ public class MirrorSourceTask extends SourceTask {
             for (ConsumerRecord<byte[], byte[]> record : records) {
                 SourceRecord converted = convertRecord(record);
                 sourceRecords.add(converted);
-                metrics.recordAge(converted.topic(), System.currentTimeMillis() - record.timestamp());
-                metrics.recordBytes(converted.topic(), record.value().length);
+                TopicPartition topicPartition = new TopicPartition(converted.topic(), converted.kafkaPartition());
+                metrics.recordAge(topicPartition, System.currentTimeMillis() - record.timestamp());
+                metrics.recordBytes(topicPartition, record.value().length);
             }
             return sourceRecords;
         } finally {
@@ -125,17 +126,14 @@ public class MirrorSourceTask extends SourceTask {
             log.error("RecordMetadata has no offset -- can't sync offsets for {}.", record.topic());
             return;
         }
+        TopicPartition topicPartition = new TopicPartition(record.topic(), record.kafkaPartition());
         long lag = System.currentTimeMillis() - record.timestamp();
-        metrics.countRecord(record.topic());
-        metrics.replicationLag(record.topic(), lag);
-        if (heartbeatsTopic.equals(record.topic())) {
-            // we're replicating a heartbeat
-            metrics.heartbeatLag(lag);
-        } 
+        metrics.countRecord(topicPartition);
+        metrics.replicationLag(topicPartition, lag);
+        TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
         long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
         long downstreamOffset = metadata.offset();
-        TopicPartition topicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
-        maybeSyncOffsets(topicPartition, upstreamOffset, downstreamOffset);
+        maybeSyncOffsets(sourceTopicPartition, upstreamOffset, downstreamOffset);
     }
 
     // updates partition state and sends OffsetSync if necessary

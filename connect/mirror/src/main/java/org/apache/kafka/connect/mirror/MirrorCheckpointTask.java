@@ -50,7 +50,6 @@ public class MirrorCheckpointTask extends SourceTask {
     private Set<String> consumerGroups;
     private ReplicationPolicy replicationPolicy;
     private OffsetSyncStore offsetSyncStore;
-    private MirrorMetrics metrics;
     private boolean stopped;
 
     public MirrorCheckpointTask() {}
@@ -67,10 +66,9 @@ public class MirrorCheckpointTask extends SourceTask {
     @Override
     public void start(Map<String, String> props) {
         MirrorTaskConfig config = new MirrorTaskConfig(props);
-        stopped = true;
+        stopped = false;
         sourceClusterAlias = config.sourceClusterAlias();
         targetClusterAlias = config.targetClusterAlias();
-        metrics = MirrorMetrics.metricsFor(sourceClusterAlias, targetClusterAlias);
         consumerGroups = config.taskConsumerGroups();
         checkpointsTopic = config.checkpointsTopic();
         topicFilter = config.topicFilter();
@@ -170,7 +168,5 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public void commitRecord(SourceRecord record) {
-        metrics.checkpointLag(System.currentTimeMillis() - record.timestamp());
-        metrics.countCheckpoint();
     }
 }

@@ -40,12 +40,10 @@ public class MirrorHeartbeatConnector extends SourceConnector {
         config = new MirrorConnectorConfig(props);
         connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
-        log.info("Starting {}.", connectorName);
     }
 
     @Override
     public void stop() {
-        log.info("Stopping {}.", connectorName);
     }
 
     @Override

@@ -56,7 +56,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
         groupFilter = config.groupFilter();
         replicationPolicy = config.replicationPolicy();
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
-        log.info("Starting {} for {}.", connectorName, sourceAndTarget);
         scheduler = new Scheduler(MirrorCheckpointConnector.class);
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
@@ -66,7 +65,6 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     @Override
     public void stop() {
-        log.info("Stopping {}.", connectorName);
         scheduler.shutdown();
         synchronized (sourceAdminClient) {
             sourceAdminClient.close();

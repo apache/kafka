@@ -74,7 +74,7 @@ public class DefaultGroupFilter implements GroupFilter, Configurable {
                 GROUPS_BLACKLIST_DOC);
 
         GroupFilterConfig(Map<?, ?> props) {
-            super(DEF, props);
+            super(DEF, props, false);
         }
 
         Pattern whitelistPattern() {

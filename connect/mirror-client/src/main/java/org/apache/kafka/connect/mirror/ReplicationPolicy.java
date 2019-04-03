@@ -50,5 +50,11 @@ public interface ReplicationPolicy {
         } else {
             return originalTopic(upstream);
         }
-    } 
+    }
+
+    /** Internal topics are never replicated. */
+    default boolean isInternalTopic(String topic) {
+        return topic.endsWith(".internal") || topic.endsWith("-internal") || topic.startsWith("__")
+            || topic.startsWith(".");
+    }
 }

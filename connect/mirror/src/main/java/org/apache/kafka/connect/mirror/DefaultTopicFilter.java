@@ -74,7 +74,7 @@ public class DefaultTopicFilter implements TopicFilter, Configurable {
                 TOPICS_BLACKLIST_DOC);
 
         TopicFilterConfig(Map<?, ?> props) {
-            super(DEF, props);
+            super(DEF, props, false);
         }
 
         Pattern whitelistPattern() {

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -66,8 +67,7 @@ public class MirrorClient implements AutoCloseable {
         adminClient.close();
     }
 
-    public int replicationHops(String upstreamClusterAlias)
-            throws InterruptedException, ExecutionException {
+    public int replicationHops(String upstreamClusterAlias) throws InterruptedException {
         return heartbeatTopics().stream()
             .map(x -> countHopsForTopic(x, upstreamClusterAlias))
             .filter(x -> x != -1)
@@ -76,32 +76,44 @@ public class MirrorClient implements AutoCloseable {
             .orElse(-1);
     }
 
-    public Set<String> heartbeatTopics()
-            throws InterruptedException, ExecutionException {
+    public Set<String> heartbeatTopics() throws InterruptedException {
         return listTopics().stream()
             .filter(this::isHeartbeatTopic)
             .collect(Collectors.toSet());
     }
 
-    public Set<String> checkpointTopics()
-            throws InterruptedException, ExecutionException {
+    public Set<String> checkpointTopics() throws InterruptedException {
         return listTopics().stream()
             .filter(this::isCheckpointTopic)
             .collect(Collectors.toSet());
     }
 
     /** Finds upstream clusters based on incoming heartbeats */
-    public Set<String> upstreamClusters()
-            throws InterruptedException, ExecutionException {
+    public Set<String> upstreamClusters() throws InterruptedException {
         return listTopics().stream()
             .filter(this::isHeartbeatTopic)
             .map(replicationPolicy::topicSource)
+            .filter(x -> x != null)
+            .collect(Collectors.toSet());
+    }
+
+    public Set<String> remoteTopics() throws InterruptedException {
+        return listTopics().stream()
+            .filter(this::isRemoteTopic)
+            .collect(Collectors.toSet());
+    }
+
+    public Set<String> remoteTopics(String source) throws InterruptedException {
+        return listTopics().stream()
+            .filter(this::isRemoteTopic)
+            .filter(x -> source.equals(replicationPolicy.topicSource(x)))
+            .distinct()
             .collect(Collectors.toSet());
     }
 
     public Map<TopicPartition, OffsetAndMetadata> remoteConsumerOffsets(String consumerGroupId,
             String remoteClusterAlias, Duration timeout)
-            throws InterruptedException, ExecutionException, TimeoutException {
+            throws InterruptedException, TimeoutException {
         long deadline = System.currentTimeMillis() + timeout.toMillis();
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerConfig,
             new ByteArrayDeserializer(), new ByteArrayDeserializer());
@@ -128,9 +140,12 @@ public class MirrorClient implements AutoCloseable {
     }
 
     // visible for testing
-    protected Set<String> listTopics()
-            throws InterruptedException, ExecutionException {
-        return adminClient.listTopics().names().get();
+    protected Set<String> listTopics() throws InterruptedException {
+        try {
+            return adminClient.listTopics().names().get();
+        } catch (ExecutionException e) {
+            throw new KafkaException(e.getCause());
+        }
     }
 
     int countHopsForTopic(String topic, String sourceClusterAlias) {
@@ -154,8 +169,13 @@ public class MirrorClient implements AutoCloseable {
 
     boolean isCheckpointTopic(String topic) {
         // checkpoint topics must have a source
-        return replicationPolicy.topicSource(topic) != null
+        return replicationPolicy.topicSource(topic) != null 
             && MirrorClientConfig.CHECKPOINTS_TOPIC.equals(replicationPolicy.originalTopic(topic));
+    }
+
+    boolean isRemoteTopic(String topic) {
+        return !replicationPolicy.isInternalTopic(topic)
+            && replicationPolicy.topicSource(topic) != null;
     }
 
     static protected boolean endOfStream(Consumer<?, ?> consumer, Collection<TopicPartition> assignments)

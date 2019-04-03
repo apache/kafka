@@ -40,7 +40,6 @@ public class MirrorHeartbeatTask extends SourceTask {
     private String heartbeatsTopic;
     private Duration interval;
     private CountDownLatch stopped;
-    private MirrorMetrics metrics;
 
     @Override
     public void start(Map<String, String> props) {
@@ -50,7 +49,6 @@ public class MirrorHeartbeatTask extends SourceTask {
         targetClusterAlias = config.targetClusterAlias();
         heartbeatsTopic = config.heartbeatsTopic();
         interval = config.emitHeartbeatsInterval();
-        metrics = MirrorMetrics.metricsFor(sourceClusterAlias, targetClusterAlias);
     }
 
     @Override
@@ -87,6 +85,5 @@ public class MirrorHeartbeatTask extends SourceTask {
 
     @Override
     public void commitRecord(SourceRecord record) {
-        metrics.countHeartbeat();
     }
 }
