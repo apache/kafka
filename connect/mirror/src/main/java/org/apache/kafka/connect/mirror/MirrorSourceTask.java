@@ -37,12 +37,16 @@ import java.util.Set;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.time.Duration;
 
 /** Replicates a set of topic-partitions. */
 public class MirrorSourceTask extends SourceTask {
 
     private static final Logger log = LoggerFactory.getLogger(MirrorSourceTask.class);
+
+    private static final int MAX_OUTSTANDING_OFFSET_SYNCS = 10;
 
     private KafkaConsumer<byte[], byte[]> consumer;
     private KafkaProducer<byte[], byte[]> offsetProducer;
@@ -55,6 +59,7 @@ public class MirrorSourceTask extends SourceTask {
     private ReplicationPolicy replicationPolicy;
     private MirrorMetrics metrics;
     private ReentrantLock lock;
+    private Semaphore outstandingOffsetSyncs;
 
     public MirrorSourceTask() {}
 
@@ -69,6 +74,7 @@ public class MirrorSourceTask extends SourceTask {
     public void start(Map<String, String> props) {
         MirrorTaskConfig config = new MirrorTaskConfig(props);
         lock = new ReentrantLock();
+        outstandingOffsetSyncs = new Semaphore(MAX_OUTSTANDING_OFFSET_SYNCS);
         sourceClusterAlias = config.sourceClusterAlias();
         metrics = config.metrics();
         pollTimeout = config.consumerPollTimeout();
@@ -79,9 +85,12 @@ public class MirrorSourceTask extends SourceTask {
         heartbeatsTopic = config.targetHeartbeatsTopic();
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig());
         offsetProducer = MirrorUtils.newProducer(config.sourceProducerConfig());
-        Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(config.taskTopicPartitions());
+        Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
+        Map<TopicPartition, Long> topicPartitionOffsets = loadOffsets(taskTopicPartitions);
         consumer.assign(topicPartitionOffsets.keySet());
         topicPartitionOffsets.forEach(consumer::seek);
+        log.info("{} replicating {} topic-partitions {}->{}: {}.", Thread.currentThread().getName(),
+            taskTopicPartitions.size(), sourceClusterAlias, config.targetClusterAlias(), taskTopicPartitions);
     }
 
     @Override
@@ -93,6 +102,15 @@ public class MirrorSourceTask extends SourceTask {
     public void stop() {
         lock.lock();
         consumer.close();
+        try {
+            // re-use the poll-timeout to approximate round-trip time
+            if (!outstandingOffsetSyncs.tryAcquire(MAX_OUTSTANDING_OFFSET_SYNCS, 2 * pollTimeout.toMillis(),
+                    TimeUnit.MILLISECONDS)) {
+                log.warn("Timed out waiting for outstanding offset syncs.");
+            }
+        } catch (InterruptedException e) {
+            log.info("Interrupted waiting for outstanding offset syncs.");
+        }
         offsetProducer.close();
     }
     
@@ -149,6 +167,10 @@ public class MirrorSourceTask extends SourceTask {
     // sends OffsetSync record upstream to internal offsets topic
     private void sendOffsetSync(TopicPartition topicPartition, long upstreamOffset,
             long downstreamOffset) {
+        if (!outstandingOffsetSyncs.tryAcquire()) {
+            log.warn("Too many outstanding offset syncs.");
+            return;
+        }
         OffsetSync offsetSync = new OffsetSync(topicPartition, upstreamOffset, downstreamOffset);
         ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(offsetSyncTopic, 0,
                 offsetSync.recordKey(), offsetSync.recordValue());
@@ -156,8 +178,9 @@ public class MirrorSourceTask extends SourceTask {
             if (e != null) {
                 log.error("Failure sending offset sync.", e);
             }
+            outstandingOffsetSyncs.release();
         });
-    }
+   }
  
     private Map<TopicPartition, Long> loadOffsets(Set<TopicPartition> topicPartitions) {
         return topicPartitions.stream().collect(Collectors.toMap(x -> x, x -> loadOffset(x)));
