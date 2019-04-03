@@ -983,6 +983,7 @@ public class FetcherTest {
         consumerClient.poll(time.timer(0));
         assertEquals(0, fetcher.fetchedRecords().size());
         assertTrue(subscriptions.isOffsetResetNeeded(tp0));
+        assertNull(subscriptions.validPosition(tp0));
         assertNotNull(subscriptions.position(tp0));
     }
 

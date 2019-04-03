@@ -373,8 +373,12 @@ public class SubscriptionState {
         assignedState(tp).validate();
     }
 
+    public FetchPosition validPosition(TopicPartition tp) {
+        return assignedState(tp).validPosition();
+    }
+
     public FetchPosition position(TopicPartition tp) {
-        return assignedState(tp).position;
+        return assignedState(tp).position();
     }
 
     public Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
@@ -568,7 +572,6 @@ public class SubscriptionState {
         private void reset(OffsetResetStrategy strategy) {
             this.state = FetchState.AWAIT_RESET;
             this.resetStrategy = strategy;
-            //this.position = null;
             this.nextRetryTimeMs = null;
         }
 
@@ -640,6 +643,18 @@ public class SubscriptionState {
             if (!hasValidPosition())
                 throw new IllegalStateException("Cannot set a new position without a valid current position");
             this.position = position;
+        }
+
+        private FetchPosition validPosition() {
+            if (hasValidPosition()) {
+                return position;
+            } else {
+                return null;
+            }
+        }
+
+        private FetchPosition position() {
+            return position;
         }
 
         private void pause() {
