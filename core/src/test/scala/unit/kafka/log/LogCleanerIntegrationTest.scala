@@ -187,11 +187,28 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
   }
 
   @Test
-  def testDeadThreadCountMetric(): Unit = {
+  def testDeadThreadCountMetricOnUnexpectedError(): Unit = {
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backOffMs = 100)
+    cleaner.startup()
+    assertEquals(0, cleaner.deadThreadCount)
+    // we simulate the unexpected error with an interrupt
+    cleaner.cleaners.foreach(_.interrupt())
+    // wait until interruption is propagated to all the threads
+    TestUtils.waitUntilTrue (
+      () => cleaner.cleaners.foldLeft(true)((result, thread) => {
+        thread.isThreadFailed && result
+      }), "Threads didn't terminate unexpectedly"
+    )
+    assertEquals(cleaner.cleaners.size, cleaner.deadThreadCount)
+  }
+
+  @Test
+  def testDeadThreadCountMetricOnShutdown(): Unit = {
     cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = 100000, backOffMs = 100)
     cleaner.startup()
     assertEquals(0, cleaner.deadThreadCount)
     cleaner.cleaners.foreach(_.shutdown())
-    assertEquals(1, cleaner.deadThreadCount)
+    // intentionally shutting down threads shouldn't wobble the metric
+    assertEquals(0, cleaner.deadThreadCount)
   }
 }

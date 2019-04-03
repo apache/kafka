@@ -116,7 +116,7 @@ class AbstractFetcherManagerTest {
 
     EasyMock.expect(fetcher.start())
     EasyMock.expect(fetcher.addPartitions(Map(tp -> OffsetAndEpoch(fetchOffset, leaderEpoch))))
-    EasyMock.expect(fetcher.isShutdownComplete).andReturn(true)
+    EasyMock.expect(fetcher.isThreadFailed).andReturn(true)
     EasyMock.replay(fetcher)
 
     fetcherManager.addFetcherForPartitions(Map(tp -> initialFetchState))
@@ -125,7 +125,7 @@ class AbstractFetcherManagerTest {
     EasyMock.verify(fetcher)
 
     EasyMock.reset(fetcher)
-    EasyMock.expect(fetcher.isShutdownComplete).andReturn(false)
+    EasyMock.expect(fetcher.isThreadFailed).andReturn(false)
     EasyMock.replay(fetcher)
 
     assertEquals(0, fetcherManager.deadFetcherThreadCount)

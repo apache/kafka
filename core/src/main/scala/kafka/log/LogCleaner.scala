@@ -146,7 +146,7 @@ class LogCleaner(initialConfig: CleanerConfig,
     })
 
   // visible for testing
-  private[log] def deadThreadCount = cleaners.count(_.isShutdownComplete)
+  private[log] def deadThreadCount = cleaners.count(_.isThreadFailed)
 
   /**
    * Start the background cleaning
