@@ -21,11 +21,11 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
@@ -45,13 +45,18 @@ import org.junit.runners.Parameterized;
 import org.powermock.api.easymock.PowerMock;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
+import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolSet;
+import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.WorkerState;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COOPERATIVE;
@@ -59,6 +64,7 @@ import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativ
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedWorkerState;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 import static org.junit.runners.Parameterized.Parameter;
 import static org.junit.runners.Parameterized.Parameters;
 
@@ -213,12 +219,15 @@ public class WorkerCoordinatorIncrementalTest {
 
         PowerMock.replayAll();
 
-        List<ProtocolMetadata> serialized = coordinator.metadata();
+        JoinGroupRequestProtocolSet serialized = coordinator.metadata();
         assertEquals(expectedMetadataSize, serialized.size());
 
-        ProtocolMetadata defaultMetadata = serialized.get(0);
+        Iterator<JoinGroupRequestProtocol> protocolIterator = serialized.iterator();
+        assertTrue(protocolIterator.hasNext());
+        JoinGroupRequestProtocol defaultMetadata = protocolIterator.next();
         assertEquals(compatibility.protocol(), defaultMetadata.name());
-        WorkerState state = IncrementalCooperativeConnectProtocol.deserializeMetadata(defaultMetadata.metadata());
+        WorkerState state = IncrementalCooperativeConnectProtocol
+                .deserializeMetadata(ByteBuffer.wrap(defaultMetadata.metadata()));
         assertEquals(1, state.offset());
 
         PowerMock.verifyAll();
@@ -236,12 +245,16 @@ public class WorkerCoordinatorIncrementalTest {
                 Collections.emptyList(), Collections.emptyList(), 0);
         ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
         coordinator.onJoinComplete(9, null, null, buf);
-        List<ProtocolMetadata> serialized = coordinator.metadata();
+
+        JoinGroupRequestProtocolSet serialized = coordinator.metadata();
         assertEquals(expectedMetadataSize, serialized.size());
 
-        ProtocolMetadata defaultMetadata = serialized.get(0);
+        Iterator<JoinGroupRequestProtocol> protocolIterator = serialized.iterator();
+        assertTrue(protocolIterator.hasNext());
+        JoinGroupRequestProtocol defaultMetadata = protocolIterator.next();
         assertEquals(compatibility.protocol(), defaultMetadata.name());
-        ExtendedWorkerState state = IncrementalCooperativeConnectProtocol.deserializeMetadata(defaultMetadata.metadata());
+        ExtendedWorkerState state = IncrementalCooperativeConnectProtocol
+                .deserializeMetadata(ByteBuffer.wrap(defaultMetadata.metadata()));
         assertEquals(1, state.offset());
         System.out.println(state);
 
@@ -417,11 +430,17 @@ public class WorkerCoordinatorIncrementalTest {
         // Prime the current configuration state
         coordinator.metadata();
 
-        Map<String, ByteBuffer> configs = new HashMap<>();
         // Mark everyone as in sync with configState1
-        configs.put("leader", IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, null)));
-        configs.put("member", IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(MEMBER_URL, 1L, null)));
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
+        List<JoinGroupResponseMember> responseMembers = new ArrayList<>();
+        responseMembers.add(new JoinGroupResponseMember()
+                .setMemberId("leader")
+                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, null)).array())
+        );
+        responseMembers.add(new JoinGroupResponseMember()
+                .setMemberId("member")
+                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(MEMBER_URL, 1L, null)).array())
+        );
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, responseMembers);
 
         // configState1 has 1 connector, 1 task
         Assignment leaderAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("leader"));
@@ -456,9 +475,16 @@ public class WorkerCoordinatorIncrementalTest {
 
         Map<String, ByteBuffer> configs = new HashMap<>();
         // Mark everyone as in sync with configState1
-        configs.put("leader", IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, null)));
-        configs.put("member", IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(MEMBER_URL, 1L, null)));
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
+        List<JoinGroupResponseMember> responseMembers = new ArrayList<>();
+        responseMembers.add(new JoinGroupResponseMember()
+                .setMemberId("leader")
+                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, null)).array())
+        );
+        responseMembers.add(new JoinGroupResponseMember()
+                .setMemberId("member")
+                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(MEMBER_URL, 1L, null)).array())
+        );
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, responseMembers);
 
         // configState2 has 2 connector, 3 tasks and should trigger round robin assignment
         Assignment leaderAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(result.get("leader"));
@@ -490,11 +516,17 @@ public class WorkerCoordinatorIncrementalTest {
         // Prime the current configuration state
         coordinator.metadata();
 
-        Map<String, ByteBuffer> configs = new HashMap<>();
         // Mark everyone as in sync with configState1
-        configs.put("leader", IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, null)));
-        configs.put("member", IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(MEMBER_URL, 1L, null)));
-        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, configs);
+        List<JoinGroupResponseMember> responseMembers = new ArrayList<>();
+        responseMembers.add(new JoinGroupResponseMember()
+                .setMemberId("leader")
+                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(LEADER_URL, 1L, null)).array())
+        );
+        responseMembers.add(new JoinGroupResponseMember()
+                .setMemberId("member")
+                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(MEMBER_URL, 1L, null)).array())
+        );
+        Map<String, ByteBuffer> result = coordinator.performAssignment("leader", WorkerCoordinator.DEFAULT_SUBPROTOCOL, responseMembers);
 
         // Round robin assignment when there are the same number of connectors and tasks should result in each being
         // evenly distributed across the workers, i.e. round robin assignment of connectors first, then followed by tasks
@@ -522,20 +554,33 @@ public class WorkerCoordinatorIncrementalTest {
 
     private JoinGroupResponse joinGroupLeaderResponse(int generationId, String memberId,
                                            Map<String, Long> configOffsets, Errors error) {
-        Map<String, ByteBuffer> metadata = new HashMap<>();
+        List<JoinGroupResponseMember> metadata = new ArrayList<>();
         for (Map.Entry<String, Long> configStateEntry : configOffsets.entrySet()) {
             // We need a member URL, but it doesn't matter for the purposes of this test. Just set it to the member ID
             String memberUrl = configStateEntry.getKey();
             long configOffset = configStateEntry.getValue();
             ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeMetadata(new ExtendedWorkerState(memberUrl, configOffset, null));
-            metadata.put(configStateEntry.getKey(), buf);
+            metadata.add(new JoinGroupResponseMember()
+                    .setMemberId(configStateEntry.getKey())
+                    .setMetadata(buf.array()));
         }
-        return new JoinGroupResponse(error, generationId, WorkerCoordinator.DEFAULT_SUBPROTOCOL, memberId, memberId, metadata);
+        return new JoinGroupResponse(new JoinGroupResponseData()
+                .setErrorCode(error.code())
+                .setGenerationId(generationId)
+                .setProtocolName(WorkerCoordinator.DEFAULT_SUBPROTOCOL)
+                .setLeader(memberId)
+                .setMemberId(memberId)
+                .setMembers(metadata));
     }
 
     private JoinGroupResponse joinGroupFollowerResponse(int generationId, String memberId, String leaderId, Errors error) {
-        return new JoinGroupResponse(error, generationId, WorkerCoordinator.DEFAULT_SUBPROTOCOL, memberId, leaderId,
-                Collections.emptyMap());
+        return new JoinGroupResponse(
+                new JoinGroupResponseData().setErrorCode(error.code())
+                        .setGenerationId(generationId)
+                        .setProtocolName(WorkerCoordinator.DEFAULT_SUBPROTOCOL)
+                        .setLeader(leaderId)
+                        .setMemberId(memberId)
+                        .setMembers(Collections.emptyList()));
     }
 
     private SyncGroupResponse syncGroupResponse(short assignmentError, String leader, long configOffset, List<String> connectorIds,
