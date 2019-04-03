@@ -30,6 +30,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
@@ -1011,7 +1012,13 @@ public class StreamsConfig extends AbstractConfig {
             if (producerProps.containsKey(ProducerConfig.BATCH_SIZE_CONFIG)) {
                 batchSize = Integer.parseInt(producerProps.get(ProducerConfig.BATCH_SIZE_CONFIG).toString());
             } else {
-                final ProducerConfig producerDefaultConfig = new ProducerConfig(new Properties());
+                Properties props = ProducerConfig.addSerializerToConfig(new Properties(), new ByteArraySerializer(), new ByteArraySerializer());
+                Map<String, Object> producerConfigs = getProducerConfigs(clientId);
+                for (final Map.Entry<String, Object> entry: producerConfigs.entrySet()) {
+                    props.put(entry.getKey(), entry.getValue());
+                }
+
+                final ProducerConfig producerDefaultConfig = new ProducerConfig(props);
                 batchSize = producerDefaultConfig.getInt(ProducerConfig.BATCH_SIZE_CONFIG);
             }
 
