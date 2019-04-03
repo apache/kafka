@@ -58,7 +58,7 @@ import org.junit.Test;
 public class InMemorySessionStoreTest {
 
     private final String storeName = "InMemorySessionStore";
-    private final long retentionPeriod = 10_000L;
+    private final static long RETENTION_PERIOD = 10_000L;
 
     private SessionStore<String, Long> sessionStore;
     private InternalMockProcessorContext context;
@@ -91,24 +91,28 @@ public class InMemorySessionStoreTest {
         }
     };
 
-    @Before
-    public void before() {
-        sessionStore = Stores.sessionStoreBuilder(
+    private SessionStore<String, Long> buildSessionStore(final long retentionPeriod) {
+        return Stores.sessionStoreBuilder(
             Stores.inMemorySessionStore(
                 storeName,
                 ofMillis(retentionPeriod)),
             Serdes.String(),
             Serdes.Long()).build();
+    }
 
+    @Before
+    public void before() {
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
             recordCollector,
             new ThreadCache(
-                new LogContext("testCache "),
+                new LogContext("testCache"),
                 0,
                 new MockStreamsMetrics(new Metrics())));
+
+        sessionStore = buildSessionStore(RETENTION_PERIOD);
 
         sessionStore.init(context, sessionStore);
         recordCollector.init(producer);
@@ -138,8 +142,7 @@ public class InMemorySessionStoreTest {
             assertEquals(expected, toList(values));
         }
 
-        final List<KeyValue<Windowed<String>, Long>> expected2 = Collections
-            .singletonList(KeyValue.pair(a2, 2L));
+        final List<KeyValue<Windowed<String>, Long>> expected2 = Collections.singletonList(KeyValue.pair(a2, 2L));
 
         try (final KeyValueIterator<Windowed<String>, Long> values2 =
             sessionStore.findSessions(key, 400L, 600L)
@@ -226,13 +229,7 @@ public class InMemorySessionStoreTest {
 
     @Test
     public void shouldFetchExactKeys() {
-        sessionStore = Stores.sessionStoreBuilder(
-            Stores.inMemorySessionStore(
-                "session-store",
-                ofMillis(0x7a00000000000000L)),
-            Serdes.String(),
-            Serdes.Long()).build();
-
+        sessionStore = buildSessionStore(0x7a00000000000000L);
         sessionStore.init(context, sessionStore);
 
         sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
@@ -266,8 +263,65 @@ public class InMemorySessionStoreTest {
         }
     }
 
+    @Test
+    public void testIteratorPeek() {
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
+        sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(10, 20)), 4L);
 
+        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions("a", 0L, 20);
 
+        assertEquals(iterator.peekNextKey(), new Windowed<>("a", new SessionWindow(0L, 0L)));
+        assertEquals(iterator.peekNextKey(), iterator.next().key);
+        assertEquals(iterator.peekNextKey(), iterator.next().key);
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldRemoveExpired() {
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 10)), 2L);
+        sessionStore.put(new Windowed<>("a", new SessionWindow(10, 20)), 3L);
+
+        // Advance stream time to expire the first record
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(10, RETENTION_PERIOD)), 4L);
+
+        try (final KeyValueIterator<Windowed<String>, Long> iterator =
+            sessionStore.findSessions("a", "b", 0L, Long.MAX_VALUE)
+        ) {
+            assertThat(valuesToList(iterator), equalTo(Arrays.asList(2L, 3L, 4L)));
+        }
+    }
+
+    @Test
+    public void shouldRestore() {
+        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), 1L),
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(10, 10)), 2L),
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(100, 100)), 3L),
+            KeyValue.pair(new Windowed<>("a", new SessionWindow(1000, 1000)), 4L));
+
+        for (final KeyValue<Windowed<String>, Long> kv : expected) {
+            sessionStore.put(kv.key, kv.value);
+        }
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("a")) {
+            assertEquals(expected, toList(values));
+        }
+
+        sessionStore.close();
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("a")) {
+            assertEquals(Collections.emptyList(), toList(values));
+        }
+
+        context.restore(storeName, changeLog);
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("a")) {
+            assertEquals(expected, toList(values));
+        }
+    }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionOnFindSessionsNullKey() {
