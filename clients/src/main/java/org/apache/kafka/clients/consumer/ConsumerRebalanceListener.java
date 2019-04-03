@@ -131,6 +131,9 @@ public interface ConsumerRebalanceListener {
      * group is formed without itself, this function will then be called when the consumer finally be notified about the
      * partitions that have already been emigrated to other consumers.
      *
+     * By default it will just trigger {@link ConsumerRebalanceListener#onPartitionsRevoked}; for advanced users who want to distinguish
+     * the handling logic of revoked partitions v.s. emigrated partitions, they can override the default implementation.
+     *
      * It is possible
      * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
      * to be raised from one these nested invocations. In this case, the exception will be propagated to the current
@@ -143,6 +146,6 @@ public interface ConsumerRebalanceListener {
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
     default void onPartitionsEmigrated(Collection<TopicPartition> partitions) {
-        onPartitionsAssigned(partitions);
+        onPartitionsRevoked(partitions);
     }
 }
