@@ -42,6 +42,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -602,25 +603,44 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
 
-        switch (protocol) {
-            case EAGER:
-                Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
-                log.info("Revoking previously assigned partitions {}", revoked);
-                try {
-                    listener.onPartitionsRevoked(revoked);
-                } catch (WakeupException | InterruptException e) {
-                    throw e;
-                } catch (Exception e) {
-                    log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
-                }
+        // if member.id is unknown, it means a reset generation,
+        // hence we should always call onPartitionsEmigrated to all
+        // previously assigned partitions regardless of the rebalance protocol
+        if (memberId.equals(JoinGroupResponse.UNKNOWN_MEMBER_ID)) {
+            Set<TopicPartition> emigrated = new HashSet<>(subscriptions.assignedPartitions());
+            log.info("Emigrating previously assigned partitions {}", emigrated);
 
-                // also clear the assigned partitions since all have been revoked
-                subscriptions.assignFromSubscribed(Collections.emptySet());
+            try {
+                listener.onPartitionsEmigrated(emigrated);
+            } catch (WakeupException | InterruptException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("User provided listener {} failed on partition emigration", listener.getClass().getName(), e);
+            }
 
-                break;
+            // also clear the assigned partitions since all have been emigrated
+            subscriptions.assignFromSubscribed(Collections.emptySet());
+        } else {
+            switch (protocol) {
+                case EAGER:
+                    Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
+                    log.info("Revoking previously assigned partitions {}", revoked);
+                    try {
+                        listener.onPartitionsEmigrated(revoked);
+                    } catch (WakeupException | InterruptException e) {
+                        throw e;
+                    } catch (Exception e) {
+                        log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
+                    }
 
-            case COOPERATIVE:
-                break;
+                    // also clear the assigned partitions since all have been revoked
+                    subscriptions.assignFromSubscribed(Collections.emptySet());
+
+                    break;
+
+                case COOPERATIVE:
+                    break;
+            }
         }
 
         isLeader = false;

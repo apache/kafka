@@ -95,7 +95,7 @@ public interface ConsumerRebalanceListener {
      * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
      * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
      *
-     * @param partitions The list of partitions that were assigned to the consumer on the last rebalance
+     * @param partitions The list of partitions that were assigned to the consumer and now need to be revoked
      * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
@@ -122,4 +122,27 @@ public interface ConsumerRebalanceListener {
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
     void onPartitionsAssigned(Collection<TopicPartition> partitions);
+
+    /**
+     * A callback method the user can implement to provide handling of cleaning up resources for partitions that have already
+     * been re-assigned to other consumers. This method will be called during normal execution as the owned partitions would
+     * first be revoked by calling the {@link ConsumerRebalanceListener#onPartitionsRevoked} first, before being re-assigned
+     * to other consumers. However, when the consumer is being kicked out of the group and hence were not aware when the new
+     * group is formed without itself, this function will then be called when the consumer finally be notified about the
+     * partitions that have already been emigrated to other consumers.
+     *
+     * It is possible
+     * for a {@link org.apache.kafka.common.errors.WakeupException} or {@link org.apache.kafka.common.errors.InterruptException}
+     * to be raised from one these nested invocations. In this case, the exception will be propagated to the current
+     * invocation of {@link KafkaConsumer#poll(java.time.Duration)} in which this callback is being executed. This means it is not
+     * necessary to catch these exceptions and re-attempt to wakeup or interrupt the consumer thread.
+     *
+     * @param partitions The list of partitions that were assigned to the consumer and now have been re-assigned
+     *                  to other consumers
+     * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
+     * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
+     */
+    default void onPartitionsEmigrated(Collection<TopicPartition> partitions) {
+        onPartitionsAssigned(partitions);
+    }
 }
