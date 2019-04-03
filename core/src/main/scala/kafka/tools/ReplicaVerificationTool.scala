@@ -458,7 +458,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
       time,
       "replica-fetcher",
       Map("broker-id" -> sourceNode.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
-      false,git
+      false,
       channelBuilder,
       new LogContext
     )
