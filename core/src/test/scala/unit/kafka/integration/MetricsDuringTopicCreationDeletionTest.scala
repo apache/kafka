@@ -31,7 +31,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   private val nodesNum = 3
   private val topicName = "topic"
   private val topicNum = 2
-  private val replicationFactor = 3
+  private val replicationFactor = 3.toShort
   private val partitionNum = 3
   private val createDeleteIterations = 3
 

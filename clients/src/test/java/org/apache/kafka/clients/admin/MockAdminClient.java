@@ -171,7 +171,7 @@ public class MockAdminClient extends AdminClient {
                 createTopicResult.put(topicName, future);
                 continue;
             }
-            int replicationFactor = newTopic.replicationFactor();
+            short replicationFactor = newTopic.replicationFactor();
             List<Node> replicas = new ArrayList<>(replicationFactor);
             for (int i = 0; i < replicationFactor; ++i) {
                 replicas.add(brokers.get(i));

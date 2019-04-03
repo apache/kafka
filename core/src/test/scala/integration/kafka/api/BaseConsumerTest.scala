@@ -66,7 +66,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
-    createTopic(topic, 2, serverCount)
+    createTopic(topic, 2, serverCount.toShort)
   }
 
   @Test

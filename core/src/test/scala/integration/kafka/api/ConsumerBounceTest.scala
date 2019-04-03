@@ -72,7 +72,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
-    createTopic(topic, 1, numBrokers)
+    createTopic(topic, 1, numBrokers.toShort)
   }
 
   @After
@@ -176,7 +176,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     val consumer = createConsumer()
     consumer.subscribe(Collections.singleton(newtopic))
     executor.schedule(new Runnable {
-        def run() = createTopic(newtopic, numPartitions = numBrokers, replicationFactor = numBrokers)
+        def run() = createTopic(newtopic, numPartitions = numBrokers, replicationFactor = numBrokers.toShort)
       }, 2, TimeUnit.SECONDS)
     consumer.poll(time.Duration.ZERO)
 
@@ -316,7 +316,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
     val producer = createProducer()
-    createTopic(topic, numPartitions = partitionCount, replicationFactor = numBrokers)
+    createTopic(topic, numPartitions = partitionCount, replicationFactor = numBrokers.toShort)
     val stableConsumers = createConsumersWithGroupId("group2", consumerCount, executor, topic = topic)
 
     // assert group is stable and working
@@ -392,7 +392,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
     val topic = "group-max-size-test"
     val groupId = "group1"
     val executor = Executors.newScheduledThreadPool(maxGroupSize * 2)
-    createTopic(topic, maxGroupSize, numBrokers)
+    createTopic(topic, maxGroupSize, numBrokers.toShort)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -463,7 +463,7 @@ class ConsumerBounceTest extends BaseRequestTest with Logging {
   @Test
   def testCloseDuringRebalance() {
     val topic = "closetest"
-    createTopic(topic, 10, numBrokers)
+    createTopic(topic, 10, numBrokers.toShort)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")

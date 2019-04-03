@@ -297,7 +297,7 @@ object TestUtils extends Logging {
   def createTopic(zkClient: KafkaZkClient,
                   topic: String,
                   numPartitions: Int = 1,
-                  replicationFactor: Int = 1,
+                  replicationFactor: Short = 1,
                   servers: Seq[KafkaServer],
                   topicConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] = {
     val adminZkClient = new AdminZkClient(zkClient)
@@ -370,7 +370,7 @@ object TestUtils extends Logging {
     val server = servers.head
     createTopic(zkClient, Topic.GROUP_METADATA_TOPIC_NAME,
       server.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
-      server.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
+      server.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp),
       servers,
       server.groupCoordinator.offsetsTopicConfigs)
   }

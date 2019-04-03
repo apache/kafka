@@ -128,7 +128,7 @@ object AdminUtils extends Logging with AdminUtilities {
    */
   def assignReplicasToBrokers(brokerMetadatas: Seq[BrokerMetadata],
                               nPartitions: Int,
-                              replicationFactor: Int,
+                              replicationFactor: Short,
                               fixedStartIndex: Int = -1,
                               startPartitionId: Int = -1): Map[Int, Seq[Int]] = {
     if (nPartitions <= 0)
@@ -149,7 +149,7 @@ object AdminUtils extends Logging with AdminUtilities {
   }
 
   private def assignReplicasToBrokersRackUnaware(nPartitions: Int,
-                                                 replicationFactor: Int,
+                                                 replicationFactor: Short,
                                                  brokerList: Seq[Int],
                                                  fixedStartIndex: Int,
                                                  startPartitionId: Int): Map[Int, Seq[Int]] = {
@@ -295,7 +295,7 @@ object AdminUtils extends Logging with AdminUtilities {
 
     val proposedAssignmentForNewPartitions = replicaAssignment.getOrElse {
       val startIndex = math.max(0, allBrokers.indexWhere(_.id >= existingAssignmentPartition0.head))
-      AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size,
+      AdminUtils.assignReplicasToBrokers(allBrokers, partitionsToAdd, existingAssignmentPartition0.size.toShort,
         startIndex, existingAssignment.size)
     }
     val proposedAssignment = existingAssignment ++ proposedAssignmentForNewPartitions
@@ -403,7 +403,7 @@ object AdminUtils extends Logging with AdminUtilities {
   def createTopic(zkUtils: ZkUtils,
                   topic: String,
                   partitions: Int,
-                  replicationFactor: Int,
+                  replicationFactor: Short,
                   topicConfig: Properties = new Properties,
                   rackAwareMode: RackAwareMode = RackAwareMode.Enforced) {
     val brokerMetadatas = getBrokerMetadatas(zkUtils, rackAwareMode)

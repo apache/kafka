@@ -67,7 +67,7 @@ class LogOffsetTest extends BaseRequestTest {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
 
-    createTopic(topic, 1, 1)
+    createTopic(topic, 1, 1.toShort)
 
     val logManager = server.getLogManager
     TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,
@@ -99,7 +99,7 @@ class LogOffsetTest extends BaseRequestTest {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
 
-    createTopic(topic, 1, 1)
+    createTopic(topic, 1, 1.toShort)
 
     val logManager = server.getLogManager
     TestUtils.waitUntilTrue(() => logManager.getLog(topicPartition).isDefined,

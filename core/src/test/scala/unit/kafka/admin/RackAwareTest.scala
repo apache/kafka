@@ -25,7 +25,7 @@ trait RackAwareTest {
                                brokerRackMapping: Map[Int, String],
                                numBrokers: Int,
                                numPartitions: Int,
-                               replicationFactor: Int,
+                               replicationFactor: Short,
                                verifyRackAware: Boolean = true,
                                verifyLeaderDistribution: Boolean = true,
                                verifyReplicasDistribution: Boolean = true) {

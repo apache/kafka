@@ -70,7 +70,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     clientConfig.put(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, "5000")
 
     // create the test topic with all the brokers as replicas
-    createTopic(topic, 2, serverCount)
+    createTopic(topic, 2, serverCount.toShort)
   }
 
   @After

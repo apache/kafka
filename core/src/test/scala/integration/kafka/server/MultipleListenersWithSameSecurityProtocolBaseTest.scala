@@ -126,7 +126,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends ZooKeep
       def addProducerConsumer(listenerName: ListenerName, mechanism: String, saslProps: Option[Properties]): Unit = {
 
         val topic = s"${listenerName.value}${producers.size}"
-        TestUtils.createTopic(zkClient, topic, 2, 2, servers)
+        TestUtils.createTopic(zkClient, topic, 2, 2.toShort, servers)
         val clientMetadata = ClientMetadata(listenerName, mechanism, topic)
 
         producers(clientMetadata) = TestUtils.createProducer(bootstrapServers, acks = -1,

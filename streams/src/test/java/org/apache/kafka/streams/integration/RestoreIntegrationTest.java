@@ -89,9 +89,9 @@ public class RestoreIntegrationTest {
 
     @BeforeClass
     public static void createTopics() throws InterruptedException {
-        CLUSTER.createTopic(INPUT_STREAM, 2, 1);
-        CLUSTER.createTopic(INPUT_STREAM_2, 2, 1);
-        CLUSTER.createTopic(APPID + "-store-changelog", 2, 1);
+        CLUSTER.createTopic(INPUT_STREAM, 2, (short) 1);
+        CLUSTER.createTopic(INPUT_STREAM_2, 2, (short) 1);
+        CLUSTER.createTopic(APPID + "-store-changelog", 2, (short) 1);
     }
 
     private Properties props(final String applicationId) {

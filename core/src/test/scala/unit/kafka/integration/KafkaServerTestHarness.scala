@@ -120,7 +120,7 @@ abstract class KafkaServerTestHarness extends ZooKeeperTestHarness {
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
    */
-  def createTopic(topic: String, numPartitions: Int = 1, replicationFactor: Int = 1,
+  def createTopic(topic: String, numPartitions: Int = 1, replicationFactor: Short = 1,
                   topicConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] =
     TestUtils.createTopic(zkClient, topic, numPartitions, replicationFactor, servers, topicConfig)
 

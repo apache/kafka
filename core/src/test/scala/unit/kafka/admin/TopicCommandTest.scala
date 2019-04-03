@@ -16,6 +16,7 @@
  */
 package kafka.admin
 
+import joptsimple.OptionException
 import kafka.admin.TopicCommand.{TopicCommandOptions, ZookeeperTopicService}
 import kafka.server.ConfigType
 import kafka.utils.{Logging, TestUtils}
@@ -118,7 +119,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     val brokers = List(0)
     TestUtils.createBrokersInZk(zkClient, brokers)
 
-    intercept[InvalidReplicationFactorException] {
+    intercept[OptionException] {
       topicService.createTopic(new TopicCommandOptions(
         Array("--partitions", "2", "--replication-factor", (Short.MaxValue+1).toString, "--topic", testTopicName)))
     }
@@ -427,7 +428,7 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     TestUtils.createBrokersInZk(toBrokerMetadata(rackInfo), zkClient)
 
     val numPartitions = 18
-    val replicationFactor = 3
+    val replicationFactor = 3.toShort
     val createOpts = new TopicCommandOptions(Array(
       "--partitions", numPartitions.toString,
       "--replication-factor", replicationFactor.toString,

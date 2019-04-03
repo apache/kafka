@@ -212,7 +212,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param topic The name of the topic.
      */
     public void createTopic(String topic, int partitions) {
-        createTopic(topic, partitions, 1, new HashMap<>());
+        createTopic(topic, partitions, (short) 1, new HashMap<>());
     }
 
     /**
@@ -223,7 +223,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
      * @param replication The replication factor for (partitions of) this topic.
      * @param topicConfig Additional topic-level configuration settings.
      */
-    public void createTopic(String topic, int partitions, int replication, Map<String, String> topicConfig) {
+    public void createTopic(String topic, int partitions, short replication, Map<String, String> topicConfig) {
         if (replication > brokers.length) {
             throw new InvalidReplicationFactorException("Insufficient brokers ("
                     + brokers.length + ") for desired replication (" + replication + ")");
@@ -231,7 +231,7 @@ public class EmbeddedKafkaCluster extends ExternalResource {
 
         log.debug("Creating topic { name: {}, partitions: {}, replication: {}, config: {} }",
                 topic, partitions, replication, topicConfig);
-        final NewTopic newTopic = new NewTopic(topic, partitions, (short) replication);
+        final NewTopic newTopic = new NewTopic(topic, partitions, replication);
         newTopic.configs(topicConfig);
 
         try (final AdminClient adminClient = createAdminClient()) {

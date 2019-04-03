@@ -221,7 +221,7 @@ public class KStreamAggregationDedupIntegrationTest {
     private void createTopics() throws InterruptedException {
         streamOneInput = "stream-one-" + testNo;
         outputTopic = "output-" + testNo;
-        CLUSTER.createTopic(streamOneInput, 3, 1);
+        CLUSTER.createTopic(streamOneInput, 3, (short) 1);
         CLUSTER.createTopic(outputTopic);
     }
 

@@ -49,7 +49,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   @Before
   override def setUp(): Unit = {
     super.setUp()
-    TestUtils.createTopic(zkClient, topic, numBrokers, numBrokers, servers)
+    TestUtils.createTopic(zkClient, topic, numBrokers, numBrokers.toShort, servers)
   }
 
   @After

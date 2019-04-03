@@ -113,7 +113,7 @@ public class QueryableStateIntegrationTest {
     // sufficiently large window size such that everything falls into 1 window
     private static final long WINDOW_SIZE = TimeUnit.MILLISECONDS.convert(2, TimeUnit.DAYS);
     private static final int STREAM_TWO_PARTITIONS = 2;
-    private static final int NUM_REPLICAS = NUM_BROKERS;
+    private static final short NUM_REPLICAS = NUM_BROKERS;
     private Properties streamsConfiguration;
     private List<String> inputValues;
     private int numberOfWordsPerIteration = 0;
@@ -134,7 +134,7 @@ public class QueryableStateIntegrationTest {
         streamTwo = streamTwo + "-" + testNo;
         CLUSTER.createTopics(streamOne, streamConcurrent);
         CLUSTER.createTopic(streamTwo, STREAM_TWO_PARTITIONS, NUM_REPLICAS);
-        CLUSTER.createTopic(streamThree, STREAM_THREE_PARTITIONS, 1);
+        CLUSTER.createTopic(streamThree, STREAM_THREE_PARTITIONS, (short) 1);
         CLUSTER.createTopics(outputTopic, outputTopicConcurrent, outputTopicConcurrentWindowed, outputTopicThree);
     }
 

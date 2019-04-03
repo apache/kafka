@@ -673,6 +673,12 @@ public class ConfigDef {
                         return value;
                     } else if (value instanceof String) {
                         return Short.parseShort(trimmed);
+                    } else if (value instanceof Integer || value instanceof Long) {
+                        Long longValue = ((Number) value).longValue();
+                        if (longValue > Short.MAX_VALUE || longValue < Short.MIN_VALUE) {
+                            throw new ConfigException(name, value, "Expected value to be a 16-bit integer (short), but it was > " + Short.MAX_VALUE);
+                        }
+                        return ((Number) value).shortValue();
                     } else {
                         throw new ConfigException(name, value, "Expected value to be a 16-bit integer (short), but it was a " + value.getClass().getName());
                     }
