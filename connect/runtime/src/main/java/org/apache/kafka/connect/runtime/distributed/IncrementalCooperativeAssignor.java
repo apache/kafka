@@ -333,7 +333,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             );
 
             if (log.isDebugEnabled()) {
-                completeWorkerAssignment.stream().forEachOrdered(wl -> log.debug(
+                completeWorkerAssignment.forEach(wl -> log.debug(
                         "Current plan worker {} connectors {} tasks {}",
                         wl.worker(),
                         wl.connectorsSize(),

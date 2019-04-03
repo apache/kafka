@@ -31,6 +31,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * This class implements the protocol for Kafka Connect workers in a group. It includes the format of worker state used when
@@ -54,15 +55,19 @@ public class ConnectProtocol {
 
     /**
      * Connect Protocol Header V0:
+     * <pre>
      *   Version            => Int16
+     * </pre>
      */
     private static final Struct CONNECT_PROTOCOL_HEADER_V0 = new Struct(CONNECT_PROTOCOL_HEADER_SCHEMA)
             .set(VERSION_KEY_NAME, CONNECT_PROTOCOL_V0);
 
     /**
      * Config State V0:
+     * <pre>
      *   Url                => [String]
      *   ConfigOffset       => Int64
+     * </pre>
      */
     public static final Schema CONFIG_STATE_V0 = new Schema(
             new Field(URL_KEY_NAME, Type.STRING),
@@ -70,8 +75,10 @@ public class ConnectProtocol {
 
     /**
      * Connector Assignment V0:
+     * <pre>
      *   Connector          => [String]
      *   Tasks              => [Int32]
+     * </pre>
      */
     // Assignments for each worker are a set of connectors and tasks. These are categorized by connector ID. A sentinel
     // task ID (CONNECTOR_TASK) is used to indicate the connector itself (i.e. that the assignment includes
@@ -82,11 +89,13 @@ public class ConnectProtocol {
 
     /**
      * Assignment V0:
+     * <pre>
      *   Error              => Int16
      *   Leader             => [String]
      *   LeaderUrl          => [String]
      *   ConfigOffset       => Int64
      *   Assignment         => [Connector Assignment]
+     * </pre>
      */
     public static final Schema ASSIGNMENT_V0 = new Schema(
             new Field(ERROR_KEY_NAME, Type.INT16),
@@ -95,6 +104,15 @@ public class ConnectProtocol {
             new Field(CONFIG_OFFSET_KEY_NAME, Type.INT64),
             new Field(ASSIGNMENT_KEY_NAME, new ArrayOf(CONNECTOR_ASSIGNMENT_V0)));
 
+    /**
+     * The fields are serialized in sequence as follows:
+     * Subscription V1:
+     * <pre>
+     *   Version            => Int16
+     *   Url                => [String]
+     *   ConfigOffset       => Int64
+     * </pre>
+     */
     public static ByteBuffer serializeMetadata(WorkerState workerState) {
         Struct struct = new Struct(CONFIG_STATE_V0);
         struct.set(URL_KEY_NAME, workerState.url());
@@ -106,6 +124,14 @@ public class ConnectProtocol {
         return buffer;
     }
 
+    /**
+     * Given a byte buffer that contains protocol metadata return the deserialized form of the
+     * metadata.
+     *
+     * @param buffer A buffer containing the protocols metadata
+     * @return the deserialized metadata
+     * @throws SchemaException on incompatible Connect protocol version
+     */
     public static WorkerState deserializeMetadata(ByteBuffer buffer) {
         Struct header = CONNECT_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
@@ -116,6 +142,18 @@ public class ConnectProtocol {
         return new WorkerState(url, configOffset);
     }
 
+    /**
+     * The fields are serialized in sequence as follows:
+     * Complete Assignment V1:
+     * <pre>
+     *   Version            => Int16
+     *   Error              => Int16
+     *   Leader             => [String]
+     *   LeaderUrl          => [String]
+     *   ConfigOffset       => Int64
+     *   Assignment         => [Connector Assignment]
+     * </pre>
+     */
     public static ByteBuffer serializeAssignment(Assignment assignment) {
         Struct struct = new Struct(ASSIGNMENT_V0);
         struct.set(ERROR_KEY_NAME, assignment.error());
@@ -139,6 +177,14 @@ public class ConnectProtocol {
         return buffer;
     }
 
+    /**
+     * Given a byte buffer that contains an assignment as defined by this protocol, return the
+     * deserialized form of the assignment.
+     *
+     * @param buffer the buffer containing a serialized assignment
+     * @return the deserialized assignment
+     * @throws SchemaException on incompatible Connect protocol version
+     */
     public static Assignment deserializeAssignment(ByteBuffer buffer) {
         Struct header = CONNECT_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
@@ -164,6 +210,10 @@ public class ConnectProtocol {
         return new Assignment(error, leader, leaderUrl, offset, connectorIds, taskIds);
     }
 
+
+    /**
+     * A class that captures the deserialized form of a worker's metadata.
+     */
     public static class WorkerState {
         private final String url;
         private final long offset;
@@ -177,6 +227,11 @@ public class ConnectProtocol {
             return url;
         }
 
+        /**
+         * The most up-to-date (maximum) configuration offset according known to this worker.
+         *
+         * @return the configuration offset
+         */
         public long offset() {
             return offset;
         }
@@ -190,6 +245,10 @@ public class ConnectProtocol {
         }
     }
 
+
+    /**
+     * The basic assignment of connectors and tasks introduced with V0 version of the Connect protocol.
+     */
     public static class Assignment {
         public static final short NO_ERROR = 0;
         // Configuration offsets mismatched in a way that the leader could not resolve. Workers should read to the end
@@ -205,8 +264,14 @@ public class ConnectProtocol {
 
         /**
          * Create an assignment indicating responsibility for the given connector instances and task Ids.
-         * @param connectorIds list of connectors that the worker should instantiate and run
-         * @param taskIds list of task IDs that the worker should instantiate and run
+         *
+         * @param error error code for this assignment; {@code ConnectProtocol.Assignment.NO_ERROR}
+         *              indicates no error during assignment
+         * @param leader Connect group's leader Id; may be null only on the empty assignment
+         * @param leaderUrl Connect group's leader URL; may be null only on the empty assignment
+         * @param configOffset the most up-to-date configuration offset according to this assignment
+         * @param connectorIds list of connectors that the worker should instantiate and run; may not be null
+         * @param taskIds list of task IDs that the worker should instantiate and run; may not be null
          */
         public Assignment(short error, String leader, String leaderUrl, long configOffset,
                           Collection<String> connectorIds, Collection<ConnectorTaskId> taskIds) {
@@ -214,34 +279,71 @@ public class ConnectProtocol {
             this.leader = leader;
             this.leaderUrl = leaderUrl;
             this.offset = configOffset;
-            this.taskIds = taskIds;
+            Objects.requireNonNull(connectorIds, "Assigned connector IDs may be empty but not null");
             this.connectorIds = connectorIds;
+            Objects.requireNonNull(taskIds, "Assigned task IDs may be empty but not null");
+            this.taskIds = taskIds;
         }
 
+        /**
+         * Return the error code of this assignment; 0 signals successful assignment ({@code ConnectProtocol.Assignment.NO_ERROR}).
+         *
+         * @return the error code of the assignment
+         */
         public short error() {
             return error;
         }
 
+        /**
+         * Return the ID of the leader Connect worker in this assignment.
+         *
+         * @return the ID of the leader
+         */
         public String leader() {
             return leader;
         }
 
+        /**
+         * Return the URL to which the leader accepts requests from other members of the group.
+         *
+         * @return the leader URL
+         */
         public String leaderUrl() {
             return leaderUrl;
         }
 
+        /**
+         * Check if this assignment failed.
+         *
+         * @return true if this assignment failed; false otherwise
+         */
         public boolean failed() {
             return error != NO_ERROR;
         }
 
+        /**
+         * Return the most up-to-date offset in the configuration topic according to this assignment
+         *
+         * @return the configuration topic
+         */
         public long offset() {
             return offset;
         }
 
+        /**
+         * The connectors included in this assignment.
+         *
+         * @return the connectors
+         */
         public Collection<String> connectors() {
             return connectorIds;
         }
 
+        /**
+         * The tasks included in this assignment.
+         *
+         * @return the tasks
+         */
         public Collection<ConnectorTaskId> tasks() {
             return taskIds;
         }
@@ -289,5 +391,4 @@ public class ConnectProtocol {
 
         // otherwise, assume versions can be parsed as V0
     }
-
 }

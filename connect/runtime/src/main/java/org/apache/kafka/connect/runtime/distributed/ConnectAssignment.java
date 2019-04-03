@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -59,8 +60,16 @@ public class ConnectAssignment extends ConnectProtocol.Assignment {
     /**
      * Create an assignment indicating responsibility for the given connector instances and task Ids.
      *
-     * @param revokedConnectorIds list of connectors that the worker should stop running
-     * @param revokedTaskIds list of task IDs that the worker should stop running
+     * @param version Connect protocol version
+     * @param error error code for this assignment; {@code ConnectProtocol.Assignment.NO_ERROR}
+     *              indicates no error during assignment
+     * @param leader Connect group's leader Id; may be null only on the empty assignment
+     * @param leaderUrl Connect group's leader URL; may be null only on the empty assignment
+     * @param configOffset the offset in the config topic that this assignment is corresponding to
+     * @param connectorIds list of connectors that the worker should instantiate and run; may not be null
+     * @param taskIds list of task IDs that the worker should instantiate and run; may not be null
+     * @param revokedConnectorIds list of connectors that the worker should stop running; may not be null
+     * @param revokedTaskIds list of task IDs that the worker should stop running; may not be null
      * @param delay the scheduled delay after which the worker should rejoin the group
      */
     public ConnectAssignment(short version, short error, String leader, String leaderUrl, long configOffset,
@@ -69,7 +78,9 @@ public class ConnectAssignment extends ConnectProtocol.Assignment {
                              int delay) {
         super(error, leader, leaderUrl, configOffset, connectorIds, taskIds);
         this.version = version;
+        Objects.requireNonNull(revokedConnectorIds, "Revoked connector IDs may be empty but not null");
         this.revokedConnectorIds = revokedConnectorIds;
+        Objects.requireNonNull(revokedTaskIds, "Revoked task IDs may be empty but not null");
         this.revokedTaskIds = revokedTaskIds;
         this.delay = delay;
     }
@@ -86,7 +97,7 @@ public class ConnectAssignment extends ConnectProtocol.Assignment {
     /**
      * Return the IDs of the connectors that are revoked by this assignment.
      *
-     * @return the revoked connector IDs
+     * @return the revoked connector IDs; empty if there are no revoked connectors
      */
     public Collection<String> revokedConnectors() {
         return revokedConnectorIds;
@@ -95,7 +106,7 @@ public class ConnectAssignment extends ConnectProtocol.Assignment {
     /**
      * Return the IDs of the tasks that are revoked by this assignment.
      *
-     * @return the revoked task IDs
+     * @return the revoked task IDs; empty if there are no revoked tasks
      */
     public Collection<ConnectorTaskId> revokedTasks() {
         return revokedTaskIds;

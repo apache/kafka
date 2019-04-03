@@ -52,29 +52,37 @@ public class IncrementalCooperativeConnectProtocol {
 
     /**
      * Connect Protocol Header V1:
+     * <pre>
      *   Version            => Int16
+     * </pre>
      */
     private static final Struct CONNECT_PROTOCOL_HEADER_V1 = new Struct(CONNECT_PROTOCOL_HEADER_SCHEMA)
             .set(VERSION_KEY_NAME, CONNECT_PROTOCOL_V1);
 
     /**
      * Config State V1:
+     * <pre>
      *   Url                => [String]
      *   ConfigOffset       => Int64
+     * </pre>
      */
     public static final Schema CONFIG_STATE_V1 = CONFIG_STATE_V0;
 
     /**
      * Allocation V1
+     * <pre>
      *   Current Assignment => [Byte]
+     * </pre>
      */
     public static final Schema ALLOCATION_V1 = new Schema(
             new Field(ALLOCATION_KEY_NAME, NULLABLE_BYTES, null, true, null));
 
     /**
      * Connector Assignment V1:
+     * <pre>
      *   Connector          => [String]
      *   Tasks              => [Int32]
+     * </pre>
      */
     // Assignments for each worker are a set of connectors and tasks. These are categorized by connector ID. A sentinel
     // task ID (CONNECTOR_TASK) is used to indicate the connector itself (i.e. that the assignment includes
@@ -83,6 +91,7 @@ public class IncrementalCooperativeConnectProtocol {
 
     /**
      * Raw (non versioned) assignment V1:
+     * <pre>
      *   Error              => Int16
      *   Leader             => [String]
      *   LeaderUrl          => [String]
@@ -90,6 +99,7 @@ public class IncrementalCooperativeConnectProtocol {
      *   Assignment         => [Connector Assignment]
      *   Revoked            => [Connector Assignment]
      *   ScheduledDelay     => Int32
+     * </pre>
      */
     public static final Schema ASSIGNMENT_V1 = new Schema(
             new Field(ERROR_KEY_NAME, Type.INT16),
@@ -103,10 +113,12 @@ public class IncrementalCooperativeConnectProtocol {
     /**
      * The fields are serialized in sequence as follows:
      * Subscription V1:
+     * <pre>
      *   Version            => Int16
      *   Url                => [String]
      *   ConfigOffset       => Int64
      *   Current Assignment => [Byte]
+     * </pre>
      */
     public static ByteBuffer serializeMetadata(ExtendedWorkerState workerState) {
         Struct configState = new Struct(CONFIG_STATE_V1)
@@ -131,6 +143,7 @@ public class IncrementalCooperativeConnectProtocol {
      *
      * @param buffer A buffer containing the protocols metadata
      * @return the deserialized metadata
+     * @throws SchemaException on incompatible Connect protocol version
      */
     public static ExtendedWorkerState deserializeMetadata(ByteBuffer buffer) {
         Struct header = CONNECT_PROTOCOL_HEADER_SCHEMA.read(buffer);
@@ -148,6 +161,7 @@ public class IncrementalCooperativeConnectProtocol {
     /**
      * The fields are serialized in sequence as follows:
      * Complete Assignment V1:
+     * <pre>
      *   Version            => Int16
      *   Error              => Int16
      *   Leader             => [String]
@@ -156,6 +170,7 @@ public class IncrementalCooperativeConnectProtocol {
      *   Assignment         => [Connector Assignment]
      *   Revoked            => [Connector Assignment]
      *   ScheduledDelay     => Int32
+     * </pre>
      */
     public static ByteBuffer serializeAssignment(ConnectAssignment assignment) {
         if (assignment == null || ConnectAssignment.empty().equals(assignment)) {
@@ -176,6 +191,7 @@ public class IncrementalCooperativeConnectProtocol {
      *
      * @param buffer the buffer containing a serialized assignment
      * @return the deserialized assignment
+     * @throws SchemaException on incompatible Connect protocol version
      */
     public static ConnectAssignment deserializeAssignment(ByteBuffer buffer) {
         if (buffer == null) {
