@@ -54,9 +54,9 @@ public class JsonSerializationTest {
         verify(new WorkerDone(null, null, 0, 0, null, null));
         verify(new WorkerRunning(null, null, 0, null));
         verify(new WorkerStopping(null, null, 0, null));
-        verify(new ProduceBenchSpec(0, 0, null, null,
-            0, 0, null, null, Optional.empty(), null, null, null, null, null));
-        verify(new RoundTripWorkloadSpec(0, 0, null, null, null, null, null, null,
+        verify(new ProduceBenchSpec(0, 0, null, null, null,
+                0, 0, null, null, Optional.empty(), null, null, null, null, null));
+        verify(new RoundTripWorkloadSpec(0, 0, null, null, null, null, null, null, null,
             0, null, null, 0));
         verify(new TopicsSpec());
         verify(new PartitionsSpec(0, (short) 0, null, null));

@@ -146,7 +146,8 @@ public class RoundTripWorker implements TaskWorker {
                     throw new RuntimeException("You must specify at least one active topic.");
                 }
                 status.update(new TextNode("Creating " + newTopics.keySet().size() + " topic(s)"));
-                WorkerUtils.createTopics(log, spec.bootstrapServers(), spec.commonClientConf(),
+                WorkerUtils.createTopics(log, spec.adminClientBootstrapServers(),
+                        spec.commonClientConf(),
                     spec.adminClientConf(), newTopics, true);
                 status.update(new TextNode("Created " + newTopics.keySet().size() + " topic(s)"));
                 toSendTracker = new ToSendTracker(spec.maxMessages());

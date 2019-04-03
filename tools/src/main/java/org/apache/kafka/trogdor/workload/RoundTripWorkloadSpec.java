@@ -33,6 +33,7 @@ import java.util.Map;
 public class RoundTripWorkloadSpec extends TaskSpec {
     private final String clientNode;
     private final String bootstrapServers;
+    private final String adminClientBootstrapServers;
     private final int targetMessagesPerSec;
     private final PayloadGenerator valueGenerator;
     private final TopicsSpec activeTopics;
@@ -47,6 +48,7 @@ public class RoundTripWorkloadSpec extends TaskSpec {
              @JsonProperty("durationMs") long durationMs,
              @JsonProperty("clientNode") String clientNode,
              @JsonProperty("bootstrapServers") String bootstrapServers,
+             @JsonProperty("adminClientBootstrapServers") String adminClientBootstrapServers,
              @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
              @JsonProperty("adminClientConf") Map<String, String> adminClientConf,
              @JsonProperty("consumerConf") Map<String, String> consumerConf,
@@ -58,6 +60,13 @@ public class RoundTripWorkloadSpec extends TaskSpec {
         super(startMs, durationMs);
         this.clientNode = clientNode == null ? "" : clientNode;
         this.bootstrapServers = bootstrapServers == null ? "" : bootstrapServers;
+        if (adminClientBootstrapServers != null) {
+            this.adminClientBootstrapServers = adminClientBootstrapServers;
+        } else if (bootstrapServers != null) {
+            this.adminClientBootstrapServers = bootstrapServers;
+        } else {
+            this.adminClientBootstrapServers = "";
+        }
         this.targetMessagesPerSec = targetMessagesPerSec;
         this.valueGenerator = valueGenerator == null ?
             new UniformRandomPayloadGenerator(32, 123, 10) : valueGenerator;
@@ -83,6 +92,11 @@ public class RoundTripWorkloadSpec extends TaskSpec {
     @JsonProperty
     public int targetMessagesPerSec() {
         return targetMessagesPerSec;
+    }
+
+    @JsonProperty
+    public String adminClientBootstrapServers() {
+        return adminClientBootstrapServers;
     }
 
     @JsonProperty

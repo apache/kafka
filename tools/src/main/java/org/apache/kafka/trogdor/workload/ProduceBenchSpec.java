@@ -61,6 +61,7 @@ import java.util.Optional;
 public class ProduceBenchSpec extends TaskSpec {
     private final String producerNode;
     private final String bootstrapServers;
+    private final String adminClientBootstrapServers;
     private final int targetMessagesPerSec;
     private final long maxMessages;
     private final PayloadGenerator keyGenerator;
@@ -77,6 +78,7 @@ public class ProduceBenchSpec extends TaskSpec {
                          @JsonProperty("durationMs") long durationMs,
                          @JsonProperty("producerNode") String producerNode,
                          @JsonProperty("bootstrapServers") String bootstrapServers,
+                         @JsonProperty("adminClientBootstrapServers") String adminClientBootstrapServers,
                          @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
                          @JsonProperty("maxMessages") long maxMessages,
                          @JsonProperty("keyGenerator") PayloadGenerator keyGenerator,
@@ -90,6 +92,13 @@ public class ProduceBenchSpec extends TaskSpec {
         super(startMs, durationMs);
         this.producerNode = (producerNode == null) ? "" : producerNode;
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
+        if (adminClientBootstrapServers != null) {
+            this.adminClientBootstrapServers = adminClientBootstrapServers;
+        } else if (bootstrapServers != null) {
+            this.adminClientBootstrapServers = bootstrapServers;
+        } else {
+            this.adminClientBootstrapServers = "";
+        }
         this.targetMessagesPerSec = targetMessagesPerSec;
         this.maxMessages = maxMessages;
         this.keyGenerator = keyGenerator == null ?
@@ -114,6 +123,11 @@ public class ProduceBenchSpec extends TaskSpec {
     @JsonProperty
     public String bootstrapServers() {
         return bootstrapServers;
+    }
+
+    @JsonProperty
+    public String adminClientBootstrapServers() {
+        return adminClientBootstrapServers;
     }
 
     @JsonProperty

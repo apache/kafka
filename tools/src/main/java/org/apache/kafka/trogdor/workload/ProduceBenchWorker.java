@@ -118,7 +118,7 @@ public class ProduceBenchWorker implements TaskWorker {
                     newTopics.put(topicName, partSpec.newTopic(topicName));
                 }
                 status.update(new TextNode("Creating " + newTopics.keySet().size() + " topic(s)"));
-                WorkerUtils.createTopics(log, spec.bootstrapServers(), spec.commonClientConf(),
+                WorkerUtils.createTopics(log, spec.adminClientBootstrapServers(), spec.commonClientConf(),
                                          spec.adminClientConf(), newTopics, false);
                 status.update(new TextNode("Created " + newTopics.keySet().size() + " topic(s)"));
                 executor.submit(new SendRecords(active));
