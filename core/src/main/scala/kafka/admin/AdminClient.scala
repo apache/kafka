@@ -378,7 +378,7 @@ object AdminClient {
   val DefaultSendBufferBytes = 128 * 1024
   val DefaultReceiveBufferBytes = 32 * 1024
   val DefaultRetryBackoffMs = 100
-
+  val DEFAULT_CONNECT_READY_TIMEOUT_MS_CONFIG = 30 * 1000
   val AdminClientIdSequence = new AtomicInteger(1)
   val AdminConfigDef = {
     val config = new ConfigDef()
@@ -460,6 +460,7 @@ object AdminClient {
       DefaultMaxInFlightRequestsPerConnection,
       DefaultReconnectBackoffMs,
       DefaultReconnectBackoffMax,
+      DEFAULT_CONNECT_READY_TIMEOUT_MS_CONFIG,
       DefaultSendBufferBytes,
       DefaultReceiveBufferBytes,
       requestTimeoutMs,

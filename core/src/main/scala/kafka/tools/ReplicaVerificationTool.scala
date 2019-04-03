@@ -458,7 +458,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
       time,
       "replica-fetcher",
       Map("broker-id" -> sourceNode.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
-      false,
+      false,git
       channelBuilder,
       new LogContext
     )
@@ -467,6 +467,7 @@ private class ReplicaFetcherBlockingSend(sourceNode: Node,
       new ManualMetadataUpdater(),
       clientId,
       1,
+      0,
       0,
       0,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
