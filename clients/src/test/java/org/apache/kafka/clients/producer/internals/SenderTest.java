@@ -38,6 +38,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -108,7 +109,6 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.spy;
 
 public class SenderTest {
-
     private static final int MAX_REQUEST_SIZE = 1024 * 1024;
     private static final short ACKS_ALL = -1;
     private static final String CLIENT_ID = "clientId";
@@ -2321,13 +2321,20 @@ public class SenderTest {
         if (error != Errors.NONE)
             producerEpoch = RecordBatch.NO_PRODUCER_EPOCH;
 
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                return body instanceof InitProducerIdRequest && ((InitProducerIdRequest) body).transactionalId() == null;
-            }
-        }, new InitProducerIdResponse(0, error, producerId, producerEpoch));
+        client.prepareResponse(body -> {
+            return body instanceof InitProducerIdRequest &&
+                    ((InitProducerIdRequest) body).data.transactionalId() == null;
+        }, initProducerIdResponse(producerId, producerEpoch, error));
         sender.run(time.milliseconds());
+    }
+
+    private InitProducerIdResponse initProducerIdResponse(long producerId, short producerEpoch, Errors error) {
+        InitProducerIdResponseData responseData = new InitProducerIdResponseData()
+                .setErrorCode(error.code())
+                .setProducerEpoch(producerEpoch)
+                .setProducerId(producerId)
+                .setThrottleTimeMs(0);
+        return new InitProducerIdResponse(responseData);
     }
 
     private void doInitTransactions(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch) {
@@ -2345,8 +2352,8 @@ public class SenderTest {
         client.prepareResponse(new FindCoordinatorResponse(error, metadata.fetch().nodes().get(0)));
     }
 
-    private void prepareInitPidResponse(Errors error, long pid, short epoch) {
-        client.prepareResponse(new InitProducerIdResponse(0, error, pid, epoch));
+    private void prepareInitPidResponse(Errors error, long producerId, short producerEpoch) {
+        client.prepareResponse(initProducerIdResponse(producerId, producerEpoch, error));
     }
 
     private void assertFutureFailure(Future<?> future, Class<? extends Exception> expectedExceptionType)
