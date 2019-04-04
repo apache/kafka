@@ -316,7 +316,7 @@ public class SslFactory implements Reconfigurable {
         private final String path;
         private final Password password;
         private final Password keyPassword;
-        private Long fileLastModifiedMs;
+        private final Long fileLastModifiedMs;
 
         SecurityStore(String type, String path, Password password, Password keyPassword) {
             Objects.requireNonNull(type, "type must not be null");
@@ -324,6 +324,7 @@ public class SslFactory implements Reconfigurable {
             this.path = path;
             this.password = password;
             this.keyPassword = keyPassword;
+            fileLastModifiedMs = lastModifiedMs(path);
         }
 
         /**
@@ -338,7 +339,6 @@ public class SslFactory implements Reconfigurable {
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;
                 ks.load(in, passwordChars);
-                fileLastModifiedMs = lastModifiedMs(path);
 
                 log.debug("Loaded key store with path {} modification time {}", path,
                         fileLastModifiedMs == null ? null : new Date(fileLastModifiedMs));
