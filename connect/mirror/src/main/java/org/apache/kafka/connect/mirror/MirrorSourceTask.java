@@ -100,6 +100,10 @@ public class MirrorSourceTask extends SourceTask {
 
     @Override
     public void stop() {
+        new Thread(this::cleanup).start();
+    }
+
+    private void cleanup() {
         lock.lock();
         consumer.close();
         try {
@@ -110,10 +114,11 @@ public class MirrorSourceTask extends SourceTask {
             }
         } catch (InterruptedException e) {
             log.info("Interrupted waiting for outstanding offset syncs.");
+        } finally {
+            offsetProducer.close();
         }
-        offsetProducer.close();
     }
-    
+   
     @Override
     public String version() {
         return "wip";

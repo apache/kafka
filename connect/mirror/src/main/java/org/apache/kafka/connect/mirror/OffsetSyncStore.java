@@ -61,11 +61,16 @@ class OffsetSyncStore {
     }
 
     // poll and handle records
-    void update(Duration pollTimeout) throws InterruptedException {
+    synchronized void update(Duration pollTimeout) throws InterruptedException {
         consumer.poll(pollTimeout).forEach(this::handleRecord);
     }
 
     void close() {
+        // cleanup off-thread to prevent blocking
+        new Thread(this::cleanup).start();
+    }
+
+    private synchronized void cleanup() {
         consumer.close();
     }
 

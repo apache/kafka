@@ -33,6 +33,7 @@ import java.util.Set;
 import java.util.Collections;
 import java.util.stream.Collectors;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.locks.ReentrantLock;
 import java.time.Duration;
 
 /** Emits checkpoints for upstream consumer groups. */
@@ -51,6 +52,7 @@ public class MirrorCheckpointTask extends SourceTask {
     private ReplicationPolicy replicationPolicy;
     private OffsetSyncStore offsetSyncStore;
     private boolean stopped;
+    private ReentrantLock lock;
 
     public MirrorCheckpointTask() {}
 
@@ -65,6 +67,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public void start(Map<String, String> props) {
+        lock = new ReentrantLock();
         MirrorTaskConfig config = new MirrorTaskConfig(props);
         stopped = false;
         sourceClusterAlias = config.sourceClusterAlias();
@@ -87,10 +90,13 @@ public class MirrorCheckpointTask extends SourceTask {
     @Override
     public void stop() {
         stopped = true;
+        new Thread(this::cleanup).start();  // cleanup off-thread to prevent blocking
+    }
+
+    private void cleanup() {
+        lock.lock();
         offsetSyncStore.close();
-        synchronized (sourceAdminClient) {
-            sourceAdminClient.close();
-        }
+        sourceAdminClient.close();
     }
 
     @Override
@@ -100,15 +106,20 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
-        long deadline = System.currentTimeMillis() + interval.toMillis();
-        while (!stopped && System.currentTimeMillis() < deadline) {
-            offsetSyncStore.update(pollTimeout);
+        try { 
+            lock.lock();
+            long deadline = System.currentTimeMillis() + interval.toMillis();
+            while (!stopped && System.currentTimeMillis() < deadline) {
+                offsetSyncStore.update(pollTimeout);
+            }
+            List<SourceRecord> records = new ArrayList<>();
+            for (String group : consumerGroups) {
+                records.addAll(checkpointsForGroup(group));
+            }
+            return records;
+        } finally {
+            lock.unlock();
         }
-        List<SourceRecord> records = new ArrayList<>();
-        for (String group : consumerGroups) {
-            records.addAll(checkpointsForGroup(group));
-        }
-        return records;
     }
 
     private List<SourceRecord> checkpointsForGroup(String group) throws InterruptedException {
@@ -128,9 +139,11 @@ public class MirrorCheckpointTask extends SourceTask {
 
     private Map<TopicPartition, OffsetAndMetadata> listConsumerGroupOffsets(String group)
             throws InterruptedException, ExecutionException {
-        synchronized (sourceAdminClient) {
-            return sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
+        if (stopped) {
+            // short circuit if stopping
+            return Collections.emptyMap();
         }
+        return sourceAdminClient.listConsumerGroupOffsets(group).partitionsToOffsetAndMetadata().get();
     }
 
     Checkpoint checkpoint(String group, TopicPartition topicPartition,
