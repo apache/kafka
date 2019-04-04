@@ -312,11 +312,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 try {
                     listener.onPartitionsAssigned(assignedPartitions);
                 } catch (WakeupException | InterruptException e) {
-                    // also clear the assigned partitions
-                    subscriptions.assignFromSubscribed(Collections.emptySet());
                     throw e;
                 } catch (Exception e) {
-                    subscriptions.assignFromSubscribed(Collections.emptySet());
                     log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
                 }
                 break;
@@ -341,8 +338,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         addedPartitions.removeAll(ownedPartitions);
         revokedPartitions.removeAll(assignedPartitions);
 
-        // TODO: ignored assignment.revokedPartitions
-
         log.info("Updating with newly assigned partitions: {}, compare with already owned partitions: {}, " +
                 "newly added partitions: {}, revoking partitions: {}",
             Utils.join(assignedPartitions, ", "),
@@ -353,12 +348,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         try {
             listener.onPartitionsAssigned(addedPartitions);
         } catch (WakeupException | InterruptException e) {
-            // reset the assigned to owned partitions
-            subscriptions.assignFromSubscribed(ownedPartitions);
             throw e;
         } catch (Exception e) {
-            // reset the assigned to owned partitions
-            subscriptions.assignFromSubscribed(ownedPartitions);
             log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
         }
 
@@ -366,12 +357,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             try {
                 listener.onPartitionsRevoked(revokedPartitions);
             } catch (WakeupException | InterruptException e) {
-                // reset the assigned to owned partitions
-                subscriptions.assignFromSubscribed(ownedPartitions);
                 throw e;
             } catch (Exception e) {
-                // reset the assigned to owned partitions
-                subscriptions.assignFromSubscribed(ownedPartitions);
                 log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
             }
         }
@@ -567,12 +554,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private void adjustAssignment(final Map<TopicPartition, String> ownedPartitions,
                                   final Map<String, Assignment> assignments) {
         boolean revocationsNeeded = false;
-        // update the assignment if the partition is owned by another different owner
         Set<TopicPartition> assignedPartitions = new HashSet<>();
         for (final Map.Entry<String, Assignment> entry : assignments.entrySet()) {
             final Assignment assignment = entry.getValue();
             assignedPartitions.addAll(assignment.partitions());
 
+            // update the assignment if the partition is owned by another different owner
             if (assignment.partitions().removeIf(tp -> ownedPartitions.containsKey(tp) && !entry.getKey().equals(ownedPartitions.get(tp)))) {
                 revocationsNeeded = true;
             }
