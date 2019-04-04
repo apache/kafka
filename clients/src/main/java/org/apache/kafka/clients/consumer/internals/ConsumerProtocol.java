@@ -34,7 +34,7 @@ import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 
 /**
  * ConsumerProtocol contains the schemas for consumer subscriptions and assignments for use with
- * Kafka's generalized group management protocol. Below is the version 0 format:
+ * Kafka's generalized group management protocol. Below is the version 1 format:
  *
  * <pre>
  * Subscription => Version Topics
@@ -51,11 +51,10 @@ import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
  *     Topic            => String
  *     Partitions       => [int32]
  *     UserData   => Bytes
- *   RevokedPartitions  => [Topic Partitions]
- *     Topic            => String
- *     Partitions       => [int32]
  *   ErrorCode          => [int16]
  * </pre>
+ *
+ * Older versioned formats can be inferred by reading the code below.
  *
  * The current implementation assumes that future versions will not break compatibility. When
  * it encounters a newer version, it parses it using the current format. This basically means
@@ -70,7 +69,6 @@ public class ConsumerProtocol {
     public static final String TOPIC_KEY_NAME = "topic";
     public static final String PARTITIONS_KEY_NAME = "partitions";
     public static final String OWNED_PARTITIONS_KEY_NAME = "owned_partitions";
-    public static final String REVOKED_PARTITIONS_KEY_NAME = "revoked_partitions";
     public static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
     public static final String USER_DATA_KEY_NAME = "user_data";
 
@@ -104,7 +102,6 @@ public class ConsumerProtocol {
     public static final Schema ASSIGNMENT_V1 = new Schema(
         new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
         new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
-        new Field(REVOKED_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
         ERROR_CODE);
 
     public enum Errors {
@@ -164,7 +161,6 @@ public class ConsumerProtocol {
         SUBSCRIPTION_V1.write(buffer, struct);
         buffer.flip();
         return buffer;
-
     }
 
     public static ByteBuffer serializeSubscription(PartitionAssignor.Subscription subscription) {
@@ -250,15 +246,6 @@ public class ConsumerProtocol {
             topicAssignments.add(topicAssignment);
         }
         struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        List<Struct> revokedAssignments = new ArrayList<>();
-        partitionsByTopic = CollectionUtils.groupPartitionsByTopic(assignment.revokedPartitions());
-        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
-            Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT_V0);
-            topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
-            topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
-            revokedAssignments.add(topicAssignment);
-        }
-        struct.set(REVOKED_PARTITIONS_KEY_NAME, revokedAssignments.toArray());
         struct.set(ERROR_CODE.name, assignment.error().code);
 
         ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V1.sizeOf() + ASSIGNMENT_V1.sizeOf(struct));
@@ -300,18 +287,9 @@ public class ConsumerProtocol {
             }
         }
 
-        List<TopicPartition> revokedPartitions = new ArrayList<>();
-        for (Object structObj : struct.getArray(REVOKED_PARTITIONS_KEY_NAME)) {
-            Struct assignment = (Struct) structObj;
-            String topic = assignment.getString(TOPIC_KEY_NAME);
-            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                Integer partition = (Integer) partitionObj;
-                revokedPartitions.add(new TopicPartition(topic, partition));
-            }
-        }
         Errors error = Errors.fromCode(struct.get(ERROR_CODE));
 
-        return new PartitionAssignor.Assignment(partitions, userData, revokedPartitions, error);
+        return new PartitionAssignor.Assignment(partitions, userData, error);
     }
 
     public static PartitionAssignor.Assignment deserializeAssignment(ByteBuffer buffer) {
