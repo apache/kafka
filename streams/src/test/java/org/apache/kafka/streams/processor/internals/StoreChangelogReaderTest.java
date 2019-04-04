@@ -103,6 +103,7 @@ public class StoreChangelogReaderTest {
         expect(mockRestorer.partition())
             .andReturn(new TopicPartition("sometopic", 0))
             .andReturn(new TopicPartition("sometopic", 0))
+            .andReturn(new TopicPartition("sometopic", 0))
             .andReturn(new TopicPartition("sometopic", 0));
         EasyMock.replay(mockRestorer);
         changelogReader.register(mockRestorer);
@@ -142,8 +143,9 @@ public class StoreChangelogReaderTest {
         });
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName"));
 
-        EasyMock.expect(active.restoringTaskFor(topicPartition)).andReturn(task).andReturn(task);
-        EasyMock.replay(active);
+        expect(active.restoringTaskFor(topicPartition)).andReturn(task).anyTimes();
+        expect(task.isEosEnabled()).andReturn(false).anyTimes();
+        replay(active, task);
 
         // first restore call "fails" but we should not die with an exception
         assertEquals(0, changelogReader.restore(active).size());
@@ -249,10 +251,11 @@ public class StoreChangelogReaderTest {
         changelogReader.register(new StateRestorer(one, restoreListener1, null, Long.MAX_VALUE, true, "storeName2"));
         changelogReader.register(new StateRestorer(two, restoreListener2, null, Long.MAX_VALUE, true, "storeName3"));
 
+        expect(task.isEosEnabled()).andReturn(false).anyTimes();
         expect(active.restoringTaskFor(one)).andReturn(task);
         expect(active.restoringTaskFor(two)).andReturn(task);
-        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
-        replay(active);
+        expect(active.restoringTaskFor(topicPartition)).andReturn(task).anyTimes();
+        replay(active, task);
         changelogReader.restore(active);
 
         assertThat(callback.restored.size(), equalTo(10));
@@ -425,7 +428,8 @@ public class StoreChangelogReaderTest {
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         expect(active.restoringTaskFor(postInitialization)).andReturn(task);
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
-        replay(active);
+        expect(task.isEosEnabled()).andReturn(false).anyTimes();
+        replay(active, task);
 
         assertTrue(changelogReader.restore(active).isEmpty());
 
@@ -517,7 +521,9 @@ public class StoreChangelogReaderTest {
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName"));
 
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
-        replay(active);
+        expect(task.isEosEnabled()).andReturn(true).anyTimes();
+
+        replay(active, task);
         try {
             changelogReader.restore(active);
             fail("Should have thrown task migrated exception");
