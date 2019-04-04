@@ -1035,6 +1035,10 @@ class PartitionTest {
     builder.build()
   }
 
+  /**
+    * Test for AtMinIsr partition state. We set the partition replica set size as 3, but only set one replica as an ISR.
+    * As the default minIsr configuration is 1, then the partition should be at min ISR (isAtMinIsr = true).
+    */
   @Test
   def testAtMinIsr(): Unit = {
     val controllerEpoch = 3
