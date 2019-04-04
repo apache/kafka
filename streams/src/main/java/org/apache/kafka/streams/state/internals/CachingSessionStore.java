@@ -159,7 +159,7 @@ class CachingSessionStore
                                                                   final long latestSessionStartTime) {
         // Make sure this is a valid query
         if (keyFrom.compareTo(keyTo) > 0) {
-            LOG.debug("Returning empty iterator for findSessions call with invalid range: keyFrom > keyTo.");
+            LOG.warn("Returning empty iterator for findSessions call with invalid range: keyFrom > keyTo.");
             return KeyValueIterators.emptyIterator();
         }
 

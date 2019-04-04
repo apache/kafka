@@ -117,7 +117,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
         // Make sure this is a valid query
         if (from.compareTo(to) > 0) {
-            LOG.debug("Returning empty iterator for range query with invalid range: keyFrom > keyTo.");
+            LOG.warn("Returning empty iterator for range query with invalid range: keyFrom > keyTo.");
             return KeyValueIterators.emptyIterator();
         }
 

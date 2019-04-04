@@ -131,7 +131,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         if (windowStartTimestamp <= this.observedStreamTime - this.retentionPeriod) {
             expiredRecordSensor.record();
-            LOG.debug("Skipping record for expired segment.");
+            LOG.warn("Skipping record for expired segment.");
         } else {
             if (value != null) {
                 this.segmentMap.computeIfAbsent(windowStartTimestamp, t -> new ConcurrentSkipListMap<>());
