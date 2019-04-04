@@ -231,6 +231,10 @@ public class SslFactory implements Reconfigurable {
             Password keyPassword = keystore.keyPassword != null ? keystore.keyPassword : keystore.password;
             kmf.init(ks, keyPassword.value().toCharArray());
             keyManagers = kmf.getKeyManagers();
+        } else if (kmfAlgorithm != null) {
+            KeyManagerFactory kmf = KeyManagerFactory.getInstance(kmfAlgorithm);
+            kmf.init(null, null);
+            keyManagers = kmf.getKeyManagers();
         }
 
         String tmfAlgorithm = this.tmfAlgorithm != null ? this.tmfAlgorithm : TrustManagerFactory.getDefaultAlgorithm();
