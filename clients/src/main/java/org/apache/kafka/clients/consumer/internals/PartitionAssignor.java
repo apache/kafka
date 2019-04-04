@@ -115,18 +115,16 @@ public interface PartitionAssignor {
     class Assignment {
         private final List<TopicPartition> partitions;
         private final ByteBuffer userData;
-        private final List<TopicPartition> revokedPartitions;
         private ConsumerProtocol.Errors error;
 
-        public Assignment(List<TopicPartition> partitions, ByteBuffer userData, List<TopicPartition> revokedPartitions, ConsumerProtocol.Errors error) {
+        public Assignment(List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.Errors error) {
             this.partitions = partitions;
             this.userData = userData;
-            this.revokedPartitions = revokedPartitions;
             this.error = error;
         }
 
         public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
-            this(partitions, userData, Collections.emptyList(), ConsumerProtocol.Errors.NONE);
+            this(partitions, userData, ConsumerProtocol.Errors.NONE);
         }
 
         public Assignment(List<TopicPartition> partitions) {
@@ -135,10 +133,6 @@ public interface PartitionAssignor {
 
         public List<TopicPartition> partitions() {
             return partitions;
-        }
-
-        public List<TopicPartition> revokedPartitions() {
-            return revokedPartitions;
         }
 
         public ConsumerProtocol.Errors error() {
