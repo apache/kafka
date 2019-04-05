@@ -281,41 +281,6 @@ public class StoreChangelogReader implements ChangelogReader {
         needsInitializing.clear();
     }
 
-    /**
-     * @throws TaskMigratedException if another thread wrote to the changelog topic that is currently restored
-     */
-    private void restorePartition(final ConsumerRecords<byte[], byte[]> allRecords,
-                                  final TopicPartition topicPartition,
-                                  final Task task) {
-        final StateRestorer restorer = stateRestorers.get(topicPartition);
-        final Long endOffset = endOffsets.get(topicPartition);
-        final long pos = processNext(allRecords.records(topicPartition), restorer, endOffset);
-        restorer.setRestoredOffset(pos);
-        if (restorer.hasCompleted(pos, endOffset)) {
-            if (pos > endOffset) {
-                throw new TaskMigratedException(task, topicPartition, endOffset, pos);
-            }
-
-            // need to check for changelog topic
-            if (restorer.offsetLimit() == Long.MAX_VALUE) {
-                final Long updatedEndOffset = restoreConsumer.endOffsets(Collections.singletonList(topicPartition)).get(topicPartition);
-                if (!restorer.hasCompleted(pos, updatedEndOffset)) {
-                    throw new TaskMigratedException(task, topicPartition, updatedEndOffset, pos);
-                }
-            }
-
-
-            log.debug("Completed restoring state from changelog {} with {} records ranging from offset {} to {}",
-                      topicPartition,
-                      restorer.restoredNumRecords(),
-                      restorer.startingOffset(),
-                      restorer.restoredOffset());
-
-            restorer.restoreDone();
-            needsRestoring.remove(topicPartition);
-        }
-    }
-
     private long processNext(final List<ConsumerRecord<byte[], byte[]>> records,
                              final StateRestorer restorer,
                              final Long endOffset) {
