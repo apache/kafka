@@ -33,7 +33,7 @@ import scala.collection.JavaConverters._
 
 class MetricsTest extends IntegrationTestHarness with SaslSetup {
 
-  override val serverCount = 1
+  override val brokerCount = 1
 
   override protected def listenerName = new ListenerName("CLIENT")
   private val kafkaClientSaslMechanism = "PLAIN"
