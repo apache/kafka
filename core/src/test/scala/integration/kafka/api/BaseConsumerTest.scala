@@ -14,13 +14,14 @@ package kafka.api
 
 import java.time.Duration
 import java.util
+import java.util.Properties
 
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import kafka.utils.{ShutdownableThread, TestUtils}
-import kafka.server.KafkaConfig
+import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
@@ -30,43 +31,49 @@ import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.internals.Topic
 
+import scala.collection.mutable
+
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures
  */
-abstract class BaseConsumerTest extends IntegrationTestHarness {
+abstract class BaseConsumerTest extends BaseRequestTest {
 
   val epsilon = 0.1
-  val serverCount = 3
+  override def brokerCount: Int = 3
 
   val topic = "topic"
   val part = 0
   val tp = new TopicPartition(topic, part)
   val part2 = 1
   val tp2 = new TopicPartition(topic, part2)
+  val group = "my-test"
   val producerClientId = "ConsumerTestProducer"
   val consumerClientId = "ConsumerTestConsumer"
+  val groupMaxSessionTimeoutMs = 30000L
 
-  // configure the servers and clients
-  this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100") // set small enough session timeout
-  this.serverConfig.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, "30000")
-  this.serverConfig.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "10")
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "all")
   this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
   this.consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, consumerClientId)
-  this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "my-test")
+  this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
   this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
   this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
+
+  override protected def brokerPropertyOverrides(properties: Properties): Unit = {
+    properties.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
+    properties.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3") // don't want to lose offset
+    properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
+    properties.setProperty(KafkaConfig.GroupMinSessionTimeoutMsProp, "100") // set small enough session timeout
+    properties.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp, groupMaxSessionTimeoutMs.toString)
+    properties.setProperty(KafkaConfig.GroupInitialRebalanceDelayMsProp, "10")
+  }
 
   @Before
   override def setUp() {
     super.setUp()
 
     // create the test topic with all the brokers as replicas
-    createTopic(topic, 2, serverCount)
+    createTopic(topic, 2, brokerCount)
   }
 
   @Test
@@ -90,7 +97,7 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   @Test
   def testCoordinatorFailover() {
     val listener = new TestConsumerReassignmentListener()
-    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5000")
+    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "2000")
     val consumer = createConsumer()
 
@@ -128,6 +135,12 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
       info("onPartitionsRevoked called.")
       callsToRevoked += 1
     }
+  }
+
+  protected def createConsumerWithGroupId(groupId: String): KafkaConsumer[Array[Byte], Array[Byte]] = {
+    val groupOverrideConfig = new Properties
+    groupOverrideConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
+    createConsumer(configOverrides = groupOverrideConfig)
   }
 
   protected def sendRecords(producer: KafkaProducer[Array[Byte], Array[Byte]], numRecords: Int,
@@ -223,6 +236,100 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
     assertEquals(None, commitCallback.error)
   }
 
+  /**
+    * Create 'numOfConsumersToAdd' consumers add then to the consumer group 'consumerGroup', and create corresponding
+    * pollers for these consumers. Wait for partition re-assignment and validate.
+    *
+    * Currently, assignment validation requires that total number of partitions is greater or equal to
+    * number of consumers, so subscriptions.size must be greater or equal the resulting number of consumers in the group
+    *
+    * @param numOfConsumersToAdd number of consumers to create and add to the consumer group
+    * @param consumerGroup current consumer group
+    * @param consumerPollers current consumer pollers
+    * @param topicsToSubscribe topics to which new consumers will subscribe to
+    * @param subscriptions set of all topic partitions
+    */
+  def addConsumersToGroupAndWaitForGroupAssignment(numOfConsumersToAdd: Int,
+                                                   consumerGroup: mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
+                                                   consumerPollers: mutable.Buffer[ConsumerAssignmentPoller],
+                                                   topicsToSubscribe: List[String],
+                                                   subscriptions: Set[TopicPartition],
+                                                   group: String = group): (mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], mutable.Buffer[ConsumerAssignmentPoller]) = {
+    assertTrue(consumerGroup.size + numOfConsumersToAdd <= subscriptions.size)
+    addConsumersToGroup(numOfConsumersToAdd, consumerGroup, consumerPollers, topicsToSubscribe, subscriptions, group)
+    // wait until topics get re-assigned and validate assignment
+    validateGroupAssignment(consumerPollers, subscriptions)
+
+    (consumerGroup, consumerPollers)
+  }
+
+  /**
+    * Create 'numOfConsumersToAdd' consumers add then to the consumer group 'consumerGroup', and create corresponding
+    * pollers for these consumers.
+    *
+    *
+    * @param numOfConsumersToAdd number of consumers to create and add to the consumer group
+    * @param consumerGroup current consumer group
+    * @param consumerPollers current consumer pollers
+    * @param topicsToSubscribe topics to which new consumers will subscribe to
+    * @param subscriptions set of all topic partitions
+    */
+  def addConsumersToGroup(numOfConsumersToAdd: Int,
+                          consumerGroup: mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
+                          consumerPollers: mutable.Buffer[ConsumerAssignmentPoller],
+                          topicsToSubscribe: List[String],
+                          subscriptions: Set[TopicPartition],
+                          group: String = group): (mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], mutable.Buffer[ConsumerAssignmentPoller]) = {
+    for (_ <- 0 until numOfConsumersToAdd) {
+      val consumer = createConsumerWithGroupId(group)
+      consumerGroup += consumer
+      consumerPollers += subscribeConsumerAndStartPolling(consumer, topicsToSubscribe)
+    }
+
+    (consumerGroup, consumerPollers)
+  }
+
+  /**
+    * Wait for consumers to get partition assignment and validate it.
+    *
+    * @param consumerPollers consumer pollers corresponding to the consumer group we are testing
+    * @param subscriptions set of all topic partitions
+    * @param msg message to print when waiting for/validating assignment fails
+    */
+  def validateGroupAssignment(consumerPollers: mutable.Buffer[ConsumerAssignmentPoller],
+                              subscriptions: Set[TopicPartition],
+                              msg: Option[String] = None,
+                              waitTime: Long = 10000L): Unit = {
+    val assignments = mutable.Buffer[Set[TopicPartition]]()
+    TestUtils.waitUntilTrue(() => {
+      assignments.clear()
+      consumerPollers.foreach(assignments += _.consumerAssignment())
+      isPartitionAssignmentValid(assignments, subscriptions)
+    }, msg.getOrElse(s"Did not get valid assignment for partitions $subscriptions. Instead, got $assignments"), waitTime)
+  }
+
+  /**
+    * Subscribes consumer 'consumer' to a given list of topics 'topicsToSubscribe', creates
+    * consumer poller and starts polling.
+    * Assumes that the consumer is not subscribed to any topics yet
+    *
+    * @param consumer consumer
+    * @param topicsToSubscribe topics that this consumer will subscribe to
+    * @return consumer poller for the given consumer
+    */
+  def subscribeConsumerAndStartPolling(consumer: Consumer[Array[Byte], Array[Byte]],
+                                       topicsToSubscribe: List[String],
+                                       partitionsToAssign: Set[TopicPartition] = Set.empty[TopicPartition]): ConsumerAssignmentPoller = {
+    assertEquals(0, consumer.assignment().size)
+    val consumerPoller = if (topicsToSubscribe.nonEmpty)
+      new ConsumerAssignmentPoller(consumer, topicsToSubscribe)
+    else
+      new ConsumerAssignmentPoller(consumer, partitionsToAssign)
+
+    consumerPoller.start()
+    consumerPoller
+  }
+
   protected def awaitRebalance(consumer: Consumer[_, _], rebalanceListener: TestConsumerReassignmentListener): Unit = {
     val numReassignments = rebalanceListener.callsToAssigned
     TestUtils.pollUntilTrue(consumer, () => rebalanceListener.callsToAssigned > numReassignments,
@@ -253,13 +360,25 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
   }
 
   protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]],
-                                           topicsToSubscribe: List[String]) extends ShutdownableThread("daemon-consumer-assignment", false)
+                                           topicsToSubscribe: List[String],
+                                           partitionsToAssign: Set[TopicPartition]) extends ShutdownableThread("daemon-consumer-assignment", false)
   {
-    @volatile private var partitionAssignment: Set[TopicPartition] = Set.empty[TopicPartition]
-    private var topicsSubscription = topicsToSubscribe
-    @volatile private var subscriptionChanged = false
+    def this(consumer: Consumer[Array[Byte], Array[Byte]], topicsToSubscribe: List[String]) {
+      this(consumer, topicsToSubscribe, Set.empty[TopicPartition])
+    }
 
-    val rebalanceListener = new ConsumerRebalanceListener {
+    def this(consumer: Consumer[Array[Byte], Array[Byte]], partitionsToAssign: Set[TopicPartition]) {
+      this(consumer, List.empty[String], partitionsToAssign)
+    }
+
+    @volatile var thrownException: Option[Throwable] = None
+    @volatile var receivedMessages = 0
+
+    @volatile private var partitionAssignment: Set[TopicPartition] = partitionsToAssign
+    @volatile private var subscriptionChanged = false
+    private var topicsSubscription = topicsToSubscribe
+
+    val rebalanceListener: ConsumerRebalanceListener = new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]) = {
         partitionAssignment = collection.immutable.Set(consumer.assignment().asScala.toArray: _*)
       }
@@ -268,7 +387,11 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
         partitionAssignment = Set.empty[TopicPartition]
       }
     }
-    consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
+    if (partitionAssignment.isEmpty) {
+      consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
+    } else {
+      consumer.assign(partitionAssignment.asJava)
+    }
 
     def consumerAssignment(): Set[TopicPartition] = {
       partitionAssignment
@@ -285,14 +408,16 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
      * @param newTopicsToSubscribe
      */
     def subscribe(newTopicsToSubscribe: List[String]): Unit = {
-      if (subscriptionChanged) {
+      if (subscriptionChanged)
         throw new IllegalStateException("Do not call subscribe until the previous subscribe request is processed.")
-      }
+      if (partitionsToAssign.nonEmpty)
+        throw new IllegalStateException("Cannot call subscribe when configured to use manual partition assignment")
+
       topicsSubscription = newTopicsToSubscribe
       subscriptionChanged = true
     }
 
-    def isSubscribeRequestProcessed(): Boolean = {
+    def isSubscribeRequestProcessed: Boolean = {
       !subscriptionChanged
     }
 
@@ -308,9 +433,12 @@ abstract class BaseConsumerTest extends IntegrationTestHarness {
         subscriptionChanged = false
       }
       try {
-        consumer.poll(Duration.ofMillis(50))
+        receivedMessages += consumer.poll(Duration.ofMillis(50)).count()
       } catch {
         case _: WakeupException => // ignore for shutdown
+        case e: Throwable =>
+          thrownException = Some(e)
+          throw e
       }
     }
   }

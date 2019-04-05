@@ -49,7 +49,7 @@ import scala.collection.mutable.ListBuffer
 
 class RequestQuotaTest extends BaseRequestTest {
 
-  override def numBrokers: Int = 1
+  override def brokerCount: Int = 1
 
   private val topic = "topic-1"
   private val numPartitions = 1
@@ -66,7 +66,7 @@ class RequestQuotaTest extends BaseRequestTest {
   private val executor = Executors.newCachedThreadPool
   private val tasks = new ListBuffer[Task]
 
-  override def propertyOverrides(properties: Properties): Unit = {
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
     properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")

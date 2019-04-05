@@ -54,7 +54,7 @@ import scala.collection.mutable.Buffer
 
 class AuthorizerIntegrationTest extends BaseRequestTest {
 
-  override def numBrokers: Int = 1
+  override def brokerCount: Int = 1
   val brokerId: Integer = 0
   def userPrincipal = KafkaPrincipal.ANONYMOUS
 
@@ -103,7 +103,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   producerConfig.setProperty(ProducerConfig.MAX_BLOCK_MS_CONFIG, "50000")
   consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
 
-  override def propertyOverrides(properties: Properties): Unit = {
+  override def brokerPropertyOverrides(properties: Properties): Unit = {
     properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
     properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
     properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")

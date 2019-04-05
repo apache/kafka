@@ -55,7 +55,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-partitions", numPartitions = -1))),
       Map("error-partitions" -> error(Errors.INVALID_PARTITIONS)), checkErrorMessage = false)
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-replication",
-      replicationFactor = numBrokers + 1))),
+      replicationFactor = brokerCount + 1))),
       Map("error-replication" -> error(Errors.INVALID_REPLICATION_FACTOR)), checkErrorMessage = false)
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-config",
       config=Map("not.a.property" -> "error")))),
@@ -71,7 +71,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     validateErrorCreateTopicsRequests(topicsReq(Seq(
       topicReq(existingTopic),
       topicReq("partial-partitions", numPartitions = -1),
-      topicReq("partial-replication", replicationFactor=numBrokers + 1),
+      topicReq("partial-replication", replicationFactor=brokerCount + 1),
       topicReq("partial-assignment", assignment=Map(0 -> List(0, 1), 1 -> List(0))),
       topicReq("partial-none"))),
       Map(

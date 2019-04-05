@@ -58,7 +58,7 @@ import scala.collection.JavaConverters._
   * would end up with ZooKeeperTestHarness twice.
   */
 abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with SaslSetup {
-  override val serverCount = 3
+  override val brokerCount = 3
 
   override def configureSecurityBeforeServersStart() {
     AclCommand.main(clusterActionArgs)
