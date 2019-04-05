@@ -120,6 +120,13 @@ public class SslFactoryTest {
         assertNotSame("SSL context not recreated", sslContext, sslFactory.sslContext());
         sslContext = sslFactory.sslContext();
 
+        // Verify that context is recreated after validation on reconfigure() if config is not changed, but keystore file was modified
+        keyStoreFile.setLastModified(System.currentTimeMillis() + 15000);
+        sslFactory.validateReconfiguration(sslConfig);
+        sslFactory.reconfigure(sslConfig);
+        assertNotSame("SSL context not recreated", sslContext, sslFactory.sslContext());
+        sslContext = sslFactory.sslContext();
+
         // Verify that the context is not recreated if modification time cannot be determined
         keyStoreFile.setLastModified(System.currentTimeMillis() + 20000);
         Files.delete(keyStoreFile.toPath());
