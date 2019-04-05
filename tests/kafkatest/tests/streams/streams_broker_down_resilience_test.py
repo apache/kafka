@@ -14,8 +14,6 @@
 # limitations under the License.
 
 import time
-import streams_property
-from kafkatest.services.kafka import KafkaConfig
 from kafkatest.services.streams import StreamsBrokerDownResilienceService
 from kafkatest.tests.streams.base_streams_test import BaseStreamsTest
 
@@ -41,13 +39,6 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
 
     def setUp(self):
         self.zk.start()
-
-    def prop_file(self):
-        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
-                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
-
-        cfg = KafkaConfig(**properties)
-        return cfg.render()
 
     def test_streams_resilient_to_broker_down(self):
         self.kafka.start()
