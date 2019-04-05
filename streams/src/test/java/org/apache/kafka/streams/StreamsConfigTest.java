@@ -644,7 +644,7 @@ public class StreamsConfigTest {
     public void testThrowIllegalArgumentExceptionWhenTopicSegmentSizeSmallerThanProducerBatchSize() {
         props.put(topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), 100);
         props.put(producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), 101);
-        new StreamsConfig(props);
+        new StreamsConfig(props).getMainConsumerConfigs("groupId", "clientId");
     }
 
     static class MisconfiguredSerde implements Serde {
