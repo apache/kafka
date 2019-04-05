@@ -29,11 +29,8 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSUMER_PROTOCOL_HEADER_SCHEMA;
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.OWNED_PARTITIONS_KEY_NAME;
@@ -43,6 +40,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.TOPIC
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.USER_DATA_KEY_NAME;
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.VERSION_KEY_NAME;
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -199,9 +197,5 @@ public class ConsumerProtocolTest {
         PartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(buffer);
         assertEquals(toSet(Collections.singletonList(tp1)), toSet(assignment.partitions()));
         assertEquals(Errors.NEED_REJOIN, assignment.error());
-    }
-
-    private static <T> Set<T> toSet(Collection<T> collection) {
-        return new HashSet<>(collection);
     }
 }

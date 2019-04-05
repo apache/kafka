@@ -305,7 +305,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         switch (protocol) {
             case EAGER:
                 if (!ownedPartitions.isEmpty()) {
-                    throw new IllegalStateException("Some partitions are not revoked with EAGER rebalance protocol, this should never happen.");
+                    log.warn("Some partitions are not revoked with EAGER rebalance protocol, " +
+                        "it is likely that the previous rebalance did not complete due to some errors");
                 }
 
                 log.info("Setting newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
