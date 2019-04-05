@@ -35,7 +35,7 @@ import scala.collection.mutable
 /**
  * Integration tests for the consumer that cover basic usage as well as server failures
  */
-class ConsumerBounceTest extends BaseConsumerTest with Logging {
+class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   val maxGroupSize = 5
 
   // Time to process commit and leave group requests in tests when brokers are available
