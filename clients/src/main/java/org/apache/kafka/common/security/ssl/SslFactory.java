@@ -139,6 +139,7 @@ public class SslFactory implements Reconfigurable {
                          (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
         try {
             this.sslContext = createSSLContext(keystore, truststore);
+            log.debug("Created SSL context with keystore {} truststore {}", keystore, truststore);
         } catch (Exception e) {
             throw new KafkaException(e);
         }
@@ -173,6 +174,7 @@ public class SslFactory implements Reconfigurable {
                 SecurityStore keystore = newKeystore != null ? newKeystore : this.keystore;
                 SecurityStore truststore = newTruststore != null ? newTruststore : this.truststore;
                 this.sslContext = createSSLContext(keystore, truststore);
+                log.info("Created new SSL context with keystore {} truststore {}", keystore, truststore);
                 this.keystore = keystore;
                 this.truststore = truststore;
             } catch (Exception e) {
@@ -339,9 +341,6 @@ public class SslFactory implements Reconfigurable {
                 // If a password is not set access to the truststore is still available, but integrity checking is disabled.
                 char[] passwordChars = password != null ? password.value().toCharArray() : null;
                 ks.load(in, passwordChars);
-
-                log.debug("Loaded key store with path {} modification time {}", path,
-                        fileLastModifiedMs == null ? null : new Date(fileLastModifiedMs));
                 return ks;
             } catch (GeneralSecurityException | IOException e) {
                 throw new KafkaException("Failed to load SSL keystore " + path + " of type " + type, e);
@@ -360,6 +359,13 @@ public class SslFactory implements Reconfigurable {
         boolean modified() {
             Long modifiedMs = lastModifiedMs(path);
             return modifiedMs != null && !Objects.equals(modifiedMs, this.fileLastModifiedMs);
+        }
+
+        @Override
+        public String toString() {
+            return "SecurityStore(" +
+                    "path=" + path +
+                    ", modificationTime=" + (fileLastModifiedMs == null ? null : new Date(fileLastModifiedMs)) + ")";
         }
     }
 

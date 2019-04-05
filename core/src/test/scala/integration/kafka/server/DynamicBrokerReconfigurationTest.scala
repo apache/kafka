@@ -266,6 +266,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     // the broker, so we wait for producer operation to succeed to verify that the update has been performed.
     Files.copy(new File(sslProperties2.getProperty(SSL_KEYSTORE_LOCATION_CONFIG)).toPath,
       reusableFile.toPath, StandardCopyOption.REPLACE_EXISTING)
+    reusableFile.setLastModified(System.currentTimeMillis() + 1000)
     alterSslKeystore(adminClient, reusableProps, SecureExternal)
     TestUtils.waitUntilTrue(() => {
       try {
