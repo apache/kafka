@@ -1035,4 +1035,25 @@ class PartitionTest {
     builder.build()
   }
 
+  /**
+    * Test for AtMinIsr partition state. We set the partition replica set size as 3, but only set one replica as an ISR.
+    * As the default minIsr configuration is 1, then the partition should be at min ISR (isAtMinIsr = true).
+    */
+  @Test
+  def testAtMinIsr(): Unit = {
+    val controllerEpoch = 3
+    val leader = brokerId
+    val follower1 = brokerId + 1
+    val follower2 = brokerId + 2
+    val controllerId = brokerId + 3
+    val replicas = List[Integer](leader, follower1, follower2).asJava
+    val isr = List[Integer](leader).asJava
+    val leaderEpoch = 8
+
+    val partition = Partition(topicPartition, time, replicaManager)
+    assertFalse(partition.isAtMinIsr)
+    // Make isr set to only have leader to trigger AtMinIsr (default min isr config is 1)
+    partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, leader, leaderEpoch, isr, 1, replicas, true), 0)
+    assertTrue(partition.isAtMinIsr)
+  }
 }
