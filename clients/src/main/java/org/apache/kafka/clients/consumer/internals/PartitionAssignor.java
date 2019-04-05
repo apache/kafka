@@ -18,12 +18,16 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.types.SchemaException;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSUMER_PROTOCOL_V0;
+import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSUMER_PROTOCOL_V1;
 
 /**
  * This interface is used to define custom partition assignment for use in
@@ -74,22 +78,38 @@ public interface PartitionAssignor {
     String name();
 
     class Subscription {
+        private final Short version;
         private final List<String> topics;
         private final ByteBuffer userData;
         private final List<TopicPartition> ownedPartitions;
 
-        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+        public Subscription(Short version, List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+            this.version = version;
             this.topics = topics;
             this.userData = userData;
             this.ownedPartitions = ownedPartitions;
+
+            if (version < CONSUMER_PROTOCOL_V0)
+                throw new SchemaException("Unsupported subscription version: " + version);
+
+            if (version < CONSUMER_PROTOCOL_V1 && !ownedPartitions.isEmpty())
+                throw new IllegalArgumentException("Subscription version smaller than 1 should not have owned partitions");
+        }
+
+        public Subscription(Short version, List<String> topics, ByteBuffer userData) {
+            this(version, topics, userData, Collections.emptyList());
         }
 
         public Subscription(List<String> topics, ByteBuffer userData) {
-            this(topics, userData, Collections.emptyList());
+            this(CONSUMER_PROTOCOL_V1, topics, userData);
         }
 
         public Subscription(List<String> topics) {
             this(topics, ByteBuffer.wrap(new byte[0]));
+        }
+
+        public Short version() {
+            return version;
         }
 
         public List<String> topics() {
@@ -113,22 +133,38 @@ public interface PartitionAssignor {
     }
 
     class Assignment {
+        private final Short version;
         private final List<TopicPartition> partitions;
         private final ByteBuffer userData;
         private final ConsumerProtocol.Errors error;
 
-        public Assignment(List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.Errors error) {
+        public Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.Errors error) {
+            this.version = version;
             this.partitions = partitions;
             this.userData = userData;
             this.error = error;
+
+            if (version < CONSUMER_PROTOCOL_V0)
+                throw new SchemaException("Unsupported subscription version: " + version);
+
+            if (version < CONSUMER_PROTOCOL_V1 && error != ConsumerProtocol.Errors.NONE)
+                throw new IllegalArgumentException("Assignment version smaller than 1 should not have error code.");
+        }
+
+        public Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData) {
+            this(version, partitions, userData, ConsumerProtocol.Errors.NONE);
         }
 
         public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
-            this(partitions, userData, ConsumerProtocol.Errors.NONE);
+            this(CONSUMER_PROTOCOL_V1, partitions, userData);
         }
 
         public Assignment(List<TopicPartition> partitions) {
             this(partitions, ByteBuffer.wrap(new byte[0]));
+        }
+
+        public Short version() {
+            return version;
         }
 
         public List<TopicPartition> partitions() {
