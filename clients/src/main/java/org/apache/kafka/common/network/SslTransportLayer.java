@@ -530,7 +530,7 @@ public class SslTransportLayer implements TransportLayer {
                     readFromNetwork = true;
             }
 
-            while (netReadBuffer.position() > 0) {
+            if (netReadBuffer.position() > 0) {
                 netReadBuffer.flip();
                 SSLEngineResult unwrapResult = sslEngine.unwrap(netReadBuffer, appReadBuffer);
                 netReadBuffer.compact();
