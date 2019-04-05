@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 import java.util.Properties
-import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig

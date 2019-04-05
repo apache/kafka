@@ -228,7 +228,7 @@ class PartitionTest {
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir2.getAbsolutePath)
     val log2 = logManager.getOrCreateLog(topicPartition, logConfig, isFuture = true)
     val buffer = ByteBuffer.allocate(1024)
-    var builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+    val builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
       TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, 0)
     builder.appendWithOffset(2L, new SimpleRecord("k1".getBytes, "v3".getBytes))
     builder.appendWithOffset(5L, new SimpleRecord("k2".getBytes, "v6".getBytes))
