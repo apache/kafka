@@ -297,6 +297,7 @@ public class ProtocolSerializationTest {
     public void testReadWhenOptionalDataMissingAtTheEndIsTolerated() {
         Schema oldSchema = new Schema(new Field("field1", Type.NULLABLE_STRING));
         Schema newSchema = new Schema(
+                true,
                 new Field("field1", Type.NULLABLE_STRING),
                 new Field("field2", Type.NULLABLE_STRING, "", true, "default"),
                 new Field("field3", Type.NULLABLE_STRING, "", true, null),
@@ -307,7 +308,7 @@ public class ProtocolSerializationTest {
         ByteBuffer buffer = ByteBuffer.allocate(oldSchema.sizeOf(oldFormat));
         oldFormat.writeTo(buffer);
         buffer.flip();
-        Struct newFormat = newSchema.read(buffer, true);
+        Struct newFormat = newSchema.read(buffer);
         assertEquals(value, newFormat.get("field1"));
         assertEquals("default", newFormat.get("field2"));
         assertEquals(null, newFormat.get("field3"));
@@ -334,6 +335,7 @@ public class ProtocolSerializationTest {
     public void testReadWithMissingNonOptionalExtraDataAtTheEnd() {
         Schema oldSchema = new Schema(new Field("field1", Type.NULLABLE_STRING));
         Schema newSchema = new Schema(
+                true,
                 new Field("field1", Type.NULLABLE_STRING),
                 new Field("field2", Type.NULLABLE_STRING));
         String value = "foo bar baz";
@@ -341,7 +343,7 @@ public class ProtocolSerializationTest {
         ByteBuffer buffer = ByteBuffer.allocate(oldSchema.sizeOf(oldFormat));
         oldFormat.writeTo(buffer);
         buffer.flip();
-        SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer, true));
+        SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer));
         e.getMessage().contains("Missing value for field 'field2' which has no default value");
     }
 }
