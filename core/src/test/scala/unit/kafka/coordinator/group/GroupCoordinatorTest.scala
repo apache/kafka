@@ -195,7 +195,7 @@ class GroupCoordinatorTest extends JUnitSuite {
 
   @Test
   def testJoinGroupShouldReceiveErrorIfGroupOverMaxSize() {
-    var futures = ArrayBuffer[Future[JoinGroupResult]]()
+    val futures = ArrayBuffer[Future[JoinGroupResult]]()
     val rebalanceTimeout = GroupInitialRebalanceDelay * 2
 
     for (i <- 1.to(GroupMaxSize)) {
@@ -885,7 +885,7 @@ class GroupCoordinatorTest extends JUnitSuite {
 
     // create a pending member in the group
     EasyMock.reset(replicaManager)
-    var pendingMember = joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, sessionTimeout=100)
+    val pendingMember = joinGroupPartial(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols, sessionTimeout=100)
     assertEquals(1, groupCoordinator.groupManager.getGroup(groupId).get.numPending)
 
     // re-join the second existing member
