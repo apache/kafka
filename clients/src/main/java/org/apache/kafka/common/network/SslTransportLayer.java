@@ -547,18 +547,19 @@ public class SslTransportLayer implements TransportLayer {
                 } else if (unwrapResult.getStatus() == Status.BUFFER_OVERFLOW) {
                     int currentApplicationBufferSize = applicationBufferSize();
                     appReadBuffer = Utils.ensureCapacity(appReadBuffer, currentApplicationBufferSize + appReadBuffer.position());
-                    if (appReadBuffer.position() >= currentApplicationBufferSize) {
-                        throw new IllegalStateException("Buffer overflow when available data size (" + appReadBuffer.position() +
-                                                        ") >= application buffer size (" + currentApplicationBufferSize + ")");
-                    }
 
-                    // appReadBuffer will extended upto currentApplicationBufferSize
-                    // we need to read the existing content into dst before we can do unwrap again. If there are no space in dst
-                    // we can break here.
-                    if (dst.hasRemaining())
-                        read += readFromAppBuffer(dst);
-                    else
-                        break;
+//                    if (appReadBuffer.position() >= currentApplicationBufferSize) {
+//                        throw new IllegalStateException("Buffer overflow when available data size (" + appReadBuffer.position() +
+//                                                        ") >= application buffer size (" + currentApplicationBufferSize + ")");
+//                    }
+//
+//                    // appReadBuffer will extended upto currentApplicationBufferSize
+//                    // we need to read the existing content into dst before we can do unwrap again. If there are no space in dst
+//                    // we can break here.
+//                    if (dst.hasRemaining())
+//                        read += readFromAppBuffer(dst);
+//                    else
+//                        break;
                 } else if (unwrapResult.getStatus() == Status.BUFFER_UNDERFLOW) {
                     int currentNetReadBufferSize = netReadBufferSize();
                     netReadBuffer = Utils.ensureCapacity(netReadBuffer, currentNetReadBufferSize);
