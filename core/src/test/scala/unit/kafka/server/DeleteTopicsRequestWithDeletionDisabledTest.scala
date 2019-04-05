@@ -29,14 +29,14 @@ import java.util.Collections
 
 class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
 
-  override def numBrokers: Int = 1
+  override def brokerCount: Int = 1
 
   override def generateConfigs = {
-    val props = TestUtils.createBrokerConfigs(numBrokers, zkConnect,
+    val props = TestUtils.createBrokerConfigs(brokerCount, zkConnect,
       enableControlledShutdown = false, enableDeleteTopic = false,
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
-    props.foreach(propertyOverrides)
+    props.foreach(brokerPropertyOverrides)
     props.map(KafkaConfig.fromProps)
   }
 

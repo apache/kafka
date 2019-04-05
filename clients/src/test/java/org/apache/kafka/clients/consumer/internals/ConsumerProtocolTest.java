@@ -70,17 +70,17 @@ public class ConsumerProtocolTest {
 
     @Test
     public void deserializeOldSubscriptionVersion() {
-        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"));
-        ByteBuffer buffer = ConsumerProtocol.serializeSubscriptionV0(subscription);
+        Subscription subscription = new Subscription((short) 0, Arrays.asList("foo", "bar"), null);
+        ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
         Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
         assertEquals(parsedSubscription.topics(), parsedSubscription.topics());
-        assertEquals(0, parsedSubscription.userData().limit());
+        assertNull(parsedSubscription.userData());
         assertTrue(parsedSubscription.ownedPartitions().isEmpty());
     }
 
     @Test
-    public void deserializeNewSubscriptionVersion() {
-        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), null, Collections.singletonList(tp2));
+    public void deserializeNewSubscriptionWithOldVersion() {
+        Subscription subscription = new Subscription((short) 1, Arrays.asList("foo", "bar"), null, Collections.singletonList(tp2));
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
         // ignore the version assuming it is the old byte code, as it will blindly deserialize as V0
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
@@ -145,17 +145,17 @@ public class ConsumerProtocolTest {
     @Test
     public void deserializeOldAssignmentVersion() {
         List<TopicPartition> partitions = Arrays.asList(tp1, tp2);
-        ByteBuffer buffer = ConsumerProtocol.serializeAssignmentV0(new Assignment(partitions));
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment((short) 0, partitions, null));
         Assignment parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
         assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
-        assertEquals(0, parsedAssignment.userData().limit());
+        assertNull(parsedAssignment.userData());
         assertEquals(Errors.NONE, parsedAssignment.error());
     }
 
     @Test
-    public void deserializeNewAssignmentVersion() {
+    public void deserializeNewAssignmentWithOldVersion() {
         List<TopicPartition> partitions = Collections.singletonList(tp1);
-        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment(partitions, null, Errors.NEED_REJOIN));
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment((short) 1, partitions, null, Errors.NEED_REJOIN));
         // ignore the version assuming it is the old byte code, as it will blindly deserialize as 0
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         header.getShort(VERSION_KEY_NAME);

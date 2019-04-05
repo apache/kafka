@@ -36,7 +36,7 @@ import scala.collection.JavaConverters._
  */
 class ScramServerStartupTest extends IntegrationTestHarness with SaslSetup {
 
-  override val serverCount = 1
+  override val brokerCount = 1
 
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
   private val kafkaServerSaslMechanisms = Collections.singletonList("SCRAM-SHA-256").asScala

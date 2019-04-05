@@ -164,7 +164,17 @@ public class ConsumerProtocol {
     }
 
     public static ByteBuffer serializeSubscription(PartitionAssignor.Subscription subscription) {
-        return serializeSubscriptionV1(subscription);
+        switch (subscription.version()) {
+            case CONSUMER_PROTOCOL_V0:
+                return serializeSubscriptionV0(subscription);
+
+            case CONSUMER_PROTOCOL_V1:
+                return serializeSubscriptionV1(subscription);
+
+            default:
+                // for any versions higher than known, try to serialize it as V1
+                return serializeSubscriptionV1(subscription);
+        }
     }
 
     public static PartitionAssignor.Subscription deserializeSubscriptionV0(ByteBuffer buffer) {
@@ -174,7 +184,7 @@ public class ConsumerProtocol {
         for (Object topicObj : struct.getArray(TOPICS_KEY_NAME))
             topics.add((String) topicObj);
 
-        return new PartitionAssignor.Subscription(topics, userData);
+        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V0, topics, userData);
     }
 
     public static PartitionAssignor.Subscription deserializeSubscriptionV1(ByteBuffer buffer) {
@@ -194,7 +204,7 @@ public class ConsumerProtocol {
             }
         }
 
-        return new PartitionAssignor.Subscription(topics, userData, ownedPartitions);
+        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V1, topics, userData, ownedPartitions);
     }
 
     public static PartitionAssignor.Subscription deserializeSubscription(ByteBuffer buffer) {
@@ -207,6 +217,9 @@ public class ConsumerProtocol {
         switch (version) {
             case CONSUMER_PROTOCOL_V0:
                 return deserializeSubscriptionV0(buffer);
+
+            case CONSUMER_PROTOCOL_V1:
+                return deserializeSubscriptionV1(buffer);
 
             // assume all higher versions can be parsed as V1
             default:
@@ -256,7 +269,17 @@ public class ConsumerProtocol {
     }
 
     public static ByteBuffer serializeAssignment(PartitionAssignor.Assignment assignment) {
-        return serializeAssignmentV1(assignment);
+        switch (assignment.version()) {
+            case CONSUMER_PROTOCOL_V0:
+                return serializeAssignmentV0(assignment);
+
+            case CONSUMER_PROTOCOL_V1:
+                return serializeAssignmentV1(assignment);
+
+            default:
+                // for any versions higher than known, try to serialize it as V1
+                return serializeAssignmentV1(assignment);
+        }
     }
 
     public static PartitionAssignor.Assignment deserializeAssignmentV0(ByteBuffer buffer) {
@@ -271,7 +294,7 @@ public class ConsumerProtocol {
                 partitions.add(new TopicPartition(topic, partition));
             }
         }
-        return new PartitionAssignor.Assignment(partitions, userData);
+        return new PartitionAssignor.Assignment(CONSUMER_PROTOCOL_V0, partitions, userData);
     }
 
     public static PartitionAssignor.Assignment deserializeAssignmentV1(ByteBuffer buffer) {
@@ -289,7 +312,7 @@ public class ConsumerProtocol {
 
         Errors error = Errors.fromCode(struct.get(ERROR_CODE));
 
-        return new PartitionAssignor.Assignment(partitions, userData, error);
+        return new PartitionAssignor.Assignment(CONSUMER_PROTOCOL_V1, partitions, userData, error);
     }
 
     public static PartitionAssignor.Assignment deserializeAssignment(ByteBuffer buffer) {
@@ -303,8 +326,11 @@ public class ConsumerProtocol {
             case CONSUMER_PROTOCOL_V0:
                 return deserializeAssignmentV0(buffer);
 
-            // assume all higher versions can be parsed as V1
+            case CONSUMER_PROTOCOL_V1:
+                return deserializeAssignmentV1(buffer);
+
             default:
+                // assume all higher versions can be parsed as V1
                 return deserializeAssignmentV1(buffer);
         }
     }

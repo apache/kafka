@@ -39,7 +39,7 @@ import scala.collection.JavaConverters._
 
 class DynamicConnectionQuotaTest extends BaseRequestTest {
 
-  override def numBrokers = 1
+  override def brokerCount = 1
 
   val topic = "test"
   val listener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
@@ -49,7 +49,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   @Before
   override def setUp(): Unit = {
     super.setUp()
-    TestUtils.createTopic(zkClient, topic, numBrokers, numBrokers, servers)
+    TestUtils.createTopic(zkClient, topic, brokerCount, brokerCount, servers)
   }
 
   @After
@@ -64,16 +64,16 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     }
   }
 
-  override protected def propertyOverrides(properties: Properties): Unit = {
-    super.propertyOverrides(properties)
+  override protected def brokerPropertyOverrides(properties: Properties): Unit = {
+    super.brokerPropertyOverrides(properties)
   }
 
   @Test
-  def testDynamicConnectionQuota(): Unit = {
+  def testDynamicConnectionQuota() {
     val initialConnectionCount = connectionCount
     val maxConnectionsPerIP = 5
 
-    def connectAndVerify: Unit = {
+    def connectAndVerify() {
       val socket = connect()
       try {
         sendAndReceive(produceRequest, ApiKeys.PRODUCE, socket)
@@ -101,7 +101,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     val socketServer = servers.head.socketServer
     val initialConnectionCount = connectionCount
 
-    def connectAndVerify(): Unit = {
+    def connectAndVerify() {
       val socket = connect("PLAINTEXT")
       socket.setSoTimeout(1000)
       try {
