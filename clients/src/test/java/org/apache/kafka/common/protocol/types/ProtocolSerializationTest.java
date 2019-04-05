@@ -26,6 +26,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class ProtocolSerializationTest {
@@ -293,7 +294,7 @@ public class ProtocolSerializationTest {
     }
 
     @Test
-    public void testReadWhenOptionalDataIsMissingAtTheEnd() {
+    public void testReadWhenOptionalDataMissingAtTheEndIsTolerated() {
         Schema oldSchema = new Schema(new Field("field1", Type.NULLABLE_STRING));
         Schema newSchema = new Schema(
                 new Field("field1", Type.NULLABLE_STRING),
@@ -306,7 +307,7 @@ public class ProtocolSerializationTest {
         ByteBuffer buffer = ByteBuffer.allocate(oldSchema.sizeOf(oldFormat));
         oldFormat.writeTo(buffer);
         buffer.flip();
-        Struct newFormat = newSchema.read(buffer);
+        Struct newFormat = newSchema.read(buffer, true);
         assertEquals(value, newFormat.get("field1"));
         assertEquals("default", newFormat.get("field2"));
         assertEquals(null, newFormat.get("field3"));
@@ -314,17 +315,33 @@ public class ProtocolSerializationTest {
         assertEquals(Long.MAX_VALUE, newFormat.get("field5"));
     }
 
-    @Test(expected = SchemaException.class)
-    public void testReadWithMissingNonOptionalExtraDataAtTheEnd() {
+    @Test
+    public void testReadWhenOptionalDataMissingAtTheEndIsNotTolerated() {
         Schema oldSchema = new Schema(new Field("field1", Type.NULLABLE_STRING));
-        Schema newSchema = new Schema(new Field("field1", Type.NULLABLE_STRING), new Field("field2", Type.NULLABLE_STRING));
+        Schema newSchema = new Schema(
+                new Field("field1", Type.NULLABLE_STRING),
+                new Field("field2", Type.NULLABLE_STRING, "", true, "default"));
         String value = "foo bar baz";
         Struct oldFormat = new Struct(oldSchema).set("field1", value);
         ByteBuffer buffer = ByteBuffer.allocate(oldSchema.sizeOf(oldFormat));
         oldFormat.writeTo(buffer);
         buffer.flip();
-        Struct newFormat = newSchema.read(buffer);
-        assertEquals(value, newFormat.get("field1"));
-        newFormat.get("field2");
+        SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer));
+        e.getMessage().contains("Error reading field 'field2': java.nio.BufferUnderflowException");
+    }
+
+    @Test
+    public void testReadWithMissingNonOptionalExtraDataAtTheEnd() {
+        Schema oldSchema = new Schema(new Field("field1", Type.NULLABLE_STRING));
+        Schema newSchema = new Schema(
+                new Field("field1", Type.NULLABLE_STRING),
+                new Field("field2", Type.NULLABLE_STRING));
+        String value = "foo bar baz";
+        Struct oldFormat = new Struct(oldSchema).set("field1", value);
+        ByteBuffer buffer = ByteBuffer.allocate(oldSchema.sizeOf(oldFormat));
+        oldFormat.writeTo(buffer);
+        buffer.flip();
+        SchemaException e = assertThrows(SchemaException.class, () -> newSchema.read(buffer, true));
+        e.getMessage().contains("Missing value for field 'field2' which has no default value");
     }
 }

@@ -63,23 +63,31 @@ public class Schema extends Type {
         }
     }
 
+    @Override
+    public Struct read(ByteBuffer buffer) {
+        return read(buffer, false);
+    }
+
     /**
      * Read a struct from the buffer. Missing fields at the end of the buffer are replaced with
      * their default values if such fields are optional; otherwise a {@code SchemaException} is
      * thrown to signify that mandatory fields are missing.
      */
-    @Override
-    public Struct read(ByteBuffer buffer) {
+    public Struct read(ByteBuffer buffer, boolean tolerateMissingWithDefaults) {
         Object[] objects = new Object[fields.length];
         for (int i = 0; i < fields.length; i++) {
             try {
-                if (buffer.hasRemaining()) {
-                    objects[i] = fields[i].def.type.read(buffer);
-                } else if (fields[i].def.hasDefaultValue) {
-                    objects[i] = fields[i].def.defaultValue;
+                if (tolerateMissingWithDefaults) {
+                    if (buffer.hasRemaining()) {
+                        objects[i] = fields[i].def.type.read(buffer);
+                    } else if (fields[i].def.hasDefaultValue) {
+                        objects[i] = fields[i].def.defaultValue;
+                    } else {
+                        throw new SchemaException("Missing value for field '" + fields[i].def.name +
+                                "' which has no default value");
+                    }
                 } else {
-                    throw new SchemaException("Missing value for field '" + fields[i].def.name +
-                                              "' which has no default value.");
+                    objects[i] = fields[i].def.type.read(buffer);
                 }
             } catch (Exception e) {
                 throw new SchemaException("Error reading field '" + fields[i].def.name + "': " +
