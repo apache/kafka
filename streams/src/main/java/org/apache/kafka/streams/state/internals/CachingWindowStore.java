@@ -200,9 +200,8 @@ class CachingWindowStore
                                                            final Bytes to,
                                                            final long timeFrom,
                                                            final long timeTo) {
-        // Make sure this is a valid query
         if (from.compareTo(to) > 0) {
-            LOG.warn("Returning empty iterator for fetch with invalid range: keyFrom > keyTo.");
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to.");
             return KeyValueIterators.emptyIterator();
         }
 

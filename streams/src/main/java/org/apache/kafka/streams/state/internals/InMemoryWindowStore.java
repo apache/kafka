@@ -185,9 +185,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                                                            final long timeTo) {
         removeExpiredSegments();
 
-        // Make sure this is a valid query
         if (from.compareTo(to) > 0) {
-            LOG.debug("Returning empty iterator for fetch with invalid range: keyFrom > keyTo.");
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to.");
             return KeyValueIterators.emptyIterator();
         }
 
