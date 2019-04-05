@@ -583,6 +583,15 @@ public class InMemoryWindowStoreTest {
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
         windowStore = createInMemoryWindowStore(context, false);
+
+        LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
         windowStore.fetch(-1, 1, 0L, 10L);
+
+        final List<String> messages = appender.getMessages();
+        assertThat(messages, hasItem("Returning empty iterator for fetch with invalid key range: from > to. "
+            + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. "
+            + "Note that the built-in numerical serdes do not follow this for negative numbers"));
     }
 }
