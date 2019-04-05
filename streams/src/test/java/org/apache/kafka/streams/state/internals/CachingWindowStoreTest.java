@@ -568,6 +568,13 @@ public class CachingWindowStoreTest {
         cachingStore.fetch(bytesKey("anyFrom"), null, ofEpochMilli(1L), ofEpochMilli(2L));
     }
 
+    @Test
+    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
+        final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
+        final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
+        cachingStore.fetch(keyFrom, keyTo, 0L, 10L);
+    }
+
     private static KeyValue<Windowed<Bytes>, byte[]> windowedPair(final String key, final String value, final long timestamp) {
         return KeyValue.pair(
             new Windowed<>(bytesKey(key), new TimeWindow(timestamp, timestamp + WINDOW_SIZE)),

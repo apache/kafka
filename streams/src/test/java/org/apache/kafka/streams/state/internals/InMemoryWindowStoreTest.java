@@ -579,4 +579,10 @@ public class InMemoryWindowStoreTest {
 
         assertFalse(iterator.hasNext());
     }
+
+    @Test
+    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
+        windowStore = createInMemoryWindowStore(context, false);
+        windowStore.fetch(-1, 1, 0L, 10L);
+    }
 }

@@ -389,4 +389,9 @@ public abstract class AbstractKeyValueStoreTest {
 
         assertEquals(new KeyValue<>(0, "zero"), results.next());
     }
+
+    @Test
+    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
+        store.range(-1, 1);
+    }
 }
