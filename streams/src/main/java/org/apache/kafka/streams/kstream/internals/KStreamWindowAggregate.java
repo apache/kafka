@@ -18,8 +18,10 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
@@ -30,6 +32,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
+import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -103,6 +106,15 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                 return;
             }
 
+            if (windows instanceof TimeWindows) {
+                processTimeWindows(key, value);
+            } else {
+                processSlidingWindow(key, value);
+            }
+        }
+
+        private void processTimeWindows(final K key, final V value) {
+
             // first get the matching windows
             final long timestamp = context().timestamp();
             observedStreamTime = Math.max(observedStreamTime, timestamp);
@@ -134,6 +146,53 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                     lateRecordDropSensor.record();
                 }
             }
+        }
+
+        private void processSlidingWindow(final K key, final V value) {
+
+            // Get the current window
+            final long timestamp = context().timestamp();
+            observedStreamTime = Math.max(observedStreamTime, timestamp);
+            final long currentWindowStartTime = observedStreamTime - windows.size();
+
+            if (timestamp < currentWindowStartTime) {
+                log.debug(
+                    "Skipping expired record outside current sliding window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{})",
+                    key, context().topic(), context().partition(), context().offset(), context().timestamp(), currentWindowStartTime, observedStreamTime
+                );
+                lateRecordDropSensor.record();
+                return;
+            }
+
+            WindowStoreIterator<Agg> openWindows = windowStore.fetch(key, currentWindowStartTime, observedStreamTime);
+            Agg currentWindowAgg = null;
+
+            while (openWindows.hasNext()) {
+                final KeyValue<Long, Agg> window = openWindows.next();
+                final long windowStart = window.key;
+
+                final Agg oldAgg = window.value;
+                final Agg newAgg = aggregator.apply(key, value, oldAgg);
+
+                // store the first agg we find to compute the new total agg for the current sliding window
+                if (currentWindowAgg == null) {
+                    currentWindowAgg = oldAgg;
+                }
+
+                //update the agg for a window starting at this time
+                windowStore.put(key, newAgg, windowStart);
+            }
+
+            if (currentWindowAgg == null) {
+                currentWindowAgg = initializer.apply();
+            }
+
+            // compute and maybe forward the agg for the currently defined window
+            final Agg newAgg = aggregator.apply(key, value, currentWindowAgg);
+            tupleForwarder.maybeForward(new Windowed<>(key, new TimeWindow(currentWindowStartTime, observedStreamTime)), newAgg, sendOldValues ? currentWindowAgg : null);
+
+            // store the agg so far for a window starting at/after this timestamp
+            windowStore.put(key, aggregator.apply(key, value, initializer.apply()), timestamp);
         }
     }
 
