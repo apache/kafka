@@ -24,8 +24,6 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
@@ -35,12 +33,8 @@ import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Stack;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
-import java.util.HashSet;
-import java.util.TreeSet;
 
 
 class NamedCache {
