@@ -16,34 +16,32 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.time.Duration;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Rule;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.Properties;
 
 import static org.junit.Assert.assertEquals;
 
 public class KStreamTransformTest {
-
-    private String topicName = "topic";
-
-    private final ConsumerRecordFactory<Integer, Integer> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer());
+    private final String topicName = "topic";
+    private final ConsumerRecordFactory<Integer, Integer> recordFactory =
+        new ConsumerRecordFactory<>(new IntegerSerializer(), new IntegerSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.Integer());
 
     @SuppressWarnings("deprecation")
@@ -54,26 +52,22 @@ public class KStreamTransformTest {
     public void testTransform() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier = new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
-            public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
-                return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
+        final TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
+            () -> new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
+                private int total = 0;
 
-                    private int total = 0;
+                @Override
+                public void init(final ProcessorContext context) {}
 
-                    @Override
-                    public void init(final ProcessorContext context) {}
+                @Override
+                public KeyValue<Integer, Integer> transform(final Number key, final Number value) {
+                    total += value.intValue();
+                    return KeyValue.pair(key.intValue() * 2, total);
+                }
 
-                    @Override
-                    public KeyValue<Integer, Integer> transform(final Number key, final Number value) {
-                        total += value.intValue();
-                        return KeyValue.pair(key.intValue() * 2, total);
-                    }
-
-                    @Override
-                    public void close() {}
-                };
-            }
-        };
+                @Override
+                public void close() {}
+            };
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
@@ -94,7 +88,7 @@ public class KStreamTransformTest {
 
         //String[] expected = {"2:10", "20:110", "200:1110", "2000:11110", "-1:2", "-1:3"};
 
-        final String[] expected = {"2:10", "20:110", "200:1110", "2000:11110"};
+        final String[] expected = {"2:10 (ts: 0)", "20:110 (ts: 0)", "200:1110 (ts: 0)", "2000:11110 (ts: 0)"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));
@@ -105,34 +99,27 @@ public class KStreamTransformTest {
     public void testTransformWithNewDriverAndPunctuator() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier = new TransformerSupplier<Number, Number, KeyValue<Integer, Integer>>() {
-            public Transformer<Number, Number, KeyValue<Integer, Integer>> get() {
-                return new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
+        final TransformerSupplier<Number, Number, KeyValue<Integer, Integer>> transformerSupplier =
+            () -> new Transformer<Number, Number, KeyValue<Integer, Integer>>() {
+                private int total = 0;
 
-                    private int total = 0;
+                @Override
+                public void init(final ProcessorContext context) {
+                    context.schedule(
+                        Duration.ofMillis(1),
+                        PunctuationType.WALL_CLOCK_TIME,
+                        timestamp -> context.forward(-1, (int) timestamp));
+                }
 
-                    @Override
-                    public void init(final ProcessorContext context) {
-                        context.schedule(Duration.ofMillis(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator() {
-                            @Override
-                            public void punctuate(final long timestamp) {
-                                context.forward(-1, (int) timestamp);
-                            }
-                        });
-                    }
+                @Override
+                public KeyValue<Integer, Integer> transform(final Number key, final Number value) {
+                    total += value.intValue();
+                    return KeyValue.pair(key.intValue() * 2, total);
+                }
 
-                    @Override
-                    public KeyValue<Integer, Integer> transform(final Number key, final Number value) {
-                        total += value.intValue();
-                        return KeyValue.pair(key.intValue() * 2, total);
-                    }
-
-                    @Override
-                    public void close() {}
-                };
-            }
-        };
-
+                @Override
+                public void close() {}
+            };
 
         final int[] expectedKeys = {1, 10, 100, 1000};
 
@@ -153,7 +140,7 @@ public class KStreamTransformTest {
 
         assertEquals(6, processor.theCapturedProcessor().processed.size());
 
-        final String[] expected = {"2:10", "20:110", "200:1110", "2000:11110", "-1:2", "-1:3"};
+        final String[] expected = {"2:10 (ts: 0)", "20:110 (ts: 0)", "200:1110 (ts: 0)", "2000:11110 (ts: 0)", "-1:2 (ts: 2)", "-1:3 (ts: 3)"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));

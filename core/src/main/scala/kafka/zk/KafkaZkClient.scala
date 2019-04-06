@@ -1820,9 +1820,10 @@ object KafkaZkClient {
             maxInFlightRequests: Int,
             time: Time,
             metricGroup: String = "kafka.server",
-            metricType: String = "SessionExpireListener") = {
+            metricType: String = "SessionExpireListener",
+            name: Option[String] = None) = {
     val zooKeeperClient = new ZooKeeperClient(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests,
-      time, metricGroup, metricType)
+      time, metricGroup, metricType, name)
     new KafkaZkClient(zooKeeperClient, isSecure, time)
   }
 

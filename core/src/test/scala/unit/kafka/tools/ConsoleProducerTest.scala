@@ -23,6 +23,7 @@ import ConsoleProducer.LineMessageReader
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.junit.{Assert, Test}
 import Assert.assertEquals
+import kafka.utils.Exit
 
 class ConsoleProducerTest {
 
@@ -50,13 +51,13 @@ class ConsoleProducerTest {
       producerConfig.getList(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG))
   }
 
-  @Test
+  @Test(expected = classOf[IllegalArgumentException])
   def testInvalidConfigs() {
+    Exit.setExitProcedure((_, message) => throw new IllegalArgumentException(message.orNull))
     try {
       new ConsoleProducer.ProducerConfig(invalidArgs)
-      Assert.fail("Should have thrown an UnrecognizedOptionException")
-    } catch {
-      case _: joptsimple.OptionException => // expected exception
+    } finally {
+      Exit.resetExitProcedure()
     }
   }
 

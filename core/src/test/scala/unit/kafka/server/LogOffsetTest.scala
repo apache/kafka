@@ -38,11 +38,11 @@ class LogOffsetTest extends BaseRequestTest {
 
   private lazy val time = new MockTime
 
-  protected override def numBrokers = 1
+  override def brokerCount = 1
 
   protected override def brokerTime(brokerId: Int) = time
 
-  protected override def propertyOverrides(props: Properties): Unit = {
+  protected override def brokerPropertyOverrides(props: Properties): Unit = {
     props.put("log.flush.interval.messages", "1")
     props.put("num.partitions", "20")
     props.put("log.retention.hours", "10")

@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.api.{ApiVersion, Request}
 import kafka.common.UnexpectedAppendOffsetException
 import kafka.log.{Defaults => _, _}
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils._
 import kafka.zk.KafkaZkClient
@@ -57,6 +58,7 @@ class PartitionTest {
   var replicaManager: ReplicaManager = _
   var logManager: LogManager = _
   var logConfig: LogConfig = _
+  var quotaManagers: QuotaManagers = _
 
   @Before
   def setup(): Unit = {
@@ -74,9 +76,10 @@ class PartitionTest {
     brokerProps.put(KafkaConfig.LogDirsProp, Seq(logDir1, logDir2).map(_.getAbsolutePath).mkString(","))
     val brokerConfig = KafkaConfig.fromProps(brokerProps)
     val kafkaZkClient: KafkaZkClient = EasyMock.createMock(classOf[KafkaZkClient])
+    quotaManagers = QuotaFactory.instantiate(brokerConfig, metrics, time, "")
     replicaManager = new ReplicaManager(
       config = brokerConfig, metrics, time, zkClient = kafkaZkClient, new MockScheduler(time),
-      logManager, new AtomicBoolean(false), QuotaFactory.instantiate(brokerConfig, metrics, time, ""),
+      logManager, new AtomicBoolean(false), quotaManagers,
       brokerTopicStats, new MetadataCache(brokerId), new LogDirFailureChannel(brokerConfig.logDirs.size))
 
     EasyMock.expect(kafkaZkClient.getEntityConfigs(EasyMock.anyString(), EasyMock.anyString())).andReturn(logProps).anyTimes()
@@ -103,6 +106,7 @@ class PartitionTest {
     Utils.delete(tmpDir)
     logManager.liveLogDirs.foreach(Utils.delete)
     replicaManager.shutdown(checkpointHW = false)
+    quotaManagers.shutdown()
   }
 
   @Test
@@ -224,7 +228,7 @@ class PartitionTest {
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir2.getAbsolutePath)
     val log2 = logManager.getOrCreateLog(topicPartition, logConfig, isFuture = true)
     val buffer = ByteBuffer.allocate(1024)
-    var builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
+    val builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
       TimestampType.CREATE_TIME, 0L, RecordBatch.NO_TIMESTAMP, 0)
     builder.appendWithOffset(2L, new SimpleRecord("k1".getBytes, "v3".getBytes))
     builder.appendWithOffset(5L, new SimpleRecord("k2".getBytes, "v6".getBytes))
@@ -996,7 +1000,7 @@ class PartitionTest {
           (1 to 10000).foreach { _ => partition.appendRecordsToLeader(createRecords(baseOffset = 0), isFromClient = true) }
         })
       }
-      futures.foreach(_.get(10, TimeUnit.SECONDS))
+      futures.foreach(_.get(15, TimeUnit.SECONDS))
       done.set(true)
     } catch {
       case e: TimeoutException =>
@@ -1031,4 +1035,25 @@ class PartitionTest {
     builder.build()
   }
 
+  /**
+    * Test for AtMinIsr partition state. We set the partition replica set size as 3, but only set one replica as an ISR.
+    * As the default minIsr configuration is 1, then the partition should be at min ISR (isAtMinIsr = true).
+    */
+  @Test
+  def testAtMinIsr(): Unit = {
+    val controllerEpoch = 3
+    val leader = brokerId
+    val follower1 = brokerId + 1
+    val follower2 = brokerId + 2
+    val controllerId = brokerId + 3
+    val replicas = List[Integer](leader, follower1, follower2).asJava
+    val isr = List[Integer](leader).asJava
+    val leaderEpoch = 8
+
+    val partition = Partition(topicPartition, time, replicaManager)
+    assertFalse(partition.isAtMinIsr)
+    // Make isr set to only have leader to trigger AtMinIsr (default min isr config is 1)
+    partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, leader, leaderEpoch, isr, 1, replicas, true), 0)
+    assertTrue(partition.isAtMinIsr)
+  }
 }

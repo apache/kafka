@@ -341,7 +341,7 @@ private[kafka] object LogValidator extends Logging {
                                            isTransactional: Boolean,
                                            partitionLeaderEpoch: Int,
                                            isFromClient: Boolean,
-                                           uncompresssedSizeInBytes: Int): ValidationAndOffsetAssignResult = {
+                                           uncompressedSizeInBytes: Int): ValidationAndOffsetAssignResult = {
     val startNanos = time.nanoseconds
     val estimatedSize = AbstractRecords.estimateSizeInBytes(magic, offsetCounter.value, compressionType,
       validatedRecords.asJava)
@@ -362,7 +362,7 @@ private[kafka] object LogValidator extends Logging {
     // message format V0 or if the inner offsets are not consecutive. This is OK since the impact is the same: we have
     // to rebuild the records (including recompression if enabled).
     val conversionCount = builder.numRecords
-    val recordConversionStats = new RecordConversionStats(uncompresssedSizeInBytes + builder.uncompressedBytesWritten,
+    val recordConversionStats = new RecordConversionStats(uncompressedSizeInBytes + builder.uncompressedBytesWritten,
       conversionCount, time.nanoseconds - startNanos)
 
     ValidationAndOffsetAssignResult(

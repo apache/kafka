@@ -218,11 +218,20 @@ public class RecordCollectorImpl implements RecordCollector {
                 }
             });
         } catch (final TimeoutException e) {
-            log.error("Timeout exception caught when sending record to topic {}. " +
-                "This might happen if the producer cannot send data to the Kafka cluster and thus, " +
-                "its internal buffer fills up. " +
-                "You can increase producer parameter `max.block.ms` to increase this timeout.", topic);
-            throw new StreamsException(String.format("%sFailed to send record to topic %s due to timeout.", logPrefix, topic));
+            log.error(
+                "Timeout exception caught when sending record to topic {}. " +
+                    "This might happen if the producer cannot send data to the Kafka cluster and thus, " +
+                    "its internal buffer fills up. " +
+                    "This can also happen if the broker is slow to respond, if the network connection to " +
+                    "the broker was interrupted, or if similar circumstances arise. " +
+                    "You can increase producer parameter `max.block.ms` to increase this timeout.",
+                topic,
+                e
+            );
+            throw new StreamsException(
+                String.format("%sFailed to send record to topic %s due to timeout.", logPrefix, topic),
+                e
+            );
         } catch (final Exception uncaughtException) {
             if (uncaughtException instanceof KafkaException &&
                 uncaughtException.getCause() instanceof ProducerFencedException) {

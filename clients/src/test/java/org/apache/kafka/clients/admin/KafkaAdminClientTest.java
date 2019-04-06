@@ -53,6 +53,8 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DeleteTopicsResponseData;
+import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
@@ -223,6 +225,14 @@ public class KafkaAdminClientTest {
         return new CreateTopicsResponse(data);
     }
 
+    private static DeleteTopicsResponse prepareDeleteTopicsResponse(String topicName, Errors error) {
+        DeleteTopicsResponseData data = new DeleteTopicsResponseData();
+        data.responses().add(new DeletableTopicResult()
+                .setName(topicName)
+                .setErrorCode(error.code()));
+        return new DeleteTopicsResponse(data);
+    }
+
     /**
      * Test that the client properly times out when we don't receive any metadata.
      */
@@ -250,7 +260,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(request -> request instanceof MetadataRequest, null, true);
             env.kafkaClient().prepareResponse(request -> request instanceof MetadataRequest,
-                    new MetadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
+                    MetadataResponse.prepareResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
                             1, Collections.emptyList()));
             env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
                     prepareCreateTopicsResponse("myTopic", Errors.NONE));
@@ -274,7 +284,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().setUnreachable(cluster.nodes().get(0), 200);
             env.kafkaClient().prepareResponse(body -> body instanceof MetadataRequest,
-                    new  MetadataResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
+                    MetadataResponse.prepareResponse(discoveredCluster.nodes(), discoveredCluster.clusterResource().clusterId(),
                             1, Collections.emptyList()));
             env.kafkaClient().prepareResponse(body -> body instanceof CreateTopicsRequest,
                 prepareCreateTopicsResponse("myTopic", Errors.NONE));
@@ -352,6 +362,11 @@ public class KafkaAdminClientTest {
             // Wait until the first attempt has failed, then advance the time
             TestUtils.waitForCondition(() -> mockClient.numAwaitingResponses() == 1,
                     "Failed awaiting CreateTopics first request failure");
+
+            // Wait until the retry call added to the queue in AdminClient
+            TestUtils.waitForCondition(() -> ((KafkaAdminClient) env.adminClient()).numPendingCalls() == 1,
+                "Failed to add retry CreateTopics call");
+
             time.sleep(retryBackoff);
 
             future.get();
@@ -369,7 +384,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponseFrom(
                 prepareCreateTopicsResponse("myTopic", Errors.NOT_CONTROLLER),
                 env.cluster().nodeById(0));
-            env.kafkaClient().prepareResponse(new MetadataResponse(env.cluster().nodes(),
+            env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(env.cluster().nodes(),
                 env.cluster().clusterResource().clusterId(),
                 1,
                 Collections.<MetadataResponse.TopicMetadata>emptyList()));
@@ -389,19 +404,19 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             env.kafkaClient().prepareResponse(body -> body instanceof DeleteTopicsRequest,
-                    new DeleteTopicsResponse(Collections.singletonMap("myTopic", Errors.NONE)));
+                    prepareDeleteTopicsResponse("myTopic", Errors.NONE));
             KafkaFuture<Void> future = env.adminClient().deleteTopics(Collections.singletonList("myTopic"),
                     new DeleteTopicsOptions()).all();
             future.get();
 
             env.kafkaClient().prepareResponse(body -> body instanceof DeleteTopicsRequest,
-                    new DeleteTopicsResponse(Collections.singletonMap("myTopic", Errors.TOPIC_DELETION_DISABLED)));
+                    prepareDeleteTopicsResponse("myTopic", Errors.TOPIC_DELETION_DISABLED));
             future = env.adminClient().deleteTopics(Collections.singletonList("myTopic"),
                     new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, TopicDeletionDisabledException.class);
 
             env.kafkaClient().prepareResponse(body -> body instanceof DeleteTopicsRequest,
-                    new DeleteTopicsResponse(Collections.singletonMap("myTopic", Errors.UNKNOWN_TOPIC_OR_PARTITION)));
+                    prepareDeleteTopicsResponse("myTopic", Errors.UNKNOWN_TOPIC_OR_PARTITION));
             future = env.adminClient().deleteTopics(Collections.singletonList("myTopic"),
                     new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, UnknownTopicOrPartitionException.class);
@@ -457,7 +472,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(null, true);
 
             // The next one succeeds and gives us the controller id
-            env.kafkaClient().prepareResponse(new MetadataResponse(initializedCluster.nodes(),
+            env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(initializedCluster.nodes(),
                     initializedCluster.clusterResource().clusterId(),
                     initializedCluster.controller().id(),
                     Collections.emptyList()));
@@ -467,7 +482,7 @@ public class KafkaAdminClientTest {
             MetadataResponse.PartitionMetadata partitionMetadata = new MetadataResponse.PartitionMetadata(
                     Errors.NONE, 0, leader, Optional.of(10), singletonList(leader),
                     singletonList(leader), singletonList(leader));
-            env.kafkaClient().prepareResponse(new MetadataResponse(initializedCluster.nodes(),
+            env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(initializedCluster.nodes(),
                     initializedCluster.clusterResource().clusterId(), 1,
                     singletonList(new MetadataResponse.TopicMetadata(Errors.NONE, topic, false,
                             singletonList(partitionMetadata)))));
@@ -845,7 +860,7 @@ public class KafkaAdminClientTest {
 
             t.add(new MetadataResponse.TopicMetadata(Errors.NONE, "my_topic", false, p));
 
-            env.kafkaClient().prepareResponse(new MetadataResponse(cluster.nodes(), cluster.clusterResource().clusterId(), cluster.controller().id(), t));
+            env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(cluster.nodes(), cluster.clusterResource().clusterId(), cluster.controller().id(), t));
             env.kafkaClient().prepareResponse(new DeleteRecordsResponse(0, m));
 
             Map<TopicPartition, RecordsToDelete> recordsToDelete = new HashMap<>();
@@ -925,14 +940,14 @@ public class KafkaAdminClientTest {
 
             // Empty metadata response should be retried
             env.kafkaClient().prepareResponse(
-                    new MetadataResponse(
+                     MetadataResponse.prepareResponse(
                             Collections.emptyList(),
                             env.cluster().clusterResource().clusterId(),
                             -1,
                             Collections.emptyList()));
 
             env.kafkaClient().prepareResponse(
-                    new MetadataResponse(
+                     MetadataResponse.prepareResponse(
                             env.cluster().nodes(),
                             env.cluster().clusterResource().clusterId(),
                             env.cluster().controller().id(),
@@ -1027,7 +1042,7 @@ public class KafkaAdminClientTest {
             // Empty metadata causes the request to fail since we have no list of brokers
             // to send the ListGroups requests to
             env.kafkaClient().prepareResponse(
-                    new MetadataResponse(
+                     MetadataResponse.prepareResponse(
                             Collections.emptyList(),
                             env.cluster().clusterResource().clusterId(),
                             -1,

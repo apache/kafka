@@ -276,10 +276,10 @@ streams	2
 Here the last printed lines <b>kafka 2</b> and <b>streams 2</b> indicate updates to the keys <b>kafka</b> and <b>streams</b> whose counts have been incremented from <b>1</b> to <b>2</b>.
 Whenever you write further input messages to the input topic, you will observe new messages being added to the <b>streams-wordcount-output</b> topic,
 representing the most recent word counts as computed by the WordCount application.
-Let's enter one final input text line "join kafka summit" and hit &lt;RETURN&gt; in the console producer to the input topic <b>streams-wordcount-input</b> before we wrap up this quickstart:
+Let's enter one final input text line "join kafka summit" and hit &lt;RETURN&gt; in the console producer to the input topic <b>streams-plaintext-input</b> before we wrap up this quickstart:
 
 <pre class="brush: bash;">
-&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-wordcount-input
+&gt; bin/kafka-console-producer.sh --broker-list localhost:9092 --topic streams-plaintext-input
 all streams lead to kafka
 hello kafka streams
 join kafka summit

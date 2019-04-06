@@ -61,6 +61,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
     private final LinkedHashMap<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new LinkedHashMap<>();
     private final LinkedHashSet<StreamsGraphNode> mergeNodes = new LinkedHashSet<>();
+    private final LinkedHashSet<StreamsGraphNode> tableSourceNodes = new LinkedHashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
@@ -254,6 +255,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
         } else if (node.isMergeNode()) {
             mergeNodes.add(node);
+        } else if (node instanceof TableSourceNode) {
+            tableSourceNodes.add(node);
         }
     }
 
@@ -292,8 +295,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         if (props != null && StreamsConfig.OPTIMIZE.equals(props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION))) {
             LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
+            optimizeKTableSourceTopics();
             maybeOptimizeRepartitionOperations();
         }
+    }
+
+    private void optimizeKTableSourceTopics() {
+        LOG.debug("Marking KTable source nodes to optimize using source topic for changelogs ");
+        tableSourceNodes.forEach(node -> ((TableSourceNode) node).reuseSourceTopicForChangeLog(true));
     }
 
     @SuppressWarnings("unchecked")

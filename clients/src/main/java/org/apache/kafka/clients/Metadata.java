@@ -21,21 +21,22 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
-import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.InvalidMetadataException;
+import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -43,7 +44,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
-import java.util.stream.Collectors;
 
 /**
  * A class encapsulating some of the logic around metadata.
@@ -58,63 +58,43 @@ import java.util.stream.Collectors;
  * manage topics while producers rely on topic expiry to limit the refresh set.
  */
 public class Metadata implements Closeable {
-
-    private static final Logger log = LoggerFactory.getLogger(Metadata.class);
-
-    public static final long TOPIC_EXPIRY_MS = 5 * 60 * 1000;
-    private static final long TOPIC_EXPIRY_NEEDS_UPDATE = -1L;
-
+    private final Logger log;
     private final long refreshBackoffMs;
     private final long metadataExpireMs;
-    private int version;
+    private int updateVersion;  // bumped on every metadata response
+    private int requestVersion; // bumped on every new topic addition
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
     private AuthenticationException authenticationException;
+    private KafkaException metadataException;
     private MetadataCache cache = MetadataCache.empty();
     private boolean needUpdate;
-    /* Topics with expiry time */
-    private final Map<String, Long> topics;
-    private final List<Listener> listeners;
     private final ClusterResourceListeners clusterResourceListeners;
-    private boolean needMetadataForAllTopics;
-    private final boolean allowAutoTopicCreation;
-    private final boolean topicExpiryEnabled;
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
 
-    public Metadata(long refreshBackoffMs,
-                    long metadataExpireMs,
-                    boolean allowAutoTopicCreation) {
-        this(refreshBackoffMs, metadataExpireMs, allowAutoTopicCreation, false, new ClusterResourceListeners());
-    }
-
     /**
      * Create a new Metadata instance
-     * @param refreshBackoffMs The minimum amount of time that must expire between metadata refreshes to avoid busy
-     *        polling
-     * @param metadataExpireMs The maximum amount of time that metadata can be retained without refresh
-     * @param allowAutoTopicCreation If this and the broker config 'auto.create.topics.enable' are true, topics that
-     *                               don't exist will be created by the broker when a metadata request is sent
-     * @param topicExpiryEnabled If true, enable expiry of unused topics
+     *
+     * @param refreshBackoffMs         The minimum amount of time that must expire between metadata refreshes to avoid busy
+     *                                 polling
+     * @param metadataExpireMs         The maximum amount of time that metadata can be retained without refresh
+     * @param logContext               Log context corresponding to the containing client
      * @param clusterResourceListeners List of ClusterResourceListeners which will receive metadata updates.
      */
     public Metadata(long refreshBackoffMs,
                     long metadataExpireMs,
-                    boolean allowAutoTopicCreation,
-                    boolean topicExpiryEnabled,
+                    LogContext logContext,
                     ClusterResourceListeners clusterResourceListeners) {
+        this.log = logContext.logger(Metadata.class);
         this.refreshBackoffMs = refreshBackoffMs;
         this.metadataExpireMs = metadataExpireMs;
-        this.allowAutoTopicCreation = allowAutoTopicCreation;
-        this.topicExpiryEnabled = topicExpiryEnabled;
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
-        this.version = 0;
+        this.requestVersion = 0;
+        this.updateVersion = 0;
         this.needUpdate = false;
-        this.topics = new HashMap<>();
-        this.listeners = new ArrayList<>();
         this.clusterResourceListeners = clusterResourceListeners;
-        this.needMetadataForAllTopics = false;
         this.isClosed = false;
         this.lastSeenLeaderEpochs = new HashMap<>();
     }
@@ -124,17 +104,6 @@ public class Metadata implements Closeable {
      */
     public synchronized Cluster fetch() {
         return cache.cluster();
-    }
-
-    /**
-     * Add the topic to maintain in the metadata. If topic expiry is enabled, expiry time
-     * will be reset on the next update.
-     */
-    public synchronized void add(String topic) {
-        Objects.requireNonNull(topic, "topic cannot be null");
-        if (topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE) == null) {
-            requestUpdateForNewTopics();
-        }
     }
 
     /**
@@ -161,11 +130,11 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * Request an update of the current cluster metadata info, return the current version before the update
+     * Request an update of the current cluster metadata info, return the current updateVersion before the update
      */
     public synchronized int requestUpdate() {
         this.needUpdate = true;
-        return this.version;
+        return this.updateVersion;
     }
 
     /**
@@ -184,9 +153,9 @@ public class Metadata implements Closeable {
     /**
      * Conditionally update the leader epoch for a partition
      *
-     * @param topicPartition topic+partition to update the epoch for
-     * @param epoch the new epoch
-     * @param epochTest a predicate to determine if the old epoch should be replaced
+     * @param topicPartition       topic+partition to update the epoch for
+     * @param epoch                the new epoch
+     * @param epochTest            a predicate to determine if the old epoch should be replaced
      * @param setRequestUpdateFlag sets the "needUpdate" flag to true if the epoch is updated
      * @return true if the epoch was updated, false otherwise
      */
@@ -211,6 +180,7 @@ public class Metadata implements Closeable {
 
     /**
      * Check whether an update has been explicitly requested.
+     *
      * @return true if an update was requested, false otherwise
      */
     public synchronized boolean updateRequested() {
@@ -243,140 +213,101 @@ public class Metadata implements Closeable {
             return null;
     }
 
-    /**
-     * Wait for metadata update until the current version is larger than the last version we know of
-     */
-    public synchronized void awaitUpdate(final int lastVersion, final long maxWaitMs) throws InterruptedException {
-        if (maxWaitMs < 0)
-            throw new IllegalArgumentException("Max time to wait for metadata updates should not be < 0 milliseconds");
-
-        long begin = System.currentTimeMillis();
-        long remainingWaitMs = maxWaitMs;
-        while ((this.version <= lastVersion) && !isClosed()) {
-            AuthenticationException ex = getAndClearAuthenticationException();
-            if (ex != null)
-                throw ex;
-            if (remainingWaitMs != 0)
-                wait(remainingWaitMs);
-            long elapsed = System.currentTimeMillis() - begin;
-            if (elapsed >= maxWaitMs)
-                throw new TimeoutException("Failed to update metadata after " + maxWaitMs + " ms.");
-            remainingWaitMs = maxWaitMs - elapsed;
-        }
-        if (isClosed())
-            throw new KafkaException("Requested metadata update after close");
-    }
-
-    /**
-     * Replace the current set of topics maintained to the one provided.
-     * If topic expiry is enabled, expiry time of the topics will be
-     * reset on the next update.
-     * @param topics
-     */
-    public synchronized void setTopics(Collection<String> topics) {
-        Set<TopicPartition> partitionsToRemove = lastSeenLeaderEpochs.keySet()
-                .stream()
-                .filter(tp -> !topics.contains(tp.topic()))
-                .collect(Collectors.toSet());
-        partitionsToRemove.forEach(lastSeenLeaderEpochs::remove);
-
-        cache.retainTopics(topics);
-
-        if (!this.topics.keySet().containsAll(topics)) {
-            requestUpdateForNewTopics();
-        }
-        this.topics.clear();
-        for (String topic : topics)
-            this.topics.put(topic, TOPIC_EXPIRY_NEEDS_UPDATE);
-    }
-
-    /**
-     * Get the list of topics we are currently maintaining metadata for
-     */
-    public synchronized Set<String> topics() {
-        return new HashSet<>(this.topics.keySet());
-    }
-
-    /**
-     * Check if a topic is already in the topic set.
-     * @param topic topic to check
-     * @return true if the topic exists, false otherwise
-     */
-    public synchronized boolean containsTopic(String topic) {
-        return this.topics.containsKey(topic);
+    synchronized KafkaException getAndClearMetadataException() {
+        if (this.metadataException != null) {
+            KafkaException metadataException = this.metadataException;
+            this.metadataException = null;
+            return metadataException;
+        } else
+            return null;
     }
 
     public synchronized void bootstrap(List<InetSocketAddress> addresses, long now) {
         this.needUpdate = true;
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
-        this.version += 1;
+        this.updateVersion += 1;
         this.cache = MetadataCache.bootstrap(addresses);
+    }
+
+    /**
+     * Update metadata assuming the current request version. This is mainly for convenience in testing.
+     */
+    public synchronized void update(MetadataResponse response, long now) {
+        this.update(this.requestVersion, response, now);
     }
 
     /**
      * Updates the cluster metadata. If topic expiry is enabled, expiry time
      * is set for topics if required and expired topics are removed from the metadata.
      *
-     * @param metadataResponse metadata response received from the broker
+     * @param requestVersion The request version corresponding to the update response, as provided by
+     *     {@link #newMetadataRequestAndVersion()}.
+     * @param response metadata response received from the broker
      * @param now current time in milliseconds
      */
-    public synchronized void update(MetadataResponse metadataResponse, long now) {
-        Objects.requireNonNull(metadataResponse, "Metadata response cannot be null");
+    public synchronized void update(int requestVersion, MetadataResponse response, long now) {
+        Objects.requireNonNull(response, "Metadata response cannot be null");
         if (isClosed())
             throw new IllegalStateException("Update requested after metadata close");
 
-        this.needUpdate = false;
+        if (requestVersion == this.requestVersion)
+            this.needUpdate = false;
+        else
+            requestUpdate();
+
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
-        this.version += 1;
-
-        if (topicExpiryEnabled) {
-            // Handle expiry of topics from the metadata refresh set.
-            for (Iterator<Map.Entry<String, Long>> it = topics.entrySet().iterator(); it.hasNext(); ) {
-                Map.Entry<String, Long> entry = it.next();
-                long expireMs = entry.getValue();
-                if (expireMs == TOPIC_EXPIRY_NEEDS_UPDATE)
-                    entry.setValue(now + TOPIC_EXPIRY_MS);
-                else if (expireMs <= now) {
-                    it.remove();
-                    log.debug("Removing unused topic {} from the metadata list, expiryMs {} now {}", entry.getKey(), expireMs, now);
-                }
-            }
-        }
+        this.updateVersion += 1;
 
         String previousClusterId = cache.cluster().clusterResource().clusterId();
 
-        this.cache = handleMetadataResponse(metadataResponse, topic -> true);
-        Set<String> unavailableTopics = metadataResponse.unavailableTopics();
-        Cluster clusterForListeners = this.cache.cluster();
-        fireListeners(clusterForListeners, unavailableTopics);
+        this.cache = handleMetadataResponse(response, topic -> retainTopic(topic.topic(), topic.isInternal(), now));
 
-        if (this.needMetadataForAllTopics) {
-            // the listener may change the interested topics, which could cause another metadata refresh.
-            // If we have already fetched all topics, however, another fetch should be unnecessary.
-            this.needUpdate = false;
-            this.cache = handleMetadataResponse(metadataResponse, topics.keySet()::contains);
-        }
+        Cluster cluster = cache.cluster();
+        maybeSetMetadataError(cluster);
+
+        this.lastSeenLeaderEpochs.keySet().removeIf(tp -> !retainTopic(tp.topic(), false, now));
 
         String newClusterId = cache.cluster().clusterResource().clusterId();
         if (!Objects.equals(previousClusterId, newClusterId)) {
             log.info("Cluster ID: {}", newClusterId);
         }
-        clusterResourceListeners.onUpdate(clusterForListeners.clusterResource());
+        clusterResourceListeners.onUpdate(cache.cluster().clusterResource());
 
-        notifyAll();
-        log.debug("Updated cluster metadata version {} to {}", this.version, this.cache);
+        log.debug("Updated cluster metadata updateVersion {} to {}", this.updateVersion, this.cache);
+    }
+
+    private void maybeSetMetadataError(Cluster cluster) {
+        // if we encounter any invalid topics, cache the exception to later throw to the user
+        metadataException = null;
+        checkInvalidTopics(cluster);
+        checkUnauthorizedTopics(cluster);
+    }
+
+    private void checkInvalidTopics(Cluster cluster) {
+        if (!cluster.invalidTopics().isEmpty()) {
+            log.error("Metadata response reported invalid topics {}", cluster.invalidTopics());
+            metadataException = new InvalidTopicException(cluster.invalidTopics());
+        }
+    }
+
+    private void checkUnauthorizedTopics(Cluster cluster) {
+        if (!cluster.unauthorizedTopics().isEmpty()) {
+            log.error("Topic authorization failed for topics {}", cluster.unauthorizedTopics());
+            metadataException = new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
+        }
     }
 
     /**
      * Transform a MetadataResponse into a new MetadataCache instance.
      */
-    private MetadataCache handleMetadataResponse(MetadataResponse metadataResponse, Predicate<String> topicsToRetain) {
+    private MetadataCache handleMetadataResponse(MetadataResponse metadataResponse,
+                                                 Predicate<MetadataResponse.TopicMetadata> topicsToRetain) {
         Set<String> internalTopics = new HashSet<>();
         List<MetadataCache.PartitionInfoAndEpoch> partitions = new ArrayList<>();
         for (MetadataResponse.TopicMetadata metadata : metadataResponse.topicMetadata()) {
-            if (!topicsToRetain.test(metadata.topic()))
+            if (!topicsToRetain.test(metadata))
                 continue;
 
             if (metadata.error() == Errors.NONE) {
@@ -387,7 +318,16 @@ public class Metadata implements Closeable {
                         int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
                         partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
                     });
+
+                    if (partitionMetadata.error().exception() instanceof InvalidMetadataException) {
+                        log.debug("Requesting metadata update for partition {} due to error {}",
+                                new TopicPartition(metadata.topic(), partitionMetadata.partition()), partitionMetadata.error());
+                        requestUpdate();
+                    }
                 }
+            } else if (metadata.error().exception() instanceof InvalidMetadataException) {
+                log.debug("Requesting metadata update for topic {} due to error {}", metadata.topic(), metadata.error());
+                requestUpdate();
             }
         }
 
@@ -415,14 +355,6 @@ public class Metadata implements Closeable {
                 PartitionInfo previousInfo = cache.cluster().partition(tp);
                 if (previousInfo != null) {
                     partitionInfoConsumer.accept(previousInfo);
-                } else {
-                    if (containsTopic(topic)) {
-                        log.debug("Got an older epoch in partition metadata response for {}, but we are not tracking this topic. " +
-                                "Ignoring metadata update for this partition", tp);
-                    } else {
-                        log.warn("Got an older epoch in partition metadata response for {}, but could not find previous partition " +
-                                "info to use. Refusing to update metadata for this partition", tp);
-                    }
                 }
             }
         } else {
@@ -432,9 +364,14 @@ public class Metadata implements Closeable {
         }
     }
 
-    private void fireListeners(Cluster newCluster, Set<String> unavailableTopics) {
-        for (Listener listener: listeners)
-            listener.onMetadataUpdate(newCluster, unavailableTopics);
+    public synchronized void maybeThrowException() {
+        AuthenticationException authenticationException = getAndClearAuthenticationException();
+        if (authenticationException != null)
+            throw authenticationException;
+
+        KafkaException metadataException = getAndClearMetadataException();
+        if (metadataException != null)
+            throw metadataException;
     }
 
     /**
@@ -444,15 +381,13 @@ public class Metadata implements Closeable {
     public synchronized void failedUpdate(long now, AuthenticationException authenticationException) {
         this.lastRefreshMs = now;
         this.authenticationException = authenticationException;
-        if (authenticationException != null)
-            this.notifyAll();
     }
 
     /**
-     * @return The current metadata version
+     * @return The current metadata updateVersion
      */
-    public synchronized int version() {
-        return this.version;
+    public synchronized int updateVersion() {
+        return this.updateVersion;
     }
 
     /**
@@ -462,79 +397,51 @@ public class Metadata implements Closeable {
         return this.lastSuccessfulRefreshMs;
     }
 
-    public boolean allowAutoTopicCreation() {
-        return allowAutoTopicCreation;
-    }
-
     /**
-     * Set state to indicate if metadata for all topics in Kafka cluster is required or not.
-     * @param needMetadataForAllTopics boolean indicating need for metadata of all topics in cluster.
-     */
-    public synchronized void needMetadataForAllTopics(boolean needMetadataForAllTopics) {
-        if (needMetadataForAllTopics && !this.needMetadataForAllTopics) {
-            requestUpdateForNewTopics();
-        }
-        this.needMetadataForAllTopics = needMetadataForAllTopics;
-    }
-
-    /**
-     * Get whether metadata for all topics is needed or not
-     */
-    public synchronized boolean needMetadataForAllTopics() {
-        return this.needMetadataForAllTopics;
-    }
-
-    /**
-     * Add a Metadata listener that gets notified of metadata updates
-     */
-    public synchronized void addListener(Listener listener) {
-        this.listeners.add(listener);
-    }
-
-    /**
-     * Stop notifying the listener of metadata updates
-     */
-    public synchronized void removeListener(Listener listener) {
-        this.listeners.remove(listener);
-    }
-
-    /**
-     * "Close" this metadata instance to indicate that metadata updates are no longer possible. This is typically used
-     * when the thread responsible for performing metadata updates is exiting and needs a way to relay this information
-     * to any other thread(s) that could potentially wait on metadata update to come through.
+     * Close this metadata instance to indicate that metadata updates are no longer possible.
      */
     @Override
     public synchronized void close() {
         this.isClosed = true;
-        this.notifyAll();
     }
 
     /**
      * Check if this metadata instance has been closed. See {@link #close()} for more information.
+     *
      * @return True if this instance has been closed; false otherwise
      */
     public synchronized boolean isClosed() {
         return this.isClosed;
     }
 
-    /**
-     * MetadataUpdate Listener
-     */
-    public interface Listener {
-        /**
-         * Callback invoked on metadata update.
-         *
-         * @param cluster the cluster containing metadata for topics with valid metadata
-         * @param unavailableTopics topics which are non-existent or have one or more partitions whose
-         *        leader is not known
-         */
-        void onMetadataUpdate(Cluster cluster, Set<String> unavailableTopics);
-    }
-
-    private synchronized void requestUpdateForNewTopics() {
+    public synchronized void requestUpdateForNewTopics() {
         // Override the timestamp of last refresh to let immediate update.
         this.lastRefreshMs = 0;
+        this.requestVersion++;
         requestUpdate();
+    }
+
+    public synchronized MetadataRequestAndVersion newMetadataRequestAndVersion() {
+        return new MetadataRequestAndVersion(newMetadataRequestBuilder(), requestVersion);
+    }
+
+    protected MetadataRequest.Builder newMetadataRequestBuilder() {
+        return MetadataRequest.Builder.allTopics();
+    }
+
+    protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
+        return true;
+    }
+
+    public static class MetadataRequestAndVersion {
+        public final MetadataRequest.Builder requestBuilder;
+        public final int requestVersion;
+
+        private MetadataRequestAndVersion(MetadataRequest.Builder requestBuilder,
+                                          int requestVersion) {
+            this.requestBuilder = requestBuilder;
+            this.requestVersion = requestVersion;
+        }
     }
 
 }

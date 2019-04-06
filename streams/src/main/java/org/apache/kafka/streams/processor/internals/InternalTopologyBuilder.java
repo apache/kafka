@@ -30,6 +30,7 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.internals.SessionStoreBuilder;
 import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
+import org.apache.kafka.streams.state.internals.TimestampedWindowStoreBuilder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -122,9 +123,6 @@ public class InternalTopologyBuilder {
 
     private Map<Integer, Set<String>> nodeGroups = null;
 
-    // TODO: this is only temporary for 2.0 and should be removed
-    private final Map<StoreBuilder, String> storeToSourceChangelogTopic = new HashMap<>();
-
     public static class StateStoreFactory {
         private final StoreBuilder builder;
         private final Set<String> users = new HashSet<>();
@@ -140,6 +138,8 @@ public class InternalTopologyBuilder {
         long retentionPeriod() {
             if (builder instanceof WindowStoreBuilder) {
                 return ((WindowStoreBuilder) builder).retentionPeriod();
+            } else if (builder instanceof TimestampedWindowStoreBuilder) {
+                return ((TimestampedWindowStoreBuilder) builder).retentionPeriod();
             } else if (builder instanceof SessionStoreBuilder) {
                 return ((SessionStoreBuilder) builder).retentionPeriod();
             } else {
@@ -160,7 +160,9 @@ public class InternalTopologyBuilder {
         }
 
         private boolean isWindowStore() {
-            return builder instanceof WindowStoreBuilder || builder instanceof SessionStoreBuilder;
+            return builder instanceof WindowStoreBuilder
+                || builder instanceof TimestampedWindowStoreBuilder
+                || builder instanceof SessionStoreBuilder;
         }
 
         // Apparently Java strips the generics from this method because we're using the raw type for builder,
@@ -353,10 +355,6 @@ public class InternalTopologyBuilder {
         for (final StoreBuilder storeBuilder : globalStateBuilders.values()) {
             globalStateStores.put(storeBuilder.name(), storeBuilder.build());
         }
-
-        // adjust the topology if optimization is turned on.
-        // TODO: to be removed post 2.0
-        adjust(config);
 
         return this;
     }
@@ -601,20 +599,12 @@ public class InternalTopologyBuilder {
         nodeGroups = null;
     }
 
-    private void connectSourceStoreAndTopic(final String sourceStoreName,
+    public void connectSourceStoreAndTopic(final String sourceStoreName,
                                             final String topic) {
         if (storeToChangelogTopic.containsKey(sourceStoreName)) {
             throw new TopologyException("Source store " + sourceStoreName + " is already added.");
         }
         storeToChangelogTopic.put(sourceStoreName, topic);
-    }
-
-    public final void markSourceStoreAndTopic(final StoreBuilder storeBuilder,
-                                              final String topic) {
-        if (storeToSourceChangelogTopic.containsKey(storeBuilder)) {
-            throw new TopologyException("Source store " + storeBuilder.name() + " is already used.");
-        }
-        storeToSourceChangelogTopic.put(storeBuilder, topic);
     }
 
     public final void addInternalTopic(final String topicName) {
@@ -1064,25 +1054,6 @@ public class InternalTopologyBuilder {
         }
 
         return Collections.unmodifiableMap(topicGroups);
-    }
-
-    // Adjust the generated topology based on the configs.
-    // Not exposed as public API and should be removed post 2.0
-    private void adjust(final StreamsConfig config) {
-        final boolean enableOptimization20 =
-            config.getString(StreamsConfig.TOPOLOGY_OPTIMIZATION).equals(StreamsConfig.OPTIMIZE);
-
-        if (enableOptimization20) {
-            for (final Map.Entry<StoreBuilder, String> entry : storeToSourceChangelogTopic.entrySet()) {
-                final StoreBuilder storeBuilder = entry.getKey();
-                final String topicName = entry.getValue();
-
-                // update store map to disable logging for this store
-                storeBuilder.withLoggingDisabled();
-                addStateStore(storeBuilder, true);
-                connectSourceStoreAndTopic(storeBuilder.name(), topicName);
-            }
-        }
     }
 
     private void setRegexMatchedTopicsToSourceNodes() {

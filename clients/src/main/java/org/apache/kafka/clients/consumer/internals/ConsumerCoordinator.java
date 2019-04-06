@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -30,11 +29,12 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -42,7 +42,6 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.JoinGroupRequest.ProtocolMetadata;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -72,14 +71,13 @@ import java.util.stream.Collectors;
 public final class ConsumerCoordinator extends AbstractCoordinator {
     private final Logger log;
     private final List<PartitionAssignor> assignors;
-    private final Metadata metadata;
+    private final ConsumerMetadata metadata;
     private final ConsumerCoordinatorMetrics sensors;
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
     private final int autoCommitIntervalMs;
     private final ConsumerInterceptors<?, ?> interceptors;
-    private final boolean excludeInternalTopics;
     private final AtomicInteger pendingAsyncCommits;
 
     // this collection must be thread-safe because it is modified from the response handler
@@ -123,7 +121,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                int sessionTimeoutMs,
                                Heartbeat heartbeat,
                                List<PartitionAssignor> assignors,
-                               Metadata metadata,
+                               ConsumerMetadata metadata,
                                SubscriptionState subscriptions,
                                Metrics metrics,
                                String metricGrpPrefix,
@@ -132,7 +130,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
-                               boolean excludeInternalTopics,
                                final boolean leaveGroupOnClose) {
         super(logContext,
               client,
@@ -147,7 +144,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
               leaveGroupOnClose);
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
-        this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch());
+        this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.updateVersion());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
         this.autoCommitEnabled = autoCommitEnabled;
@@ -156,14 +153,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
-        this.excludeInternalTopics = excludeInternalTopics;
         this.pendingAsyncCommits = new AtomicInteger();
 
         if (autoCommitEnabled)
             this.nextAutoCommitTimer = time.timer(autoCommitIntervalMs);
 
         this.metadata.requestUpdate();
-        addMetadataListener();
     }
 
     @Override
@@ -172,58 +167,28 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected List<ProtocolMetadata> metadata() {
+    protected JoinGroupRequestData.JoinGroupRequestProtocolSet metadata() {
+        log.debug("Joining group with current subscription: {}", subscriptions.subscription());
         this.joinedSubscription = subscriptions.subscription();
-        List<ProtocolMetadata> metadataList = new ArrayList<>();
+        JoinGroupRequestData.JoinGroupRequestProtocolSet protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolSet();
+
         for (PartitionAssignor assignor : assignors) {
             Subscription subscription = assignor.subscription(joinedSubscription);
             ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
-            metadataList.add(new ProtocolMetadata(assignor.name(), metadata));
+
+            protocolSet.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
+                    .setName(assignor.name())
+                    .setMetadata(metadata.array()));
         }
-        return metadataList;
+        return protocolSet;
     }
 
     public void updatePatternSubscription(Cluster cluster) {
-        final Set<String> topicsToSubscribe = new HashSet<>();
-
-        for (String topic : cluster.topics())
-            if (subscriptions.subscribedPattern().matcher(topic).matches() &&
-                    !(excludeInternalTopics && cluster.internalTopics().contains(topic)))
-                topicsToSubscribe.add(topic);
-
-        subscriptions.subscribeFromPattern(topicsToSubscribe);
-
-        // note we still need to update the topics contained in the metadata. Although we have
-        // specified that all topics should be fetched, only those set explicitly will be retained
-        metadata.setTopics(subscriptions.groupSubscription());
-    }
-
-    private void addMetadataListener() {
-        this.metadata.addListener(new Metadata.Listener() {
-            @Override
-            public void onMetadataUpdate(Cluster cluster, Set<String> unavailableTopics) {
-                // if we encounter any unauthorized topics, raise an exception to the user
-                if (!cluster.unauthorizedTopics().isEmpty())
-                    throw new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
-
-                // if we encounter any invalid topics, raise an exception to the user
-                if (!cluster.invalidTopics().isEmpty())
-                    throw new InvalidTopicException(cluster.invalidTopics());
-
-                if (subscriptions.hasPatternSubscription())
-                    updatePatternSubscription(cluster);
-
-                // check if there are any changes to the metadata which should trigger a rebalance
-                if (subscriptions.partitionsAutoAssigned()) {
-                    MetadataSnapshot snapshot = new MetadataSnapshot(subscriptions, cluster);
-                    if (!snapshot.equals(metadataSnapshot))
-                        metadataSnapshot = snapshot;
-                }
-
-                if (!Collections.disjoint(metadata.topics(), unavailableTopics))
-                    metadata.requestUpdate();
-            }
-        });
+        final Set<String> topicsToSubscribe = cluster.topics().stream()
+                .filter(subscriptions::matchesSubscribedPattern)
+                .collect(Collectors.toSet());
+        if (subscriptions.subscribeFromPattern(topicsToSubscribe))
+            metadata.requestUpdateForNewTopics();
     }
 
     private PartitionAssignor lookupAssignor(String name) {
@@ -232,6 +197,43 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return assignor;
         }
         return null;
+    }
+
+    private void handleAssignmentMismatch(Assignment assignment) {
+        // We received an assignment that doesn't match our current subscription. If the subscription changed,
+        // we can ignore the assignment and rebalance. Otherwise we raise an error.
+        Set<TopicPartition> invalidAssignments = assignment.partitions().stream().filter(topicPartition ->
+                !joinedSubscription.contains(topicPartition.topic())).collect(Collectors.toSet());
+        if (invalidAssignments.size() > 0) {
+            throw new IllegalStateException("Consumer was assigned partitions " + invalidAssignments +
+                    " which didn't correspond to subscription request " + joinedSubscription);
+        }
+
+        requestRejoin();
+    }
+
+    private void maybeUpdateJoinedSubscription(Set<TopicPartition> assignedPartitions) {
+        // Check if the assignment contains some topics that were not in the original
+        // subscription, if yes we will obey what leader has decided and add these topics
+        // into the subscriptions as long as they still match the subscribed pattern
+
+        Set<String> addedTopics = new HashSet<>();
+        //this is a copy because its handed to listener below
+        for (TopicPartition tp : assignedPartitions) {
+            if (!joinedSubscription.contains(tp.topic()))
+                addedTopics.add(tp.topic());
+        }
+
+        if (!addedTopics.isEmpty()) {
+            Set<String> newSubscription = new HashSet<>(subscriptions.subscription());
+            Set<String> newJoinedSubscription = new HashSet<>(joinedSubscription);
+            newSubscription.addAll(addedTopics);
+            newJoinedSubscription.addAll(addedTopics);
+
+            if (this.subscriptions.subscribeFromPattern(newSubscription))
+                metadata.requestUpdateForNewTopics();
+            this.joinedSubscription = newJoinedSubscription;
+        }
     }
 
     @Override
@@ -249,44 +251,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
         if (!subscriptions.assignFromSubscribed(assignment.partitions())) {
-            // was sent assignments that didn't match the original subscription
-            Set<TopicPartition> invalidAssignments = assignment.partitions().stream().filter(topicPartition -> 
-                !joinedSubscription.contains(topicPartition.topic())).collect(Collectors.toSet());
-            if (invalidAssignments.size() > 0) {
-                throw new IllegalStateException("Coordinator leader sent assignment that don't correspond to subscription request: " + invalidAssignments);
-            }
-
-            requestRejoin();
+            handleAssignmentMismatch(assignment);
             return;
         }
 
-        // check if the assignment contains some topics that were not in the original
-        // subscription, if yes we will obey what leader has decided and add these topics
-        // into the subscriptions as long as they still match the subscribed pattern
-        //
-        // TODO this part of the logic should be removed once we allow regex on leader assign
-        Set<String> addedTopics = new HashSet<>();
-        //this is a copy because its handed to listener below
         Set<TopicPartition> assignedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-        for (TopicPartition tp : assignedPartitions) {
-            if (!joinedSubscription.contains(tp.topic()))
-                addedTopics.add(tp.topic());
-        }
 
-        if (!addedTopics.isEmpty()) {
-            Set<String> newSubscription = new HashSet<>(subscriptions.subscription());
-            Set<String> newJoinedSubscription = new HashSet<>(joinedSubscription);
-            newSubscription.addAll(addedTopics);
-            newJoinedSubscription.addAll(addedTopics);
-
-            this.subscriptions.subscribeFromPattern(newSubscription);
-            this.joinedSubscription = newJoinedSubscription;
-        }
-
-        // Update the metadata to include the full group subscription. The leader will trigger a rebalance
-        // if there are any metadata changes affecting any of the consumed partitions (whether or not this
-        // instance is subscribed to the topics).
-        this.metadata.setTopics(subscriptions.groupSubscription());
+        // The leader may have assigned partitions which match our subscription pattern, but which
+        // were not explicitly requested, so we update the joined subscription here.
+        maybeUpdateJoinedSubscription(assignedPartitions);
 
         // give the assignor a chance to update internal state based on the received assignment
         assignor.onAssignment(assignment);
@@ -307,6 +280,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    void maybeUpdateSubscriptionMetadata() {
+        int version = metadata.updateVersion();
+        if (version > metadataSnapshot.version) {
+            Cluster cluster = metadata.fetch();
+
+            if (subscriptions.hasPatternSubscription())
+                updatePatternSubscription(cluster);
+
+            // Update the current snapshot, which will be used to check for subscription
+            // changes that would require a rebalance (e.g. new partitions).
+            metadataSnapshot = new MetadataSnapshot(subscriptions, cluster, version);
+        }
+    }
+
     /**
      * Poll for coordinator events. This ensures that the coordinator is known and that the consumer
      * has joined the group (if it is using group management). This also handles periodic offset commits
@@ -318,6 +305,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @return true iff the operation succeeded
      */
     public boolean poll(Timer timer) {
+        maybeUpdateSubscriptionMetadata();
+
         invokeCompletedOffsetCommitCallbacks();
 
         if (subscriptions.partitionsAutoAssigned()) {
@@ -340,13 +329,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     // reduce the number of rebalances caused by single topic creation by asking consumer to
                     // refresh metadata before re-joining the group as long as the refresh backoff time has
                     // passed.
-                    if (this.metadata.timeToAllowUpdate(time.milliseconds()) == 0) {
+                    if (this.metadata.timeToAllowUpdate(timer.currentTimeMs()) == 0) {
                         this.metadata.requestUpdate();
                     }
 
                     if (!client.ensureFreshMetadata(timer)) {
                         return false;
                     }
+
+                    maybeUpdateSubscriptionMetadata();
                 }
 
                 if (!ensureActiveGroup(timer)) {
@@ -382,30 +373,39 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return Math.min(nextAutoCommitTimer.remainingMs(), timeToNextHeartbeat(now));
     }
 
+    private void updateGroupSubscription(Set<String> topics) {
+        // the leader will begin watching for changes to any of the topics the group is interested in,
+        // which ensures that all metadata changes will eventually be seen
+        if (this.subscriptions.groupSubscribe(topics))
+            metadata.requestUpdateForNewTopics();
+
+        // update metadata (if needed) and keep track of the metadata used for assignment so that
+        // we can check after rebalance completion whether anything has changed
+        if (!client.ensureFreshMetadata(time.timer(Long.MAX_VALUE)))
+            throw new TimeoutException();
+
+        maybeUpdateSubscriptionMetadata();
+    }
+
     @Override
     protected Map<String, ByteBuffer> performAssignment(String leaderId,
                                                         String assignmentStrategy,
-                                                        Map<String, ByteBuffer> allSubscriptions) {
+                                                        List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions) {
         PartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
 
         Set<String> allSubscribedTopics = new HashSet<>();
         Map<String, Subscription> subscriptions = new HashMap<>();
-        for (Map.Entry<String, ByteBuffer> subscriptionEntry : allSubscriptions.entrySet()) {
-            Subscription subscription = ConsumerProtocol.deserializeSubscription(subscriptionEntry.getValue());
-            subscriptions.put(subscriptionEntry.getKey(), subscription);
+        for (JoinGroupResponseData.JoinGroupResponseMember memberSubScription : allSubscriptions) {
+            Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberSubScription.metadata()));
+            subscriptions.put(memberSubScription.memberId(), subscription);
             allSubscribedTopics.addAll(subscription.topics());
         }
 
         // the leader will begin watching for changes to any of the topics the group is interested in,
         // which ensures that all metadata changes will eventually be seen
-        this.subscriptions.groupSubscribe(allSubscribedTopics);
-        metadata.setTopics(this.subscriptions.groupSubscription());
-
-        // update metadata (if needed) and keep track of the metadata used for assignment so that
-        // we can check after rebalance completion whether anything has changed
-        if (!client.ensureFreshMetadata(time.timer(Long.MAX_VALUE))) throw new TimeoutException();
+        updateGroupSubscription(allSubscribedTopics);
 
         isLeader = true;
 
@@ -439,9 +439,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     "fetched from the brokers: {}", newlyAddedTopics);
 
             allSubscribedTopics.addAll(assignedTopics);
-            this.subscriptions.groupSubscribe(allSubscribedTopics);
-            metadata.setTopics(this.subscriptions.groupSubscription());
-            if (!client.ensureFreshMetadata(time.timer(Long.MAX_VALUE))) throw new TimeoutException();
+            updateGroupSubscription(allSubscribedTopics);
         }
 
         assignmentSnapshot = metadataSnapshot;
@@ -485,7 +483,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return false;
 
         // we need to rejoin if we performed the assignment and metadata has changed
-        if (assignmentSnapshot != null && !assignmentSnapshot.equals(metadataSnapshot))
+        if (assignmentSnapshot != null && !assignmentSnapshot.matches(metadataSnapshot))
             return true;
 
         // we need to join if our subscription has changed since the last join
@@ -966,26 +964,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private static class MetadataSnapshot {
+        private final int version;
         private final Map<String, Integer> partitionsPerTopic;
 
-        private MetadataSnapshot(SubscriptionState subscription, Cluster cluster) {
+        private MetadataSnapshot(SubscriptionState subscription, Cluster cluster, int version) {
             Map<String, Integer> partitionsPerTopic = new HashMap<>();
             for (String topic : subscription.groupSubscription())
                 partitionsPerTopic.put(topic, cluster.partitionCountForTopic(topic));
             this.partitionsPerTopic = partitionsPerTopic;
+            this.version = version;
         }
 
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            MetadataSnapshot that = (MetadataSnapshot) o;
-            return partitionsPerTopic != null ? partitionsPerTopic.equals(that.partitionsPerTopic) : that.partitionsPerTopic == null;
-        }
-
-        @Override
-        public int hashCode() {
-            return partitionsPerTopic != null ? partitionsPerTopic.hashCode() : 0;
+        boolean matches(MetadataSnapshot other) {
+            return version == other.version || partitionsPerTopic.equals(other.partitionsPerTopic);
         }
     }
 
