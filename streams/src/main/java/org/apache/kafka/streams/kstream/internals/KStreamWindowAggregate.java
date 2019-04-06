@@ -179,8 +179,21 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                     currentWindowAgg = oldAgg;
                 }
 
-                //update the agg for a window starting at this time
-                windowStore.put(key, newAgg, windowStart);
+                // break once we get to windows starting after this timestamp, unless we haven't yet found an agg
+                if (windowStart > timestamp && currentWindowAgg != null) {
+                     break;
+                }
+
+                // update the agg if this timestamp is within its window
+                if (windowStart <= timestamp){
+                    windowStore.put(key, newAgg, windowStart);
+
+                // if we've reached windows starting after this timestamp, break unless we still need to find an agg
+                } else {
+                    if (currentWindowAgg != null) {
+                        break;
+                    }
+                }
             }
 
             if (currentWindowAgg == null) {
