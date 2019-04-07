@@ -276,7 +276,7 @@ class StreamsEosTestBaseService(StreamsTestBaseService):
 
     def clean_node(self, node):
         if self.clean_node_enabled:
-            super.clean_node(self, node)
+            super(StreamsEosTestBaseService, self).clean_node(node)
 
 
 class StreamsSmokeTestDriverService(StreamsSmokeTestBaseService):

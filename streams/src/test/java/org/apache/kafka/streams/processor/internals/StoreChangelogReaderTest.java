@@ -27,7 +27,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.test.MockRestoreCallback;
 import org.apache.kafka.test.MockStateRestoreListener;
@@ -103,6 +102,7 @@ public class StoreChangelogReaderTest {
         expect(mockRestorer.partition())
             .andReturn(new TopicPartition("sometopic", 0))
             .andReturn(new TopicPartition("sometopic", 0))
+            .andReturn(new TopicPartition("sometopic", 0))
             .andReturn(new TopicPartition("sometopic", 0));
         EasyMock.replay(mockRestorer);
         changelogReader.register(mockRestorer);
@@ -142,11 +142,15 @@ public class StoreChangelogReaderTest {
         });
         changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName"));
 
-        EasyMock.expect(active.restoringTaskFor(topicPartition)).andReturn(task).andReturn(task);
-        EasyMock.replay(active);
+        expect(active.restoringTaskFor(topicPartition)).andReturn(task).anyTimes();
+        expect(task.isEosEnabled()).andReturn(false).anyTimes();
+        replay(active, task);
 
         // first restore call "fails" but we should not die with an exception
         assertEquals(0, changelogReader.restore(active).size());
+
+        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true,
+                "storeName"));
         // retry restore should succeed
         assertEquals(1, changelogReader.restore(active).size());
         assertThat(callback.restored.size(), equalTo(messages));
@@ -246,10 +250,11 @@ public class StoreChangelogReaderTest {
         changelogReader.register(new StateRestorer(one, restoreListener1, null, Long.MAX_VALUE, true, "storeName2"));
         changelogReader.register(new StateRestorer(two, restoreListener2, null, Long.MAX_VALUE, true, "storeName3"));
 
+        expect(task.isEosEnabled()).andReturn(false).anyTimes();
         expect(active.restoringTaskFor(one)).andReturn(task);
         expect(active.restoringTaskFor(two)).andReturn(task);
-        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
-        replay(active);
+        expect(active.restoringTaskFor(topicPartition)).andReturn(task).anyTimes();
+        replay(active, task);
         changelogReader.restore(active);
 
         assertThat(callback.restored.size(), equalTo(10));
@@ -270,9 +275,9 @@ public class StoreChangelogReaderTest {
         setupConsumer(3, two);
 
         changelogReader
-            .register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName1"));
-        changelogReader.register(new StateRestorer(one, restoreListener1, null, Long.MAX_VALUE, true, "storeName2"));
-        changelogReader.register(new StateRestorer(two, restoreListener2, null, Long.MAX_VALUE, true, "storeName3"));
+            .register(new StateRestorer(topicPartition, restoreListener, 0L, Long.MAX_VALUE, true, "storeName1"));
+        changelogReader.register(new StateRestorer(one, restoreListener1, 0L, Long.MAX_VALUE, true, "storeName2"));
+        changelogReader.register(new StateRestorer(two, restoreListener2, 0L, Long.MAX_VALUE, true, "storeName3"));
 
         expect(active.restoringTaskFor(one)).andReturn(task);
         expect(active.restoringTaskFor(two)).andReturn(task);
@@ -297,11 +302,10 @@ public class StoreChangelogReaderTest {
     @Test
     public void shouldOnlyReportTheLastRestoredOffset() {
         setupConsumer(10, topicPartition);
-        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, 5, true, "storeName1"));
-
-        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
-        replay(active);
-
+        changelogReader
+            .register(new StateRestorer(topicPartition, restoreListener, 0L, 5, true, "storeName1"));
+        expect(active.restoringTaskFor(topicPartition)).andStubReturn(task);
+        replay(active, task);
         changelogReader.restore(active);
 
         assertThat(callback.restored.size(), equalTo(5));
@@ -423,7 +427,8 @@ public class StoreChangelogReaderTest {
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
         expect(active.restoringTaskFor(postInitialization)).andReturn(task);
         expect(active.restoringTaskFor(topicPartition)).andReturn(task);
-        replay(active);
+        expect(task.isEosEnabled()).andReturn(false).anyTimes();
+        replay(active, task);
 
         assertTrue(changelogReader.restore(active).isEmpty());
 
@@ -444,47 +449,6 @@ public class StoreChangelogReaderTest {
     }
 
     @Test
-    public void shouldThrowTaskMigratedExceptionIfEndOffsetGetsExceededDuringRestoreForChangelogTopic() {
-        final int messages = 10;
-        setupConsumer(messages, topicPartition);
-        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 5L));
-        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName"));
-
-        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
-        replay(active);
-
-        try {
-            changelogReader.restore(active);
-            fail("Should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            /* ignore */
-        }
-    }
-
-
-    @Test
-    public void shouldThrowTaskMigratedExceptionIfChangelogTopicUpdatedDuringRestoreProcessFoundInSecondCheck() {
-        final int messages = 10;
-        setupConsumer(messages, topicPartition);
-        // in this case first call to endOffsets returns correct value, but a second thread has updated the changelog topic
-        // so a subsequent call to endOffsets returns a value exceeding the expected end value
-        consumer.addEndOffsets(Collections.singletonMap(topicPartition, 15L));
-        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName"));
-
-        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
-        replay(active);
-
-        try {
-            changelogReader.restore(active);
-            fail("Should have thrown TaskMigratedException");
-        } catch (final TaskMigratedException expected) {
-            // verifies second block threw exception with updated end offset
-            assertTrue(expected.getMessage().contains("end offset 15, current offset 10"));
-        }
-    }
-
-
-    @Test
     public void shouldNotThrowTaskMigratedExceptionIfSourceTopicUpdatedDuringRestoreProcess() {
         final int messages = 10;
         setupConsumer(messages, topicPartition);
@@ -497,31 +461,6 @@ public class StoreChangelogReaderTest {
         replay(active);
 
         changelogReader.restore(active);
-    }
-
-
-    @Test
-    public void shouldThrowTaskMigratedExceptionIfEndOffsetGetsExceededDuringRestoreForChangelogTopicEOSEnabled() {
-        final int totalMessages = 10;
-        assignPartition(totalMessages, topicPartition);
-        // records 0..4
-        addRecords(5, topicPartition, 0);
-        //EOS enabled commit marker at offset 5 so rest of records 6..10
-        addRecords(5, topicPartition, 6);
-        consumer.assign(Collections.<TopicPartition>emptyList());
-
-        // end offsets should start after commit marker of 5 from above
-        consumer.updateEndOffsets(Collections.singletonMap(topicPartition, 6L));
-        changelogReader.register(new StateRestorer(topicPartition, restoreListener, null, Long.MAX_VALUE, true, "storeName"));
-
-        expect(active.restoringTaskFor(topicPartition)).andReturn(task);
-        replay(active);
-        try {
-            changelogReader.restore(active);
-            fail("Should have thrown task migrated exception");
-        } catch (final TaskMigratedException expected) {
-            /* ignore */
-        }
     }
 
     @Test
