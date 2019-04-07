@@ -29,44 +29,20 @@ import java.util.HashMap;
 
 import static java.lang.Math.toIntExact;
 
-class TimeAwareNamedCache {
+class TimeAwareNamedCache extends NamedCache {
     private static final Logger log = LoggerFactory.getLogger(TimeAwareNamedCache.class);
     public static final int WHEEL_COUNT = 8; // Each wheel represents 8 bits of the long integer
 
-    private final NamedCache cache;
     private final HiearchalWheel[] wheels;
-
-    private long numReadHits = 0;
-    private long numReadMisses = 0;
-    private long numOverwrites = 0;
-    private long numFlushes = 0;
+    private final HashMap<Bytes, Integer> wheelLocation;
 
     public TimeAwareNamedCache(final String name, final StreamsMetricsImpl metrics) {
-        this.cache = new NamedCache(name, metrics);
+        super(name, metrics);
         this.wheels = new HiearchalWheel[WHEEL_COUNT];
+        this.wheelLocation = new HashMap<>();
         for (int i = 0; i < WHEEL_COUNT; i++) {
             wheels[i] = new HiearchalWheel(8 * i); // 8 * i: bits by which a number needs to be shifted
         }
-    }
-
-    synchronized long hits() {
-        return numReadHits;
-    }
-
-    synchronized long misses() {
-        return numReadMisses;
-    }
-
-    synchronized long overwrites() {
-        return numOverwrites;
-    }
-
-    synchronized long flushes() {
-        return numFlushes;
-    }
-
-    synchronized LRUCacheEntry get(final Bytes key) {
-        return cache.get(key);
     }
 
     private int findShift(final long remainingMs) {
@@ -81,17 +57,65 @@ class TimeAwareNamedCache {
     }
 
     synchronized void put(final Bytes key, final LRUCacheEntry value, final Timer timer) {
-        cache.put(key, value);
+        super.put(key, value);
         final int shift = findShift(timer.remainingMs());
+        wheelLocation.put(key, shift);
         wheels[shift].put(new HiearchalWheelNode(key, timer));
     }
 
-    private void evictNodesInWheels() {
-        
+    synchronized LRUCacheEntry putIfAbsent(final Bytes key, 
+                                           final LRUCacheEntry value, 
+                                           final Timer timer) {
+        final Integer location = wheelLocation.get(key);
+        if (location == null) {
+            put(key, value, timer);
+        }
+        return value;
     }
- 
+
+    private int evictNodesInWheels() {
+        int nodesRemoved = 0;
+        for (int i = 0; i < WHEEL_COUNT; i++) {
+            final HiearchalWheelNode[] arr = wheels[i].evictNodes();
+            for (final HiearchalWheelNode node : arr) {
+                if (node.timer.isExpired()) {
+                    super.delete(node.key); // node's lifetime has expired
+                    nodesRemoved++;
+                } else {
+                    final int shift = findShift(node.timer.remainingMs());
+                    wheelLocation.put(node.key, shift);
+                    wheels[shift].put(node);
+                }
+            }
+        }
+        return nodesRemoved;
+    }
+
+    @Override
     synchronized void evict() {
-        evictNodesInWheels();
+        final int removed = evictNodesInWheels();
+        if (removed == 0) {
+            super.evict();
+        }
+    }
+
+    @Override
+    synchronized LRUCacheEntry delete(final Bytes key) {
+        final LRUCacheEntry entry = super.delete(key);
+        final Integer location = wheelLocation.get(key);
+        if (location != null) {
+            wheels[location].setEvicted(key);
+        }
+        return entry;
+    }
+
+    @Override
+    synchronized void close() {
+        super.close();
+        wheelLocation.clear();
+        for (int i = 0; i < WHEEL_COUNT; i++) {
+            wheels[i].clear();
+        }
     }
 
     /**
@@ -126,7 +150,7 @@ class TimeAwareNamedCache {
         public static final int WHEEL_SIZE = 1 << 8;
 
         private final ArrayList<Stack<HiearchalWheelNode>> timeSlots;
-        private final HashMap<HiearchalWheelNode, Boolean> evicted;
+        private final HashMap<Bytes, Boolean> evicted;
         private final Timer timer;
         private long lastChecked;
         private long elapsed;
@@ -154,7 +178,7 @@ class TimeAwareNamedCache {
             final long timeRemaining = timer.remainingMs();
             final long index = (timeRemaining >> shift + this.index) % WHEEL_SIZE;
             timeSlots.get(toIntExact(index)).push(node);
-            evicted.put(node, false);
+            evicted.put(node.key, false);
         }
 
         public HiearchalWheelNode[] evictNodes() {
@@ -171,7 +195,7 @@ class TimeAwareNamedCache {
                 }
                 while (!timeSlots.get(j).isEmpty()) {
                     final HiearchalWheelNode node = timeSlots.get(j).pop();
-                    final Boolean result = evicted.get(node);
+                    final Boolean result = evicted.get(node.key);
                     if (result != null && !result) {
                         nodes.add(node);
                     }
@@ -181,8 +205,13 @@ class TimeAwareNamedCache {
             return nodes.toArray(new HiearchalWheelNode[nodes.size()]);
         }
 
-        public void setEvicted(final HiearchalWheelNode node) {
-            evicted.put(node, true);
+        public void setEvicted(final Bytes key) {
+            evicted.put(key, true);
+        }
+
+        public void clear() {
+            timeSlots.clear();
+            evicted.clear();
         }
     }
 }

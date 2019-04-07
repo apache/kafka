@@ -36,7 +36,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-
 class NamedCache {
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
     private final String name;
@@ -306,6 +305,49 @@ class NamedCache {
         namedCacheMetrics.removeAllSensors();
     }
 
+    /**
+     * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
+     */
+    static class LRUNode {
+        private final Bytes key;
+        private LRUCacheEntry entry;
+        private LRUNode previous;
+        private LRUNode next;
+
+        LRUNode(final Bytes key, final LRUCacheEntry entry) {
+            this.key = key;
+            this.entry = entry;
+        }
+
+        LRUCacheEntry entry() {
+            return entry;
+        }
+
+        Bytes key() {
+            return key;
+        }
+
+        long size() {
+            return key.get().length +
+                8 + // entry
+                8 + // previous
+                8 + // next
+                entry.size();
+        }
+
+        LRUNode next() {
+            return next;
+        }
+
+        LRUNode previous() {
+            return previous;
+        }
+
+        private void update(final LRUCacheEntry entry) {
+            this.entry = entry;
+        }
+    }
+
     private static class NamedCacheMetrics {
         private final StreamsMetricsImpl metrics;
 
@@ -368,49 +410,6 @@ class NamedCache {
 
         private void removeAllSensors() {
             metrics.removeAllCacheLevelSensors(taskName, cacheName);
-        }
-    }
-    
-    /**
-     * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
-     */
-    static class LRUNode {
-        private final Bytes key;
-        private LRUCacheEntry entry;
-        private LRUNode previous;
-        private LRUNode next;
-
-        LRUNode(final Bytes key, final LRUCacheEntry entry) {
-            this.key = key;
-            this.entry = entry;
-        }
-
-        LRUCacheEntry entry() {
-            return entry;
-        }
-
-        Bytes key() {
-            return key;
-        }
-
-        long size() {
-            return key.get().length +
-                8 + // entry
-                8 + // previous
-                8 + // next
-                entry.size();
-        }
-
-        LRUNode next() {
-            return next;
-        }
-
-        LRUNode previous() {
-            return previous;
-        }
-
-        private void update(final LRUCacheEntry entry) {
-            this.entry = entry;
         }
     }
 }
