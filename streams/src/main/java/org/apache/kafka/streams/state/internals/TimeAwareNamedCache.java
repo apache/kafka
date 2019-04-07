@@ -27,7 +27,6 @@ import java.util.Stack;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-import java.lang.Long;
 import static java.lang.Math.toIntExact;
 
 class TimeAwareNamedCache {
@@ -66,16 +65,16 @@ class TimeAwareNamedCache {
         return numFlushes;
     }
 
-    synchronized LRUCacheEntry get(Bytes key) {
+    synchronized LRUCacheEntry get(final Bytes key) {
         return cache.get(key);
     }
 
     private int findShift(final long remainingMs) {
         for (int i = 0; i < 8; i++) {
-            if (remainingMs >> (8*i) > 0) {
+            if (remainingMs >> (8 * i) > 0) {
                 continue;
             } else {
-                return i-1;
+                return i - 1;
             }
         }
         return 8;
@@ -178,7 +177,7 @@ class TimeAwareNamedCache {
                     }
                 }
             }
-            index = toIntExact(((rotations + index) % WHEEL_SIZE));
+            index = toIntExact((rotations + index) % WHEEL_SIZE);
             return nodes.toArray(new HiearchalWheelNode[nodes.size()]);
         }
 
