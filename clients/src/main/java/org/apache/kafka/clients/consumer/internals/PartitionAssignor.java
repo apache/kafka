@@ -127,7 +127,9 @@ public interface PartitionAssignor {
         @Override
         public String toString() {
             return "Subscription(" +
-                    "topics=" + topics +
+                    "version=" + version +
+                    ", topics=" + topics +
+                    ", ownedPartitions=" + ownedPartitions +
                     ')';
         }
     }
@@ -182,7 +184,9 @@ public interface PartitionAssignor {
         @Override
         public String toString() {
             return "Assignment(" +
-                    "partitions=" + partitions +
+                    "version=" + version +
+                    ", partitions=" + partitions +
+                    ", error=" + error +
                     ')';
         }
     }
