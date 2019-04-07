@@ -27,6 +27,9 @@ import java.util.Stack;
 import java.util.ArrayList;
 import java.util.HashMap;
 
+import java.lang.Long;
+import static java.lang.Math.toIntExact;
+
 class TimeAwareNamedCache {
     private static final Logger log = LoggerFactory.getLogger(TimeAwareNamedCache.class);
     public static final int WHEEL_COUNT = 8; // Each wheel represents 8 bits of the long integer
@@ -34,12 +37,62 @@ class TimeAwareNamedCache {
     private final NamedCache cache;
     private final HiearchalWheel[] wheels;
 
+    private long numReadHits = 0;
+    private long numReadMisses = 0;
+    private long numOverwrites = 0;
+    private long numFlushes = 0;
+
     public TimeAwareNamedCache(final String name, final StreamsMetricsImpl metrics) {
         this.cache = new NamedCache(name, metrics);
         this.wheels = new HiearchalWheel[WHEEL_COUNT];
         for (int i = 0; i < WHEEL_COUNT; i++) {
             wheels[i] = new HiearchalWheel(8 * i); // 8 * i: bits by which a number needs to be shifted
         }
+    }
+
+    synchronized long hits() {
+        return numReadHits;
+    }
+
+    synchronized long misses() {
+        return numReadMisses;
+    }
+
+    synchronized long overwrites() {
+        return numOverwrites;
+    }
+
+    synchronized long flushes() {
+        return numFlushes;
+    }
+
+    synchronized LRUCacheEntry get(Bytes key) {
+        return cache.get(key);
+    }
+
+    private int findShift(final long remainingMs) {
+        for (int i = 0; i < 8; i++) {
+            if (remainingMs >> (8*i) > 0) {
+                continue;
+            } else {
+                return i-1;
+            }
+        }
+        return 8;
+    }
+
+    synchronized void put(final Bytes key, final LRUCacheEntry value, final Timer timer) {
+        cache.put(key, value);
+        final int shift = findShift(timer.remainingMs());
+        wheels[shift].put(new HiearchalWheelNode(key, timer));
+    }
+
+    private void evictNodesInWheels() {
+        
+    }
+ 
+    synchronized void evict() {
+        evictNodesInWheels();
     }
 
     /**
@@ -72,7 +125,6 @@ class TimeAwareNamedCache {
 
     private static class HiearchalWheel {
         public static final int WHEEL_SIZE = 1 << 8;
-        public static final int BASE_MASK_INTERVAL = 1 << 9 - 1;
 
         private final ArrayList<Stack<HiearchalWheelNode>> timeSlots;
         private final HashMap<HiearchalWheelNode, Boolean> evicted;
@@ -83,7 +135,6 @@ class TimeAwareNamedCache {
         private int index;
         private final long interval;
         private final int shift;
-        private final long mask;
 
         public HiearchalWheel(final int bitShift) {
             this.timeSlots = new ArrayList<>(WHEEL_SIZE);
@@ -96,15 +147,14 @@ class TimeAwareNamedCache {
             this.elapsed = 0;
             this.remainder = 0;
             this.index = 0;
-            this.mask = BASE_MASK_INTERVAL << bitShift;
             this.interval = 1 << bitShift;
             this.shift = bitShift;
         }
 
         public void put(final HiearchalWheelNode node) {
             final long timeRemaining = timer.remainingMs();
-            final long index = (timeRemaining & mask) >> shift;
-            timeSlots.get((int) index).push(node);
+            final long index = (timeRemaining >> shift + this.index) % WHEEL_SIZE;
+            timeSlots.get(toIntExact(index)).push(node);
             evicted.put(node, false);
         }
 
@@ -128,7 +178,7 @@ class TimeAwareNamedCache {
                     }
                 }
             }
-            index = (int) ((rotations + index) % WHEEL_SIZE);
+            index = toIntExact(((rotations + index) % WHEEL_SIZE));
             return nodes.toArray(new HiearchalWheelNode[nodes.size()]);
         }
 
