@@ -66,7 +66,7 @@ public class ConnectorsResource {
     // session timeout to complete, during which we cannot serve some requests. Ideally we could reduce this, but
     // we need to consider all possible scenarios this could fail. It might be ok to fail with a timeout in rare cases,
     // but currently a worker simply leaving the group can take this long as well.
-    private static final long REQUEST_TIMEOUT_MS = 90 * 1000;
+    public static final long REQUEST_TIMEOUT_MS = 90 * 1000;
 
     private final HerderProvider herderProvider;
     private final WorkerConfig config;
