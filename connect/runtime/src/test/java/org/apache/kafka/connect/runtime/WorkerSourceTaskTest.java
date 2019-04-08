@@ -215,6 +215,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
 
+        sourceTask.stopped();
+        EasyMock.expectLastCall();
+
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
 
@@ -263,6 +266,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
+
+        sourceTask.stopped();
+        EasyMock.expectLastCall();
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -316,6 +322,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
 
+        sourceTask.stopped();
+        EasyMock.expectLastCall();
+
         producer.close(EasyMock.anyObject(Duration.class));
         EasyMock.expectLastCall();
 
@@ -356,6 +365,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
+
+        sourceTask.stopped();
+        EasyMock.expectLastCall();
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -401,6 +413,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(false);
+
+        sourceTask.stopped();
+        EasyMock.expectLastCall();
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
@@ -591,6 +606,9 @@ public class WorkerSourceTaskTest extends ThreadedTest {
         sourceTask.stop();
         EasyMock.expectLastCall();
         expectOffsetFlush(true);
+
+        sourceTask.stopped();
+        EasyMock.expectLastCall();
 
         statusListener.onShutdown(taskId);
         EasyMock.expectLastCall();
