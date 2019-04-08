@@ -236,7 +236,7 @@ public class CachingWindowStoreTest {
         return Bytes.wrap(key.getBytes());
     }
 
-    private String stringFrom(byte[] from) {
+    private String stringFrom(final byte[] from) {
         return Serdes.String().deserializer().deserialize("", from);
     }
 
