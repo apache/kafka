@@ -382,6 +382,21 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldReturnSameResultsForGetAndRangeWithEqualKeys() {
+        final List<KeyValue<Integer, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(1, "one"));
+        entries.add(new KeyValue<>(2, "two"));
+        entries.add(new KeyValue<>(3, "three"));
+
+        store.putAll(entries);
+
+        final Iterator<KeyValue<Integer, String>> iterator = store.range(2, 2);
+
+        assertEquals(iterator.next().value, store.get(2));
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
     public void shouldNotThrowConcurrentModificationException() {
         store.put(0, "zero");
 

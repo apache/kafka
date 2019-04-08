@@ -569,6 +569,24 @@ public class InMemoryWindowStoreTest {
     }
 
     @Test
+    public void shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeFetch() {
+        windowStore = createInMemoryWindowStore(context, false);
+
+        windowStore.put(1, "one", 0L);
+        windowStore.put(2, "two", 1L);
+        windowStore.put(2, "two", 2L);
+        windowStore.put(3, "three", 3L);
+
+        final WindowStoreIterator<String> singleKeyIterator = windowStore.fetch(2, 0L, 5L);
+        final KeyValueIterator<Windowed<Integer>, String> keyRangeIterator = windowStore.fetch(2, 2, 0L, 5L);
+
+        assertEquals(singleKeyIterator.next().value, keyRangeIterator.next().value);
+        assertEquals(singleKeyIterator.next().value, keyRangeIterator.next().value);
+        assertFalse(singleKeyIterator.hasNext());
+        assertFalse(keyRangeIterator.hasNext());
+    }
+
+    @Test
     public void shouldNotThrowExceptionWhenFetchRangeIsExpired() {
         windowStore = createInMemoryWindowStore(context, false);
 
