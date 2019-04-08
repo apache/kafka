@@ -577,7 +577,9 @@ public class CachingWindowStoreTest {
 
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
-        cachingStore.fetch(keyFrom, keyTo, 0L, 10L);
+
+        final KeyValueIterator iterator = cachingStore.fetch(keyFrom, keyTo, 0L, 10L);
+        assertFalse(iterator.hasNext());
 
         final List<String> messages = appender.getMessages();
         assertThat(messages, hasItem("Returning empty iterator for fetch with invalid key range: from > to. "

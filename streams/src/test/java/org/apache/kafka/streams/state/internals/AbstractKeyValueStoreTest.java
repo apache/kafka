@@ -397,7 +397,8 @@ public abstract class AbstractKeyValueStoreTest {
         LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
-        store.range(-1, 1);
+        final KeyValueIterator iterator = store.range(-1, 1);
+        assertFalse(iterator.hasNext());
 
         final List<String> messages = appender.getMessages();
         assertThat(messages, hasItem("Returning empty iterator for fetch with invalid key range: from > to. "

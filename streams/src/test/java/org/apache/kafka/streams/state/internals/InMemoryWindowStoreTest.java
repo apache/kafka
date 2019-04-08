@@ -587,7 +587,8 @@ public class InMemoryWindowStoreTest {
         LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
-        windowStore.fetch(-1, 1, 0L, 10L);
+        final KeyValueIterator iterator = windowStore.fetch(-1, 1, 0L, 10L);
+        assertFalse(iterator.hasNext());
 
         final List<String> messages = appender.getMessages();
         assertThat(messages, hasItem("Returning empty iterator for fetch with invalid key range: from > to. "
