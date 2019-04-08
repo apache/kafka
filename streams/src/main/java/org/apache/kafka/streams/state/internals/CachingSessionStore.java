@@ -168,12 +168,9 @@ class CachingSessionStore
                                                                   final long latestSessionStartTime) {
         validateStoreOpen();
 
-        final PeekingKeyValueIterator<Bytes, LRUCacheEntry> cacheIterator = wrapped().persistent() ?
-            new CacheIteratorWrapper(keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime) :
-            cache.range(cacheName,
-                        cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime)),
-                        cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime))
-            );
+        final Bytes cacheKeyFrom = cacheFunction.cacheKey(keySchema.lowerRange(keyFrom, earliestSessionEndTime));
+        final Bytes cacheKeyTo = cacheFunction.cacheKey(keySchema.upperRange(keyTo, latestSessionStartTime));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.range(cacheName, cacheKeyFrom, cacheKeyTo);
 
         final KeyValueIterator<Windowed<Bytes>, byte[]> storeIterator = wrapped().findSessions(
             keyFrom, keyTo, earliestSessionEndTime, latestSessionStartTime
