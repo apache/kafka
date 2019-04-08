@@ -602,8 +602,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                 if (partitionRecords.nextFetchOffset > position.offset) {
                     SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
-                            partitionRecords.nextFetchOffset, partitionRecords.lastEpoch, position.currentLeader);
-
+                            partitionRecords.nextFetchOffset, partitionRecords.lastEpoch,
+                            metadata.leaderAndEpoch(partitionRecords.partition));
                     log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
                             "position to {}", position, partitionRecords.partition, nextPosition);
                     subscriptions.position(partitionRecords.partition, nextPosition);
@@ -694,18 +694,15 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * Requests are grouped by Node for efficiency.
      */
     private void validateOffsetsAsync(Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate) {
-       // Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = partitionsToValidate.stream()
-       //         .collect(Collectors.toMap(Function.identity(), subscriptions::position));
-
         final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
                 regroupPartitionMapByNode(partitionsToValidate);
 
         regrouped.forEach((node, dataMap) -> {
             subscriptions.setNextAllowedRetry(dataMap.keySet(), time.milliseconds() + requestTimeoutMs);
 
-            final Map<TopicPartition, Metadata.LeaderAndEpoch> cachedLeaderAndEpochs = partitionsToValidate.keySet()
+            final Map<TopicPartition, Metadata.LeaderAndEpoch> cachedLeaderAndEpochs = partitionsToValidate.entrySet()
                     .stream()
-                    .collect(Collectors.toMap(Function.identity(), metadata::leaderAndEpoch));
+                    .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().currentLeader));
 
             RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future = offsetsForLeaderEpochClient.sendAsyncRequest(node, partitionsToValidate);
             future.addListener(new RequestFutureListener<OffsetsForLeaderEpochClient.OffsetForEpochResult>() {
@@ -721,13 +718,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     // for the partition. If so, it means we have experienced log truncation and need to reposition
                     // that partition's offset.
                     offsetsResult.endOffsets().forEach((respTopicPartition, respEndOffset) -> {
-                        Metadata.LeaderAndEpoch currentLeader = metadata.leaderAndEpoch(respTopicPartition);
+                        SubscriptionState.FetchPosition currentPosition = subscriptions.position(respTopicPartition);
+                        Metadata.LeaderAndEpoch currentLeader = currentPosition.currentLeader;
                         if (!currentLeader.equals(cachedLeaderAndEpochs.get(respTopicPartition))) {
                             return;
                         }
 
                         if (subscriptions.awaitingValidation(respTopicPartition)) {
-                            SubscriptionState.FetchPosition currentPosition = subscriptions.position(respTopicPartition);
                             if (respEndOffset.endOffset() < currentPosition.offset) {
                                 if (subscriptions.hasDefaultOffsetResetPolicy()) {
                                     SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
@@ -1017,8 +1014,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             } else if (client.hasPendingRequests(node)) {
                 log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
             } else {
-                ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
                 SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
+                ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = position.currentLeader;
 
                 // if there is a leader and no in-flight requests, issue a new fetch
                 FetchSessionHandler.Builder builder = fetchable.get(leaderAndEpoch.leader);

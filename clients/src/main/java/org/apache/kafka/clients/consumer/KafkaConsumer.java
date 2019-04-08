@@ -1517,7 +1517,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         try {
             log.info("Seeking to offset {} for partition {}", offset, partition);
             SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(offset, Optional.empty(),
-                    Metadata.LeaderAndEpoch.noLeaderOrEpoch());
+                    this.metadata.leaderAndEpoch(partition));
             this.subscriptions.seek(partition, newPosition);
         } finally {
             release();

@@ -1727,15 +1727,15 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testRefreshOffsetWithValidation() {
-        // Initial leader epoch of 4
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("clusterId", 1,
-                Collections.emptyMap(), singletonMap(t1p.topic(), 1), tp -> 4);
-        client.updateMetadata(metadataResponse);
-
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
 
         subscriptions.assignFromUser(singleton(t1p));
+
+        // Initial leader epoch of 4
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("kafka-cluster", 1,
+                Collections.emptyMap(), singletonMap(topic1, 1), tp -> 4);
+        client.updateMetadata(metadataResponse);
 
         // Load offsets from previous epoch
         client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L, 3));

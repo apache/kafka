@@ -2739,8 +2739,8 @@ public class FetcherTest {
 
         List<ConsumerRecord<byte[], byte[]>> records;
         assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
-        subscriptions.seek(tp0, 0);
-        subscriptions.seek(tp1, 1);
+        subscriptions.seek(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), metadata.leaderAndEpoch(tp0)));
+        subscriptions.seek(tp1, new SubscriptionState.FetchPosition(1, Optional.empty(), metadata.leaderAndEpoch(tp1)));
 
         // Fetch some records and establish an incremental fetch session.
         LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> partitions1 = new LinkedHashMap<>();
@@ -3149,6 +3149,8 @@ public class FetcherTest {
 
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(tp0.topic(), 4);
+
+        // Start off with leader epoch of 2
         MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> 2);
         metadata.update(metadataResponse, 0L);
 
@@ -3156,25 +3158,28 @@ public class FetcherTest {
         Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.leaderAndEpoch(tp0).leader, Optional.of(1));
         subscriptions.seek(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1), leaderAndEpoch));
 
+        // Send a fetch
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
         // Check for truncation, this should cause tp0 to go into validation
         fetcher.validateOffsetsIfNeeded();
 
-        // No fetches sent since we entered validation
-        assertEquals(0, fetcher.sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
-        assertTrue(subscriptions.awaitingValidation(tp0));
-
-        // Change leader
+        // Get a metadata update, epoch is now 3
         metadata.update(TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> 3), 1L);
 
-        // Construct response for new epoch, should not update client state
+        // Prepare fetch response
+        client.prepareResponse(fullFetchResponse(tp0, records, Errors.NONE, 100L, 0));
+        consumerClient.pollNoWakeup();
+
+        // Prepare offset list response from async validation
         Map<TopicPartition, EpochEndOffset> endOffsetMap = new HashMap<>();
         endOffsetMap.put(tp0, new EpochEndOffset(Errors.NONE, 2, 10L));
         OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(endOffsetMap);
         client.prepareResponse(resp);
         consumerClient.pollNoWakeup();
 
-        assertTrue(subscriptions.awaitingValidation(tp0));
+        assertTrue("Expected validation to fail since leader epoch changed", subscriptions.awaitingValidation(tp0));
     }
 
     @Test

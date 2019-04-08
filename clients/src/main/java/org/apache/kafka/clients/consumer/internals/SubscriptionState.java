@@ -576,10 +576,6 @@ public class SubscriptionState {
         }
 
         private boolean maybeValidatePosition(Metadata.LeaderAndEpoch currentLeader) {
-            if (!hasPosition()) {
-                throw new IllegalStateException("Cannot validate offset while partition is in state " + state);
-            }
-
             if (position != null && !position.safeToFetchFrom(currentLeader)) {
                 FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeader);
 
@@ -729,26 +725,24 @@ public class SubscriptionState {
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
-
             FetchPosition that = (FetchPosition) o;
-
-            if (offset != that.offset) return false;
-            return offsetEpoch.equals(that.offsetEpoch);
+            return offset == that.offset &&
+                    offsetEpoch.equals(that.offsetEpoch) &&
+                    currentLeader.equals(that.currentLeader);
         }
 
         @Override
         public int hashCode() {
-            int result = (int) (offset ^ (offset >>> 32));
-            result = 31 * result + offsetEpoch.hashCode();
-            return result;
+            return Objects.hash(offset, offsetEpoch, currentLeader);
         }
 
         @Override
         public String toString() {
-            return "FetchPosition(" +
+            return "FetchPosition{" +
                     "offset=" + offset +
-                    ", lastFetchEpoch=" + offsetEpoch +
-                    ')';
+                    ", offsetEpoch=" + offsetEpoch +
+                    ", currentLeader=" + currentLeader +
+                    '}';
         }
     }
 }
