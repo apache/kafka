@@ -3143,6 +3143,41 @@ public class FetcherTest {
     }
 
     @Test
+    public void testOffsetValidationFencing() {
+        buildFetcher();
+        assignFromUser(singleton(tp0));
+
+        Map<String, Integer> partitionCounts = new HashMap<>();
+        partitionCounts.put(tp0.topic(), 4);
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> 2);
+        metadata.update(metadataResponse, 0L);
+
+        // Seek
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.leaderAndEpoch(tp0).leader, Optional.of(1));
+        subscriptions.seek(tp0, new SubscriptionState.FetchPosition(0, Optional.of(1), leaderAndEpoch));
+
+        // Check for truncation, this should cause tp0 to go into validation
+        fetcher.validateOffsetsIfNeeded();
+
+        // No fetches sent since we entered validation
+        assertEquals(0, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+        assertTrue(subscriptions.awaitingValidation(tp0));
+
+        // Change leader
+        metadata.update(TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> 3), 1L);
+
+        // Construct response for new epoch, should not update client state
+        Map<TopicPartition, EpochEndOffset> endOffsetMap = new HashMap<>();
+        endOffsetMap.put(tp0, new EpochEndOffset(Errors.NONE, 2, 10L));
+        OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(endOffsetMap);
+        client.prepareResponse(resp);
+        consumerClient.pollNoWakeup();
+
+        assertTrue(subscriptions.awaitingValidation(tp0));
+    }
+
+    @Test
     public void testTruncationDetected() {
         // Create some records that include a leader epoch (1)
         MemoryRecordsBuilder builder = MemoryRecords.builder(

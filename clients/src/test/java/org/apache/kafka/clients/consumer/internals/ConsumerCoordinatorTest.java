@@ -1726,6 +1726,30 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
+    public void testRefreshOffsetWithValidation() {
+        // Initial leader epoch of 4
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("clusterId", 1,
+                Collections.emptyMap(), singletonMap(t1p.topic(), 1), tp -> 4);
+        client.updateMetadata(metadataResponse);
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        subscriptions.assignFromUser(singleton(t1p));
+
+        // Load offsets from previous epoch
+        client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L, 3));
+        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
+
+        // Offset gets loaded, but requires validation
+        assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
+        assertFalse(subscriptions.hasAllFetchPositions());
+        assertTrue(subscriptions.awaitingValidation(t1p));
+        assertEquals(subscriptions.position(t1p).offset, 100L);
+        assertNull(subscriptions.validPosition(t1p));
+    }
+
+    @Test
     public void testFetchCommittedOffsets() {
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
@@ -2205,6 +2229,12 @@ public class ConsumerCoordinatorTest {
     private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset) {
         OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset,
                 Optional.empty(), metadata, partitionLevelError);
+        return new OffsetFetchResponse(Errors.NONE, singletonMap(tp, data));
+    }
+
+    private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset, int epoch) {
+        OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset,
+                Optional.of(epoch), metadata, partitionLevelError);
         return new OffsetFetchResponse(Errors.NONE, singletonMap(tp, data));
     }
 

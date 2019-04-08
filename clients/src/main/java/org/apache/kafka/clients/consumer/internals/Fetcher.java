@@ -734,7 +734,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                             return;
                         }
 
-
                         if (subscriptions.awaitingValidation(respTopicPartition)) {
                             SubscriptionState.FetchPosition currentPosition = subscriptions.position(respTopicPartition);
                             if (respEndOffset.endOffset() < currentPosition.offset) {

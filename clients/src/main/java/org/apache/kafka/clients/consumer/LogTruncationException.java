@@ -33,11 +33,11 @@ import java.util.function.Function;
  */
 public class LogTruncationException extends OffsetOutOfRangeException {
 
-    private final Map<TopicPartition, OffsetAndMetadata> offsetOutOfRangePartitions;
+    private final Map<TopicPartition, OffsetAndMetadata> divergentOffsets;
 
-    public LogTruncationException(Map<TopicPartition, OffsetAndMetadata> offsetOutOfRangePartitions) {
-        super(Utils.transformMap(offsetOutOfRangePartitions, Function.identity(), OffsetAndMetadata::offset));
-        this.offsetOutOfRangePartitions = Collections.unmodifiableMap(offsetOutOfRangePartitions);
+    public LogTruncationException(Map<TopicPartition, OffsetAndMetadata> divergentOffsets) {
+        super(Utils.transformMap(divergentOffsets, Function.identity(), OffsetAndMetadata::offset));
+        this.divergentOffsets = Collections.unmodifiableMap(divergentOffsets);
     }
 
     /**
@@ -45,6 +45,6 @@ public class LogTruncationException extends OffsetOutOfRangeException {
      * from what the consumer read.
      */
     public Map<TopicPartition, OffsetAndMetadata> divergentOffsets() {
-        return offsetOutOfRangePartitions;
+        return divergentOffsets;
     }
 }
