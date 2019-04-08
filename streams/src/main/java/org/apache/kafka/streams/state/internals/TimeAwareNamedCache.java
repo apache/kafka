@@ -59,6 +59,7 @@ class TimeAwareNamedCache extends NamedCache {
     synchronized void put(final Bytes key, final LRUCacheEntry value, final Timer timer) {
         super.put(key, value);
         final int shift = findShift(timer.remainingMs());
+        System.out.println("Object was put in shift: " + shift);
         wheelLocation.put(key, shift);
         wheels[shift].put(new HiearchalWheelNode(key, timer));
     }
@@ -74,6 +75,7 @@ class TimeAwareNamedCache extends NamedCache {
     }
 
     private int evictNodesInWheels() {
+        System.out.println("Checking wheels for eviction.");
         int nodesRemoved = 0;
         for (int i = 0; i < WHEEL_COUNT; i++) {
             final HiearchalWheelNode[] arr = wheels[i].evictNodes();
@@ -83,6 +85,7 @@ class TimeAwareNamedCache extends NamedCache {
                     nodesRemoved++;
                 } else {
                     final int shift = findShift(node.timer.remainingMs());
+                    System.out.println("Moving object from " + i + " to " + shift);
                     wheelLocation.put(node.key, shift);
                     wheels[shift].put(node);
                 }
@@ -160,9 +163,9 @@ class TimeAwareNamedCache extends NamedCache {
         private final int shift;
 
         public HiearchalWheel(final int bitShift) {
-            this.timeSlots = new ArrayList<>(WHEEL_SIZE);
+            this.timeSlots = new ArrayList<>();
             for (int i = 0; i < WHEEL_SIZE; i++) {
-                timeSlots.set(i, new Stack<HiearchalWheelNode>());
+                timeSlots.add(new Stack<HiearchalWheelNode>());
             }
             this.evicted = new HashMap<>();
             this.timer = Time.SYSTEM.timer(Long.MAX_VALUE);
@@ -175,6 +178,7 @@ class TimeAwareNamedCache extends NamedCache {
         }
 
         public void put(final HiearchalWheelNode node) {
+            System.out.println("Inserted element at time " + timer.currentTimeMs());
             final long timeRemaining = timer.remainingMs();
             final long index = (timeRemaining >> shift + this.index) % WHEEL_SIZE;
             timeSlots.get(toIntExact(index)).push(node);
@@ -182,9 +186,11 @@ class TimeAwareNamedCache extends NamedCache {
         }
 
         public HiearchalWheelNode[] evictNodes() {
+            System.out.println("Now currently at time " + timer.currentTimeMs());
             final long timeSinceLastEviction = timer.elapsedMs() - lastChecked;
             lastChecked = timer.currentTimeMs();
             elapsed = timeSinceLastEviction + remainder;
+            System.out.println("Time elapsed " + elapsed);
             final long rotations = elapsed / interval;
             remainder = elapsed % interval;
 
