@@ -308,7 +308,7 @@ object TestUtils extends Logging {
         adminZkClient.createTopic(topic, numPartitions, replicationFactor, topicConfig)
       } catch {
         case _: SessionExpiredException => hasSessionExpirationException = true
-        case e => throw e // let other exceptions propagate
+        case e: Throwable => throw e // let other exceptions propagate
       }
       !hasSessionExpirationException},
       s"Can't create topic $topic")
@@ -350,7 +350,7 @@ object TestUtils extends Logging {
         adminZkClient.createTopicWithAssignment(topic, topicConfig, partitionReplicaAssignment)
       } catch {
         case _: SessionExpiredException => hasSessionExpirationException = true
-        case e => throw e // let other exceptions propagate
+        case e: Throwable => throw e // let other exceptions propagate
       }
       !hasSessionExpirationException},
       s"Can't create topic $topic")

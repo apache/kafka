@@ -114,17 +114,36 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
                                   final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal,
                                   final boolean filterNot) {
-        // we actually do not need to generate store names at all since if it is not specified, we will not
-        // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
-        if (materializedInternal != null && materializedInternal.storeName() == null) {
-            builder.newStoreName(FILTER_NAME);
+        final Serde<K> keySerde;
+        final Serde<V> valueSerde;
+        final String queryableStoreName;
+        final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+
+        if (materializedInternal != null) {
+            // we actually do not need to generate store names at all since if it is not specified, we will not
+            // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
+            if (materializedInternal.storeName() == null) {
+                builder.newStoreName(FILTER_NAME);
+            }
+            // we can inherit parent key and value serde if user do not provide specific overrides, more specifically:
+            // we preserve the key following the order of 1) materialized, 2) parent
+            keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
+            // we preserve the value following the order of 1) materialized, 2) parent
+            valueSerde = materializedInternal.valueSerde() != null ? materializedInternal.valueSerde() : this.valSerde;
+            queryableStoreName = materializedInternal.queryableStoreName();
+            // only materialize if materialized is specified and it has queryable name
+            storeBuilder = queryableStoreName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
+        } else {
+            keySerde = this.keySerde;
+            valueSerde = this.valSerde;
+            queryableStoreName = null;
+            storeBuilder = null;
         }
 
         final String name = builder.newProcessorName(FILTER_NAME);
 
-        // only materialize if the state store has queryable name
-        final String queryableName = materializedInternal != null ? materializedInternal.queryableStoreName() : null;
-        final KTableProcessorSupplier<K, V, V> processorSupplier = new KTableFilter<>(this, predicate, filterNot, queryableName);
+        final KTableProcessorSupplier<K, V, V> processorSupplier =
+            new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
 
         final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
             new ProcessorParameters<>(processorSupplier, name)
@@ -133,20 +152,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StreamsGraphNode tableNode = new TableProcessorNode<>(
             name,
             processorParameters,
-            materializedInternal,
-            null
+            storeBuilder
         );
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
-        // we can inherit parent key and value serde if user do not provide specific overrides, more specifically:
-        // we preserve the key following the order of 1) materialized, 2) parent
-        // we preserve the value following the order of 1) materialized, 2) parent
         return new KTableImpl<>(name,
-                                materializedInternal != null && materializedInternal.keySerde() != null ? materializedInternal.keySerde() : keySerde,
-                                materializedInternal != null && materializedInternal.valueSerde() != null ? materializedInternal.valueSerde() : valSerde,
+                                keySerde,
+                                valueSerde,
                                 sourceNodes,
-                                queryableName,
+                                queryableStoreName,
                                 processorSupplier,
                                 tableNode,
                                 builder);
@@ -186,17 +201,32 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     private <VR> KTable<K, VR> doMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
                                            final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
-        // we actually do not need generate store names at all since if it is not specified, we will not
-        // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
-        if (materializedInternal != null && materializedInternal.storeName() == null) {
-            builder.newStoreName(MAPVALUES_NAME);
+        final Serde<K> keySerde;
+        final Serde<VR> valueSerde;
+        final String queryableStoreName;
+        final StoreBuilder<KeyValueStore<K, VR>> storeBuilder;
+
+        if (materializedInternal != null) {
+            // we actually do not need to generate store names at all since if it is not specified, we will not
+            // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
+            if (materializedInternal.storeName() == null) {
+                builder.newStoreName(MAPVALUES_NAME);
+            }
+            keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
+            valueSerde = materializedInternal.valueSerde();
+            queryableStoreName = materializedInternal.queryableStoreName();
+            // only materialize if materialized is specified and it has queryable name
+            storeBuilder = queryableStoreName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
+        } else {
+            keySerde = this.keySerde;
+            valueSerde = null;
+            queryableStoreName = null;
+            storeBuilder = null;
         }
 
         final String name = builder.newProcessorName(MAPVALUES_NAME);
 
-        // only materialize if the state store has queryable name
-        final String queryableName = materializedInternal != null ? materializedInternal.queryableStoreName() : null;
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this, mapper, queryableName);
+        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this, mapper, queryableStoreName);
 
         // leaving in calls to ITB until building topology with graph
 
@@ -206,8 +236,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StreamsGraphNode tableNode = new TableProcessorNode<>(
             name,
             processorParameters,
-            materializedInternal,
-            null
+            storeBuilder
         );
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
@@ -217,10 +246,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         // we preserve the value following the order of 1) materialized, 2) null
         return new KTableImpl<>(
             name,
-            materializedInternal != null && materializedInternal.keySerde() != null ? materializedInternal.keySerde() : keySerde,
-            materializedInternal != null ? materializedInternal.valueSerde() : null,
+            keySerde,
+            valueSerde,
             sourceNodes,
-            queryableName,
+            queryableStoreName,
             processorSupplier,
             tableNode,
             builder
@@ -277,14 +306,31 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     private <VR> KTable<K, VR> doTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                                 final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
+                                                 final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
                                                  final String... stateStoreNames) {
         Objects.requireNonNull(stateStoreNames, "stateStoreNames");
+        final Serde<K> keySerde;
+        final Serde<VR> valueSerde;
+        final String queryableStoreName;
+        final StoreBuilder<KeyValueStore<K, VR>> storeBuilder;
+
+        if (materializedInternal != null) {
+            // don't inherit parent value serde, since this operation may change the value type, more specifically:
+            // we preserve the key following the order of 1) materialized, 2) parent, 3) null
+            keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
+            // we preserve the value following the order of 1) materialized, 2) null
+            valueSerde = materializedInternal.valueSerde();
+            queryableStoreName = materializedInternal.queryableStoreName();
+            // only materialize if materialized is specified and it has queryable name
+            storeBuilder = queryableStoreName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
+        } else {
+            keySerde = this.keySerde;
+            valueSerde = null;
+            queryableStoreName = null;
+            storeBuilder = null;
+        }
 
         final String name = builder.newProcessorName(TRANSFORMVALUES_NAME);
-
-        // only materialize if users provide a specific queryable name
-        final String queryableStoreName = materialized != null ? materialized.queryableStoreName() : null;
 
         final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableTransformValues<>(
             this,
@@ -298,19 +344,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StreamsGraphNode tableNode = new TableProcessorNode<>(
             name,
             processorParameters,
-            materialized,
+            storeBuilder,
             stateStoreNames
         );
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
-        // don't inherit parent value serde, since this operation may change the value type, more specifically:
-        // we preserve the key following the order of 1) materialized, 2) parent, 3) null
-        // we preserve the value following the order of 1) materialized, 2) null
         return new KTableImpl<>(
             name,
-            materialized != null && materialized.keySerde() != null ? materialized.keySerde() : keySerde,
-            materialized != null ? materialized.valueSerde() : null,
+            keySerde,
+            valueSerde,
             sourceNodes,
             queryableStoreName,
             processorSupplier,

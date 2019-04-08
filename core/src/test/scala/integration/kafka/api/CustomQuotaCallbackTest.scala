@@ -48,7 +48,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   override protected def interBrokerListenerName: ListenerName = new ListenerName("BROKER")
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
-  override val serverCount: Int = 2
+  override val brokerCount: Int = 2
 
   private val kafkaServerSaslMechanisms = Seq("SCRAM-SHA-256")
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
@@ -161,7 +161,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     user.waitForQuotaUpdate(8000, 2500, defaultRequestQuota)
     user.produceConsume(expectProduceThrottle = true, expectConsumeThrottle = true)
 
-    assertEquals(serverCount, callbackInstances.get)
+    assertEquals(brokerCount, callbackInstances.get)
   }
 
   /**
