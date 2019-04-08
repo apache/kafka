@@ -19,15 +19,11 @@ package kafka.admin
 
 import java.text.{ParseException, SimpleDateFormat}
 import java.time.{Duration, Instant}
-import java.util
 import java.util.Properties
 
 import com.fasterxml.jackson.dataformat.csv.CsvMapper
 import com.fasterxml.jackson.module.scala.DefaultScalaModule
 import com.fasterxml.jackson.module.scala.experimental.ScalaObjectMapper
-import javax.xml.datatype.DatatypeFactory
-import joptsimple.{OptionParser, OptionSpec}
-import kafka.admin.ConsumerGroupCommand.{CsvRecordNoGroup, CsvRecordWithGroup, CsvUtils}
 import kafka.utils._
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
@@ -37,11 +33,9 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
 
 import scala.collection.JavaConverters._
-import scala.collection.immutable.TreeMap
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, Set, mutable}
 import scala.util.{Failure, Success, Try}
-import com.fasterxml.jackson.databind.{ObjectReader, ObjectWriter}
 import joptsimple.OptionSpec
 import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
