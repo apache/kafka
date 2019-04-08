@@ -412,7 +412,7 @@ public class SubscriptionState {
             TopicPartitionState partitionState = state.value();
             if (partitionState.hasValidPosition())
                 allConsumed.put(state.topicPartition(), new OffsetAndMetadata(partitionState.position.offset,
-                        partitionState.position.lastFetchEpoch, ""));
+                        partitionState.position.offsetEpoch, ""));
         });
         return allConsumed;
     }
@@ -576,16 +576,24 @@ public class SubscriptionState {
         }
 
         private boolean maybeValidatePosition(Metadata.LeaderAndEpoch currentLeader) {
-            if (!hasPosition())
+            if (!hasPosition()) {
                 throw new IllegalStateException("Cannot validate offset while partition is in state " + state);
+            }
 
-            this.position = new FetchPosition(position.offset, position.lastFetchEpoch, currentLeader);
-            // If we have no epoch information for the current position, then we can skip validation.
-            if (position.lastFetchEpoch.isPresent()) {
-                this.state = FetchState.AWAIT_VALIDATION;
-                return true;
+            if (position != null && !position.safeToFetchFrom(currentLeader)) {
+                FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeader);
+
+                if (position.offsetEpoch.isPresent()) {
+                    this.state = FetchState.AWAIT_VALIDATION;
+                    this.position = newPosition;
+                    return true;
+                } else {
+                    // If we have no epoch information for the current position, then we can skip validation
+                    this.state = FetchState.FETCHING;
+                    this.position = newPosition;
+                    return false;
+                }
             } else {
-                this.state = FetchState.FETCHING;
                 return false;
             }
         }
@@ -682,19 +690,21 @@ public class SubscriptionState {
     }
 
     /**
-     * Represents the position of a partition subscription. This includes the offset and epoch from the last record in
+     * Represents the position of a partition subscription.
+     *
+     * This includes the offset and epoch from the last record in
      * the batch from a FetchResponse. It also includes the leader epoch at the time the batch was consumed.
      *
      * The last fetch epoch is used to
      */
     public static class FetchPosition {
         public final long offset;
-        public final Optional<Integer> lastFetchEpoch;
+        public final Optional<Integer> offsetEpoch;
         public final Metadata.LeaderAndEpoch currentLeader;
 
-        public FetchPosition(long offset, Optional<Integer> lastFetchEpoch, Metadata.LeaderAndEpoch currentLeader) {
+        public FetchPosition(long offset, Optional<Integer> offsetEpoch, Metadata.LeaderAndEpoch currentLeader) {
             this.offset = offset;
-            this.lastFetchEpoch = Objects.requireNonNull(lastFetchEpoch);
+            this.offsetEpoch = Objects.requireNonNull(offsetEpoch);
             this.currentLeader = Objects.requireNonNull(currentLeader);
         }
 
@@ -723,13 +733,13 @@ public class SubscriptionState {
             FetchPosition that = (FetchPosition) o;
 
             if (offset != that.offset) return false;
-            return lastFetchEpoch.equals(that.lastFetchEpoch);
+            return offsetEpoch.equals(that.offsetEpoch);
         }
 
         @Override
         public int hashCode() {
             int result = (int) (offset ^ (offset >>> 32));
-            result = 31 * result + lastFetchEpoch.hashCode();
+            result = 31 * result + offsetEpoch.hashCode();
             return result;
         }
 
@@ -737,7 +747,7 @@ public class SubscriptionState {
         public String toString() {
             return "FetchPosition(" +
                     "offset=" + offset +
-                    ", lastFetchEpoch=" + lastFetchEpoch +
+                    ", lastFetchEpoch=" + offsetEpoch +
                     ')';
         }
     }

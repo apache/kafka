@@ -20,17 +20,18 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.AbstractResponse;
+import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 public abstract class AsyncClient<T1, Req extends AbstractRequest, Resp extends AbstractResponse, T2> {
 
-    protected final Logger log = LoggerFactory.getLogger(this.getClass());
-
+    private final Logger log;
     private final ConsumerNetworkClient client;
 
-    AsyncClient(ConsumerNetworkClient client) {
+    AsyncClient(ConsumerNetworkClient client, LogContext logContext) {
         this.client = client;
+        this.log = logContext.logger(getClass());
     }
 
     public RequestFuture<T2> sendAsyncRequest(Node node, T1 requestData) {
@@ -61,6 +62,10 @@ public abstract class AsyncClient<T1, Req extends AbstractRequest, Resp extends 
                 future1.raise(e);
             }
         });
+    }
+
+    protected Logger logger() {
+        return log;
     }
 
     protected abstract AbstractRequest.Builder<Req> prepareRequest(Node node, T1 requestData);

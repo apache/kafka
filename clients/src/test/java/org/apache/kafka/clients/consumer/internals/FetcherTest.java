@@ -3139,7 +3139,7 @@ public class FetcherTest {
         assertTrue(partitionRecords.containsKey(tp0));
 
         assertEquals(subscriptions.position(tp0).offset, 3L);
-        assertOptional(subscriptions.position(tp0).lastFetchEpoch, value -> assertEquals(value.intValue(), 1));
+        assertOptional(subscriptions.position(tp0).offsetEpoch, value -> assertEquals(value.intValue(), 1));
     }
 
     @Test
@@ -3240,7 +3240,7 @@ public class FetcherTest {
         assertTrue(partitionRecords.containsKey(tp0));
 
         assertEquals(subscriptions.position(tp0).offset, 3L);
-        assertOptional(subscriptions.position(tp0).lastFetchEpoch, value -> assertEquals(value.intValue(), 1));
+        assertOptional(subscriptions.position(tp0).offsetEpoch, value -> assertEquals(value.intValue(), 1));
     }
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {

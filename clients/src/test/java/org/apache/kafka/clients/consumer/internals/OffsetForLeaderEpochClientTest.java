@@ -150,7 +150,7 @@ public class OffsetForLeaderEpochClientTest {
 
     private OffsetsForLeaderEpochClient newOffsetClient() {
         buildDependencies(OffsetResetStrategy.EARLIEST);
-        return new OffsetsForLeaderEpochClient(consumerClient);
+        return new OffsetsForLeaderEpochClient(consumerClient, new LogContext());
     }
 
     private void buildDependencies(OffsetResetStrategy offsetResetStrategy) {

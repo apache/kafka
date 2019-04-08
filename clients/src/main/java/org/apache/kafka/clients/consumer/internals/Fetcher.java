@@ -137,9 +137,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
     private final Map<Integer, FetchSessionHandler> sessionHandlers;
     private final AtomicReference<RuntimeException> cachedListOffsetsException = new AtomicReference<>();
     private final AtomicReference<RuntimeException> cachedOffsetForLeaderException = new AtomicReference<>();
-
     private final OffsetsForLeaderEpochClient offsetsForLeaderEpochClient;
-
 
     private PartitionRecords nextInLineRecords = null;
 
@@ -181,7 +179,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
         this.isolationLevel = isolationLevel;
         this.sessionHandlers = new HashMap<>();
-        this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client);
+        this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
 
         subscriptions.addListener(this);
     }
@@ -426,22 +424,17 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         if (exception != null)
             throw exception;
 
-        // Check for a leader change
+        // Check for a leader change, if the leader or epoch have changed we need to validate the fetch position
+        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = new HashMap<>();
+
         subscriptions.assignedPartitions().forEach(topicPartition -> {
             ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
-
-            // Check the latest epoch from subscription
-            SubscriptionState.FetchPosition position = this.subscriptions.position(topicPartition);
-
-            // If the leader or epoch have changed, we need to validate the fetch position
-            if (position != null && !position.safeToFetchFrom(leaderAndEpoch)) {
-                if (position.lastFetchEpoch.isPresent()) {
-                    subscriptions.maybeValidatePosition(topicPartition, leaderAndEpoch);
-                }
+            if (subscriptions.maybeValidatePosition(topicPartition, leaderAndEpoch)) {
+                partitionsToValidate.put(topicPartition, subscriptions.position(topicPartition));
             }
         });
 
-        validateOffsetsAsync();
+        validateOffsetsAsync(partitionsToValidate);
     }
 
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
@@ -700,22 +693,21 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      *
      * Requests are grouped by Node for efficiency.
      */
-    private void validateOffsetsAsync() {
-        Set<TopicPartition> partitions = subscriptions.partitionsNeedingValidation(time.milliseconds());
-        Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = partitions.stream()
-                .collect(Collectors.toMap(Function.identity(), subscriptions::position));
+    private void validateOffsetsAsync(Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate) {
+       // Map<TopicPartition, SubscriptionState.FetchPosition> positionMap = partitionsToValidate.stream()
+       //         .collect(Collectors.toMap(Function.identity(), subscriptions::position));
 
         final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
-                regroupPartitionMapByNode(positionMap);
+                regroupPartitionMapByNode(partitionsToValidate);
 
         regrouped.forEach((node, dataMap) -> {
             subscriptions.setNextAllowedRetry(dataMap.keySet(), time.milliseconds() + requestTimeoutMs);
 
-            final Map<TopicPartition, Metadata.LeaderAndEpoch> cachedLeaderAndEpochs = positionMap.keySet()
+            final Map<TopicPartition, Metadata.LeaderAndEpoch> cachedLeaderAndEpochs = partitionsToValidate.keySet()
                     .stream()
                     .collect(Collectors.toMap(Function.identity(), metadata::leaderAndEpoch));
 
-            RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future = offsetsForLeaderEpochClient.sendAsyncRequest(node, positionMap);
+            RequestFuture<OffsetsForLeaderEpochClient.OffsetForEpochResult> future = offsetsForLeaderEpochClient.sendAsyncRequest(node, partitionsToValidate);
             future.addListener(new RequestFutureListener<OffsetsForLeaderEpochClient.OffsetForEpochResult>() {
                 @Override
                 public void onSuccess(OffsetsForLeaderEpochClient.OffsetForEpochResult offsetsResult) {

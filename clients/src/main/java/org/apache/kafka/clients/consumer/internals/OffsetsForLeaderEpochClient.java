@@ -25,6 +25,7 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochRequest;
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
+import org.apache.kafka.common.utils.LogContext;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -40,15 +41,15 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
         OffsetsForLeaderEpochResponse,
         OffsetsForLeaderEpochClient.OffsetForEpochResult> {
 
-    OffsetsForLeaderEpochClient(ConsumerNetworkClient client) {
-        super(client);
+    OffsetsForLeaderEpochClient(ConsumerNetworkClient client, LogContext logContext) {
+        super(client, logContext);
     }
 
     @Override
     protected AbstractRequest.Builder<OffsetsForLeaderEpochRequest> prepareRequest(
             Node node, Map<TopicPartition, SubscriptionState.FetchPosition> requestData) {
         Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> partitionData = new HashMap<>(requestData.size());
-        requestData.forEach((topicPartition, fetchPosition) -> fetchPosition.lastFetchEpoch.ifPresent(
+        requestData.forEach((topicPartition, fetchPosition) -> fetchPosition.offsetEpoch.ifPresent(
             fetchEpoch -> partitionData.put(topicPartition,
                 new OffsetsForLeaderEpochRequest.PartitionData(fetchPosition.currentLeader.epoch, fetchEpoch))));
 
@@ -68,13 +69,13 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
         for (TopicPartition topicPartition : requestData.keySet()) {
             EpochEndOffset epochEndOffset = response.responses().get(topicPartition);
             if (epochEndOffset == null) {
-                log.warn("Missing partition {} from response, ignoring", topicPartition);
+                logger().warn("Missing partition {} from response, ignoring", topicPartition);
                 partitionsToRetry.add(topicPartition);
                 continue;
             }
             Errors error = epochEndOffset.error();
             if (error == Errors.NONE) {
-                log.debug("Handling OffsetsForLeaderEpoch response for {}. Got offset {} for epoch {}",
+                logger().debug("Handling OffsetsForLeaderEpoch response for {}. Got offset {} for epoch {}",
                         topicPartition, epochEndOffset.endOffset(), epochEndOffset.leaderEpoch());
                 endOffsets.put(topicPartition, epochEndOffset);
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
@@ -82,21 +83,21 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
                     error == Errors.KAFKA_STORAGE_ERROR ||
                     error == Errors.OFFSET_NOT_AVAILABLE ||
                     error == Errors.LEADER_NOT_AVAILABLE) {
-                log.debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
+                logger().debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
                         topicPartition, error);
                 partitionsToRetry.add(topicPartition);
             } else if (error == Errors.FENCED_LEADER_EPOCH ||
                     error == Errors.UNKNOWN_LEADER_EPOCH) {
-                log.debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
+                logger().debug("Attempt to fetch offsets for partition {} failed due to {}, retrying.",
                         topicPartition, error);
                 partitionsToRetry.add(topicPartition);
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                log.warn("Received unknown topic or partition error in ListOffset request for partition {}", topicPartition);
+                logger().warn("Received unknown topic or partition error in ListOffset request for partition {}", topicPartition);
                 partitionsToRetry.add(topicPartition);
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                 unauthorizedTopics.add(topicPartition.topic());
             } else {
-                log.warn("Attempt to fetch offsets for partition {} failed due to: {}, retrying.", topicPartition, error.message());
+                logger().warn("Attempt to fetch offsets for partition {} failed due to: {}, retrying.", topicPartition, error.message());
                 partitionsToRetry.add(topicPartition);
             }
         }
