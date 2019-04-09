@@ -62,6 +62,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -1087,5 +1088,51 @@ public class TopologyTestDriverTest {
 
         final TaskId taskId = new TaskId(0, 0);
         assertTrue(new File(appDir, taskId.toString()).exists());
+    }
+
+    @Test
+    public void shouldReturnIteratorForMultipleRecords() {
+        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
+
+        testDriver.pipeInput(consumerRecord1);
+        testDriver.pipeInput(consumerRecord1);
+
+        final Iterator<ProducerRecord<byte[], byte[]>> output = testDriver.iterateOutput(SINK_TOPIC_1);
+
+        final ProducerRecord outputRecord1 = output.next();
+
+        assertEquals(key1, outputRecord1.key());
+        assertEquals(value1, outputRecord1.value());
+        assertEquals(SINK_TOPIC_1, outputRecord1.topic());
+
+        final ProducerRecord outputRecord2 = output.next();
+
+        assertEquals(key1, outputRecord2.key());
+        assertEquals(value1, outputRecord2.value());
+        assertEquals(SINK_TOPIC_1, outputRecord2.topic());
+
+    }
+
+    @Test
+    public void shouldReturnIteratorForMultipleRecordsWithSerDes() {
+        testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
+
+        testDriver.pipeInput(recordFactory.create(SOURCE_TOPIC_1, "Key1", 12345L));
+        testDriver.pipeInput(recordFactory.create(SOURCE_TOPIC_1, "Key2", 6789L));
+
+        final Iterator<ProducerRecord<String, Long>> output = testDriver.iterateOutput(SINK_TOPIC_1, stringDeserializer, longDeserializer);
+
+        final ProducerRecord outputRecord1 = output.next();
+
+        assertEquals("Key1", outputRecord1.key());
+        assertEquals(12345L, outputRecord1.value());
+        assertEquals(SINK_TOPIC_1, outputRecord1.topic());
+
+        final ProducerRecord outputRecord2 = output.next();
+
+        assertEquals("Key2", outputRecord2.key());
+        assertEquals(6789L, outputRecord2.value());
+        assertEquals(SINK_TOPIC_1, outputRecord2.topic());
+
     }
 }

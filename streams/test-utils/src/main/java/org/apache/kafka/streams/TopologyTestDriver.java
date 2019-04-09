@@ -45,7 +45,6 @@ import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.internals.WindowStoreFacade;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
-import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -82,6 +81,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -92,6 +92,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Supplier;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * This class makes it easier to write tests to verify the behavior of topologies created with {@link Topology} or
@@ -561,6 +562,44 @@ public class TopologyTestDriver implements Closeable {
         final K key = keyDeserializer.deserialize(record.topic(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.value());
         return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value, record.headers());
+    }
+
+    /**
+     * Iterate over all records from the given topic.
+     * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
+     *
+     * @param topic the name of the topic
+     * @return an Iterator over the output records, or an empty Iterator if there are no records available
+     */
+    public Iterator<ProducerRecord<byte[], byte[]>> iterateOutput(final String topic) {
+        final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
+        if (outputRecords == null) {
+            return Collections.emptyIterator();
+        }
+        return outputRecords.iterator();
+    }
+
+    /**
+     * Iterate over all records from the given topic.
+     * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
+     *
+     * @param topic             the name of the topic
+     * @param keyDeserializer   the deserializer for the key type
+     * @param valueDeserializer the deserializer for the value type
+     * @return an Iterator over the output records, or an empty Iterator if there are no records available
+     */
+    public <K, V> Iterator<ProducerRecord<K, V>> iterateOutput(final String topic,
+                                                               final Deserializer<K> keyDeserializer,
+                                                               final Deserializer<V> valueDeserializer) {
+        final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
+        if (outputRecords == null) {
+            return Collections.emptyIterator();
+        }
+        return outputRecords.stream().map(record -> {
+            final K key = keyDeserializer.deserialize(record.topic(), record.key());
+            final V value = valueDeserializer.deserialize(record.topic(), record.value());
+            return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value, record.headers());
+        }).collect(Collectors.toList()).iterator();
     }
 
     /**
