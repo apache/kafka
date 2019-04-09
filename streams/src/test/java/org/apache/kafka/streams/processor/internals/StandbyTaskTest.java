@@ -104,7 +104,7 @@ public class StandbyTaskTest {
     private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
 
     private final Set<TopicPartition> topicPartitions = Collections.emptySet();
-    private final ProcessorTopology topology = ProcessorTopology.withLocalStores(
+    private final ProcessorTopology topology = ProcessorTopologyFactories.withLocalStores(
         asList(new MockKeyValueStoreBuilder(storeName1, false).build(), new MockKeyValueStoreBuilder(storeName2, true).build()),
         mkMap(
             mkEntry(storeName1, storeChangelogTopicName1),
@@ -113,7 +113,7 @@ public class StandbyTaskTest {
     );
     private final TopicPartition globalTopicPartition = new TopicPartition(globalStoreName, 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(globalTopicPartition);
-    private final ProcessorTopology ktableTopology = ProcessorTopology.withLocalStores(
+    private final ProcessorTopology ktableTopology = ProcessorTopologyFactories.withLocalStores(
         singletonList(new MockKeyValueStoreBuilder(globalTopicPartition.topic(), true).withLoggingDisabled().build()),
         mkMap(
             mkEntry(globalStoreName, globalTopicPartition.topic())

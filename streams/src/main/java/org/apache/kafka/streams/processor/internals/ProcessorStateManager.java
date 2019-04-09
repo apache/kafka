@@ -41,6 +41,7 @@ import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackA
 public class ProcessorStateManager extends AbstractStateManager {
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
 
+    private final List<String> topologicalOrderOfStores;
     private final Logger log;
     private final TaskId taskId;
     private final String logPrefix;
@@ -51,6 +52,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
     private final Map<String, RecordConverter> recordConverters; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
+    private final Map<String, StateStore> stores = new HashMap<>();
     private final List<TopicPartition> changelogPartitions = new ArrayList<>();
 
     // TODO: this map does not work with customized grouper where multiple partitions
@@ -66,10 +68,12 @@ public class ProcessorStateManager extends AbstractStateManager {
                                  final boolean isStandby,
                                  final StateDirectory stateDirectory,
                                  final Map<String, String> storeToChangelogTopic,
+                                 final List<String> topologicalOrderOfStores,
                                  final ChangelogReader changelogReader,
                                  final boolean eosEnabled,
                                  final LogContext logContext) throws IOException {
         super(stateDirectory.directoryForTask(taskId), eosEnabled);
+        this.topologicalOrderOfStores = topologicalOrderOfStores;
 
         this.log = logContext.logger(ProcessorStateManager.class);
         this.taskId = taskId;
@@ -233,15 +237,18 @@ public class ProcessorStateManager extends AbstractStateManager {
         // attempting to flush the stores
         if (!stores.isEmpty()) {
             log.debug("Flushing all stores registered in the state manager");
-            for (final StateStore store : stores.values()) {
-                log.trace("Flushing store {}", store.name());
-                try {
-                    store.flush();
-                } catch (final Exception e) {
-                    if (firstException == null) {
-                        firstException = new ProcessorStateException(String.format("%sFailed to flush state store %s", logPrefix, store.name()), e);
+            for (final String storeName : topologicalOrderOfStores) {
+                final StateStore store = stores.get(storeName);
+                if (store != null) {
+                    log.trace("Flushing store {}", store.name());
+                    try {
+                        store.flush();
+                    } catch (final Exception e) {
+                        if (firstException == null) {
+                            firstException = new ProcessorStateException(String.format("%sFailed to flush state store %s", logPrefix, store.name()), e);
+                        }
+                        log.error("Failed to flush state store {}: ", store.name(), e);
                     }
-                    log.error("Failed to flush state store {}: ", store.name(), e);
                 }
             }
         }

@@ -26,12 +26,15 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MockKeyValueStore implements KeyValueStore {
+    private static final AtomicInteger GLOBAL_FLUSH_COUNTER = new AtomicInteger(0);
+    private final AtomicInteger instanceLastFlushCount = new AtomicInteger(-1);
     private final String name;
-    private final boolean persistent;
 
     public boolean initialized = false;
+    private final boolean persistent;
     public boolean flushed = false;
     public boolean closed = true;
     public final ArrayList<Integer> keys = new ArrayList<>();
@@ -58,7 +61,12 @@ public class MockKeyValueStore implements KeyValueStore {
 
     @Override
     public void flush() {
+        instanceLastFlushCount.set(GLOBAL_FLUSH_COUNTER.getAndIncrement());
         flushed = true;
+    }
+
+    public int getLastFlushCount() {
+        return instanceLastFlushCount.get();
     }
 
     @Override

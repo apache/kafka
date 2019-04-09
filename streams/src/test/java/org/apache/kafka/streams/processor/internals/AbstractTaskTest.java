@@ -96,6 +96,8 @@ public class AbstractTaskTest {
     public void shouldThrowLockExceptionIfFailedToLockStateDirectoryWhenTopologyHasStores() throws IOException {
         final Consumer consumer = EasyMock.createNiceMock(Consumer.class);
         final StateStore store = EasyMock.createNiceMock(StateStore.class);
+        expect(store.name()).andReturn("dummy-store-name").anyTimes();
+        EasyMock.replay(store);
         expect(stateDirectory.lock(id)).andReturn(false);
         EasyMock.replay(stateDirectory);
 
@@ -232,7 +234,7 @@ public class AbstractTaskTest {
 
         return new AbstractTask(id,
                                 storeTopicPartitions,
-                                ProcessorTopology.withLocalStores(new ArrayList<>(stateStoresToChangelogTopics.keySet()), storeNamesToChangelogTopics),
+                                ProcessorTopologyFactories.withLocalStores(new ArrayList<>(stateStoresToChangelogTopics.keySet()), storeNamesToChangelogTopics),
                                 consumer,
                                 new StoreChangelogReader(consumer, Duration.ZERO, new MockStateRestoreListener(), new LogContext("stream-task-test ")),
                                 false,

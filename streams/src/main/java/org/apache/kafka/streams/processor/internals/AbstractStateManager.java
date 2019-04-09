@@ -45,7 +45,6 @@ abstract class AbstractStateManager implements StateManager {
     OffsetCheckpoint checkpoint;
 
     final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>();
-    final Map<String, StateStore> stores = new LinkedHashMap<>();
     final Map<String, StateStore> globalStores = new LinkedHashMap<>();
 
     AbstractStateManager(final File baseDir,
