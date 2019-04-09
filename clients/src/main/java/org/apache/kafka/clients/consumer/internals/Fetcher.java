@@ -1015,12 +1015,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
             } else {
                 SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
-                final Metadata.LeaderAndEpoch leaderAndEpoch;
-                if (!position.currentLeader.equals(Metadata.LeaderAndEpoch.NO_LEADER_OR_EPOCH)) {
-                    leaderAndEpoch = position.currentLeader;
-                } else {
-                    leaderAndEpoch = metadata.leaderAndEpoch(partition);
-                }
+                final Metadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
 
                 // if there is a leader and no in-flight requests, issue a new fetch
                 FetchSessionHandler.Builder builder = fetchable.get(leaderAndEpoch.leader);
@@ -1036,7 +1031,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 }
 
                 builder.add(partition, new FetchRequest.PartitionData(position.offset,
-                        FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize, position.currentLeader.epoch));
+                        FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize, leaderAndEpoch.epoch));
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", isolationLevel,
                     partition, position, leaderAndEpoch.leader);
