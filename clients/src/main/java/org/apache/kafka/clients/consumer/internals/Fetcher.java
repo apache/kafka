@@ -1015,7 +1015,12 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
             } else {
                 SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
-                ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = position.currentLeader;
+                final Metadata.LeaderAndEpoch leaderAndEpoch;
+                if (!position.currentLeader.equals(Metadata.LeaderAndEpoch.NO_LEADER_OR_EPOCH)) {
+                    leaderAndEpoch = position.currentLeader;
+                } else {
+                    leaderAndEpoch = metadata.leaderAndEpoch(partition);
+                }
 
                 // if there is a leader and no in-flight requests, issue a new fetch
                 FetchSessionHandler.Builder builder = fetchable.get(leaderAndEpoch.leader);

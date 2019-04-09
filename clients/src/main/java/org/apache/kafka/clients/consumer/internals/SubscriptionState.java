@@ -590,7 +590,7 @@ public class SubscriptionState {
                     return false;
                 }
             } else {
-                return false;
+                return this.state == FetchState.AWAIT_VALIDATION;
             }
         }
 
