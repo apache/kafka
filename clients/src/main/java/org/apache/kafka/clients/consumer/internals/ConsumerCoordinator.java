@@ -354,14 +354,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
         }
 
-        if (!revokedPartitions.isEmpty()) {
-            try {
-                listener.onPartitionsRevoked(revokedPartitions);
-            } catch (WakeupException | InterruptException e) {
-                throw e;
-            } catch (Exception e) {
-                log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
-            }
+        try {
+            listener.onPartitionsRevoked(revokedPartitions);
+        } catch (WakeupException | InterruptException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
         }
     }
 
