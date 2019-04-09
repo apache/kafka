@@ -311,7 +311,7 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             emptyMap(),
-            emptyList(),
+            singletonList(mockKeyValueStore.name()),
             changelogReader,
             false,
             logContext);
@@ -385,7 +385,7 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             emptyMap(),
-            emptyList(),
+            singletonList(nonPersistentStoreName),
             changelogReader,
             false,
             logContext);
@@ -534,7 +534,7 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             emptyMap(),
-            emptyList(),
+            singletonList(mockKeyValueStore.name()),
             changelogReader,
             false,
             logContext);
@@ -690,16 +690,6 @@ public class ProcessorStateManagerTest {
 
     @Test
     public void shouldCloseAllStoresEvenIfStoreThrowsExcepiton() throws IOException {
-        final ProcessorStateManager stateManager = new ProcessorStateManager(
-            taskId,
-            Collections.singleton(changelogTopicPartition),
-            false,
-            stateDirectory,
-            singletonMap(storeName, changelogTopic),
-            singletonList(storeName),
-            changelogReader,
-            false,
-            logContext);
 
         final AtomicBoolean closedStore = new AtomicBoolean(false);
 
@@ -715,6 +705,17 @@ public class ProcessorStateManagerTest {
                 closedStore.set(true);
             }
         };
+        final ProcessorStateManager stateManager = new ProcessorStateManager(
+            taskId,
+            Collections.singleton(changelogTopicPartition),
+            false,
+            stateDirectory,
+            singletonMap(storeName, changelogTopic),
+            asList(stateStore1.name(), stateStore2.name()),
+            changelogReader,
+            false,
+            logContext);
+
         stateManager.register(stateStore1, stateStore1.stateRestoreCallback);
         stateManager.register(stateStore2, stateStore2.stateRestoreCallback);
 
@@ -765,25 +766,24 @@ public class ProcessorStateManagerTest {
         final String store2Changelog = "store2-changelog";
         final TopicPartition store2Partition = new TopicPartition(store2Changelog, 0);
         final List<TopicPartition> changelogPartitions = asList(changelogTopicPartition, store2Partition);
-        final Map<String, String> storeToChangelog = new HashMap<String, String>() {
-            {
-                put(storeName, changelogTopic);
-                put(store2Name, store2Changelog);
-            }
-        };
+        final Map<String, String> storeToChangelog = mkMap(
+                mkEntry(storeName, changelogTopic),
+                mkEntry(store2Name, store2Changelog)
+        );
+
+        final MockKeyValueStore stateStore = new MockKeyValueStore(storeName, true);
+        final MockKeyValueStore stateStore2 = new MockKeyValueStore(store2Name, true);
+
         final ProcessorStateManager stateManager = new ProcessorStateManager(
             taskId,
             changelogPartitions,
             false,
             stateDirectory,
             storeToChangelog,
-            new ArrayList<>(storeToChangelog.keySet()),
+            asList(stateStore.name(), stateStore2.name()),
             changelogReader,
             eosEnabled,
             logContext);
-
-        final MockKeyValueStore stateStore = new MockKeyValueStore(storeName, true);
-        final MockKeyValueStore stateStore2 = new MockKeyValueStore(store2Name, true);
 
         stateManager.register(stateStore, stateStore.stateRestoreCallback);
         stateManager.register(stateStore2, stateStore2.stateRestoreCallback);

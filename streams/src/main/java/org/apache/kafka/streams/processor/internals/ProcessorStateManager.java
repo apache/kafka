@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -51,7 +52,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     private final Map<String, StateRestoreCallback> restoreCallbacks; // used for standby tasks, keyed by state topic name
     private final Map<String, RecordConverter> recordConverters; // used for standby tasks, keyed by state topic name
     private final Map<String, String> storeToChangelogTopic;
-    private final Map<String, StateStore> stores = new HashMap<>();
+    private final LinkedHashMap<String, StateStore> registeredStores = new LinkedHashMap<>();
     private final List<String> topologicalOrderOfStores;
     private final List<TopicPartition> changelogPartitions = new ArrayList<>();
 
@@ -126,44 +127,56 @@ public class ProcessorStateManager extends AbstractStateManager {
             throw new IllegalArgumentException(String.format("%sIllegal store name: %s", logPrefix, CHECKPOINT_FILE_NAME));
         }
 
-        if (stores.containsKey(storeName)) {
+        if (registeredStores.containsKey(storeName)) {
             throw new IllegalArgumentException(String.format("%sStore %s has already been registered.", logPrefix, storeName));
         }
 
         // check that the underlying change log topic exist or not
         final String topic = storeToChangelogTopic.get(storeName);
         if (topic == null) {
-            stores.put(storeName, store);
-            return;
-        }
-
-        final TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
-
-        final RecordConverter recordConverter = converterForStore(store);
-
-        if (isStandby) {
-            log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", storeName, topic);
-
-            restoreCallbacks.put(topic, stateRestoreCallback);
-            recordConverters.put(topic, recordConverter);
+            registeredStores.put(storeName, store);
         } else {
-            log.trace("Restoring state store {} from changelog topic {} at checkpoint {}", storeName, topic, checkpointableOffsets.get(storePartition));
 
-            final StateRestorer restorer = new StateRestorer(
-                storePartition,
-                new CompositeRestoreListener(stateRestoreCallback),
-                checkpointableOffsets.get(storePartition),
-                offsetLimit(storePartition),
-                store.persistent(),
-                storeName,
-                recordConverter
-            );
+            final TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
 
-            changelogReader.register(restorer);
+            final RecordConverter recordConverter = converterForStore(store);
+
+            if (isStandby) {
+                log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", storeName, topic);
+
+                restoreCallbacks.put(topic, stateRestoreCallback);
+                recordConverters.put(topic, recordConverter);
+            } else {
+                log.trace("Restoring state store {} from changelog topic {} at checkpoint {}", storeName, topic, checkpointableOffsets.get(storePartition));
+
+                final StateRestorer restorer = new StateRestorer(
+                    storePartition,
+                    new CompositeRestoreListener(stateRestoreCallback),
+                    checkpointableOffsets.get(storePartition),
+                    offsetLimit(storePartition),
+                    store.persistent(),
+                    storeName,
+                    recordConverter
+                );
+
+                changelogReader.register(restorer);
+            }
+            changelogPartitions.add(storePartition);
+
+            registeredStores.put(storeName, store);
         }
-        changelogPartitions.add(storePartition);
 
-        stores.put(storeName, store);
+        ensureStoresIsTopologicallyOrdered();
+    }
+
+    private void ensureStoresIsTopologicallyOrdered() {
+        final LinkedHashMap<String, StateStore> stores = new LinkedHashMap<>(registeredStores);
+        registeredStores.clear();
+        for (final String storeName : topologicalOrderOfStores) {
+            if (stores.containsKey(storeName)) {
+                registeredStores.put(storeName, stores.get(storeName));
+            }
+        }
     }
 
     @Override
@@ -171,7 +184,7 @@ public class ProcessorStateManager extends AbstractStateManager {
                                                      final InternalProcessorContext processorContext) {
         super.reinitializeStateStoresForPartitions(
             log,
-            stores,
+            registeredStores,
             storeToChangelogTopic,
             partitions,
             processorContext);
@@ -228,29 +241,24 @@ public class ProcessorStateManager extends AbstractStateManager {
 
     @Override
     public StateStore getStore(final String name) {
-        return stores.get(name);
+        return registeredStores.get(name);
     }
 
     @Override
     public void flush() {
         ProcessorStateException firstException = null;
         // attempting to flush the stores
-        if (!stores.isEmpty()) {
+        if (!registeredStores.isEmpty()) {
             log.debug("Flushing all stores registered in the state manager");
-            for (final String storeName : topologicalOrderOfStores) {
-                final StateStore store = stores.get(storeName);
-                if (store == null) {
-                    log.trace("Skipping not-registered store {}", storeName);
-                } else {
-                    log.trace("Flushing store {}", store.name());
-                    try {
-                        store.flush();
-                    } catch (final Exception e) {
-                        if (firstException == null) {
-                            firstException = new ProcessorStateException(String.format("%sFailed to flush state store %s", logPrefix, store.name()), e);
-                        }
-                        log.error("Failed to flush state store {}: ", store.name(), e);
+            for (final StateStore store : registeredStores.values()) {
+                log.trace("Flushing store {}", store.name());
+                try {
+                    store.flush();
+                } catch (final Exception e) {
+                    if (firstException == null) {
+                        firstException = new ProcessorStateException(String.format("%sFailed to flush state store %s", logPrefix, store.name()), e);
                     }
+                    log.error("Failed to flush state store {}: ", store.name(), e);
                 }
             }
         }
@@ -270,9 +278,9 @@ public class ProcessorStateManager extends AbstractStateManager {
         ProcessorStateException firstException = null;
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet
-        if (!stores.isEmpty()) {
+        if (!registeredStores.isEmpty()) {
             log.debug("Closing its state manager and all the registered state stores");
-            for (final StateStore store : stores.values()) {
+            for (final StateStore store : registeredStores.values()) {
                 log.debug("Closing storage engine {}", store.name());
                 try {
                     store.close();
@@ -283,7 +291,7 @@ public class ProcessorStateManager extends AbstractStateManager {
                     log.error("Failed to close state store {}: ", store.name(), e);
                 }
             }
-            stores.clear();
+            registeredStores.clear();
         }
 
         if (!clean && eosEnabled && checkpoint != null) {
@@ -306,7 +314,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     public void checkpoint(final Map<TopicPartition, Long> checkpointableOffsets) {
         this.checkpointableOffsets.putAll(changelogReader.restoredOffsets());
         log.trace("Checkpointable offsets updated with restored offsets: {}", this.checkpointableOffsets);
-        for (final StateStore store : stores.values()) {
+        for (final StateStore store : registeredStores.values()) {
             final String storeName = store.name();
             // only checkpoint the offset to the offsets file if
             // it is persistent AND changelog enabled
