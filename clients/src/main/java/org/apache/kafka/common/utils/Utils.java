@@ -39,8 +39,8 @@ import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.nio.file.SimpleFileVisitor;
+import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.DecimalFormat;
@@ -137,9 +137,10 @@ public final class Utils {
      * @return The UTF8 string
      */
     public static String utf8(ByteBuffer buffer, int offset, int length) {
-        if (buffer.hasArray()) {
+        if (buffer.hasArray())
             return new String(buffer.array(), buffer.arrayOffset() + buffer.position() + offset, length, StandardCharsets.UTF_8);
-        } else { return utf8(toArray(buffer, offset, length)); }
+        else
+            return utf8(toArray(buffer, offset, length));
     }
 
     /**
@@ -169,7 +170,8 @@ public final class Utils {
     public static long min(long first, long... rest) {
         long min = first;
         for (long r : rest) {
-            if (r < min) { min = r; }
+            if (r < min)
+                min = r;
         }
         return min;
     }
@@ -183,7 +185,8 @@ public final class Utils {
     public static long max(long first, long... rest) {
         long max = first;
         for (long r : rest) {
-            if (r > max) { max = r; }
+            if (r > max)
+                max = r;
         }
         return max;
     }
@@ -288,7 +291,10 @@ public final class Utils {
      * @throws NullPointerException if t is null.
      */
     public static <T> T notNull(T t) {
-        if (t == null) { throw new NullPointerException(); } else { return t; }
+        if (t == null)
+            throw new NullPointerException();
+        else
+            return t;
     }
 
     /**
@@ -308,7 +314,8 @@ public final class Utils {
      * Instantiate the class
      */
     public static <T> T newInstance(Class<T> c) {
-        if (c == null) { throw new KafkaException("class cannot be null"); }
+        if (c == null)
+            throw new KafkaException("class cannot be null");
         try {
             return c.getDeclaredConstructor().newInstance();
         } catch (NoSuchMethodException e) {
@@ -346,11 +353,11 @@ public final class Utils {
      * @param className                 The full name of the class to construct.
      * @param params                    A sequence of (type, object) elements.
      * @param <T>                       The type of object to construct.
-     * @return The new object.
+     * @return                          The new object.
      * @throws ClassNotFoundException   If there was a problem constructing the object.
      */
     public static <T> T newParameterizedInstance(String className, Object... params)
-        throws ClassNotFoundException {
+            throws ClassNotFoundException {
         Class<?>[] argTypes = new Class<?>[params.length / 2];
         Object[] args = new Object[params.length / 2];
         try {
@@ -364,16 +371,16 @@ public final class Utils {
             return constructor.newInstance(args);
         } catch (NoSuchMethodException e) {
             throw new ClassNotFoundException(String.format("Failed to find " +
-                                                               "constructor with %s for %s", Utils.join(argTypes, ", "), className), e);
+                "constructor with %s for %s", Utils.join(argTypes, ", "), className), e);
         } catch (InstantiationException e) {
             throw new ClassNotFoundException(String.format("Failed to instantiate " +
-                                                               "%s", className), e);
+                "%s", className), e);
         } catch (IllegalAccessException e) {
             throw new ClassNotFoundException(String.format("Unable to access " +
-                                                               "constructor of %s", className), e);
+                "constructor of %s", className), e);
         } catch (InvocationTargetException e) {
             throw new ClassNotFoundException(String.format("Unable to invoke " +
-                                                               "constructor of %s", className), e);
+                "constructor of %s", className), e);
         }
     }
 
@@ -461,8 +468,8 @@ public final class Utils {
      */
     public static String formatAddress(String host, Integer port) {
         return host.contains(":")
-            ? "[" + host + "]:" + port // IPv6
-            : host + ":" + port;
+                ? "[" + host + "]:" + port // IPv6
+                : host + ":" + port;
     }
 
     /**
@@ -509,7 +516,8 @@ public final class Utils {
         Iterator<T> iter = list.iterator();
         while (iter.hasNext()) {
             sb.append(iter.next());
-            if (iter.hasNext()) { sb.append(separator); }
+            if (iter.hasNext())
+                sb.append(separator);
         }
         return sb.toString();
     }
@@ -527,7 +535,7 @@ public final class Utils {
         String prefix = "";
         for (Map.Entry<K, V> entry : map.entrySet()) {
             bld.append(prefix).append(entry.getKey()).
-                append(keyValueSeparator).append(entry.getValue());
+                    append(keyValueSeparator).append(entry.getValue());
             prefix = elementSeparator;
         }
         bld.append(end);
@@ -738,14 +746,14 @@ public final class Utils {
      * @param file The root file at which to begin deleting
      */
     public static void delete(final File file) throws IOException {
-        if (file == null) { return; }
+        if (file == null)
+            return;
         Files.walkFileTree(file.toPath(), new SimpleFileVisitor<Path>() {
             @Override
             public FileVisitResult visitFileFailed(Path path, IOException exc) throws IOException {
                 // If the root path did not exist, ignore the error; otherwise throw it.
-                if (exc instanceof NoSuchFileException && path.toFile().equals(file)) {
+                if (exc instanceof NoSuchFileException && path.toFile().equals(file))
                     return FileVisitResult.TERMINATE;
-                }
                 throw exc;
             }
 
@@ -772,9 +780,9 @@ public final class Utils {
         return other == null ? Collections.emptyList() : other;
     }
 
-    /**
-     * Get the ClassLoader which loaded Kafka.
-     */
+   /**
+    * Get the ClassLoader which loaded Kafka.
+    */
     public static ClassLoader getKafkaClassLoader() {
         return Utils.class.getClassLoader();
     }
@@ -787,7 +795,10 @@ public final class Utils {
      */
     public static ClassLoader getContextOrKafkaClassLoader() {
         ClassLoader cl = Thread.currentThread().getContextClassLoader();
-        if (cl == null) { return getKafkaClassLoader(); } else { return cl; }
+        if (cl == null)
+            return getKafkaClassLoader();
+        else
+            return cl;
     }
 
     /**
@@ -802,7 +813,7 @@ public final class Utils {
             try {
                 Files.move(source, target, StandardCopyOption.REPLACE_EXISTING);
                 log.debug("Non-atomic move of {} to {} succeeded after atomic move failed due to {}", source, target,
-                          outer.getMessage());
+                        outer.getMessage());
             } catch (IOException inner) {
                 inner.addSuppressed(outer);
                 throw inner;
@@ -820,12 +831,17 @@ public final class Utils {
         IOException exception = null;
         for (Closeable closeable : closeables) {
             try {
-                if (closeable != null) { closeable.close(); }
+                if (closeable != null)
+                    closeable.close();
             } catch (IOException e) {
-                if (exception != null) { exception.addSuppressed(e); } else { exception = e; }
+                if (exception != null)
+                    exception.addSuppressed(e);
+                else
+                    exception = e;
             }
         }
-        if (exception != null) { throw exception; }
+        if (exception != null)
+            throw exception;
     }
 
     /**
@@ -905,8 +921,8 @@ public final class Utils {
         readFully(channel, destinationBuffer, position);
         if (destinationBuffer.hasRemaining()) {
             throw new EOFException(String.format("Failed to read `%s` from file channel `%s`. Expected to read %d bytes, " +
-                                                     "but reached end of file after reading %d bytes. Started read from position %d.",
-                                                 description, channel, expectedReadBytes, expectedReadBytes - destinationBuffer.remaining(), position));
+                    "but reached end of file after reading %d bytes. Started read from position %d.",
+                    description, channel, expectedReadBytes, expectedReadBytes - destinationBuffer.remaining(), position));
         }
     }
 
@@ -944,16 +960,16 @@ public final class Utils {
      * @throws IOException If an I/O error occurs
      */
     public static final void readFully(InputStream inputStream, ByteBuffer destinationBuffer) throws IOException {
-        if (!destinationBuffer.hasArray()) {
+        if (!destinationBuffer.hasArray())
             throw new IllegalArgumentException("destinationBuffer must be backed by an array");
-        }
         int initialOffset = destinationBuffer.arrayOffset() + destinationBuffer.position();
         byte[] array = destinationBuffer.array();
         int length = destinationBuffer.remaining();
         int totalBytesRead = 0;
         do {
             int bytesRead = inputStream.read(array, initialOffset + totalBytesRead, length - totalBytesRead);
-            if (bytesRead == -1) { break; }
+            if (bytesRead == -1)
+                break;
             totalBytesRead += bytesRead;
         } while (length > totalBytesRead);
         destinationBuffer.position(destinationBuffer.position() + totalBytesRead);
@@ -995,7 +1011,7 @@ public final class Utils {
 
     public static <T> List<T> concatLists(List<T> left, List<T> right, Function<List<T>, List<T>> finisher) {
         return Stream.concat(left.stream(), right.stream())
-                     .collect(Collectors.collectingAndThen(Collectors.toList(), finisher));
+                .collect(Collectors.collectingAndThen(Collectors.toList(), finisher));
     }
 
     public static int to32BitField(final Set<Byte> bytes) {
@@ -1006,15 +1022,18 @@ public final class Utils {
     }
 
     private static byte checkRange(final byte i) {
-        if (i > 31) { throw new IllegalArgumentException("out of range: i>31, i = " + i); }
-        if (i < 0) { throw new IllegalArgumentException("out of range: i<0, i = " + i); }
+        if (i > 31)
+            throw new IllegalArgumentException("out of range: i>31, i = " + i);
+        if (i < 0)
+            throw new IllegalArgumentException("out of range: i<0, i = " + i);
         return i;
     }
 
     public static Set<Byte> from32BitField(final int intValue) {
         Set<Byte> result = new HashSet<>();
         for (int itr = intValue, count = 0; itr != 0; itr >>>= 1) {
-            if ((itr & 1) != 0) { result.add((byte) count); }
+            if ((itr & 1) != 0)
+                result.add((byte) count);
             count++;
         }
         return result;

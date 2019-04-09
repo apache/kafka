@@ -311,7 +311,7 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             emptyMap(),
-            Collections.emptyList(),
+            emptyList(),
             changelogReader,
             false,
             logContext);
@@ -351,7 +351,7 @@ public class ProcessorStateManagerTest {
             // make sure the checkpoint file is not written yet
             assertFalse(checkpointFile.exists());
 
-            // order of flush should be determined by the constructor arg topologicallySortedStoreNameToChangelogTopic,
+            // order of flush should be determined by the topological order defined by the constructor,
             // not by the registration order
             stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
             stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
@@ -684,7 +684,7 @@ public class ProcessorStateManagerTest {
 
         try {
             stateManager.flush();
-        } catch (final ProcessorStateException expected) { /* ignore */ }
+        } catch (final ProcessorStateException expected) { /* ignode */ }
         Assert.assertTrue(flushedStore.get());
     }
 

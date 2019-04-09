@@ -50,6 +50,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
+import static org.apache.kafka.streams.processor.internals.ProcessorTopologyFactories.withLocalStores;
 import static org.easymock.EasyMock.expect;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -234,9 +235,13 @@ public class AbstractTaskTest {
 
         return new AbstractTask(id,
                                 storeTopicPartitions,
-                                ProcessorTopologyFactories.withLocalStores(new ArrayList<>(stateStoresToChangelogTopics.keySet()), storeNamesToChangelogTopics),
+                                withLocalStores(new ArrayList<>(stateStoresToChangelogTopics.keySet()),
+                                                storeNamesToChangelogTopics),
                                 consumer,
-                                new StoreChangelogReader(consumer, Duration.ZERO, new MockStateRestoreListener(), new LogContext("stream-task-test ")),
+                                new StoreChangelogReader(consumer,
+                                                         Duration.ZERO,
+                                                         new MockStateRestoreListener(),
+                                                         new LogContext("stream-task-test ")),
                                 false,
                                 stateDirectory,
                                 config) {
