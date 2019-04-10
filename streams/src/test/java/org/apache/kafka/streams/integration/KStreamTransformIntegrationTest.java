@@ -55,16 +55,11 @@ public class KStreamTransformIntegrationTest {
     private final String topic = "stream";
     private final String stateStoreName = "myTransformState";
     private final List<KeyValue<Integer, Integer>> results = new ArrayList<>();
-    private final ForeachAction<Integer, Integer> action = new ForeachAction<Integer, Integer>() {
-        @Override
-        public void apply(final Integer key, final Integer value) {
-            results.add(KeyValue.pair(key, value));
-        }
-    };
+    private final ForeachAction<Integer, Integer> action = (key, value) -> results.add(KeyValue.pair(key, value));
     private KStream<Integer, Integer> stream;
 
     @Before
-    public void before() throws InterruptedException {
+    public void before() {
         builder = new StreamsBuilder();
         final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
                 Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(stateStoreName),
@@ -90,7 +85,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
-    public void shouldTransform() throws Exception {
+    public void shouldTransform() {
         stream
             .transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
                 private KeyValueStore<Integer, Integer> state;
@@ -127,7 +122,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
-    public void shouldFlatTransform() throws Exception {
+    public void shouldFlatTransform() {
         stream
             .flatTransform(() -> new Transformer<Integer, Integer, Iterable<KeyValue<Integer, Integer>>>() {
                 private KeyValueStore<Integer, Integer> state;
@@ -144,7 +139,7 @@ public class KStreamTransformIntegrationTest {
                     state.putIfAbsent(key, 0);
                     Integer storedValue = state.get(key);
                     for (int i = 0; i < 3; i++) {
-                        result.add(new KeyValue<Integer, Integer>(key + i, value + storedValue++));
+                        result.add(new KeyValue<>(key + i, value + storedValue++));
                     }
                     state.put(key, storedValue);
                     return result;
@@ -179,7 +174,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
-    public void shouldTransformValuesWithValueTransformerWithKey() throws Exception {
+    public void shouldTransformValuesWithValueTransformerWithKey() {
         stream
             .transformValues(() -> new ValueTransformerWithKey<Integer, Integer, Integer>() {
                 private KeyValueStore<Integer, Integer> state;
@@ -215,7 +210,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
-    public void shouldTransformValuesWithValueTransformerWithoutKey() throws Exception {
+    public void shouldTransformValuesWithValueTransformerWithoutKey() {
         stream
             .transformValues(() -> new ValueTransformer<Integer, Integer>() {
                 private KeyValueStore<Integer, Integer> state;
@@ -250,7 +245,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
-    public void shouldFlatTransformValuesWithKey() throws Exception {
+    public void shouldFlatTransformValuesWithKey() {
         stream
             .flatTransformValues(() -> new ValueTransformerWithKey<Integer, Integer, Iterable<Integer>>() {
                 private KeyValueStore<Integer, Integer> state;
@@ -301,7 +296,7 @@ public class KStreamTransformIntegrationTest {
     }
 
     @Test
-    public void shouldFlatTransformValuesWithValueTransformerWithoutKey() throws Exception {
+    public void shouldFlatTransformValuesWithValueTransformerWithoutKey() {
         stream
             .flatTransformValues(() -> new ValueTransformer<Integer, Iterable<Integer>>() {
                 private KeyValueStore<Integer, Integer> state;

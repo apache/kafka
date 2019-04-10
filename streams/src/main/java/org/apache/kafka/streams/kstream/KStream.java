@@ -678,7 +678,7 @@ public interface KStream<K, V> {
                                            final String... stateStoreNames);
 
     /**
-     * Transform the value of each input record into a new value (with possible new type) of the output record.
+     * Transform the value of each input record into a new value (with possibly a new type) of the output record.
      * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -686,8 +686,8 @@ public interface KStream<K, V> {
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
-     * global state stores; read-only access to global state stores is available by default):
+     * In order to assign a state store, the state store must be created and registered beforehand (it's not required to
+     * connect global state stores; read-only access to global state stores is available by default):
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
@@ -699,8 +699,7 @@ public interface KStream<K, V> {
      *
      * KStream outputStream = inputStream.transformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
      * }</pre>
-     * Within the {@link ValueTransformer}, the state is obtained via the
-     * {@link ProcessorContext}.
+     * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
@@ -752,7 +751,7 @@ public interface KStream<K, V> {
                                         final String... stateStoreNames);
 
     /**
-     * Transform the value of each input record into a new value (with possible new type) of the output record.
+     * Transform the value of each input record into a new value (with possibly a new type) of the output record.
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
      * each input record value and computes a new value for it.
      * Thus, an input record {@code <K,V>} can be transformed into an output record {@code <K:V'>}.
@@ -760,8 +759,8 @@ public interface KStream<K, V> {
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
-     * global state stores; read-only access to global state stores is available by default):
+     * In order to assign a state store, the state store must be created and registered beforehand (it's not required to
+     * connect global state stores; read-only access to global state stores is available by default):
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
@@ -773,8 +772,7 @@ public interface KStream<K, V> {
      *
      * KStream outputStream = inputStream.transformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
      * }</pre>
-     * Within the {@link ValueTransformerWithKey}, the state is obtained via the
-     * {@link ProcessorContext}.
+     * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
@@ -828,7 +826,7 @@ public interface KStream<K, V> {
                                         final String... stateStoreNames);
 
     /**
-     * Transform the value of each input record into zero or more new values (with possible new
+     * Transform the value of each input record into zero or more new values (with possibly a new
      * type) and emit for each new value a record with the same key of the input record and the value.
      * A {@link ValueTransformer} (provided by the given {@link ValueTransformerSupplier}) is applied to each input
      * record value and computes zero or more new values.
@@ -837,7 +835,7 @@ public interface KStream<K, V> {
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand:
+     * In order to assign a state store, the state store must be created and registered beforehand:
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
@@ -849,7 +847,7 @@ public interface KStream<K, V> {
      *
      * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
      * }</pre>
-     * Within the {@link ValueTransformer}, the state is obtained via the {@link ProcessorContext}.
+     * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * The {@link ValueTransformer} must return a list of values in {@link ValueTransformer#transform(Object)
@@ -908,7 +906,7 @@ public interface KStream<K, V> {
                                             final String... stateStoreNames);
 
     /**
-     * Transform the value of each input record into zero or more new values (with possible new
+     * Transform the value of each input record into zero or more new values (with possibly a new
      * type) and emit for each new value a record with the same key of the input record and the value.
      * A {@link ValueTransformerWithKey} (provided by the given {@link ValueTransformerWithKeySupplier}) is applied to
      * each input record value and computes zero or more new values.
@@ -917,7 +915,7 @@ public interface KStream<K, V> {
      * Furthermore, via {@link org.apache.kafka.streams.processor. Punctuator#punctuate()} the processing progress can
      * be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand:
+     * In order to assign a state store, the state store must be created and registered beforehand:
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
@@ -929,7 +927,7 @@ public interface KStream<K, V> {
      *
      * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
      * }</pre>
-     * Within the {@link ValueTransformerWithKey}, the state is obtained via the {@link ProcessorContext}.
+     * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * The {@link ValueTransformer} must return a list of values in {@link ValueTransformer#transform(Object)

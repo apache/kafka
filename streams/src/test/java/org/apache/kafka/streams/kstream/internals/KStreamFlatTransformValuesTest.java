@@ -48,7 +48,7 @@ public class KStreamFlatTransformValuesTest extends EasyMockSupport {
         inputValue = 10;
         valueTransformer = mock(ValueTransformerWithKey.class);
         context = strictMock(ProcessorContext.class);
-        processor = new KStreamFlatTransformValuesProcessor<Integer, Integer, String>(valueTransformer);
+        processor = new KStreamFlatTransformValuesProcessor<>(valueTransformer);
     }
 
     @Test
