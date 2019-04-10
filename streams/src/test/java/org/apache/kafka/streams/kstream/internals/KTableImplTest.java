@@ -65,13 +65,12 @@ import static org.junit.Assert.assertNull;
 
 @SuppressWarnings("unchecked")
 public class KTableImplTest {
-
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
     private final Produced<String, String> produced = Produced.with(Serdes.String(), Serdes.String());
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
     private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
     private final Serde<String> mySerde = new Serdes.StringSerde();
 
     private KTable<String, String> table;
@@ -94,16 +93,13 @@ public class KTableImplTest {
         table1.toStream().process(supplier);
 
         final KTable<String, Integer> table2 = table1.mapValues(Integer::new);
-
         table2.toStream().process(supplier);
 
         final KTable<String, Integer> table3 = table2.filter((key, value) -> (value % 2) == 0);
-
         table3.toStream().process(supplier);
-
         table1.toStream().to(topic2, produced);
-        final KTable<String, String> table4 = builder.table(topic2, consumed);
 
+        final KTable<String, String> table4 = builder.table(topic2, consumed);
         table4.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -114,10 +110,10 @@ public class KTableImplTest {
         }
 
         final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
-        assertEquals(asList("A:01", "B:02", "C:03", "D:04"), processors.get(0).processed);
-        assertEquals(asList("A:1", "B:2", "C:3", "D:4"), processors.get(1).processed);
-        assertEquals(asList("A:null", "B:2", "C:null", "D:4"), processors.get(2).processed);
-        assertEquals(asList("A:01", "B:02", "C:03", "D:04"), processors.get(3).processed);
+        assertEquals(asList("A:01 (ts: 0)", "B:02 (ts: 0)", "C:03 (ts: 0)", "D:04 (ts: 0)"), processors.get(0).processed);
+        assertEquals(asList("A:1 (ts: 0)", "B:2 (ts: 0)", "C:3 (ts: 0)", "D:4 (ts: 0)"), processors.get(1).processed);
+        assertEquals(asList("A:null (ts: 0)", "B:2 (ts: 0)", "C:null (ts: 0)", "D:4 (ts: 0)"), processors.get(2).processed);
+        assertEquals(asList("A:01 (ts: 0)", "B:02 (ts: 0)", "C:03 (ts: 0)", "D:04 (ts: 0)"), processors.get(3).processed);
     }
 
     @Test
@@ -246,10 +242,9 @@ public class KTableImplTest {
 
     @Test
     public void testStateStoreLazyEval() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
-
-        final StreamsBuilder builder = new StreamsBuilder();
 
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
@@ -266,10 +261,9 @@ public class KTableImplTest {
 
     @Test
     public void testStateStore() {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String topic2 = "topic2";
-
-        final StreamsBuilder builder = new StreamsBuilder();
 
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(topic1, consumed);
@@ -301,10 +295,9 @@ public class KTableImplTest {
 
     @Test
     public void shouldCreateSourceAndSinkNodesForRepartitioningTopic() throws Exception {
+        final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
         final String storeName1 = "storeName1";
-
-        final StreamsBuilder builder = new StreamsBuilder();
 
         final KTableImpl<String, String, String> table1 =
             (KTableImpl<String, String, String>) builder.table(

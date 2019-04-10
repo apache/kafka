@@ -32,12 +32,19 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ControlledShutdownRequestData;
+import org.apache.kafka.common.message.ControlledShutdownResponseData;
+import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
+import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionSet;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.DeleteTopicsRequestData;
+import org.apache.kafka.common.message.DeleteTopicsResponseData;
+import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersRequestData;
@@ -45,6 +52,8 @@ import org.apache.kafka.common.message.ElectPreferredLeadersRequestData.TopicPar
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -601,7 +610,7 @@ public class RequestResponseTest {
         ByteBuffer buffer = toBuffer(struct);
         ControlledShutdownResponse deserialized = ControlledShutdownResponse.parse(buffer, version);
         assertEquals(response.error(), deserialized.error());
-        assertEquals(response.partitionsRemaining(), deserialized.partitionsRemaining());
+        assertEquals(response.data().remainingPartitions(), deserialized.data().remainingPartitions());
     }
 
     @Test(expected = UnsupportedVersionException.class)
@@ -648,7 +657,7 @@ public class RequestResponseTest {
         final short version = 0;
         JoinGroupRequest jgr = createJoinGroupRequest(version);
         JoinGroupRequest jgr2 = new JoinGroupRequest(jgr.toStruct(), version);
-        assertEquals(jgr2.rebalanceTimeout(), jgr.rebalanceTimeout());
+        assertEquals(jgr2.data().rebalanceTimeoutMs(), jgr.data().rebalanceTimeoutMs());
     }
 
     @Test
@@ -742,23 +751,53 @@ public class RequestResponseTest {
     }
 
     private JoinGroupRequest createJoinGroupRequest(int version) {
-        ByteBuffer metadata = ByteBuffer.wrap(new byte[] {});
-        List<JoinGroupRequest.ProtocolMetadata> protocols = new ArrayList<>();
-        protocols.add(new JoinGroupRequest.ProtocolMetadata("consumer-range", metadata));
+        JoinGroupRequestData.JoinGroupRequestProtocolSet protocols = new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+                Collections.singleton(
+                new JoinGroupRequestData.JoinGroupRequestProtocol()
+                        .setName("consumer-range")
+                        .setMetadata(new byte[0])).iterator()
+        );
         if (version == 0) {
-            return new JoinGroupRequest.Builder("group1", 30000, "consumer1", "consumer", protocols).
-                    build((short) version);
+            return new JoinGroupRequest.Builder(
+                    new JoinGroupRequestData()
+                            .setGroupId("group1")
+                            .setSessionTimeoutMs(30000)
+                            .setMemberId("consumer1")
+                            .setProtocolType("consumer")
+                            .setProtocols(protocols))
+                    .build((short) version);
         } else {
-            return new JoinGroupRequest.Builder("group1", 10000, "consumer1", "consumer", protocols).
-                    setRebalanceTimeout(60000).build();
+            return new JoinGroupRequest.Builder(
+                    new JoinGroupRequestData()
+                            .setGroupId("group1")
+                            .setSessionTimeoutMs(30000)
+                            .setMemberId("consumer1")
+                            .setProtocolType("consumer")
+                            .setProtocols(protocols)
+                            .setRebalanceTimeoutMs(60000)) // v1 and above contains rebalance timeout
+                    .build((short) version);
         }
     }
 
     private JoinGroupResponse createJoinGroupResponse() {
-        Map<String, ByteBuffer> members = new HashMap<>();
-        members.put("consumer1", ByteBuffer.wrap(new byte[]{}));
-        members.put("consumer2", ByteBuffer.wrap(new byte[]{}));
-        return new JoinGroupResponse(Errors.NONE, 1, "range", "consumer1", "leader", members);
+        List<JoinGroupResponseData.JoinGroupResponseMember> members = Arrays.asList(
+                new JoinGroupResponseData.JoinGroupResponseMember()
+                        .setMemberId("consumer1")
+                        .setMetadata(new byte[0]),
+                new JoinGroupResponseData.JoinGroupResponseMember()
+                        .setMemberId("consumer2")
+                        .setMetadata(new byte[0])
+        );
+
+        return new JoinGroupResponse(
+                new JoinGroupResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setGenerationId(1)
+                        .setProtocolName("range")
+                        .setLeader("leader")
+                        .setMemberId("consumer1")
+                        .setMembers(members)
+        );
     }
 
     private ListGroupsRequest createListGroupsRequest() {
@@ -940,19 +979,37 @@ public class RequestResponseTest {
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest() {
-        return new ControlledShutdownRequest.Builder(10, 0, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build();
+        ControlledShutdownRequestData data = new ControlledShutdownRequestData()
+                .setBrokerId(10)
+                .setBrokerEpoch(0L);
+        return new ControlledShutdownRequest.Builder(
+                data,
+                ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build();
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest(int version) {
-        return new ControlledShutdownRequest.Builder(10, 0, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build((short) version);
+        ControlledShutdownRequestData data = new ControlledShutdownRequestData()
+                .setBrokerId(10)
+                .setBrokerEpoch(0L);
+        return new ControlledShutdownRequest.Builder(
+                data,
+                ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build((short) version);
     }
 
     private ControlledShutdownResponse createControlledShutdownResponse() {
-        Set<TopicPartition> topicPartitions = Utils.mkSet(
-                new TopicPartition("test2", 5),
-                new TopicPartition("test1", 10)
-        );
-        return new ControlledShutdownResponse(Errors.NONE, topicPartitions);
+        RemainingPartition p1 = new RemainingPartition()
+                .setTopicName("test2")
+                .setPartitionIndex(5);
+        RemainingPartition p2 = new RemainingPartition()
+                .setTopicName("test1")
+                .setPartitionIndex(10);
+        RemainingPartitionSet pSet = new RemainingPartitionSet();
+        pSet.add(p1);
+        pSet.add(p2);
+        ControlledShutdownResponseData data = new ControlledShutdownResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setRemainingPartitions(pSet);
+        return new ControlledShutdownResponse(data);
     }
 
     private LeaderAndIsrRequest createLeaderAndIsrRequest(int version) {
@@ -1092,14 +1149,21 @@ public class RequestResponseTest {
     }
 
     private DeleteTopicsRequest createDeleteTopicsRequest() {
-        return new DeleteTopicsRequest.Builder(Utils.mkSet("my_t1", "my_t2"), 10000).build();
+        return new DeleteTopicsRequest.Builder(
+                new DeleteTopicsRequestData()
+                .setTopicNames(Arrays.asList("my_t1", "my_t2"))
+                .setTimeoutMs(1000)).build();
     }
 
     private DeleteTopicsResponse createDeleteTopicsResponse() {
-        Map<String, Errors> errors = new HashMap<>();
-        errors.put("t1", Errors.INVALID_TOPIC_EXCEPTION);
-        errors.put("t2", Errors.TOPIC_AUTHORIZATION_FAILED);
-        return new DeleteTopicsResponse(errors);
+        DeleteTopicsResponseData data = new DeleteTopicsResponseData();
+        data.responses().add(new DeletableTopicResult()
+                .setName("t1")
+                .setErrorCode(Errors.INVALID_TOPIC_EXCEPTION.code()));
+        data.responses().add(new DeletableTopicResult()
+                .setName("t2")
+                .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code()));
+        return new DeleteTopicsResponse(data);
     }
 
     private InitProducerIdRequest createInitPidRequest() {

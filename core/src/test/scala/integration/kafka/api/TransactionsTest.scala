@@ -18,6 +18,7 @@
 package kafka.api
 
 import java.lang.{Long => JLong}
+import java.time.Duration
 import java.util.{Optional, Properties}
 import java.util.concurrent.TimeUnit
 
@@ -578,7 +579,7 @@ class TransactionsTest extends KafkaServerTestHarness {
     try {
       producer.commitTransaction()
     } finally {
-      producer.close(0, TimeUnit.MILLISECONDS)
+      producer.close(Duration.ZERO)
     }
   }
 

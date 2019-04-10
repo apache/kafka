@@ -25,7 +25,9 @@ import java.util.Objects;
 class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment>, Segment {
     public final long id;
 
-    KeyValueSegment(final String segmentName, final String windowName, final long id) {
+    KeyValueSegment(final String segmentName,
+                    final String windowName,
+                    final long id) {
         super(segmentName, windowName);
         this.id = id;
     }

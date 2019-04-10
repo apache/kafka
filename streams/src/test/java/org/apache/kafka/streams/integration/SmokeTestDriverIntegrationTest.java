@@ -18,12 +18,14 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.tests.SmokeTestClient;
 import org.apache.kafka.streams.tests.SmokeTestDriver;
 import org.junit.Assert;
 import org.junit.ClassRule;
 import org.junit.Test;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Map;
 import java.util.Properties;
@@ -53,7 +55,8 @@ public class SmokeTestDriverIntegrationTest {
         @Override
         public void run() {
             try {
-                final Map<String, Set<Integer>> allData = generate(bootstrapServers, numKeys, maxRecordsPerKey, true);
+                final Map<String, Set<Integer>> allData =
+                    generate(bootstrapServers, numKeys, maxRecordsPerKey, Duration.ofSeconds(20));
                 result = verify(bootstrapServers, allData, maxRecordsPerKey);
 
             } catch (final Exception ex) {
@@ -76,7 +79,7 @@ public class SmokeTestDriverIntegrationTest {
         int numClientsCreated = 0;
         final ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
-        CLUSTER.createTopics(SmokeTestDriver.topics());
+        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, SmokeTestDriver.topics());
 
         final String bootstrapServers = CLUSTER.bootstrapServers();
         final Driver driver = new Driver(bootstrapServers, 10, 1000);

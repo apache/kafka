@@ -23,12 +23,15 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
  */
 class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
 
-    KeyValueSegments(final String name, final long retentionPeriod, final long segmentInterval) {
+    KeyValueSegments(final String name,
+                     final long retentionPeriod,
+                     final long segmentInterval) {
         super(name, retentionPeriod, segmentInterval);
     }
 
     @Override
-    public KeyValueSegment getOrCreateSegment(final long segmentId, final InternalProcessorContext context) {
+    public KeyValueSegment getOrCreateSegment(final long segmentId,
+                                              final InternalProcessorContext context) {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
         } else {
