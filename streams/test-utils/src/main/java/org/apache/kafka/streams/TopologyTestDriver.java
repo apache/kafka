@@ -81,7 +81,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -161,7 +160,7 @@ import java.util.stream.Collectors;
  * {@link ProducerRecord#equals(Object)} can simplify your code as you can ignore attributes you are not interested in.
  * <p>
  * Note, that calling {@code pipeInput()} will also trigger {@link PunctuationType#STREAM_TIME event-time} base
- * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuation} callbacks.
+ * {@link ProcessorContext#schedule(Duration, PunctuationType, org.apache.kafka.streams.processor.Punctuator) punctuation} callbacks.
  * However, you won't trigger {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type punctuations that you must
  * trigger manually via {@link #advanceWallClockTime(long)}.
  * <p>
@@ -512,7 +511,7 @@ public class TopologyTestDriver implements Closeable {
     /**
      * Advances the internally mocked wall-clock time.
      * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
-     * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuations}.
+     * {@link ProcessorContext#schedule(Duration, PunctuationType, org.apache.kafka.streams.processor.Punctuator) punctuations}.
      *
      * @param advanceMs the amount of time to advance wall-clock time in milliseconds
      */
@@ -569,14 +568,14 @@ public class TopologyTestDriver implements Closeable {
      * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
      *
      * @param topic the name of the topic
-     * @return an Iterator over the output records, or an empty Iterator if there are no records available
+     * @return an Iterable over the output records, or an empty List if there are no records available
      */
-    public Iterator<ProducerRecord<byte[], byte[]>> iterateOutput(final String topic) {
+    public Iterable<ProducerRecord<byte[], byte[]>> iterateOutput(final String topic) {
         final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
         if (outputRecords == null) {
-            return Collections.emptyIterator();
+            return Collections.emptyList();
         }
-        return outputRecords.iterator();
+        return outputRecords;
     }
 
     /**
@@ -586,20 +585,20 @@ public class TopologyTestDriver implements Closeable {
      * @param topic             the name of the topic
      * @param keyDeserializer   the deserializer for the key type
      * @param valueDeserializer the deserializer for the value type
-     * @return an Iterator over the output records, or an empty Iterator if there are no records available
+     * @return an Iterable over the output records, or an empty List if there are no records available
      */
-    public <K, V> Iterator<ProducerRecord<K, V>> iterateOutput(final String topic,
+    public <K, V> Iterable<ProducerRecord<K, V>> iterateOutput(final String topic,
                                                                final Deserializer<K> keyDeserializer,
                                                                final Deserializer<V> valueDeserializer) {
         final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
         if (outputRecords == null) {
-            return Collections.emptyIterator();
+            return Collections.emptyList();
         }
         return outputRecords.stream().map(record -> {
             final K key = keyDeserializer.deserialize(record.topic(), record.key());
             final V value = valueDeserializer.deserialize(record.topic(), record.value());
             return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value, record.headers());
-        }).collect(Collectors.toList()).iterator();
+        }).collect(Collectors.toList());
     }
 
     /**
