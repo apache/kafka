@@ -424,15 +424,17 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         if (exception != null)
             throw exception;
 
-        // Check for a leader change, if the leader or epoch have changed we need to validate the fetch position
-        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = new HashMap<>();
-
+        // Validate each partition against the current leader and epoch
         subscriptions.assignedPartitions().forEach(topicPartition -> {
             ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
-            if (subscriptions.maybeValidatePosition(topicPartition, leaderAndEpoch)) {
-                partitionsToValidate.put(topicPartition, subscriptions.position(topicPartition));
-            }
+            subscriptions.maybeValidatePosition(topicPartition, leaderAndEpoch);
         });
+
+        // Collect positions needing validation, with backoff
+        Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate = subscriptions
+                .partitionsNeedingValidation(time.milliseconds())
+                .stream()
+                .collect(Collectors.toMap(Function.identity(), subscriptions::position));
 
         validateOffsetsAsync(partitionsToValidate);
     }
@@ -1004,7 +1006,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             Metadata.LeaderAndEpoch leaderAndEpoch = position.currentLeader;
             Node node = leaderAndEpoch.leader;
 
-            if (node == null) {
+            if (node == null || node.isEmpty()) {
                 metadata.requestUpdate();
             } else if (client.isUnavailable(node)) {
                 client.maybeThrowAuthFailure(node);

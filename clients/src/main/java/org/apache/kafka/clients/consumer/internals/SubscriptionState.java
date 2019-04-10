@@ -582,11 +582,13 @@ public class SubscriptionState {
                 if (position.offsetEpoch.isPresent()) {
                     this.state = FetchState.AWAIT_VALIDATION;
                     this.position = newPosition;
+                    this.nextRetryTimeMs = null;
                     return true;
                 } else {
                     // If we have no epoch information for the current position, then we can skip validation
                     this.state = FetchState.FETCHING;
                     this.position = newPosition;
+                    this.nextRetryTimeMs = null;
                     return false;
                 }
             } else {
