@@ -178,6 +178,13 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                                                   final long latestSessionStartTime) {
         removeExpiredSegments();
 
+        if (keyFrom.compareTo(keyTo) > 0) {
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
+                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
+            return KeyValueIterators.emptyIterator();
+        }
+
         return new InMemorySessionStoreIterator(keyFrom,
                                                 keyTo,
                                                 latestSessionStartTime,
