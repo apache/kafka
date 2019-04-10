@@ -317,8 +317,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val newConfigs = generateKafkaConfigs(maxGroupSize.toString)
     var kickedOutConsumerIdx: Option[Int] = None
     // restart brokers until the group moves to a Coordinator with the new config
-    breakable { for (broker <- servers.indices) {
-      killBroker(broker)
+    breakable { for (broker <- Range(0, servers.size + 1)) {
+      if (broker < servers.size)
+        killBroker(broker)
       consumerPollers.indices.foreach(idx => {
         consumerPollers(idx).thrownException match {
           case Some(thrownException) =>
@@ -336,9 +337,11 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       if (kickedOutConsumerIdx.isDefined)
         break
 
-      val config = newConfigs(broker)
-      servers(broker) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
-      restartDeadBrokers()
+      if (broker < servers.size) {
+        val config = newConfigs(broker)
+        servers(broker) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
+        restartDeadBrokers()
+      }
     }}
     if (kickedOutConsumerIdx.isEmpty)
       fail(s"Should have received an ${classOf[GroupMaxSizeReachedException]} during the cluster roll")
