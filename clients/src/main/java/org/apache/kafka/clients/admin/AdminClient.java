@@ -17,6 +17,13 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.time.Duration;
+import java.util.Collection;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -25,12 +32,6 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
-
-import java.time.Duration;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
@@ -848,7 +849,9 @@ public abstract class AdminClient implements AutoCloseable {
      *
      * @param partitions      The partitions for which the preferred leader should be elected.
      * @return                The ElectPreferredLeadersResult.
+     * @deprecated            Since TBD. Use {@link #electLeaders}.
      */
+    @Deprecated
     public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions) {
         return electPreferredLeaders(partitions, new ElectPreferredLeadersOptions());
     }
@@ -882,13 +885,40 @@ public abstract class AdminClient implements AutoCloseable {
      *   <li>{@link org.apache.kafka.common.errors.LeaderNotAvailableException}
      *   if the preferred leader was not alive or not in the ISR.</li>
      * </ul>
+     * TODO: This can be implemeted interms of the method below.
      *
      * @param partitions      The partitions for which the preferred leader should be elected.
      * @param options         The options to use when electing the preferred leaders.
      * @return                The ElectPreferredLeadersResult.
+     * @deprecated            Since TBD. Use {@link #electLeaders}.
      */
+    @Deprecated
     public abstract ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions,
                                                                       ElectPreferredLeadersOptions options);
+    /**
+     * TODO: Write documentation for this method.
+     *
+     * @param electionType            The type of election to conduct.
+     * @param partitions              The topics and partitions for which to conduct elections.
+     * @param options                 The options to use when electing the leaders.
+     * @return                        The ElectLeadersResult.
+     */
+    public ElectLeadersResult electLeaders(ElectionType electionType, Set<TopicPartition> partitions) {
+        return electLeaders(electionType, partitions, new ElectLeadersOptions());
+    }
+
+    /**
+     * TODO: Write documentation for this method.
+     *
+     * @param electionType            The type of election to conduct.
+     * @param partitions              The topics and partitions for which to conduct elections.
+     * @param options                 The options to use when electing the leaders.
+     * @return                        The ElectLeadersResult.
+     */
+    public abstract ElectLeadersResult electLeaders(
+            ElectionType electionType,
+            Set<TopicPartition> partitions,
+            ElectLeadersOptions options);
 
     /**
      * Get the metrics kept by the adminClient

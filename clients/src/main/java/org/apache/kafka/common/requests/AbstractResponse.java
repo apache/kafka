@@ -156,8 +156,8 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new DescribeDelegationTokenResponse(struct);
             case DELETE_GROUPS:
                 return new DeleteGroupsResponse(struct);
-            case ELECT_PREFERRED_LEADERS:
-                return new ElectPreferredLeadersResponse(struct, version);
+            case ELECT_LEADERS:
+                return new ElectLeadersResponse(struct, version);
             case INCREMENTAL_ALTER_CONFIGS:
                 return new IncrementalAlterConfigsResponse(struct, version);
             default:

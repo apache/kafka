@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.{AdminUtils, RackAwareMode}
+import kafka.api.ElectLeadersRequestOps
 import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
@@ -47,9 +48,19 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
+import org.apache.kafka.common.message.CreateTopicsResponseData
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultSet}
-import org.apache.kafka.common.message._
+import org.apache.kafka.common.message.DeleteTopicsResponseData
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultSet}
+import org.apache.kafka.common.message.DescribeGroupsResponseData
+import org.apache.kafka.common.message.ElectLeadersResponseData
+import org.apache.kafka.common.message.InitProducerIdResponseData
+import org.apache.kafka.common.message.JoinGroupResponseData
+import org.apache.kafka.common.message.LeaveGroupResponseData
+import org.apache.kafka.common.message.OffsetCommitRequestData
+import org.apache.kafka.common.message.OffsetCommitResponseData
+import org.apache.kafka.common.message.SaslAuthenticateResponseData
+import org.apache.kafka.common.message.SaslHandshakeResponseData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -153,7 +164,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireTokenRequest(request)
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeTokensRequest(request)
         case ApiKeys.DELETE_GROUPS => handleDeleteGroupsRequest(request)
-        case ApiKeys.ELECT_PREFERRED_LEADERS => handleElectPreferredReplicaLeader(request)
+        case ApiKeys.ELECT_LEADERS => handleElectReplicaLeader(request)
         case ApiKeys.INCREMENTAL_ALTER_CONFIGS => handleIncrementalAlterConfigsRequest(request)
       }
     } catch {
@@ -2389,32 +2400,31 @@ class KafkaApis(val requestChannel: RequestChannel,
       true
   }
 
-  def handleElectPreferredReplicaLeader(request: RequestChannel.Request): Unit = {
+  def handleElectReplicaLeader(request: RequestChannel.Request): Unit = {
 
-    val electionRequest = request.body[ElectPreferredLeadersRequest]
-    val partitions =
-      if (electionRequest.data().topicPartitions() == null) {
-        metadataCache.getAllPartitions()
-      } else {
-        electionRequest.data().topicPartitions().asScala.flatMap{tp =>
-          tp.partitionId().asScala.map(partitionId => new TopicPartition(tp.topic, partitionId))}.toSet
-      }
+    val electionRequest = request.body[ElectLeadersRequest]
+    val partitions: Set[TopicPartition] = if (electionRequest.data().topicPartitions() == null) {
+      metadataCache.getAllPartitions()
+    } else {
+      electionRequest.topicPartitions
+    }
+
     def sendResponseCallback(result: Map[TopicPartition, ApiError]): Unit = {
       sendResponseMaybeThrottle(request, requestThrottleMs => {
         val results = result.
           groupBy{case (tp, error) => tp.topic}.
-          map{case (topic, ps) => new ElectPreferredLeadersResponseData.ReplicaElectionResult()
+          map{case (topic, ps) => new ElectLeadersResponseData.ReplicaElectionResult()
             .setTopic(topic)
             .setPartitionResult(ps.map{
             case (tp, error) =>
-              new ElectPreferredLeadersResponseData.PartitionResult()
+              new ElectLeadersResponseData.PartitionResult()
                 .setErrorCode(error.error.code)
                 .setErrorMessage(error.message())
                 .setPartitionId(tp.partition)}.toList.asJava)}
-        val data = new ElectPreferredLeadersResponseData()
+        val data = new ElectLeadersResponseData()
           .setThrottleTimeMs(requestThrottleMs)
           .setReplicaElectionResults(results.toList.asJava)
-        new ElectPreferredLeadersResponse(data)})
+        new ElectLeadersResponse(data)})
     }
     if (!authorize(request.session, Alter, Resource.ClusterResource)) {
       val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null);

@@ -17,6 +17,10 @@
 
 package org.apache.kafka.clients.admin;
 
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.Set;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -26,25 +30,17 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 
-import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
-
 /**
- * The result of {@link AdminClient#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}
+ * The result of {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOptions)}
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
- *
- * @deprecated Since TDB. Use {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOption)}.
  */
 @InterfaceStability.Evolving
-@Deprecated
-final public class ElectPreferredLeadersResult {
-
+final public class ElectLeadersResult {
     private final KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture;
     private final Set<TopicPartition> partitions;
 
-    ElectPreferredLeadersResult(KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture, Set<TopicPartition> partitions) {
+    ElectLeadersResult(KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture, Set<TopicPartition> partitions) {
         this.electionFuture = electionFuture;
         this.partitions = partitions;
     }
@@ -89,7 +85,7 @@ final public class ElectPreferredLeadersResult {
      * an election was attempted even if the election was not successful.</p>
      *
      * <p>This method is provided to discover the partitions attempted when
-     * {@link AdminClient#electPreferredLeaders(Collection)} is called
+     * {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOptions)} is called
      * with a null {@code partitions} argument.</p>
      */
     public KafkaFuture<Set<TopicPartition>> partitions() {

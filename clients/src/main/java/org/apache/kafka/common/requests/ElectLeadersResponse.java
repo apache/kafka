@@ -17,9 +17,9 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
-import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
-import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.ElectLeadersResponseData;
+import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
+import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -28,24 +28,24 @@ import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
 
-public class ElectPreferredLeadersResponse extends AbstractResponse {
+public class ElectLeadersResponse extends AbstractResponse {
 
-    private final ElectPreferredLeadersResponseData data;
+    private final ElectLeadersResponseData data;
 
-    public ElectPreferredLeadersResponse(ElectPreferredLeadersResponseData data) {
+    public ElectLeadersResponse(ElectLeadersResponseData data) {
         this.data = data;
     }
 
-    public ElectPreferredLeadersResponse(Struct struct, short version) {
-        this.data = new ElectPreferredLeadersResponseData(struct, version);
+    public ElectLeadersResponse(Struct struct, short version) {
+        this.data = new ElectLeadersResponseData(struct, version);
     }
 
-    public ElectPreferredLeadersResponse(Struct struct) {
-        short latestVersion = (short) (ElectPreferredLeadersResponseData.SCHEMAS.length - 1);
-        this.data = new ElectPreferredLeadersResponseData(struct, latestVersion);
+    public ElectLeadersResponse(Struct struct) {
+        short latestVersion = (short) (ElectLeadersResponseData.SCHEMAS.length - 1);
+        this.data = new ElectLeadersResponseData(struct, latestVersion);
     }
 
-    public ElectPreferredLeadersResponseData data() {
+    public ElectLeadersResponseData data() {
         return data;
     }
 
@@ -71,9 +71,9 @@ public class ElectPreferredLeadersResponse extends AbstractResponse {
         return counts;
     }
 
-    public static ElectPreferredLeadersResponse parse(ByteBuffer buffer, short version) {
-        return new ElectPreferredLeadersResponse(
-                ApiKeys.ELECT_PREFERRED_LEADERS.responseSchema(version).read(buffer), version);
+    public static ElectLeadersResponse parse(ByteBuffer buffer, short version) {
+        return new ElectLeadersResponse(
+                ApiKeys.ELECT_LEADERS.responseSchema(version).read(buffer), version);
     }
 
     @Override

@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
@@ -60,8 +61,8 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicSet;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
@@ -89,22 +90,21 @@ import org.apache.kafka.common.requests.AlterConfigsResponse;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsRequest;
 import org.apache.kafka.common.requests.AlterReplicaLogDirsResponse;
 import org.apache.kafka.common.requests.ApiError;
-import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation;
-import org.apache.kafka.common.requests.CreateAclsResponse;
+import org.apache.kafka.common.requests.CreateAclsRequest;
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
+import org.apache.kafka.common.requests.CreateAclsResponse;
 import org.apache.kafka.common.requests.CreateDelegationTokenRequest;
 import org.apache.kafka.common.requests.CreateDelegationTokenResponse;
-import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails;
+import org.apache.kafka.common.requests.CreatePartitionsRequest;
 import org.apache.kafka.common.requests.CreatePartitionsResponse;
 import org.apache.kafka.common.requests.CreateTopicsRequest;
 import org.apache.kafka.common.requests.CreateTopicsResponse;
 import org.apache.kafka.common.requests.DeleteAclsRequest;
-import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
-import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
+import org.apache.kafka.common.requests.DeleteAclsResponse;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsResponse;
 import org.apache.kafka.common.requests.DeleteRecordsRequest;
@@ -121,10 +121,11 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.DescribeLogDirsRequest;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
-import org.apache.kafka.common.requests.ElectPreferredLeadersRequest;
-import org.apache.kafka.common.requests.ElectPreferredLeadersResponse;
+import org.apache.kafka.common.requests.ElectLeadersRequest;
+import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
 import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
@@ -2943,26 +2944,32 @@ public class KafkaAdminClient extends AdminClient {
         return Collections.unmodifiableMap(this.metrics.metrics());
     }
 
+    @Deprecated
     @Override
     public ElectPreferredLeadersResult electPreferredLeaders(final Collection<TopicPartition> partitions,
                                                              ElectPreferredLeadersOptions options) {
-        final Set<TopicPartition> partitionSet = partitions != null ? new HashSet<>(partitions) : null;
+        final ElectLeadersOptions newOptions = new ElectLeadersOptions();
+        newOptions.timeoutMs(options.timeoutMs());
+
+        final Set<TopicPartition> topicPartitions = partitions == null ? null : new HashSet<>(partitions);
+
         final KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
-        runnable.call(new Call("electPreferredLeaders", calcDeadlineMs(now, options.timeoutMs()),
+
+        runnable.call(new Call("electLeaders", calcDeadlineMs(now, options.timeoutMs()),
                 new ControllerNodeProvider()) {
 
             @Override
             public AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new ElectPreferredLeadersRequest.Builder(
-                        ElectPreferredLeadersRequest.toRequestData(partitions, timeoutMs));
+                return new ElectLeadersRequest.Builder(ElectionType.PREFERRED, topicPartitions, timeoutMs);
             }
 
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
-                ElectPreferredLeadersResponse response = (ElectPreferredLeadersResponse) abstractResponse;
+                ElectLeadersResponse response = (ElectLeadersResponse) abstractResponse;
+                // TODO: check out the fromResponseData is doing the right thing (tm)
                 electionFuture.complete(
-                        ElectPreferredLeadersRequest.fromResponseData(response.data()));
+                        ElectLeadersRequest.fromResponseData(response.data()));
             }
 
             @Override
@@ -2970,7 +2977,38 @@ public class KafkaAdminClient extends AdminClient {
                 electionFuture.completeExceptionally(throwable);
             }
         }, now);
-        return new ElectPreferredLeadersResult(electionFuture, partitionSet);
+
+        return new ElectPreferredLeadersResult(electionFuture, topicPartitions);
     }
 
+    @Override
+    public ElectLeadersResult electLeaders(
+            final ElectionType electionType,
+            final Set<TopicPartition> topicPartitions,
+            ElectLeadersOptions options) {
+        final KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture = new KafkaFutureImpl<>();
+        final long now = time.milliseconds();
+        runnable.call(new Call("electLeaders", calcDeadlineMs(now, options.timeoutMs()),
+                new ControllerNodeProvider()) {
+
+            @Override
+            public AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new ElectLeadersRequest.Builder(electionType, topicPartitions, timeoutMs);
+            }
+
+            @Override
+            public void handleResponse(AbstractResponse abstractResponse) {
+                ElectLeadersResponse response = (ElectLeadersResponse) abstractResponse;
+                // TODO: check out the fromResponseData is doing the right thing (tm)
+                electionFuture.complete(
+                        ElectLeadersRequest.fromResponseData(response.data()));
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                electionFuture.completeExceptionally(throwable);
+            }
+        }, now);
+        return new ElectLeadersResult(electionFuture, topicPartitions);
+    }
 }

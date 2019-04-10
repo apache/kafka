@@ -18,6 +18,7 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBinding;
@@ -33,25 +34,23 @@ import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
-import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionSet;
-import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreateableTopicConfig;
-import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
-import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
+import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
-import org.apache.kafka.common.message.ElectPreferredLeadersRequestData;
-import org.apache.kafka.common.message.ElectPreferredLeadersRequestData.TopicPartitions;
-import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
-import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
-import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
+import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
@@ -344,10 +343,10 @@ public class RequestResponseTest {
         checkRequest(createRenewTokenRequest());
         checkErrorResponse(createRenewTokenRequest(), new UnknownServerException());
         checkResponse(createRenewTokenResponse(), 0);
-        checkRequest(createElectPreferredLeadersRequest());
-        checkRequest(createElectPreferredLeadersRequestNullPartitions());
-        checkErrorResponse(createElectPreferredLeadersRequest(), new UnknownServerException());
-        checkResponse(createElectPreferredLeadersResponse(), 0);
+        checkRequest(createElectLeadersRequest());
+        checkRequest(createElectLeadersRequestNullPartitions());
+        checkErrorResponse(createElectLeadersRequest(), new UnknownServerException());
+        checkResponse(createElectLeadersResponse(), 0);
         checkRequest(createIncrementalAlterConfigsRequest());
         checkErrorResponse(createIncrementalAlterConfigsRequest(), new UnknownServerException());
         checkResponse(createIncrementalAlterConfigsResponse(), 0);
@@ -1489,23 +1488,18 @@ public class RequestResponseTest {
         return new DescribeDelegationTokenResponse(20, Errors.NONE, tokenList);
     }
 
-    private ElectPreferredLeadersRequest createElectPreferredLeadersRequestNullPartitions() {
-        return new ElectPreferredLeadersRequest.Builder(
-                new ElectPreferredLeadersRequestData()
-                        .setTimeoutMs(100)
-                        .setTopicPartitions(null))
-                .build((short) 0);
+    private ElectLeadersRequest createElectLeadersRequestNullPartitions() {
+        return new ElectLeadersRequest.Builder(ElectionType.PREFERRED, null, 100).build((short) 0);
     }
 
-    private ElectPreferredLeadersRequest createElectPreferredLeadersRequest() {
-        ElectPreferredLeadersRequestData data = new ElectPreferredLeadersRequestData()
-                .setTimeoutMs(100);
-        data.topicPartitions().add(new TopicPartitions().setTopic("data").setPartitionId(asList(1, 2)));
-        return new ElectPreferredLeadersRequest.Builder(data).build((short) 0);
+    private ElectLeadersRequest createElectLeadersRequest() {
+        List<TopicPartition> partitions = asList(new TopicPartition("data", 1), new TopicPartition("data", 2));
+
+        return new ElectLeadersRequest.Builder(ElectionType.PREFERRED, partitions, 100).build((short) 0);
     }
 
-    private ElectPreferredLeadersResponse createElectPreferredLeadersResponse() {
-        ElectPreferredLeadersResponseData data = new ElectPreferredLeadersResponseData().setThrottleTimeMs(200);
+    private ElectLeadersResponse createElectLeadersResponse() {
+        ElectLeadersResponseData data = new ElectLeadersResponseData().setThrottleTimeMs(200);
         ReplicaElectionResult resultsByTopic = new ReplicaElectionResult().setTopic("myTopic");
         resultsByTopic.partitionResult().add(new PartitionResult().setPartitionId(0)
                 .setErrorCode(Errors.NONE.code())
@@ -1514,7 +1508,7 @@ public class RequestResponseTest {
                 .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
                 .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
         data.replicaElectionResults().add(resultsByTopic);
-        return new ElectPreferredLeadersResponse(data);
+        return new ElectLeadersResponse(data);
     }
 
     private IncrementalAlterConfigsRequest createIncrementalAlterConfigsRequest() {

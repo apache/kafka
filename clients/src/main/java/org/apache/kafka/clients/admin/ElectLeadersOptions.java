@@ -22,13 +22,10 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Collection;
 
 /**
- * Options for {@link AdminClient#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}.
+ * Options for {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOptions)}.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
- *
- * @deprecated Since TBD. Use {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOption)}.
  */
 @InterfaceStability.Evolving
-@Deprecated
-public class ElectPreferredLeadersOptions extends AbstractOptions<ElectPreferredLeadersOptions> {
+final public class ElectLeadersOptions extends AbstractOptions<ElectLeadersOptions> {
 }

@@ -15,20 +15,22 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.common;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collection;
-
 /**
- * Options for {@link AdminClient#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}.
+ * Options for {@link AdminClient#electLeaders(ElectionType, Collection, ElectPreferredLeadersOptions)}.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
- *
- * @deprecated Since TBD. Use {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOption)}.
  */
 @InterfaceStability.Evolving
-@Deprecated
-public class ElectPreferredLeadersOptions extends AbstractOptions<ElectPreferredLeadersOptions> {
+public enum ElectionType {
+    PREFERRED((byte) 0), UNCLEAN((byte) 1);
+
+    public final byte value;
+
+    ElectionType(byte value) {
+        this.value = value;
+    }
 }
