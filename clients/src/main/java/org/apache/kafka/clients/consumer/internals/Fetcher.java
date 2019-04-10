@@ -602,8 +602,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
                 if (partitionRecords.nextFetchOffset > position.offset) {
                     SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
-                            partitionRecords.nextFetchOffset, partitionRecords.lastEpoch,
-                            metadata.leaderAndEpoch(partitionRecords.partition));
+                            partitionRecords.nextFetchOffset,
+                            partitionRecords.lastEpoch,
+                            position.currentLeader);
                     log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
                             "position to {}", position, partitionRecords.partition, nextPosition);
                     subscriptions.position(partitionRecords.partition, nextPosition);
@@ -695,7 +696,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      */
     private void validateOffsetsAsync(Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate) {
         final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
-                regroupPartitionMapByNode(partitionsToValidate);
+                regroupFetchPositionsByLeader(partitionsToValidate);
 
         regrouped.forEach((node, dataMap) -> {
             subscriptions.setNextAllowedRetry(dataMap.keySet(), time.milliseconds() + requestTimeoutMs);
@@ -999,10 +1000,10 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
 
         for (TopicPartition partition : fetchablePartitions()) {
-            Node node = metadata.partitionInfoIfCurrent(partition)
-                    .map(MetadataCache.PartitionInfoAndEpoch::partitionInfo)
-                    .map(PartitionInfo::leader)
-                    .orElse(null);
+            SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
+            Metadata.LeaderAndEpoch leaderAndEpoch = position.currentLeader;
+            Node node = leaderAndEpoch.leader;
+
             if (node == null) {
                 metadata.requestUpdate();
             } else if (client.isUnavailable(node)) {
@@ -1014,9 +1015,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             } else if (client.hasPendingRequests(node)) {
                 log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
             } else {
-                SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
-                final Metadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
-
                 // if there is a leader and no in-flight requests, issue a new fetch
                 FetchSessionHandler.Builder builder = fetchable.get(leaderAndEpoch.leader);
                 if (builder == null) {
@@ -1045,6 +1043,13 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         return reqs;
     }
 
+    private Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regroupFetchPositionsByLeader(
+            Map<TopicPartition, SubscriptionState.FetchPosition> partitionMap) {
+        return partitionMap.entrySet()
+                .stream()
+                .collect(Collectors.groupingBy(entry -> entry.getValue().currentLeader.leader,
+                        Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+    }
 
     private <T> Map<Node, Map<TopicPartition, T>> regroupPartitionMapByNode(Map<TopicPartition, T> partitionMap) {
         return partitionMap.entrySet()
