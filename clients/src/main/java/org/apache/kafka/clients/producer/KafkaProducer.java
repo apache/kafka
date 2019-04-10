@@ -395,7 +395,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.accumulator = new RecordAccumulator(logContext,
                     config.getInt(ProducerConfig.BATCH_SIZE_CONFIG),
                     this.compressionType,
-                    config.getInt(ProducerConfig.LINGER_MS_CONFIG),
+                    lingerMs(config),
                     retryBackoffMs,
                     deliveryTimeoutMs,
                     metrics,
@@ -475,12 +475,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 apiVersions);
     }
 
+    private static int lingerMs(ProducerConfig config) {
+        return (int) Math.min(config.getLong(ProducerConfig.LINGER_MS_CONFIG), Integer.MAX_VALUE);
+    }
+
     private static int configureDeliveryTimeout(ProducerConfig config, Logger log) {
         int deliveryTimeoutMs = config.getInt(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG);
-        int lingerMs = config.getInt(ProducerConfig.LINGER_MS_CONFIG);
+        int lingerMs = lingerMs(config);
         int requestTimeoutMs = config.getInt(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        int lingerAndRequestTimeoutMs = (int) Math.min((long) lingerMs + requestTimeoutMs, Integer.MAX_VALUE);
 
-        if (deliveryTimeoutMs < Integer.MAX_VALUE && deliveryTimeoutMs < lingerMs + requestTimeoutMs) {
+        if (deliveryTimeoutMs < Integer.MAX_VALUE && deliveryTimeoutMs < lingerAndRequestTimeoutMs) {
             if (config.originals().containsKey(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG)) {
                 // throw an exception if the user explicitly set an inconsistent value
                 throw new ConfigException(ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG
@@ -488,7 +493,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     + " + " + ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             } else {
                 // override deliveryTimeoutMs default value to lingerMs + requestTimeoutMs for backward compatibility
-                deliveryTimeoutMs = lingerMs + requestTimeoutMs;
+                deliveryTimeoutMs = lingerAndRequestTimeoutMs;
                 log.warn("{} should be equal to or larger than {} + {}. Setting it to {}.",
                     ProducerConfig.DELIVERY_TIMEOUT_MS_CONFIG, ProducerConfig.LINGER_MS_CONFIG,
                     ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, deliveryTimeoutMs);
