@@ -34,7 +34,7 @@ import scala.collection.JavaConverters._
 
 class MetadataRequestTest extends BaseRequestTest {
 
-  override def propertyOverrides(properties: Properties) {
+  override def brokerPropertyOverrides(properties: Properties) {
     properties.setProperty(KafkaConfig.DefaultReplicationFactorProp, "2")
     properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
   }

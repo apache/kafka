@@ -39,7 +39,7 @@ import org.junit.{After, Before, Test}
 import scala.collection.JavaConverters._
 
 class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
-  override val serverCount = 1
+  override val brokerCount = 1
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
 
   private val kafkaClientSaslMechanism = "GSSAPI"
@@ -70,7 +70,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     clientConfig.put(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG, "5000")
 
     // create the test topic with all the brokers as replicas
-    createTopic(topic, 2, serverCount)
+    createTopic(topic, 2, brokerCount)
   }
 
   @After

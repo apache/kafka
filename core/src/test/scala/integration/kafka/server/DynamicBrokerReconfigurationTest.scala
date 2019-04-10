@@ -253,6 +253,29 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     alterSslKeystore(adminClient, sslPropertiesCopy, SecureInternal)
     verifyProduceConsume(producer, consumer, 10, topic2)
 
+    // Verify that keystores can be updated using same file name.
+    val reusableProps = sslProperties2.clone().asInstanceOf[Properties]
+    val reusableFile = File.createTempFile("keystore", ".jks")
+    reusableProps.setProperty(SSL_KEYSTORE_LOCATION_CONFIG, reusableFile.getPath)
+    Files.copy(new File(sslProperties1.getProperty(SSL_KEYSTORE_LOCATION_CONFIG)).toPath,
+      reusableFile.toPath, StandardCopyOption.REPLACE_EXISTING)
+    alterSslKeystore(adminClient, reusableProps, SecureExternal)
+    val producer3 = ProducerBuilder().trustStoreProps(sslProperties2).maxRetries(0).build()
+    verifyAuthenticationFailure(producer3)
+    // Now alter using same file name. We can't check if the update has completed by comparing config on
+    // the broker, so we wait for producer operation to succeed to verify that the update has been performed.
+    Files.copy(new File(sslProperties2.getProperty(SSL_KEYSTORE_LOCATION_CONFIG)).toPath,
+      reusableFile.toPath, StandardCopyOption.REPLACE_EXISTING)
+    reusableFile.setLastModified(System.currentTimeMillis() + 1000)
+    alterSslKeystore(adminClient, reusableProps, SecureExternal)
+    TestUtils.waitUntilTrue(() => {
+      try {
+        producer3.partitionsFor(topic).size() == numPartitions
+      } catch {
+        case _: Exception  => false
+      }
+    }, "Keystore not updated")
+
     // Verify that all messages sent with retries=0 while keystores were being altered were consumed
     stopAndVerifyProduceConsume(producerThread, consumerThread)
   }
