@@ -398,7 +398,7 @@ class CachingWindowStore
 
         private void setCacheKeyRange(final long lowerRangeEndTime, final long upperRangeEndTime) {
             if (cacheFunction.segmentId(lowerRangeEndTime) != cacheFunction.segmentId(upperRangeEndTime)) {
-                throw new IllegalStateException();
+                throw new IllegalStateException("Error iterating over segments: segment interval has changed");
             }
 
             if (keyFrom == keyTo) {
