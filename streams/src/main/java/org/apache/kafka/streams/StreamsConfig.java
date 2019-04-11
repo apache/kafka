@@ -433,6 +433,9 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ROCKSDB_CONFIG_SETTER_CLASS_CONFIG = "rocksdb.config.setter";
     private static final String ROCKSDB_CONFIG_SETTER_CLASS_DOC = "A Rocks DB config setter class or class name that implements the <code>org.apache.kafka.streams.state.RocksDBConfigSetter</code> interface";
 
+    /** {@code rocksdb.shared.block.cache} */
+    public static final String ROCKSDB_SHARED_BLOCK_CACHE = "rocksdb.shared.block.cache";
+
     /** {@code security.protocol} */
     @SuppressWarnings("WeakerAccess")
     public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;

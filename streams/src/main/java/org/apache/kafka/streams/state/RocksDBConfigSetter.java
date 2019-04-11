@@ -34,4 +34,15 @@ public interface RocksDBConfigSetter {
      * @param configs       the configuration supplied to {@link org.apache.kafka.streams.StreamsConfig}
      */
     void setConfig(final String storeName, final Options options, final Map<String, Object> configs);
+
+    /**
+     * Turn on/off sharing of the block cache between all RocksDB instances within a process. Override this to share
+     * the cache and limit memory usage. Note that the default shared block cache size is the same as the default
+     * for individual block caches (50 MB) so you may want to set this value in setConfig()
+     *
+     * @return              true means share the block cache
+     */
+    default boolean shareBlockCache() {
+        return false;
+    }
 }

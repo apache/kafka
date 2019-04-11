@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
+import org.rocksdb.Cache;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
@@ -40,6 +41,7 @@ import org.rocksdb.CompressionType;
 import org.rocksdb.DBOptions;
 import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
+import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -153,6 +155,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         if (configSetterClass != null) {
             final RocksDBConfigSetter configSetter = Utils.newInstance(configSetterClass);
             configSetter.setConfig(name, userSpecifiedOptions, configs);
+
+            if (configSetter.shareBlockCache()) {
+                if (!(userSpecifiedOptions.tableFormatConfig() instanceof BlockBasedTableConfig)) {
+                    throw new IllegalArgumentException("Unknown type of TableFormatConfig");
+                }
+
+                // Need to get the current tableConfig in case the user customized it
+                final BlockBasedTableConfig currentTableConfig = (BlockBasedTableConfig) userSpecifiedOptions.tableFormatConfig();
+                final Cache cache = (Cache) configs.computeIfAbsent(StreamsConfig.ROCKSDB_SHARED_BLOCK_CACHE, c -> new LRUCache(currentTableConfig.blockCacheSize()));
+                currentTableConfig.setBlockCache(cache);
+            }
         }
 
         if (prepareForBulkload) {
