@@ -54,12 +54,12 @@ public class InitProducerIdRequest extends AbstractRequest {
     public final InitProducerIdRequestData data;
 
     private InitProducerIdRequest(InitProducerIdRequestData data, short version) {
-        super(ApiKeys.CREATE_TOPICS, version);
+        super(ApiKeys.INIT_PRODUCER_ID, version);
         this.data = data;
     }
 
     public InitProducerIdRequest(Struct struct, short version) {
-        super(ApiKeys.CREATE_TOPICS, version);
+        super(ApiKeys.INIT_PRODUCER_ID, version);
         this.data = new InitProducerIdRequestData(struct, version);
     }
 

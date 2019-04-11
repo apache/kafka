@@ -391,30 +391,39 @@ public class RequestResponseTest {
         checkResponse(req.getErrorResponse(e), req.version());
     }
 
-    private void checkRequest(AbstractRequest req) throws Exception {
+    private void checkRequest(AbstractRequest req) {
         // Check that we can serialize, deserialize and serialize again
         // We don't check for equality or hashCode because it is likely to fail for any request containing a HashMap
         checkRequest(req, false);
     }
 
-    private void checkRequest(AbstractRequest req, boolean checkEqualityAndHashCode) throws Exception {
+    private void checkRequest(AbstractRequest req, boolean checkEqualityAndHashCode) {
         // Check that we can serialize, deserialize and serialize again
         // Check for equality and hashCode only if indicated
-        Struct struct = req.toStruct();
-        AbstractRequest deserialized = (AbstractRequest) deserialize(req, struct, req.version());
-        Struct struct2 = deserialized.toStruct();
-        if (checkEqualityAndHashCode) {
-            assertEquals(struct, struct2);
-            assertEquals(struct.hashCode(), struct2.hashCode());
+        try {
+            Struct struct = req.toStruct();
+            AbstractRequest deserialized = AbstractRequest.parseRequest(req.api, req.version(), struct);
+            Struct struct2 = deserialized.toStruct();
+            if (checkEqualityAndHashCode) {
+                assertEquals(struct, struct2);
+                assertEquals(struct.hashCode(), struct2.hashCode());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to deserialize request " + req + " with type " + req.getClass(), e);
         }
     }
 
     private void checkResponse(AbstractResponse response, int version) throws Exception {
         // Check that we can serialize, deserialize and serialize again
         // We don't check for equality or hashCode because it is likely to fail for any response containing a HashMap
-        Struct struct = response.toStruct((short) version);
-        AbstractResponse deserialized = (AbstractResponse) deserialize(response, struct, (short) version);
-        Struct struct2 = deserialized.toStruct((short) version);
+        try {
+            Struct struct = response.toStruct((short) version);
+            AbstractResponse deserialized = (AbstractResponse) deserialize(response, struct, (short) version);
+            Struct struct2 = deserialized.toStruct((short) version);
+            assertEquals(struct2, struct);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to deserialize response " + response + " with type " + response.getClass(), e);
+        }
     }
 
     private AbstractRequestResponse deserialize(AbstractRequestResponse req, Struct struct, short version) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
