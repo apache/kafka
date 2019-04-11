@@ -82,7 +82,7 @@ public final class SlidingWindows extends Windows<TimeWindow> {
 
     @Override
     public long gracePeriodMs() {
-        return size();
+        return 0;
     }
 
     @Override
