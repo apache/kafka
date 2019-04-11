@@ -416,6 +416,9 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     produceConsumeAndShutdown(topic = topic1, group = group1, totalMessages = 100, numConsumers = 2)
     produceConsumeAndShutdown(topic = topic2, group = group2, totalMessages = 100, numConsumers = 5)
 
+    awaitConsumerGroupInactive(consumerGroupCommand, group1)
+    awaitConsumerGroupInactive(consumerGroupCommand, group2)
+
     val file = File.createTempFile("reset", ".csv")
     file.deleteOnExit()
 
@@ -468,6 +471,13 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
       count == offsets.sum
     }, "Expected that consumer group has consumed all messages from topic/partition. " +
       s"Expected offset: $count. Actual offset: ${committedOffsets(topic, group).values.sum}")
+  }
+
+  private def awaitConsumerGroupInactive(consumerGroupService: ConsumerGroupService, group: String): Unit = {
+    TestUtils.waitUntilTrue(() => {
+      val state = consumerGroupService.collectGroupState(group).state
+      state == "Empty" || state == "Dead"
+    }, s"Expected that consumer group is inactive. Actual state: ${consumerGroupService.collectGroupState(group).state}")
   }
 
   private def resetAndAssertOffsets(args: Array[String],
