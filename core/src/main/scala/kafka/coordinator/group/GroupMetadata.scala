@@ -246,14 +246,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   /**
-    * Replace the old member id with the new one, keep everything else unchanged and return the
-    * updated member.
+    * [For static members only]: Replace the old member id with the new one,
+    * keep everything else unchanged and return the updated member.
     */
   def replace(oldMemberId: String,
               newMemberId: String,
               groupInstanceId: String): MemberMetadata = {
-    val oldMember = members(oldMemberId)
-    members.remove(oldMemberId)
+    val oldMember = members.remove(oldMemberId)
+      .getOrElse(throw new IllegalArgumentException(s"Cannot replace non-existing member id $oldMemberId"))
 
     oldMember.memberId = newMemberId
     members.put(newMemberId, oldMember)

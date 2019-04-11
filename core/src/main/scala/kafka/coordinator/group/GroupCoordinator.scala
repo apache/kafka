@@ -183,17 +183,15 @@ class GroupCoordinator(val brokerId: Int,
           val oldMemberId = group.getStaticMemberId(groupInstanceId)
 
           if (group.is(Stable)) {
-            debug(s"Static member $groupInstanceId with unknown member id rejoins, assigning new member id $newMemberId. " +
-              s"No rebalance will be triggered.")
+            debug("Static member $groupInstanceId with unknown member id rejoins, assigning new member id $newMemberId. " +
+              "No rebalance will be triggered.")
 
             val oldMember = group.replace(oldMemberId, newMemberId, groupInstanceId)
 
             // Heartbeat of old member id will expire without affection since the group no longer contains that member id.
-            // New member id will be the same.
+            // New heartbeat shall be scheduled with new member id.
             completeAndScheduleNextHeartbeatExpiration(group, oldMember)
 
-            // For leader rejoin, we have to send back the entire group metadata, otherwise assignor will trigger
-            // divide by 0 exception potentially (since no group member exists in the metadata).
             responseCallback(JoinGroupResult(
               members = if (group.isLeader(newMemberId)) {
                 group.currentMemberMetadata
@@ -247,16 +245,20 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else if (group.isPendingMember(memberId)) {
         // A rejoining pending member will be accepted. Note that pending member will never be a static member.
-        assert(groupInstanceId == JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID)
-        addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID,
-          clientId, clientHost, protocolType, protocols, group, responseCallback)
+        if (isStaticMember) {
+          throw new IllegalStateException(s"the static member $groupInstanceId was unexpectedly to be assigned " +
+            s"into pending member bucket with member id $memberId")
+        } else {
+          addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID,
+            clientId, clientHost, protocolType, protocols, group, responseCallback)
+        }
       } else {
         val isKnownGroupInstanceId = group.hasStaticMember(groupInstanceId)
         val groupInstanceIdNotFound = isStaticMember && !isKnownGroupInstanceId
 
         if (isKnownGroupInstanceId && group.getStaticMemberId(groupInstanceId) != memberId) {
           // given member id doesn't match with the groupInstanceId. Inform duplicate instance to shut down immediately.
-          responseCallback(joinError(memberId, Errors.MEMBER_ID_MISMATCH))
+          responseCallback(joinError(memberId, Errors.FENCED_INSTANCE_ID))
         } else if (!group.has(memberId) || groupInstanceIdNotFound) {
             // If the dynamic member trying to register with an unrecognized id, or
             // the static member joins with unknown group instance id, send the response to let

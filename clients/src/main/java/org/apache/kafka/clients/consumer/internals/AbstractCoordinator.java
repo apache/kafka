@@ -554,7 +554,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     || error == Errors.INVALID_GROUP_ID
                     || error == Errors.GROUP_AUTHORIZATION_FAILED
                     || error == Errors.GROUP_MAX_SIZE_REACHED
-                    || error == Errors.MEMBER_ID_MISMATCH) {
+                    || error == Errors.FENCED_INSTANCE_ID) {
                 // log the error and re-throw the exception
                 log.error("Attempt to join group failed due to fatal error: {}", error.message());
                 if (error == Errors.GROUP_MAX_SIZE_REACHED) {

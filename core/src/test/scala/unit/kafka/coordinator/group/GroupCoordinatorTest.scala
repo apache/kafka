@@ -423,7 +423,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     EasyMock.reset(replicaManager)
     val unknownMemberId = "unknown_member"
     joinGroupResult = staticJoinGroup(groupId, unknownMemberId, groupInstanceId, protocolType, protocols)
-    assertEquals(Errors.MEMBER_ID_MISMATCH, joinGroupResult.error)
+    assertEquals(Errors.FENCED_INSTANCE_ID, joinGroupResult.error)
   }
 
   @Test
@@ -465,7 +465,7 @@ class GroupCoordinatorTest extends JUnitSuite {
 
     EasyMock.reset(replicaManager)
     val oldLeaderJoinGroupResult = staticJoinGroup(groupId, rebalanceResult.leaderId, leaderInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
-    assertEquals(Errors.MEMBER_ID_MISMATCH, oldLeaderJoinGroupResult.error)
+    assertEquals(Errors.FENCED_INSTANCE_ID, oldLeaderJoinGroupResult.error)
 
     EasyMock.reset(replicaManager)
     assertNotEquals(rebalanceResult.leaderId, joinGroupResult.leaderId)
@@ -562,7 +562,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     // Join with old member id will fail because the member id is updated
     assertNotEquals(rebalanceResult.followerId, joinGroupResult.memberId)
     val oldFollowerJoinGroupResult = staticJoinGroup(groupId, rebalanceResult.followerId, followerInstanceId, protocolType, newProtocols, clockAdvance = 1)
-    assertEquals(Errors.MEMBER_ID_MISMATCH, oldFollowerJoinGroupResult.error)
+    assertEquals(Errors.FENCED_INSTANCE_ID, oldFollowerJoinGroupResult.error)
 
     EasyMock.reset(replicaManager)
     // Sync with old member id will fail because the member id is updated
@@ -674,7 +674,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     EasyMock.reset(replicaManager)
     val joinGroupResult = staticJoinGroup(groupId, rebalanceResult.followerId, leaderInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
 
-    assertEquals(Errors.MEMBER_ID_MISMATCH, joinGroupResult.error)
+    assertEquals(Errors.FENCED_INSTANCE_ID, joinGroupResult.error)
   }
 
   @Test
@@ -684,7 +684,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     EasyMock.reset(replicaManager)
     val joinGroupResult = staticJoinGroup(groupId, rebalanceResult.leaderId, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
 
-    assertEquals(Errors.MEMBER_ID_MISMATCH, joinGroupResult.error)
+    assertEquals(Errors.FENCED_INSTANCE_ID, joinGroupResult.error)
   }
 
   @Test
@@ -697,6 +697,23 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(Errors.UNKNOWN_MEMBER_ID, joinGroupResult.error)
   }
 
+  @Test
+  def staticMemberJoinWithIllegalStateAsPendingMember() {
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+    val group = groupCoordinator.groupManager.getGroup(groupId).get
+    group.addPendingMember(rebalanceResult.followerId)
+    group.remove(rebalanceResult.followerId)
+    EasyMock.reset(replicaManager)
+
+    // Illegal state exception shall trigger since follower id resides in pending member bucket.
+    val expectedException = intercept[IllegalStateException] {
+      staticJoinGroup(groupId, rebalanceResult.followerId, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
+    }
+
+    val message = expectedException.getMessage
+    assertTrue(message.contains(rebalanceResult.followerId))
+    assertTrue(message.contains(followerInstanceId))
+  }
 
   private class RebalanceResult(val generation: Int,
                                 val leaderId: String,

@@ -248,11 +248,11 @@ public class AbstractCoordinatorTest {
         final String memberId = "memberId";
         final int generation = -1;
 
-        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.MEMBER_ID_MISMATCH));
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.FENCED_INSTANCE_ID));
 
         RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
-        assertEquals(Errors.MEMBER_ID_MISMATCH.message(), future.exception().getMessage());
+        assertEquals(Errors.FENCED_INSTANCE_ID.message(), future.exception().getMessage());
         // Make sure the exception is fatal.
         assertFalse(future.isRetriable());
     }

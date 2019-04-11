@@ -672,8 +672,8 @@ public class StreamThread extends Thread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        // Starting from 2.3, stream thread will always use thread client id to overwrite group.instance.id. This automatically infers
-        // that the stream thread will use static membership by default.
+        // Starting from 2.3, stream thread will always use thread client id to overwrite group.instance.id.
+        // This infers that the stream thread will use static membership by default.
         consumerConfigs.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, threadClientId + "-consumer");
 
         final Consumer<byte[], byte[]> consumer = clientSupplier.getConsumer(consumerConfigs);

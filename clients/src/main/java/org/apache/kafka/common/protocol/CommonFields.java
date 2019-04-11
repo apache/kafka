@@ -39,8 +39,6 @@ public class CommonFields {
     public static final Field.Int32 GENERATION_ID = new Field.Int32("generation_id", "The generation of the group.");
     public static final Field.Str MEMBER_ID = new Field.Str("member_id", "The member id assigned by the group " +
             "coordinator or null if joining for the first time.");
-    public static final Field.Str GROUP_INSTANCE_ID = new Field.Str("group_instance_id", "The unique identifier of the consumer "
-        + "instance provided by end user.");
 
     // Transactional APIs
     public static final Field.Str TRANSACTIONAL_ID = new Field.Str("transactional_id", "The transactional id corresponding to the transaction.");
