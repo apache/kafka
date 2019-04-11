@@ -28,7 +28,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
@@ -146,25 +145,22 @@ public class SubscriptionStateTest {
     }
 
     @Test
-    public void verifyAssignmentListener() {
-        final AtomicReference<Set<TopicPartition>> assignmentRef = new AtomicReference<>();
-        state.addListener(new SubscriptionState.Listener() {
-            @Override
-            public void onAssignment(Set<TopicPartition> assignment) {
-                assignmentRef.set(assignment);
-            }
-        });
+    public void verifyAssignmentId() {
+        assertEquals(0, state.assignmentId());
         Set<TopicPartition> userAssignment = Utils.mkSet(tp0, tp1);
         state.assignFromUser(userAssignment);
-        assertEquals(userAssignment, assignmentRef.get());
+        assertEquals(1, state.assignmentId());
+        assertEquals(userAssignment, state.assignedPartitions());
 
         state.unsubscribe();
-        assertEquals(Collections.emptySet(), assignmentRef.get());
+        assertEquals(2, state.assignmentId());
+        assertEquals(Collections.emptySet(), state.assignedPartitions());
 
         Set<TopicPartition> autoAssignment = Utils.mkSet(t1p0);
         state.subscribe(singleton(topic1), rebalanceListener);
         assertTrue(state.assignFromSubscribed(autoAssignment));
-        assertEquals(autoAssignment, assignmentRef.get());
+        assertEquals(3, state.assignmentId());
+        assertEquals(autoAssignment, state.assignedPartitions());
     }
 
     @Test
