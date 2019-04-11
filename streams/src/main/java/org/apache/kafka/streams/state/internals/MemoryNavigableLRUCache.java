@@ -23,8 +23,12 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class MemoryNavigableLRUCache extends MemoryLRUCache {
+
+    private static final Logger LOG = LoggerFactory.getLogger(MemoryNavigableLRUCache.class);
 
     public MemoryNavigableLRUCache(final String name, final int maxCacheSize) {
         super(name, maxCacheSize);
@@ -32,6 +36,14 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
 
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+
+        if (from.compareTo(to) > 0) {
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
+                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
+            return KeyValueIterators.emptyIterator();
+        }
+
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
         return new DelegatingPeekingKeyValueIterator<>(name(),
             new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet()
