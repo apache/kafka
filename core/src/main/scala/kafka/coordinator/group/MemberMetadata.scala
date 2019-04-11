@@ -73,6 +73,11 @@ private[group] class MemberMetadata(var memberId: String,
   var isLeaving: Boolean = false
   var isNew: Boolean = false
   val isStaticMember: Boolean = groupInstanceId != JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID
+  val getInstanceId: Option[String] =
+    if (isStaticMember)
+      Some(groupInstanceId)
+    else
+      None
 
   def isAwaitingJoin = awaitingJoinCallback != null
 

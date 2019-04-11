@@ -133,7 +133,7 @@ private object GroupMetadata {
     members.foreach(member => {
       group.add(member, null)
       if (member.isStaticMember) {
-        group.addStaticMember(member.groupInstanceId, member.memberId)
+        group.addStaticMember(member.getInstanceId, member.memberId)
       }
     })
     group
@@ -251,7 +251,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     */
   def replace(oldMemberId: String,
               newMemberId: String,
-              groupInstanceId: String): MemberMetadata = {
+              groupInstanceId: Option[String]): MemberMetadata = {
     val oldMember = members.remove(oldMemberId)
       .getOrElse(throw new IllegalArgumentException(s"Cannot replace non-existing member id $oldMemberId"))
 
@@ -270,19 +270,22 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def removePendingMember(memberId: String) = pendingMembers.remove(memberId)
 
-  def hasStaticMember(groupInstanceId: String) = staticMembers.contains(groupInstanceId)
+  def hasStaticMember(groupInstanceId: Option[String]) = groupInstanceId.isDefined && staticMembers.contains(groupInstanceId.get)
 
-  def getStaticMemberId(groupInstanceId: String) = staticMembers(groupInstanceId)
-
-  /**
-    * Add new static member mapping. Empty group.instance.id is not allowed.
-    */
-  def addStaticMember(groupInstanceId: String, newMemberId: String) = {
-    assert(groupInstanceId != JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID)
-    staticMembers.put(groupInstanceId, newMemberId)
+  def getStaticMemberId(groupInstanceId: Option[String]) = {
+    assert(groupInstanceId.isDefined)
+    staticMembers(groupInstanceId.get)
   }
 
-  def removeStaticMember(groupInstanceId: String) = staticMembers.remove(groupInstanceId)
+  def addStaticMember(groupInstanceId: Option[String], newMemberId: String) = {
+    assert(groupInstanceId.isDefined)
+    staticMembers.put(groupInstanceId.get, newMemberId)
+  }
+
+  def removeStaticMember(groupInstanceId: Option[String]) = {
+//    assert(groupInstanceId.isDefined)
+    staticMembers.remove(groupInstanceId.orNull)
+  }
 
   def currentState = state
 

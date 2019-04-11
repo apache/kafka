@@ -159,7 +159,7 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: JoinGroupCallback): Unit = {
-      groupCoordinator.handleJoinGroup(member.groupId, member.memberId, JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID, requireKnownMemberId = false, "clientId", "clientHost",
+      groupCoordinator.handleJoinGroup(member.groupId, member.memberId, None, requireKnownMemberId = false, "clientId", "clientHost",
        DefaultRebalanceTimeout, DefaultSessionTimeout,
        protocolType, protocols, responseCallback)
     }
