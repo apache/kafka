@@ -69,6 +69,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   private var messageHandler: MirrorMakerMessageHandler = null
   private var offsetCommitIntervalMs = 0
   private var abortOnSendFailure: Boolean = true
+  private[tools] var partitionToPartition: Boolean = false
   @volatile private var exitingOnSendFailure: Boolean = false
   private var lastSuccessfulCommitTime = -1L
   private val time = Time.SYSTEM
@@ -420,7 +421,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
   private[tools] object defaultMirrorMakerMessageHandler extends MirrorMakerMessageHandler {
     override def handle(record: BaseConsumerRecord): util.List[ProducerRecord[Array[Byte], Array[Byte]]] = {
       val timestamp: java.lang.Long = if (record.timestamp == RecordBatch.NO_TIMESTAMP) null else record.timestamp
-      Collections.singletonList(new ProducerRecord(record.topic, null, timestamp, record.key, record.value, record.headers))
+      Collections.singletonList(new ProducerRecord(
+        record.topic,
+        if (partitionToPartition) record.partition else null,
+        timestamp,
+        record.key,
+        record.value,
+        record.headers))
     }
   }
 
@@ -496,6 +503,13 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
       .ofType(classOf[String])
       .defaultsTo("true")
 
+    val partitionToPartitionOpt = parser.accepts("partition.to.partition",
+      "Try to leave data partitioning the same as on source topics.")
+      .withRequiredArg()
+      .describedAs("Moving data preserves partition assignment. Source and destination topics must have same partition count.")
+      .ofType(classOf[String])
+      .defaultsTo("false")
+
     options = parser.parse(args: _*)
 
     def checkArgs() = {
@@ -514,6 +528,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
           "config: 'partition.assignment.strategy=org.apache.kafka.clients.consumer.RoundRobinAssignor'")
 
       abortOnSendFailure = options.valueOf(abortOnSendFailureOpt).toBoolean
+      partitionToPartition = options.valueOf(partitionToPartitionOpt).toBoolean
       offsetCommitIntervalMs = options.valueOf(offsetCommitIntervalMsOpt).intValue()
       val numStreams = options.valueOf(numStreamsOpt).intValue()
 
