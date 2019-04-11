@@ -715,6 +715,23 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertTrue(message.contains(followerInstanceId.get))
   }
 
+  @Test
+  def staticMemberReJoinWithIllegalArgumentAsMissingOldMember() {
+    val _ = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+    val group = groupCoordinator.groupManager.getGroup(groupId).get
+    val invalidMemberId = "invalid_member_id"
+    group.addStaticMember(followerInstanceId, invalidMemberId)
+    EasyMock.reset(replicaManager)
+
+    // Illegal state exception shall trigger since follower corresponding id is not defined in member list.
+    val expectedException = intercept[IllegalArgumentException] {
+      staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
+    }
+
+    val message = expectedException.getMessage
+    assertTrue(message.contains(invalidMemberId))
+  }
+
   private class RebalanceResult(val generation: Int,
                                 val leaderId: String,
                                 val leaderAssignment: Array[Byte],

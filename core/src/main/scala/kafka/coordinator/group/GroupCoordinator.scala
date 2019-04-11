@@ -316,7 +316,6 @@ class GroupCoordinator(val brokerId: Int,
               responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
           }
         }
-
       }
     }
   }

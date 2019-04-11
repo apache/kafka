@@ -23,7 +23,6 @@ import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
-import org.apache.kafka.common.requests.JoinGroupRequest
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, immutable, mutable}
@@ -283,7 +282,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def removeStaticMember(groupInstanceId: Option[String]) = {
-//    assert(groupInstanceId.isDefined)
     staticMembers.remove(groupInstanceId.orNull)
   }
 

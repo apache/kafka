@@ -1315,16 +1315,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       )
     } else {
-      val groupInstanceId = joinGroupRequest.data().groupInstanceId()
-      val nullableGroupInstanceId =
-        if (groupInstanceId.equals(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID))
+      val encodedGroupInstanceId = joinGroupRequest.data().groupInstanceId()
+      val groupInstanceId =
+        if (encodedGroupInstanceId.equals(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID))
           None
         else
-          Some(groupInstanceId)
+          Some(encodedGroupInstanceId)
 
       // Only return MEMBER_ID_REQUIRED error if joinGroupRequest version is >= 4
       // and groupInstanceId is configured to unknown.
-      val requireKnownMemberId = joinGroupRequest.version >= 4 && nullableGroupInstanceId.isEmpty
+      val requireKnownMemberId = joinGroupRequest.version >= 4 && groupInstanceId.isEmpty
 
       // let the coordinator handle join-group
       val protocols = joinGroupRequest.data().protocols().asScala.map(protocol =>
@@ -1332,7 +1332,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       groupCoordinator.handleJoinGroup(
         joinGroupRequest.data().groupId,
         joinGroupRequest.data().memberId,
-        nullableGroupInstanceId,
+        groupInstanceId,
         requireKnownMemberId,
         request.header.clientId,
         request.session.clientAddress.toString,
