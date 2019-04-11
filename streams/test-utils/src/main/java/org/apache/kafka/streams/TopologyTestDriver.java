@@ -45,6 +45,7 @@ import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.internals.WindowStoreFacade;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -160,7 +161,7 @@ import java.util.stream.Collectors;
  * {@link ProducerRecord#equals(Object)} can simplify your code as you can ignore attributes you are not interested in.
  * <p>
  * Note, that calling {@code pipeInput()} will also trigger {@link PunctuationType#STREAM_TIME event-time} base
- * {@link ProcessorContext#schedule(Duration, PunctuationType, org.apache.kafka.streams.processor.Punctuator) punctuation} callbacks.
+ * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuation} callbacks.
  * However, you won't trigger {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type punctuations that you must
  * trigger manually via {@link #advanceWallClockTime(long)}.
  * <p>
@@ -511,7 +512,7 @@ public class TopologyTestDriver implements Closeable {
     /**
      * Advances the internally mocked wall-clock time.
      * This might trigger a {@link PunctuationType#WALL_CLOCK_TIME wall-clock} type
-     * {@link ProcessorContext#schedule(Duration, PunctuationType, org.apache.kafka.streams.processor.Punctuator) punctuations}.
+     * {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator) punctuations}.
      *
      * @param advanceMs the amount of time to advance wall-clock time in milliseconds
      */
