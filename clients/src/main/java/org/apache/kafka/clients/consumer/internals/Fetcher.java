@@ -644,9 +644,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         } else if (!requestedResetTimestamp.equals(offsetResetStrategyTimestamp(partition))) {
             log.debug("Skipping reset of partition {} since an alternative reset has been requested", partition);
         } else {
-            ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(partition);
             SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
-                    offsetData.offset, offsetData.leaderEpoch, leaderAndEpoch);
+                    offsetData.offset, offsetData.leaderEpoch, metadata.leaderAndEpoch(partition));
             log.info("Resetting offset for partition {} to offset {}.", partition, position);
             offsetData.leaderEpoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(partition, epoch));
             subscriptions.seek(partition, position);

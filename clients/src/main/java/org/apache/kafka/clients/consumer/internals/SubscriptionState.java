@@ -558,6 +558,30 @@ public class SubscriptionState {
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
 
+        private static final Map<FetchState, Collection<FetchState>> validTransitions = new HashMap<>();
+
+        private static void addTransition(FetchState from, FetchState to) {
+            validTransitions.computeIfAbsent(from, state -> new HashSet<>()).add(to);
+
+        }
+
+        static {
+            addTransition(FetchState.INITIALIZING, FetchState.FETCHING);
+            addTransition(FetchState.INITIALIZING, FetchState.AWAIT_RESET);
+            addTransition(FetchState.INITIALIZING, FetchState.AWAIT_VALIDATION);
+
+            addTransition(FetchState.FETCHING, FetchState.FETCHING);
+            addTransition(FetchState.FETCHING, FetchState.AWAIT_RESET);
+            addTransition(FetchState.FETCHING, FetchState.AWAIT_VALIDATION);
+
+            addTransition(FetchState.AWAIT_RESET, FetchState.FETCHING);
+            addTransition(FetchState.AWAIT_RESET, FetchState.AWAIT_RESET);
+
+            addTransition(FetchState.AWAIT_VALIDATION, FetchState.FETCHING);
+            addTransition(FetchState.AWAIT_VALIDATION, FetchState.AWAIT_RESET);
+            addTransition(FetchState.AWAIT_VALIDATION, FetchState.AWAIT_VALIDATION);
+        }
+
         TopicPartitionState() {
             this.paused = false;
             this.state = FetchState.INITIALIZING;
@@ -569,31 +593,44 @@ public class SubscriptionState {
             this.nextRetryTimeMs = null;
         }
 
+        private void transitionState(FetchState state, Runnable runnable) {
+            if (validTransitions.get(this.state).contains(state)) {
+                runnable.run();
+                this.state = state;
+            } else {
+                throw new IllegalStateException("Cannot transition subscription state from " + this.state + " to " + state);
+            }
+        }
+
         private void reset(OffsetResetStrategy strategy) {
-            this.state = FetchState.AWAIT_RESET;
-            this.resetStrategy = strategy;
-            this.nextRetryTimeMs = null;
+            transitionState(FetchState.AWAIT_RESET, () -> {
+                this.resetStrategy = strategy;
+                this.nextRetryTimeMs = null;
+            });
         }
 
         private boolean maybeValidatePosition(Metadata.LeaderAndEpoch currentLeader) {
+            if (this.state.equals(FetchState.AWAIT_RESET)) {
+                return false;
+            }
+
             if (position != null && !position.safeToFetchFrom(currentLeader)) {
                 FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeader);
 
                 if (position.offsetEpoch.isPresent()) {
-                    this.state = FetchState.AWAIT_VALIDATION;
-                    this.position = newPosition;
-                    this.nextRetryTimeMs = null;
-                    return true;
+                    transitionState(FetchState.AWAIT_VALIDATION, () -> {
+                        this.position = newPosition;
+                        this.nextRetryTimeMs = null;
+                    });
                 } else {
                     // If we have no epoch information for the current position, then we can skip validation
-                    this.state = FetchState.FETCHING;
-                    this.position = newPosition;
-                    this.nextRetryTimeMs = null;
-                    return false;
+                    transitionState(FetchState.FETCHING, () -> {
+                        this.position = newPosition;
+                        this.nextRetryTimeMs = null;
+                    });
                 }
-            } else {
-                return this.state == FetchState.AWAIT_VALIDATION;
             }
+            return this.state == FetchState.AWAIT_VALIDATION;
         }
 
         /**
@@ -601,8 +638,9 @@ public class SubscriptionState {
          */
         private void validate() {
             if (hasPosition()) {
-                this.state = FetchState.FETCHING;
-                this.nextRetryTimeMs = null;
+                transitionState(FetchState.FETCHING, () -> {
+                    this.nextRetryTimeMs = null;
+                });
             }
         }
 
@@ -639,10 +677,11 @@ public class SubscriptionState {
         }
 
         private void seek(FetchPosition position) {
-            this.state = FetchState.FETCHING;
-            this.position = position;
-            this.resetStrategy = null;
-            this.nextRetryTimeMs = null;
+            transitionState(FetchState.FETCHING, () -> {
+                this.position = position;
+                this.resetStrategy = null;
+                this.nextRetryTimeMs = null;
+            });
         }
 
         private void position(FetchPosition position) {
@@ -716,11 +755,7 @@ public class SubscriptionState {
 
             // I think the answer is 'no' because the OffsetsForLeaderEpoch API was
             // not exposed in older versions anyway.
-            if (currentLeader.leader.isEmpty()) {
-                return true;
-            } else {
-                return currentLeader.equals(leaderAndEpoch);
-            }
+            return !currentLeader.leader.isEmpty() && currentLeader.equals(leaderAndEpoch);
         }
 
         @Override
