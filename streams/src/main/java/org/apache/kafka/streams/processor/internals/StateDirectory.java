@@ -276,69 +276,74 @@ public class StateDirectory {
         }
 
         for (final File taskDir : taskDirs) {
-            final String dirName = taskDir.getName();
-            final TaskId id = TaskId.parse(dirName);
-            boolean retryDeleteAfterUnlock = false;
-            if (!locks.containsKey(id)) {
-                try {
-                    if (lock(id)) {
-                        final long now = time.milliseconds();
-                        final long lastModifiedMs = taskDir.lastModified();
-                        if (now > lastModifiedMs + cleanupDelayMs || manualUserCall) {
-                            if (!manualUserCall) {
-                                log.info(
-                                    "{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
-                                    logPrefix(),
-                                    dirName,
-                                    id,
-                                    now - lastModifiedMs,
-                                    cleanupDelayMs);
-                            } else {
-                                log.info(
-                                        "{} Deleting state directory {} for task {} as user calling cleanup.",
-                                        logPrefix(),
-                                        dirName,
-                                        id);
-                            }
-                            Utils.delete(taskDir);
-                        }
-                    }
-                } catch (final OverlappingFileLockException e) {
-                    // locked by another thread
-                    if (manualUserCall) {
-                        log.error("{} Failed to get the state directory lock.", logPrefix(), e);
-                        throw e;
-                    }
-                } catch (final DirectoryNotEmptyException e) {
-                    //Log warning, not stacktrace, exception thrown only after retry
-                    log.warn("{} Retry after unlock failed the state directory delete. {} {}",
+            final long now = time.milliseconds();
+            final long lastModifiedMs = taskDir.lastModified();
+            if (now > lastModifiedMs + cleanupDelayMs || manualUserCall) {
+                final String dirName = taskDir.getName();
+                final TaskId id = TaskId.parse(dirName);
+                if (!manualUserCall) {
+                    log.info(
+                            "{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
                             logPrefix(),
-                            e.getClass().getName(),
-                            e.getMessage());
-                    retryDeleteAfterUnlock = true;
+                            dirName,
+                            id,
+                            now - lastModifiedMs,
+                            cleanupDelayMs);
+                } else {
+                    log.info(
+                            "{} Deleting state directory {} for task {} as user calling cleanup.",
+                            logPrefix(),
+                            dirName,
+                            id);
+                }
+                cleanRemovedTaskDir(id, taskDir, manualUserCall);
+            }
+        }
+    }
+
+    private void cleanRemovedTaskDir(final TaskId id,
+                                     final File taskDir,
+                                     final boolean manualUserCall) throws IOException {
+        boolean retryDeleteAfterUnlock = false;
+        if (!locks.containsKey(id)) {
+            try {
+                if (lock(id)) {
+                    Utils.delete(taskDir);
+                }
+            } catch (final OverlappingFileLockException e) {
+                // locked by another thread
+                if (manualUserCall) {
+                    log.error("{} Failed to get the state directory lock.", logPrefix(), e);
+                    throw e;
+                }
+            } catch (final DirectoryNotEmptyException e) {
+                //Log warning, not stacktrace, exception thrown only after retry
+                log.warn("{} Retry delete after unlock. The state directory not empty: {}",
+                        logPrefix(),
+                        e.getMessage());
+                retryDeleteAfterUnlock = true;
+            } catch (final IOException e) {
+                log.error("{} Failed to delete the state directory.", logPrefix(), e);
+                if (manualUserCall) {
+                    throw e;
+                }
+            } finally {
+                try {
+                    unlock(id);
                 } catch (final IOException e) {
-                    log.error("{} Failed to delete the state directory.", logPrefix(), e);
+                    log.error("{} Failed to release the state directory lock.", logPrefix());
                     if (manualUserCall) {
                         throw e;
                     }
-                } finally {
+                }
+                if (retryDeleteAfterUnlock) {
+                    //Retry the delete if it failed due to lock
                     try {
-                        unlock(id);
+                        Utils.delete(taskDir);
                     } catch (final IOException e) {
-                        log.error("{} Failed to release the state directory lock.", logPrefix());
+                        log.error("{} Failed to delete the state directory.", logPrefix(), e);
                         if (manualUserCall) {
                             throw e;
-                        }
-                    }
-                    if (retryDeleteAfterUnlock) {
-                        //Retry the delete if it failed due to lock
-                        try {
-                            Utils.delete(taskDir);
-                        } catch (final IOException e) {
-                            log.error("{} Failed to delete the state directory.", logPrefix(), e);
-                            if (manualUserCall) {
-                                throw e;
-                            }
                         }
                     }
                 }
