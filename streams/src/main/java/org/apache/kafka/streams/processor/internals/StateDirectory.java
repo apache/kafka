@@ -30,6 +30,7 @@ import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.DirectoryNotEmptyException;
 import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
@@ -277,6 +278,7 @@ public class StateDirectory {
         for (final File taskDir : taskDirs) {
             final String dirName = taskDir.getName();
             final TaskId id = TaskId.parse(dirName);
+            boolean retryDeleteAfterUnlock = false;
             if (!locks.containsKey(id)) {
                 try {
                     if (lock(id)) {
@@ -307,6 +309,13 @@ public class StateDirectory {
                         log.error("{} Failed to get the state directory lock.", logPrefix(), e);
                         throw e;
                     }
+                } catch (final DirectoryNotEmptyException e) {
+                    //Log warning, not stacktrace, exception thrown only after retry
+                    log.warn("{} Retry after unlock failed the state directory delete. {} {}",
+                            logPrefix(),
+                            e.getClass().getName(),
+                            e.getMessage());
+                    retryDeleteAfterUnlock = true;
                 } catch (final IOException e) {
                     log.error("{} Failed to delete the state directory.", logPrefix(), e);
                     if (manualUserCall) {
@@ -319,6 +328,17 @@ public class StateDirectory {
                         log.error("{} Failed to release the state directory lock.", logPrefix());
                         if (manualUserCall) {
                             throw e;
+                        }
+                    }
+                    if (retryDeleteAfterUnlock) {
+                        //Retry the delete if it failed due to lock
+                        try {
+                            Utils.delete(taskDir);
+                        } catch (final IOException e) {
+                            log.error("{} Failed to delete the state directory.", logPrefix(), e);
+                            if (manualUserCall) {
+                                throw e;
+                            }
                         }
                     }
                 }
