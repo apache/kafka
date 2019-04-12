@@ -41,6 +41,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import sun.plugin2.jvm.RemoteJVMLauncher.CallBack;
 
 public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
@@ -48,14 +49,13 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     private final String name;
     private final String metricScope;
-    private InternalProcessorContext context;
     private Sensor expiredRecordSensor;
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
     private final long retentionPeriod;
 
-    private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeMap;
-    private final Set<InMemorySessionStoreIterator> openIterators;
+    private final ConcurrentNavigableMap<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>> endTimeMap = new ConcurrentSkipListMap<>();
+    private final Set<InMemorySessionStoreIterator> openIterators  = ConcurrentHashMap.newKeySet();
 
     private volatile boolean open = false;
 
@@ -65,9 +65,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         this.name = name;
         this.retentionPeriod = retentionPeriod;
         this.metricScope = metricScope;
-
-        this.openIterators = ConcurrentHashMap.newKeySet();
-        this.endTimeMap = new ConcurrentSkipListMap<>();
     }
 
     @Override
@@ -76,11 +73,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context, final StateStore root) {
-        this.context = (InternalProcessorContext) context;
-
-        final StreamsMetricsImpl metrics = this.context.metrics();
+        final StreamsMetricsImpl metrics = ((InternalProcessorContext) context).metrics();
         final String taskName = context.taskId().toString();
         expiredRecordSensor = metrics.storeLevelSensor(
             taskName,
@@ -100,7 +94,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                 put(SessionKeySchema.from(Bytes.wrap(key)), value);
             });
         }
-        this.open = true;
+        open = true;
     }
 
     @Override
@@ -235,7 +229,18 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         endTimeMap.headMap(minLiveTime, false).clear();
     }
 
-    private class InMemorySessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]>, Comparable<InMemorySessionStoreIterator> {
+    private InMemorySessionStoreIterator registerNewIterator(final Bytes keyFrom,
+                                                           final Bytes keyTo,
+                                                           final long latestSessionStartTime,
+                                                           final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator) {
+        final InMemorySessionStoreIterator iterator = new InMemorySessionStoreIterator(keyFrom, keyTo, latestSessionStartTime, endTimeIterator);
+        openIterators.add(iterator);
+        return iterator;
+    }
+
+    
+
+    private class InMemorySessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 
         private Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator;
         private Iterator<Entry<Bytes, ConcurrentNavigableMap<Long, byte[]>>> keyIterator;
@@ -259,8 +264,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
             this.endTimeIterator = endTimeIterator;
             setAllIterators();
-
-            openIterators.add(this);
         }
 
         @Override
@@ -366,10 +369,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             }
 
             setAllIterators();
-        }
-
-        public int compareTo(final InMemorySessionStoreIterator other) {
-            return (int) (minTime() - other.minTime());
         }
     }
 
