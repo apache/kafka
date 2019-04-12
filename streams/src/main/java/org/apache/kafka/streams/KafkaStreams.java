@@ -78,6 +78,7 @@ import java.util.UUID;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
@@ -1073,10 +1074,8 @@ public class KafkaStreams implements AutoCloseable {
      */
     public Set<ThreadMetadata> localThreadsMetadata() {
         validateIsRunning();
-        final Set<ThreadMetadata> threadMetadata = new HashSet<>();
-        for (final StreamThread thread : threads) {
-            threadMetadata.add(thread.threadMetadata());
-        }
-        return threadMetadata;
+        return Arrays.stream(threads)
+                .map(StreamThread::threadMetadata)
+                .collect(Collectors.toSet());
     }
 }
