@@ -276,62 +276,57 @@ public class StateDirectory {
         }
 
         for (final File taskDir : taskDirs) {
-            final long now = time.milliseconds();
-            final long lastModifiedMs = taskDir.lastModified();
-            if (now > lastModifiedMs + cleanupDelayMs || manualUserCall) {
-                final String dirName = taskDir.getName();
-                final TaskId id = TaskId.parse(dirName);
-                if (!manualUserCall) {
-                    log.info(
-                            "{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
-                            logPrefix(),
-                            dirName,
-                            id,
-                            now - lastModifiedMs,
-                            cleanupDelayMs);
-                } else {
-                    log.info(
-                            "{} Deleting state directory {} for task {} as user calling cleanup.",
-                            logPrefix(),
-                            dirName,
-                            id);
+            final String dirName = taskDir.getName();
+            final TaskId id = TaskId.parse(dirName);
+            if (!locks.containsKey(id)) {
+                boolean retryDeleteAfterUnlock = false;
+                try {
+                    if (lock(id)) {
+                        final long now = time.milliseconds();
+                        final long lastModifiedMs = taskDir.lastModified();
+                        if (now > lastModifiedMs + cleanupDelayMs || manualUserCall) {
+                            if (!manualUserCall) {
+                                log.info(
+                                    "{} Deleting obsolete state directory {} for task {} as {}ms has elapsed (cleanup delay is {}ms).",
+                                    logPrefix(),
+                                    dirName,
+                                    id,
+                                    now - lastModifiedMs,
+                                    cleanupDelayMs);
+                            } else {
+                                log.info(
+                                        "{} Deleting state directory {} for task {} as user calling cleanup.",
+                                        logPrefix(),
+                                        dirName,
+                                        id);
+                            }
+                            retryDeleteAfterUnlock = deleteTaskDir(taskDir, manualUserCall, true);
+                        }
+                    }
+                } catch (final OverlappingFileLockException e) {
+                    // locked by another thread
+                    if (manualUserCall) {
+                        log.error("{} Failed to get the state directory lock.", logPrefix(), e);
+                        throw e;
+                    }
+                } finally {
+                    try {
+                        unlock(id);
+                    } catch (final IOException e) {
+                        log.error("{} Failed to release the state directory lock.", logPrefix());
+                        if (manualUserCall) {
+                            throw e;
+                        }
+                    }
+                    if (retryDeleteAfterUnlock) {
+                        //Retry the delete if it failed due to lock
+                        deleteTaskDir(taskDir, manualUserCall, false);
+                    }
                 }
-                cleanRemovedTaskDir(id, taskDir, manualUserCall);
             }
         }
     }
 
-    private void cleanRemovedTaskDir(final TaskId id,
-                                     final File taskDir,
-                                     final boolean manualUserCall) throws IOException {
-        boolean retryDeleteAfterUnlock = false;
-        if (!locks.containsKey(id)) {
-            try {
-                if (lock(id)) {
-                    retryDeleteAfterUnlock = deleteTaskDir(taskDir, manualUserCall, true);
-                }
-            } catch (final OverlappingFileLockException e) {
-                // locked by another thread
-                if (manualUserCall) {
-                    log.error("{} Failed to get the state directory lock.", logPrefix(), e);
-                    throw e;
-                }
-            } finally {
-                try {
-                    unlock(id);
-                } catch (final IOException e) {
-                    log.error("{} Failed to release the state directory lock.", logPrefix());
-                    if (manualUserCall) {
-                        throw e;
-                    }
-                }
-                if (retryDeleteAfterUnlock) {
-                    //Retry the delete if it failed due to lock
-                    deleteTaskDir(taskDir, manualUserCall, false);
-                }
-            }
-        }
-    }
 
     /** Delete Task Dir and handle Exceptions.
      * In Windows TaskDir is not empty due to lock file in it
