@@ -231,12 +231,16 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                                              final Bytes keyTo,
                                                              final long latestSessionStartTime,
                                                              final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator) {
-        final InMemorySessionStoreIterator iterator = new InMemorySessionStoreIterator(keyFrom, keyTo, latestSessionStartTime, endTimeIterator);
+        final InMemorySessionStoreIterator iterator = new InMemorySessionStoreIterator(keyFrom, keyTo, latestSessionStartTime, endTimeIterator, it -> openIterators.remove(it));
         openIterators.add(iterator);
         return iterator;
     }
 
-    private class InMemorySessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
+    interface ClosingCallback {
+        void deregisterIterator(final InMemorySessionStoreIterator iterator);
+    }
+
+    private static class InMemorySessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 
         private final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator;
         private Iterator<Entry<Bytes, ConcurrentNavigableMap<Long, byte[]>>> keyIterator;
@@ -250,15 +254,19 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         private final Bytes keyTo;
         private final long latestSessionStartTime;
 
+        private final ClosingCallback callback;
+
         InMemorySessionStoreIterator(final Bytes keyFrom,
                                      final Bytes keyTo,
                                      final long latestSessionStartTime,
-                                     final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator) {
+                                     final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator,
+                                     final ClosingCallback callback) {
             this.keyFrom = keyFrom;
             this.keyTo = keyTo;
             this.latestSessionStartTime = latestSessionStartTime;
 
             this.endTimeIterator = endTimeIterator;
+            this.callback = callback;
             setAllIterators();
         }
 
@@ -295,7 +303,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         @Override
         public void close() {
-            openIterators.remove(this);
+            callback.deregisterIterator(this);
         }
 
         Long minTime() {
