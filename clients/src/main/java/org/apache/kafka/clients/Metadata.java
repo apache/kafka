@@ -315,17 +315,17 @@ public class Metadata implements Closeable {
                 if (metadata.isInternal())
                     internalTopics.add(metadata.topic());
                 for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
-                    if (partitionMetadata.error() == Errors.NONE) {
-                        updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
-                            int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
-                            partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
-                        });
-                    } else if (partitionMetadata.error().exception() instanceof InvalidMetadataException) {
+
+                    // Even if the partition's metadata includes an error, we need to handle the update to catch new epochs
+                    updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
+                        int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                        partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
+                    });
+
+                    if (partitionMetadata.error().exception() instanceof InvalidMetadataException) {
                         log.debug("Requesting metadata update for partition {} due to error {}",
                                 new TopicPartition(metadata.topic(), partitionMetadata.partition()), partitionMetadata.error());
                         requestUpdate();
-                    } else {
-                        throw partitionMetadata.error().exception();
                     }
                 }
             } else if (metadata.error().exception() instanceof InvalidMetadataException) {
@@ -361,17 +361,9 @@ public class Metadata implements Closeable {
                 }
             }
         } else {
-            if (partitionMetadata.leader() == null || partitionMetadata.leader().isEmpty()) {
-                // Ignore this metadata which lacks a valid leader
-                PartitionInfo previousInfo = cache.cluster().partition(tp);
-                if (previousInfo != null) {
-                    partitionInfoConsumer.accept(previousInfo);
-                }
-            } else {
-                // Old cluster format (no epochs)
-                lastSeenLeaderEpochs.clear();
-                partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
-            }
+            // Handle old cluster formats as well as error responses where leader and epoch are missing
+            lastSeenLeaderEpochs.remove(tp);
+            partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
         }
     }
 
