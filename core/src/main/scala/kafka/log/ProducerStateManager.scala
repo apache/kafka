@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.types._
 import org.apache.kafka.common.record.{ControlRecordType, DefaultRecordBatch, EndTransactionMarker, RecordBatch}
 import org.apache.kafka.common.utils.{ByteUtils, Crc32C}
 
+import scala.collection.JavaConverters._
 import scala.collection.mutable.ListBuffer
 import scala.collection.{immutable, mutable}
 
@@ -750,14 +751,9 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     lastMapOffset = 0L
   }
 
-  def firstUnstableOffsetAfter(completedTxn: CompletedTxn): Long = {
-    val ongoingTxnsIter = ongoingTxns.values.iterator()
-    while (ongoingTxnsIter.hasNext) {
-      val ongoingTxn = ongoingTxnsIter.next()
-      if (ongoingTxn.producerId != completedTxn.producerId)
-        return ongoingTxn.firstOffset.messageOffset
-    }
-    completedTxn.lastOffset + 1
+  def lastStableOffset(completedTxn: CompletedTxn): Long = {
+    val nextIncompleteTxn = ongoingTxns.values.asScala.find(_.producerId != completedTxn.producerId)
+    nextIncompleteTxn.map(_.firstOffset.messageOffset).getOrElse(completedTxn.lastOffset  + 1)
   }
 
   /**
