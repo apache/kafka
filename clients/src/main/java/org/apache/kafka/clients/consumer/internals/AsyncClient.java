@@ -39,21 +39,17 @@ public abstract class AsyncClient<T1, Req extends AbstractRequest, Resp extends 
         return client.send(node, requestBuilder).compose(new RequestFutureAdapter<ClientResponse, T2>() {
             @Override
             @SuppressWarnings("unchecked")
-            public void onSuccess(ClientResponse value, RequestFuture<T2> future1) {
+            public void onSuccess(ClientResponse value, RequestFuture<T2> future) {
                 Resp resp;
                 try {
                     resp = (Resp) value.responseBody();
                 } catch (ClassCastException cce) {
                     log.error("Could not cast response body", cce);
-                    future1.raise(cce);
+                    future.raise(cce);
                     return;
                 }
                 log.trace("Received {} {} from broker {}", resp.getClass().getSimpleName(), resp, node);
-                try {
-                    future1.complete(handleResponse(node, requestData, resp));
-                } catch (RuntimeException t) {
-                    future1.raise(t);
-                }
+                future.complete(handleResponse(node, requestData, resp));
             }
 
             @Override

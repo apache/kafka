@@ -558,10 +558,10 @@ public class SubscriptionState {
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
 
-        private static final Map<FetchState, Collection<FetchState>> validTransitions = new HashMap<>();
+        private static final Map<FetchState, Collection<FetchState>> VALID_STATE_TRANSITIONS = new HashMap<>();
 
         private static void addTransition(FetchState from, FetchState to) {
-            validTransitions.computeIfAbsent(from, state -> new HashSet<>()).add(to);
+            VALID_STATE_TRANSITIONS.computeIfAbsent(from, state -> new HashSet<>()).add(to);
 
         }
 
@@ -593,12 +593,12 @@ public class SubscriptionState {
             this.nextRetryTimeMs = null;
         }
 
-        private void transitionState(FetchState state, Runnable runnable) {
-            if (validTransitions.get(this.state).contains(state)) {
+        private void transitionState(FetchState newState, Runnable runnable) {
+            if (VALID_STATE_TRANSITIONS.get(this.state).contains(newState)) {
                 runnable.run();
-                this.state = state;
+                this.state = newState;
             } else {
-                throw new IllegalStateException("Cannot transition subscription state from " + this.state + " to " + state);
+                throw new IllegalStateException("Cannot transition subscription state from " + this.state + " to " + newState);
             }
         }
 
