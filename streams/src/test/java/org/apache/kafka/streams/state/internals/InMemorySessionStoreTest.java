@@ -25,6 +25,7 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
@@ -59,8 +60,8 @@ import org.junit.Test;
 
 public class InMemorySessionStoreTest {
 
-    private final String storeName = "InMemorySessionStore";
-    private final static long RETENTION_PERIOD = 10_000L;
+    private static final String STORE_NAME = "InMemorySessionStore";
+    private static final long RETENTION_PERIOD = 10_000L;
 
     private SessionStore<String, Long> sessionStore;
     private InternalMockProcessorContext context;
@@ -72,8 +73,8 @@ public class InMemorySessionStoreTest {
         Serdes.ByteArray().serializer());
 
     private final RecordCollector recordCollector = new RecordCollectorImpl(
-        storeName,
-        new LogContext(storeName),
+        STORE_NAME,
+        new LogContext(STORE_NAME),
         new DefaultProductionExceptionHandler(),
         new Metrics().sensor("skipped-records")) {
 
@@ -96,7 +97,7 @@ public class InMemorySessionStoreTest {
     private SessionStore<String, Long> buildSessionStore(final long retentionPeriod) {
         return Stores.sessionStoreBuilder(
             Stores.inMemorySessionStore(
-                storeName,
+                STORE_NAME,
                 ofMillis(retentionPeriod)),
             Serdes.String(),
             Serdes.Long()).build();
@@ -369,7 +370,7 @@ public class InMemorySessionStoreTest {
             assertEquals(Collections.emptyList(), toList(values));
         }
 
-        context.restore(storeName, changeLog);
+        context.restore(STORE_NAME, changeLog);
 
         try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("a")) {
             assertEquals(expected, toList(values));
@@ -440,7 +441,7 @@ public class InMemorySessionStoreTest {
         final String keyFrom = Serdes.String().deserializer().deserialize("", Serdes.Integer().serializer().serialize("", -1));
         final String keyTo = Serdes.String().deserializer().deserialize("", Serdes.Integer().serializer().serialize("", 1));
 
-        final KeyValueIterator iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L);
+        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L);
         assertFalse(iterator.hasNext());
 
         final List<String> messages = appender.getMessages();
