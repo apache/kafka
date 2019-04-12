@@ -41,7 +41,6 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import sun.plugin2.jvm.RemoteJVMLauncher.CallBack;
 
 public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
@@ -91,8 +90,6 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         if (root != null) {
             context.register(root, (key, value) -> put(SessionKeySchema.from(Bytes.wrap(key)), value));
-                put(SessionKeySchema.from(Bytes.wrap(key)), value);
-            });
         }
         open = true;
     }
@@ -158,10 +155,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                                                   final long latestSessionStartTime) {
         removeExpiredSegments();
 
-        return new InMemorySessionStoreIterator(key,
-                                                key,
-                                                latestSessionStartTime,
-                                                endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
+        return registerNewIterator(key,
+                                   key,
+                                   latestSessionStartTime,
+                                   endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
     }
 
     @Deprecated
@@ -179,24 +176,24 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
             return KeyValueIterators.emptyIterator();
         }
 
-        return new InMemorySessionStoreIterator(keyFrom,
-                                                keyTo,
-                                                latestSessionStartTime,
-                                                endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
+        return registerNewIterator(keyFrom,
+                                   keyTo,
+                                   latestSessionStartTime,
+                                   endTimeMap.tailMap(earliestSessionEndTime, true).entrySet().iterator());
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes key) {
         removeExpiredSegments();
 
-        return new InMemorySessionStoreIterator(key, key, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
+        return registerNewIterator(key, key, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
         removeExpiredSegments();
 
-        return new InMemorySessionStoreIterator(from, to, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
+        return registerNewIterator(from, to, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
     }
 
     @Override
@@ -223,22 +220,22 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     private void removeExpiredSegments() {
         long minLiveTime = Math.max(0L, observedStreamTime - retentionPeriod + 1);
+
         for (final InMemorySessionStoreIterator it : openIterators) {
             minLiveTime = Math.min(minLiveTime, it.minTime());
         }
+
         endTimeMap.headMap(minLiveTime, false).clear();
     }
 
     private InMemorySessionStoreIterator registerNewIterator(final Bytes keyFrom,
-                                                           final Bytes keyTo,
-                                                           final long latestSessionStartTime,
-                                                           final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator) {
+                                                             final Bytes keyTo,
+                                                             final long latestSessionStartTime,
+                                                             final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator) {
         final InMemorySessionStoreIterator iterator = new InMemorySessionStoreIterator(keyFrom, keyTo, latestSessionStartTime, endTimeIterator);
         openIterators.add(iterator);
         return iterator;
     }
-
-    
 
     private class InMemorySessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 
