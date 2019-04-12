@@ -22,6 +22,7 @@ import org.apache.kafka.streams.state.QueryableStoreType;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.stream.Collectors;
 
 import static java.util.Collections.singletonList;
 
@@ -54,10 +55,11 @@ public class QueryableStoreProvider {
         if (!globalStore.isEmpty()) {
             return queryableStoreType.create(new WrappingStoreProvider(singletonList(globalStoreProvider)), storeName);
         }
-        final List<T> allStores = new ArrayList<>();
-        for (final StateStoreProvider storeProvider : storeProviders) {
-            allStores.addAll(storeProvider.stores(storeName, queryableStoreType));
-        }
+
+        final List<T> allStores = storeProviders.stream()
+                .flatMap(storeProvider -> storeProvider.stores(storeName, queryableStoreType).stream())
+                .collect(Collectors.toList());
+
         if (allStores.isEmpty()) {
             throw new InvalidStateStoreException("The state store, " + storeName + ", may have migrated to another instance.");
         }
