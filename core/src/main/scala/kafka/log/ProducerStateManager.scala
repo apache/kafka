@@ -751,13 +751,19 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     lastMapOffset = 0L
   }
 
+  /**
+   * Compute the last stable offset of a completed transaction, but do not yet mark the transaction complete.
+   * That will be done in `completeTxn` below. This is used to compute the LSO that will be appended to the
+   * transaction index, but the completion must be done only after successfully appending to the index.
+   */
   def lastStableOffset(completedTxn: CompletedTxn): Long = {
     val nextIncompleteTxn = ongoingTxns.values.asScala.find(_.producerId != completedTxn.producerId)
     nextIncompleteTxn.map(_.firstOffset.messageOffset).getOrElse(completedTxn.lastOffset  + 1)
   }
 
   /**
-   * Complete the transaction and return the last stable offset.
+   * Mark a transaction as completed. We will still await advancement of the high watermark before
+   * advancing the first unstable offset.
    */
   def completeTxn(completedTxn: CompletedTxn): Unit = {
     val txnMetadata = ongoingTxns.remove(completedTxn.firstOffset)
