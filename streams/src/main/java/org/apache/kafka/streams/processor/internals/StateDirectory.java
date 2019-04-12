@@ -308,23 +308,12 @@ public class StateDirectory {
         if (!locks.containsKey(id)) {
             try {
                 if (lock(id)) {
-                    Utils.delete(taskDir);
+                    retryDeleteAfterUnlock = deleteTaskDir(taskDir, manualUserCall, true);
                 }
             } catch (final OverlappingFileLockException e) {
                 // locked by another thread
                 if (manualUserCall) {
                     log.error("{} Failed to get the state directory lock.", logPrefix(), e);
-                    throw e;
-                }
-            } catch (final DirectoryNotEmptyException e) {
-                //Log warning, not stacktrace, exception thrown only after retry
-                log.warn("{} Retry delete after unlock. The state directory not empty: {}",
-                        logPrefix(),
-                        e.getMessage());
-                retryDeleteAfterUnlock = true;
-            } catch (final IOException e) {
-                log.error("{} Failed to delete the state directory.", logPrefix(), e);
-                if (manualUserCall) {
                     throw e;
                 }
             } finally {
@@ -338,17 +327,42 @@ public class StateDirectory {
                 }
                 if (retryDeleteAfterUnlock) {
                     //Retry the delete if it failed due to lock
-                    try {
-                        Utils.delete(taskDir);
-                    } catch (final IOException e) {
-                        log.error("{} Failed to delete the state directory.", logPrefix(), e);
-                        if (manualUserCall) {
-                            throw e;
-                        }
-                    }
+                    deleteTaskDir(taskDir, manualUserCall, false);
                 }
             }
         }
+    }
+
+    /** Delete Task Dir and handle Exceptions.
+     * In Windows TaskDir is not empty due to lock file in it
+     * First call with indicateRetryIfDirectoryNotEmpty = true to indicate possibility to try it again after unlock
+     *
+     * @param taskDir Directory to be removed
+     * @param throwError false if Exceptions are not rethrown
+     * @param indicateRetryIfDirectoryNotEmpty true in first call inside lock
+     * @return true if delete should be retried after unlock
+     * @throws IOException if throwError is true
+     */
+    private boolean deleteTaskDir(final File taskDir,
+                                  final boolean throwError,
+                                  final boolean indicateRetryIfDirectoryNotEmpty) throws IOException {
+        try {
+            Utils.delete(taskDir);
+        } catch (final IOException e) {
+            if (indicateRetryIfDirectoryNotEmpty && e instanceof DirectoryNotEmptyException) {
+                //Log warning, not stacktrace, exception thrown only after retry
+                log.warn("{} Retry delete after unlock. The state directory not empty: {}",
+                        logPrefix(),
+                        e.getMessage());
+                return true;
+            } else {
+                log.error("{} Failed to delete the state directory.", logPrefix(), e);
+                if (throwError) {
+                    throw e;
+                }
+            }
+        }
+        return false;
     }
 
     /**
