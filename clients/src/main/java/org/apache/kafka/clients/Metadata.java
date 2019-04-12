@@ -315,15 +315,17 @@ public class Metadata implements Closeable {
                 if (metadata.isInternal())
                     internalTopics.add(metadata.topic());
                 for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
-                    updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
-                        int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
-                        partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
-                    });
-
-                    if (partitionMetadata.error().exception() instanceof InvalidMetadataException) {
+                    if (partitionMetadata.error() == Errors.NONE) {
+                        updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
+                            int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
+                            partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
+                        });
+                    } else if (partitionMetadata.error().exception() instanceof InvalidMetadataException) {
                         log.debug("Requesting metadata update for partition {} due to error {}",
                                 new TopicPartition(metadata.topic(), partitionMetadata.partition()), partitionMetadata.error());
                         requestUpdate();
+                    } else {
+                        throw partitionMetadata.error().exception();
                     }
                 }
             } else if (metadata.error().exception() instanceof InvalidMetadataException) {
@@ -359,9 +361,17 @@ public class Metadata implements Closeable {
                 }
             }
         } else {
-            // Old cluster format (no epochs)
-            lastSeenLeaderEpochs.clear();
-            partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
+            if (partitionMetadata.leader() == null || partitionMetadata.leader().isEmpty()) {
+                // Ignore this metadata which lacks a valid leader
+                PartitionInfo previousInfo = cache.cluster().partition(tp);
+                if (previousInfo != null) {
+                    partitionInfoConsumer.accept(previousInfo);
+                }
+            } else {
+                // Old cluster format (no epochs)
+                lastSeenLeaderEpochs.clear();
+                partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
+            }
         }
     }
 
