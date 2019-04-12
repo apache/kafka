@@ -948,10 +948,11 @@ public class FetcherTest {
     public void testEpochSetInFetchRequest() {
         buildFetcher();
         subscriptions.assignFromUser(singleton(tp0));
-        client.updateMetadata(initialUpdateResponse);
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1,
+                Collections.emptyMap(), Collections.singletonMap(topicName, 4), tp -> 99);
+        client.updateMetadata(metadataResponse);
 
-        subscriptions.seek(tp0, new SubscriptionState.FetchPosition(10,  Optional.of(99),
-                new Metadata.LeaderAndEpoch(Node.noNode(), Optional.of(99))));
+        subscriptions.seek(tp0, 10);
         assertEquals(1, fetcher.sendFetches());
 
         // Check for epoch in outgoing request
@@ -960,7 +961,7 @@ public class FetcherTest {
                 FetchRequest fetchRequest = (FetchRequest) body;
                 fetchRequest.fetchData().values().forEach(partitionData -> {
                     assertTrue("Expected Fetcher to set leader epoch in request", partitionData.currentLeaderEpoch.isPresent());
-                    assertEquals("Expected leader epoch to match epoch from metadata update", partitionData.currentLeaderEpoch.get().longValue(), 99);
+                    assertEquals("Expected leader epoch to match epoch from metadata update", 99, partitionData.currentLeaderEpoch.get().longValue());
                 });
                 return true;
             } else {
