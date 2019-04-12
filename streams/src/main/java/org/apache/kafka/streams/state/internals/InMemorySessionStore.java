@@ -69,7 +69,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public String name() {
-        return this.name;
+        return name;
     }
 
     @Override
@@ -90,7 +90,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         );
 
         if (root != null) {
-            context.register(root, (key, value) -> {
+            context.register(root, (key, value) -> put(SessionKeySchema.from(Bytes.wrap(key)), value));
                 put(SessionKeySchema.from(Bytes.wrap(key)), value);
             });
         }
@@ -206,7 +206,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public boolean isOpen() {
-        return this.open;
+        return open;
     }
 
     @Override
@@ -242,7 +242,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     private class InMemorySessionStoreIterator implements KeyValueIterator<Windowed<Bytes>, byte[]> {
 
-        private Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator;
+        private final Iterator<Entry<Long, ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>>>> endTimeIterator;
         private Iterator<Entry<Bytes, ConcurrentNavigableMap<Long, byte[]>>> keyIterator;
         private Iterator<Entry<Long, byte[]>> recordIterator;
 
