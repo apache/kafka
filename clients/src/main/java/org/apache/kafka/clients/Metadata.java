@@ -457,8 +457,10 @@ public class Metadata implements Closeable {
 
     public synchronized LeaderAndEpoch leaderAndEpoch(TopicPartition tp) {
         return partitionInfoIfCurrent(tp)
-                .map(infoAndEpoch -> new LeaderAndEpoch(infoAndEpoch.partitionInfo().leader(),
-                        Optional.of(infoAndEpoch.epoch())))
+                .map(infoAndEpoch -> {
+                    Node leader = infoAndEpoch.partitionInfo().leader();
+                    return new LeaderAndEpoch(leader == null ? Node.noNode() : leader, Optional.of(infoAndEpoch.epoch()));
+                })
                 .orElse(new LeaderAndEpoch(Node.noNode(), lastSeenLeaderEpoch(tp)));
     }
 

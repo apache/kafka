@@ -700,6 +700,11 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                 regroupFetchPositionsByLeader(partitionsToValidate);
 
         regrouped.forEach((node, dataMap) -> {
+            if (node.isEmpty()) {
+                metadata.requestUpdate();
+                return;
+            }
+
             subscriptions.setNextAllowedRetry(dataMap.keySet(), time.milliseconds() + requestTimeoutMs);
 
             final Map<TopicPartition, Metadata.LeaderAndEpoch> cachedLeaderAndEpochs = partitionsToValidate.entrySet()
@@ -720,13 +725,18 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
                     // for the partition. If so, it means we have experienced log truncation and need to reposition
                     // that partition's offset.
                     offsetsResult.endOffsets().forEach((respTopicPartition, respEndOffset) -> {
-                        SubscriptionState.FetchPosition currentPosition = subscriptions.position(respTopicPartition);
-                        Metadata.LeaderAndEpoch currentLeader = currentPosition.currentLeader;
-                        if (!currentLeader.equals(cachedLeaderAndEpochs.get(respTopicPartition))) {
+                        if (!subscriptions.isAssigned(respTopicPartition)) {
+                            log.debug("Ignoring OffsetsForLeader response for partition {} which is not currently assigned.", respTopicPartition);
                             return;
                         }
 
                         if (subscriptions.awaitingValidation(respTopicPartition)) {
+                            SubscriptionState.FetchPosition currentPosition = subscriptions.position(respTopicPartition);
+                            Metadata.LeaderAndEpoch currentLeader = currentPosition.currentLeader;
+                            if (!currentLeader.equals(cachedLeaderAndEpochs.get(respTopicPartition))) {
+                                return;
+                            }
+
                             if (respEndOffset.endOffset() < currentPosition.offset) {
                                 if (subscriptions.hasDefaultOffsetResetPolicy()) {
                                     SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(

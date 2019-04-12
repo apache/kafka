@@ -614,6 +614,11 @@ public class SubscriptionState {
                 return false;
             }
 
+            if (currentLeader.equals(Metadata.LeaderAndEpoch.noLeaderOrEpoch())) {
+                // Ignore empty LeaderAndEpochs
+                return false;
+            }
+
             if (position != null && !position.safeToFetchFrom(currentLeader)) {
                 FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeader);
 
