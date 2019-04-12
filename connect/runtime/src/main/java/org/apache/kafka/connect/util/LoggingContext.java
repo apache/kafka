@@ -133,15 +133,57 @@ public final class LoggingContext implements AutoCloseable {
         return context;
     }
 
+    /**
+     * Return the prefix that uses the specified connector name, task number, and scope. The
+     * format is as follows:
+     *
+     * <pre>
+     *     [&lt;connectorName>|&lt;scope>]&lt;sp>
+     * </pre>
+     *
+     * where "<code>&lt;connectorName></code>" is the name of the connector,
+     * "<code>&lt;sp></code>" indicates a trailing space, and
+     * "<code>&lt;scope></code>" is one of the following:
+     *
+     * <ul>
+     *   <li>"<code>task-n</code>" for the operation of the numbered task, including calling the
+     *      task methods and the producer/consumer; here "n" is the 0-based task number
+     *   <li>"<code>task-n|offset</code>" for the committing of source offsets for the numbered
+     *       task; here "n" is the * zero-based task number
+     *   <li>"<code>worker</code>" for the creation and usage of connector instances
+     * </ul>
+     *
+     * <p>The following are examples of the connector context for a connector named "my-connector":
+     *
+     * <ul>
+     *   <li>`[my-connector|worker]` - used on log messages where the Connect worker is
+     *     validating the configuration for or starting/stopping the "local-file-source" connector
+     *     via the SourceConnector / SinkConnector implementation methods.
+     *   <li>`[my-connector|task-0]` - used on log messages where the Connect worker is executing
+     *     task 0 of the "local-file-source" connector, including calling any of the SourceTask /
+     *     SinkTask implementation methods, processing the messages for/from the task, and
+     *     calling the task's * producer/consumer.
+     *   <li>`[my-connector|task-0|offsets]` - used on log messages where the Connect worker is
+     *       committing * source offsets for task 0 of the "local-file-source" connector.
+     * </ul>
+     *
+     * @param connectorName the name of the connector; may not be null
+     * @param scope the scope; may not be null
+     * @param taskNumber the 0-based task number; may be null if there is no associated task
+     * @return the prefix; never null
+     */
     protected static String prefixFor(String connectorName, Scope scope, Integer taskNumber) {
         StringBuilder sb = new StringBuilder();
         sb.append("[");
         sb.append(connectorName);
         if (taskNumber != null) {
+            // There is a task number, so this is a task
             sb.append("|");
             sb.append(Scope.TASK.toString());
+            sb.append("-");
             sb.append(taskNumber.toString());
         }
+        // Append non-task scopes (e.g., worker and offset)
         if (scope != Scope.TASK) {
             sb.append("|");
             sb.append(scope.toString());
