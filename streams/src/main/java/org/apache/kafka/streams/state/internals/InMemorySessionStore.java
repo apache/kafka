@@ -134,15 +134,14 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
         removeExpiredSegments();
 
-        if (endTime <= observedStreamTime - retentionPeriod) {
-            return null;
-        }
-
-        final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(endTime);
-        if (keyMap != null) {
-            final ConcurrentNavigableMap<Long, byte[]> startTimeMap = keyMap.get(key);
-            if (startTimeMap != null) {
-                return startTimeMap.get(startTime);
+        // Only need to search if the record hasn't expired yet
+        if (endTime > observedStreamTime - retentionPeriod) {
+            final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(endTime);
+            if (keyMap != null) {
+                final ConcurrentNavigableMap<Long, byte[]> startTimeMap = keyMap.get(key);
+                if (startTimeMap != null) {
+                    return startTimeMap.get(startTime);
+                }
             }
         }
         return null;
@@ -267,14 +266,12 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         public boolean hasNext() {
             if (next != null) {
                 return true;
-            }
-
-            if (recordIterator == null) {
+            } else if (recordIterator == null) {
                 return false;
+            } else {
+                next = getNext();
+                return next != null;
             }
-
-            next = getNext();
-            return next != null;
         }
 
         @Override
@@ -351,6 +348,7 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                 } else {
                     recordIterator = nextKeyEntry.getValue().headMap(latestSessionStartTime, true).entrySet().iterator();
                 }
+
                 if (recordIterator.hasNext()) {
                     return true;
                 }
