@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.ssl;
 import java.io.File;
 import java.nio.file.Files;
 import java.security.KeyStore;
+import java.security.Provider;
 import java.util.Map;
 
 import javax.net.ssl.SSLContext;
@@ -27,6 +28,9 @@ import javax.net.ssl.SSLHandshakeException;
 
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.security.ssl.mock.TestKeyManagerFactory;
+import org.apache.kafka.common.security.ssl.mock.TestProvider;
+import org.apache.kafka.common.security.ssl.mock.TestTrustManagerFactory;
 import org.apache.kafka.test.TestSslUtils;
 import org.apache.kafka.common.network.Mode;
 import org.junit.Test;
@@ -40,10 +44,8 @@ import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import java.security.Security;
 
-/**
- * A set of tests for the selector over ssl. These use a test harness that runs a simple socket server that echos back responses.
- */
 public class SslFactoryTest {
 
     @Test
@@ -58,6 +60,21 @@ public class SslFactoryTest {
         String[] expectedProtocols = {"TLSv1.2"};
         assertArrayEquals(expectedProtocols, engine.getEnabledProtocols());
         assertEquals(false, engine.getUseClientMode());
+    }
+
+    @Test
+    public void testSslFactoryWithoutKeyStoreConfig() throws Exception {
+        Provider provider = new TestProvider();
+        Security.addProvider(provider);
+        Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
+                TestKeyManagerFactory.ALGORITHM,
+                TestTrustManagerFactory.ALGORITHM
+        );
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(serverSslConfig);
+        SSLContext sslContext = sslFactory.createSSLContext(sslKeyStore(serverSslConfig), null);
+        assertNotNull("SSL context not created", sslContext);
+        Security.removeProvider(provider.getName());
     }
 
     @Test
