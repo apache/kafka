@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -61,6 +62,7 @@ import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
@@ -232,6 +234,10 @@ public class CachingWindowStoreTest {
 
     private static Bytes bytesKey(final String key) {
         return Bytes.wrap(key.getBytes());
+    }
+
+    private String stringFrom(final byte[] from) {
+        return Serdes.String().deserializer().deserialize("", from);
     }
 
     @Test
@@ -543,6 +549,22 @@ public class CachingWindowStoreTest {
         );
     }
 
+    @Test
+    public void shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeFetch() {
+        cachingStore.put(bytesKey("a"), bytesValue("0001"), 0);
+        cachingStore.put(bytesKey("aa"), bytesValue("0002"), 1);
+        cachingStore.put(bytesKey("aa"), bytesValue("0003"), 2);
+        cachingStore.put(bytesKey("aaa"), bytesValue("0004"), 3);
+
+        final WindowStoreIterator<byte[]> singleKeyIterator = cachingStore.fetch(bytesKey("aa"), 0L, 5L);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> keyRangeIterator = cachingStore.fetch(bytesKey("aa"), bytesKey("aa"), 0L, 5L);
+
+        assertEquals(stringFrom(singleKeyIterator.next().value), stringFrom(keyRangeIterator.next().value));
+        assertEquals(stringFrom(singleKeyIterator.next().value), stringFrom(keyRangeIterator.next().value));
+        assertFalse(singleKeyIterator.hasNext());
+        assertFalse(keyRangeIterator.hasNext());
+    }
+
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
         cachingStore.put(null, bytesValue("anyValue"));
@@ -566,6 +588,23 @@ public class CachingWindowStoreTest {
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerExceptionOnRangeNullToKey() {
         cachingStore.fetch(bytesKey("anyFrom"), null, ofEpochMilli(1L), ofEpochMilli(2L));
+    }
+
+    @Test
+    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
+        LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
+        final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
+
+        final KeyValueIterator iterator = cachingStore.fetch(keyFrom, keyTo, 0L, 10L);
+        assertFalse(iterator.hasNext());
+
+        final List<String> messages = appender.getMessages();
+        assertThat(messages, hasItem("Returning empty iterator for fetch with invalid key range: from > to. "
+            + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. "
+            + "Note that the built-in numerical serdes do not follow this for negative numbers"));
     }
 
     private static KeyValue<Windowed<Bytes>, byte[]> windowedPair(final String key, final String value, final long timestamp) {

@@ -95,7 +95,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case STOP_REPLICA:
                 return new StopReplicaResponse(struct);
             case CONTROLLED_SHUTDOWN:
-                return new ControlledShutdownResponse(struct);
+                return new ControlledShutdownResponse(struct, version);
             case UPDATE_METADATA:
                 return new UpdateMetadataResponse(struct);
             case LEADER_AND_ISR:
@@ -115,7 +115,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case DELETE_RECORDS:
                 return new DeleteRecordsResponse(struct);
             case INIT_PRODUCER_ID:
-                return new InitProducerIdResponse(struct);
+                return new InitProducerIdResponse(struct, version);
             case OFFSET_FOR_LEADER_EPOCH:
                 return new OffsetsForLeaderEpochResponse(struct);
             case ADD_PARTITIONS_TO_TXN:

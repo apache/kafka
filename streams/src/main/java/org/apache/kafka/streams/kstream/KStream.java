@@ -515,7 +515,7 @@ public interface KStream<K, V> {
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * The {@link Transformer} must return a {@link KeyValue} type in {@link Transformer#transform(Object, Object)
-     * transform()} and {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()}.
+     * transform()}.
      * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
      * in which case no record is emitted.
      * <pre>{@code
@@ -528,7 +528,7 @@ public interface KStream<K, V> {
      *             void init(ProcessorContext context) {
      *                 this.context = context;
      *                 this.state = context.getStateStore("myTransformState");
-     *                 // punctuate each 1000ms; can access this.state
+     *                 // punctuate each second; can access this.state
      *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
@@ -553,7 +553,8 @@ public interface KStream<K, V> {
      * (cf. {@link #transformValues(ValueTransformerSupplier, String...) transformValues()} )
      * <p>
      * Note that it is possible to emit multiple records for each input record by using
-     * {@link ProcessorContext#forward(Object, Object) context#forward()} in {@link Transformer#transform(Object, Object) Transformer#transform()} and
+     * {@link ProcessorContext#forward(Object, Object) context#forward()} in
+     * {@link Transformer#transform(Object, Object) Transformer#transform()} and
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      * Be aware that a mismatch between the types of the emitted records and the type of the stream would only be
      * detected at runtime.
@@ -619,7 +620,7 @@ public interface KStream<K, V> {
      *             void init(ProcessorContext context) {
      *                 this.context = context;
      *                 this.state = context.getStateStore("myTransformState");
-     *                 // punctuate each 1000ms; can access this.state
+     *                 // punctuate each second; can access this.state
      *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
@@ -697,8 +698,7 @@ public interface KStream<K, V> {
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
-     * pairs should be emitted via {@link ProcessorContext#forward(Object, Object)
-     * ProcessorContext.forward()}.
+     * pairs should be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * <pre>{@code
      * new ValueTransformerSupplier() {
      *     ValueTransformer get() {
@@ -707,7 +707,7 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each 1000ms, can access this.state
+     *                 // punctuate each second, can access this.state
      *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
@@ -779,7 +779,7 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each 1000ms, can access this.state
+     *                 // punctuate each second, can access this.state
      *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
@@ -848,7 +848,7 @@ public interface KStream<K, V> {
      *
      *             void init(ProcessorContext context) {
      *                 this.state = context.getStateStore("myProcessorState");
-     *                 // punctuate each 1000ms, can access this.state
+     *                 // punctuate each second, can access this.state
      *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *

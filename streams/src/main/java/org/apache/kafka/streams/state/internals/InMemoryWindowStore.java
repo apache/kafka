@@ -131,7 +131,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         if (windowStartTimestamp <= this.observedStreamTime - this.retentionPeriod) {
             expiredRecordSensor.record();
-            LOG.debug("Skipping record for expired segment.");
+            LOG.warn("Skipping record for expired segment.");
         } else {
             if (value != null) {
                 this.segmentMap.computeIfAbsent(windowStartTimestamp, t -> new ConcurrentSkipListMap<>());
@@ -184,6 +184,13 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                                                            final long timeFrom,
                                                            final long timeTo) {
         removeExpiredSegments();
+
+        if (from.compareTo(to) > 0) {
+            LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
+                + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. " +
+                "Note that the built-in numerical serdes do not follow this for negative numbers");
+            return KeyValueIterators.emptyIterator();
+        }
 
         // add one b/c records expire exactly retentionPeriod ms after created
         final long minTime = Math.max(timeFrom, this.observedStreamTime - this.retentionPeriod + 1);

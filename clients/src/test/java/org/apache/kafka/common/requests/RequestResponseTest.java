@@ -32,6 +32,10 @@ import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.SecurityDisabledException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.ControlledShutdownRequestData;
+import org.apache.kafka.common.message.ControlledShutdownResponseData;
+import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
+import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionSet;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
@@ -48,6 +52,8 @@ import org.apache.kafka.common.message.ElectPreferredLeadersRequestData.TopicPar
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.InitProducerIdRequestData;
+import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
@@ -385,30 +391,39 @@ public class RequestResponseTest {
         checkResponse(req.getErrorResponse(e), req.version());
     }
 
-    private void checkRequest(AbstractRequest req) throws Exception {
+    private void checkRequest(AbstractRequest req) {
         // Check that we can serialize, deserialize and serialize again
         // We don't check for equality or hashCode because it is likely to fail for any request containing a HashMap
         checkRequest(req, false);
     }
 
-    private void checkRequest(AbstractRequest req, boolean checkEqualityAndHashCode) throws Exception {
+    private void checkRequest(AbstractRequest req, boolean checkEqualityAndHashCode) {
         // Check that we can serialize, deserialize and serialize again
         // Check for equality and hashCode only if indicated
-        Struct struct = req.toStruct();
-        AbstractRequest deserialized = (AbstractRequest) deserialize(req, struct, req.version());
-        Struct struct2 = deserialized.toStruct();
-        if (checkEqualityAndHashCode) {
-            assertEquals(struct, struct2);
-            assertEquals(struct.hashCode(), struct2.hashCode());
+        try {
+            Struct struct = req.toStruct();
+            AbstractRequest deserialized = AbstractRequest.parseRequest(req.api, req.version(), struct);
+            Struct struct2 = deserialized.toStruct();
+            if (checkEqualityAndHashCode) {
+                assertEquals(struct, struct2);
+                assertEquals(struct.hashCode(), struct2.hashCode());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to deserialize request " + req + " with type " + req.getClass(), e);
         }
     }
 
     private void checkResponse(AbstractResponse response, int version) throws Exception {
         // Check that we can serialize, deserialize and serialize again
         // We don't check for equality or hashCode because it is likely to fail for any response containing a HashMap
-        Struct struct = response.toStruct((short) version);
-        AbstractResponse deserialized = (AbstractResponse) deserialize(response, struct, (short) version);
-        Struct struct2 = deserialized.toStruct((short) version);
+        try {
+            Struct struct = response.toStruct((short) version);
+            AbstractResponse deserialized = (AbstractResponse) deserialize(response, struct, (short) version);
+            Struct struct2 = deserialized.toStruct((short) version);
+            assertEquals(struct2, struct);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to deserialize response " + response + " with type " + response.getClass(), e);
+        }
     }
 
     private AbstractRequestResponse deserialize(AbstractRequestResponse req, Struct struct, short version) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
@@ -606,7 +621,7 @@ public class RequestResponseTest {
         ByteBuffer buffer = toBuffer(struct);
         ControlledShutdownResponse deserialized = ControlledShutdownResponse.parse(buffer, version);
         assertEquals(response.error(), deserialized.error());
-        assertEquals(response.partitionsRemaining(), deserialized.partitionsRemaining());
+        assertEquals(response.data().remainingPartitions(), deserialized.data().remainingPartitions());
     }
 
     @Test(expected = UnsupportedVersionException.class)
@@ -975,19 +990,37 @@ public class RequestResponseTest {
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest() {
-        return new ControlledShutdownRequest.Builder(10, 0, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build();
+        ControlledShutdownRequestData data = new ControlledShutdownRequestData()
+                .setBrokerId(10)
+                .setBrokerEpoch(0L);
+        return new ControlledShutdownRequest.Builder(
+                data,
+                ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build();
     }
 
     private ControlledShutdownRequest createControlledShutdownRequest(int version) {
-        return new ControlledShutdownRequest.Builder(10, 0, ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build((short) version);
+        ControlledShutdownRequestData data = new ControlledShutdownRequestData()
+                .setBrokerId(10)
+                .setBrokerEpoch(0L);
+        return new ControlledShutdownRequest.Builder(
+                data,
+                ApiKeys.CONTROLLED_SHUTDOWN.latestVersion()).build((short) version);
     }
 
     private ControlledShutdownResponse createControlledShutdownResponse() {
-        Set<TopicPartition> topicPartitions = Utils.mkSet(
-                new TopicPartition("test2", 5),
-                new TopicPartition("test1", 10)
-        );
-        return new ControlledShutdownResponse(Errors.NONE, topicPartitions);
+        RemainingPartition p1 = new RemainingPartition()
+                .setTopicName("test2")
+                .setPartitionIndex(5);
+        RemainingPartition p2 = new RemainingPartition()
+                .setTopicName("test1")
+                .setPartitionIndex(10);
+        RemainingPartitionSet pSet = new RemainingPartitionSet();
+        pSet.add(p1);
+        pSet.add(p2);
+        ControlledShutdownResponseData data = new ControlledShutdownResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setRemainingPartitions(pSet);
+        return new ControlledShutdownResponse(data);
     }
 
     private LeaderAndIsrRequest createLeaderAndIsrRequest(int version) {
@@ -1145,13 +1178,20 @@ public class RequestResponseTest {
     }
 
     private InitProducerIdRequest createInitPidRequest() {
-        return new InitProducerIdRequest.Builder(null, 100).build();
+        InitProducerIdRequestData requestData = new InitProducerIdRequestData()
+                .setTransactionalId(null)
+                .setTransactionTimeoutMs(100);
+        return new InitProducerIdRequest.Builder(requestData).build();
     }
 
     private InitProducerIdResponse createInitPidResponse() {
-        return new InitProducerIdResponse(0, Errors.NONE, 3332, (short) 3);
+        InitProducerIdResponseData responseData = new InitProducerIdResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setProducerEpoch((short) 3)
+                .setProducerId(3332)
+                .setThrottleTimeMs(0);
+        return new InitProducerIdResponse(responseData);
     }
-
 
     private OffsetsForLeaderEpochRequest createLeaderEpochRequest() {
         Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = new HashMap<>();

@@ -134,7 +134,7 @@ public final class MessageTest {
         for (ApiKeys apiKey : ApiKeys.values()) {
             Message message = null;
             try {
-                message = ApiMessageFactory.newRequest(apiKey.id);
+                message = ApiMessageType.fromApiKey(apiKey.id).newRequest();
             } catch (UnsupportedVersionException e) {
                 fail("No request message spec found for API " + apiKey);
             }
@@ -142,7 +142,7 @@ public final class MessageTest {
                     "supports versions up to " + message.highestSupportedVersion(),
                 apiKey.latestVersion() <= message.highestSupportedVersion());
             try {
-                message = ApiMessageFactory.newResponse(apiKey.id);
+                message = ApiMessageType.fromApiKey(apiKey.id).newResponse();
             } catch (UnsupportedVersionException e) {
                 fail("No response message spec found for API " + apiKey);
             }
@@ -159,7 +159,7 @@ public final class MessageTest {
     public void testRequestSchemas() throws Exception {
         for (ApiKeys apiKey : ApiKeys.values()) {
             Schema[] manualSchemas = apiKey.requestSchemas;
-            Schema[] generatedSchemas = ApiMessageFactory.requestSchemas(apiKey.id);
+            Schema[] generatedSchemas = ApiMessageType.fromApiKey(apiKey.id).requestSchemas();
             Assert.assertEquals("Mismatching request SCHEMAS lengths " +
                 "for api key " + apiKey, manualSchemas.length, generatedSchemas.length);
             for (int v = 0; v < manualSchemas.length; v++) {
@@ -182,7 +182,7 @@ public final class MessageTest {
     public void testResponseSchemas() throws Exception {
         for (ApiKeys apiKey : ApiKeys.values()) {
             Schema[] manualSchemas = apiKey.responseSchemas;
-            Schema[] generatedSchemas = ApiMessageFactory.responseSchemas(apiKey.id);
+            Schema[] generatedSchemas = ApiMessageType.fromApiKey(apiKey.id).responseSchemas();
             Assert.assertEquals("Mismatching response SCHEMAS lengths " +
                 "for api key " + apiKey, manualSchemas.length, generatedSchemas.length);
             for (int v = 0; v < manualSchemas.length; v++) {
