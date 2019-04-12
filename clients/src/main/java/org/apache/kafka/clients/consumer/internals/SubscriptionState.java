@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -541,14 +542,7 @@ public class SubscriptionState {
 
     private static class TopicPartitionState {
 
-        private enum FetchState {
-            INITIALIZING,
-            FETCHING,
-            AWAIT_RESET,
-            AWAIT_VALIDATION
-        }
-
-        private FetchState state;
+        private FetchState fetchState;
         private FetchPosition position; // last consumed position
 
         private Long highWatermark; // the high watermark from last fetch
@@ -558,33 +552,10 @@ public class SubscriptionState {
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
 
-        private static final Map<FetchState, Collection<FetchState>> VALID_STATE_TRANSITIONS = new HashMap<>();
-
-        private static void addTransition(FetchState from, FetchState to) {
-            VALID_STATE_TRANSITIONS.computeIfAbsent(from, state -> new HashSet<>()).add(to);
-
-        }
-
-        static {
-            addTransition(FetchState.INITIALIZING, FetchState.FETCHING);
-            addTransition(FetchState.INITIALIZING, FetchState.AWAIT_RESET);
-            addTransition(FetchState.INITIALIZING, FetchState.AWAIT_VALIDATION);
-
-            addTransition(FetchState.FETCHING, FetchState.FETCHING);
-            addTransition(FetchState.FETCHING, FetchState.AWAIT_RESET);
-            addTransition(FetchState.FETCHING, FetchState.AWAIT_VALIDATION);
-
-            addTransition(FetchState.AWAIT_RESET, FetchState.FETCHING);
-            addTransition(FetchState.AWAIT_RESET, FetchState.AWAIT_RESET);
-
-            addTransition(FetchState.AWAIT_VALIDATION, FetchState.FETCHING);
-            addTransition(FetchState.AWAIT_VALIDATION, FetchState.AWAIT_RESET);
-            addTransition(FetchState.AWAIT_VALIDATION, FetchState.AWAIT_VALIDATION);
-        }
 
         TopicPartitionState() {
             this.paused = false;
-            this.state = FetchState.INITIALIZING;
+            this.fetchState = FetchStates.INITIALIZING;
             this.position = null;
             this.highWatermark = null;
             this.logStartOffset = null;
@@ -593,24 +564,23 @@ public class SubscriptionState {
             this.nextRetryTimeMs = null;
         }
 
-        private void transitionState(FetchState newState, Runnable runnable) {
-            if (VALID_STATE_TRANSITIONS.get(this.state).contains(newState)) {
-                runnable.run();
-                this.state = newState;
-            } else {
-                throw new IllegalStateException("Cannot transition subscription state from " + this.state + " to " + newState);
+        private void transitionState(FetchState newState, Runnable runIfTransitioned) {
+            FetchState nextState = this.fetchState.transitionTo(newState);
+            if (nextState.equals(newState)) {
+                this.fetchState = nextState;
+                runIfTransitioned.run();
             }
         }
 
         private void reset(OffsetResetStrategy strategy) {
-            transitionState(FetchState.AWAIT_RESET, () -> {
+            transitionState(FetchStates.AWAIT_RESET, () -> {
                 this.resetStrategy = strategy;
                 this.nextRetryTimeMs = null;
             });
         }
 
         private boolean maybeValidatePosition(Metadata.LeaderAndEpoch currentLeader) {
-            if (this.state.equals(FetchState.AWAIT_RESET)) {
+            if (this.fetchState.equals(FetchStates.AWAIT_RESET)) {
                 return false;
             }
 
@@ -623,19 +593,19 @@ public class SubscriptionState {
                 FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeader);
 
                 if (position.offsetEpoch.isPresent()) {
-                    transitionState(FetchState.AWAIT_VALIDATION, () -> {
+                    transitionState(FetchStates.AWAIT_VALIDATION, () -> {
                         this.position = newPosition;
                         this.nextRetryTimeMs = null;
                     });
                 } else {
                     // If we have no epoch information for the current position, then we can skip validation
-                    transitionState(FetchState.FETCHING, () -> {
+                    transitionState(FetchStates.FETCHING, () -> {
                         this.position = newPosition;
                         this.nextRetryTimeMs = null;
                     });
                 }
             }
-            return this.state == FetchState.AWAIT_VALIDATION;
+            return this.fetchState.equals(FetchStates.AWAIT_VALIDATION);
         }
 
         /**
@@ -643,14 +613,14 @@ public class SubscriptionState {
          */
         private void validate() {
             if (hasPosition()) {
-                transitionState(FetchState.FETCHING, () -> {
+                transitionState(FetchStates.FETCHING, () -> {
                     this.nextRetryTimeMs = null;
                 });
             }
         }
 
         private boolean awaitingValidation() {
-            return state == FetchState.AWAIT_VALIDATION;
+            return fetchState.equals(FetchStates.AWAIT_VALIDATION);
         }
 
         private boolean awaitingRetryBackoff(long nowMs) {
@@ -658,7 +628,7 @@ public class SubscriptionState {
         }
 
         private boolean awaitingReset() {
-            return state == FetchState.AWAIT_RESET;
+            return fetchState.equals(FetchStates.AWAIT_RESET);
         }
 
         private void setNextAllowedRetry(long nextAllowedRetryTimeMs) {
@@ -670,11 +640,11 @@ public class SubscriptionState {
         }
 
         private boolean hasValidPosition() {
-            return state == FetchState.FETCHING;
+            return fetchState.hasValidPosition();
         }
 
         private boolean hasPosition() {
-            return state == FetchState.FETCHING || state == FetchState.AWAIT_VALIDATION || state == FetchState.AWAIT_RESET;
+            return fetchState.hasPosition();
         }
 
         private boolean isPaused() {
@@ -682,7 +652,7 @@ public class SubscriptionState {
         }
 
         private void seek(FetchPosition position) {
-            transitionState(FetchState.FETCHING, () -> {
+            transitionState(FetchStates.FETCHING, () -> {
                 this.position = position;
                 this.resetStrategy = null;
                 this.nextRetryTimeMs = null;
@@ -719,6 +689,100 @@ public class SubscriptionState {
             return !paused && hasValidPosition();
         }
 
+    }
+
+    /**
+     * The fetch state of a partition. This class is used to determine valid state transitions and expose the some of
+     * the behavior of the current fetch state. Actual state variables are stored in the {@link TopicPartitionState}.
+     */
+    interface FetchState {
+        default FetchState transitionTo(FetchState newState) {
+            if (validTransitions().contains(newState)) {
+                return newState;
+            } else {
+                return this;
+            }
+        }
+
+        Collection<FetchState> validTransitions();
+
+        boolean hasPosition();
+
+        boolean hasValidPosition();
+    }
+
+    /**
+     * An enumeration of all the possible fetch states. The state transitions are encoded in the values returned by
+     * {@link FetchState#validTransitions}.
+     */
+    enum FetchStates implements FetchState {
+        INITIALIZING() {
+            @Override
+            public Collection<FetchState> validTransitions() {
+                return Arrays.asList(FetchStates.FETCHING, FetchStates.AWAIT_RESET, FetchStates.AWAIT_VALIDATION);
+            }
+
+            @Override
+            public boolean hasPosition() {
+                return false;
+            }
+
+            @Override
+            public boolean hasValidPosition() {
+                return false;
+            }
+        },
+
+        FETCHING() {
+            @Override
+            public Collection<FetchState> validTransitions() {
+                return Arrays.asList(FetchStates.FETCHING, FetchStates.AWAIT_RESET, FetchStates.AWAIT_VALIDATION);
+            }
+
+            @Override
+            public boolean hasPosition() {
+                return true;
+            }
+
+            @Override
+            public boolean hasValidPosition() {
+                return true;
+            }
+        },
+
+        AWAIT_RESET() {
+            @Override
+            public Collection<FetchState> validTransitions() {
+                return Arrays.asList(FetchStates.FETCHING, FetchStates.AWAIT_RESET);
+            }
+
+            @Override
+            public boolean hasPosition() {
+                return true;
+            }
+
+            @Override
+            public boolean hasValidPosition() {
+                return false;
+            }
+        },
+
+        AWAIT_VALIDATION() {
+            @Override
+            public Collection<FetchState> validTransitions() {
+                return Arrays.asList(FetchStates.FETCHING, FetchStates.AWAIT_RESET, FetchStates.AWAIT_VALIDATION);
+            }
+
+            @Override
+            public boolean hasPosition() {
+                return true;
+            }
+
+            @Override
+            public boolean hasValidPosition() {
+                return false;
+            }
+        }
     }
 
     public interface Listener {

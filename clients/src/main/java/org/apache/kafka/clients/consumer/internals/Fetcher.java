@@ -1012,7 +1012,7 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
 
         // Ensure the position has an up-to-date leader
         subscriptions.assignedPartitions().forEach(
-                tp -> subscriptions.maybeValidatePosition(tp, metadata.leaderAndEpoch(tp)));
+            tp -> subscriptions.maybeValidatePosition(tp, metadata.leaderAndEpoch(tp)));
 
         for (TopicPartition partition : fetchablePartitions()) {
             SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
