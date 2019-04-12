@@ -18,6 +18,8 @@ package org.apache.kafka.streams.state.internals;
 
 import static java.time.Duration.ofMillis;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToList;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -25,6 +27,7 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.util.ArrayList;
@@ -32,8 +35,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import java.util.Map;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.common.Metric;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
@@ -390,6 +396,51 @@ public class InMemorySessionStoreTest {
         assertEquals(singleKeyIterator.next(), keyRangeIterator.next());
         assertFalse(singleKeyIterator.hasNext());
         assertFalse(keyRangeIterator.hasNext());
+    }
+
+    @Test
+    public void shouldLogAndMeasureExpiredRecords() {
+        LogCaptureAppender.setClassLoggerToDebug(InMemorySessionStore.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+
+        // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
+        sessionStore.put(new Windowed<>("initial record", new SessionWindow(0, RETENTION_PERIOD)), 0L);
+
+        // Try inserting a record with timestamp 0 -- should be dropped
+        sessionStore.put(new Windowed<>("late record", new SessionWindow(0, 0)), 0L);
+        sessionStore.put(new Windowed<>("another on-time record", new SessionWindow(0, RETENTION_PERIOD)), 0L);
+
+        LogCaptureAppender.unregister(appender);
+
+        final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
+
+        final Metric dropTotal = metrics.get(new MetricName(
+            "expired-window-record-drop-total",
+            "stream-in-memory-session-state-metrics",
+            "The total number of occurrence of expired-window-record-drop operations.",
+            mkMap(
+                mkEntry("client-id", "mock"),
+                mkEntry("task-id", "0_0"),
+                mkEntry("in-memory-session-state-id", STORE_NAME)
+            )
+        ));
+
+        final Metric dropRate = metrics.get(new MetricName(
+            "expired-window-record-drop-rate",
+            "stream-in-memory-session-state-metrics",
+            "The average number of occurrence of expired-window-record-drop operation per second.",
+            mkMap(
+                mkEntry("client-id", "mock"),
+                mkEntry("task-id", "0_0"),
+                mkEntry("in-memory-session-state-id", STORE_NAME)
+            )
+        ));
+
+        assertEquals(1.0, dropTotal.metricValue());
+        assertNotEquals(0.0, dropRate.metricValue());
+        final List<String> messages = appender.getMessages();
+        assertThat(messages, hasItem("Skipping record for expired segment."));
     }
 
     @Test(expected = NullPointerException.class)
