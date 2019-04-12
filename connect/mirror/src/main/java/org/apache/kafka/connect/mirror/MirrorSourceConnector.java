@@ -29,10 +29,15 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.clients.admin.NewPartitions;
+import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.CreateTopicsOptions;
 
 import java.util.Map;
 import java.util.List;
@@ -63,6 +68,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private List<TopicPartition> knownTopicPartitions = Collections.emptyList();
     private Set<String> knownTargetTopics = Collections.emptySet();
     private ReplicationPolicy replicationPolicy;
+    private int replicationFactor;
     private AdminClient sourceAdminClient;
     private AdminClient targetAdminClient;
 
@@ -86,10 +92,12 @@ public class MirrorSourceConnector extends SourceConnector {
         topicFilter = config.topicFilter();
         configPropertyFilter = config.configPropertyFilter();
         replicationPolicy = config.replicationPolicy();
+        replicationFactor = config.replicationFactor();
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
         targetAdminClient = AdminClient.create(config.targetAdminConfig());
         scheduler = new Scheduler(MirrorSourceConnector.class);
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
+        scheduler.execute(this::createTopicPartitions, "creating downstream topic-partitions");
         scheduler.scheduleRepeating(this::syncTopicAcls, config.syncTopicAclsInterval(), "syncing topic ACLs");
         scheduler.scheduleRepeating(this::syncTopicConfigs, config.syncTopicConfigsInterval(),
             "syncing topic configs");
@@ -204,6 +212,40 @@ public class MirrorSourceConnector extends SourceConnector {
         Map<String, Config> targetConfigs = sourceConfigs.entrySet().stream()
             .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> targetConfig(x.getValue())));
         updateTopicConfigs(targetConfigs);
+    }
+
+    private void createTopicPartitions()
+            throws InterruptedException, ExecutionException {
+        Map<String, Long> partitionCounts = knownTopicPartitions.stream()
+            .collect(Collectors.groupingBy(x -> x.topic(), Collectors.counting())).entrySet().stream()
+            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x ->x.getValue()));
+        List<NewTopic> newTopics = partitionCounts.entrySet().stream()
+            .filter(x -> !knownTargetTopics.contains(x.getKey()))
+            .map(x -> new NewTopic(x.getKey(), x.getValue().intValue(), (short) replicationFactor))
+            .collect(Collectors.toList());
+        Map<String, NewPartitions> newPartitions = partitionCounts.entrySet().stream()
+            .filter(x -> knownTargetTopics.contains(x.getKey()))
+            .collect(Collectors.toMap(x -> x.getKey(), x -> NewPartitions.increaseTo(x.getValue().intValue())));
+        synchronized (targetAdminClient) {
+            targetAdminClient.createTopics(newTopics, new CreateTopicsOptions()).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+                if (e != null) {
+                    log.warn("Could not create topic {}.", k, e);
+                } else {
+                    log.info("Created remote topic {} with {} partitions.", k, partitionCounts.get(k));
+                }
+            }));
+        }
+        synchronized (targetAdminClient) {
+            targetAdminClient.createPartitions(newPartitions).values().forEach((k, v) -> v.whenComplete((x, e) -> {
+                if (e instanceof InvalidPartitionsException) {
+                    // swallow, this is normal
+                } else if (e != null) {
+                    log.warn("Could not create topic-partitions for {}.", k, e);
+                } else {
+                    log.info("Increased size of {} to {} partitions.", k, partitionCounts.get(k));
+                }
+            }));
+        }
     }
 
     private static Set<String> listTopics(AdminClient adminClient)

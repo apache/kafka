@@ -54,6 +54,9 @@ public class MirrorConnectorConfig extends AbstractConfig {
     private static final String REPLICATION_POLICY_SEPARATOR_DOC = "replication.policy.separator";
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
         MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
+    public static final String REPLICATION_FACTOR = "replication.factor";
+    private static final String REPLICATION_FACTOR_DOC = "replication.factor";
+    public static final int REPLICATION_FACTOR_DEFAULT = 1;
 
     protected static final String TASK_TOPIC_PARTITIONS = "task.assigned.partitions";
     protected static final String TASK_TOPIC_PARTITIONS_DOC = "task.assigned.partitions";
@@ -290,6 +293,10 @@ public class MirrorConnectorConfig extends AbstractConfig {
         return getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
     }
 
+    int replicationFactor() {
+        return getInt(REPLICATION_FACTOR);
+    }
+
     TopicFilter topicFilter() {
         return getConfiguredInstance(TOPIC_FILTER_CLASS, TopicFilter.class);
     }
@@ -422,7 +429,13 @@ public class MirrorConnectorConfig extends AbstractConfig {
             ConfigDef.Type.STRING,
             REPLICATION_POLICY_SEPARATOR_DEFAULT,
             ConfigDef.Importance.LOW,
-            REPLICATION_POLICY_SEPARATOR_DEFAULT)
+            REPLICATION_POLICY_SEPARATOR_DOC)
+        .define(
+            REPLICATION_FACTOR,
+            ConfigDef.Type.INT,
+            REPLICATION_FACTOR_DEFAULT,
+            ConfigDef.Importance.LOW,
+            REPLICATION_FACTOR_DOC)
         .define(
             CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
             ConfigDef.Type.LIST,
