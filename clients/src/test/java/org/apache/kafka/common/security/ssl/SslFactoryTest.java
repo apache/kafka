@@ -63,7 +63,7 @@ public class SslFactoryTest {
     }
 
     @Test
-    public void testSslFactoryWithoutKeyStoreConfig() throws Exception {
+    public void testSslFactoryWithCustomKeyManagerConfiguration() throws Exception {
         Provider provider = new TestProvider();
         Security.addProvider(provider);
         Map<String, Object> serverSslConfig = TestSslUtils.createSslConfig(
@@ -72,7 +72,7 @@ public class SslFactoryTest {
         );
         SslFactory sslFactory = new SslFactory(Mode.SERVER);
         sslFactory.configure(serverSslConfig);
-        SSLContext sslContext = sslFactory.createSSLContext(sslKeyStore(serverSslConfig), null);
+        SSLContext sslContext = sslFactory.createSSLContext(null, null);
         assertNotNull("SSL context not created", sslContext);
         Security.removeProvider(provider.getName());
     }

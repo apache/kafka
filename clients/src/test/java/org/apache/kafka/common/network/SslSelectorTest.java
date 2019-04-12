@@ -92,7 +92,7 @@ public class SslSelectorTest extends SelectorTest {
     }
 
     @Test
-    public void testConnectWithCustomKeyManager() throws Exception {
+    public void testConnectionWithCustomKeyManager() throws Exception {
         Provider provider = new TestProvider();
         Security.addProvider(provider);
 
