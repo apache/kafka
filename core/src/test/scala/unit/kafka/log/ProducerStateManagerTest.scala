@@ -823,7 +823,8 @@ class ProducerStateManagerTest extends JUnitSuite {
     val endTxnMarker = new EndTransactionMarker(controlType, coordinatorEpoch)
     val completedTxn = producerAppendInfo.appendEndTxnMarker(endTxnMarker, producerEpoch, offset, timestamp)
     mapping.update(producerAppendInfo)
-    val lastStableOffset = mapping.completeTxn(completedTxn)
+    val lastStableOffset = mapping.firstUnstableOffsetAfter(completedTxn)
+    mapping.completeTxn(completedTxn)
     mapping.updateMapEndOffset(offset + 1)
     (completedTxn, lastStableOffset)
   }

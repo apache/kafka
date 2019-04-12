@@ -599,7 +599,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
    * snapshot in range (if there is one). Note that the log end offset is assumed to be less than
    * or equal to the high watermark.
    */
-  def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long) {
+  def truncateAndReload(logStartOffset: Long, logEndOffset: Long, currentTimeMs: Long): Unit = {
     // remove all out of range snapshots
     deleteSnapshotFiles(logDir, { snapOffset =>
       snapOffset > logEndOffset || snapOffset <= logStartOffset
@@ -750,10 +750,20 @@ class ProducerStateManager(val topicPartition: TopicPartition,
     lastMapOffset = 0L
   }
 
+  def firstUnstableOffsetAfter(completedTxn: CompletedTxn): Long = {
+    val ongoingTxnsIter = ongoingTxns.values.iterator()
+    while (ongoingTxnsIter.hasNext) {
+      val ongoingTxn = ongoingTxnsIter.next()
+      if (ongoingTxn.producerId != completedTxn.producerId)
+        return ongoingTxn.firstOffset.messageOffset
+    }
+    completedTxn.lastOffset + 1
+  }
+
   /**
    * Complete the transaction and return the last stable offset.
    */
-  def completeTxn(completedTxn: CompletedTxn): Long = {
+  def completeTxn(completedTxn: CompletedTxn): Unit = {
     val txnMetadata = ongoingTxns.remove(completedTxn.firstOffset)
     if (txnMetadata == null)
       throw new IllegalArgumentException(s"Attempted to complete transaction $completedTxn on partition $topicPartition " +
@@ -761,9 +771,6 @@ class ProducerStateManager(val topicPartition: TopicPartition,
 
     txnMetadata.lastOffset = Some(completedTxn.lastOffset)
     unreplicatedTxns.put(completedTxn.firstOffset, txnMetadata)
-
-    val lastStableOffset = firstUndecidedOffset.getOrElse(completedTxn.lastOffset + 1)
-    lastStableOffset
   }
 
   @threadsafe
