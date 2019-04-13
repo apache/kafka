@@ -49,7 +49,6 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -792,11 +791,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             }
         }
         return taskIdsForConsumerAssignment;
-    }
-
-    @Override
-    public void onAssignment(final Assignment assignment, final Optional<Integer> generation) {
-        onAssignment(assignment);
     }
 
     /**

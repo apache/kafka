@@ -22,7 +22,6 @@ import org.apache.kafka.common.TopicPartition;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -70,7 +69,7 @@ public interface PartitionAssignor {
      * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, Map)}
      * @param generation The consumer group generation associated with this partition assignment (optional)
      */
-    default void onAssignment(Assignment assignment, Optional<Integer> generation) {
+    default void onAssignment(Assignment assignment, int generation) {
         onAssignment(assignment);
     }
 

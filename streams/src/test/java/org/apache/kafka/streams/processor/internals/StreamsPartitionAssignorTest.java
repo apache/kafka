@@ -53,7 +53,6 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -656,7 +655,7 @@ public class StreamsPartitionAssignorTest {
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager);
 
-        partitionAssignor.onAssignment(assignment, Optional.empty());
+        partitionAssignor.onAssignment(assignment);
 
         EasyMock.verify(taskManager);
 
@@ -977,7 +976,7 @@ public class StreamsPartitionAssignorTest {
         EasyMock.expectLastCall();
         EasyMock.replay(taskManager);
 
-        partitionAssignor.onAssignment(createAssignment(hostState), Optional.empty());
+        partitionAssignor.onAssignment(createAssignment(hostState));
 
         EasyMock.verify(taskManager);
     }

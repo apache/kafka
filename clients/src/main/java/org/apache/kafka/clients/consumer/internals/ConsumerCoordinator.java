@@ -60,7 +60,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -263,7 +262,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         maybeUpdateJoinedSubscription(assignedPartitions);
 
         // give the assignor a chance to update internal state based on the received assignment
-        assignor.onAssignment(assignment, Optional.of(generation));
+        assignor.onAssignment(assignment, generation);
 
         // reschedule the auto commit starting from now
         if (autoCommitEnabled)

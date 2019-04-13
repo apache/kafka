@@ -652,7 +652,7 @@ public class StickyAssignorTest {
         Map<String, List<TopicPartition>> assignment = assignor.assign(partitionsPerTopic, subscriptions);
         subscriptions.put(consumer,
                 new Subscription(topics(topic), StickyAssignor.serializeTopicPartitionAssignment(
-                        new ConsumerUserData(assignment.get(consumer), 1))));
+                        new ConsumerUserData(assignment.get(consumer), Optional.of(1)))));
 
         assignment = assignor.assign(Collections.emptyMap(), subscriptions);
         assertEquals(assignment.size(), 1);
