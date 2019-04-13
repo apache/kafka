@@ -28,7 +28,6 @@ import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
@@ -96,11 +95,10 @@ public class SubscriptionState {
     /* Default offset reset strategy */
     private final OffsetResetStrategy defaultResetStrategy;
 
-    /* Listeners provide a hook for internal state cleanup (e.g. metrics) on assignment changes */
-    private final List<Listener> listeners = new ArrayList<>();
-
     /* User-provided listener to be invoked when assignment changes */
     private ConsumerRebalanceListener rebalanceListener;
+
+    private int assignmentId = 0;
 
     public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
         this.log = logContext.logger(this.getClass());
@@ -110,6 +108,16 @@ public class SubscriptionState {
         this.groupSubscription = ConcurrentHashMap.newKeySet();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
+    }
+
+    /**
+     * Monotonically increasing id which is incremented after every assignment change. This can
+     * be used to check when an assignment has changed.
+     *
+     * @return The current assignment Id
+     */
+    public int assignmentId() {
+        return assignmentId;
     }
 
     /**
@@ -182,7 +190,7 @@ public class SubscriptionState {
         if (this.assignment.partitionSet().equals(partitions))
             return false;
 
-        fireOnAssignment(partitions);
+        assignmentId++;
 
         Set<String> manualSubscribedTopics = new HashSet<>();
         Map<TopicPartition, TopicPartitionState> partitionToState = new HashMap<>();
@@ -230,8 +238,7 @@ public class SubscriptionState {
         if (assignmentMatchedSubscription) {
             Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(
                     assignments);
-            fireOnAssignment(assignedPartitionStates.keySet());
-
+            assignmentId++;
             this.assignment.set(assignedPartitionStates);
         }
 
@@ -266,7 +273,7 @@ public class SubscriptionState {
         this.assignment.clear();
         this.subscribedPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
-        fireOnAssignment(Collections.emptySet());
+        this.assignmentId++;
     }
 
     /**
@@ -524,15 +531,6 @@ public class SubscriptionState {
         return rebalanceListener;
     }
 
-    public void addListener(Listener listener) {
-        listeners.add(listener);
-    }
-
-    public void fireOnAssignment(Set<TopicPartition> assignment) {
-        for (Listener listener : listeners)
-            listener.onAssignment(assignment);
-    }
-
     private static Map<TopicPartition, TopicPartitionState> partitionToStateMap(Collection<TopicPartition> assignments) {
         Map<TopicPartition, TopicPartitionState> map = new HashMap<>(assignments.size());
         for (TopicPartition tp : assignments)
@@ -783,16 +781,6 @@ public class SubscriptionState {
                 return false;
             }
         }
-    }
-
-    public interface Listener {
-        /**
-         * Fired after a new assignment is received (after a group rebalance or when the user manually changes the
-         * assignment).
-         *
-         * @param assignment The topic partitions assigned to the consumer
-         */
-        void onAssignment(Set<TopicPartition> assignment);
     }
 
     /**
