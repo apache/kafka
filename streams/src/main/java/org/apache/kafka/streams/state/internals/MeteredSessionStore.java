@@ -167,7 +167,12 @@ public class MeteredSessionStore<K, V>
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
-        return fetch(key);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().fetch(keyBytes(key)),
+            fetchTime,
+            metrics,
+            serdes,
+            time);
     }
 
     @Override
@@ -175,7 +180,12 @@ public class MeteredSessionStore<K, V>
                                                   final K to) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
-        return fetch(from, to);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().fetch(keyBytes(from), keyBytes(to)),
+            fetchTime,
+            metrics,
+            serdes,
+            time);
     }
 
     @Override
