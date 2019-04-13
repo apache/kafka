@@ -1242,7 +1242,7 @@ public class KafkaAdminClientTest {
             configs.put(brokerResource, Collections.singletonList(alterConfigOp1));
             configs.put(topicResource, Collections.singletonList(alterConfigOp2));
 
-            IncrementalAlterConfigsResult result = env.adminClient().incrementalAlterConfigs(configs);
+            AlterConfigsResult result = env.adminClient().incrementalAlterConfigs(configs);
             TestUtils.assertFutureError(result.values().get(brokerResource), ClusterAuthorizationException.class);
             TestUtils.assertFutureError(result.values().get(topicResource), InvalidRequestException.class);
 

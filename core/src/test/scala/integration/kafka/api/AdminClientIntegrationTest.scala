@@ -1480,7 +1480,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     alterResult = client.incrementalAlterConfigs(Map(
       topic1Resource -> topic1AlterConfigs
-    ).asJava, new IncrementalAlterConfigsOptions().validateOnly(true))
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
     alterResult.all.get
 
     // Verify that topics were not updated due to validateOnly = true
@@ -1496,7 +1496,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     alterResult = client.incrementalAlterConfigs(Map(
       topic1Resource -> topic1AlterConfigs
-    ).asJava, new IncrementalAlterConfigsOptions().validateOnly(true))
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
 
     assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
       Some("Invalid config value for resource"))

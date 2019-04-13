@@ -1956,8 +1956,8 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public IncrementalAlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                                 final IncrementalAlterConfigsOptions options) {
+    public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
+                                                                 final AlterConfigsOptions options) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> allFutures = new HashMap<>();
         // We must make a separate AlterConfigs request for every BROKER resource we want to alter
         // and send the request to that specific broker. Other resources are grouped together into
@@ -1974,11 +1974,11 @@ public class KafkaAdminClient extends AdminClient {
         if (!unifiedRequestResources.isEmpty())
             allFutures.putAll(incrementalAlterConfigs(configs, options, unifiedRequestResources, new LeastLoadedNodeProvider()));
 
-        return new IncrementalAlterConfigsResult(new HashMap<>(allFutures));
+        return new AlterConfigsResult(new HashMap<>(allFutures));
     }
 
     private Map<ConfigResource, KafkaFutureImpl<Void>> incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                                    final IncrementalAlterConfigsOptions options,
+                                                                    final AlterConfigsOptions options,
                                                                     Collection<ConfigResource> resources,
                                                                     NodeProvider nodeProvider) {
         final Map<ConfigResource, KafkaFutureImpl<Void>> futures = new HashMap<>();

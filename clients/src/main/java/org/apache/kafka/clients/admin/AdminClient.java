@@ -387,7 +387,7 @@ public abstract class AdminClient implements AutoCloseable {
      *                        be updated currently)
      * @param options         The options to use when describing configs
      * @return                The AlterConfigsResult
-     * @deprecated Since 2.3. Use {@link #incrementalAlterConfigs(Map, IncrementalAlterConfigsOptions)}.
+     * @deprecated Since 2.3. Use {@link #incrementalAlterConfigs(Map, AlterConfigsOptions)}.
      */
     @Deprecated
     public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
@@ -395,7 +395,7 @@ public abstract class AdminClient implements AutoCloseable {
     /**
      * Incrementally updates the configuration for the specified resources with default options.
      *
-     * This is a convenience method for #{@link AdminClient#incrementalAlterConfigs(Map, IncrementalAlterConfigsOptions)} with default options.
+     * This is a convenience method for #{@link AdminClient#incrementalAlterConfigs(Map, AlterConfigsOptions)} with default options.
      * See the overload for more details.*
      *
      * This operation is supported by brokers with version 2.3.0 or higher.
@@ -403,8 +403,8 @@ public abstract class AdminClient implements AutoCloseable {
      * @param configs         The resources with their configs
      * @return                The IncrementalAlterConfigsResult
      */
-    public IncrementalAlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs) {
-        return incrementalAlterConfigs(configs, new IncrementalAlterConfigsOptions());
+    public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs) {
+        return incrementalAlterConfigs(configs, new AlterConfigsOptions());
     }
 
 
@@ -431,8 +431,8 @@ public abstract class AdminClient implements AutoCloseable {
      * @param options         The options to use when altering configs
      * @return                The IncrementalAlterConfigsResult
      */
-    public abstract IncrementalAlterConfigsResult incrementalAlterConfigs(Map<ConfigResource,
-            Collection<AlterConfigOp>> configs, IncrementalAlterConfigsOptions options);
+    public abstract AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource,
+            Collection<AlterConfigOp>> configs, AlterConfigsOptions options);
 
     /**
      * Change the log directory for the specified replicas. If the replica does not exist on the broker, the result

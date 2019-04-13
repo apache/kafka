@@ -381,8 +381,8 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public IncrementalAlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                                 IncrementalAlterConfigsOptions options) {
+    public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs,
+                                                      AlterConfigsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
