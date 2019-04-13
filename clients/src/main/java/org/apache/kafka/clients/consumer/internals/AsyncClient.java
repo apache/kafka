@@ -49,7 +49,13 @@ public abstract class AsyncClient<T1, Req extends AbstractRequest, Resp extends 
                     return;
                 }
                 log.trace("Received {} {} from broker {}", resp.getClass().getSimpleName(), resp, node);
-                future.complete(handleResponse(node, requestData, resp));
+                try {
+                    future.complete(handleResponse(node, requestData, resp));
+                } catch (RuntimeException e) {
+                    if (!future.isDone()) {
+                        future.raise(e);
+                    }
+                }
             }
 
             @Override
