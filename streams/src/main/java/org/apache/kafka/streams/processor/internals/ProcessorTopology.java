@@ -23,7 +23,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 public class ProcessorTopology {
 
@@ -167,9 +166,5 @@ public class ProcessorTopology {
         }
 
         return Collections.emptySet();
-    }
-
-    public List<String> topologicalOrderOfStores() {
-        return stateStores.stream().map(StateStore::name).collect(Collectors.toList());
     }
 }

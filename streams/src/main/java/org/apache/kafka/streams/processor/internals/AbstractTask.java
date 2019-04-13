@@ -90,7 +90,6 @@ public abstract class AbstractTask implements Task {
                 isStandby,
                 stateDirectory,
                 topology.storeToChangelogTopic(),
-                topology.topologicalOrderOfStores(),
                 changelogReader,
                 eosEnabled,
                 logContext);

@@ -44,7 +44,6 @@ import org.junit.Test;
 import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -54,7 +53,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static java.util.Arrays.asList;
-import static java.util.Collections.emptyList;
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
@@ -201,7 +199,6 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreName)
             ),
-            asList(persistentStoreName, nonPersistentStoreName),
             changelogReader,
             false,
             logContext);
@@ -227,7 +224,6 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
-            asList(persistentStoreName, nonPersistentStoreName),
             changelogReader,
             false,
             logContext);
@@ -277,7 +273,6 @@ public class ProcessorStateManagerTest {
             true, // standby
             stateDirectory,
             storeToChangelogTopic,
-            new ArrayList<>(storeToChangelogTopic.keySet()),
             changelogReader,
             false,
             logContext);
@@ -311,7 +306,6 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             emptyMap(),
-            singletonList(mockKeyValueStore.name()),
             changelogReader,
             false,
             logContext);
@@ -343,7 +337,6 @@ public class ProcessorStateManagerTest {
             stateDirectory,
             mkMap(mkEntry(persistentStoreName, persistentStoreTopicName),
                   mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)),
-            asList(persistentStoreName, nonPersistentStoreName),
             changelogReader,
             false,
             logContext);
@@ -351,10 +344,8 @@ public class ProcessorStateManagerTest {
             // make sure the checkpoint file is not written yet
             assertFalse(checkpointFile.exists());
 
-            // order of flush should be determined by the topological order defined by the constructor,
-            // not by the registration order
-            stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
             stateMgr.register(persistentStore, persistentStore.stateRestoreCallback);
+            stateMgr.register(nonPersistentStore, nonPersistentStore.stateRestoreCallback);
         } finally {
             // close the state manager with the ack'ed offsets
             stateMgr.flush();
@@ -385,7 +376,6 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             emptyMap(),
-            singletonList(nonPersistentStoreName),
             changelogReader,
             false,
             logContext);
@@ -405,7 +395,6 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             emptyMap(),
-            emptyList(),
             changelogReader,
             false,
             logContext);
@@ -423,7 +412,6 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             singletonMap(persistentStore.name(), persistentStoreTopicName),
-            singletonList(persistentStore.name()),
             changelogReader,
             false,
             logContext);
@@ -442,7 +430,6 @@ public class ProcessorStateManagerTest {
             true, // standby
             stateDirectory,
             singletonMap(persistentStore.name(), persistentStoreTopicName),
-            singletonList(persistentStore.name()),
             changelogReader,
             false,
             logContext);
@@ -472,7 +459,6 @@ public class ProcessorStateManagerTest {
             true, // standby
             stateDirectory,
             singletonMap(nonPersistentStoreName, nonPersistentStoreTopicName),
-            singletonList(nonPersistentStoreName),
             changelogReader,
             false,
             logContext);
@@ -492,7 +478,6 @@ public class ProcessorStateManagerTest {
             true, // standby
             stateDirectory,
             emptyMap(),
-            emptyList(),
             changelogReader,
             false,
             logContext);
@@ -513,7 +498,6 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             emptyMap(),
-            emptyList(),
             changelogReader,
             false,
             logContext);
@@ -534,7 +518,6 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             emptyMap(),
-            singletonList(mockKeyValueStore.name()),
             changelogReader,
             false,
             logContext);
@@ -559,7 +542,6 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             singletonMap(storeName, changelogTopic),
-            singletonList(storeName),
             changelogReader,
             false,
             logContext);
@@ -589,7 +571,6 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             singletonMap(storeName, changelogTopic),
-            singletonList(storeName),
             changelogReader,
             false,
             logContext);
@@ -624,7 +605,6 @@ public class ProcessorStateManagerTest {
                 false,
                 stateDirectory,
                 singletonMap(persistentStore.name(), persistentStoreTopicName),
-                singletonList(persistentStore.name()),
                 changelogReader,
                 false,
                 logContext);
@@ -674,7 +654,6 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             singletonMap(storeName, changelogTopic),
-            asList(stateStore1.name(), stateStore2.name()),
             changelogReader,
             false,
             logContext);
@@ -711,7 +690,6 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             singletonMap(storeName, changelogTopic),
-            asList(stateStore1.name(), stateStore2.name()),
             changelogReader,
             false,
             logContext);
@@ -738,7 +716,6 @@ public class ProcessorStateManagerTest {
                 false,
                 stateDirectory,
                 emptyMap(),
-                emptyList(),
                 changelogReader,
                 true,
                 logContext);
@@ -780,7 +757,6 @@ public class ProcessorStateManagerTest {
             false,
             stateDirectory,
             storeToChangelog,
-            asList(stateStore.name(), stateStore2.name()),
             changelogReader,
             eosEnabled,
             logContext);
@@ -809,7 +785,6 @@ public class ProcessorStateManagerTest {
             true,
             stateDirectory,
             singletonMap(persistentStoreName, persistentStoreTopicName),
-            singletonList(persistentStoreName),
             changelogReader,
             false,
             logContext);
