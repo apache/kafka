@@ -116,7 +116,6 @@ public class RestoreIntegrationTest {
     }
 
     @Test
-    @SuppressWarnings("unchecked")
     public void shouldRestoreStateFromSourceTopic() throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -139,9 +138,7 @@ public class RestoreIntegrationTest {
         final CountDownLatch startupLatch = new CountDownLatch(1);
         final CountDownLatch shutdownLatch = new CountDownLatch(1);
 
-        final KStreamSerDesIntegrationTest.MyIntegerSerde keySerde = new KStreamSerDesIntegrationTest.MyIntegerSerde<>();
-        final  KStreamSerDesIntegrationTest.MyIntegerSerde valueSerde = new KStreamSerDesIntegrationTest.MyIntegerSerde<>();
-        builder.table(INPUT_STREAM, Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store").withKeySerde(keySerde).withValueSerde(valueSerde))
+        builder.table(INPUT_STREAM, Materialized.<Integer, Integer, KeyValueStore<Bytes, byte[]>>as("store").withKeySerde(Serdes.Integer()).withValueSerde(Serdes.Integer()))
                 .toStream()
                 .foreach((key, value) -> {
                     if (numReceived.incrementAndGet() == 2 * offsetLimitDelta) {
@@ -149,7 +146,7 @@ public class RestoreIntegrationTest {
                     }
                 });
 
-        kafkaStreams = new KafkaStreams(builder.build(props), props);
+        kafkaStreams = new KafkaStreams(builder.build(), props);
         kafkaStreams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
                 startupLatch.countDown();
@@ -174,8 +171,6 @@ public class RestoreIntegrationTest {
             }
         });
         kafkaStreams.start();
-        assertTrue(keySerde.configured());
-        assertTrue(valueSerde.configured());
 
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
         assertThat(restored.get(), equalTo((long) numberOfKeys - offsetLimitDelta * 2 - offsetCheckpointed * 2));

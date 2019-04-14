@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.streams.integration;
 
-import org.apache.kafka.common.serialization.LongDeserializer;
-import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -27,7 +25,6 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
-import static org.junit.Assert.assertTrue;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -37,7 +34,6 @@ import org.junit.runners.Parameterized;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Tests all available joins of Kafka Streams DSL.
@@ -67,71 +63,9 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     final private String expectedFinalMultiJoinResult = "D-d-d";
     final private String storeName = appID + "-store";
 
-    static class MyLongSerializer extends LongSerializer {
-        boolean configured = false;
-        boolean called = false;
-
-        MyLongSerializer() {
-            super();
-        }
-
-        @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {
-            super.configure(configs, isKey);
-            configured = true;
-        }
-
-        @Override
-        public byte[] serialize(final String topic, final Long data) {
-            called = true;
-            return super.serialize(topic, data);
-        }
-
-        boolean configured() {
-            return !called || configured;
-        }
-    }
-    static class MyLongDeserializer extends LongDeserializer {
-        boolean configured = false;
-        boolean called = false;
-
-        @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {
-            super.configure(configs, isKey);
-            configured = true;
-        }
-        @Override
-        public Long deserialize(final String topic, final byte[] data) {
-            called = true;
-            return super.deserialize(topic, data);
-        }
-
-        boolean configured() {
-            return !called || configured;
-        }
-    }
-
-    static class MyLongSerde<K> extends Serdes.WrapperSerde<Long> {
-        public MyLongSerde() {
-            super(new MyLongSerializer(), new MyLongDeserializer());
-        }
-        @Override
-        public void configure(final Map<String, ?> configs, final boolean isKey) {
-            super.configure(configs, isKey);
-        }
-
-        public boolean configured() {
-            if (!((MyLongSerializer) this.serializer()).configured()) return false;
-            if (!((MyLongDeserializer) this.deserializer()).configured()) return false;
-            return true;
-        }
-    }
-    private MyLongSerde longSerde = new MyLongSerde<>();
-    private KStreamSerDesIntegrationTest.MyStringSerde stringSerde = new KStreamSerDesIntegrationTest.MyStringSerde();
-    @SuppressWarnings("unchecked")
     private Materialized<Long, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(storeName)
-            .withKeySerde(longSerde)
-            .withValueSerde(stringSerde)
+            .withKeySerde(Serdes.Long())
+            .withValueSerde(Serdes.String())
             .withCachingDisabled()
             .withLoggingDisabled();
 
@@ -185,8 +119,6 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
             runTest(expectedResult, storeName);
         }
-        assertTrue(longSerde.configured());
-        assertTrue(stringSerde.configured());
     }
 
     @Test
