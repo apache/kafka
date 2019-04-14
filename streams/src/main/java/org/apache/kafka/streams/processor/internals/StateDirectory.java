@@ -329,7 +329,7 @@ public class StateDirectory {
 
 
     /**
-     * Delete Task Dir with retry option and handle Exceptions.
+     * Delete Task Dir with retry option and exception handling.
      * In Windows TaskDir is not empty due to lock file in it
      * First call with indicateRetryIfDirectoryNotEmpty = true to indicate possibility to try it again after unlock
      *
