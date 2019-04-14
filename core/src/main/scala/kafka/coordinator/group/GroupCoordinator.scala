@@ -132,7 +132,6 @@ class GroupCoordinator(val brokerId: Int,
           } else {
             responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
           }
-
         case Some(group) =>
           group.inLock {
             if ((groupIsOverCapacity(group)

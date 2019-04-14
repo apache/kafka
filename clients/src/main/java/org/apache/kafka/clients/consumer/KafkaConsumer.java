@@ -676,9 +676,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             String groupInstanceId = config.getString(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
             if (groupInstanceId != null) {
-                if (groupInstanceId.equals(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID)) {
-                    throw new InvalidConfigurationException("group instance id must be non-empty string");
-                }
+                JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
                 this.groupInstanceId = groupInstanceId;
             } else {
                 this.groupInstanceId = JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID;
