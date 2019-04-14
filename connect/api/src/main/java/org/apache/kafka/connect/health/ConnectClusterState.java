@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.health;
 
 import java.util.Collection;
+import java.util.Map;
 
 /**
  * Provides the ability to lookup connector metadata and its health. This is made available to the {@link org.apache.kafka.connect.rest.ConnectRestExtension}
@@ -43,4 +44,32 @@ public interface ConnectClusterState {
      * @throws org.apache.kafka.connect.errors.NotFoundException if the requested connector can't be found
      */
     ConnectorHealth connectorHealth(String connName);
+
+    /**
+     * Lookup the current configuration of a connector. This provides the current snapshot of configuration by querying the underlying
+     * herder. A connector returned by previous invocation of {@link #connectors()} may no longer be available and could result in {@link
+     * org.apache.kafka.connect.errors.NotFoundException}.
+     *
+     * @param connName name of the connector
+     * @return the configuration of the connector for the connector name
+     * @throws org.apache.kafka.connect.errors.NotFoundException if the requested connector can't be found
+     */
+    Map<String, String> connectorConfig(String connName);
+
+    /**
+     * Lookup the current task configurations of a connector. This provides the current snapshot of configuration by querying the underlying
+     * herder. A connector returned by previous invocation of {@link #connectors()} may no longer be available and could result in {@link
+     * org.apache.kafka.connect.errors.NotFoundException}.
+     *
+     * @param connName name of the connector
+     * @return the configuration for each task ID
+     * @throws org.apache.kafka.connect.errors.NotFoundException if the requested connector can't be found
+     **/
+    Map<Integer, Map<String, String>> taskConfigs(String connName);
+
+    /**
+     * Get the cluster ID of the Kafka cluster backing this Connect cluster.
+     * @return the cluster ID of the Kafka cluster backing this connect cluster
+     **/
+    String kafkaClusterId();
 }
