@@ -52,7 +52,7 @@ public class KStreamFlatTransformValuesTest extends EasyMockSupport {
     }
 
     @Test
-    public void shouldInitialiseFlatTransformValuesProcessor() {
+    public void shouldInitializeFlatTransformValuesProcessor() {
         valueTransformer.init(EasyMock.isA(ForwardingDisabledProcessorContext.class));
         replayAll();
 

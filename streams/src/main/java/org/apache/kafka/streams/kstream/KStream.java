@@ -633,7 +633,7 @@ public interface KStream<K, V> {
      *             Iterable<KeyValue> transform(K key, V value) {
      *                 // can access this.state
      *                 List<KeyValue> result = new ArrayList<>();
-     *                 for (int i = 0; i < n; i++) {
+     *                 for (int i = 0; i < 3; i++) {
      *                     result.add(new KeyValue(key, value));
      *                 }
      *                 return result; // emits a list of key-value pairs via return
@@ -702,6 +702,9 @@ public interface KStream<K, V> {
      * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
+     * The {@link ValueTransformer} must return the new value in {@link ValueTransformer#transform(Object) transform()}.
+     * If the return value of {@link ValueTransformer#transform(Object) ValueTransformer#transform()} is {@null}, no
+     * records are emitted.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()}, no additional {@link KeyValue}
      * pairs can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
@@ -775,6 +778,10 @@ public interface KStream<K, V> {
      * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
+     * The {@link ValueTransformerWithKey} must return the new value in
+     * {@link ValueTransformerWithKey#transform(Object, Object) transform()}.
+     * If the return value of {@link ValueTransformerWithKey#transform(Object, Object) ValueTransformerWithKey#transform()}
+     * is {@null}, no records are emitted.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
      * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
@@ -850,9 +857,11 @@ public interface KStream<K, V> {
      * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
-     * The {@link ValueTransformer} must return a list of values in {@link ValueTransformer#transform(Object)
-     * transform()} or {@code null}.
-     * If the return value is an empty list or {@null} no records are emitted.
+     * The {@link ValueTransformer} must return an {@link java.lang.Iterable} type (e.g., any
+     * {@link java.util.Collection} type) in {@link ValueTransformer#transform(Object)
+     * transform()}.
+     * If the return value of {@link ValueTransformer#transform(Object) ValueTransformer#transform()} is an empty
+     * {@link java.lang.Iterable Iterable} or {@null}, no records are emitted.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
      * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
@@ -870,9 +879,13 @@ public interface KStream<K, V> {
      *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
-     *             NewValueType transform(V value) {
+     *             Iterable<NewValueType> transform(V value) {
      *                 // can access this.state
-     *                 return new NewValueType(); // or null
+     *                 List<NewValueType> result = new ArrayList<>();
+     *                 for (int i = 0; i < 3; i++) {
+     *                     result.add(new NewValueType(value));
+     *                 }
+     *                 return result; // values
      *             }
      *
      *             void close() {
@@ -930,9 +943,11 @@ public interface KStream<K, V> {
      * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
-     * The {@link ValueTransformer} must return a list of values in {@link ValueTransformer#transform(Object)
-     * transform()} or {@code null}.
-     * If the return value is an empty list or {@null} no records are emitted.
+     * The {@link ValueTransformerWithKey} must return an {@link java.lang.Iterable} type (e.g., any
+     * {@link java.util.Collection} type) in {@link ValueTransformerWithKey#transform(Object, Object)
+     * transform()}.
+     * If the return value of {@link ValueTransformerWithKey#transform(Object, Object) ValueTransformerWithKey#transform()}
+     * is an empty {@link java.lang.Iterable Iterable} or {@null}, no records are emitted.
      * In contrast to {@link #transform(TransformerSupplier, String...) transform()} and
      * {@link #flatTransform(TransformerSupplier, String...) flatTransform()}, no additional {@link KeyValue} pairs
      * can be emitted via {@link ProcessorContext#forward(Object, Object) ProcessorContext.forward()}.
@@ -950,9 +965,13 @@ public interface KStream<K, V> {
      *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
      *             }
      *
-     *             NewValueType transform(K readOnlyKey, V value) {
+     *             Iterable<NewValueType> transform(K readOnlyKey, V value) {
      *                 // can access this.state and use read-only key
-     *                 return new NewValueType(readOnlyKey); // or null
+     *                 List<NewValueType> result = new ArrayList<>();
+     *                 for (int i = 0; i < 3; i++) {
+     *                     result.add(new NewValueType(readOnlyKey));
+     *                 }
+     *                 return result; // values
      *             }
      *
      *             void close() {
