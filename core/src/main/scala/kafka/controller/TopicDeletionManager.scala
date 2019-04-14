@@ -302,7 +302,7 @@ class TopicDeletionManager(controller: KafkaController,
    */
   private def startReplicaDeletion(replicasForTopicsToBeDeleted: Set[PartitionAndReplica]) {
     replicasForTopicsToBeDeleted.groupBy(_.topic).keys.foreach { topic =>
-      val aliveReplicasForTopic = controllerContext.allLiveReplicas().filter(p => p.topic == topic)
+      val aliveReplicasForTopic = controllerContext.allLiveReplicas.filter(p => p.topic == topic)
       val deadReplicasForTopic = replicasForTopicsToBeDeleted -- aliveReplicasForTopic
       val successfullyDeletedReplicas = controller.replicaStateMachine.replicasInState(topic, ReplicaDeletionSuccessful)
       val replicasForDeletionRetry = aliveReplicasForTopic -- successfullyDeletedReplicas

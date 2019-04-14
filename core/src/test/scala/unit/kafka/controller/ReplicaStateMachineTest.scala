@@ -17,12 +17,15 @@
 package kafka.controller
 
 import kafka.api.LeaderAndIsr
+import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
 import kafka.zookeeper.{GetDataResponse, ResponseMetadata}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.easymock.EasyMock
@@ -58,6 +61,26 @@ class ReplicaStateMachineTest extends JUnitSuite {
     replicaState = mutable.Map.empty[PartitionAndReplica, ReplicaState]
     replicaStateMachine = new ReplicaStateMachine(config, new StateChangeLogger(brokerId, true, None), controllerContext, mockTopicDeletionManager, mockZkClient,
       replicaState, mockControllerBrokerRequestBatch)
+  }
+
+  @Test
+  def testStartupOnlinePartition(): Unit = {
+    val endpoint1 = new EndPoint("localhost", 9997, new ListenerName("blah"),
+      SecurityProtocol.PLAINTEXT)
+    val liveBrokerEpochs = Map(Broker(brokerId, Seq(endpoint1), rack = None) -> 1L)
+    controllerContext.setLiveBrokerAndEpochs(liveBrokerEpochs)
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    assertEquals(None, replicaState.get(replica))
+    replicaStateMachine.startup()
+    assertEquals(OnlineReplica, replicaState(replica))
+  }
+
+  @Test
+  def testStartupOfflinePartition(): Unit = {
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    assertEquals(None, replicaState.get(replica))
+    replicaStateMachine.startup()
+    assertEquals(OfflineReplica, replicaState(replica))
   }
 
   @Test

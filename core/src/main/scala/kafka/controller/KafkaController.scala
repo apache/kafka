@@ -72,6 +72,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private val stateChangeLogger = new StateChangeLogger(config.brokerId, inControllerContext = true, None)
   val controllerContext = new ControllerContext
+  var controllerChannelManager: ControllerChannelManager = _
 
   // have a separate scheduler for the controller to be able to start and stop independently of the kafka server
   // visible for testing
@@ -328,6 +329,11 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     // shutdown replica state machine
     replicaStateMachine.shutdown()
     zkClient.unregisterZNodeChildChangeHandler(brokerChangeHandler.path)
+
+    if (controllerChannelManager != null) {
+      controllerChannelManager.shutdown()
+      controllerChannelManager = null
+    }
 
     controllerContext.resetContext()
 
@@ -715,7 +721,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     controllerContext.partitionsBeingReassigned ++= partitionsBeingReassigned.iterator.map { case (tp, newReplicas) =>
       val reassignIsrChangeHandler = new PartitionReassignmentIsrChangeHandler(this, eventManager, tp)
-      tp -> new ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler)
+      tp -> ReassignedPartitionsContext(newReplicas, reassignIsrChangeHandler)
     }
   }
 
@@ -733,9 +739,9 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   }
 
   private def startChannelManager() {
-    controllerContext.controllerChannelManager = new ControllerChannelManager(controllerContext, config, time, metrics,
+    controllerChannelManager = new ControllerChannelManager(controllerContext, config, time, metrics,
       stateChangeLogger, threadNamePrefix)
-    controllerContext.controllerChannelManager.startup()
+    controllerChannelManager.startup()
   }
 
   private def updateLeaderAndIsrCache(partitions: Seq[TopicPartition] = controllerContext.allPartitions.toSeq) {
@@ -912,7 +918,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   private[controller] def sendRequest(brokerId: Int, apiKey: ApiKeys, request: AbstractControlRequest.Builder[_ <: AbstractControlRequest],
                                       callback: AbstractResponse => Unit = null) = {
-    controllerContext.controllerChannelManager.sendRequest(brokerId, apiKey, request, callback)
+    controllerChannelManager.sendRequest(brokerId, apiKey, request, callback)
   }
 
   /**
@@ -1309,10 +1315,10 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         s"bounced brokers: ${bouncedBrokerIdsSorted.mkString(",")}, " +
         s"all live brokers: ${liveBrokerIdsSorted.mkString(",")}")
 
-      newBrokerAndEpochs.keySet.foreach(controllerContext.controllerChannelManager.addBroker)
-      bouncedBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
-      bouncedBrokerAndEpochs.keySet.foreach(controllerContext.controllerChannelManager.addBroker)
-      deadBrokerIds.foreach(controllerContext.controllerChannelManager.removeBroker)
+      newBrokerAndEpochs.keySet.foreach(controllerChannelManager.addBroker)
+      bouncedBrokerIds.foreach(controllerChannelManager.removeBroker)
+      bouncedBrokerAndEpochs.keySet.foreach(controllerChannelManager.addBroker)
+      deadBrokerIds.foreach(controllerChannelManager.removeBroker)
       if (newBrokerIds.nonEmpty) {
         controllerContext.addLiveBrokersAndEpochs(newBrokerAndEpochs)
         onBrokerStartup(newBrokerIdsSorted)

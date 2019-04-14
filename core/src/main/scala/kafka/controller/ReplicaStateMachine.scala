@@ -64,7 +64,9 @@ class ReplicaStateMachine(config: KafkaConfig,
     info("Initializing replica state")
     initializeReplicaState()
     info("Triggering online replica state changes")
-    handleStateChanges(controllerContext.allLiveReplicas().toSeq, OnlineReplica)
+    val (onlineReplicas, offlineReplicas) = controllerContext.liveOrOfflineReplicas
+    handleStateChanges(onlineReplicas.toSeq, OnlineReplica)
+    handleStateChanges(offlineReplicas.toSeq, OfflineReplica)
     info(s"Started replica state machine with initial state -> $replicaState")
   }
 
@@ -85,13 +87,14 @@ class ReplicaStateMachine(config: KafkaConfig,
       val replicas = controllerContext.partitionReplicaAssignment(partition)
       replicas.foreach { replicaId =>
         val partitionAndReplica = PartitionAndReplica(partition, replicaId)
-        if (controllerContext.isReplicaOnline(replicaId, partition))
+        if (controllerContext.isReplicaOnline(replicaId, partition)) {
           replicaState.put(partitionAndReplica, OnlineReplica)
-        else
-        // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
-        // This is required during controller failover since during controller failover a broker can go down,
-        // so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.
+        } else {
+          // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
+          // This is required during controller failover since during controller failover a broker can go down,
+          // so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.
           replicaState.put(partitionAndReplica, ReplicaDeletionIneligible)
+        }
       }
     }
   }
@@ -101,7 +104,7 @@ class ReplicaStateMachine(config: KafkaConfig,
     if (replicas.nonEmpty) {
       try {
         controllerBrokerRequestBatch.newBatch()
-        replicas.groupBy(_.replica).map { case (replicaId, replicas) =>
+        replicas.groupBy(_.replica).foreach { case (replicaId, replicas) =>
           val partitions = replicas.map(_.topicPartition)
           doHandleStateChanges(replicaId, partitions, targetState, callbacks)
         }

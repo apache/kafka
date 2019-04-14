@@ -24,9 +24,6 @@ import scala.collection.{Seq, Set, mutable}
 
 class ControllerContext {
   val stats = new ControllerStats
-
-  var controllerChannelManager: ControllerChannelManager = null
-
   var shuttingDownBrokerIds: mutable.Set[Int] = mutable.Set.empty
   var epoch: Int = KafkaController.InitialControllerEpoch
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
@@ -93,13 +90,13 @@ class ControllerContext {
   }
 
   // getter
-  def liveBrokers = liveBrokersUnderlying.filter(broker => !shuttingDownBrokerIds.contains(broker.id))
-  def liveBrokerIds = liveBrokerIdAndEpochsUnderlying.keySet -- shuttingDownBrokerIds
+  def liveBrokers: Set[Broker] = liveBrokersUnderlying.filter(broker => !shuttingDownBrokerIds.contains(broker.id))
+  def liveBrokerIds: Set[Int] = liveBrokerIdAndEpochsUnderlying.keySet -- shuttingDownBrokerIds
 
-  def liveOrShuttingDownBrokerIds = liveBrokerIdAndEpochsUnderlying.keySet
-  def liveOrShuttingDownBrokers = liveBrokersUnderlying
+  def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerIdAndEpochsUnderlying.keySet
+  def liveOrShuttingDownBrokers: Set[Broker] = liveBrokersUnderlying
 
-  def liveBrokerIdAndEpochs = liveBrokerIdAndEpochsUnderlying
+  def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerIdAndEpochsUnderlying
 
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionReplicaAssignmentUnderlying.flatMap {
@@ -142,10 +139,32 @@ class ControllerContext {
     }.toSet
   }
 
-  def allLiveReplicas(): Set[PartitionAndReplica] = {
+  def allLiveReplicas: Set[PartitionAndReplica] = {
     replicasOnBrokers(liveBrokerIds).filter { partitionAndReplica =>
       isReplicaOnline(partitionAndReplica.replica, partitionAndReplica.topicPartition)
     }
+  }
+
+  /**
+   * Get all online and offline replicas.
+   *
+   * @return a tuple consisting of first the online replicas and followed by the offline replicas
+   */
+  def liveOrOfflineReplicas: (Set[PartitionAndReplica], Set[PartitionAndReplica]) = {
+    val onlineReplicas = mutable.Set.empty[PartitionAndReplica]
+    val offlineReplicas = mutable.Set.empty[PartitionAndReplica]
+    for ((topic, partitionReplicas) <- partitionReplicaAssignmentUnderlying;
+         (partitionId, replicas) <- partitionReplicas) {
+      val partition = new TopicPartition(topic, partitionId)
+      for (replica <- replicas) {
+        val partitionAndReplica = PartitionAndReplica(partition, replica)
+        if (isReplicaOnline(replica, partition))
+          onlineReplicas.add(partitionAndReplica)
+        else
+          offlineReplicas.add(partitionAndReplica)
+      }
+    }
+    (onlineReplicas, offlineReplicas)
   }
 
   def replicasForPartition(partitions: collection.Set[TopicPartition]): collection.Set[PartitionAndReplica] = {
@@ -156,10 +175,6 @@ class ControllerContext {
   }
 
   def resetContext(): Unit = {
-    if (controllerChannelManager != null) {
-      controllerChannelManager.shutdown()
-      controllerChannelManager = null
-    }
     shuttingDownBrokerIds.clear()
     epoch = 0
     epochZkVersion = 0
