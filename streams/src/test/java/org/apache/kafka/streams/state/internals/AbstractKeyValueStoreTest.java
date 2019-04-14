@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.KeyValueStoreTestDriver;
@@ -38,6 +39,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -380,6 +382,21 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldReturnSameResultsForGetAndRangeWithEqualKeys() {
+        final List<KeyValue<Integer, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(1, "one"));
+        entries.add(new KeyValue<>(2, "two"));
+        entries.add(new KeyValue<>(3, "three"));
+
+        store.putAll(entries);
+
+        final Iterator<KeyValue<Integer, String>> iterator = store.range(2, 2);
+
+        assertEquals(iterator.next().value, store.get(2));
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
     public void shouldNotThrowConcurrentModificationException() {
         store.put(0, "zero");
 
@@ -388,5 +405,19 @@ public abstract class AbstractKeyValueStoreTest {
         store.put(1, "one");
 
         assertEquals(new KeyValue<>(0, "zero"), results.next());
+    }
+
+    @Test
+    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
+        LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        final KeyValueIterator iterator = store.range(-1, 1);
+        assertFalse(iterator.hasNext());
+
+        final List<String> messages = appender.getMessages();
+        assertThat(messages, hasItem("Returning empty iterator for fetch with invalid key range: from > to. "
+            + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. "
+            + "Note that the built-in numerical serdes do not follow this for negative numbers"));
     }
 }
