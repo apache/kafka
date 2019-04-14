@@ -2941,6 +2941,62 @@ public class FetcherTest {
     }
 
     @Test
+    public void testFetcherSessionEpochUpdate() throws Exception {
+        buildFetcher(2);
+
+        MetadataResponse initialMetadataResponse = TestUtils.metadataUpdateWith(1, singletonMap(topicName, 1));
+        client.updateMetadata(initialMetadataResponse);
+        assignFromUser(Collections.singleton(tp0));
+        subscriptions.seek(tp0, 0L);
+
+        AtomicInteger fetchesRemaining = new AtomicInteger(1000);
+        executorService = Executors.newSingleThreadExecutor();
+        Future<?> future = executorService.submit(() -> {
+            long nextOffset = 0;
+            long nextEpoch = 0;
+            while (fetchesRemaining.get() > 0) {
+                synchronized (consumerClient) {
+                    if (!client.requests().isEmpty()) {
+                        ClientRequest request = client.requests().peek();
+                        FetchRequest fetchRequest = (FetchRequest) request.requestBuilder().build();
+                        int epoch = fetchRequest.metadata().epoch();
+                        assertTrue(String.format("Unexpected epoch expected %d got %d", nextEpoch, epoch), epoch == 0 || epoch == nextEpoch);
+                        nextEpoch++;
+                        LinkedHashMap<TopicPartition, FetchResponse.PartitionData<MemoryRecords>> responseMap = new LinkedHashMap<>();
+                        responseMap.put(tp0, new FetchResponse.PartitionData<>(Errors.NONE, nextOffset + 2L, nextOffset + 2,
+                                0L, null, buildRecords(nextOffset, 2, nextOffset)));
+                        nextOffset += 2;
+                        client.respondToRequest(request, new FetchResponse<>(Errors.NONE, responseMap, 0, 123));
+                        consumerClient.poll(time.timer(0));
+                    }
+                }
+            }
+            return fetchesRemaining.get();
+        });
+        long nextFetchOffset = 0;
+        while (fetchesRemaining.get() > 0 && !future.isDone()) {
+            if (fetcher.sendFetches() == 1) {
+                synchronized (consumerClient) {
+                    consumerClient.poll(time.timer(0));
+                }
+            }
+            if (fetcher.hasCompletedFetches()) {
+                Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords = fetchedRecords();
+                if (!fetchedRecords.isEmpty()) {
+                    fetchesRemaining.decrementAndGet();
+                    List<ConsumerRecord<byte[], byte[]>> records = fetchedRecords.get(tp0);
+                    assertEquals(2, records.size());
+                    assertEquals(nextFetchOffset, records.get(0).offset());
+                    assertEquals(nextFetchOffset + 1, records.get(1).offset());
+                    nextFetchOffset += 2;
+                }
+                assertTrue(fetchedRecords().isEmpty());
+            }
+        }
+        assertEquals(0, future.get());
+    }
+
+    @Test
     public void testEmptyControlBatch() {
         buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
