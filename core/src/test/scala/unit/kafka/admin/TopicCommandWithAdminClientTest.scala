@@ -23,7 +23,7 @@ import kafka.common.AdminCommandFailedException
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.{ConfigType, KafkaConfig}
 import kafka.utils.{Exit, Logging, TestUtils}
-import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode}
+import kafka.zk.{ConfigEntityChangeNotificationZNode, ConfigEntityZNode, DeleteTopicsTopicZNode, TopicZNode}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{ListTopicsOptions, NewTopic, AdminClient => JAdminClient}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
@@ -468,7 +468,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val deletePath = DeleteTopicsTopicZNode.path(testTopicName)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deletePath))
     topicService.deleteTopic(deleteOpts)
-    assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deletePath))
+    verifyTopicDelete(testTopicName)
   }
 
   @Test
@@ -486,7 +486,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val deleteOffsetTopicPath = DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deleteOffsetTopicPath))
     topicService.deleteTopic(deleteOffsetTopicOpts)
-    assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deleteOffsetTopicPath))
+    verifyTopicDelete(testTopicName)
   }
 
   @Test
@@ -691,5 +691,12 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     output = TestUtils.grabConsoleOutput(topicService.listTopics(new TopicCommandOptions(Array("--list", "--exclude-internal"))))
     assertTrue(output.contains(testTopicName))
     assertFalse(output.contains(Topic.GROUP_METADATA_TOPIC_NAME))
+  }
+
+  private def verifyTopicDelete(topic: String): Unit = {
+    TestUtils.waitUntilTrue(() => !zkClient.pathExists(TopicZNode.path(topic)), "Topic path not deleted")
+    TestUtils.waitUntilTrue(() => !zkClient.pathExists(DeleteTopicsTopicZNode.path(topic)), "Delete topic path not deleted")
+    TestUtils.waitUntilTrue(() => !zkClient.pathExists(ConfigEntityZNode.path(ConfigType.Topic, topic)),
+      "Topic configs path not deleted")
   }
 }
