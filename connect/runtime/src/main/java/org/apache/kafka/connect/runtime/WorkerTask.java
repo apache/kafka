@@ -216,6 +216,9 @@ abstract class WorkerTask implements Runnable {
 
     @Override
     public void run() {
+        // Clear all MDC parameters, in case this thread is being reused
+        LoggingContext.clear();
+
         try (LoggingContext loggingContext = LoggingContext.forTask(id())) {
             ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
             String savedName = Thread.currentThread().getName();

@@ -40,6 +40,8 @@ public class LoggingContextTest {
     private static final String EXTRA_VALUE1 = "value1";
     private static final String EXTRA_KEY2 = "extra.key.2";
     private static final String EXTRA_VALUE2 = "value2";
+    private static final String EXTRA_KEY3 = "extra.key.3";
+    private static final String EXTRA_VALUE3 = "value3";
 
     private Map<String, String> mdc;
 
@@ -131,25 +133,41 @@ public class LoggingContextTest {
         try (LoggingContext loggingContext1 = LoggingContext.forConnector(CONNECTOR_NAME)) {
             assertMdc(CONNECTOR_NAME, null, Scope.WORKER);
             log.info("Starting Connector");
+            // Set the extra MDC parameter, as if the connector were
+            MDC.put(EXTRA_KEY3, EXTRA_VALUE3);
+            assertConnectorMdcSet();
 
             try (LoggingContext loggingContext2 = LoggingContext.forTask(TASK_ID1)) {
                 assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.TASK);
                 log.info("Starting task");
+                // The extra connector-specific MDC parameter should still be set
+                assertConnectorMdcSet();
 
                 try (LoggingContext loggingContext3 = LoggingContext.forOffsets(TASK_ID1)) {
                     assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.OFFSETS);
+                    assertConnectorMdcSet();
                     log.info("Offsets for task");
                 }
 
                 assertMdc(TASK_ID1.connector(), TASK_ID1.task(), Scope.TASK);
                 log.info("Stopping task");
+                // The extra connector-specific MDC parameter should still be set
+                assertConnectorMdcSet();
             }
 
             assertMdc(CONNECTOR_NAME, null, Scope.WORKER);
             log.info("Stopping Connector");
+            // The extra connector-specific MDC parameter should still be set
+            assertConnectorMdcSet();
         }
         assertMdcExtrasUntouched();
         assertMdc(null, null, null);
+
+        // The extra connector-specific MDC parameter should still be set
+        assertConnectorMdcSet();
+
+        LoggingContext.clear();
+        assertConnectorMdcUnset();
     }
 
     protected void assertMdc(String connectorName, Integer taskId, Scope scope) {
@@ -177,5 +195,13 @@ public class LoggingContextTest {
     protected void assertMdcExtrasUntouched() {
         assertEquals(EXTRA_VALUE1, MDC.get(EXTRA_KEY1));
         assertEquals(EXTRA_VALUE2, MDC.get(EXTRA_KEY2));
+    }
+
+    protected void assertConnectorMdcSet() {
+        assertEquals(EXTRA_VALUE3, MDC.get(EXTRA_KEY3));
+    }
+
+    protected void assertConnectorMdcUnset() {
+        assertEquals(null, MDC.get(EXTRA_KEY3));
     }
 }

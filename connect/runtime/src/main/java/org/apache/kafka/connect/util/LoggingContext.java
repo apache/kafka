@@ -18,6 +18,8 @@ package org.apache.kafka.connect.util;
 
 import org.slf4j.MDC;
 
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 
@@ -31,9 +33,9 @@ import java.util.Objects;
  * <p>Any logger created on the thread will inherit the MDC context, so this mechanism is ideal for
  * providing additional information in the log messages without requiring connector
  * implementations to use a specific Connect API or SLF4J API. {@link LoggingContext#close()}
- * will also properly restore the MDC context to its state prior when the LoggingContext was
- * created. Again, this is ideal since Connect threads will be calling connector-specific code,
- * which might improperly set but not clear MDC context parameters.
+ * will also properly restore the Connect MDC parameters to their state just prior to when the
+ * LoggingContext was created. Use {@link #clear()} to remove all MDC parameters from the
+ * current thread context.
  *
  * <p>Compare this approach to {@link org.apache.kafka.common.utils.LogContext}, which must be
  * used to create a new {@link org.slf4j.Logger} instance pre-configured with the desired prefix.
@@ -46,6 +48,8 @@ public final class LoggingContext implements AutoCloseable {
      * The name of the Mapped Diagnostic Context (MDC) key that defines the context for a connector.
      */
     public static final String CONNECTOR_CONTEXT = "connector.context";
+
+    public static final Collection<String> ALL_CONTEXTS = Collections.singleton(CONNECTOR_CONTEXT);
 
     /**
      * The Scope values used by Connect when specifying the context.
@@ -80,6 +84,13 @@ public final class LoggingContext implements AutoCloseable {
         public String toString() {
             return text;
         }
+    }
+
+    /**
+     * Clear all MDC parameters.
+     */
+    public static void clear() {
+        MDC.clear();
     }
 
     /**
@@ -199,13 +210,18 @@ public final class LoggingContext implements AutoCloseable {
     }
 
     /**
-     * Close this logging context, restoring all {@link MDC} parameters back to the state just before this context was created.
+     * Close this logging context, restoring the Connect {@link MDC} parameters back to the state
+     * just before this context was created. This does not affect other MDC parameters set by
+     * connectors or tasks.
      */
     @Override
     public void close() {
-        MDC.clear();
-        if (previous != null && !previous.isEmpty()) {
-            MDC.setContextMap(previous);
+        for (String param : ALL_CONTEXTS) {
+            if (previous != null && previous.containsKey(param)) {
+                MDC.put(param, previous.get(param));
+            } else {
+                MDC.remove(param);
+            }
         }
     }
 }
