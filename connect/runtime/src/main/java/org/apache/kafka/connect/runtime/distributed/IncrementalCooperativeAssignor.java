@@ -381,8 +381,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             }
         }
 
-        completeWorkerAssignment.stream().forEachOrdered(wl -> log.debug("Old plan worker {} "
-                + "connectors {} tasks {}", wl.worker(), wl.connectorsSize(), wl.tasksSize()));
+        // TODO: improve logging messages in this class
+        completeWorkerAssignment.forEach(wl -> log.debug("Old plan worker {} connectors {} tasks {}",
+                wl.worker(), wl.connectorsSize(), wl.tasksSize()));
         return revoking;
     }
 

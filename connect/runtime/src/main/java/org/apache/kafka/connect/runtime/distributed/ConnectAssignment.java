@@ -163,8 +163,7 @@ public class ConnectAssignment extends ConnectProtocol.Assignment {
 
         Optional.ofNullable(revokedTaskIds)
                 .orElseGet(Collections::emptyList)
-                .stream()
-                .forEachOrdered(taskId -> {
+                .forEach(taskId -> {
                     String connectorId = taskId.connector();
                     Collection<Integer> connectorTasks =
                             taskMap.computeIfAbsent(connectorId, v -> new ArrayList<>());
