@@ -1825,6 +1825,7 @@ public class FetcherTest {
 
         // verify de-registration of partition lag
         subscriptions.unsubscribe();
+        fetcher.sendFetches();
         assertFalse(allMetrics.containsKey(partitionLagMetric));
     }
 
@@ -1866,6 +1867,7 @@ public class FetcherTest {
 
         // verify de-registration of partition lag
         subscriptions.unsubscribe();
+        fetcher.sendFetches();
         assertFalse(allMetrics.containsKey(partitionLeadMetric));
     }
 
@@ -1908,6 +1910,7 @@ public class FetcherTest {
 
         // verify de-registration of partition lag
         subscriptions.unsubscribe();
+        fetcher.sendFetches();
         assertFalse(allMetrics.containsKey(partitionLagMetric));
     }
 

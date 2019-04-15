@@ -76,11 +76,13 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
     }
 
     private final short version;
+    public final ApiKeys api;
 
     public AbstractRequest(ApiKeys api, short version) {
         if (!api.isVersionSupported(version))
             throw new UnsupportedVersionException("The " + api + " protocol does not support version " + version);
         this.version = version;
+        this.api = api;
     }
 
     /**
