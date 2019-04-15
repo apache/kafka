@@ -363,4 +363,14 @@ public class ProcessorStateManager extends AbstractStateManager {
     Collection<TopicPartition> changelogPartitions() {
         return unmodifiableList(changelogPartitions);
     }
+
+    void ensureStoresRegistered() {
+        for (final Map.Entry<String, Optional<StateStore>> entry : registeredStores.entrySet()) {
+            if (!entry.getValue().isPresent()) {
+                throw new IllegalStateException(
+                    "store ["+entry.getKey()+ "] has not been correctly registered. This is a bug in Kafka Streams."
+                );
+            }
+        }
+    }
 }
