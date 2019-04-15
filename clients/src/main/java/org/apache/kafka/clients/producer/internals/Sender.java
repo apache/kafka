@@ -273,7 +273,7 @@ public class Sender implements Runnable {
             // the futures.
             if (transactionManager != null) {
                 log.debug("Aborting incomplete transactional requests due to forced shutdown");
-                transactionManager.abortPendingTransactionalRequests();
+                transactionManager.close();
             }
             log.debug("Aborting incomplete batches due to forced shutdown");
             this.accumulator.abortIncompleteBatches();

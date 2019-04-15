@@ -681,7 +681,7 @@ public class TransactionManager {
             request.fatalError(e);
     }
 
-    synchronized void abortPendingTransactionalRequests() {
+    synchronized void close() {
         KafkaException shutdownException = new KafkaException("The producer closed forcefully");
         pendingRequests.forEach(handler ->
                 handler.fatalError(shutdownException));
