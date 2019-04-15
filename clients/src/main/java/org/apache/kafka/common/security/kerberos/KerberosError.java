@@ -49,6 +49,7 @@ public enum KerberosError {
 
     static {
         try {
+            // different IBM JDKs versions include different security implementations
             if (Java.isIbmJdk() && canLoad("com.ibm.security.krb5.KrbException")) {
                 KRB_EXCEPTION_CLASS = Class.forName("com.ibm.security.krb5.KrbException");
             } else if (Java.isIbmJdk() && canLoad("com.ibm.security.krb5.internal.KrbException")) {
