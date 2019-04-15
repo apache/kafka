@@ -898,8 +898,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         log.info("Finished starting connectors and tasks");
     }
 
+    // arguments should assignment collections (connectors or tasks) and should not be null
     private static <T> Collection<T> assignmentDifference(Collection<T> update, Collection<T> running) {
-        if (running == null || running.isEmpty()) {
+        if (running.isEmpty()) {
             return update;
         }
         HashSet<T> diff = new HashSet<>(update);
