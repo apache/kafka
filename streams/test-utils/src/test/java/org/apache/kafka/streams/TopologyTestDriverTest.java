@@ -952,8 +952,8 @@ public class TopologyTestDriverTest {
 
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
             Assert.assertNull(
-                    "Closing the prior test driver should have cleaned up this store and value.",
-                    testDriver.getKeyValueStore("storeProcessorStore").get("a")
+                "Closing the prior test driver should have cleaned up this store and value.",
+                testDriver.getKeyValueStore("storeProcessorStore").get("a")
             );
         }
 
