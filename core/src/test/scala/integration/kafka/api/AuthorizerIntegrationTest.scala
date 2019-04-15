@@ -1110,7 +1110,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
     val opts = new ConsumerGroupCommandOptions(cgcArgs)
     val consumerGroupService = new ConsumerGroupService(opts)
-    consumerGroupService.describeGroup()
+    consumerGroupService.describeGroups()
     consumerGroupService.close()
   }
 
