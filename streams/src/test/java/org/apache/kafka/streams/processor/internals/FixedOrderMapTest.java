@@ -42,6 +42,7 @@ public class FixedOrderMapTest {
         assertThat(iterator.hasNext(), is(false));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldForbidRemove() {
         final FixedOrderMap<String, Integer> map = new FixedOrderMap<>();
@@ -55,6 +56,7 @@ public class FixedOrderMapTest {
         assertThat(map.get("a"), is(0));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldForbidConditionalRemove() {
         final FixedOrderMap<String, Integer> map = new FixedOrderMap<>();
@@ -68,6 +70,7 @@ public class FixedOrderMapTest {
         assertThat(map.get("a"), is(0));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldForbidConditionalClear() {
         final FixedOrderMap<String, Integer> map = new FixedOrderMap<>();
