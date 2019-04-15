@@ -80,13 +80,13 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -207,7 +207,7 @@ public class TopologyTestDriver implements Closeable {
     private final Map<String, TopicPartition> globalPartitionsByTopic = new HashMap<>();
     private final Map<TopicPartition, AtomicLong> offsetsByTopicPartition = new HashMap<>();
 
-    private final Map<String, Queue<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
+    private final Map<String, Deque<ProducerRecord<byte[], byte[]>>> outputRecordsByTopic = new HashMap<>();
     private final boolean eosEnabled;
 
     /**
@@ -535,7 +535,7 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings("WeakerAccess")
     public ProducerRecord<byte[], byte[]> readOutput(final String topic) {
-        final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
+        final Deque<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
         if (outputRecords == null) {
             return null;
         }
@@ -572,7 +572,7 @@ public class TopologyTestDriver implements Closeable {
      * @return an Iterable over the output records, or an empty List if there are no records available
      */
     public Iterable<ProducerRecord<byte[], byte[]>> iterateOutput(final String topic) {
-        final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
+        final Deque<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
         if (outputRecords == null) {
             return Collections.emptyList();
         }
@@ -591,7 +591,7 @@ public class TopologyTestDriver implements Closeable {
     public <K, V> Iterable<ProducerRecord<K, V>> iterateOutput(final String topic,
                                                                final Deserializer<K> keyDeserializer,
                                                                final Deserializer<V> valueDeserializer) {
-        final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
+        final Deque<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
         if (outputRecords == null) {
             return Collections.emptyList();
         }
