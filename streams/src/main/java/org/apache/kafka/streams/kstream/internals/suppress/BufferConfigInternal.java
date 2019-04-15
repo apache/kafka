@@ -43,7 +43,7 @@ abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC>> impl
     }
 
     @Override
-    public Suppressed.BufferConfig emitEarlyWhenFull() {
+    public Suppressed.EagerBufferConfig emitEarlyWhenFull() {
         return new EagerBufferConfigImpl(maxRecords(), maxBytes());
     }
 }
