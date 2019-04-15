@@ -954,8 +954,8 @@ public class TopologyTestDriverTest {
 
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
             Assert.assertNull(
-                    "Closing the prior test driver should have cleaned up this store and value.",
-                    testDriver.getKeyValueStore("storeProcessorStore").get("a")
+                "Closing the prior test driver should have cleaned up this store and value.",
+                testDriver.getKeyValueStore("storeProcessorStore").get("a")
             );
         }
 
@@ -1096,7 +1096,11 @@ public class TopologyTestDriverTest {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
         testDriver.pipeInput(consumerRecord1);
-        testDriver.pipeInput(consumerRecord1);
+        final byte[] key2 = "key2".getBytes();
+        final byte[] value2 = "value2".getBytes();
+        final long timestamp2 = 42L;
+        final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory.create(SOURCE_TOPIC_1, key2, value2, headers, timestamp2);
+        testDriver.pipeInput(consumerRecord2);
 
         final Iterator<ProducerRecord<byte[], byte[]>> output = testDriver.iterateOutput(SINK_TOPIC_1).iterator();
 
@@ -1108,10 +1112,10 @@ public class TopologyTestDriverTest {
 
         final ProducerRecord outputRecord2 = output.next();
 
-        assertEquals(key1, outputRecord2.key());
-        assertEquals(value1, outputRecord2.value());
+        assertEquals(key2, outputRecord2.key());
+        assertEquals(value2, outputRecord2.value());
         assertEquals(SINK_TOPIC_1, outputRecord2.topic());
-
+        assertFalse(output.hasNext());
     }
 
     @Test
@@ -1134,7 +1138,7 @@ public class TopologyTestDriverTest {
         assertEquals("Key2", outputRecord2.key());
         assertEquals(6789L, outputRecord2.value());
         assertEquals(SINK_TOPIC_1, outputRecord2.topic());
-
+        assertFalse(output.hasNext());
     }
 
     @Test
@@ -1142,7 +1146,6 @@ public class TopologyTestDriverTest {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
         assertFalse(testDriver.iterateOutput(SINK_TOPIC_1).iterator().hasNext());
-
     }
 
     @Test
@@ -1150,6 +1153,5 @@ public class TopologyTestDriverTest {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
         assertFalse(testDriver.iterateOutput(SINK_TOPIC_1, stringDeserializer, longDeserializer).iterator().hasNext());
-
     }
 }
