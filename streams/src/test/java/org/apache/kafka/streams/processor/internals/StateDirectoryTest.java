@@ -324,7 +324,7 @@ public class StateDirectoryTest {
         thread.join(30000);
         assertNull("should not have had an exception during locking on other thread", exceptionOnThread.get());
         assertFalse(directory.lock(taskId));
-        //This test (@After method) is still failing in Windows due to existing lock file in directory see KAFKA-6647
+        //This test (@After cleanup method) is still failing in Windows due to existing lock file in directory see KAFKA-6647
         //There is no way to unlock task of already dead thread without adding extra code to StateDirectory class
     }
 
