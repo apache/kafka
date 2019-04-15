@@ -3154,19 +3154,19 @@ public class FetcherTest {
         Map<String, Integer> partitionCounts = new HashMap<>();
         partitionCounts.put(tp0.topic(), 4);
 
-        final int EPOCH_ONE = 1;
-        final int EPOCH_TWO = 2;
-        final int EPOCH_THREE = 3;
+        final int epochOne = 1;
+        final int epochTwo = 2;
+        final int epochThree = 3;
 
         // Start with metadata, epoch=1
-        metadata.update(TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> EPOCH_ONE), 0L);
+        metadata.update(TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> epochOne), 0L);
 
         // Seek with a position and leader+epoch
-        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.leaderAndEpoch(tp0).leader, Optional.of(EPOCH_ONE));
-        subscriptions.seek(tp0, new SubscriptionState.FetchPosition(0, Optional.of(EPOCH_ONE), leaderAndEpoch));
+        Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(metadata.leaderAndEpoch(tp0).leader, Optional.of(epochOne));
+        subscriptions.seek(tp0, new SubscriptionState.FetchPosition(0, Optional.of(epochOne), leaderAndEpoch));
 
         // Update metadata to epoch=2, enter validation
-        metadata.update(TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> EPOCH_TWO), 0L);
+        metadata.update(TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, tp -> epochTwo), 0L);
         fetcher.validateOffsetsIfNeeded();
         assertTrue(subscriptions.awaitingValidation(tp0));
 
@@ -3174,14 +3174,14 @@ public class FetcherTest {
         subscriptions.validate(tp0);
         SubscriptionState.FetchPosition nextPosition = new SubscriptionState.FetchPosition(
                 10,
-                Optional.of(EPOCH_TWO),
-                new Metadata.LeaderAndEpoch(leaderAndEpoch.leader, Optional.of(EPOCH_TWO)));
+                Optional.of(epochTwo),
+                new Metadata.LeaderAndEpoch(leaderAndEpoch.leader, Optional.of(epochTwo)));
         subscriptions.position(tp0, nextPosition);
-        subscriptions.maybeValidatePosition(tp0, new Metadata.LeaderAndEpoch(leaderAndEpoch.leader, Optional.of(EPOCH_THREE)));
+        subscriptions.maybeValidatePosition(tp0, new Metadata.LeaderAndEpoch(leaderAndEpoch.leader, Optional.of(epochThree)));
 
         // Prepare offset list response from async validation with epoch=2
         Map<TopicPartition, EpochEndOffset> endOffsetMap = new HashMap<>();
-        endOffsetMap.put(tp0, new EpochEndOffset(Errors.NONE, EPOCH_TWO, 10L));
+        endOffsetMap.put(tp0, new EpochEndOffset(Errors.NONE, epochTwo, 10L));
         OffsetsForLeaderEpochResponse resp = new OffsetsForLeaderEpochResponse(endOffsetMap);
         client.prepareResponse(resp);
         consumerClient.pollNoWakeup();
@@ -3190,7 +3190,7 @@ public class FetcherTest {
         // Next round of validation, should succeed in validating the position
         fetcher.validateOffsetsIfNeeded();
         endOffsetMap.clear();
-        endOffsetMap.put(tp0, new EpochEndOffset(Errors.NONE, EPOCH_THREE, 10L));
+        endOffsetMap.put(tp0, new EpochEndOffset(Errors.NONE, epochThree, 10L));
         resp = new OffsetsForLeaderEpochResponse(endOffsetMap);
         client.prepareResponse(resp);
         consumerClient.pollNoWakeup();
