@@ -64,11 +64,11 @@ abstract class AbstractStateManager implements StateManager {
                                                      final Collection<TopicPartition> partitions,
                                                      final InternalProcessorContext processorContext) {
         final Map<String, String> changelogTopicToStore = inverseOneToOneMap(storeToChangelogTopic);
-        final Set<String> storeToBeReinitialized = new HashSet<>();
+        final Set<String> storesToBeReinitialized = new HashSet<>();
 
         for (final TopicPartition topicPartition : partitions) {
             checkpointableOffsets.remove(topicPartition);
-            storeToBeReinitialized.add(changelogTopicToStore.get(topicPartition.topic()));
+            storesToBeReinitialized.add(changelogTopicToStore.get(topicPartition.topic()));
         }
 
         if (!eosEnabled) {
@@ -80,38 +80,40 @@ abstract class AbstractStateManager implements StateManager {
             }
         }
 
-        for (final Map.Entry<String, Optional<StateStore>> entry : stateStores.entrySet()) {
-            if (entry.getValue().isPresent()) {
-                final StateStore stateStore = entry.getValue().get();
-                final String storeName = stateStore.name();
-                if (storeToBeReinitialized.contains(storeName)) {
-                    try {
-                        stateStore.close();
-                    } catch (final RuntimeException ignoreAndSwallow) { /* ignore */ }
-                    processorContext.uninitialize();
-                    stateStores.put(storeName, Optional.empty());
-
-                    // TODO remove this eventually
-                    // -> (only after we are sure, we don't need it for backward compatibility reasons anymore; maybe 2.0 release?)
-                    // this is an ugly "hack" that is required because RocksDBStore does not follow the pattern to put the
-                    // store directory as <taskDir>/<storeName> but nests it with an intermediate <taskDir>/rocksdb/<storeName>
-                    try {
-                        Utils.delete(new File(baseDir + File.separator + "rocksdb" + File.separator + storeName));
-                    } catch (final IOException fatalException) {
-                        log.error("Failed to reinitialize store {}.", storeName, fatalException);
-                        throw new StreamsException(String.format("Failed to reinitialize store %s.", storeName), fatalException);
-                    }
-
-                    try {
-                        Utils.delete(new File(baseDir + File.separator + storeName));
-                    } catch (final IOException fatalException) {
-                        log.error("Failed to reinitialize store {}.", storeName, fatalException);
-                        throw new StreamsException(String.format("Failed to reinitialize store %s.", storeName), fatalException);
-                    }
-
-                    stateStore.init(processorContext, stateStore);
-                }
+        for (final String storeName : storesToBeReinitialized) {
+            final Optional<StateStore> maybeStore = stateStores.get(storeName);
+            if (!maybeStore.isPresent()) {
+                throw new IllegalStateException(
+                    "Re-initializing store that has not been initialied. This is a bug in Kafka Streams."
+                );
             }
+            final StateStore stateStore = maybeStore.get();
+
+            try {
+                stateStore.close();
+            } catch (final RuntimeException ignoreAndSwallow) { /* ignore */ }
+            processorContext.uninitialize();
+            stateStores.put(storeName, Optional.empty());
+
+            // TODO remove this eventually
+            // -> (only after we are sure, we don't need it for backward compatibility reasons anymore; maybe 2.0 release?)
+            // this is an ugly "hack" that is required because RocksDBStore does not follow the pattern to put the
+            // store directory as <taskDir>/<storeName> but nests it with an intermediate <taskDir>/rocksdb/<storeName>
+            try {
+                Utils.delete(new File(baseDir + File.separator + "rocksdb" + File.separator + storeName));
+            } catch (final IOException fatalException) {
+                log.error("Failed to reinitialize store {}.", storeName, fatalException);
+                throw new StreamsException(String.format("Failed to reinitialize store %s.", storeName), fatalException);
+            }
+
+            try {
+                Utils.delete(new File(baseDir + File.separator + storeName));
+            } catch (final IOException fatalException) {
+                log.error("Failed to reinitialize store {}.", storeName, fatalException);
+                throw new StreamsException(String.format("Failed to reinitialize store %s.", storeName), fatalException);
+            }
+
+            stateStore.init(processorContext, stateStore);
         }
     }
 
