@@ -73,6 +73,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -805,6 +806,31 @@ public class GlobalStateManagerImplTest {
                        final boolean rocksdbStore) {
             super(name, rocksdbStore);
         }
+    }
+
+    @Test
+    public void shouldProcessTombstoneRecordsWhenRestoring() {
+        final HashMap<TopicPartition, Long> startOffsets = new HashMap<>();
+        startOffsets.put(t1, 1L);
+        final HashMap<TopicPartition, Long> endOffsets = new HashMap<>();
+        endOffsets.put(t1, 3L);
+        consumer.updatePartitions(t1.topic(), Collections.singletonList(new PartitionInfo(t1.topic(), t1.partition(), null, null, null)));
+        consumer.assign(Collections.singletonList(t1));
+        consumer.updateEndOffsets(endOffsets);
+        consumer.updateBeginningOffsets(startOffsets);
+        final byte[] expectedKey = "key".getBytes();
+        final byte[] expectedValue = "value".getBytes();
+        consumer.addRecord(new ConsumerRecord<>(t1.topic(), t1.partition(), 1, expectedKey, expectedValue));
+        consumer.addRecord(new ConsumerRecord<>(t1.topic(), t1.partition(), 2, expectedKey, null));
+
+        stateManager.initialize();
+        stateManager.register(store1, stateRestoreCallback);
+        final KeyValue<byte[], byte[]> restoredKv = stateRestoreCallback.restored.get(0);
+        final List<KeyValue<byte[], byte[]>> expected = new ArrayList<>();
+        expected.add(KeyValue.pair(restoredKv.key, restoredKv.value));
+        expected.add(KeyValue.pair(restoredKv.key, null));
+        assertThat(stateRestoreCallback.restored, equalTo(expected));
+        assertNull(store1.get(restoredKv.key));
     }
 
 }
