@@ -307,7 +307,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     @Override
     public void flush() {
         log.debug("Flushing all global globalStores registered in the state manager");
-        for (final Optional<StateStore> maybeStore : this.globalStores.values()) {
+        for (final Optional<StateStore> maybeStore : globalStores.values()) {
             if (maybeStore.isPresent()) {
                 final StateStore store = maybeStore.get();
                 try {
