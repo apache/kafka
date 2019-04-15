@@ -18,7 +18,9 @@ package org.apache.kafka.connect.runtime.health;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.Herder;
+import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
 import org.easymock.IAnswer;
@@ -30,6 +32,10 @@ import org.powermock.modules.junit4.PowerMockRunner;
 
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
@@ -42,17 +48,16 @@ public class ConnectClusterStateImplTest {
     @Mock
     protected Herder herder;
     protected ConnectClusterStateImpl connectClusterState;
-    protected Collection<String> expectedConnectors;
     protected long herderRequestTimeoutMs = TimeUnit.SECONDS.toMillis(10);
     
     @Before
     public void setUp() {
         connectClusterState = new ConnectClusterStateImpl(herderRequestTimeoutMs, herder);
-        expectedConnectors = Arrays.asList("sink1", "source1", "source2");
     }
     
     @Test
     public void connectors() {
+        final Collection<String> expectedConnectors = Arrays.asList("sink1", "source1", "source2");
         Capture<Callback<Collection<String>>> callback = EasyMock.newCapture();
         herder.connectors(EasyMock.capture(callback));
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
@@ -64,6 +69,59 @@ public class ConnectClusterStateImplTest {
         });
         EasyMock.replay(herder);
         assertEquals(expectedConnectors, connectClusterState.connectors());
+    }
+
+    @Test
+    public void connectorConfig() {
+        final String connName = "sink6";
+        final Map<String, String> expectedConfig = Collections.singletonMap("key", "value");
+        Capture<Callback<Map<String, String>>> callback = EasyMock.newCapture();
+        herder.connectorConfig(EasyMock.eq(connName), EasyMock.capture(callback));
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            public Void answer() {
+                callback.getValue().onCompletion(null, expectedConfig);
+                return null;
+            }
+        });
+        EasyMock.replay(herder);
+        assertEquals(expectedConfig, connectClusterState.connectorConfig(connName));
+    }
+
+    @Test
+    public void taskConfigs() {
+        final String connName = "sink9";
+        final Map<String, String> taskConfig0 = Collections.singletonMap("k1", "v1");
+        final Map<String, String> taskConfig1 = Collections.singletonMap("k4", "v20"); 
+
+        final Map<Integer, Map<String, String>> expectedConfigs = new HashMap<>();
+        expectedConfigs.put(0, taskConfig0);
+        expectedConfigs.put(1, taskConfig1);
+
+        Capture<Callback<List<TaskInfo>>> callback = EasyMock.newCapture();
+        herder.taskConfigs(EasyMock.eq(connName), EasyMock.capture(callback));
+        EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
+            @Override
+            public Void answer() {
+                List<TaskInfo> taskInfos = Arrays.asList(
+                    new TaskInfo(new ConnectorTaskId(connName, 0), taskConfig0),
+                    new TaskInfo(new ConnectorTaskId(connName, 1), taskConfig1)
+                );
+                callback.getValue().onCompletion(null, taskInfos);
+                return null;
+            }
+        });
+
+        EasyMock.replay(herder);
+        assertEquals(expectedConfigs, connectClusterState.taskConfigs(connName));
+    }
+
+    @Test
+    public void kafkaClusterId() {
+        final String kafkaClusterId = "kclstr";
+        EasyMock.expect(herder.kafkaClusterId()).andReturn(kafkaClusterId);
+        EasyMock.replay(herder);
+        assertEquals(kafkaClusterId, connectClusterState.kafkaClusterId());
     }
 
     @Test
