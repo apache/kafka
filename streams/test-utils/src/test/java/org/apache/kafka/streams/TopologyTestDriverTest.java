@@ -1092,17 +1092,19 @@ public class TopologyTestDriverTest {
     }
 
     @Test
-    public void shouldReturnIteratorForMultipleRecords() {
+    public void shouldReturnIterableForMultipleRecords() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
-
-        testDriver.pipeInput(consumerRecord1);
+        final byte[] key1 = "key1".getBytes();
+        final byte[] value1 = "value1".getBytes();
+        final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, new RecordHeaders(), 0L);
         final byte[] key2 = "key2".getBytes();
         final byte[] value2 = "value2".getBytes();
-        final long timestamp2 = 42L;
-        final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory.create(SOURCE_TOPIC_1, key2, value2, headers, timestamp2);
+        final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory.create(SOURCE_TOPIC_1, key2, value2, new RecordHeaders(), 0L);
+
+        testDriver.pipeInput(consumerRecord1);
         testDriver.pipeInput(consumerRecord2);
 
-        final Iterator<ProducerRecord<byte[], byte[]>> output = testDriver.iterateOutput(SINK_TOPIC_1).iterator();
+        final Iterator<ProducerRecord<byte[], byte[]>> output = testDriver.iterableOutput(SINK_TOPIC_1).iterator();
 
         final ProducerRecord outputRecord1 = output.next();
 
@@ -1119,24 +1121,35 @@ public class TopologyTestDriverTest {
     }
 
     @Test
-    public void shouldReturnIteratorForMultipleRecordsWithSerDes() {
+    public void shouldReturnIterableForMultipleRecordsWithSerDes() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
-        testDriver.pipeInput(recordFactory.create(SOURCE_TOPIC_1, "Key1", 12345L));
-        testDriver.pipeInput(recordFactory.create(SOURCE_TOPIC_1, "Key2", 6789L));
+        final ConsumerRecordFactory<String, Long> consumerRecordFactory = new ConsumerRecordFactory<>(
+            new StringSerializer(),
+            new LongSerializer());
 
-        final Iterator<ProducerRecord<String, Long>> output = testDriver.iterateOutput(SINK_TOPIC_1, stringDeserializer, longDeserializer).iterator();
+        final String key1 = "key1";
+        final Long value1 = 12345L;
+        final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, new RecordHeaders(), 0L);
+        final String key2 = "key2";
+        final Long value2 = 6789L;
+        final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory.create(SOURCE_TOPIC_1, key2, value2, new RecordHeaders(), 0L);
+
+        testDriver.pipeInput(consumerRecord1);
+        testDriver.pipeInput(consumerRecord2);
+
+        final Iterator<ProducerRecord<String, Long>> output = testDriver.iterableOutput(SINK_TOPIC_1, stringDeserializer, longDeserializer).iterator();
 
         final ProducerRecord outputRecord1 = output.next();
 
-        assertEquals("Key1", outputRecord1.key());
-        assertEquals(12345L, outputRecord1.value());
+        assertEquals(key1, outputRecord1.key());
+        assertEquals(value1, outputRecord1.value());
         assertEquals(SINK_TOPIC_1, outputRecord1.topic());
 
         final ProducerRecord outputRecord2 = output.next();
 
-        assertEquals("Key2", outputRecord2.key());
-        assertEquals(6789L, outputRecord2.value());
+        assertEquals(key2, outputRecord2.key());
+        assertEquals(value2, outputRecord2.value());
         assertEquals(SINK_TOPIC_1, outputRecord2.topic());
         assertFalse(output.hasNext());
     }
@@ -1145,13 +1158,13 @@ public class TopologyTestDriverTest {
     public void shouldReturnEmptyListForIterateOutput() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
-        assertFalse(testDriver.iterateOutput(SINK_TOPIC_1).iterator().hasNext());
+        assertFalse(testDriver.iterableOutput(SINK_TOPIC_1).iterator().hasNext());
     }
 
     @Test
     public void shouldReturnEmptyListForIterateOutputWithSerDes() {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
 
-        assertFalse(testDriver.iterateOutput(SINK_TOPIC_1, stringDeserializer, longDeserializer).iterator().hasNext());
+        assertFalse(testDriver.iterableOutput(SINK_TOPIC_1, stringDeserializer, longDeserializer).iterator().hasNext());
     }
 }

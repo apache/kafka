@@ -571,7 +571,7 @@ public class TopologyTestDriver implements Closeable {
      * @param topic the name of the topic
      * @return an Iterable over the output records, or an empty List if there are no records available
      */
-    public Iterable<ProducerRecord<byte[], byte[]>> iterateOutput(final String topic) {
+    public Iterable<ProducerRecord<byte[], byte[]>> iterableOutput(final String topic) {
         final Deque<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
         if (outputRecords == null) {
             return Collections.emptyList();
@@ -588,9 +588,9 @@ public class TopologyTestDriver implements Closeable {
      * @param valueDeserializer the deserializer for the value type
      * @return an Iterable over the output records, or an empty List if there are no records available
      */
-    public <K, V> Iterable<ProducerRecord<K, V>> iterateOutput(final String topic,
-                                                               final Deserializer<K> keyDeserializer,
-                                                               final Deserializer<V> valueDeserializer) {
+    public <K, V> Iterable<ProducerRecord<K, V>> iterableOutput(final String topic,
+                                                                final Deserializer<K> keyDeserializer,
+                                                                final Deserializer<V> valueDeserializer) {
         final Deque<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
         if (outputRecords == null) {
             return Collections.emptyList();
