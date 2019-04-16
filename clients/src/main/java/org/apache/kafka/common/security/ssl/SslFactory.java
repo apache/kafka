@@ -161,7 +161,8 @@ public class SslFactory implements Reconfigurable {
                 createSSLContext(keystore, truststore);
             }
         } catch (Exception e) {
-            throw new ConfigException("Validation of dynamic config update failed", e);
+            log.debug("Validation of dynamic config update of SSL keystore/truststore failed", e);
+            throw new ConfigException("Validation of dynamic config update of SSL keystore/truststore failed: " + e);
         }
     }
 
@@ -178,21 +179,24 @@ public class SslFactory implements Reconfigurable {
                 this.keystore = keystore;
                 this.truststore = truststore;
             } catch (Exception e) {
-                throw new ConfigException("Reconfiguration of SSL keystore/truststore failed", e);
+                log.debug("Reconfiguration of SSL keystore/truststore failed", e);
+                throw new ConfigException("Reconfiguration of SSL keystore/truststore failed: " + e);
             }
         }
     }
 
     private SecurityStore maybeCreateNewKeystore(Map<String, ?> configs) {
-        boolean keystoreChanged = !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG), keystore.type) ||
-                !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG), keystore.path) ||
-                !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG), keystore.password) ||
-                !Objects.equals(configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG), keystore.keyPassword);
-
-        if (!keystoreChanged) {
-            keystoreChanged = keystore.modified();
+        boolean keystoreChanged  = false;
+        if (keystore != null) {
+            keystoreChanged = !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG), keystore.type) ||
+                    !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG), keystore.path) ||
+                    !Objects.equals(configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG), keystore.password) ||
+                    !Objects.equals(configs.get(SslConfigs.SSL_KEY_PASSWORD_CONFIG), keystore.keyPassword);
+            if (!keystoreChanged) {
+                keystoreChanged = keystore.modified();
+            }
         }
-        if (keystoreChanged) {
+        if (keystoreChanged || keystore == null) {
             return createKeystore((String) configs.get(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG),
                     (String) configs.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG),
                     (Password) configs.get(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG),
@@ -202,14 +206,18 @@ public class SslFactory implements Reconfigurable {
     }
 
     private SecurityStore maybeCreateNewTruststore(Map<String, ?> configs) {
-        boolean truststoreChanged = !Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG), truststore.type) ||
+        boolean truststoreChanged = false;
+        if (truststore != null) {
+            truststoreChanged = !Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG), truststore.type) ||
                 !Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG), truststore.path) ||
                 !Objects.equals(configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG), truststore.password);
 
-        if (!truststoreChanged) {
-            truststoreChanged = truststore.modified();
+            if (!truststoreChanged) {
+                truststoreChanged = truststore.modified();
+            }
         }
-        if (truststoreChanged) {
+
+        if (truststoreChanged || truststore == null) {
             return createTruststore((String) configs.get(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG),
                     (String) configs.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG),
                     (Password) configs.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG));
@@ -244,8 +252,11 @@ public class SslFactory implements Reconfigurable {
         boolean verifyKeystore = keystore != null && keystore != this.keystore;
         boolean verifyTruststore = truststore != null && truststore != this.truststore;
         if (verifyKeystore || verifyTruststore) {
-            if (this.keystore == null)
+            if (this.keystore == null && keystore != null)
                 throw new ConfigException("Cannot add SSL keystore to an existing listener for which no keystore was configured.");
+            if (this.truststore == null && truststore != null)
+                throw new ConfigException("Cannot add SSL truststore to an existing listener for which no truststore was configured.");
+
             if (keystoreVerifiableUsingTruststore) {
                 SSLConfigValidatorEngine.validate(this, sslContext, this.sslContext);
                 SSLConfigValidatorEngine.validate(this, this.sslContext, sslContext);
