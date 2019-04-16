@@ -1127,6 +1127,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val nonExistingTopics = topics.diff(topicResponses.map(_.name).toSet)
       val nonExistingTopicResponses = if (allowAutoTopicCreation) {
+        nonExistingTopics.foreach { topic =>
+          info(
+            "Automatically creating topic: {" +
+              s"name=${topic}, partitions=${config.numPartitions}, replicationFactor=${config.defaultReplicationFactor}, " +
+              s"principal=${request.context.principal}, IP=${request.context.clientAddress}, header=${request.context.header}" +
+            "}"
+          )
+        }
         val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
         autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota, Some(request.context))
       } else {
