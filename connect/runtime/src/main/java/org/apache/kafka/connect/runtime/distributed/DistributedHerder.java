@@ -158,7 +158,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private volatile long scheduledRebalance;
 
     private final DistributedConfig config;
-    ConnectProtocolCompatibility protocolCompatibility;
 
     public DistributedHerder(DistributedConfig config,
                              Time time,
@@ -214,9 +213,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         rebalanceResolved = true; // If we still need to follow up after a rebalance occurred, starting up tasks
         needsReconfigRebalance = false;
         canReadConfigs = true; // We didn't try yet, but Configs are readable until proven otherwise
-
-        protocolCompatibility = ConnectProtocolCompatibility.compatibility(
-                config.getString(DistributedConfig.CONNECT_PROTOCOL_CONFIG));
         scheduledRebalance = Long.MAX_VALUE;
     }
 

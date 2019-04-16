@@ -398,10 +398,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     public static class ConnectorsAndTasks {
-        private final Collection<String> connectors;
-        private final Collection<ConnectorTaskId> tasks;
         public static final ConnectorsAndTasks EMPTY =
                 new ConnectorsAndTasks(Collections.emptyList(), Collections.emptyList());
+
+        private final Collection<String> connectors;
+        private final Collection<ConnectorTaskId> tasks;
 
         private ConnectorsAndTasks(Collection<String> connectors, Collection<ConnectorTaskId> tasks) {
             this.connectors = connectors;
@@ -439,7 +440,6 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
             return "{ connectorIds=" + connectors + ", taskIds=" + tasks + '}';
         }
     }
-
 
     public static class WorkerLoad {
         private final String worker;

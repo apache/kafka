@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 
@@ -144,7 +145,7 @@ public class DistributedConfig extends WorkerConfig {
      */
     public static final String SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG = "scheduled.rebalance.max.delay.ms";
     public static final String SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC = "Compatibility mode for Kafka Connect Protocol";
-    public static final int SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT = 300_000;
+    public static final int SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT = Math.toIntExact(TimeUnit.SECONDS.toMillis(300));
 
     static {
         CONFIG = baseConfigDef()
