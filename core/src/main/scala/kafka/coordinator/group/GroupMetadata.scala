@@ -23,6 +23,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
+import org.apache.kafka.common.requests.JoinGroupRequest
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, immutable, mutable}
@@ -132,7 +133,7 @@ private object GroupMetadata {
     members.foreach(member => {
       group.add(member, null)
       if (member.isStaticMember) {
-        group.addStaticMember(member.getInstanceId, member.memberId)
+        group.addStaticMember(member.groupInstanceId, member.memberId)
       }
     })
     group
@@ -251,6 +252,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def replace(oldMemberId: String,
               newMemberId: String,
               groupInstanceId: Option[String]): MemberMetadata = {
+    assert(groupInstanceId.isDefined)
     val oldMember = members.remove(oldMemberId)
       .getOrElse(throw new IllegalArgumentException(s"Cannot replace non-existing member id $oldMemberId"))
 
@@ -385,7 +387,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       throw new IllegalStateException("Cannot obtain member metadata for group in state %s".format(state))
     members.map{ case (memberId, memberMetadata) => new JoinGroupResponseMember()
         .setMemberId(memberId)
-        .setGroupInstanceId(memberMetadata.groupInstanceId)
+        .setGroupInstanceId(memberMetadata.groupInstanceId.getOrElse(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID))
         .setMetadata(memberMetadata.metadata(protocol.get))
     }.toList
   }

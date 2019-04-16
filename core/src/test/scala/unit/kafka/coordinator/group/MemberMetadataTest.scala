@@ -24,7 +24,7 @@ import org.scalatest.junit.JUnitSuite
 
 class MemberMetadataTest extends JUnitSuite {
   val groupId = "groupId"
-  val groupInstanceId = "groupInstanceId"
+  val groupInstanceId = Some("groupInstanceId")
   val clientId = "clientId"
   val clientHost = "clientHost"
   val memberId = "memberId"

@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.{AdminUtils, RackAwareMode}
-import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
+import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.controller.KafkaController
@@ -1315,9 +1315,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       )
     } else {
-      val encodedGroupInstanceId = joinGroupRequest.data().groupInstanceId()
+      val encodedGroupInstanceId = joinGroupRequest.data().groupInstanceId
       val groupInstanceId =
-        if (encodedGroupInstanceId.equals(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID))
+        if (encodedGroupInstanceId.equals(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID) ||
+        config.interBrokerProtocolVersion < KAFKA_2_3_IV0)
           None
         else
           Some(encodedGroupInstanceId)

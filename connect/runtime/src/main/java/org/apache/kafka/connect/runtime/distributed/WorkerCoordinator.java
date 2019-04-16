@@ -40,6 +40,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * This class manages the coordination process with the Kafka group coordinator on the broker for managing assignments
@@ -78,7 +79,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         super(logContext,
               client,
               groupId,
-              JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID,
+              Optional.empty(),
               rebalanceTimeoutMs,
               sessionTimeoutMs,
               heartbeatIntervalMs,

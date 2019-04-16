@@ -102,7 +102,7 @@ public class ConsumerCoordinatorTest {
     private final TopicPartition t1p = new TopicPartition(topic1, 0);
     private final TopicPartition t2p = new TopicPartition(topic2, 0);
     private final String groupId = "test-group";
-    private final String groupInstanceId = "test-instance";
+    private final Optional<String> groupInstanceId = Optional.of("test-instance");
     private final int rebalanceTimeoutMs = 60000;
     private final int sessionTimeoutMs = 10000;
     private final int heartbeatIntervalMs = 5000;
@@ -146,7 +146,7 @@ public class ConsumerCoordinatorTest {
         this.mockOffsetCommitCallback = new MockCommitCallback();
         this.partitionAssignor.clear();
 
-        this.coordinator = buildCoordinator(metrics, assignors, false, JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+        this.coordinator = buildCoordinator(metrics, assignors, false, Optional.empty());
     }
 
     @After
@@ -1049,7 +1049,7 @@ public class ConsumerCoordinatorTest {
     @Test
     public void testWakeupFromAssignmentCallback() {
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
-                false, JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+                false, Optional.empty());
 
         final String topic = "topic1";
         TopicPartition partition = new TopicPartition(topic, 0);
@@ -1166,7 +1166,7 @@ public class ConsumerCoordinatorTest {
         metadata = new ConsumerMetadata(0, Long.MAX_VALUE, includeInternalTopics,
                 subscriptions, new LogContext(), new ClusterResourceListeners());
         client = new MockClient(time, metadata);
-        coordinator = buildCoordinator(new Metrics(), assignors, false, JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+        coordinator = buildCoordinator(new Metrics(), assignors, false, Optional.empty());
 
         subscriptions.subscribe(Pattern.compile(".*"), rebalanceListener);
 
@@ -1936,19 +1936,19 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCloseDynamicAssignment() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.empty());
         gracefulCloseTest(coordinator, true);
     }
 
     @Test
     public void testCloseManualAssignment() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(false, true, JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(false, true, Optional.empty());
         gracefulCloseTest(coordinator, false);
     }
 
     @Test
     public void testCloseCoordinatorNotKnownManualAssignment() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(false, true, JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(false, true, Optional.empty());
         makeCoordinatorUnknown(coordinator, Errors.NOT_COORDINATOR);
         time.sleep(autoCommitIntervalMs);
         closeVerifyTimeout(coordinator, 1000, 1000, 1000);
@@ -1956,7 +1956,7 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCloseCoordinatorNotKnownNoCommits() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.empty());
         makeCoordinatorUnknown(coordinator, Errors.NOT_COORDINATOR);
         closeVerifyTimeout(coordinator, 1000, 0, 0);
     }
@@ -1971,7 +1971,7 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCloseCoordinatorUnavailableNoCommits() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.empty());
         makeCoordinatorUnknown(coordinator, Errors.COORDINATOR_NOT_AVAILABLE);
         closeVerifyTimeout(coordinator, 1000, 0, 0);
     }
@@ -2001,7 +2001,7 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCloseNoResponseForLeaveGroup() throws Exception {
-        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+        ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, false, Optional.empty());
         closeVerifyTimeout(coordinator, Long.MAX_VALUE, requestTimeoutMs, requestTimeoutMs);
     }
 
@@ -2047,7 +2047,7 @@ public class ConsumerCoordinatorTest {
 
     private ConsumerCoordinator prepareCoordinatorForCloseTest(final boolean useGroupManagement,
                                                                final boolean autoCommit,
-                                                               final String groupInstanceId) {
+                                                               final Optional<String> groupInstanceId) {
         final String consumerId = "consumer";
         ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors,
                 autoCommit, groupInstanceId);
@@ -2143,7 +2143,7 @@ public class ConsumerCoordinatorTest {
     private ConsumerCoordinator buildCoordinator(final Metrics metrics,
                                                  final List<PartitionAssignor> assignors,
                                                  final boolean autoCommitEnabled,
-                                                 final String groupInstanceId) {
+                                                 final Optional<String> groupInstanceId) {
         return new ConsumerCoordinator(
                 new LogContext(),
                 consumerClient,

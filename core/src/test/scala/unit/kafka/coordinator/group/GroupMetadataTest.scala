@@ -30,7 +30,7 @@ import org.scalatest.junit.JUnitSuite
 class GroupMetadataTest extends JUnitSuite {
   private val protocolType = "consumer"
   private val groupId = "groupId"
-  private val groupInstanceId = "groupInstanceId"
+  private val groupInstanceId = Some("groupInstanceId")
   private val clientId = "clientId"
   private val clientHost = "clientHost"
   private val rebalanceTimeoutMs = 60000

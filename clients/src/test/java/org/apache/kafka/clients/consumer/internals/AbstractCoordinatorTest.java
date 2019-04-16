@@ -48,6 +48,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -83,15 +84,15 @@ public class AbstractCoordinatorTest {
 
     private void setupCoordinator() {
         setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS,
-            JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+            Optional.empty());
     }
 
     private void setupCoordinator(int retryBackoffMs) {
         setupCoordinator(retryBackoffMs, REBALANCE_TIMEOUT_MS,
-            JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+            Optional.empty());
     }
 
-    private void setupCoordinator(int retryBackoffMs, int rebalanceTimeoutMs, String groupInstanceId) {
+    private void setupCoordinator(int retryBackoffMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId) {
         LogContext logContext = new LogContext();
         this.mockTime = new MockTime();
         ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, 60 * 60 * 1000L,
@@ -175,7 +176,7 @@ public class AbstractCoordinatorTest {
     @Test
     public void testJoinGroupRequestTimeout() {
         setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS,
-            JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+            Optional.empty());
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
@@ -193,7 +194,7 @@ public class AbstractCoordinatorTest {
         // Ensure we can handle the maximum allowed rebalance timeout
 
         setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE,
-            JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
+            Optional.empty());
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
@@ -278,11 +279,11 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testLeaveGroupSentWithGroupInstanceIdUnSet() {
-        checkLeaveGroupRequestSent(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID);
-        checkLeaveGroupRequestSent("groupInstanceId");
+        checkLeaveGroupRequestSent(Optional.empty());
+        checkLeaveGroupRequestSent(Optional.of("groupInstanceId"));
     }
 
-    private void checkLeaveGroupRequestSent(String groupInstanceId) {
+    private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId) {
         setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, groupInstanceId);
 
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
@@ -806,7 +807,7 @@ public class AbstractCoordinatorTest {
                                 Time time,
                                 int rebalanceTimeoutMs,
                                 int retryBackoffMs,
-                                String groupInstanceId) {
+                                Optional<String> groupInstanceId) {
             super(new LogContext(), client, GROUP_ID, groupInstanceId, rebalanceTimeoutMs,
                     SESSION_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS, metrics, METRIC_GROUP_PREFIX, time, retryBackoffMs);
         }

@@ -21,11 +21,9 @@ import java.util
 
 import kafka.utils.nonthreadsafe
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.JoinGroupRequest
-
 
 case class MemberSummary(memberId: String,
-                         groupInstanceId: String,
+                         groupInstanceId: Option[String],
                          clientId: String,
                          clientHost: String,
                          metadata: Array[Byte],
@@ -58,7 +56,7 @@ private object MemberMetadata {
 @nonthreadsafe
 private[group] class MemberMetadata(var memberId: String,
                                     val groupId: String,
-                                    val groupInstanceId: String,
+                                    val groupInstanceId: Option[String],
                                     val clientId: String,
                                     val clientHost: String,
                                     val rebalanceTimeoutMs: Int,
@@ -72,12 +70,7 @@ private[group] class MemberMetadata(var memberId: String,
   var latestHeartbeat: Long = -1
   var isLeaving: Boolean = false
   var isNew: Boolean = false
-  val isStaticMember: Boolean = groupInstanceId != JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID
-  val getInstanceId: Option[String] =
-    if (isStaticMember)
-      Some(groupInstanceId)
-    else
-      None
+  val isStaticMember: Boolean = groupInstanceId.isDefined
 
   def isAwaitingJoin = awaitingJoinCallback != null
 

@@ -568,7 +568,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Logger log;
     private final String clientId;
     private String groupId;
-    private String groupInstanceId;
+    private Optional<String> groupInstanceId;
     private final ConsumerCoordinator coordinator;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
@@ -677,9 +677,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             String groupInstanceId = config.getString(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
             if (groupInstanceId != null) {
                 JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
-                this.groupInstanceId = groupInstanceId;
+                this.groupInstanceId = Optional.of(groupInstanceId);
             } else {
-                this.groupInstanceId = JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID;
+                this.groupInstanceId = Optional.empty();
             }
 
             LogContext logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId + "] ");
