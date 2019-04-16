@@ -638,6 +638,8 @@ project(':core') {
   dependencies {
     compile project(':clients')
     compile libs.jacksonDatabind
+    compile libs.jacksonModuleScala
+    compile libs.jacksonDataformatCsv
     compile libs.jacksonJDK8Datatypes
     compile libs.joptSimple
     compile libs.metrics
