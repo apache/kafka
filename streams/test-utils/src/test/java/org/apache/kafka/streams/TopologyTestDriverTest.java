@@ -1096,10 +1096,12 @@ public class TopologyTestDriverTest {
         testDriver = new TopologyTestDriver(setupSourceSinkTopology(), config);
         final byte[] key1 = "key1".getBytes();
         final byte[] value1 = "value1".getBytes();
-        final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, new RecordHeaders(), 0L);
+        final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory
+            .create(SOURCE_TOPIC_1, key1, value1, new RecordHeaders(), 0L);
         final byte[] key2 = "key2".getBytes();
         final byte[] value2 = "value2".getBytes();
-        final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory.create(SOURCE_TOPIC_1, key2, value2, new RecordHeaders(), 0L);
+        final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory
+            .create(SOURCE_TOPIC_1, key2, value2, new RecordHeaders(), 0L);
 
         testDriver.pipeInput(consumerRecord1);
         testDriver.pipeInput(consumerRecord2);
@@ -1130,15 +1132,18 @@ public class TopologyTestDriverTest {
 
         final String key1 = "key1";
         final Long value1 = 12345L;
-        final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, new RecordHeaders(), 0L);
+        final ConsumerRecord<byte[], byte[]> consumerRecord1 = consumerRecordFactory
+            .create(SOURCE_TOPIC_1, key1, value1, new RecordHeaders(), 0L);
         final String key2 = "key2";
         final Long value2 = 6789L;
-        final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory.create(SOURCE_TOPIC_1, key2, value2, new RecordHeaders(), 0L);
+        final ConsumerRecord<byte[], byte[]> consumerRecord2 = consumerRecordFactory
+            .create(SOURCE_TOPIC_1, key2, value2, new RecordHeaders(), 0L);
 
         testDriver.pipeInput(consumerRecord1);
         testDriver.pipeInput(consumerRecord2);
 
-        final Iterator<ProducerRecord<String, Long>> output = testDriver.iterableOutput(SINK_TOPIC_1, stringDeserializer, longDeserializer).iterator();
+        final Iterator<ProducerRecord<String, Long>> output = testDriver
+            .iterableOutput(SINK_TOPIC_1, stringDeserializer, longDeserializer).iterator();
 
         final ProducerRecord outputRecord1 = output.next();
 
