@@ -209,7 +209,7 @@ public class TestSslUtils {
         File keyStoreFile = null;
         Password password = mode == Mode.SERVER ? new Password("ServerPassword") : new Password("ClientPassword");
 
-        Password trustStorePassword = new Password("TrustStorePassword");
+        Password trustStorePassword = new Password(TRUST_STORE_PASSWORD);
 
         if (mode == Mode.CLIENT && useClientCert) {
             keyStoreFile = File.createTempFile("clientKS", ".jks");
