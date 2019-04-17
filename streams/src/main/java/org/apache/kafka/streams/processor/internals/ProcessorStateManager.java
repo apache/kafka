@@ -230,7 +230,7 @@ public class ProcessorStateManager extends AbstractStateManager {
 
     @Override
     public StateStore getStore(final String name) {
-        return registeredStores.computeIfAbsent(name, k -> Optional.empty()).orElse(null);
+        return registeredStores.containsKey(name) ? registeredStores.get(name).orElse(null) : null;
     }
 
     @Override
@@ -357,7 +357,7 @@ public class ProcessorStateManager extends AbstractStateManager {
 
     @Override
     public StateStore getGlobalStore(final String name) {
-        return globalStores.computeIfAbsent(name, k -> Optional.empty()).orElse(null);
+        return globalStores.containsKey(name) ? globalStores.get(name).orElse(null) : null;
     }
 
     Collection<TopicPartition> changelogPartitions() {

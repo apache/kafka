@@ -141,7 +141,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
     @Override
     public StateStore getGlobalStore(final String name) {
-        return globalStores.computeIfAbsent(name, k -> Optional.empty()).orElse(null);
+        return globalStores.containsKey(name) ? globalStores.get(name).orElse(null) : null;
     }
 
     @Override

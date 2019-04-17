@@ -81,6 +81,10 @@ abstract class AbstractStateManager implements StateManager {
         }
 
         for (final String storeName : storesToBeReinitialized) {
+            if (!stateStores.containsKey(storeName)) {
+                // the store has never been registered; carry on...
+                continue;
+            }
             final Optional<StateStore> maybeStore = stateStores.get(storeName);
             if (!maybeStore.isPresent()) {
                 throw new IllegalStateException(
