@@ -204,13 +204,9 @@ public class Metadata implements Closeable {
      * If any non-retriable exceptions were encountered during metadata update, clear and return the exception.
      */
     public synchronized KafkaException getAndClearMetadataException() {
-        if (this.metadataException != null) {
-            KafkaException metadataException = this.metadataException;
-            this.metadataException = null;
-            return metadataException;
-        } else {
-            return null;
-        }
+        KafkaException metadataException = this.metadataException;
+        this.metadataException = null;
+        return metadataException;
     }
 
     public synchronized void bootstrap(List<InetSocketAddress> addresses, long now) {
