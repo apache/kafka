@@ -189,7 +189,7 @@ public class DistributedHerderTest {
                 statusBackingStore, configBackingStore, member, MEMBER_URL, metrics, time);
 
         configUpdateListener = herder.new ConfigUpdateListener();
-        rebalanceListener = herder.new RebalanceListener();
+        rebalanceListener = herder.new RebalanceListener(time);
         plugins = PowerMock.createMock(Plugins.class);
         conn1SinkConfig = new SinkConnectorConfig(plugins, CONN1_CONFIG);
         conn1SinkConfigUpdated = new SinkConnectorConfig(plugins, CONN1_CONFIG_UPDATED);

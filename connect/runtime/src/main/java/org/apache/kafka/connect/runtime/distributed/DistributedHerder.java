@@ -195,7 +195,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         LogContext logContext = new LogContext("[Worker clientId=" + clientId + ", groupId=" + this.workerGroupId + "] ");
         log = logContext.logger(DistributedHerder.class);
 
-        this.member = member != null ? member : new WorkerGroupMember(config, restUrl, this.configBackingStore, new RebalanceListener(), time, clientId, logContext);
+        this.member = member != null
+                      ? member
+                      : new WorkerGroupMember(config, restUrl, this.configBackingStore,
+                              new RebalanceListener(time), time, clientId, logContext);
 
         this.herderExecutor = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS, new LinkedBlockingDeque<Runnable>(1),
                 new ThreadFactory() {
@@ -793,7 +796,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             }
         }
 
-        long now = System.currentTimeMillis();
+        long now = time.milliseconds();
         if (scheduledRebalance <= now) {
             needsRejoin = true;
             scheduledRebalance = Long.MAX_VALUE;
@@ -1250,6 +1253,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     // Rebalances are triggered internally from the group member, so these are always executed in the work thread.
     public class RebalanceListener implements WorkerRebalanceListener {
+        private final Time time;
+        RebalanceListener(Time time) {
+            this.time = time;
+        }
+
         @Override
         public void onAssigned(ConnectAssignment assignment, int generation) {
             // This callback just logs the info and saves it. The actual response is handled in the main loop, which
@@ -1263,7 +1271,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 DistributedHerder.this.generation = generation;
                 int delay = assignment.delay();
                 DistributedHerder.this.scheduledRebalance = delay > 0
-                                                            ? System.currentTimeMillis() + delay
+                                                            ? time.milliseconds() + delay
                                                             : Long.MAX_VALUE;
                 rebalanceResolved = false;
                 herderMetrics.rebalanceStarted(time.milliseconds());
