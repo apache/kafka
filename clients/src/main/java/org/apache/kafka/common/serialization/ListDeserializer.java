@@ -24,53 +24,51 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.common.serialization.Deserializer;
-
 public class ListDeserializer<T> implements Deserializer<List<T>> {
 
-	private final Deserializer<T> deserializer;
-	private final Comparator<T> comparator;
+    private final Deserializer<T> deserializer;
+    private final Comparator<T> comparator;
 
-	public ListDeserializer(Deserializer<T> deserializer, Comparator<T> comparator) {
-		this.deserializer = deserializer;
-		this.comparator = comparator;
-	}
+    public ListDeserializer(Deserializer<T> deserializer, Comparator<T> comparator) {
+        this.deserializer = deserializer;
+        this.comparator = comparator;
+    }
 
-	@Override
-	public void configure(Map<String, ?> configs, boolean isKey) {
-		// Do nothing
-	}
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+        // Do nothing
+    }
 
-	@Override
-	public List<T> deserialize(String topic, byte[] data) {
-		if (data == null || data.length == 0) {
-			return null;
-		}
-		@SuppressWarnings("serial")
-		List<T> deserializedList = new ArrayList<T>() {
-			@Override
-			public void sort(Comparator<? super T> c) {
-				super.sort(comparator);
-			}
-		};
-		DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
-		try {
-			final int size = dis.readInt();
-			for (int i = 0; i < size; i++) {
-				byte[] payload = new byte[dis.readInt()];
-				dis.read(payload);
-				deserializedList.add(deserializer.deserialize(topic, payload));
-			}
-			dis.close();
-		} catch (IOException e) {
-			throw new RuntimeException("Unable to deserialize into a List", e);
-		}
-		return deserializedList;
-	}
+    @Override
+    public List<T> deserialize(String topic, byte[] data) {
+        if (data == null || data.length == 0) {
+            return null;
+        }
+        @SuppressWarnings("serial")
+        List<T> deserializedList = new ArrayList<T>() {
+            @Override
+            public void sort(Comparator<? super T> c) {
+                super.sort(comparator);
+            }
+        };
+        DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
+        try {
+            final int size = dis.readInt();
+            for (int i = 0; i < size; i++) {
+                byte[] payload = new byte[dis.readInt()];
+                dis.read(payload);
+                deserializedList.add(deserializer.deserialize(topic, payload));
+            }
+            dis.close();
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to deserialize into a List", e);
+        }
+        return deserializedList;
+    }
 
-	@Override
-	public void close() {
-		// Do nothing
-	}
+    @Override
+    public void close() {
+        // Do nothing
+    }
 
 }

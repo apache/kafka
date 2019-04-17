@@ -22,43 +22,41 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.kafka.common.serialization.Serializer;
-
 public class ListSerializer<T> implements Serializer<List<T>> {
 
-	private final Serializer<T> serializer;
+    private final Serializer<T> serializer;
 
-	public ListSerializer(Serializer<T> serializer) {
-		this.serializer = serializer;
-	}
+    public ListSerializer(Serializer<T> serializer) {
+        this.serializer = serializer;
+    }
 
-	@Override
-	public void configure(Map<String, ?> configs, boolean isKey) {
-		// Do nothing
-	}
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+        // Do nothing
+    }
 
-	@Override
-	public byte[] serialize(String topic, List<T> data) {
-		final int size = data.size();
-		final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-		final DataOutputStream out = new DataOutputStream(baos);
-		try {
-			out.writeInt(size);
-			for (T entry : data) {
-				final byte[] bytes = serializer.serialize(topic, entry);
-				out.writeInt(bytes.length);
-				out.write(bytes);
-			}
-			out.close();
-		} catch (IOException e) {
-			throw new RuntimeException("Failed to serialize List", e);
-		}
-		return baos.toByteArray();
-	}
+    @Override
+    public byte[] serialize(String topic, List<T> data) {
+        final int size = data.size();
+        final ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        final DataOutputStream out = new DataOutputStream(baos);
+        try {
+            out.writeInt(size);
+            for (T entry : data) {
+                final byte[] bytes = serializer.serialize(topic, entry);
+                out.writeInt(bytes.length);
+                out.write(bytes);
+            }
+            out.close();
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to serialize List", e);
+        }
+        return baos.toByteArray();
+    }
 
-	@Override
-	public void close() {
-		serializer.close();
-	}
+    @Override
+    public void close() {
+        serializer.close();
+    }
 
 }

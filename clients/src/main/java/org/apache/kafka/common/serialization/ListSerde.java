@@ -21,34 +21,34 @@ import java.util.List;
 import java.util.Map;
 
 public class ListSerde<T> implements Serde<List<T>> {
-	
-	private final Serde<List<T>> inner;
+
+    private final Serde<List<T>> inner;
 
     public ListSerde(Serde<T> serde, Comparator<T> comparator) {
-		inner = Serdes.serdeFrom(new ListSerializer<T>(serde.serializer()), 
-				new ListDeserializer<T>(serde.deserializer(), comparator));
-	}
+        inner = Serdes.serdeFrom(new ListSerializer<T>(serde.serializer()),
+                new ListDeserializer<T>(serde.deserializer(), comparator));
+    }
 
-	@Override
-	public void configure(Map<String, ?> configs, boolean isKey) {
-		inner.serializer().configure(configs, isKey);
-		inner.deserializer().configure(configs, isKey);
-	}
+    @Override
+    public void configure(Map<String, ?> configs, boolean isKey) {
+        inner.serializer().configure(configs, isKey);
+        inner.deserializer().configure(configs, isKey);
+    }
 
-	@Override
-	public void close() {
-		inner.serializer().close();
-		inner.deserializer().close();
-	}
+    @Override
+    public void close() {
+        inner.serializer().close();
+        inner.deserializer().close();
+    }
 
-	@Override
-	public Serializer<List<T>> serializer() {
-		return inner.serializer();
-	}
+    @Override
+    public Serializer<List<T>> serializer() {
+        return inner.serializer();
+    }
 
-	@Override
-	public Deserializer<List<T>> deserializer() {
-		return inner.deserializer();
-	}
+    @Override
+    public Deserializer<List<T>> deserializer() {
+        return inner.deserializer();
+    }
 
 }
