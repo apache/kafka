@@ -36,7 +36,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
 
 /**
- * This is an integration test that tests the fully integrated log cleaner
+ * Tests behavior of specifying auto topic creation configuration for the consumer and broker
  */
 @RunWith(value = classOf[Parameterized])
 class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean) extends IntegrationTestHarness {
