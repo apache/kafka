@@ -316,8 +316,14 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     // roll all brokers with a lesser max group size to make sure coordinator has the new config
     val newConfigs = generateKafkaConfigs(maxGroupSize.toString)
     var kickedOutConsumerIdx: Option[Int] = None
+    val holdingGroupBrokers = servers.filter(!_.groupCoordinator.groupManager.currentGroups.isEmpty).map(_.config.brokerId)
+    // should only have one broker holding the group metadata
+    assertEquals(holdingGroupBrokers.size, 1)
+    val coordinator = holdingGroupBrokers.head
+    // ensure the coordinator broker will be restarted first
+    val orderedBrokersIds = List(coordinator) ++ servers.indices.toBuffer.filter(_ != coordinator)
     // restart brokers until the group moves to a Coordinator with the new config
-    breakable { for (broker <- servers.indices) {
+    breakable { for (broker <- orderedBrokersIds) {
       killBroker(broker)
       consumerPollers.indices.foreach(idx => {
         consumerPollers(idx).thrownException match {
