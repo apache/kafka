@@ -924,10 +924,6 @@ public class ConfigDef {
             return new ValidString(Arrays.asList(validStrings));
         }
 
-        public static ValidString in(List<String> validStrings) {
-            return new ValidString(validStrings);
-        }
-
         @Override
         public void ensureValid(String name, Object o) {
             String s = (String) o;
