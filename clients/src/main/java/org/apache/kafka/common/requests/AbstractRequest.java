@@ -231,6 +231,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new DeleteGroupsRequest(struct, apiVersion);
             case ELECT_PREFERRED_LEADERS:
                 return new ElectPreferredLeadersRequest(struct, apiVersion);
+            case INCREMENTAL_ALTER_CONFIGS:
+                return new IncrementalAlterConfigsRequest(struct, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));
