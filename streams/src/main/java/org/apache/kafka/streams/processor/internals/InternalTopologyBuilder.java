@@ -1480,7 +1480,8 @@ public class InternalTopologyBuilder {
             // omit successor to avoid infinite loops
             return name.equals(source.name)
                 && topics.equals(source.topics)
-                && topicPattern.equals(source.topicPattern);
+                && (topicPattern == null && source.topicPattern == null
+                    || topicPattern != null && topicPattern.equals(source.topicPattern));
         }
 
         @Override
@@ -1653,7 +1654,9 @@ public class InternalTopologyBuilder {
 
             final Subtopology that = (Subtopology) o;
             return id == that.id
-                && nodes.equals(that.nodes);
+                // convert both TreeSets to arrays to ensure .equals() is used recursively
+                // otherwise, the provides NODE_COMPARATOR is used what might result in incorrect comparison
+                && Arrays.equals(nodes.toArray(), that.nodes.toArray());
         }
 
         @Override
@@ -1796,7 +1799,9 @@ public class InternalTopologyBuilder {
             }
 
             final TopologyDescription that = (TopologyDescription) o;
-            return subtopologies.equals(that.subtopologies)
+            // convert both TreeSets to arrays to ensure .equals() is used recursively
+            // otherwise, the provides SUBTOPOLOGY_COMPARATOR is used what might result in incorrect comparison
+            return Arrays.equals(subtopologies.toArray(), that.subtopologies.toArray())
                 && globalStores.equals(that.globalStores);
         }
 
