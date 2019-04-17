@@ -37,6 +37,11 @@ import java.util.regex.Pattern;
 public interface Consumer<K, V> extends Closeable {
 
     /**
+     * @see KafkaConsumer#isConnected()
+     */
+    boolean isConnected();
+
+    /**
      * @see KafkaConsumer#assignment()
      */
     Set<TopicPartition> assignment();
