@@ -66,7 +66,6 @@ public class Metadata implements Closeable {
     private int requestVersion; // bumped on every new topic addition
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
-    private AuthenticationException authenticationException;
     private KafkaException metadataException;
     private MetadataCache cache = MetadataCache.empty();
     private boolean needUpdate;
@@ -202,25 +201,16 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * If any non-retriable authentication exceptions were encountered during
-     * metadata update, clear and return the exception.
+     * If any non-retriable exceptions were encountered during metadata update, clear and return the exception.
      */
-    public synchronized AuthenticationException getAndClearAuthenticationException() {
-        if (authenticationException != null) {
-            AuthenticationException exception = authenticationException;
-            authenticationException = null;
-            return exception;
-        } else
-            return null;
-    }
-
-    synchronized KafkaException getAndClearMetadataException() {
+    public synchronized KafkaException getAndClearMetadataException() {
         if (this.metadataException != null) {
             KafkaException metadataException = this.metadataException;
             this.metadataException = null;
             return metadataException;
-        } else
+        } else {
             return null;
+        }
     }
 
     public synchronized void bootstrap(List<InetSocketAddress> addresses, long now) {
@@ -281,7 +271,6 @@ public class Metadata implements Closeable {
 
     private void maybeSetMetadataError(Cluster cluster) {
         // if we encounter any invalid topics, cache the exception to later throw to the user
-        metadataException = null;
         checkInvalidTopics(cluster);
         checkUnauthorizedTopics(cluster);
     }
@@ -368,10 +357,6 @@ public class Metadata implements Closeable {
     }
 
     public synchronized void maybeThrowException() {
-        AuthenticationException authenticationException = getAndClearAuthenticationException();
-        if (authenticationException != null)
-            throw authenticationException;
-
         KafkaException metadataException = getAndClearMetadataException();
         if (metadataException != null)
             throw metadataException;
@@ -381,9 +366,9 @@ public class Metadata implements Closeable {
      * Record an attempt to update the metadata that failed. We need to keep track of this
      * to avoid retrying immediately.
      */
-    public synchronized void failedUpdate(long now, AuthenticationException authenticationException) {
+    public synchronized void failedUpdate(long now, KafkaException fatalException) {
         this.lastRefreshMs = now;
-        this.authenticationException = authenticationException;
+        this.metadataException = fatalException;
     }
 
     /**

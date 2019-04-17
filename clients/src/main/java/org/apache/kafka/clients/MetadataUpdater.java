@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -64,11 +65,11 @@ public interface MetadataUpdater extends Closeable {
     void handleDisconnection(String destination);
 
     /**
-     * Handle authentication failure. Propagate the authentication exception if awaiting metadata.
+     * Handle failure. Propagate the exception if awaiting metadata.
      *
-     * @param exception authentication exception from broker
+     * @param exception exception corresponding to the failure
      */
-    void handleAuthenticationFailure(AuthenticationException exception);
+    void handleFailure(KafkaException exception);
 
     /**
      * Handle responses for metadata requests.

@@ -16,18 +16,18 @@
  */
 package org.apache.kafka.clients;
 
+import com.sun.xml.internal.ws.protocol.soap.VersionMismatchException;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.CommonFields;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.requests.ApiVersionsResponse;
-import org.apache.kafka.common.requests.MetadataRequest;
-import org.apache.kafka.common.requests.ProduceRequest;
-import org.apache.kafka.common.requests.ResponseHeader;
+import org.apache.kafka.common.requests.*;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.DelayedReceive;
@@ -43,11 +43,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 public class NetworkClientTest {
 
@@ -58,25 +54,26 @@ public class NetworkClientTest {
     protected final long reconnectBackoffMsTest = 10 * 1000;
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
 
+    private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
     private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
     private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
-        return new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)), "mock", Integer.MAX_VALUE,
+        return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
-        return new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)),
+        return new NetworkClient(selector, metadataUpdater,
                 "mock-static", Integer.MAX_VALUE, 0, 0, 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
-        return new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)), "mock", Integer.MAX_VALUE,
+        return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
                 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
@@ -138,6 +135,16 @@ public class NetworkClientTest {
         assertFalse(client.hasInFlightRequests(node.idString()));
         assertFalse(client.hasInFlightRequests());
         assertFalse("Connection should not be ready after close", client.isReady(node, 0));
+    }
+
+    @Test
+    public void testUnsupportedVersionDuringInternalMetadataRequest() {
+        List<String> topics = Arrays.asList("topic_1");
+
+        // disabling auto topic creation for versions less than 4 is not supported
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(topics, false, (short) 3);
+        client.sendInternalMetadataRequest(builder, node.idString(), time.milliseconds());
+        assertEquals(UnsupportedVersionException.class, metadataUpdater.getAndClearFailure().getClass());
     }
 
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
@@ -549,6 +556,63 @@ public class NetworkClientTest {
         public void onComplete(ClientResponse response) {
             this.executed = true;
             this.response = response;
+        }
+    }
+
+    // ManualMetadataUpdater with ability to keep track of failures
+    private static class TestMetadataUpdater implements MetadataUpdater {
+        private final ManualMetadataUpdater updater;
+        private KafkaException failure;
+
+        public TestMetadataUpdater(List<Node> nodes) {
+            updater = new ManualMetadataUpdater(nodes);
+        }
+
+        @Override
+        public List<Node> fetchNodes() {
+            return updater.fetchNodes();
+        }
+
+        @Override
+        public boolean isUpdateDue(long now) {
+            return updater.isUpdateDue(now);
+        }
+
+        @Override
+        public long maybeUpdate(long now) {
+            return updater.maybeUpdate(now);
+        }
+
+        @Override
+        public void handleDisconnection(String destination) {
+            updater.handleDisconnection(destination);
+        }
+
+        @Override
+        public void handleFailure(KafkaException exception) {
+            failure = exception;
+            updater.handleFailure(exception);
+        }
+
+        @Override
+        public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse) {
+            updater.handleCompletedMetadataResponse(requestHeader, now, metadataResponse);
+        }
+
+        @Override
+        public void requestUpdate() {
+            updater.requestUpdate();
+        }
+
+        @Override
+        public void close() {
+            updater.close();
+        }
+
+        public KafkaException getAndClearFailure() {
+            KafkaException failure = this.failure;
+            this.failure = null;
+            return failure;
         }
     }
 }

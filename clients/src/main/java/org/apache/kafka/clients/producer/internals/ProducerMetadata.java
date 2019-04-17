@@ -111,9 +111,9 @@ public class ProducerMetadata extends Metadata {
     }
 
     @Override
-    public synchronized void failedUpdate(long now, AuthenticationException authenticationException) {
-        super.failedUpdate(now, authenticationException);
-        if (authenticationException != null)
+    public synchronized void failedUpdate(long now, KafkaException fatalException) {
+        super.failedUpdate(now, fatalException);
+        if (fatalException != null)
             notifyAll();
     }
 
