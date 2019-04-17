@@ -1480,6 +1480,7 @@ public class InternalTopologyBuilder {
             }
 
             final Source source = (Source) o;
+            // omit successor to avoid infinite loops
             return name.equals(source.name)
                 && topics.equals(source.topics)
                 && (topicPattern == null && source.topicPattern == null
