@@ -280,8 +280,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                             .orElse(null);
 
                     if (workerLoad != null) {
-                        lostAssignments.connectors().forEach(c -> workerLoad.assign(c));
-                        lostAssignments.tasks().forEach(t -> workerLoad.assign(t));
+                        lostAssignments.connectors().forEach(workerLoad::assign);
+                        lostAssignments.tasks().forEach(workerLoad::assign);
                     }
                 } else {
                     newSubmissions.connectors().addAll(lostAssignments.connectors());
