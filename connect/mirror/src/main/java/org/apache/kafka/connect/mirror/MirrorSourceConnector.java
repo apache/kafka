@@ -29,7 +29,6 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.TopicDescription;
@@ -218,7 +217,7 @@ public class MirrorSourceConnector extends SourceConnector {
             throws InterruptedException, ExecutionException {
         Map<String, Long> partitionCounts = knownTopicPartitions.stream()
             .collect(Collectors.groupingBy(x -> x.topic(), Collectors.counting())).entrySet().stream()
-            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x ->x.getValue()));
+            .collect(Collectors.toMap(x -> formatRemoteTopic(x.getKey()), x -> x.getValue()));
         List<NewTopic> newTopics = partitionCounts.entrySet().stream()
             .filter(x -> !knownTargetTopics.contains(x.getKey()))
             .map(x -> new NewTopic(x.getKey(), x.getValue().intValue(), (short) replicationFactor))
