@@ -290,7 +290,7 @@ public class RocksDBSessionStoreTest {
         final String keyFrom = Serdes.String().deserializer().deserialize("", Serdes.Integer().serializer().serialize("", -1));
         final String keyTo = Serdes.String().deserializer().deserialize("", Serdes.Integer().serializer().serialize("", 1));
 
-        final KeyValueIterator iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L);
+        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L);
         assertFalse(iterator.hasNext());
 
         final List<String> messages = appender.getMessages();

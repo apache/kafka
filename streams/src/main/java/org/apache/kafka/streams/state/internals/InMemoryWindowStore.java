@@ -86,7 +86,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = (InternalProcessorContext) context;
 
@@ -276,7 +275,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     }
 
-    private abstract class InMemoryWindowStoreIteratorWrapper implements Comparable<InMemoryWindowStoreIteratorWrapper> {
+    private abstract class InMemoryWindowStoreIteratorWrapper {
 
         private Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator;
         private Iterator<Map.Entry<Bytes, byte[]>> recordIterator;
@@ -364,10 +363,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         Long minTime() {
             return currentTime;
-        }
-
-        public int compareTo(final InMemoryWindowStoreIteratorWrapper other) {
-            return (int) (minTime() - other.minTime());
         }
     }
 
