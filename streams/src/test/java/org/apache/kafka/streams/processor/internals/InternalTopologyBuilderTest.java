@@ -30,8 +30,8 @@ import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockTimestampExtractor;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Test;
@@ -50,9 +50,10 @@ import java.util.regex.Pattern;
 import static java.time.Duration.ofSeconds;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.hamcrest.core.IsInstanceOf.instanceOf;
+import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
-
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
@@ -780,5 +781,19 @@ public class InternalTopologyBuilderTest {
             "anyTopicName",
             sameNameForSourceAndProcessor,
             new MockProcessorSupplier());
+    }
+
+    @Test
+    public void shouldCompareSourceNode() {
+        final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", Collections.singleton("topic"), null);
+        final InternalTopologyBuilder.Source sameAsBase = new InternalTopologyBuilder.Source("name", Collections.singleton("topic"), null);
+        final InternalTopologyBuilder.Source differentName = new InternalTopologyBuilder.Source("name2", Collections.singleton("topic"), null);
+        final InternalTopologyBuilder.Source differentTopicList = new InternalTopologyBuilder.Source("name", Collections.emptySet(), null);
+        final InternalTopologyBuilder.Source differentTopic = new InternalTopologyBuilder.Source("name", Collections.singleton("topic2"), null);
+
+        assertThat(base, equalTo(sameAsBase));
+        assertThat(base, not(equalTo(differentName)));
+        assertThat(base, not(equalTo(differentTopicList)));
+        assertThat(base, not(equalTo(differentTopic)));
     }
 }

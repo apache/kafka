@@ -1281,6 +1281,9 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.Node node1,
                            final TopologyDescription.Node node2) {
+            if (node1.equals(node2)) {
+                return 0;
+            }
             final int size1 = ((AbstractNode) node1).size;
             final int size2 = ((AbstractNode) node2).size;
 
@@ -1477,7 +1480,6 @@ public class InternalTopologyBuilder {
             }
 
             final Source source = (Source) o;
-            // omit successor to avoid infinite loops
             return name.equals(source.name)
                 && topics.equals(source.topics)
                 && (topicPattern == null && source.topicPattern == null
@@ -1654,9 +1656,7 @@ public class InternalTopologyBuilder {
 
             final Subtopology that = (Subtopology) o;
             return id == that.id
-                // convert both TreeSets to arrays to ensure .equals() is used recursively
-                // otherwise, the provides NODE_COMPARATOR is used what might result in incorrect comparison
-                && Arrays.equals(nodes.toArray(), that.nodes.toArray());
+                && nodes.equals(that.nodes);
         }
 
         @Override
@@ -1712,6 +1712,9 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.GlobalStore globalStore1,
                            final TopologyDescription.GlobalStore globalStore2) {
+            if (globalStore1.equals(globalStore2)) {
+                return 0;
+            }
             return globalStore1.id() - globalStore2.id();
         }
     }
@@ -1722,6 +1725,9 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.Subtopology subtopology1,
                            final TopologyDescription.Subtopology subtopology2) {
+            if (subtopology1.equals(subtopology2)) {
+                return 0;
+            }
             return subtopology1.id() - subtopology2.id();
         }
     }
@@ -1799,9 +1805,7 @@ public class InternalTopologyBuilder {
             }
 
             final TopologyDescription that = (TopologyDescription) o;
-            // convert both TreeSets to arrays to ensure .equals() is used recursively
-            // otherwise, the provides SUBTOPOLOGY_COMPARATOR is used what might result in incorrect comparison
-            return Arrays.equals(subtopologies.toArray(), that.subtopologies.toArray())
+            return subtopologies.equals(that.subtopologies)
                 && globalStores.equals(that.globalStores);
         }
 
