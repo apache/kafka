@@ -17,7 +17,6 @@
 
 package integration.kafka.api
 
-import org.junit._
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
@@ -34,6 +33,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
+import org.junit.{After, Test}
 
 /**
  * Tests behavior of specifying auto topic creation configuration for the consumer and broker

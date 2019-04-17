@@ -1635,7 +1635,6 @@ public class KafkaConsumerTest {
         PartitionAssignor assignor = new RangeAssignor();
 
         client.createPendingAuthenticationError(node, 0);
-
         return newConsumer(time, client, subscription, metadata, assignor, false);
     }
 
