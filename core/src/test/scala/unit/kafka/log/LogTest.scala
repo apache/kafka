@@ -3458,6 +3458,29 @@ class LogTest {
   }
 
   @Test
+  def testZombieCoordinatorFencedEmptyTransaction(): Unit = {
+    val pid = 1L
+    val epoch = 0.toShort
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+
+    val buffer = ByteBuffer.allocate(256)
+    val append = appendTransactionalToBuffer(buffer, pid, epoch, leaderEpoch = 1)
+    append(0, 10)
+    appendEndTxnMarkerToBuffer(buffer, pid, epoch, 10L, ControlRecordType.COMMIT,
+      coordinatorEpoch = 0, leaderEpoch = 1)
+
+    buffer.flip()
+    log.appendAsFollower(MemoryRecords.readableRecords(buffer))
+
+    appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 2, leaderEpoch = 1)
+    appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 2, leaderEpoch = 1)
+    assertThrows[TransactionCoordinatorFencedException] {
+      appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1, leaderEpoch = 1)
+    }
+  }
+
+  @Test
   def testFirstUnstableOffsetDoesNotExceedLogStartOffsetMidSegment(): Unit = {
     val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
@@ -3617,10 +3640,14 @@ class LogTest {
     }
   }
 
-  private def appendEndTxnMarkerAsLeader(log: Log, producerId: Long, producerEpoch: Short,
-                                         controlType: ControlRecordType, coordinatorEpoch: Int = 0): Unit = {
+  private def appendEndTxnMarkerAsLeader(log: Log,
+                                         producerId: Long,
+                                         producerEpoch: Short,
+                                         controlType: ControlRecordType,
+                                         coordinatorEpoch: Int = 0,
+                                         leaderEpoch: Int = 0): Unit = {
     val records = endTxnRecords(controlType, producerId, producerEpoch, coordinatorEpoch = coordinatorEpoch)
-    log.appendAsLeader(records, isFromClient = false, leaderEpoch = 0)
+    log.appendAsLeader(records, isFromClient = false, leaderEpoch = leaderEpoch)
   }
 
   private def appendNonTransactionalAsLeader(log: Log, numRecords: Int): Unit = {
@@ -3631,10 +3658,14 @@ class LogTest {
     log.appendAsLeader(records, leaderEpoch = 0)
   }
 
-  private def appendTransactionalToBuffer(buffer: ByteBuffer, producerId: Long, producerEpoch: Short): (Long, Int) => Unit = {
+  private def appendTransactionalToBuffer(buffer: ByteBuffer,
+                                          producerId: Long,
+                                          producerEpoch: Short,
+                                          leaderEpoch: Int = 0): (Long, Int) => Unit = {
     var sequence = 0
     (offset: Long, numRecords: Int) => {
-      val builder = MemoryRecords.builder(buffer, CompressionType.NONE, offset, producerId, producerEpoch, sequence, true)
+      val builder = MemoryRecords.builder(buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE, TimestampType.CREATE_TIME,
+        offset, System.currentTimeMillis(), producerId, producerEpoch, sequence, true, leaderEpoch)
       for (seq <- sequence until sequence + numRecords) {
         val record = new SimpleRecord(s"$seq".getBytes)
         builder.append(record)
@@ -3645,10 +3676,15 @@ class LogTest {
     }
   }
 
-  private def appendEndTxnMarkerToBuffer(buffer: ByteBuffer, producerId: Long, producerEpoch: Short, offset: Long,
-                                         controlType: ControlRecordType, coordinatorEpoch: Int = 0): Unit = {
+  private def appendEndTxnMarkerToBuffer(buffer: ByteBuffer,
+                                         producerId: Long,
+                                         producerEpoch: Short,
+                                         offset: Long,
+                                         controlType: ControlRecordType,
+                                         coordinatorEpoch: Int = 0,
+                                         leaderEpoch: Int = 0): Unit = {
     val marker = new EndTransactionMarker(controlType, coordinatorEpoch)
-    MemoryRecords.writeEndTransactionalMarker(buffer, offset, mockTime.milliseconds(), 0, producerId, producerEpoch, marker)
+    MemoryRecords.writeEndTransactionalMarker(buffer, offset, mockTime.milliseconds(), leaderEpoch, producerId, producerEpoch, marker)
   }
 
   private def appendNonTransactionalToBuffer(buffer: ByteBuffer, offset: Long, numRecords: Int): Unit = {
