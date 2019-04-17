@@ -280,22 +280,24 @@ public class KafkaStreams implements AutoCloseable {
      * @return the current state of this Kafka Streams instance
      */
     public State state() {
-        //checkForConnection();
         return state;
     }
 
-    private void checkForConnection() {
-        synchronized (stateLock) {
-            for (final StreamThread thread : threads) {
-                if (!thread.isConnected()) {
-                    setState(State.DISCONNECTED);
-                    return;
-                }
-            }
-            if (!globalStreamThread.isConnected()) {
-                setState(State.DISCONNECTED);
+    /**
+     * Indicates whether or not all of the threads are fully connected
+     * 
+     * @return the connection state of the threads
+     */
+    public boolean isConnected() {
+        for (final StreamThread thread : threads) {
+            if (!thread.isConnected()) {
+                return false;
             }
         }
+        if (!globalStreamThread.isConnected()) {
+            return false;
+        }
+        return true;
     }
 
     private boolean isRunning() {
