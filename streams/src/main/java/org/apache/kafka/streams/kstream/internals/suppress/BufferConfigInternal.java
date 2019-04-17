@@ -18,12 +18,28 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.streams.kstream.Suppressed;
 
+import java.util.HashMap;
+import java.util.Map;
+
 import static org.apache.kafka.streams.kstream.internals.suppress.BufferFullStrategy.SHUT_DOWN;
 
-abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC>> implements Suppressed.BufferConfig<BC> {
+public abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC>> implements Suppressed.BufferConfig<BC> {
     public abstract long maxRecords();
 
     public abstract long maxBytes();
+
+    protected final boolean loggingEnabled;
+    protected final Map<String, String> topicConfig;
+
+    BufferConfigInternal() {
+        this.topicConfig = new HashMap<>();
+        this.loggingEnabled = true;
+    }
+
+    BufferConfigInternal(final Map<String, String> topicConfig, final boolean loggingEnabled) {
+        this.topicConfig = topicConfig;
+        this.loggingEnabled = loggingEnabled;
+    }
 
     @SuppressWarnings("unused")
     public abstract BufferFullStrategy bufferFullStrategy();
@@ -45,5 +61,13 @@ abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC>> impl
     @Override
     public Suppressed.EagerBufferConfig emitEarlyWhenFull() {
         return new EagerBufferConfigImpl(maxRecords(), maxBytes());
+    }
+
+    public boolean isLoggingEnabled() {
+        return loggingEnabled;
+    }
+
+    public Map<String, String> getTopicConfig() {
+        return topicConfig;
     }
 }

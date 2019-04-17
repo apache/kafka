@@ -18,12 +18,22 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.streams.kstream.Suppressed;
 
+import java.util.Map;
 import java.util.Objects;
 
 public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.EagerBufferConfig> implements Suppressed.EagerBufferConfig {
 
     private final long maxRecords;
     private final long maxBytes;
+
+    public EagerBufferConfigImpl(final long maxRecords,
+                                 final long maxBytes,
+                                 final Map<String, String> topicConfig,
+                                 final boolean loggingEnabled) {
+        super(topicConfig, loggingEnabled);
+        this.maxRecords = maxRecords;
+        this.maxBytes = maxBytes;
+    }
 
     public EagerBufferConfigImpl(final long maxRecords, final long maxBytes) {
         this.maxRecords = maxRecords;
@@ -32,12 +42,12 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
 
     @Override
     public Suppressed.EagerBufferConfig withMaxRecords(final long recordLimit) {
-        return new EagerBufferConfigImpl(recordLimit, maxBytes);
+        return new EagerBufferConfigImpl(recordLimit, maxBytes, topicConfig, loggingEnabled);
     }
 
     @Override
     public Suppressed.EagerBufferConfig withMaxBytes(final long byteLimit) {
-        return new EagerBufferConfigImpl(maxRecords, byteLimit);
+        return new EagerBufferConfigImpl(maxRecords, byteLimit, topicConfig, loggingEnabled);
     }
 
     @Override
@@ -76,5 +86,15 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
     @Override
     public String toString() {
         return "EagerBufferConfigImpl{maxRecords=" + maxRecords + ", maxBytes=" + maxBytes + '}';
+    }
+
+    @Override
+    public Suppressed.EagerBufferConfig withLoggingDisabled() {
+        return new EagerBufferConfigImpl(maxRecords, maxBytes, topicConfig, false);
+    }
+
+    @Override
+    public Suppressed.EagerBufferConfig withLoggingEnabled(final Map<String, String> config) {
+        return new EagerBufferConfigImpl(maxRecords, maxBytes, config, true);
     }
 }

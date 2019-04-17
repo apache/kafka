@@ -52,6 +52,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Collections;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -495,11 +496,19 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             storeName,
             this
         );
-        
+
+        StoreBuilder<InMemoryTimeOrderedKeyValueBuffer<K, V>> storeBuilder = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(storeName, keySerde, valSerde);
+        if (suppressedInternal.bufferConfig().isLoggingEnabled()) {
+            final Map<String, String> topicConfig = suppressedInternal.bufferConfig().getTopicConfig();
+            storeBuilder = storeBuilder.withLoggingEnabled(topicConfig);
+        } else {
+            storeBuilder = storeBuilder.withLoggingDisabled();
+        }
+
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
-            new InMemoryTimeOrderedKeyValueBuffer.Builder<>(storeName, keySerde, valSerde)
+            storeBuilder
         );
 
         builder.addGraphNode(streamsGraphNode, node);
