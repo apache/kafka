@@ -49,6 +49,7 @@ public class IncrementalCooperativeConnectProtocol {
     public static final String REVOKED_KEY_NAME = "revoked";
     public static final String SCHEDULED_DELAY_KEY_NAME = "delay";
     public static final short CONNECT_PROTOCOL_V1 = 1;
+    public static final boolean TOLERATE_MISSING_FIELDS_WITH_DEFAULTS = true;
 
     /**
      * Connect Protocol Header V1:
@@ -75,6 +76,7 @@ public class IncrementalCooperativeConnectProtocol {
      * </pre>
      */
     public static final Schema ALLOCATION_V1 = new Schema(
+            TOLERATE_MISSING_FIELDS_WITH_DEFAULTS,
             new Field(ALLOCATION_KEY_NAME, NULLABLE_BYTES, null, true, null));
 
     /**
@@ -102,6 +104,7 @@ public class IncrementalCooperativeConnectProtocol {
      * </pre>
      */
     public static final Schema ASSIGNMENT_V1 = new Schema(
+            TOLERATE_MISSING_FIELDS_WITH_DEFAULTS,
             new Field(ERROR_KEY_NAME, Type.INT16),
             new Field(LEADER_KEY_NAME, Type.STRING),
             new Field(LEADER_URL_KEY_NAME, Type.STRING),
