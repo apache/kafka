@@ -279,10 +279,10 @@ public class ConnectProtocol {
             this.leader = leader;
             this.leaderUrl = leaderUrl;
             this.offset = configOffset;
-            Objects.requireNonNull(connectorIds, "Assigned connector IDs may be empty but not null");
-            this.connectorIds = connectorIds;
-            Objects.requireNonNull(taskIds, "Assigned task IDs may be empty but not null");
-            this.taskIds = taskIds;
+            this.connectorIds = Objects.requireNonNull(connectorIds,
+                    "Assigned connector IDs may be empty but not null");
+            this.taskIds = Objects.requireNonNull(taskIds,
+                    "Assigned task IDs may be empty but not null");
         }
 
         /**

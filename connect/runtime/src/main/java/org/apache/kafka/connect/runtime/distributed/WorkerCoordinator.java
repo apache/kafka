@@ -451,9 +451,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
                 Collection<String> connectors,
                 Collection<ConnectorTaskId> tasks
         ) {
-            this.worker = worker;
-            this.connectors = connectors;
-            this.tasks = tasks;
+            this.worker = Objects.requireNonNull(worker, "worker cannot be null");
+            this.connectors = Objects.requireNonNull(connectors,
+                    "connectors may be empty but not null");
+            this.tasks = Objects.requireNonNull(tasks,
+                    "tasks may be empty but not null");
         }
 
         public static WorkerLoad copy(

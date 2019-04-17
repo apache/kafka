@@ -78,10 +78,10 @@ public class ConnectAssignment extends ConnectProtocol.Assignment {
                              int delay) {
         super(error, leader, leaderUrl, configOffset, connectorIds, taskIds);
         this.version = version;
-        Objects.requireNonNull(revokedConnectorIds, "Revoked connector IDs may be empty but not null");
-        this.revokedConnectorIds = revokedConnectorIds;
-        Objects.requireNonNull(revokedTaskIds, "Revoked task IDs may be empty but not null");
-        this.revokedTaskIds = revokedTaskIds;
+        this.revokedConnectorIds = Objects.requireNonNull(revokedConnectorIds,
+                "Revoked connector IDs may be empty but not null");
+        this.revokedTaskIds = Objects.requireNonNull(revokedTaskIds,
+                "Revoked task IDs may be empty but not null");
         this.delay = delay;
     }
 
