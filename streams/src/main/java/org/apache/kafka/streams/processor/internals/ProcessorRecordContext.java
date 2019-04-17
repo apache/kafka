@@ -88,11 +88,13 @@ public class ProcessorRecordContext implements RecordContext {
         int size = 0;
         size += Long.BYTES; // value.context.timestamp
         size += Long.BYTES; // value.context.offset
-        size += topic.getBytes(UTF_8).length;
+        if (topic != null) {
+            size += topic.toCharArray().length;
+        }
         size += Integer.BYTES; // partition
         if (headers != null) {
             for (final Header header : headers) {
-                size += header.key().getBytes(UTF_8).length;
+                size += header.key().toCharArray().length;
                 final byte[] value = header.value();
                 if (value != null) {
                     size += value.length;
@@ -127,10 +129,11 @@ public class ProcessorRecordContext implements RecordContext {
                 size += 2 * Integer.BYTES; // sizes of key and value
 
                 final byte[] keyBytes = headers[i].key().getBytes(UTF_8);
-                final byte[] valueBytes = headers[i].value();
-
                 size += keyBytes.length;
-                size += valueBytes.length;
+                final byte[] valueBytes = headers[i].value();
+                if (valueBytes != null) {
+                    size += valueBytes.length;
+                }
 
                 headerKeys[i] = keyBytes;
                 headerValues[i] = valueBytes;
@@ -140,12 +143,11 @@ public class ProcessorRecordContext implements RecordContext {
         final ByteBuffer buffer = ByteBuffer.allocate(size);
         buffer.putLong(timestamp);
         buffer.putLong(offset);
-        if (topicBytes == null) {
-            buffer.putInt(-1);
-        } else {
-            buffer.putInt(topicBytes.length);
-            buffer.put(topicBytes);
-        }
+
+        // not handling the null condition because we believe topic will never be null in cases where we serialize
+        buffer.putInt(topicBytes.length);
+        buffer.put(topicBytes);
+
         buffer.putInt(partition);
         if (headers == null) {
             buffer.putInt(-1);
@@ -155,8 +157,12 @@ public class ProcessorRecordContext implements RecordContext {
                 buffer.putInt(headerKeys[i].length);
                 buffer.put(headerKeys[i]);
 
-                buffer.putInt(headerValues[i].length);
-                buffer.put(headerValues[i]);
+                if (headerValues[i] != null) {
+                    buffer.putInt(headerValues[i].length);
+                    buffer.put(headerValues[i]);
+                } else {
+                    buffer.putInt(-1);
+                }
             }
         }
 
@@ -168,9 +174,8 @@ public class ProcessorRecordContext implements RecordContext {
         final long offset = buffer.getLong();
         final int topicSize = buffer.getInt();
         final String topic;
-        if (topicSize == -1) {
-            topic = null;
-        } else {
+        {
+            // not handling the null topic condition, because we believe the topic will never be null when we serialize
             final byte[] topicBytes = new byte[topicSize];
             buffer.get(topicBytes);
             topic = new String(topicBytes, UTF_8);
@@ -188,8 +193,13 @@ public class ProcessorRecordContext implements RecordContext {
                 buffer.get(keyBytes);
 
                 final int valueSize = buffer.getInt();
-                final byte[] valueBytes = new byte[valueSize];
-                buffer.get(valueBytes);
+                final byte[] valueBytes;
+                if (valueSize == -1) {
+                    valueBytes = null;
+                } else {
+                    valueBytes = new byte[valueSize];
+                    buffer.get(valueBytes);
+                }
 
                 headerArr[i] = new RecordHeader(new String(keyBytes, UTF_8), valueBytes);
             }
