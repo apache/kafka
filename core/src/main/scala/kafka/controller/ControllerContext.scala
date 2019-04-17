@@ -232,15 +232,15 @@ class ControllerContext {
     replicasForTopic(topic).exists(replica => replicaStates(replica) == state)
   }
 
-  def checkValidStateChange(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): (Seq[PartitionAndReplica], Seq[PartitionAndReplica]) = {
-    replicas.partition(replica => isValidTransition(replica, targetState))
+  def checkValidReplicaStateChange(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): (Seq[PartitionAndReplica], Seq[PartitionAndReplica]) = {
+    replicas.partition(replica => isValidReplicaStateTransition(replica, targetState))
   }
 
-  def checkValidStateChange(partitions: Seq[TopicPartition], targetState: PartitionState): (Seq[TopicPartition], Seq[TopicPartition]) = {
-    partitions.partition(p => isValidTransition(p, targetState))
+  def checkValidPartitionStateChange(partitions: Seq[TopicPartition], targetState: PartitionState): (Seq[TopicPartition], Seq[TopicPartition]) = {
+    partitions.partition(p => isValidPartitionStateTransition(p, targetState))
   }
 
-  def put(replica: PartitionAndReplica, state: ReplicaState): Unit = {
+  def putReplicaState(replica: PartitionAndReplica, state: ReplicaState): Unit = {
     replicaStates.put(replica, state)
   }
 
@@ -248,11 +248,11 @@ class ControllerContext {
     replicaStates.remove(replica)
   }
 
-  def putIfNotExists(replica: PartitionAndReplica, state: ReplicaState): Unit = {
+  def putReplicaStateIfNotExists(replica: PartitionAndReplica, state: ReplicaState): Unit = {
     replicaStates.getOrElseUpdate(replica, state)
   }
 
-  def put(partition: TopicPartition, targetState: PartitionState): Unit = {
+  def putPartitionState(partition: TopicPartition, targetState: PartitionState): Unit = {
     val currentState = partitionStates.put(partition, targetState).getOrElse(NonExistentPartition)
     updatePartitionStateMetrics(partition, currentState, targetState)
   }
@@ -269,16 +269,16 @@ class ControllerContext {
     }
   }
 
-  def putIfNotExists(partition: TopicPartition, state: PartitionState): Unit = {
+  def putPartitionStateIfNotExists(partition: TopicPartition, state: PartitionState): Unit = {
     if (partitionStates.getOrElseUpdate(partition, state) == state)
       updatePartitionStateMetrics(partition, NonExistentPartition, state)
   }
 
-  def currentState(replica: PartitionAndReplica): ReplicaState = {
+  def replicaState(replica: PartitionAndReplica): ReplicaState = {
     replicaStates(replica)
   }
 
-  def currentState(partition: TopicPartition): PartitionState = {
+  def partitionState(partition: TopicPartition): PartitionState = {
     partitionStates(partition)
   }
 
@@ -291,17 +291,17 @@ class ControllerContext {
   }
 
   def partitionsInState(topic: String, state: PartitionState): Set[TopicPartition] = {
-    partitionsForTopic(topic).filter { partition => state == currentState(partition) }.toSet
+    partitionsForTopic(topic).filter { partition => state == partitionState(partition) }.toSet
   }
 
   def partitionsInStates(topic: String, states: Set[PartitionState]): Set[TopicPartition] = {
-    partitionsForTopic(topic).filter { partition => states.contains(currentState(partition)) }.toSet
+    partitionsForTopic(topic).filter { partition => states.contains(partitionState(partition)) }.toSet
   }
 
-  private def isValidTransition(replica: PartitionAndReplica, targetState: ReplicaState): Boolean =
+  private def isValidReplicaStateTransition(replica: PartitionAndReplica, targetState: ReplicaState): Boolean =
     targetState.validPreviousStates.contains(replicaStates(replica))
 
-  private def isValidTransition(partition: TopicPartition, targetState: PartitionState): Boolean =
+  private def isValidPartitionStateTransition(partition: TopicPartition, targetState: PartitionState): Boolean =
     targetState.validPreviousStates.contains(partitionStates(partition))
 
 }

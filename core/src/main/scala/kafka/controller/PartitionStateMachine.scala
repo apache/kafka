@@ -87,11 +87,11 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
           // else, check if the leader for partition is alive. If yes, it is in Online state, else it is in Offline state
           if (controllerContext.isReplicaOnline(currentLeaderIsrAndEpoch.leaderAndIsr.leader, topicPartition))
           // leader is alive
-            controllerContext.put(topicPartition, OnlinePartition)
+            controllerContext.putPartitionState(topicPartition, OnlinePartition)
           else
-            controllerContext.put(topicPartition, OfflinePartition)
+            controllerContext.putPartitionState(topicPartition, OfflinePartition)
         case None =>
-          controllerContext.put(topicPartition, NewPartition)
+          controllerContext.putPartitionState(topicPartition, NewPartition)
       }
     }
   }
@@ -163,7 +163,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
   }
 
   private def partitionState(partition: TopicPartition): PartitionState = {
-    controllerContext.currentState(partition)
+    controllerContext.partitionState(partition)
   }
 
   /**
@@ -192,8 +192,8 @@ class ZkPartitionStateMachine(config: KafkaConfig,
                                    targetState: PartitionState,
                                    partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy]): Map[TopicPartition, Throwable] = {
     val stateChangeLog = stateChangeLogger.withControllerEpoch(controllerContext.epoch)
-    partitions.foreach(partition => controllerContext.putIfNotExists(partition, NonExistentPartition))
-    val (validPartitions, invalidPartitions) = controllerContext.checkValidStateChange(partitions, targetState)
+    partitions.foreach(partition => controllerContext.putPartitionStateIfNotExists(partition, NonExistentPartition))
+    val (validPartitions, invalidPartitions) = controllerContext.checkValidPartitionStateChange(partitions, targetState)
     invalidPartitions.foreach(partition => logInvalidTransition(partition, targetState))
 
     targetState match {
@@ -201,7 +201,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
         validPartitions.foreach { partition =>
           stateChangeLog.trace(s"Changed partition $partition state from ${partitionState(partition)} to $targetState with " +
             s"assigned replicas ${controllerContext.partitionReplicaAssignment(partition).mkString(",")}")
-          controllerContext.put(partition, NewPartition)
+          controllerContext.putPartitionState(partition, NewPartition)
         }
         Map.empty
       case OnlinePartition =>
@@ -212,7 +212,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
           successfulInitializations.foreach { partition =>
             stateChangeLog.trace(s"Changed partition $partition from ${partitionState(partition)} to $targetState with state " +
               s"${controllerContext.partitionLeadershipInfo(partition).leaderAndIsr}")
-            controllerContext.put(partition, OnlinePartition)
+            controllerContext.putPartitionState(partition, OnlinePartition)
           }
         }
         if (partitionsToElectLeader.nonEmpty) {
@@ -220,7 +220,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
           successfulElections.foreach { partition =>
             stateChangeLog.trace(s"Changed partition $partition from ${partitionState(partition)} to $targetState with state " +
               s"${controllerContext.partitionLeadershipInfo(partition).leaderAndIsr}")
-            controllerContext.put(partition, OnlinePartition)
+            controllerContext.putPartitionState(partition, OnlinePartition)
           }
           failedElections
         } else {
@@ -229,13 +229,13 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       case OfflinePartition =>
         validPartitions.foreach { partition =>
           stateChangeLog.trace(s"Changed partition $partition state from ${partitionState(partition)} to $targetState")
-          controllerContext.put(partition, OfflinePartition)
+          controllerContext.putPartitionState(partition, OfflinePartition)
         }
         Map.empty
       case NonExistentPartition =>
         validPartitions.foreach { partition =>
           stateChangeLog.trace(s"Changed partition $partition state from ${partitionState(partition)} to $targetState")
-          controllerContext.put(partition, NonExistentPartition)
+          controllerContext.putPartitionState(partition, NonExistentPartition)
         }
         Map.empty
     }

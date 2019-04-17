@@ -19,8 +19,8 @@ package kafka.controller
 class MockReplicaStateMachine(controllerContext: ControllerContext) extends ReplicaStateMachine(controllerContext) {
 
   override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
-    replicas.foreach(replica => controllerContext.putIfNotExists(replica, NonExistentReplica))
-    val (validReplicas, invalidReplicas) = controllerContext.checkValidStateChange(replicas, targetState)
+    replicas.foreach(replica => controllerContext.putReplicaStateIfNotExists(replica, NonExistentReplica))
+    val (validReplicas, invalidReplicas) = controllerContext.checkValidReplicaStateChange(replicas, targetState)
     if (invalidReplicas.nonEmpty) {
       val currentStates = invalidReplicas.map(replica => replica -> controllerContext.replicaStates.get(replica)).toMap
       throw new IllegalStateException(s"Invalid state transition to $targetState for replicas $currentStates")
@@ -29,7 +29,7 @@ class MockReplicaStateMachine(controllerContext: ControllerContext) extends Repl
       if (targetState == NonExistentReplica)
         controllerContext.removeReplicaState(replica)
       else
-        controllerContext.put(replica, targetState)
+        controllerContext.putReplicaState(replica, targetState)
     }
   }
 

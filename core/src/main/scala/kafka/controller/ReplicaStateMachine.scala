@@ -57,12 +57,12 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
       replicas.foreach { replicaId =>
         val partitionAndReplica = PartitionAndReplica(partition, replicaId)
         if (controllerContext.isReplicaOnline(replicaId, partition)) {
-          controllerContext.put(partitionAndReplica, OnlineReplica)
+          controllerContext.putReplicaState(partitionAndReplica, OnlineReplica)
         } else {
           // mark replicas on dead brokers as failed for topic deletion, if they belong to a topic to be deleted.
           // This is required during controller failover since during controller failover a broker can go down,
           // so the replicas on that broker should be moved to ReplicaDeletionIneligible to be on the safer side.
-          controllerContext.put(partitionAndReplica, ReplicaDeletionIneligible)
+          controllerContext.putReplicaState(partitionAndReplica, ReplicaDeletionIneligible)
         }
       }
     }
@@ -152,15 +152,15 @@ class ZkReplicaStateMachine(config: KafkaConfig,
    * @param targetState The end state that the replica should be moved to
    */
   private def doHandleStateChanges(replicaId: Int, replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
-    replicas.foreach(replica => controllerContext.putIfNotExists(replica, NonExistentReplica))
-    val (validReplicas, invalidReplicas) = controllerContext.checkValidStateChange(replicas, targetState)
+    replicas.foreach(replica => controllerContext.putReplicaStateIfNotExists(replica, NonExistentReplica))
+    val (validReplicas, invalidReplicas) = controllerContext.checkValidReplicaStateChange(replicas, targetState)
     invalidReplicas.foreach(replica => logInvalidTransition(replica, targetState))
 
     targetState match {
       case NewReplica =>
         validReplicas.foreach { replica =>
           val partition = replica.topicPartition
-          val currentState = controllerContext.currentState(replica)
+          val currentState = controllerContext.replicaState(replica)
 
           controllerContext.partitionLeadershipInfo.get(partition) match {
             case Some(leaderIsrAndControllerEpoch) =>
@@ -174,17 +174,17 @@ class ZkReplicaStateMachine(config: KafkaConfig,
                   controllerContext.partitionReplicaAssignment(replica.topicPartition),
                   isNew = true)
                 logSuccessfulTransition(replicaId, partition, currentState, NewReplica)
-                controllerContext.put(replica, NewReplica)
+                controllerContext.putReplicaState(replica, NewReplica)
               }
             case None =>
               logSuccessfulTransition(replicaId, partition, currentState, NewReplica)
-              controllerContext.put(replica, NewReplica)
+              controllerContext.putReplicaState(replica, NewReplica)
           }
         }
       case OnlineReplica =>
         validReplicas.foreach { replica =>
           val partition = replica.topicPartition
-          val currentState = controllerContext.currentState(replica)
+          val currentState = controllerContext.replicaState(replica)
 
           currentState match {
             case NewReplica =>
@@ -203,7 +203,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
               }
           }
           logSuccessfulTransition(replicaId, partition, currentState, OnlineReplica)
-          controllerContext.put(replica, OnlineReplica)
+          controllerContext.putReplicaState(replica, OnlineReplica)
         }
       case OfflineReplica =>
         validReplicas.foreach { replica =>
@@ -223,40 +223,40 @@ class ZkReplicaStateMachine(config: KafkaConfig,
               controllerContext.partitionReplicaAssignment(partition), isNew = false)
           }
           val replica = PartitionAndReplica(partition, replicaId)
-          val currentState = controllerContext.currentState(replica)
+          val currentState = controllerContext.replicaState(replica)
           logSuccessfulTransition(replicaId, partition, currentState, OfflineReplica)
-          controllerContext.put(replica, OfflineReplica)
+          controllerContext.putReplicaState(replica, OfflineReplica)
         }
 
         replicasWithoutLeadershipInfo.foreach { replica =>
-          val currentState = controllerContext.currentState(replica)
+          val currentState = controllerContext.replicaState(replica)
           logSuccessfulTransition(replicaId, replica.topicPartition, currentState, OfflineReplica)
-          controllerContext.put(replica, OfflineReplica)
+          controllerContext.putReplicaState(replica, OfflineReplica)
         }
       case ReplicaDeletionStarted =>
         validReplicas.foreach { replica =>
-          val currentState = controllerContext.currentState(replica)
+          val currentState = controllerContext.replicaState(replica)
           logSuccessfulTransition(replicaId, replica.topicPartition, currentState, ReplicaDeletionStarted)
-          controllerContext.put(replica, ReplicaDeletionStarted)
+          controllerContext.putReplicaState(replica, ReplicaDeletionStarted)
           controllerBrokerRequestBatch.addStopReplicaRequestForBrokers(Seq(replicaId),
             replica.topicPartition,
             deletePartition = true)
         }
       case ReplicaDeletionIneligible =>
         validReplicas.foreach { replica =>
-          val currentState = controllerContext.currentState(replica)
+          val currentState = controllerContext.replicaState(replica)
           logSuccessfulTransition(replicaId, replica.topicPartition, currentState, ReplicaDeletionIneligible)
-          controllerContext.put(replica, ReplicaDeletionIneligible)
+          controllerContext.putReplicaState(replica, ReplicaDeletionIneligible)
         }
       case ReplicaDeletionSuccessful =>
         validReplicas.foreach { replica =>
-          val currentState = controllerContext.currentState(replica)
+          val currentState = controllerContext.replicaState(replica)
           logSuccessfulTransition(replicaId, replica.topicPartition, currentState, ReplicaDeletionSuccessful)
-          controllerContext.put(replica, ReplicaDeletionSuccessful)
+          controllerContext.putReplicaState(replica, ReplicaDeletionSuccessful)
         }
       case NonExistentReplica =>
         validReplicas.foreach { replica =>
-          val currentState = controllerContext.currentState(replica)
+          val currentState = controllerContext.replicaState(replica)
           val currentAssignedReplicas = controllerContext.partitionReplicaAssignment(replica.topicPartition)
           controllerContext.updatePartitionReplicaAssignment(replica.topicPartition, currentAssignedReplicas.filterNot(_ == replica.replica))
           logSuccessfulTransition(replicaId, replica.topicPartition, currentState, NonExistentReplica)
@@ -282,7 +282,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       remaining = removalsToRetry
       failedRemovals.foreach { case (partition, e) =>
         val replica = PartitionAndReplica(partition, replicaId)
-        val currentState = controllerContext.currentState(replica)
+        val currentState = controllerContext.replicaState(replica)
         logFailedStateChange(replica, currentState, OfflineReplica, e)
       }
     }
@@ -383,7 +383,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
   }
 
   private def logInvalidTransition(replica: PartitionAndReplica, targetState: ReplicaState): Unit = {
-    val currState = controllerContext.currentState(replica)
+    val currState = controllerContext.replicaState(replica)
     val e = new IllegalStateException(s"Replica $replica should be in the ${targetState.validPreviousStates.mkString(",")} " +
       s"states before moving to $targetState state. Instead it is in $currState state")
     logFailedStateChange(replica, currState, targetState, e)

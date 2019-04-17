@@ -29,34 +29,34 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
   override def handleStateChanges(partitions: Seq[TopicPartition],
                                   targetState: PartitionState,
                                   leaderElectionStrategy: Option[PartitionLeaderElectionStrategy]): Map[TopicPartition, Throwable] = {
-    partitions.foreach(partition => controllerContext.putIfNotExists(partition, NonExistentPartition))
-    val (validPartitions, invalidPartitions) = controllerContext.checkValidStateChange(partitions, targetState)
+    partitions.foreach(partition => controllerContext.putPartitionStateIfNotExists(partition, NonExistentPartition))
+    val (validPartitions, invalidPartitions) = controllerContext.checkValidPartitionStateChange(partitions, targetState)
     if (invalidPartitions.nonEmpty) {
       val currentStates = invalidPartitions.map(p => controllerContext.partitionStates.get(p))
       throw new IllegalStateException(s"Invalid state transition to $targetState for partitions $currentStates")
     }
 
     if (targetState == OnlinePartition) {
-      val uninitializedPartitions = validPartitions.filter(partition => controllerContext.currentState(partition) == NewPartition)
+      val uninitializedPartitions = validPartitions.filter(partition => controllerContext.partitionState(partition) == NewPartition)
       val partitionsToElectLeader = partitions.filter { partition =>
-        val currentState = controllerContext.currentState(partition)
+        val currentState = controllerContext.partitionState(partition)
         currentState == OfflinePartition || currentState == OnlinePartition
       }
 
       uninitializedPartitions.foreach { partition =>
-        controllerContext.put(partition, targetState)
+        controllerContext.putPartitionState(partition, targetState)
       }
 
       val failedElections = doLeaderElections(partitionsToElectLeader, leaderElectionStrategy.get)
       val successfulElections = partitionsToElectLeader.filterNot(failedElections.keySet.contains)
       successfulElections.foreach { partition =>
-        controllerContext.put(partition, targetState)
+        controllerContext.putPartitionState(partition, targetState)
       }
 
       failedElections
     } else {
       validPartitions.foreach { partition =>
-        controllerContext.put(partition, targetState)
+        controllerContext.putPartitionState(partition, targetState)
       }
       Map.empty
     }

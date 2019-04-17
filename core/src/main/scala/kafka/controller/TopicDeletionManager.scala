@@ -163,7 +163,7 @@ class TopicDeletionManager(config: KafkaConfig,
    * 2. partition reassignment in progress for some partitions of the topic
    * @param topics Topics that should be marked ineligible for deletion. No op if the topic is was not previously queued up for deletion
    */
-  def markTopicIneligibleForDeletion(topics: Set[String]) {
+  def markTopicIneligibleForDeletion(topics: Set[String]): Unit = {
     if (isDeleteTopicEnabled) {
       val newTopicsToHaltDeletion = controllerContext.topicsToBeDeleted & topics
       controllerContext.topicsIneligibleForDeletion ++= newTopicsToHaltDeletion
@@ -182,13 +182,6 @@ class TopicDeletionManager(config: KafkaConfig,
   private def isTopicDeletionInProgress(topic: String): Boolean = {
     if (isDeleteTopicEnabled) {
       controllerContext.isAnyReplicaInState(topic, ReplicaDeletionStarted)
-    } else
-      false
-  }
-
-  def isTopicWithDeletionStarted(topic: String): Boolean = {
-    if (isDeleteTopicEnabled) {
-      controllerContext.topicsWithDeletionStarted.contains(topic)
     } else
       false
   }
@@ -230,7 +223,7 @@ class TopicDeletionManager(config: KafkaConfig,
    * To ensure a successful retry, reset states for respective replicas from ReplicaDeletionIneligible to OfflineReplica state
    *@param topic Topic for which deletion should be retried
    */
-  private def markTopicForDeletionRetry(topic: String) {
+  private def retryDeletionForIneligibleReplicas(topic: String): Unit = {
     // reset replica states from ReplicaDeletionIneligible to OfflineReplica
     val failedReplicas = controllerContext.replicasInState(topic, ReplicaDeletionIneligible)
     info(s"Retrying delete topic for topic $topic since replicas ${failedReplicas.mkString(",")} were not successfully deleted")
@@ -331,7 +324,6 @@ class TopicDeletionManager(config: KafkaConfig,
 
   private def resumeDeletions(): Unit = {
     val topicsQueuedForDeletion = Set.empty[String] ++ controllerContext.topicsToBeDeleted
-
     if (topicsQueuedForDeletion.nonEmpty)
       info(s"Handling deletion for topics ${topicsQueuedForDeletion.mkString(",")}")
 
@@ -341,23 +333,21 @@ class TopicDeletionManager(config: KafkaConfig,
         // clear up all state for this topic from controller cache and zookeeper
         completeDeleteTopic(topic)
         info(s"Deletion of topic $topic successfully completed")
+      } else if (controllerContext.isAnyReplicaInState(topic, ReplicaDeletionStarted)) {
+        // ignore since topic deletion is in progress
+        val replicasInDeletionStartedState = controllerContext.replicasInState(topic, ReplicaDeletionStarted)
+        val replicaIds = replicasInDeletionStartedState.map(_.replica)
+        val partitions = replicasInDeletionStartedState.map(_.topicPartition)
+        info(s"Deletion for replicas ${replicaIds.mkString(",")} for partition ${partitions.mkString(",")} of topic $topic in progress")
       } else {
-        if (controllerContext.isAnyReplicaInState(topic, ReplicaDeletionStarted)) {
-          // ignore since topic deletion is in progress
-          val replicasInDeletionStartedState = controllerContext.replicasInState(topic, ReplicaDeletionStarted)
-          val replicaIds = replicasInDeletionStartedState.map(_.replica)
-          val partitions = replicasInDeletionStartedState.map(_.topicPartition)
-          info(s"Deletion for replicas ${replicaIds.mkString(",")} for partition ${partitions.mkString(",")} of topic $topic in progress")
-        } else {
-          // if you come here, then no replica is in TopicDeletionStarted and all replicas are not in
-          // TopicDeletionSuccessful. That means, that either given topic haven't initiated deletion
-          // or there is at least one failed replica (which means topic deletion should be retried).
-          if (controllerContext.isAnyReplicaInState(topic, ReplicaDeletionIneligible)) {
-            // mark topic for deletion retry
-            markTopicForDeletionRetry(topic)
-          }
+        // if you come here, then no replica is in TopicDeletionStarted and all replicas are not in
+        // TopicDeletionSuccessful. That means, that either given topic haven't initiated deletion
+        // or there is at least one failed replica (which means topic deletion should be retried).
+        if (controllerContext.isAnyReplicaInState(topic, ReplicaDeletionIneligible)) {
+          retryDeletionForIneligibleReplicas(topic)
         }
       }
+
       // Try delete topic if it is eligible for deletion.
       if (isTopicEligibleForDeletion(topic)) {
         info(s"Deletion of topic $topic (re)started")
