@@ -110,7 +110,7 @@ import static java.util.Collections.emptyList;
  *     synchronized on the response future.</li>
  * </ul>
  */
-public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
+public class Fetcher<K, V> implements Closeable {
     private final Logger log;
     private final LogContext logContext;
     private final ConsumerNetworkClient client;
@@ -174,8 +174,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         this.requestTimeoutMs = requestTimeoutMs;
         this.isolationLevel = isolationLevel;
         this.sessionHandlers = new HashMap<>();
-
-        subscriptions.addListener(this);
     }
 
     /**
@@ -207,6 +205,9 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
      * @return number of fetches sent
      */
     public synchronized int sendFetches() {
+        // Update metrics in case there was an assignment change
+        sensors.maybeUpdateAssignment(subscriptions);
+
         Map<Node, FetchSessionHandler.FetchRequestData> fetchRequestMap = prepareFetchRequests();
         for (Map.Entry<Node, FetchSessionHandler.FetchRequestData> entry : fetchRequestMap.entrySet()) {
             final Node fetchTarget = entry.getKey();
@@ -1076,11 +1077,6 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         return leaderEpoch == RecordBatch.NO_PARTITION_LEADER_EPOCH ? Optional.empty() : Optional.of(leaderEpoch);
     }
 
-    @Override
-    public void onAssignment(Set<TopicPartition> assignment) {
-        sensors.updatePartitionLagAndLeadSensors(assignment);
-    }
-
     /**
      * Clear the buffered data which are not a part of newly assigned partitions
      *
@@ -1428,7 +1424,8 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
         private final Sensor recordsFetchLag;
         private final Sensor recordsFetchLead;
 
-        private Set<TopicPartition> assignedPartitions;
+        private int assignmentId = 0;
+        private Set<TopicPartition> assignedPartitions = Collections.emptySet();
 
         private FetchManagerMetrics(Metrics metrics, FetcherMetricsRegistry metricsRegistry) {
             this.metrics = metrics;
@@ -1491,16 +1488,19 @@ public class Fetcher<K, V> implements SubscriptionState.Listener, Closeable {
             recordsFetched.record(records);
         }
 
-        private void updatePartitionLagAndLeadSensors(Set<TopicPartition> assignedPartitions) {
-            if (this.assignedPartitions != null) {
+        private void maybeUpdateAssignment(SubscriptionState subscription) {
+            int newAssignmentId = subscription.assignmentId();
+            if (this.assignmentId != newAssignmentId) {
+                Set<TopicPartition> newAssignedPartitions = new HashSet<>(subscription.assignedPartitions());
                 for (TopicPartition tp : this.assignedPartitions) {
-                    if (!assignedPartitions.contains(tp)) {
+                    if (!newAssignedPartitions.contains(tp)) {
                         metrics.removeSensor(partitionLagMetricName(tp));
                         metrics.removeSensor(partitionLeadMetricName(tp));
                     }
                 }
+                this.assignedPartitions = newAssignedPartitions;
+                this.assignmentId = newAssignmentId;
             }
-            this.assignedPartitions = assignedPartitions;
         }
 
         private void recordPartitionLead(TopicPartition tp, long lead) {

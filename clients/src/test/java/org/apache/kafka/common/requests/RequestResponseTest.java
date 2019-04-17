@@ -52,6 +52,8 @@ import org.apache.kafka.common.message.ElectPreferredLeadersRequestData.TopicPar
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.InitProducerIdRequestData;
+import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
@@ -60,6 +62,12 @@ import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigSet;
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
+import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
+import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResult;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -336,6 +344,9 @@ public class RequestResponseTest {
         checkRequest(createElectPreferredLeadersRequestNullPartitions());
         checkErrorResponse(createElectPreferredLeadersRequest(), new UnknownServerException());
         checkResponse(createElectPreferredLeadersResponse(), 0);
+        checkRequest(createIncrementalAlterConfigsRequest());
+        checkErrorResponse(createIncrementalAlterConfigsRequest(), new UnknownServerException());
+        checkResponse(createIncrementalAlterConfigsResponse(), 0);
     }
 
     @Test
@@ -389,30 +400,39 @@ public class RequestResponseTest {
         checkResponse(req.getErrorResponse(e), req.version());
     }
 
-    private void checkRequest(AbstractRequest req) throws Exception {
+    private void checkRequest(AbstractRequest req) {
         // Check that we can serialize, deserialize and serialize again
         // We don't check for equality or hashCode because it is likely to fail for any request containing a HashMap
         checkRequest(req, false);
     }
 
-    private void checkRequest(AbstractRequest req, boolean checkEqualityAndHashCode) throws Exception {
+    private void checkRequest(AbstractRequest req, boolean checkEqualityAndHashCode) {
         // Check that we can serialize, deserialize and serialize again
         // Check for equality and hashCode only if indicated
-        Struct struct = req.toStruct();
-        AbstractRequest deserialized = (AbstractRequest) deserialize(req, struct, req.version());
-        Struct struct2 = deserialized.toStruct();
-        if (checkEqualityAndHashCode) {
-            assertEquals(struct, struct2);
-            assertEquals(struct.hashCode(), struct2.hashCode());
+        try {
+            Struct struct = req.toStruct();
+            AbstractRequest deserialized = AbstractRequest.parseRequest(req.api, req.version(), struct);
+            Struct struct2 = deserialized.toStruct();
+            if (checkEqualityAndHashCode) {
+                assertEquals(struct, struct2);
+                assertEquals(struct.hashCode(), struct2.hashCode());
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to deserialize request " + req + " with type " + req.getClass(), e);
         }
     }
 
     private void checkResponse(AbstractResponse response, int version) throws Exception {
         // Check that we can serialize, deserialize and serialize again
         // We don't check for equality or hashCode because it is likely to fail for any response containing a HashMap
-        Struct struct = response.toStruct((short) version);
-        AbstractResponse deserialized = (AbstractResponse) deserialize(response, struct, (short) version);
-        Struct struct2 = deserialized.toStruct((short) version);
+        try {
+            Struct struct = response.toStruct((short) version);
+            AbstractResponse deserialized = (AbstractResponse) deserialize(response, struct, (short) version);
+            Struct struct2 = deserialized.toStruct((short) version);
+            assertEquals(struct2, struct);
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to deserialize response " + response + " with type " + response.getClass(), e);
+        }
     }
 
     private AbstractRequestResponse deserialize(AbstractRequestResponse req, Struct struct, short version) throws NoSuchMethodException, IllegalAccessException, InvocationTargetException {
@@ -1167,13 +1187,20 @@ public class RequestResponseTest {
     }
 
     private InitProducerIdRequest createInitPidRequest() {
-        return new InitProducerIdRequest.Builder(null, 100).build();
+        InitProducerIdRequestData requestData = new InitProducerIdRequestData()
+                .setTransactionalId(null)
+                .setTransactionTimeoutMs(100);
+        return new InitProducerIdRequest.Builder(requestData).build();
     }
 
     private InitProducerIdResponse createInitPidResponse() {
-        return new InitProducerIdResponse(0, Errors.NONE, 3332, (short) 3);
+        InitProducerIdResponseData responseData = new InitProducerIdResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setProducerEpoch((short) 3)
+                .setProducerId(3332)
+                .setThrottleTimeMs(0);
+        return new InitProducerIdResponse(responseData);
     }
-
 
     private OffsetsForLeaderEpochRequest createLeaderEpochRequest() {
         Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = new HashMap<>();
@@ -1459,4 +1486,30 @@ public class RequestResponseTest {
         return new ElectPreferredLeadersResponse(data);
     }
 
+    private IncrementalAlterConfigsRequest createIncrementalAlterConfigsRequest() {
+        IncrementalAlterConfigsRequestData data = new IncrementalAlterConfigsRequestData();
+        AlterableConfig alterableConfig = new AlterableConfig()
+                .setName("retention.ms")
+                .setConfigOperation((byte) 0)
+                .setValue("100");
+        AlterableConfigSet alterableConfigs = new AlterableConfigSet();
+        alterableConfigs.add(alterableConfig);
+
+        data.resources().add(new AlterConfigsResource()
+                .setResourceName("testtopic")
+                .setResourceType(ResourceType.TOPIC.code())
+                .setConfigs(alterableConfigs));
+        return new IncrementalAlterConfigsRequest.Builder(data).build((short) 0);
+    }
+
+    private IncrementalAlterConfigsResponse createIncrementalAlterConfigsResponse() {
+        IncrementalAlterConfigsResponseData data = new IncrementalAlterConfigsResponseData();
+
+        data.responses().add(new AlterConfigsResourceResult()
+                .setResourceName("testtopic")
+                .setResourceType(ResourceType.TOPIC.code())
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("Duplicate Keys"));
+        return new IncrementalAlterConfigsResponse(data);
+    }
 }

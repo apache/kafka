@@ -1406,6 +1406,184 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(2, currentLeader(partition1))
     assertEquals(2, currentLeader(partition2))
   }
+
+  @Test
+  def testValidIncrementalAlterConfigs(): Unit = {
+    client = AdminClient.create(createConfig)
+
+    // Create topics
+    val topic1 = "incremental-alter-configs-topic-1"
+    val topic1Resource = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
+    val topic1CreateConfigs = new Properties
+    topic1CreateConfigs.setProperty(LogConfig.RetentionMsProp, "60000000")
+    topic1CreateConfigs.setProperty(LogConfig.CleanupPolicyProp, LogConfig.Compact)
+    createTopic(topic1, numPartitions = 1, replicationFactor = 1, topic1CreateConfigs)
+
+    val topic2 = "incremental-alter-configs-topic-2"
+    val topic2Resource = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
+    createTopic(topic2)
+
+    // Alter topic configs
+    var topic1AlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.FlushMsProp, "1000"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Delete), AlterConfigOp.OpType.APPEND),
+      new AlterConfigOp(new ConfigEntry(LogConfig.RetentionMsProp, ""), AlterConfigOp.OpType.DELETE)
+    ).asJavaCollection
+
+    val topic2AlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "lz4"), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+
+    var alterResult = client.incrementalAlterConfigs(Map(
+      topic1Resource -> topic1AlterConfigs,
+      topic2Resource -> topic2AlterConfigs
+    ).asJava)
+
+    assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
+    alterResult.all.get
+
+    // Verify that topics were updated correctly
+    var describeResult = client.describeConfigs(Seq(topic1Resource, topic2Resource).asJava)
+    var configs = describeResult.all.get
+
+    assertEquals(2, configs.size)
+
+    assertEquals("1000", configs.get(topic1Resource).get(LogConfig.FlushMsProp).value)
+    assertEquals("compact,delete", configs.get(topic1Resource).get(LogConfig.CleanupPolicyProp).value)
+    assertEquals((Defaults.LogRetentionHours * 60 * 60 * 1000).toString, configs.get(topic1Resource).get(LogConfig.RetentionMsProp).value)
+
+    assertEquals("0.9", configs.get(topic2Resource).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    assertEquals("lz4", configs.get(topic2Resource).get(LogConfig.CompressionTypeProp).value)
+
+    //verify subtract operation
+    topic1AlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.SUBTRACT)
+    ).asJava
+
+   alterResult = client.incrementalAlterConfigs(Map(
+      topic1Resource -> topic1AlterConfigs
+    ).asJava)
+    alterResult.all.get
+
+    // Verify that topics were updated correctly
+    describeResult = client.describeConfigs(Seq(topic1Resource).asJava)
+    configs = describeResult.all.get
+
+    assertEquals("delete", configs.get(topic1Resource).get(LogConfig.CleanupPolicyProp).value)
+    assertEquals("1000", configs.get(topic1Resource).get(LogConfig.FlushMsProp).value) // verify previous change is still intact
+
+    // Alter topics with validateOnly=true
+    topic1AlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.CleanupPolicyProp, LogConfig.Compact), AlterConfigOp.OpType.APPEND)
+    ).asJava
+
+    alterResult = client.incrementalAlterConfigs(Map(
+      topic1Resource -> topic1AlterConfigs
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
+    alterResult.all.get
+
+    // Verify that topics were not updated due to validateOnly = true
+    describeResult = client.describeConfigs(Seq(topic1Resource).asJava)
+    configs = describeResult.all.get
+
+    assertEquals("delete", configs.get(topic1Resource).get(LogConfig.CleanupPolicyProp).value)
+
+    //Alter topics with validateOnly=true with invalid configs
+    topic1AlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "zip"), AlterConfigOp.OpType.SET)
+    ).asJava
+
+    alterResult = client.incrementalAlterConfigs(Map(
+      topic1Resource -> topic1AlterConfigs
+    ).asJava, new AlterConfigsOptions().validateOnly(true))
+
+    assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
+      Some("Invalid config value for resource"))
+  }
+
+  @Test
+  def testInvalidIncrementalAlterConfigs(): Unit = {
+    client = AdminClient.create(createConfig)
+
+    // Create topics
+    val topic1 = "incremental-alter-configs-topic-1"
+    val topic1Resource = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
+    createTopic(topic1)
+
+    val topic2 = "incremental-alter-configs-topic-2"
+    val topic2Resource = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
+    createTopic(topic2)
+
+    //Add duplicate Keys for topic1
+    var topic1AlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.75"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.65"), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "gzip"), AlterConfigOp.OpType.SET) // valid entry
+    ).asJavaCollection
+
+    //Add valid config for topic2
+    var topic2AlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "0.9"), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+
+    var alterResult = client.incrementalAlterConfigs(Map(
+      topic1Resource -> topic1AlterConfigs,
+      topic2Resource -> topic2AlterConfigs
+    ).asJava)
+    assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
+
+    //InvalidRequestException error for topic1
+    assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
+      Some("Error due to duplicate config keys"))
+
+    //operation should succeed for topic2
+    alterResult.values().get(topic2Resource).get()
+
+    // Verify that topic1 is not config not updated, and topic2 config is updated
+    val describeResult = client.describeConfigs(Seq(topic1Resource, topic2Resource).asJava)
+    val configs = describeResult.all.get
+    assertEquals(2, configs.size)
+
+    assertEquals(Defaults.LogCleanerMinCleanRatio.toString, configs.get(topic1Resource).get(LogConfig.MinCleanableDirtyRatioProp).value)
+    assertEquals(Defaults.CompressionType.toString, configs.get(topic1Resource).get(LogConfig.CompressionTypeProp).value)
+    assertEquals("0.9", configs.get(topic2Resource).get(LogConfig.MinCleanableDirtyRatioProp).value)
+
+    //check invalid use of append/subtract operation types
+    topic1AlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "gzip"), AlterConfigOp.OpType.APPEND)
+    ).asJavaCollection
+
+    topic2AlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.CompressionTypeProp, "snappy"), AlterConfigOp.OpType.SUBTRACT)
+    ).asJavaCollection
+
+    alterResult = client.incrementalAlterConfigs(Map(
+      topic1Resource -> topic1AlterConfigs,
+      topic2Resource -> topic2AlterConfigs
+    ).asJava)
+    assertEquals(Set(topic1Resource, topic2Resource).asJava, alterResult.values.keySet)
+
+    assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
+      Some("Config value append is not allowed for config"))
+
+    assertFutureExceptionTypeEquals(alterResult.values().get(topic2Resource), classOf[InvalidRequestException],
+      Some("Config value subtract is not allowed for config"))
+
+
+    //try to add invalid config
+    topic1AlterConfigs = Seq(
+      new AlterConfigOp(new ConfigEntry(LogConfig.MinCleanableDirtyRatioProp, "1.1"), AlterConfigOp.OpType.SET)
+    ).asJavaCollection
+
+    alterResult = client.incrementalAlterConfigs(Map(
+      topic1Resource -> topic1AlterConfigs
+    ).asJava)
+    assertEquals(Set(topic1Resource).asJava, alterResult.values.keySet)
+
+    assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
+      Some("Invalid config value for resource"))
+  }
 }
 
 object AdminClientIntegrationTest {
