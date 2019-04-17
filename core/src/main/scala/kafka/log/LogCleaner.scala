@@ -735,9 +735,9 @@ private[log] class Cleaner(val id: Int,
        *   1) if there exists a message with the same key but higher offset
        *   2) if the message is a delete "tombstone" marker and enough time has passed
        */
-      val redundant = foundOffset >= 0 && record.offset < foundOffset
+      val latest = record.offset() >= foundOffset
       val obsoleteDelete = !retainDeletes && !record.hasValue
-      !redundant && !obsoleteDelete
+      latest && !obsoleteDelete
     } else {
       stats.invalidMessage()
       false
