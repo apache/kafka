@@ -406,6 +406,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
             final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
             final int usedVersion = info.version();
+            log.info(" mjsax used Version " + usedVersion + " supported version: " + info.latestSupportedVersion());
             supportedVersions.add(info.latestSupportedVersion());
             if (usedVersion > SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
                 futureMetadataVersion = usedVersion;
@@ -427,6 +428,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             // add the consumer to the client
             clientMetadata.addConsumer(consumerId, info);
         }
+        log.info(" mjsax futureMetadataVersion: " + futureMetadataVersion + " minReceivedMetadataVersion: " + minReceivedMetadataVersion);
 
         final boolean versionProbing;
         if (futureMetadataVersion != UNKNOWN) {
@@ -799,7 +801,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
     @Override
     public void onAssignment(final Assignment assignment) {
         final List<TopicPartition> partitions = new ArrayList<>(assignment.partitions());
-        Collections.sort(partitions, PARTITION_COMPARATOR);
+        partitions.sort(PARTITION_COMPARATOR);
 
         final AssignmentInfo info = AssignmentInfo.decode(assignment.userData());
         if (info.errCode() != Error.NONE.code) {
@@ -1009,7 +1011,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     if (numPartitions == UNKNOWN) {
                         numPartitions = partitions;
                     } else if (numPartitions != partitions) {
-                        final String[] topics = copartitionGroup.toArray(new String[copartitionGroup.size()]);
+                        final String[] topics = copartitionGroup.toArray(new String[0]);
                         Arrays.sort(topics);
                         throw new org.apache.kafka.streams.errors.TopologyException(String.format("%sTopics not co-partitioned: [%s]", logPrefix, Utils.join(Arrays.asList(topics), ",")));
                     }
