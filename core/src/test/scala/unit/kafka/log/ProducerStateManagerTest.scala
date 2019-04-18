@@ -226,7 +226,12 @@ class ProducerStateManagerTest extends JUnitSuite {
 
     def beginTxn(producerId: Long, startOffset: Long): Unit = {
       val relativeOffset = (startOffset - segmentBaseOffset).toInt
-      val producerAppendInfo = new ProducerAppendInfo(producerId, ProducerStateEntry.empty(producerId), ValidationType.Full)
+      val producerAppendInfo = new ProducerAppendInfo(
+        partition,
+        producerId,
+        ProducerStateEntry.empty(producerId),
+        ValidationType.Full
+      )
       producerAppendInfo.append(producerEpoch, 0, 0, time.milliseconds(), startOffset, startOffset, isTransactional = true)
       val logOffsetMetadata = LogOffsetMetadata(messageOffset = startOffset, segmentBaseOffset = segmentBaseOffset,
         relativePositionInSegment = 50 * relativeOffset)
