@@ -227,7 +227,7 @@ class ProducerStateManagerTest extends JUnitSuite {
     def beginTxn(producerId: Long, startOffset: Long): Unit = {
       val relativeOffset = (startOffset - segmentBaseOffset).toInt
       val producerAppendInfo = new ProducerAppendInfo(
-        new TopicPartition("test", 0),
+        partition,
         producerId,
         ProducerStateEntry.empty(producerId),
         ValidationType.Full
