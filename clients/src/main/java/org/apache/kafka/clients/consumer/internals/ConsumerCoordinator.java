@@ -517,7 +517,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             log.info("Setting offset for partition {} to the committed offset {}", tp, position);
             entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
             this.subscriptions.seek(tp, position);
-            this.subscriptions.maybeValidatePosition(tp, leaderAndEpoch);
+            this.subscriptions.maybeValidatePosition(tp, metadata.leaderAndEpoch(tp));
         }
         return true;
     }

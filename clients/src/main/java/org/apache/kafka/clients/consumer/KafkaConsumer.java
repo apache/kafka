@@ -1553,6 +1553,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     offsetAndMetadata.offset(),
                     offsetAndMetadata.leaderEpoch(),
                     this.metadata.leaderAndEpoch(partition));
+            this.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
             this.subscriptions.seek(partition, newPosition);
         } finally {
             release();
@@ -2225,7 +2226,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         // a consumer with manually assigned partitions can avoid a coordinator dependence
         // by always ensuring that assigned partitions have an initial position.
         if (coordinator != null && !coordinator.refreshCommittedOffsetsIfNeeded(timer)) return false;
-
 
         // If there are partitions still needing a position and a reset policy is defined,
         // request reset using the default policy. If no reset strategy is defined and there

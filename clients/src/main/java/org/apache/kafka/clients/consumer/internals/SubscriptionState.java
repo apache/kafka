@@ -577,18 +577,18 @@ public class SubscriptionState {
             });
         }
 
-        private boolean maybeValidatePosition(Metadata.LeaderAndEpoch currentLeader) {
+        private boolean maybeValidatePosition(Metadata.LeaderAndEpoch currentLeaderAndEpoch) {
             if (this.fetchState.equals(FetchStates.AWAIT_RESET)) {
                 return false;
             }
 
-            if (currentLeader.equals(Metadata.LeaderAndEpoch.noLeaderOrEpoch())) {
+            if (currentLeaderAndEpoch.equals(Metadata.LeaderAndEpoch.noLeaderOrEpoch())) {
                 // Ignore empty LeaderAndEpochs
                 return false;
             }
 
-            if (position != null && !position.safeToFetchFrom(currentLeader)) {
-                FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeader);
+            if (position != null && !position.safeToFetchFrom(currentLeaderAndEpoch)) {
+                FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeaderAndEpoch);
 
                 if (position.offsetEpoch.isPresent()) {
                     transitionState(FetchStates.AWAIT_VALIDATION, () -> {
