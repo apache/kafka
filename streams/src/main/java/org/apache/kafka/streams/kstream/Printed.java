@@ -31,9 +31,10 @@ import java.util.Objects;
  * @param <V> value type
  * @see KStream#print(Printed)
  */
-public class Printed<K, V> {
+public class Printed<K, V> implements NamedOperation<Printed<K, V>> {
     protected final OutputStream outputStream;
     protected String label;
+    protected String processorName;
     protected KeyValueMapper<? super K, ? super V, String> mapper = new KeyValueMapper<K, V, String>() {
         @Override
         public String apply(final K key, final V value) {
@@ -53,6 +54,7 @@ public class Printed<K, V> {
         this.outputStream = printed.outputStream;
         this.label = printed.label;
         this.mapper = printed.mapper;
+        this.processorName = printed.processorName;
     }
 
     /**
@@ -120,6 +122,18 @@ public class Printed<K, V> {
     public Printed<K, V> withKeyValueMapper(final KeyValueMapper<? super K, ? super V, String> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
         this.mapper = mapper;
+        return this;
+    }
+
+    /**
+     * Print the records of a {@link KStream} with provided processor name.
+     *
+     * @param processorName the processor name to be used. If {@code null} a default processor name will be generated
+     ** @return this
+     */
+    @Override
+    public Printed<K, V> withName(final String processorName) {
+        this.processorName = processorName;
         return this;
     }
 }
