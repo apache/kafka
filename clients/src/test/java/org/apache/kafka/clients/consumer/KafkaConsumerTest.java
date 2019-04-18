@@ -1728,7 +1728,7 @@ public class KafkaConsumerTest {
 
                 for (Map.Entry<TopicPartition, Long> partitionOffset : partitionOffsets.entrySet()) {
                     // verify that the expected offset has been committed
-                    if (commitErrors.get(partitionOffset.getKey()).equals(partitionOffset.getValue())) {
+                    if (!commitErrors.get(partitionOffset.getKey()).equals(partitionOffset.getValue())) {
                         commitReceived.set(false);
                         return false;
                     }

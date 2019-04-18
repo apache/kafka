@@ -57,15 +57,19 @@ public class OffsetCommitResponse extends AbstractResponse {
 
         for (Map.Entry<TopicPartition, Errors> entry : responseData.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
+            String topicName = topicPartition.topic();
 
             OffsetCommitResponseData.OffsetCommitResponseTopic topic = responseTopicDataMap
-                    .getOrDefault(topicPartition.topic(),
-                            new OffsetCommitResponseData.OffsetCommitResponseTopic()
-                    );
+                    .getOrDefault(topicName, new OffsetCommitResponseData.OffsetCommitResponseTopic());
+
+            if (topic.name().equals("")) {
+                topic.setName(topicName);
+            }
             topic.partitions().add(new OffsetCommitResponseData.OffsetCommitResponsePartition()
                     .setErrorCode(entry.getValue().code())
                     .setPartitionIndex(topicPartition.partition())
             );
+            responseTopicDataMap.put(topicName, topic);
         }
 
         data = new OffsetCommitResponseData()
@@ -74,7 +78,7 @@ public class OffsetCommitResponse extends AbstractResponse {
     }
 
     public OffsetCommitResponse(Map<TopicPartition, Errors> responseData) {
-        this(0, responseData);
+        this(DEFAULT_THROTTLE_TIME, responseData);
     }
 
     public OffsetCommitResponse(Struct struct) {
@@ -115,6 +119,11 @@ public class OffsetCommitResponse extends AbstractResponse {
     @Override
     public String toString() {
         return data.toString();
+    }
+
+    @Override
+    public int throttleTimeMs() {
+        return data.throttleTimeMs();
     }
 
     @Override

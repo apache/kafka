@@ -943,6 +943,7 @@ public class RequestResponseTest {
         return new OffsetCommitRequest.Builder(new OffsetCommitRequestData()
                 .setGroupId("group1")
                 .setMemberId("consumer1")
+                .setGenerationId(100)
                 .setTopics(Collections.singletonList(
                         new OffsetCommitRequestData.OffsetCommitRequestTopic()
                                 .setName("test")
@@ -963,18 +964,17 @@ public class RequestResponseTest {
     }
 
     private OffsetCommitResponse createOffsetCommitResponse() {
-        OffsetCommitResponseData.OffsetCommitResponsePartition partition =
-                new OffsetCommitResponseData.OffsetCommitResponsePartition()
-                .setPartitionIndex(0)
-                .setErrorCode(Errors.NONE.code());
-
-        OffsetCommitResponseData.OffsetCommitResponseTopic topic =
-                new OffsetCommitResponseData.OffsetCommitResponseTopic()
-                .setName("test")
-                .setPartitions(Collections.singletonList(partition));
-
         return new OffsetCommitResponse(new OffsetCommitResponseData()
-                .setTopics(Collections.singletonList(topic)));
+                .setTopics(Collections.singletonList(
+                        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                                .setName("test")
+                                .setPartitions(Collections.singletonList(
+                                        new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                                                .setPartitionIndex(0)
+                                                .setErrorCode(Errors.NONE.code())
+                                ))
+                ))
+        );
     }
 
     private OffsetFetchRequest createOffsetFetchRequest(int version) {

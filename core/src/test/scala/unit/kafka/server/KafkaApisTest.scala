@@ -118,19 +118,20 @@ class KafkaApisTest {
     def checkInvalidPartition(invalidPartitionId: Int): Unit = {
       EasyMock.reset(replicaManager, clientRequestQuotaManager, requestChannel)
 
-      val partitionOffsetCommitData = new OffsetCommitRequestData.OffsetCommitRequestPartition()
-          .setPartitionIndex(15)
-          .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-          .setCommittedMetadata("")
-
-      val topicData = new OffsetCommitRequestData.OffsetCommitRequestTopic()
-        .setName(topic)
-        .setPartitions(Collections.singletonList(partitionOffsetCommitData))
-
       val (offsetCommitRequest, request) = buildRequest(new OffsetCommitRequest.Builder(
         new OffsetCommitRequestData()
           .setGroupId("groupId")
-          .setTopics(Collections.singletonList(topicData))
+          .setTopics(Collections.singletonList(
+            new OffsetCommitRequestData.OffsetCommitRequestTopic()
+              .setName(topic)
+              .setPartitions(Collections.singletonList(
+                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                  .setPartitionIndex(invalidPartitionId)
+                  .setCommittedOffset(15)
+                  .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                  .setCommittedMetadata(""))
+              )
+          ))
       ))
 
       val capturedResponse = expectNoThrottling()
@@ -139,7 +140,8 @@ class KafkaApisTest {
 
       val response = readResponse(ApiKeys.OFFSET_COMMIT, offsetCommitRequest, capturedResponse)
         .asInstanceOf[OffsetCommitResponse]
-      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.data().topics().get(0))
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
+        Errors.forCode(response.data().topics().get(0).partitions().get(0).errorCode()))
     }
 
     checkInvalidPartition(-1)

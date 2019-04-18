@@ -29,7 +29,7 @@ import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, AlterConf
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.producer._
-import org.apache.kafka.common.acl._
+import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
@@ -38,7 +38,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, 
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigSet}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.PatternType.LITERAL
@@ -342,18 +342,23 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createOffsetCommitRequest = {
-    val partition = new OffsetCommitRequestData.OffsetCommitRequestPartition()
-        .setPartitionIndex(0)
-        .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-        .setCommittedMetadata("metadata")
-
     new requests.OffsetCommitRequest.Builder(
         new OffsetCommitRequestData()
           .setGroupId(group)
           .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
           .setGenerationId(1)
-          .setTopics(Collections.singletonList(new OffsetCommitRequestData.OffsetCommitRequestTopic()
-            .setPartitions(Collections.singletonList(partition))))
+          .setTopics(Collections.singletonList(
+            new OffsetCommitRequestData.OffsetCommitRequestTopic()
+              .setName(topic)
+              .setPartitions(Collections.singletonList(
+                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                  .setPartitionIndex(part)
+                  .setCommittedOffset(0)
+                  .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                  .setCommitTimestamp(OffsetCommitRequest.DEFAULT_TIMESTAMP)
+                  .setCommittedMetadata("metadata")
+              )))
+          )
     ).build()
   }
 
