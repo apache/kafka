@@ -3532,6 +3532,47 @@ class LogTest {
   }
 
   @Test
+  def testAppendToTransactionIndexFailure(): Unit = {
+    val pid = 1L
+    val epoch = 0.toShort
+    val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024 * 5)
+    val log = createLog(logDir, logConfig)
+
+    val append = appendTransactionalAsLeader(log, pid, epoch)
+    append(10)
+
+    // Kind of a hack, but renaming the index to a directory ensures that the append
+    // to the index will fail.
+    log.activeSegment.txnIndex.renameTo(log.dir)
+
+    // The append will be written to the log successfully, but the write to the index will fail
+    assertThrows[KafkaStorageException] {
+      appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
+    }
+    assertEquals(11L, log.logEndOffset)
+    assertEquals(Some(0L), log.firstUnstableOffset.map(_.messageOffset))
+
+    // Try the append a second time. The appended offset in the log should still increase.
+    assertThrows[KafkaStorageException] {
+      appendEndTxnMarkerAsLeader(log, pid, epoch, ControlRecordType.ABORT, coordinatorEpoch = 1)
+    }
+    assertEquals(12L, log.logEndOffset)
+    assertEquals(Some(0L), log.firstUnstableOffset.map(_.messageOffset))
+
+    // Even if the high watermark is updated, the first unstable offset does not move
+    log.onHighWatermarkIncremented(12L)
+    assertEquals(Some(0L), log.firstUnstableOffset.map(_.messageOffset))
+
+    log.close()
+
+    val reopenedLog = createLog(logDir, logConfig)
+    assertEquals(12L, reopenedLog.logEndOffset)
+    assertEquals(2, reopenedLog.activeSegment.txnIndex.allAbortedTxns.size)
+    reopenedLog.onHighWatermarkIncremented(12L)
+    assertEquals(None, reopenedLog.firstUnstableOffset.map(_.messageOffset))
+  }
+
+  @Test
   def testLastStableOffsetWithMixedProducerData() {
     val logConfig = LogTest.createLogConfig(segmentBytes = 1024 * 1024 * 5)
     val log = createLog(logDir, logConfig)
