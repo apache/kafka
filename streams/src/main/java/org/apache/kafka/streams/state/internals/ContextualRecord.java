@@ -66,10 +66,13 @@ public class ContextualRecord {
         final ProcessorRecordContext context = ProcessorRecordContext.deserialize(buffer);
 
         final int valueLength = buffer.getInt();
-        final byte[] value = new byte[valueLength];
-        buffer.get(value);
-
-        return new ContextualRecord(value, context);
+        if (valueLength == -1) {
+            return new ContextualRecord(null, context);
+        } else {
+            final byte[] value = new byte[valueLength];
+            buffer.get(value);
+            return new ContextualRecord(value, context);
+        }
     }
 
     @Override
