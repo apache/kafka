@@ -618,16 +618,6 @@ class ZkUtils(val zkClient: ZkClient,
     pathExists(getDeleteTopicPath(topic))
   }
 
-  def getCluster(): Cluster = {
-    val cluster = new Cluster
-    val nodes = getChildrenParentMayNotExist(BrokerIdsPath)
-    for (node <- nodes) {
-      val brokerZKString = readData(BrokerIdsPath + "/" + node)._1
-      cluster.add(parseBrokerJson(node.toInt, brokerZKString))
-    }
-    cluster
-  }
-
   private def parseBrokerJson(id: Int, jsonString: String): Broker = {
     BrokerIdZNode.decode(id, jsonString.getBytes(StandardCharsets.UTF_8)).broker
   }
