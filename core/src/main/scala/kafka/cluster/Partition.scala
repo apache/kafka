@@ -827,12 +827,20 @@ class Partition(val topicPartition: TopicPartition,
         FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY)
     }
 
+    val curTime: Long = System.currentTimeMillis
+    val allInSyncReplicas: Seq[Replica] = assignedReplicas.filter{replica =>
+      curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicas.contains(replica)
+    }.toSeq.sortBy(_.logEndOffsetMetadata)(new LogOffsetMetadata.OffsetOrdering)
+
+    val mostInSyncReplica: Replica = allInSyncReplicas.head
+
     LogReadInfo(
       fetchedData = fetchedData,
       highWatermark = initialHighWatermark,
       logStartOffset = initialLogStartOffset,
       logEndOffset = initialLogEndOffset,
-      lastStableOffset = initialLastStableOffset)
+      lastStableOffset = initialLastStableOffset,
+      mostInSyncReplicaId = mostInSyncReplica.brokerId)
   }
 
   def fetchOffsetForTimestamp(timestamp: Long,

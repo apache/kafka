@@ -44,8 +44,10 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
+import org.apache.kafka.common.replica.ReplicaSelector.ClientMetadata
+import org.apache.kafka.common.replica.{LeaderReplicaSelector, MostCaughtUpReplicaSelector, ReplicaSelector}
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -84,6 +86,7 @@ case class LogReadResult(info: FetchDataInfo,
                          fetchTimeMs: Long,
                          readSize: Int,
                          lastStableOffset: Option[Long],
+                         preferredReadReplica: Option[Int] = None,
                          exception: Option[Throwable] = None) {
 
   def error: Errors = exception match {
@@ -823,7 +826,8 @@ class ReplicaManager(val config: KafkaConfig,
                     fetchInfos: Seq[(TopicPartition, PartitionData)],
                     quota: ReplicaQuota = UnboundedQuota,
                     responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
-                    isolationLevel: IsolationLevel) {
+                    isolationLevel: IsolationLevel,
+                    clientMetadata: ClientMetadata) {
     val isFromFollower = Request.isValidBrokerId(replicaId)
     val fetchOnlyFromLeader = replicaId != Request.DebuggingConsumerId && replicaId != Request.FutureLocalReplicaId
 
@@ -834,7 +838,6 @@ class ReplicaManager(val config: KafkaConfig,
     else
       FetchHighWatermark
 
-
     def readFromLog(): Seq[(TopicPartition, LogReadResult)] = {
       val result = readFromLocalLog(
         replicaId = replicaId,
@@ -843,7 +846,8 @@ class ReplicaManager(val config: KafkaConfig,
         fetchMaxBytes = fetchMaxBytes,
         hardMaxBytesLimit = hardMaxBytesLimit,
         readPartitionInfo = fetchInfos,
-        quota = quota)
+        quota = quota,
+        clientMetadata = clientMetadata)
       if (isFromFollower) updateFollowerLogReadResults(replicaId, result)
       else result
     }
@@ -903,7 +907,8 @@ class ReplicaManager(val config: KafkaConfig,
                        fetchMaxBytes: Int,
                        hardMaxBytesLimit: Boolean,
                        readPartitionInfo: Seq[(TopicPartition, PartitionData)],
-                       quota: ReplicaQuota): Seq[(TopicPartition, LogReadResult)] = {
+                       quota: ReplicaQuota,
+                       clientMetadata: ClientMetadata): Seq[(TopicPartition, LogReadResult)] = {
 
     def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
       val offset = fetchInfo.fetchOffset
@@ -931,6 +936,22 @@ class ReplicaManager(val config: KafkaConfig,
           fetchOnlyFromLeader = fetchOnlyFromLeader,
           minOneMessage = minOneMessage)
 
+        // TODO plugable replica selector
+        val replicaSelector1: ReplicaSelector = new LeaderReplicaSelector()
+        val replicaSelector2: ReplicaSelector = new MostCaughtUpReplicaSelector()
+        val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), clientMetadata.listenerName)
+        val replicaInfos: Set[ReplicaSelector.ReplicaInfo] = partition.allReplicas.map(
+          replica => new ReplicaSelector.ReplicaInfo() {
+            override def isLeader: Boolean = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId))
+
+            override def getEndpoint: Node = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode())
+
+            override def logOffset(): Long = replica.logEndOffset
+
+            override def lastCaughtUpTimeMs(): Long = replica.lastCaughtUpTimeMs
+          })
+        val preferredReadReplica: Option[ReplicaSelector.ReplicaInfo] = Option.apply(replicaSelector1.select(tp, clientMetadata, replicaInfos.asJava).orElse(null))
+
         val fetchDataInfo = if (shouldLeaderThrottle(quota, tp, replicaId)) {
           // If the partition is being throttled, simply return an empty set.
           FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
@@ -950,6 +971,7 @@ class ReplicaManager(val config: KafkaConfig,
                       fetchTimeMs = fetchTimeMs,
                       readSize = adjustedMaxBytes,
                       lastStableOffset = Some(readInfo.lastStableOffset),
+                      preferredReadReplica = preferredReadReplica.map(_.getEndpoint.id()),
                       exception = None)
       } catch {
         // NOTE: Failed fetch requests metric is not incremented for known exceptions since it

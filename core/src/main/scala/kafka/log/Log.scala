@@ -125,7 +125,8 @@ case class LogReadInfo(fetchedData: FetchDataInfo,
                        highWatermark: Long,
                        logStartOffset: Long,
                        logEndOffset: Long,
-                       lastStableOffset: Long)
+                       lastStableOffset: Long,
+                       mostInSyncReplicaId: Int = -1)
 
 /**
  * A class used to hold useful metadata about a completed transaction. This is used to build
