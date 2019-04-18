@@ -14,11 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.processor.internals;
+package org.apache.kafka.common.utils;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
+/**
+ * An ordered map (LinkedHashMap) implementation for which the order is immutable.
+ * To accomplish this, all methods of removing mappings are disabled (they are marked
+ * deprecated and throw an exception).
+ *
+ * This class is final to prevent subclasses from violating the desired property.
+ *
+ * @param <K> The key type
+ * @param <V> The value type
+ */
 public final class FixedOrderMap<K, V> extends LinkedHashMap<K, V> {
     private static final long serialVersionUID = -6504110858733236170L;
 
