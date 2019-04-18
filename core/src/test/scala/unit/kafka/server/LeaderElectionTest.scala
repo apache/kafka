@@ -106,8 +106,9 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     assertEquals("Leader must return to 1", 1, leader3)
     if (leader2 == leader3)
       assertEquals("Second epoch value should be " + leaderEpoch2, leaderEpoch2, leaderEpoch3)
-    else
-      assertEquals("Second epoch value should be %d".format(leaderEpoch2+1) , leaderEpoch2+1, leaderEpoch3)
+    else // new leaderEpoch will be leaderEpoch2+2, one increment during ReplicaStateMachine.startup() and
+         // one increment during onReplicasBecomeOffline()
+      assertEquals("Second epoch value should be %d".format(leaderEpoch2+2) , leaderEpoch2+2, leaderEpoch3)
   }
 
   @Test

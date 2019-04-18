@@ -157,11 +157,11 @@ class ControllerContext {
     }
   }
 
-  def replicasOnDeadBrokers(): Set[PartitionAndReplica] = {
-    partitionReplicaAssignmentUnderlying.flatMap {
+  def allOfflineReplicas(): Set[PartitionAndReplica] = {
+    partitionAssignments.flatMap {
       case (topic, topicReplicaAssignment) => topicReplicaAssignment.flatMap {
         case (partition, replicas) => replicas.collect {
-          case (replicaId) if (!isReplicaOnline(replicaId, new TopicPartition(topic, partition))) =>
+          case replicaId if !isReplicaOnline(replicaId, new TopicPartition(topic, partition)) =>
               PartitionAndReplica(new TopicPartition(topic, partition), replicaId)
         }
       }

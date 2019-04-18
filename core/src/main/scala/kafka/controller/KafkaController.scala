@@ -270,7 +270,7 @@ class KafkaController(val config: KafkaConfig,
 
 
     // transition all offline replicas to OfflineReplica state
-    onReplicasBecomeOffline(controllerContext.replicasOnDeadBrokers())
+    onReplicasBecomeOffline(controllerContext.allOfflineReplicas())
 
     info(s"Ready to serve as the new controller with epoch $epoch")
     maybeTriggerPartitionReassignment(controllerContext.partitionsBeingReassigned.keySet)
