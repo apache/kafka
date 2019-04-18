@@ -136,7 +136,9 @@ class WindowByteProxyStore implements WindowStore<Bytes, byte[]> {
     }
 
 
-    private class WindowIteratorProxy extends KeyValueIteratorProxy<Long> implements WindowStoreIterator<byte[]> {
+    private static class WindowIteratorProxy
+        extends KeyValueIteratorProxy<Long>
+        implements WindowStoreIterator<byte[]> {
 
         WindowIteratorProxy(final KeyValueIterator<Long, byte[]> innerIterator) {
             super(innerIterator);
