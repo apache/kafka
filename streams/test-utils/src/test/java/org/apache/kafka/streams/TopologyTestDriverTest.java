@@ -26,7 +26,6 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
@@ -465,23 +464,17 @@ public class TopologyTestDriverTest {
         topology.addSink(
             "sink",
             SINK_TOPIC_1,
-            new Serializer<Object>() {
-                @Override
-                public byte[] serialize(final String topic, final Object data) {
-                    if (data instanceof Long) {
-                        return Serdes.Long().serializer().serialize(topic, (Long) data);
-                    }
-                    return Serdes.Integer().serializer().serialize(topic, (Integer) data);
+            (topic, data) -> {
+                if (data instanceof Long) {
+                    return Serdes.Long().serializer().serialize(topic, (Long) data);
                 }
+                return Serdes.Integer().serializer().serialize(topic, (Integer) data);
             },
-            new Serializer<Object>() {
-                @Override
-                public byte[] serialize(final String topic, final Object data) {
-                    if (data instanceof String) {
-                        return Serdes.String().serializer().serialize(topic, (String) data);
-                    }
-                    return Serdes.Double().serializer().serialize(topic, (Double) data);
+            (topic, data) -> {
+                if (data instanceof String) {
+                    return Serdes.String().serializer().serialize(topic, (String) data);
                 }
+                return Serdes.Double().serializer().serialize(topic, (Double) data);
             },
             processor);
 
