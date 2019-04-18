@@ -326,7 +326,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setGroupId(group)
         .setSessionTimeoutMs(10000)
         .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-        .setGroupInstanceId(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID)
+        .setGroupInstanceId(null)
         .setProtocolType("consumer")
         .setProtocols(protocolSet)
         .setRebalanceTimeoutMs(60000)

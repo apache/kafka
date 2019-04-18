@@ -1217,7 +1217,7 @@ object GroupMetadataManager {
         memberStruct.set(REBALANCE_TIMEOUT_KEY, memberMetadata.rebalanceTimeoutMs)
 
       if (version >= 3)
-        memberStruct.set(GROUP_INSTANCE_ID_KEY, memberMetadata.groupInstanceId.getOrElse(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID))
+        memberStruct.set(GROUP_INSTANCE_ID_KEY, memberMetadata.groupInstanceId.orNull)
 
       // The group is non-empty, so the current protocol must be defined
       val protocol = groupMetadata.protocolOrNull

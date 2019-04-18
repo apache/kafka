@@ -1317,7 +1317,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val encodedGroupInstanceId = joinGroupRequest.data().groupInstanceId
       val groupInstanceId =
-        if (encodedGroupInstanceId.equals(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID) ||
+        if (encodedGroupInstanceId == null ||
         config.interBrokerProtocolVersion < KAFKA_2_3_IV0)
           None
         else
