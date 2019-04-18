@@ -325,6 +325,11 @@ class ControllerContext {
         partitionLeadershipInfo.remove(new TopicPartition(topic, partition))
       }
     }
+
+    partitionStates.foreach {
+      case (topicPartition, _) if topicPartition.topic == topic => partitionStates.remove(topicPartition)
+      case _ =>
+    }
   }
 
   def queueTopicDeletion(topics: Set[String]): Unit = {
@@ -389,10 +394,17 @@ class ControllerContext {
     updatePartitionStateMetrics(partition, currentState, targetState)
   }
 
+  def excludeDeletingTopicFromOfflinePartitionCount(topic: String): Unit = {
+    if (isTopicQueuedUpForDeletion(topic)) {
+      offlinePartitionCount = offlinePartitionCount -
+        partitionsForTopic(topic).count(partition => partitionState(partition) == OfflinePartition)
+    }
+  }
+
   private def updatePartitionStateMetrics(partition: TopicPartition,
                                           currentState: PartitionState,
                                           targetState: PartitionState): Unit = {
-    if (!isTopicDeletionInProgress(partition.topic)) {
+    if (!isTopicQueuedUpForDeletion(partition.topic)) {
       if (currentState != OfflinePartition && targetState == OfflinePartition) {
         offlinePartitionCount = offlinePartitionCount + 1
       } else if (currentState == OfflinePartition && targetState != OfflinePartition) {
