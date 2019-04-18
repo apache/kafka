@@ -1342,13 +1342,16 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
     override def process(): Unit = {
       if (!isActive) return
-      val newMetadata = zkClient.getBroker(brokerId)
-      val oldMetadata = controllerContext.liveBrokers.find(_.id == brokerId)
-      if (newMetadata.nonEmpty && oldMetadata.nonEmpty && newMetadata.map(_.endPoints) != oldMetadata.map(_.endPoints)) {
-        info(s"Updated broker: ${newMetadata.get}")
-
-        controllerContext.updateBrokerMetadata(oldMetadata, newMetadata)
-        onBrokerUpdate(brokerId)
+      val newMetadataOpt = zkClient.getBroker(brokerId)
+      val oldMetadataOpt = controllerContext.liveBrokers.find(_.id == brokerId)
+      if (newMetadataOpt.nonEmpty && oldMetadataOpt.nonEmpty) {
+        val oldMetadata = oldMetadataOpt.get
+        val newMetadata = newMetadataOpt.get
+        if (newMetadata.endPoints != oldMetadata.endPoints) {
+          info(s"Updated broker metadata: $oldMetadata -> $newMetadata")
+          controllerContext.updateBrokerMetadata(oldMetadata, newMetadata)
+          onBrokerUpdate(brokerId)
+        }
       }
     }
   }

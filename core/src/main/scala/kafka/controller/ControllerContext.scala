@@ -116,8 +116,9 @@ class ControllerContext {
     liveBrokerEpochs = liveBrokerEpochs.filterKeys(id => !brokerIds.contains(id))
   }
 
-  def updateBrokerMetadata(oldMetadata: Option[Broker], newMetadata: Option[Broker]): Unit = {
-    liveBrokers = liveBrokers -- oldMetadata ++ newMetadata
+  def updateBrokerMetadata(oldMetadata: Broker, newMetadata: Broker): Unit = {
+    liveBrokers -= oldMetadata
+    liveBrokers += newMetadata
   }
 
   // getter
