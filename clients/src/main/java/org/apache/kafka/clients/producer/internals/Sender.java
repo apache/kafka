@@ -452,11 +452,12 @@ public class Sender implements Runnable {
                 if (targetNode != null) {
                     if (nextRequestHandler.isRetry())
                         time.sleep(nextRequestHandler.retryBackoffMs());
+                    long currentTimeMs = time.milliseconds();
                     ClientRequest clientRequest = client.newClientRequest(
-                        targetNode.idString(), requestBuilder, now, true, requestTimeoutMs, nextRequestHandler);
+                        targetNode.idString(), requestBuilder, currentTimeMs, true, requestTimeoutMs, nextRequestHandler);
                     transactionManager.setInFlightTransactionalRequestCorrelationId(clientRequest.correlationId());
                     log.debug("Sending transactional request {} to node {}", requestBuilder, targetNode);
-                    client.send(clientRequest, now);
+                    client.send(clientRequest, currentTimeMs);
                     return true;
                 }
             } catch (IOException e) {
