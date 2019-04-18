@@ -287,17 +287,15 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         return iterator;
     }
 
-    private WrappedWindowedKeyValueIterator registerNewWindowedKeyValueIterator(Bytes keyFrom,
-                                                                                   Bytes keyTo,
-                                                                                   final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator) {
-        if (retainDuplicates && !(keyFrom == null || keyTo == null)) {
-            keyFrom = wrapForDups(keyFrom, 0);
-            keyTo = wrapForDups(keyTo, Integer.MAX_VALUE);
-        }
+    private WrappedWindowedKeyValueIterator registerNewWindowedKeyValueIterator(final Bytes keyFrom,
+                                                                                final Bytes keyTo,
+                                                                                final Iterator<Map.Entry<Long, ConcurrentNavigableMap<Bytes, byte[]>>> segmentIterator) {
+        final Bytes from = (retainDuplicates && keyFrom != null) ? wrapForDups(keyFrom, 0) : keyFrom;
+        final Bytes to = (retainDuplicates && keyTo != null) ? wrapForDups(keyTo, Integer.MAX_VALUE) : keyTo;
 
         final WrappedWindowedKeyValueIterator iterator =
-            new WrappedWindowedKeyValueIterator(keyFrom,
-                                                keyTo,
+            new WrappedWindowedKeyValueIterator(from,
+                                                to,
                                                 segmentIterator,
                                                 openIterators::remove,
                                                 retainDuplicates,
