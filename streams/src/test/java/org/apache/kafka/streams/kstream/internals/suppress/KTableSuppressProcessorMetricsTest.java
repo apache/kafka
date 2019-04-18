@@ -40,7 +40,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.core.Is.is;
 
-@SuppressWarnings("PointlessArithmeticExpression")
 public class KTableSuppressProcessorMetricsTest {
     private static final long ARBITRARY_LONG = 5L;
 
@@ -136,16 +135,15 @@ public class KTableSuppressProcessorMetricsTest {
     public void shouldRecordMetrics() {
         final String storeName = "test-store";
 
-        final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName)
+        final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(storeName, String(),
+                                                                                  new FullChangeSerde<>(Long()))
             .withLoggingDisabled()
             .build();
 
         final KTableSuppressProcessor<String, Long> processor =
             new KTableSuppressProcessor<>(
                 (SuppressedInternal<String>) Suppressed.<String>untilTimeLimit(Duration.ofDays(100), maxRecords(1)),
-                storeName,
-                String(),
-                new FullChangeSerde<>(Long())
+                storeName
             );
 
         final MockInternalProcessorContext context = new MockInternalProcessorContext();
@@ -191,9 +189,9 @@ public class KTableSuppressProcessorMetricsTest {
     }
 
     @SuppressWarnings("unchecked")
-    private <T> void verifyMetric(final Map<MetricName, ? extends Metric> metrics,
-                                  final MetricName metricName,
-                                  final Matcher<T> matcher) {
+    private static <T> void verifyMetric(final Map<MetricName, ? extends Metric> metrics,
+                                         final MetricName metricName,
+                                         final Matcher<T> matcher) {
         assertThat(metrics.get(metricName).metricName().description(), is(metricName.description()));
         assertThat((T) metrics.get(metricName).metricValue(), matcher);
 
