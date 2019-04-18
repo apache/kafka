@@ -139,7 +139,9 @@ class TopicDeletionManager(config: KafkaConfig,
    */
   def enqueueTopicsForDeletion(topics: Set[String]): Unit = {
     if (isDeleteTopicEnabled) {
-      controllerContext.queueTopicDeletion(topics)
+      val newTopicsToBeDeleted = topics -- controllerContext.topicsToBeDeleted
+      controllerContext.queueTopicDeletion(newTopicsToBeDeleted)
+      newTopicsToBeDeleted.foreach(controllerContext.excludeDeletingTopicFromOfflinePartitionCount)
       resumeDeletions()
     }
   }

@@ -404,6 +404,24 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testTopicDeletionCleanUpPartitionState(): Unit = {
+    servers = makeServers(3, enableDeleteTopic = true)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+    val controller = servers.find(broker => broker.config.brokerId == controllerId).get.kafkaController
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(1, 0, 2))
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+
+    // Make sure the partition state has been populated
+    assertTrue(controller.controllerContext.partitionStates.contains(tp))
+    adminZkClient.deleteTopic(tp.topic())
+    TestUtils.verifyTopicDeletion(zkClient, tp.topic(), 1, servers)
+
+    // Make sure the partition state has been removed
+    assertTrue(!controller.controllerContext.partitionStates.contains(tp))
+  }
+
+  @Test
   def testLeaderAndIsrWhenEntireIsrOfflineAndUncleanLeaderElectionDisabled(): Unit = {
     servers = makeServers(2)
     val controllerId = TestUtils.waitUntilControllerElected(zkClient)
@@ -684,7 +702,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
                           enableControlledShutdown: Boolean = true,
                           listeners : Option[String] = None,
                           listenerSecurityProtocolMap : Option[String] = None,
-                          controlPlaneListenerName : Option[String] = None) = {
+                          controlPlaneListenerName : Option[String] = None,
+                          enableDeleteTopic: Boolean = false) = {
     val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown)
     configs.foreach { config =>
       config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, autoLeaderRebalanceEnable.toString)
@@ -693,6 +712,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       listeners.foreach(listener => config.setProperty(KafkaConfig.ListenersProp, listener))
       listenerSecurityProtocolMap.foreach(listenerMap => config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerMap))
       controlPlaneListenerName.foreach(controlPlaneListener => config.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListener))
+      config.setProperty(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
     }
     configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
   }
