@@ -60,7 +60,6 @@ public class TimestampedWindowStoreBuilderTest {
             Serdes.String(),
             Serdes.String(),
             new MockTime());
-
     }
 
     @Test

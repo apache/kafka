@@ -129,7 +129,7 @@ public final class Stores {
 
             @Override
             public KeyValueStore<Bytes, byte[]> get() {
-                    return new InMemoryKeyValueStore(name);
+                return new InMemoryKeyValueStore(name);
             }
 
             @Override
