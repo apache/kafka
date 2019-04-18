@@ -184,7 +184,8 @@ private[log] class ProducerStateEntry(val producerId: Long,
  *                       should have ValidationType.None. Appends coming from a client for produce requests should have
  *                       ValidationType.Full.
  */
-private[log] class ProducerAppendInfo(val producerId: Long,
+private[log] class ProducerAppendInfo(val topicPartition: TopicPartition,
+                                      val producerId: Long,
                                       val currentEntry: ProducerStateEntry,
                                       val validationType: ValidationType) {
   private val transactions = ListBuffer.empty[TxnMetadata]
@@ -194,35 +195,36 @@ private[log] class ProducerAppendInfo(val producerId: Long,
   updatedEntry.coordinatorEpoch = currentEntry.coordinatorEpoch
   updatedEntry.currentTxnFirstOffset = currentEntry.currentTxnFirstOffset
 
-  private def maybeValidateAppend(producerEpoch: Short, firstSeq: Int) = {
+  private def maybeValidateAppend(producerEpoch: Short, firstSeq: Int, offset: Long): Unit = {
     validationType match {
       case ValidationType.None =>
 
       case ValidationType.EpochOnly =>
-        checkProducerEpoch(producerEpoch)
+        checkProducerEpoch(producerEpoch, offset)
 
       case ValidationType.Full =>
-        checkProducerEpoch(producerEpoch)
-        checkSequence(producerEpoch, firstSeq)
+        checkProducerEpoch(producerEpoch, offset)
+        checkSequence(producerEpoch, firstSeq, offset)
     }
   }
 
-  private def checkProducerEpoch(producerEpoch: Short): Unit = {
+  private def checkProducerEpoch(producerEpoch: Short, offset: Long): Unit = {
     if (producerEpoch < updatedEntry.producerEpoch) {
-      throw new ProducerFencedException(s"Producer's epoch is no longer valid. There is probably another producer " +
-        s"with a newer epoch. $producerEpoch (request epoch), ${updatedEntry.producerEpoch} (server epoch)")
+      throw new ProducerFencedException(s"Producer's epoch at offset $offset is no longer valid in " +
+        s"partition $topicPartition: $producerEpoch (request epoch), ${updatedEntry.producerEpoch} (current epoch)")
     }
   }
 
-  private def checkSequence(producerEpoch: Short, appendFirstSeq: Int): Unit = {
+  private def checkSequence(producerEpoch: Short, appendFirstSeq: Int, offset: Long): Unit = {
     if (producerEpoch != updatedEntry.producerEpoch) {
       if (appendFirstSeq != 0) {
         if (updatedEntry.producerEpoch != RecordBatch.NO_PRODUCER_EPOCH) {
-          throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch: $producerEpoch " +
-            s"(request epoch), $appendFirstSeq (seq. number)")
+          throw new OutOfOrderSequenceException(s"Invalid sequence number for new epoch at offset $offset in " +
+            s"partition $topicPartition: $producerEpoch (request epoch), $appendFirstSeq (seq. number)")
         } else {
-          throw new UnknownProducerIdException(s"Found no record of producerId=$producerId on the broker. It is possible " +
-            s"that the last message with the producerId=$producerId has been removed due to hitting the retention limit.")
+          throw new UnknownProducerIdException(s"Found no record of producerId=$producerId on the broker at offset $offset" +
+            s"in partition $topicPartition. It is possible that the last message with the producerId=$producerId has " +
+            "been removed due to hitting the retention limit.")
         }
       }
     } else {
@@ -240,10 +242,12 @@ private[log] class ProducerAppendInfo(val producerId: Long,
         // the sequence number. Note that this check follows the fencing check, so the marker still fences
         // old producers even if it cannot determine our next expected sequence number.
         throw new UnknownProducerIdException(s"Local producer state matches expected epoch $producerEpoch " +
-          s"for producerId=$producerId, but next expected sequence number is not known.")
+          s"for producerId=$producerId at offset $offset in partition $topicPartition, but the next expected " +
+          "sequence number is not known.")
       } else if (!inSequence(currentLastSeq, appendFirstSeq)) {
-        throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId: $appendFirstSeq " +
-          s"(incoming seq. number), $currentLastSeq (current end sequence number)")
+        throw new OutOfOrderSequenceException(s"Out of order sequence number for producerId $producerId at " +
+          s"offset $offset in partition $topicPartition: $appendFirstSeq (incoming seq. number), " +
+          s"$currentLastSeq (current end sequence number)")
       }
     }
   }
@@ -278,13 +282,14 @@ private[log] class ProducerAppendInfo(val producerId: Long,
              firstOffset: Long,
              lastOffset: Long,
              isTransactional: Boolean): Unit = {
-    maybeValidateAppend(epoch, firstSeq)
+    maybeValidateAppend(epoch, firstSeq, firstOffset)
     updatedEntry.addBatch(epoch, lastSeq, lastOffset, (lastOffset - firstOffset).toInt, lastTimestamp)
 
     updatedEntry.currentTxnFirstOffset match {
       case Some(_) if !isTransactional =>
         // Received a non-transactional message while a transaction is active
-        throw new InvalidTxnStateException(s"Expected transactional write from producer $producerId")
+        throw new InvalidTxnStateException(s"Expected transactional write from producer $producerId at " +
+          s"offset $firstOffset in partition $topicPartition")
 
       case None if isTransactional =>
         // Began a new transaction
@@ -299,10 +304,11 @@ private[log] class ProducerAppendInfo(val producerId: Long,
                          producerEpoch: Short,
                          offset: Long,
                          timestamp: Long): CompletedTxn = {
-    checkProducerEpoch(producerEpoch)
+    checkProducerEpoch(producerEpoch, offset)
 
     if (updatedEntry.coordinatorEpoch > endTxnMarker.coordinatorEpoch)
-      throw new TransactionCoordinatorFencedException(s"Invalid coordinator epoch: ${endTxnMarker.coordinatorEpoch} " +
+      throw new TransactionCoordinatorFencedException(s"Invalid coordinator epoch for producerId $producerId at " +
+        s"offset $offset in partition $topicPartition: ${endTxnMarker.coordinatorEpoch} " +
         s"(zombie), ${updatedEntry.coordinatorEpoch} (current)")
 
     updatedEntry.maybeUpdateEpoch(producerEpoch)
@@ -628,7 +634,7 @@ class ProducerStateManager(val topicPartition: TopicPartition,
         ValidationType.Full
 
     val currentEntry = lastEntry(producerId).getOrElse(ProducerStateEntry.empty(producerId))
-    new ProducerAppendInfo(producerId, currentEntry, validationToPerform)
+    new ProducerAppendInfo(topicPartition, producerId, currentEntry, validationToPerform)
   }
 
   /**
