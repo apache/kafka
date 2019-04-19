@@ -335,6 +335,10 @@ public class SubscriptionState {
         assignedState(tp).seek(position);
     }
 
+    public void seekAndValidate(TopicPartition tp, FetchPosition position, Metadata.LeaderAndEpoch currentLeaderAndEpoch) {
+        assignedState(tp).seekAndValidate(position, currentLeaderAndEpoch);
+    }
+
     public void seek(TopicPartition tp, long offset) {
         seek(tp, new FetchPosition(offset, Optional.empty(), new Metadata.LeaderAndEpoch(Node.noNode(), Optional.empty())));
     }
@@ -655,6 +659,11 @@ public class SubscriptionState {
                 this.resetStrategy = null;
                 this.nextRetryTimeMs = null;
             });
+        }
+
+        private void seekAndValidate(FetchPosition fetchPosition, Metadata.LeaderAndEpoch currentLeaderAndEpoch) {
+            seek(fetchPosition);
+            maybeValidatePosition(currentLeaderAndEpoch);
         }
 
         private void position(FetchPosition position) {
