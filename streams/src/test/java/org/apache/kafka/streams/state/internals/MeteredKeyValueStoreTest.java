@@ -106,7 +106,7 @@ public class MeteredKeyValueStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldGetSerdesFromConfigIfNoUserSerdes() {
+    public void shouldGetSerdesFromConfigWithoutUserSerdes() {
         metered = new MeteredKeyValueStore<>(
             inner,
             "scope",

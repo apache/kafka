@@ -739,7 +739,7 @@ public class KafkaStreamsTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldInitializedUserSerdes() {
+    public void shouldInitializeUserSerdes() {
         final Deserializer mockSourceKeyDeserialzer = mock(Deserializer.class);
         mockSourceKeyDeserialzer.configure(anyObject(), eq(true));
         expectLastCall();

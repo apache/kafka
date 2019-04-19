@@ -78,7 +78,7 @@ public class MeteredTimestampWindowStoreTest {
     }
 
     @Test
-    public void shouldGetSerdesFromConfigIfNoUserSerdes() {
+    public void shouldGetSerdesFromConfigWithoutUserSerdes() {
         store = new MeteredTimestampedWindowStore<>(
             innerStoreMock,
             10L, // any size

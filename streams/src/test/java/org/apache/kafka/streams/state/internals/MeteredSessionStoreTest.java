@@ -105,7 +105,7 @@ public class MeteredSessionStoreTest {
 
     @SuppressWarnings("unchecked")
     @Test
-    public void shouldGetSerdesFromConfigIfNoUserSerdes() {
+    public void shouldGetSerdesFromConfigWithoutUserSerdes() {
         metered = new MeteredSessionStore<>(
             inner,
             "scope",

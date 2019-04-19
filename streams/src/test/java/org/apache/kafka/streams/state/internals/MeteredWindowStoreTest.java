@@ -89,7 +89,7 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void shouldGetSerdesFromConfigIfNoUserSerdes() {
+    public void shouldGetSerdesFromConfigWithoutUserSerdes() {
         store = new MeteredWindowStore<>(
             innerStoreMock,
             10L, // any size
