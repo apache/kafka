@@ -28,6 +28,7 @@ import kafka.cluster.{BrokerEndPoint, Partition, Replica}
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
+import kafka.security.auth.Authorizer
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
@@ -214,6 +215,9 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  var replicaSelector: ReplicaSelector
+
+
   val leaderCount = newGauge(
     "LeaderCount",
     new Gauge[Int] {
@@ -351,6 +355,11 @@ class ReplicaManager(val config: KafkaConfig,
     val haltBrokerOnFailure = config.interBrokerProtocolVersion < KAFKA_1_0_IV0
     logDirFailureHandler = new LogDirFailureHandler("LogDirFailureHandler", haltBrokerOnFailure)
     logDirFailureHandler.start()
+
+    replicaSelector = Option(config.replicaSelectorClassName).filter(_.nonEmpty).map { replicaSelectorClassName =>
+      CoreUtils.createObject[ReplicaSelector](replicaSelectorClassName)
+    }.getOrElse(new LeaderReplicaSelector())
+    replicaSelector.configure(config.originals())
   }
 
   def stopReplica(topicPartition: TopicPartition, deletePartition: Boolean)  = {
@@ -886,7 +895,7 @@ class ReplicaManager(val config: KafkaConfig,
       }
       val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, fetchOnlyFromLeader,
         fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
-      val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, responseCallback)
+      val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata, responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
       val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => new TopicPartitionOperationKey(tp) }
@@ -936,21 +945,23 @@ class ReplicaManager(val config: KafkaConfig,
           fetchOnlyFromLeader = fetchOnlyFromLeader,
           minOneMessage = minOneMessage)
 
-        // TODO plugable replica selector
-        val replicaSelector1: ReplicaSelector = new LeaderReplicaSelector()
-        val replicaSelector2: ReplicaSelector = new MostCaughtUpReplicaSelector()
-        val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), clientMetadata.listenerName)
-        val replicaInfos: Set[ReplicaSelector.ReplicaInfo] = partition.allReplicas.map(
-          replica => new ReplicaSelector.ReplicaInfo() {
-            override def isLeader: Boolean = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId))
+        val preferredReadReplica: Option[Int] = if (clientMetadata.equals(ClientMetadata.NO_METADATA)) {
+          partition.leaderReplicaIdOpt
+        } else {
+          val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), clientMetadata.listenerName)
+          val replicaInfos: Set[ReplicaSelector.ReplicaInfo] = partition.allReplicas.map(
+            replica => new ReplicaSelector.ReplicaInfo() {
+              override def isLeader: Boolean = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId))
 
-            override def getEndpoint: Node = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode())
+              override def getEndpoint: Node = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode())
 
-            override def logOffset(): Long = replica.logEndOffset
+              override def logOffset(): Long = replica.logEndOffset
 
-            override def lastCaughtUpTimeMs(): Long = replica.lastCaughtUpTimeMs
-          })
-        val preferredReadReplica: Option[ReplicaSelector.ReplicaInfo] = Option.apply(replicaSelector1.select(tp, clientMetadata, replicaInfos.asJava).orElse(null))
+              override def lastCaughtUpTimeMs(): Long = replica.lastCaughtUpTimeMs
+            })
+          Option.apply(replicaSelector.select(tp, clientMetadata, replicaInfos.asJava).orElse(null))
+            .map(_.getEndpoint.id())
+        }
 
         val fetchDataInfo = if (shouldLeaderThrottle(quota, tp, replicaId)) {
           // If the partition is being throttled, simply return an empty set.
@@ -971,7 +982,7 @@ class ReplicaManager(val config: KafkaConfig,
                       fetchTimeMs = fetchTimeMs,
                       readSize = adjustedMaxBytes,
                       lastStableOffset = Some(readInfo.lastStableOffset),
-                      preferredReadReplica = preferredReadReplica.map(_.getEndpoint.id()),
+                      preferredReadReplica = preferredReadReplica,
                       exception = None)
       } catch {
         // NOTE: Failed fetch requests metric is not incremented for known exceptions since it
@@ -1527,6 +1538,9 @@ class ReplicaManager(val config: KafkaConfig,
     delayedElectPreferredLeaderPurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
+    if (replicaSelector != null) {
+      replicaSelector.close()
+    }
     info("Shut down completely")
   }
 

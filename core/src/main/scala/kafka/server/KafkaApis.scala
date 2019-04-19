@@ -535,7 +535,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       fetchRequest.isFromFollower)
 
     val clientMetadata = new ClientMetadata(
-      "TODO fetchRequest.metadata.rackId",
+      fetchRequest.metadata().rackId(),
       clientId,
       request.context.clientAddress,
       request.context.principal,

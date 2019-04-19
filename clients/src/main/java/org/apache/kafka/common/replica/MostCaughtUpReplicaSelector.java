@@ -8,7 +8,9 @@ import java.util.Set;
 
 public class MostCaughtUpReplicaSelector implements ReplicaSelector {
     @Override
-    public Optional<ReplicaInfo> select(TopicPartition topicPartition, ClientMetadata clientMetadata, Set<ReplicaInfo> replicaInfos) {
+    public Optional<ReplicaInfo> select(TopicPartition topicPartition,
+                                        ClientMetadata clientMetadata,
+                                        Set<ReplicaInfo> replicaInfos) {
         return replicaInfos.stream().max(Comparator.comparing(ReplicaInfo::logOffset));
     }
 }

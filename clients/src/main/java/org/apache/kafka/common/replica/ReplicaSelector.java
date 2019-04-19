@@ -15,7 +15,13 @@ import java.util.Set;
 
 public interface ReplicaSelector extends Configurable, Closeable {
 
-    Optional<ReplicaInfo> select(TopicPartition topicPartition, ClientMetadata clientMetadata, Set<ReplicaInfo> replicaInfos);
+    /**
+     * Select the preferred replica a client should use for fetching. If no replica is available, this will return an
+     * empty optional.
+     */
+    Optional<ReplicaInfo> select(TopicPartition topicPartition,
+                                 ClientMetadata clientMetadata,
+                                 Set<ReplicaInfo> replicaInfos);
 
     @Override
     default void close() throws IOException {
@@ -27,7 +33,11 @@ public interface ReplicaSelector extends Configurable, Closeable {
 
     }
 
+
     class ClientMetadata {
+
+        public static final ClientMetadata NO_METADATA = new ClientMetadata("", "", null, null, null);
+
         public final String rackId;
         public final String clientId;
         public final InetAddress clientAddress;
