@@ -335,8 +335,8 @@ public class SubscriptionState {
         assignedState(tp).seek(position);
     }
 
-    public void seekAndValidate(TopicPartition tp, FetchPosition position, Metadata.LeaderAndEpoch currentLeaderAndEpoch) {
-        assignedState(tp).seekAndValidate(position, currentLeaderAndEpoch);
+    public void seekAndValidate(TopicPartition tp, FetchPosition position) {
+        assignedState(tp).seekAndValidate(position);
     }
 
     public void seek(TopicPartition tp, long offset) {
@@ -593,21 +593,24 @@ public class SubscriptionState {
 
             if (position != null && !position.safeToFetchFrom(currentLeaderAndEpoch)) {
                 FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeaderAndEpoch);
-
-                if (position.offsetEpoch.isPresent()) {
-                    transitionState(FetchStates.AWAIT_VALIDATION, () -> {
-                        this.position = newPosition;
-                        this.nextRetryTimeMs = null;
-                    });
-                } else {
-                    // If we have no epoch information for the current position, then we can skip validation
-                    transitionState(FetchStates.FETCHING, () -> {
-                        this.position = newPosition;
-                        this.nextRetryTimeMs = null;
-                    });
-                }
+                validatePosition(newPosition);
             }
             return this.fetchState.equals(FetchStates.AWAIT_VALIDATION);
+        }
+
+        private void validatePosition(FetchPosition position) {
+            if (position.offsetEpoch.isPresent()) {
+                transitionState(FetchStates.AWAIT_VALIDATION, () -> {
+                    this.position = position;
+                    this.nextRetryTimeMs = null;
+                });
+            } else {
+                // If we have no epoch information for the current position, then we can skip validation
+                transitionState(FetchStates.FETCHING, () -> {
+                    this.position = position;
+                    this.nextRetryTimeMs = null;
+                });
+            }
         }
 
         /**
@@ -661,9 +664,9 @@ public class SubscriptionState {
             });
         }
 
-        private void seekAndValidate(FetchPosition fetchPosition, Metadata.LeaderAndEpoch currentLeaderAndEpoch) {
+        private void seekAndValidate(FetchPosition fetchPosition) {
             seek(fetchPosition);
-            maybeValidatePosition(currentLeaderAndEpoch);
+            validatePosition(fetchPosition);
         }
 
         private void position(FetchPosition position) {
@@ -816,11 +819,6 @@ public class SubscriptionState {
          * {@link Metadata.LeaderAndEpoch} known to the subscription is equal to the one supplied by the caller.
          */
         public boolean safeToFetchFrom(Metadata.LeaderAndEpoch leaderAndEpoch) {
-            // Should we check the if the epoch is present or do we get a benefit
-            // for leader changes on older versions of the broker?
-
-            // I think the answer is 'no' because the OffsetsForLeaderEpoch API was
-            // not exposed in older versions anyway.
             return !currentLeader.leader.isEmpty() && currentLeader.equals(leaderAndEpoch);
         }
 

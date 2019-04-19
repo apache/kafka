@@ -1556,7 +1556,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     offsetAndMetadata.leaderEpoch(),
                     currentLeaderAndEpoch);
             this.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
-            this.subscriptions.seekAndValidate(partition, newPosition, currentLeaderAndEpoch);
+            this.subscriptions.seekAndValidate(partition, newPosition);
         } finally {
             release();
         }
