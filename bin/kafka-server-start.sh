@@ -50,4 +50,4 @@ case $COMMAND in
     ;;
 esac
 
-exec $base_dir/kafka-run-class.sh $EXTRA_ARGS kafka.Kafka "$@"
+exec $base_dir/kafka-run-class.sh $EXTRA_ARGS io.confluent.support.metrics.SupportedKafka "$@"

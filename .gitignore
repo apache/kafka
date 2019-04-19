@@ -53,3 +53,7 @@ kafkatest.egg-info/
 systest/
 *.swp
 clients/src/generated
+support-metrics-client/src/main/generated
+support-metrics-client/src/test/generated
+support-metrics-common/src/main/generated
+support-metrics-common/src/test/generated
