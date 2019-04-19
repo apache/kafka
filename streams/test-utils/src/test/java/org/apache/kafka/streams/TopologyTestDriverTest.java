@@ -48,13 +48,12 @@ import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
-import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
-import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -64,13 +63,13 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Arrays;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -611,8 +610,8 @@ public class TopologyTestDriverTest {
         testDriver = new TopologyTestDriver(setupGlobalStoreTopology(SOURCE_TOPIC_1), config);
 
         final KeyValueStore<byte[], byte[]> globalStore = testDriver.getKeyValueStore(SOURCE_TOPIC_1 + "-globalStore");
-        Assert.assertNotNull(globalStore);
-        Assert.assertNotNull(testDriver.getAllStateStores().get(SOURCE_TOPIC_1 + "-globalStore"));
+        assertNotNull(globalStore);
+        assertNotNull(testDriver.getAllStateStores().get(SOURCE_TOPIC_1 + "-globalStore"));
 
         testDriver.pipeInput(consumerRecord1);
 
@@ -792,35 +791,35 @@ public class TopologyTestDriverTest {
         setup();
         testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
         OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
     }
 
     @Test
     public void shouldNotUpdateStoreForSmallerValue() {
         setup();
         testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-        Assert.assertThat(store.get("a"), equalTo(21L));
+        assertThat(store.get("a"), equalTo(21L));
         OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
     }
 
     @Test
     public void shouldNotUpdateStoreForLargerValue() {
         setup();
         testDriver.pipeInput(recordFactory.create("input-topic", "a", 42L, 9999L));
-        Assert.assertThat(store.get("a"), equalTo(42L));
+        assertThat(store.get("a"), equalTo(42L));
         OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 42L);
-        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
     }
 
     @Test
     public void shouldUpdateStoreForNewKey() {
         setup();
         testDriver.pipeInput(recordFactory.create("input-topic", "b", 21L, 9999L));
-        Assert.assertThat(store.get("b"), equalTo(21L));
+        assertThat(store.get("b"), equalTo(21L));
         OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
         OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "b", 21L);
-        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
     }
 
     @Test
@@ -830,11 +829,11 @@ public class TopologyTestDriverTest {
         OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
 
         testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
 
         testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 10000L));
         OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
     }
 
     @Test
@@ -842,7 +841,7 @@ public class TopologyTestDriverTest {
         setup();
         testDriver.advanceWallClockTime(60000);
         OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-        Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
     }
 
     private class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
@@ -943,14 +942,14 @@ public class TopologyTestDriverTest {
         config.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
 
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
-            Assert.assertNull(testDriver.getKeyValueStore("storeProcessorStore").get("a"));
+            assertNull(testDriver.getKeyValueStore("storeProcessorStore").get("a"));
             testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L));
-            Assert.assertEquals(1L, testDriver.getKeyValueStore("storeProcessorStore").get("a"));
+            assertEquals(1L, testDriver.getKeyValueStore("storeProcessorStore").get("a"));
         }
 
 
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(topology, config)) {
-            Assert.assertNull(
+            assertNull(
                 "Closing the prior test driver should have cleaned up this store and value.",
                 testDriver.getKeyValueStore("storeProcessorStore").get("a")
             );
@@ -966,12 +965,12 @@ public class TopologyTestDriverTest {
             Materialized.as("globalStore"));
         try (final TopologyTestDriver testDriver = new TopologyTestDriver(builder.build(), config)) {
             final KeyValueStore<String, String> globalStore = testDriver.getKeyValueStore("globalStore");
-            Assert.assertNotNull(globalStore);
-            Assert.assertNotNull(testDriver.getAllStateStores().get("globalStore"));
+            assertNotNull(globalStore);
+            assertNotNull(testDriver.getAllStateStores().get("globalStore"));
             final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
             testDriver.pipeInput(recordFactory.create("topic", "k1", "value1"));
             // we expect to have both in the global store, the one from pipeInput and the one from the producer
-            Assert.assertEquals("value1", globalStore.get("k1"));
+            assertEquals("value1", globalStore.get("k1"));
         }
     }
 
