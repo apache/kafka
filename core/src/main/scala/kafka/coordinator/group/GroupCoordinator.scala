@@ -184,7 +184,7 @@ class GroupCoordinator(val brokerId: Int,
             debug("Static member $groupInstanceId with unknown member id rejoins, assigning new member id $newMemberId. " +
               "No rebalance will be triggered.")
 
-            val oldMember = group.replace(oldMemberId, newMemberId, groupInstanceId)
+            val oldMember = group.maybeReplaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
 
             // Heartbeat of old member id will expire without affection since the group no longer contains that member id.
             // New heartbeat shall be scheduled with new member id.

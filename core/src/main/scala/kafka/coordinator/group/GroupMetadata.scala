@@ -249,9 +249,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     * [For static members only]: Replace the old member id with the new one,
     * keep everything else unchanged and return the updated member.
     */
-  def replace(oldMemberId: String,
-              newMemberId: String,
-              groupInstanceId: Option[String]): MemberMetadata = {
+  def maybeReplaceGroupInstance(oldMemberId: String,
+                                newMemberId: String,
+                                groupInstanceId: Option[String]): MemberMetadata = {
     assert(groupInstanceId.isDefined)
     val oldMember = members.remove(oldMemberId)
       .getOrElse(throw new IllegalArgumentException(s"Cannot replace non-existing member id $oldMemberId"))
