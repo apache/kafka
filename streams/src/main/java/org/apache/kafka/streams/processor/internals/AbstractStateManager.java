@@ -86,13 +86,13 @@ abstract class AbstractStateManager implements StateManager {
                 // the store has never been registered; carry on...
                 continue;
             }
-            final Optional<StateStore> maybeStore = stateStores.get(storeName);
-            if (!maybeStore.isPresent()) {
-                throw new IllegalStateException(
-                    "Re-initializing store that has not been initialied. This is a bug in Kafka Streams."
+            final StateStore stateStore = stateStores
+                .get(storeName)
+                .orElseThrow(
+                    () -> new IllegalStateException(
+                        "Re-initializing store that has not been initialized. This is a bug in Kafka Streams."
+                    )
                 );
-            }
-            final StateStore stateStore = maybeStore.get();
 
             try {
                 stateStore.close();
