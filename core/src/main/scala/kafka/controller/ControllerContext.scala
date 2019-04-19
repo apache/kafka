@@ -125,7 +125,7 @@ class ControllerContext {
   def liveBrokerIds: Set[Int] = liveBrokerEpochs.keySet -- shuttingDownBrokerIds
   def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerEpochs.keySet
   def liveOrShuttingDownBrokers: Set[Broker] = liveBrokers
-  def liveBrokerIdAndEpochs = liveBrokerEpochs
+  def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerEpochs
 
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionAssignments.flatMap {
