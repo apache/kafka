@@ -36,6 +36,7 @@ buildscript {
     classpath 'org.owasp:dependency-check-gradle:4.0.2'
     classpath "com.diffplug.spotless:spotless-plugin-gradle:3.17.0"
     classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.9"
+    classpath 'com.netflix.nebula:gradle-ospackage-plugin:6.1.2'
   }
 }
 
@@ -111,6 +112,7 @@ ext {
   generatedDocsDir = new File("${project.rootDir}/docs/generated")
 
   commitId = project.hasProperty('commitId') ? commitId : null
+  rpmRelease = project.hasProperty('rpmRelease') ? rpmRelease : 1
 }
 
 apply from: file('wrapper.gradle')
@@ -597,6 +599,12 @@ for ( sv in availableScalaVersions ) {
     tasks = ['releaseTarGz']
   }
 
+  tasks.create(name: "releaseRpm_${taskSuffix}", type: GradleBuild) {
+    startParameter = project.getGradle().getStartParameter().newInstance()
+    startParameter.projectProperties += [scalaVersion: "${sv}"]
+    tasks = ['releaseRpm']
+  }
+
   tasks.create(name: "uploadScalaArchives_${taskSuffix}", type: GradleBuild) {
     startParameter = project.getGradle().getStartParameter().newInstance()
     startParameter.projectProperties += [scalaVersion: "${sv}"]
@@ -625,6 +633,7 @@ tasks.create(name: "testAll", dependsOn: withDefScalaVersions('testScala') + pkg
 tasks.create(name: "installAll", dependsOn: withDefScalaVersions('install') + pkgs.collect { it + ":install" }) { }
 
 tasks.create(name: "releaseTarGzAll", dependsOn: withDefScalaVersions('releaseTarGz')) { }
+tasks.create(name: "releaseRpmAll", dependsOn: withDefScalaVersions('releaseRpm')) { }
 
 tasks.create(name: "uploadArchivesAll", dependsOn: withDefScalaVersions('uploadScalaArchives') + pkgs.collect { it + ":uploadArchives" }) { }
 
@@ -843,6 +852,81 @@ project(':core') {
     from(project(':streams:test-utils').configurations.runtime) { into("libs/") }
     from(project(':streams:examples').jar) { into("libs/") }
     from(project(':streams:examples').configurations.runtime) { into("libs/") }
+    duplicatesStrategy 'exclude'
+  }
+
+  apply plugin: 'nebula.rpm'
+
+  // Mostly the same as the releaseTarGz, but with different prefixing, links, and without the configs
+  tasks.create(name: 'releaseRpm', type: Rpm) {
+    os LINUX
+    type BINARY
+    release "$rpmRelease"
+    license 'Apache License 2.0'
+
+    user "kafka"
+    group "kafka"
+
+    from(project.file("$rootDir/bin")) { into "/usr/share/kafka/bin/" }
+    from(project.file("$rootDir/config")) { into "/usr/share/kafka/config/" }
+    from(configurations.runtime) { into("/usr/share/kafka/libs/") }
+    from(configurations.archives.artifacts.files) { into("/usr/share/kafka/libs/") }
+    from(project.siteDocsTar) { into("/usr/share/kafka/site-docs/") }
+    from(project(':tools').jar) { into("/usr/share/kafka/libs/") }
+    from(project(':tools').configurations.runtime) { into("/usr/share/kafka/libs/") }
+    from(project(':connect:api').jar) { into("/usr/share/kafka/libs/") }
+    from(project(':connect:api').configurations.runtime) { into("/usr/share/kafka/libs/") }
+    from(project(':connect:runtime').jar) { into("/usr/share/kafka/libs/") }
+    from(project(':connect:runtime').configurations.runtime) { into("/usr/share/kafka/libs/") }
+    from(project(':connect:transforms').jar) { into("/usr/share/kafka/libs/") }
+    from(project(':connect:transforms').configurations.runtime) { into("/usr/share/kafka/libs/") }
+    from(project(':connect:json').jar) { into("/usr/share/kafka/libs/") }
+    from(project(':connect:json').configurations.runtime) { into("/usr/share/kafka/libs/") }
+    from(project(':connect:file').jar) { into("/usr/share/kafka/libs/") }
+    from(project(':connect:file').configurations.runtime) { into("/usr/share/kafka/libs/") }
+    from(project(':connect:basic-auth-extension').jar) { into("/usr/share/kafka/libs/") }
+    from(project(':connect:basic-auth-extension').configurations.runtime) { into("/usr/share/kafka/libs/") }
+    from(project(':streams').jar) { into("/usr/share/kafka/libs/") }
+    from(project(':streams').configurations.runtime) { into("/usr/share/kafka/libs/") }
+    from(project(':streams:streams-scala').jar) { into("/usr/share/kafka/libs/") }
+    from(project(':streams:streams-scala').configurations.runtime) { into("/usr/share/kafka/libs/") }
+    from(project(':streams:test-utils').jar) { into("/usr/share/kafka/libs/") }
+    from(project(':streams:test-utils').configurations.runtime) { into("/usr/share/kafka/libs/") }
+    from(project(':streams:examples').jar) { into("/usr/share/kafka/libs/") }
+    from(project(':streams:examples').configurations.runtime) { into("/usr/share/kafka/libs/") }
+
+    link('/usr/bin/connect-distributed.sh', '/usr/share/kafka/bin/connect-distributed.sh')
+    link('/usr/bin/connect-standalone.sh', '/usr/share/kafka/bin/connect-standalone.sh')
+    link('/usr/bin/kafka-acls.sh', '/usr/share/kafka/bin/kafka-acls.sh')
+    link('/usr/bin/kafka-broker-api-versions.sh', '/usr/share/kafka/bin/kafka-broker-api-versions.sh')
+    link('/usr/bin/kafka-configs.sh', '/usr/share/kafka/bin/kafka-configs.sh')
+    link('/usr/bin/kafka-console-consumer.sh', '/usr/share/kafka/bin/kafka-console-consumer.sh')
+    link('/usr/bin/kafka-console-producer.sh', '/usr/share/kafka/bin/kafka-console-producer.sh')
+    link('/usr/bin/kafka-consumer-groups.sh', '/usr/share/kafka/bin/kafka-consumer-groups.sh')
+    link('/usr/bin/kafka-consumer-perf-test.sh', '/usr/share/kafka/bin/kafka-consumer-perf-test.sh')
+    link('/usr/bin/kafka-delegation-tokens.sh', '/usr/share/kafka/bin/kafka-delegation-tokens.sh')
+    link('/usr/bin/kafka-delete-records.sh', '/usr/share/kafka/bin/kafka-delete-records.sh')
+    link('/usr/bin/kafka-dump-log.sh', '/usr/share/kafka/bin/kafka-dump-log.sh')
+    link('/usr/bin/kafka-log-dirs.sh', '/usr/share/kafka/bin/kafka-log-dirs.sh')
+    link('/usr/bin/kafka-mirror-maker.sh', '/usr/share/kafka/bin/kafka-mirror-maker.sh')
+    link('/usr/bin/kafka-preferred-replica-election.sh', '/usr/share/kafka/bin/kafka-preferred-replica-election.sh')
+    link('/usr/bin/kafka-producer-perf-test.sh', '/usr/share/kafka/bin/kafka-producer-perf-test.sh')
+    link('/usr/bin/kafka-reassign-partitions.sh', '/usr/share/kafka/bin/kafka-reassign-partitions.sh')
+    link('/usr/bin/kafka-replica-verification.sh', '/usr/share/kafka/bin/kafka-replica-verification.sh')
+    link('/usr/bin/kafka-run-class.sh', '/usr/share/kafka/bin/kafka-run-class.sh')
+    link('/usr/bin/kafka-server-start.sh', '/usr/share/kafka/bin/kafka-server-start.sh')
+    link('/usr/bin/kafka-server-stop.sh', '/usr/share/kafka/bin/kafka-server-stop.sh')
+    link('/usr/bin/kafka-streams-application-reset.sh', '/usr/share/kafka/bin/kafka-streams-application-reset.sh')
+    link('/usr/bin/kafka-topics.sh', '/usr/share/kafka/bin/kafka-topics.sh')
+    link('/usr/bin/kafka-verifiable-consumer.sh', '/usr/share/kafka/bin/kafka-verifiable-consumer.sh')
+    link('/usr/bin/kafka-verifiable-producer.sh', '/usr/share/kafka/bin/kafka-verifiable-producer.sh')
+    link('/usr/bin/trogdor.sh', '/usr/share/kafka/bin/trogdor.sh')
+    link('/usr/bin/windows', '/usr/share/kafka/bin/windows')
+    link('/usr/bin/zookeeper-security-migration.sh', '/usr/share/kafka/bin/zookeeper-security-migration.sh')
+    link('/usr/bin/zookeeper-server-start.sh', '/usr/share/kafka/bin/zookeeper-server-start.sh')
+    link('/usr/bin/zookeeper-server-stop.sh', '/usr/share/kafka/bin/zookeeper-server-stop.sh')
+    link('/usr/bin/zookeeper-shell.sh', '/usr/share/kafka/bin/zookeeper-shell.sh')
+
     duplicatesStrategy 'exclude'
   }
 
