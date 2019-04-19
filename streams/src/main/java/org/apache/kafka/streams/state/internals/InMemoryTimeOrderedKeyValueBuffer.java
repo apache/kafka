@@ -316,7 +316,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
                 final long time = timeAndValue.getLong();
                 final byte[] value = new byte[record.value().length - 8];
                 timeAndValue.get(value);
-                if (record.headers() == null || record.headers().lastHeader("v") == null) {
+                if (record.headers().lastHeader("v") == null) {
                     cleanPut(
                         time,
                         key,
@@ -331,7 +331,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
                             )
                         )
                     );
-                } else {
+                } else if (V_1_CHANGELOG_HEADERS.lastHeader("v").equals(record.headers().lastHeader("v"))) {
                     final ContextualRecord contextualRecord = ContextualRecord.deserialize(ByteBuffer.wrap(value));
 
                     cleanPut(
@@ -339,6 +339,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
                         key,
                         contextualRecord
                     );
+                } else {
+                    throw new IllegalArgumentException("Restoring apparently invalid changelog record: " + record);
                 }
             }
             if (record.partition() != partition) {

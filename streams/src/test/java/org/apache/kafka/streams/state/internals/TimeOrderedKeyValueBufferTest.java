@@ -565,4 +565,40 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
 
         cleanup(context, buffer);
     }
+
+    @Test
+    public void shouldNotRestoreUnrecognizedVersionRecord() {
+        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final MockInternalProcessorContext context = makeContext();
+        buffer.init(context, buffer);
+
+        final RecordBatchingStateRestoreCallback stateRestoreCallback =
+            (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
+
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, ""));
+
+        final RecordHeaders unknownFlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) -1})});
+
+        final byte[] todeleteValue = getRecord("doomed", 0).serialize();
+        try {
+            stateRestoreCallback.restoreBatch(singletonList(
+                new ConsumerRecord<>("changelog-topic",
+                                     0,
+                                     0,
+                                     999,
+                                     TimestampType.CREATE_TIME,
+                                     -1L,
+                                     -1,
+                                     -1,
+                                     "todelete".getBytes(UTF_8),
+                                     ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
+                                     unknownFlagHeaders)
+            ));
+            fail("expected an exception");
+        } catch (final IllegalArgumentException expected) {
+            // nothing to do.
+        } finally {
+            cleanup(context, buffer);
+        }
+    }
 }
