@@ -310,7 +310,7 @@ public class TransactionManager {
 
         log.debug("Begin adding offsets {} for consumer group {} to transaction", offsets, consumerGroupId);
         AddOffsetsToTxnRequest.Builder builder = new AddOffsetsToTxnRequest.Builder(transactionalId,
-                producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, consumerGroupId);
+            producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, consumerGroupId);
         AddOffsetsToTxnHandler handler = new AddOffsetsToTxnHandler(builder, offsets);
         enqueueRequest(handler);
         return handler.result;
@@ -684,6 +684,16 @@ public class TransactionManager {
             request.fatalError(e);
     }
 
+    synchronized void close() {
+        KafkaException shutdownException = new KafkaException("The producer closed forcefully");
+        pendingRequests.forEach(handler ->
+                handler.fatalError(shutdownException));
+        if (pendingResult != null) {
+            pendingResult.setError(shutdownException);
+            pendingResult.done();
+        }
+    }
+
     Node coordinator(FindCoordinatorRequest.CoordinatorType type) {
         switch (type) {
             case GROUP:
@@ -729,6 +739,10 @@ public class TransactionManager {
     // visible for testing
     synchronized boolean hasPendingOffsetCommits() {
         return !pendingTxnOffsetCommits.isEmpty();
+    }
+
+    synchronized boolean hasPendingRequests() {
+        return !pendingRequests.isEmpty();
     }
 
     // visible for testing
@@ -799,7 +813,7 @@ public class TransactionManager {
 
         if (target == State.FATAL_ERROR || target == State.ABORTABLE_ERROR) {
             if (error == null)
-                throw new IllegalArgumentException("Cannot transition to " + target + " with an null exception");
+                throw new IllegalArgumentException("Cannot transition to " + target + " with a null exception");
             lastError = error;
         } else {
             lastError = null;

@@ -24,6 +24,8 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Transformer;
+import org.apache.kafka.streams.kstream.ValueTransformer;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -53,16 +55,11 @@ public class KStreamTransformIntegrationTest {
     private final String topic = "stream";
     private final String stateStoreName = "myTransformState";
     private final List<KeyValue<Integer, Integer>> results = new ArrayList<>();
-    private final ForeachAction<Integer, Integer> action = new ForeachAction<Integer, Integer>() {
-        @Override
-        public void apply(final Integer key, final Integer value) {
-            results.add(KeyValue.pair(key, value));
-        }
-    };
+    private final ForeachAction<Integer, Integer> action = (key, value) -> results.add(KeyValue.pair(key, value));
     private KStream<Integer, Integer> stream;
 
     @Before
-    public void before() throws InterruptedException {
+    public void before() {
         builder = new StreamsBuilder();
         final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
                 Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore(stateStoreName),
@@ -80,15 +77,52 @@ public class KStreamTransformIntegrationTest {
             driver.pipeInput(recordFactory.create(topic, Arrays.asList(new KeyValue<>(1, 1),
                                                                        new KeyValue<>(2, 2),
                                                                        new KeyValue<>(3, 3),
-                                                                       new KeyValue<>(1, 4),
-                                                                       new KeyValue<>(2, 5),
-                                                                       new KeyValue<>(3, 6))));
+                                                                       new KeyValue<>(2, 1),
+                                                                       new KeyValue<>(2, 3),
+                                                                       new KeyValue<>(1, 3))));
         }
         assertThat(results, equalTo(expected));
     }
 
     @Test
-    public void shouldFlatTransform() throws Exception {
+    public void shouldTransform() {
+        stream
+            .transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
+                private KeyValueStore<Integer, Integer> state;
+
+                @SuppressWarnings("unchecked")
+                @Override
+                public void init(final ProcessorContext context) {
+                    state = (KeyValueStore<Integer, Integer>) context.getStateStore(stateStoreName);
+                }
+
+                @Override
+                public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
+                    state.putIfAbsent(key, 0);
+                    Integer storedValue = state.get(key);
+                    final KeyValue<Integer, Integer> result = new KeyValue<>(key + 1, value + storedValue++);
+                    state.put(key, storedValue);
+                    return result;
+                }
+
+                @Override
+                public void close() {
+                }
+            }, "myTransformState")
+            .foreach(action);
+
+        final List<KeyValue<Integer, Integer>> expected = Arrays.asList(
+            KeyValue.pair(2, 1),
+            KeyValue.pair(3, 2),
+            KeyValue.pair(4, 3),
+            KeyValue.pair(3, 2),
+            KeyValue.pair(3, 5),
+            KeyValue.pair(2, 4));
+        verifyResult(expected);
+    }
+
+    @Test
+    public void shouldFlatTransform() {
         stream
             .flatTransform(() -> new Transformer<Integer, Integer, Iterable<KeyValue<Integer, Integer>>>() {
                 private KeyValueStore<Integer, Integer> state;
@@ -103,12 +137,11 @@ public class KStreamTransformIntegrationTest {
                 public Iterable<KeyValue<Integer, Integer>> transform(final Integer key, final Integer value) {
                     final List<KeyValue<Integer, Integer>> result = new ArrayList<>();
                     state.putIfAbsent(key, 0);
-                    final Integer storedValue = state.get(key);
-                    int outputValue = storedValue.intValue();
+                    Integer storedValue = state.get(key);
                     for (int i = 0; i < 3; i++) {
-                        result.add(new KeyValue<Integer, Integer>(key + i, value + outputValue++));
+                        result.add(new KeyValue<>(key + i, value + storedValue++));
                     }
-                    state.put(key, new Integer(outputValue));
+                    state.put(key, storedValue);
                     return result;
                 }
 
@@ -128,37 +161,35 @@ public class KStreamTransformIntegrationTest {
             KeyValue.pair(3, 3),
             KeyValue.pair(4, 4),
             KeyValue.pair(5, 5),
-            KeyValue.pair(1, 7),
-            KeyValue.pair(2, 8),
-            KeyValue.pair(3, 9),
-            KeyValue.pair(2, 8),
-            KeyValue.pair(3, 9),
-            KeyValue.pair(4, 10),
-            KeyValue.pair(3, 9),
-            KeyValue.pair(4, 10),
-            KeyValue.pair(5, 11));
+            KeyValue.pair(2, 4),
+            KeyValue.pair(3, 5),
+            KeyValue.pair(4, 6),
+            KeyValue.pair(2, 9),
+            KeyValue.pair(3, 10),
+            KeyValue.pair(4, 11),
+            KeyValue.pair(1, 6),
+            KeyValue.pair(2, 7),
+            KeyValue.pair(3, 8));
         verifyResult(expected);
     }
 
     @Test
-    public void shouldTransform() throws Exception {
+    public void shouldTransformValuesWithValueTransformerWithKey() {
         stream
-            .transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
+            .transformValues(() -> new ValueTransformerWithKey<Integer, Integer, Integer>() {
                 private KeyValueStore<Integer, Integer> state;
 
-                @SuppressWarnings("unchecked")
                 @Override
                 public void init(final ProcessorContext context) {
-                    state = (KeyValueStore<Integer, Integer>) context.getStateStore(stateStoreName);
+                    state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
                 }
 
                 @Override
-                public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
+                public Integer transform(final Integer key, final Integer value) {
                     state.putIfAbsent(key, 0);
-                    final Integer storedValue = state.get(key);
-                    int outputValue = storedValue.intValue();
-                    final KeyValue<Integer, Integer> result = new KeyValue<>(key + 1, value + outputValue++);
-                    state.put(key, outputValue);
+                    Integer storedValue = state.get(key);
+                    final Integer result = value + storedValue++;
+                    state.put(key, storedValue);
                     return result;
                 }
 
@@ -169,13 +200,149 @@ public class KStreamTransformIntegrationTest {
             .foreach(action);
 
         final List<KeyValue<Integer, Integer>> expected = Arrays.asList(
-            KeyValue.pair(2, 1),
-            KeyValue.pair(3, 2),
-            KeyValue.pair(4, 3),
+            KeyValue.pair(1, 1),
+            KeyValue.pair(2, 2),
+            KeyValue.pair(3, 3),
+            KeyValue.pair(2, 2),
             KeyValue.pair(2, 5),
-            KeyValue.pair(3, 6),
-            KeyValue.pair(4, 7));
+            KeyValue.pair(1, 4));
         verifyResult(expected);
     }
 
+    @Test
+    public void shouldTransformValuesWithValueTransformerWithoutKey() {
+        stream
+            .transformValues(() -> new ValueTransformer<Integer, Integer>() {
+                private KeyValueStore<Integer, Integer> state;
+
+                @Override
+                public void init(final ProcessorContext context) {
+                    state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
+                }
+
+                @Override
+                public Integer transform(final Integer value) {
+                    state.putIfAbsent(value, 0);
+                    Integer counter = state.get(value);
+                    state.put(value, ++counter);
+                    return counter;
+                }
+
+                @Override
+                public void close() {
+                }
+            }, "myTransformState")
+            .foreach(action);
+
+        final List<KeyValue<Integer, Integer>> expected = Arrays.asList(
+            KeyValue.pair(1, 1),
+            KeyValue.pair(2, 1),
+            KeyValue.pair(3, 1),
+            KeyValue.pair(2, 2),
+            KeyValue.pair(2, 2),
+            KeyValue.pair(1, 3));
+        verifyResult(expected);
+    }
+
+    @Test
+    public void shouldFlatTransformValuesWithKey() {
+        stream
+            .flatTransformValues(() -> new ValueTransformerWithKey<Integer, Integer, Iterable<Integer>>() {
+                private KeyValueStore<Integer, Integer> state;
+
+                @Override
+                public void init(final ProcessorContext context) {
+                    state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
+                }
+
+                @Override
+                public Iterable<Integer> transform(final Integer key, final Integer value) {
+                    final List<Integer> result = new ArrayList<>();
+                    state.putIfAbsent(key, 0);
+                    Integer storedValue = state.get(key);
+                    for (int i = 0; i < 3; i++) {
+                        result.add(value + storedValue++);
+                    }
+                    state.put(key, storedValue);
+                    return result;
+                }
+
+                @Override
+                public void close() {
+                }
+            }, "myTransformState")
+            .foreach(action);
+
+        final List<KeyValue<Integer, Integer>> expected = Arrays.asList(
+            KeyValue.pair(1, 1),
+            KeyValue.pair(1, 2),
+            KeyValue.pair(1, 3),
+            KeyValue.pair(2, 2),
+            KeyValue.pair(2, 3),
+            KeyValue.pair(2, 4),
+            KeyValue.pair(3, 3),
+            KeyValue.pair(3, 4),
+            KeyValue.pair(3, 5),
+            KeyValue.pair(2, 4),
+            KeyValue.pair(2, 5),
+            KeyValue.pair(2, 6),
+            KeyValue.pair(2, 9),
+            KeyValue.pair(2, 10),
+            KeyValue.pair(2, 11),
+            KeyValue.pair(1, 6),
+            KeyValue.pair(1, 7),
+            KeyValue.pair(1, 8));
+        verifyResult(expected);
+    }
+
+    @Test
+    public void shouldFlatTransformValuesWithValueTransformerWithoutKey() {
+        stream
+            .flatTransformValues(() -> new ValueTransformer<Integer, Iterable<Integer>>() {
+                private KeyValueStore<Integer, Integer> state;
+
+                @Override
+                public void init(final ProcessorContext context) {
+                    state = (KeyValueStore<Integer, Integer>) context.getStateStore("myTransformState");
+                }
+
+                @Override
+                public Iterable<Integer> transform(final Integer value) {
+                    final List<Integer> result = new ArrayList<>();
+                    state.putIfAbsent(value, 0);
+                    Integer counter = state.get(value);
+                    for (int i = 0; i < 3; i++) {
+                        result.add(++counter);
+                    }
+                    state.put(value, counter);
+                    return result;
+                }
+
+                @Override
+                public void close() {
+                }
+            }, "myTransformState")
+            .foreach(action);
+
+        final List<KeyValue<Integer, Integer>> expected = Arrays.asList(
+            KeyValue.pair(1, 1),
+            KeyValue.pair(1, 2),
+            KeyValue.pair(1, 3),
+            KeyValue.pair(2, 1),
+            KeyValue.pair(2, 2),
+            KeyValue.pair(2, 3),
+            KeyValue.pair(3, 1),
+            KeyValue.pair(3, 2),
+            KeyValue.pair(3, 3),
+            KeyValue.pair(2, 4),
+            KeyValue.pair(2, 5),
+            KeyValue.pair(2, 6),
+            KeyValue.pair(2, 4),
+            KeyValue.pair(2, 5),
+            KeyValue.pair(2, 6),
+            KeyValue.pair(1, 7),
+            KeyValue.pair(1, 8),
+            KeyValue.pair(1, 9));
+        verifyResult(expected);
+    }
 }
