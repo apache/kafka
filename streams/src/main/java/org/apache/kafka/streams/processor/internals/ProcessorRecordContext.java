@@ -106,8 +106,8 @@ public class ProcessorRecordContext implements RecordContext {
 
     public byte[] serialize() {
         final byte[] topicBytes = topic.getBytes(UTF_8);
-        final byte[][] headerKeys;
-        final byte[][] headerValues;
+        final byte[][] headerKeysBytes;
+        final byte[][] headerValuesBytes;
 
 
         int size = 0;
@@ -119,11 +119,11 @@ public class ProcessorRecordContext implements RecordContext {
         size += Integer.BYTES; // number of headers
 
         if (headers == null) {
-            headerKeys = headerValues = null;
+            headerKeysBytes = headerValuesBytes = null;
         } else {
             final Header[] headers = this.headers.toArray();
-            headerKeys = new byte[headers.length][];
-            headerValues = new byte[headers.length][];
+            headerKeysBytes = new byte[headers.length][];
+            headerValuesBytes = new byte[headers.length][];
 
             for (int i = 0; i < headers.length; i++) {
                 size += 2 * Integer.BYTES; // sizes of key and value
@@ -135,8 +135,8 @@ public class ProcessorRecordContext implements RecordContext {
                     size += valueBytes.length;
                 }
 
-                headerKeys[i] = keyBytes;
-                headerValues[i] = valueBytes;
+                headerKeysBytes[i] = keyBytes;
+                headerValuesBytes[i] = valueBytes;
             }
         }
 
@@ -152,14 +152,14 @@ public class ProcessorRecordContext implements RecordContext {
         if (headers == null) {
             buffer.putInt(-1);
         } else {
-            buffer.putInt(headerKeys.length);
-            for (int i = 0; i < headerKeys.length; i++) {
-                buffer.putInt(headerKeys[i].length);
-                buffer.put(headerKeys[i]);
+            buffer.putInt(headerKeysBytes.length);
+            for (int i = 0; i < headerKeysBytes.length; i++) {
+                buffer.putInt(headerKeysBytes[i].length);
+                buffer.put(headerKeysBytes[i]);
 
-                if (headerValues[i] != null) {
-                    buffer.putInt(headerValues[i].length);
-                    buffer.put(headerValues[i]);
+                if (headerValuesBytes[i] != null) {
+                    buffer.putInt(headerValuesBytes[i].length);
+                    buffer.put(headerValuesBytes[i]);
                 } else {
                     buffer.putInt(-1);
                 }
