@@ -436,7 +436,7 @@ public final class Stores {
      *                      it is treated as delete
      * @param <K>           key type
      * @param <V>           value type
-     * @return an instance of {@link StoreBuilder} than can build a {@link TimestampedWindowStore}
+     * @return an instance of {@link StoreBuilder} that can build a {@link TimestampedWindowStore}
      */
     public static <K, V> StoreBuilder<TimestampedWindowStore<K, V>> timestampedWindowStoreBuilder(final WindowBytesStoreSupplier supplier,
                                                                                                   final Serde<K> keySerde,

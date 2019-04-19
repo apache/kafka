@@ -58,7 +58,6 @@ public class WindowStoreBuilderTest {
             Serdes.String(),
             Serdes.String(),
             new MockTime());
-
     }
 
     @Test

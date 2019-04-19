@@ -33,6 +33,9 @@ class WindowByteProxyStore implements WindowStore<Bytes, byte[]> {
     final WindowStore<Bytes, byte[]> store;
 
     WindowByteProxyStore(final WindowStore<Bytes, byte[]> store) {
+        if (!store.persistent()) {
+            throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
+        }
         this.store = store;
     }
 
@@ -43,9 +46,10 @@ class WindowByteProxyStore implements WindowStore<Bytes, byte[]> {
     }
 
     @Override
-    public void put(final Bytes key, final byte[] value,
+    public void put(final Bytes key,
+                    final byte[] valueWithTimestamp,
                     final long windowStartTimestamp) {
-        store.put(key, value);
+        store.put(key, valueWithTimestamp == null ? null : rawValue(valueWithTimestamp), windowStartTimestamp);
     }
 
     @Override

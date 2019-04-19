@@ -32,6 +32,9 @@ public class KeyValueByteProxyStore implements KeyValueStore<Bytes, byte[]> {
     final KeyValueStore<Bytes, byte[]> store;
 
     KeyValueByteProxyStore(final KeyValueStore<Bytes, byte[]> store) {
+        if (!store.persistent()) {
+            throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
+        }
         this.store = store;
     }
 
