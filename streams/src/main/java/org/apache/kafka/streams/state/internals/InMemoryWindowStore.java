@@ -419,7 +419,7 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
         }
 
         public static WrappedInMemoryWindowStoreIterator emptyIterator() {
-            return new WrappedInMemoryWindowStoreIterator(null, null, null, it -> {});
+            return new WrappedInMemoryWindowStoreIterator(null, null, null, it -> { });
         }
     }
 
