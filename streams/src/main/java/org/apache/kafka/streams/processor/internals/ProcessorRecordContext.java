@@ -84,8 +84,8 @@ public class ProcessorRecordContext implements RecordContext {
         return headers;
     }
 
-    public int sizeBytes() {
-        int size = 0;
+    public long sizeBytes() {
+        long size = 0;
         size += Long.BYTES; // value.context.timestamp
         size += Long.BYTES; // value.context.offset
         if (topic != null) {
