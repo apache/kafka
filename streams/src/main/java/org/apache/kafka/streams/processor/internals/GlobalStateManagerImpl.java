@@ -141,7 +141,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
     @Override
     public StateStore getGlobalStore(final String name) {
-        return globalStores.containsKey(name) ? globalStores.get(name).orElse(null) : null;
+        return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
 
     @Override
@@ -307,15 +307,20 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     @Override
     public void flush() {
         log.debug("Flushing all global globalStores registered in the state manager");
-        for (final Optional<StateStore> maybeStore : globalStores.values()) {
-            if (maybeStore.isPresent()) {
-                final StateStore store = maybeStore.get();
+        for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
+            if (entry.getValue().isPresent()) {
+                final StateStore store = entry.getValue().get();
                 try {
                     log.trace("Flushing global store={}", store.name());
                     store.flush();
                 } catch (final Exception e) {
-                    throw new ProcessorStateException(String.format("Failed to flush global state store %s", store.name()), e);
+                    throw new ProcessorStateException(
+                        String.format("Failed to flush global state store %s", store.name()),
+                        e
+                    );
                 }
+            } else {
+                throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
             }
         }
     }
@@ -342,6 +347,8 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                                    .append("\n");
                     }
                     globalStores.put(entry.getKey(), Optional.empty());
+                } else {
+                    log.info("Skipping to close non-initialized store {}", entry.getKey());
                 }
             }
             if (closeFailed.length() > 0) {

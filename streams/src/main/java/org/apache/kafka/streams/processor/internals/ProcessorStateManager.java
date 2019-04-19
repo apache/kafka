@@ -231,7 +231,7 @@ public class ProcessorStateManager extends AbstractStateManager {
 
     @Override
     public StateStore getStore(final String name) {
-        return registeredStores.containsKey(name) ? registeredStores.get(name).orElse(null) : null;
+        return registeredStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
 
     @Override
@@ -240,9 +240,9 @@ public class ProcessorStateManager extends AbstractStateManager {
         // attempting to flush the stores
         if (!registeredStores.isEmpty()) {
             log.debug("Flushing all stores registered in the state manager");
-            for (final Optional<StateStore> maybeStore : registeredStores.values()) {
-                if (maybeStore.isPresent()) {
-                    final StateStore store = maybeStore.get();
+            for (final Map.Entry<String, Optional<StateStore>> entry : registeredStores.entrySet()) {
+                if (entry.getValue().isPresent()) {
+                    final StateStore store = entry.getValue().get();
                     log.trace("Flushing store {}", store.name());
                     try {
                         store.flush();
@@ -252,6 +252,8 @@ public class ProcessorStateManager extends AbstractStateManager {
                         }
                         log.error("Failed to flush state store {}: ", store.name(), e);
                     }
+                } else {
+                    throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
                 }
             }
         }
@@ -273,9 +275,9 @@ public class ProcessorStateManager extends AbstractStateManager {
         // are not closed by a ProcessorNode yet
         if (!registeredStores.isEmpty()) {
             log.debug("Closing its state manager and all the registered state stores");
-            for (final Optional<StateStore> maybeStore : registeredStores.values()) {
-                if (maybeStore.isPresent()) {
-                    final StateStore store = maybeStore.get();
+            for (final Map.Entry<String, Optional<StateStore>> entry : registeredStores.entrySet()) {
+                if (entry.getValue().isPresent()) {
+                    final StateStore store = entry.getValue().get();
                     log.debug("Closing storage engine {}", store.name());
                     try {
                         store.close();
@@ -286,6 +288,8 @@ public class ProcessorStateManager extends AbstractStateManager {
                         log.error("Failed to close state store {}: ", store.name(), e);
                     }
                     registeredStores.put(store.name(), Optional.empty());
+                } else {
+                    log.info("Skipping to close non-initialized store {}", entry.getKey());
                 }
             }
         }
@@ -310,9 +314,9 @@ public class ProcessorStateManager extends AbstractStateManager {
     public void checkpoint(final Map<TopicPartition, Long> checkpointableOffsets) {
         this.checkpointableOffsets.putAll(changelogReader.restoredOffsets());
         log.trace("Checkpointable offsets updated with restored offsets: {}", this.checkpointableOffsets);
-        for (final Optional<StateStore> maybeStore : registeredStores.values()) {
-            if (maybeStore.isPresent()) {
-                final StateStore store = maybeStore.get();
+        for (final Map.Entry<String, Optional<StateStore>> entry : registeredStores.entrySet()) {
+            if (entry.getValue().isPresent()) {
+                final StateStore store = entry.getValue().get();
                 final String storeName = store.name();
                 // only checkpoint the offset to the offsets file if
                 // it is persistent AND changelog enabled
@@ -326,6 +330,8 @@ public class ProcessorStateManager extends AbstractStateManager {
                         this.checkpointableOffsets.put(topicPartition, standbyRestoredOffsets.get(topicPartition));
                     }
                 }
+            } else {
+                throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
             }
         }
 
@@ -358,7 +364,7 @@ public class ProcessorStateManager extends AbstractStateManager {
 
     @Override
     public StateStore getGlobalStore(final String name) {
-        return globalStores.containsKey(name) ? globalStores.get(name).orElse(null) : null;
+        return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
 
     Collection<TopicPartition> changelogPartitions() {
