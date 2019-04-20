@@ -460,13 +460,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         return ConnectorsAndTasks.embed(connectors, tasks);
     }
 
-    private int maxDelay(Map<String, ExtendedWorkerState> memberConfigs) {
-        return memberConfigs.values()
-                .stream()
-                .mapToInt(state -> state.assignment().delay())
-                .max().orElse(0);
-    }
-
     private int calculateDelay(long now) {
         long diff = scheduledRebalance - now;
         return diff > 0 ? (int) Math.min(diff, maxDelay) : 0;

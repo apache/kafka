@@ -32,7 +32,7 @@ import java.util.stream.IntStream;
 import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
 import static org.junit.Assert.assertEquals;
 
-public class ConnectAssignorTest {
+public class IncrementalCooperativeAssignorTest {
     private IncrementalCooperativeAssignor assignor;
 
     @Before
