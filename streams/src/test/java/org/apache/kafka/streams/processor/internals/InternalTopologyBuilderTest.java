@@ -784,7 +784,7 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
-    public void shouldCompareSourceNode() {
+    public void shouldCompareSourceNodeWithTopicList() {
         final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", Collections.singleton("topic"), null);
         final InternalTopologyBuilder.Source sameAsBase = new InternalTopologyBuilder.Source("name", Collections.singleton("topic"), null);
         final InternalTopologyBuilder.Source differentName = new InternalTopologyBuilder.Source("name2", Collections.singleton("topic"), null);
@@ -795,5 +795,19 @@ public class InternalTopologyBuilderTest {
         assertThat(base, not(equalTo(differentName)));
         assertThat(base, not(equalTo(differentTopicList)));
         assertThat(base, not(equalTo(differentTopic)));
+    }
+
+    @Test
+    public void shouldCompareSourceNodeWithTopicPattern() {
+        final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic"));
+        final InternalTopologyBuilder.Source sameAsBase = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic"));
+        final InternalTopologyBuilder.Source differentName = new InternalTopologyBuilder.Source("name2", null, Pattern.compile("topic"));
+        final InternalTopologyBuilder.Source differentPattern = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic2"));
+        final InternalTopologyBuilder.Source overlappingPattern = new InternalTopologyBuilder.Source("name", Collections.singleton("top*"), null);
+
+        assertThat(base, equalTo(sameAsBase));
+        assertThat(base, not(equalTo(differentName)));
+        assertThat(base, not(equalTo(differentPattern)));
+        assertThat(base, not(equalTo(overlappingPattern)));
     }
 }
