@@ -59,7 +59,7 @@ import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequ
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.WorkerState;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COOPERATIVE;
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedWorkerState;
 import static org.junit.Assert.assertEquals;
@@ -108,7 +108,7 @@ public class WorkerCoordinatorIncrementalTest {
     // - Expected metadata size
     @Parameters
     public static Iterable<?> mode() {
-        return Arrays.asList(new Object[][]{{COOPERATIVE, 1}});
+        return Arrays.asList(new Object[][]{{COMPATIBLE, 2}});
     }
 
     @Parameter

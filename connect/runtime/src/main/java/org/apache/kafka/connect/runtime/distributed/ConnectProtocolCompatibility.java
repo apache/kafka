@@ -38,22 +38,15 @@ import java.util.Map;
 public enum ConnectProtocolCompatibility {
     EAGER {
         @Override
-        String protocol() {
+        public String protocol() {
             return "default";
         }
     },
 
     COMPATIBLE {
         @Override
-        String protocol() {
+        public String protocol() {
             return "compatible";
-        }
-    },
-
-    COOPERATIVE {
-        @Override
-        String protocol() {
-            return "cooperative";
         }
     };
 
@@ -85,5 +78,5 @@ public enum ConnectProtocolCompatibility {
      *
      * @return the protocol name
      */
-    abstract String protocol();
+    public abstract String protocol();
 }

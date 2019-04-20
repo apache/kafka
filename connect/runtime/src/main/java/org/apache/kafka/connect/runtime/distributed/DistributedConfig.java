@@ -138,7 +138,7 @@ public class DistributedConfig extends WorkerConfig {
      */
     public static final String CONNECT_PROTOCOL_CONFIG = "connect.protocol";
     public static final String CONNECT_PROTOCOL_DOC = "Compatibility mode for Kafka Connect Protocol";
-    public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.EAGER.toString();
+    public static final String CONNECT_PROTOCOL_DEFAULT = ConnectProtocolCompatibility.COMPATIBLE.toString();
 
     /**
      * <code>connect.protocol</code>
