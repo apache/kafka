@@ -176,6 +176,7 @@ public class IncrementalCooperativeConnectProtocol {
      * </pre>
      */
     public static ByteBuffer serializeAssignment(ConnectAssignment assignment) {
+        // comparison depends on reference equality for now
         if (assignment == null || ConnectAssignment.empty().equals(assignment)) {
             return null;
         }
