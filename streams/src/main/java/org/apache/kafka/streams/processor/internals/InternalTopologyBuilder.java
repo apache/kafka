@@ -1402,6 +1402,7 @@ public class InternalTopologyBuilder {
         int size;
 
         AbstractNode(final String name) {
+            Objects.requireNonNull(name);
             this.name = name;
             this.size = 1;
         }
@@ -1438,6 +1439,13 @@ public class InternalTopologyBuilder {
                       final Set<String> topics,
                       final Pattern pattern) {
             super(name);
+            if (topics == null && pattern == null) {
+                throw new IllegalArgumentException("Either topics or pattern must be not-null, but both are null.");
+            }
+            if (topics != null && pattern != null) {
+                throw new IllegalArgumentException("Either topics or pattern must be null, but both are not null.");
+            }
+
             this.topics = topics;
             this.topicPattern = pattern;
         }
@@ -1482,9 +1490,10 @@ public class InternalTopologyBuilder {
             final Source source = (Source) o;
             // omit successor to avoid infinite loops
             return name.equals(source.name)
-                && topics.equals(source.topics)
+                && (topics == null && source.topics == null
+                    || topics != null && topics.equals(source.topics))
                 && (topicPattern == null && source.topicPattern == null
-                    || topicPattern != null && topicPattern.equals(source.topicPattern));
+                    || topicPattern != null && topicPattern.pattern().equals(source.topicPattern.pattern()));
         }
 
         @Override
