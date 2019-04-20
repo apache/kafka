@@ -354,11 +354,11 @@ public class SenderTest {
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.hasInFlightRequests());
             assertEquals(1, sender.inFlightBatches(tp0).size());
-            assertTrue("Client ready status should be true", client.isReady(node, 0L));
+            assertTrue("Client ready status should be true", client.isReady(node, time.milliseconds()));
             client.disconnect(id);
             assertEquals(0, client.inFlightRequestCount());
             assertFalse(client.hasInFlightRequests());
-            assertFalse("Client ready status should be false", client.isReady(node, 0L));
+            assertFalse("Client ready status should be false", client.isReady(node, time.milliseconds()));
             // the batch is in accumulator.inFlightBatches until it expires
             assertEquals(1, sender.inFlightBatches(tp0).size());
             sender.run(time.milliseconds()); // receive error
@@ -417,7 +417,7 @@ public class SenderTest {
             Node node = new Node(Integer.parseInt(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.hasInFlightRequests());
-            assertTrue("Client ready status should be true", client.isReady(node, 0L));
+            assertTrue("Client ready status should be true", client.isReady(node, time.milliseconds()));
             assertEquals(1, sender.inFlightBatches(tp2).size());
 
             time.sleep(900);
@@ -562,7 +562,7 @@ public class SenderTest {
         assertEquals(1, client.inFlightRequestCount());
         assertTrue(client.hasInFlightRequests());
         assertEquals(1, sender.inFlightBatches(tp0).size());
-        assertTrue("Client ready status should be true", client.isReady(node, 0L));
+        assertTrue("Client ready status should be true", client.isReady(node, time.milliseconds()));
         assertFalse(future.isDone());
 
         client.respond(new MockClient.RequestMatcher() {
@@ -1237,7 +1237,7 @@ public class SenderTest {
         TestUtils.waitForCondition(new TestCondition() {
             @Override
             public boolean conditionMet() {
-                prepareInitPidResponse(Errors.NONE, producerId + 1, (short) 1);
+                prepareInitProducerResponse(Errors.NONE, producerId + 1, (short) 1);
                 sender.run(time.milliseconds());
                 return !accumulator.hasUndrained();
             }
@@ -1830,10 +1830,10 @@ public class SenderTest {
         String id = client.requests().peek().destination();
         Node node = new Node(Integer.valueOf(id), "localhost", 0);
         assertEquals(1, client.inFlightRequestCount());
-        assertTrue("Client ready status should be true", client.isReady(node, 0L));
+        assertTrue("Client ready status should be true", client.isReady(node, time.milliseconds()));
         client.disconnect(id);
         assertEquals(0, client.inFlightRequestCount());
-        assertFalse("Client ready status should be false", client.isReady(node, 0L));
+        assertFalse("Client ready status should be false", client.isReady(node, time.milliseconds()));
 
         transactionManager.resetProducerId();
         transactionManager.setProducerIdAndEpoch(new ProducerIdAndEpoch(producerId + 1, (short) 0));
@@ -1938,7 +1938,7 @@ public class SenderTest {
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
             Node node = new Node(Integer.valueOf(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
-            assertTrue("Client ready status should be true", client.isReady(node, 0L));
+            assertTrue("Client ready status should be true", client.isReady(node, time.milliseconds()));
 
             Map<TopicPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
             responseMap.put(tp, new ProduceResponse.PartitionResponse(Errors.MESSAGE_TOO_LARGE));
@@ -1956,7 +1956,7 @@ public class SenderTest {
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
             node = new Node(Integer.valueOf(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
-            assertTrue("Client ready status should be true", client.isReady(node, 0L));
+            assertTrue("Client ready status should be true", client.isReady(node, time.milliseconds()));
 
             responseMap.put(tp, new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
             client.respond(produceRequestMatcher(tp, producerIdAndEpoch, 0, txnManager.isTransactional()),
@@ -1973,7 +1973,7 @@ public class SenderTest {
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
             node = new Node(Integer.valueOf(id), "localhost", 0);
             assertEquals(1, client.inFlightRequestCount());
-            assertTrue("Client ready status should be true", client.isReady(node, 0L));
+            assertTrue("Client ready status should be true", client.isReady(node, time.milliseconds()));
 
             responseMap.put(tp, new ProduceResponse.PartitionResponse(Errors.NONE, 1L, 0L, 0L));
             client.respond(produceRequestMatcher(tp, producerIdAndEpoch, 1, txnManager.isTransactional()),
@@ -2467,7 +2467,7 @@ public class SenderTest {
         sender.run(time.milliseconds());
         sender.run(time.milliseconds());
 
-        prepareInitPidResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
+        prepareInitProducerResponse(Errors.NONE, producerIdAndEpoch.producerId, producerIdAndEpoch.epoch);
         sender.run(time.milliseconds());
         assertTrue(transactionManager.hasProducerId());
     }
@@ -2476,7 +2476,7 @@ public class SenderTest {
         client.prepareResponse(new FindCoordinatorResponse(error, metadata.fetch().nodes().get(0)));
     }
 
-    private void prepareInitPidResponse(Errors error, long producerId, short producerEpoch) {
+    private void prepareInitProducerResponse(Errors error, long producerId, short producerEpoch) {
         client.prepareResponse(initProducerIdResponse(producerId, producerEpoch, error));
     }
 

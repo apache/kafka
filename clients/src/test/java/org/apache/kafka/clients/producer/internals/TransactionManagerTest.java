@@ -2164,7 +2164,6 @@ public class TransactionManagerTest {
         // expire the batch.
         Node clusterNode = metadata.fetch().nodes().get(0);
         client.disconnect(clusterNode.idString());
-        client.blackout(clusterNode, 100);
 
         sender.run(time.milliseconds());  // We should try to flush the produce, but expire it instead without sending anything.
         assertTrue(responseFuture.isDone());
