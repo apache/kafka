@@ -21,6 +21,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -52,6 +53,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.function.Consumer;
+import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -113,20 +116,29 @@ public class TestUtils {
     public static MetadataResponse metadataUpdateWith(final String clusterId,
                                                       final int numNodes,
                                                       final Map<String, Integer> topicPartitionCounts) {
-        return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(), topicPartitionCounts, MetadataResponse.PartitionMetadata::new);
+        return metadataUpdateWith(clusterId, numNodes, Collections.emptyMap(), topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new);
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
                                                       final int numNodes,
                                                       final Map<String, Errors> topicErrors,
                                                       final Map<String, Integer> topicPartitionCounts) {
-        return metadataUpdateWith(clusterId, numNodes, topicErrors, topicPartitionCounts, MetadataResponse.PartitionMetadata::new);
+        return metadataUpdateWith(clusterId, numNodes, topicErrors, topicPartitionCounts, tp -> null, MetadataResponse.PartitionMetadata::new);
     }
 
     public static MetadataResponse metadataUpdateWith(final String clusterId,
                                                       final int numNodes,
                                                       final Map<String, Errors> topicErrors,
                                                       final Map<String, Integer> topicPartitionCounts,
+                                                      final Function<TopicPartition, Integer> epochSupplier) {
+        return metadataUpdateWith(clusterId, numNodes, topicErrors, topicPartitionCounts, epochSupplier, MetadataResponse.PartitionMetadata::new);
+    }
+
+    public static MetadataResponse metadataUpdateWith(final String clusterId,
+                                                      final int numNodes,
+                                                      final Map<String, Errors> topicErrors,
+                                                      final Map<String, Integer> topicPartitionCounts,
+                                                      final Function<TopicPartition, Integer> epochSupplier,
                                                       final PartitionMetadataSupplier partitionSupplier) {
         final List<Node> nodes = new ArrayList<>(numNodes);
         for (int i = 0; i < numNodes; i++)
@@ -139,10 +151,11 @@ public class TestUtils {
 
             List<MetadataResponse.PartitionMetadata> partitionMetadata = new ArrayList<>(numPartitions);
             for (int i = 0; i < numPartitions; i++) {
+                TopicPartition tp = new TopicPartition(topic, i);
                 Node leader = nodes.get(i % nodes.size());
                 List<Node> replicas = Collections.singletonList(leader);
                 partitionMetadata.add(partitionSupplier.supply(
-                        Errors.NONE, i, leader, Optional.empty(), replicas, replicas, replicas));
+                        Errors.NONE, i, leader, Optional.ofNullable(epochSupplier.apply(tp)), replicas, replicas, replicas));
             }
 
             topicMetadata.add(new MetadataResponse.TopicMetadata(Errors.NONE, topic,
@@ -442,5 +455,13 @@ public class TestUtils {
 
     public static ApiKeys apiKeyFrom(NetworkReceive networkReceive) {
         return RequestHeader.parse(networkReceive.payload().duplicate()).apiKey();
+    }
+
+    public static <T> void assertOptional(Optional<T> optional, Consumer<T> assertion) {
+        if (optional.isPresent()) {
+            assertion.accept(optional.get());
+        } else {
+            fail("Missing value from Optional");
+        }
     }
 }

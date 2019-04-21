@@ -35,7 +35,6 @@ import java.net.InetSocketAddress;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -205,9 +204,7 @@ public class MetadataTest {
 
         // First epoch seen, accept it
         {
-            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
-                (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                        new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(100), replicas, isr, offlineReplicas));
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 100);
             metadata.update(metadataResponse, 10L);
             assertNotNull(metadata.fetch().partition(tp));
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -215,9 +212,9 @@ public class MetadataTest {
 
         // Fake an empty ISR, but with an older epoch, should reject it
         {
-            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 99,
                 (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                        new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(99), replicas, Collections.emptyList(), offlineReplicas));
+                        new MetadataResponse.PartitionMetadata(error, partition, leader, leaderEpoch, replicas, Collections.emptyList(), offlineReplicas));
             metadata.update(metadataResponse, 20L);
             assertEquals(metadata.fetch().partition(tp).inSyncReplicas().length, 1);
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -225,9 +222,9 @@ public class MetadataTest {
 
         // Fake an empty ISR, with same epoch, accept it
         {
-            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 100,
                 (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                        new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(100), replicas, Collections.emptyList(), offlineReplicas));
+                        new MetadataResponse.PartitionMetadata(error, partition, leader, leaderEpoch, replicas, Collections.emptyList(), offlineReplicas));
             metadata.update(metadataResponse, 20L);
             assertEquals(metadata.fetch().partition(tp).inSyncReplicas().length, 0);
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -235,8 +232,7 @@ public class MetadataTest {
 
         // Empty metadata response, should not keep old partition but should keep the last-seen epoch
         {
-            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(
-                    "dummy", 1, Collections.emptyMap(), Collections.emptyMap(), MetadataResponse.PartitionMetadata::new);
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.emptyMap());
             metadata.update(metadataResponse, 20L);
             assertNull(metadata.fetch().partition(tp));
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -244,9 +240,7 @@ public class MetadataTest {
 
         // Back in the metadata, with old epoch, should not get added
         {
-            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
-                (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                        new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(99), replicas, isr, offlineReplicas));
+            MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 99);
             metadata.update(metadataResponse, 10L);
             assertNull(metadata.fetch().partition(tp));
             assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -284,9 +278,7 @@ public class MetadataTest {
         assertTrue(metadata.updateLastSeenEpochIfNewer(tp, 99));
 
         // Update epoch to 100
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
-            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                    new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(100), replicas, isr, offlineReplicas));
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 100);
         metadata.update(metadataResponse, 10L);
         assertNotNull(metadata.fetch().partition(tp));
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 100);
@@ -308,9 +300,7 @@ public class MetadataTest {
         assertEquals(metadata.lastSeenLeaderEpoch(tp).get().longValue(), 101);
 
         // Metadata with equal or newer epoch is accepted
-        metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts,
-            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                    new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.of(101), replicas, isr, offlineReplicas));
+        metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), partitionCounts, _tp -> 101);
         metadata.update(metadataResponse, 30L);
         assertNotNull(metadata.fetch().partition(tp));
         assertEquals(metadata.fetch().partitionCountForTopic("topic-1").longValue(), 5);
@@ -321,9 +311,7 @@ public class MetadataTest {
     @Test
     public void testNoEpoch() {
         metadata.update(emptyMetadataResponse(), 0L);
-        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1),
-            (error, partition, leader, leaderEpoch, replicas, isr, offlineReplicas) ->
-                new MetadataResponse.PartitionMetadata(error, partition, leader, Optional.empty(), replicas, isr, offlineReplicas));
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("dummy", 1, Collections.emptyMap(), Collections.singletonMap("topic-1", 1));
         metadata.update(metadataResponse, 10L);
 
         TopicPartition tp = new TopicPartition("topic-1", 0);

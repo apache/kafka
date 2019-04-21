@@ -16,22 +16,27 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
 import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
@@ -45,7 +50,7 @@ import java.util.stream.Collectors;
  * or with {@link #assignFromSubscribed(Collection)} (automatic assignment from subscription).
  *
  * Once assigned, the partition is not considered "fetchable" until its initial position has
- * been set with {@link #seek(TopicPartition, long)}. Fetchable partitions track a fetch
+ * been set with {@link #seek(TopicPartition, FetchPosition)}. Fetchable partitions track a fetch
  * position which is used to set the offset of the next fetch, and a consumed position
  * which is the last offset that has been returned to the user. You can suspend fetching
  * from a partition through {@link #pause(TopicPartition)} without affecting the fetched/consumed
@@ -326,8 +331,16 @@ public class SubscriptionState {
         return state;
     }
 
+    public void seek(TopicPartition tp, FetchPosition position) {
+        assignedState(tp).seek(position);
+    }
+
+    public void seekAndValidate(TopicPartition tp, FetchPosition position) {
+        assignedState(tp).seekAndValidate(position);
+    }
+
     public void seek(TopicPartition tp, long offset) {
-        assignedState(tp).seek(offset);
+        seek(tp, new FetchPosition(offset, Optional.empty(), new Metadata.LeaderAndEpoch(Node.noNode(), Optional.empty())));
     }
 
     /**
@@ -345,33 +358,52 @@ public class SubscriptionState {
         return this.assignment.size();
     }
 
-    public List<TopicPartition> fetchablePartitions() {
-        return collectPartitions(TopicPartitionState::isFetchable, Collectors.toList());
+    public List<TopicPartition> fetchablePartitions(Predicate<TopicPartition> isAvailable) {
+        return assignment.stream()
+                .filter(tpState -> isAvailable.test(tpState.topicPartition()) && tpState.value().isFetchable())
+                .map(PartitionStates.PartitionState::topicPartition)
+                .collect(Collectors.toList());
     }
 
     public boolean partitionsAutoAssigned() {
         return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN;
     }
 
-    public void position(TopicPartition tp, long offset) {
-        assignedState(tp).position(offset);
+    public void position(TopicPartition tp, FetchPosition position) {
+        assignedState(tp).position(position);
     }
 
-    public Long position(TopicPartition tp) {
-        return assignedState(tp).position;
+    public boolean maybeValidatePosition(TopicPartition tp, Metadata.LeaderAndEpoch leaderAndEpoch) {
+        return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
+    }
+
+    public boolean awaitingValidation(TopicPartition tp) {
+        return assignedState(tp).awaitingValidation();
+    }
+
+    public void validate(TopicPartition tp) {
+        assignedState(tp).validate();
+    }
+
+    public FetchPosition validPosition(TopicPartition tp) {
+        return assignedState(tp).validPosition();
+    }
+
+    public FetchPosition position(TopicPartition tp) {
+        return assignedState(tp).position();
     }
 
     public Long partitionLag(TopicPartition tp, IsolationLevel isolationLevel) {
         TopicPartitionState topicPartitionState = assignedState(tp);
         if (isolationLevel == IsolationLevel.READ_COMMITTED)
-            return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset - topicPartitionState.position;
+            return topicPartitionState.lastStableOffset == null ? null : topicPartitionState.lastStableOffset - topicPartitionState.position.offset;
         else
-            return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position;
+            return topicPartitionState.highWatermark == null ? null : topicPartitionState.highWatermark - topicPartitionState.position.offset;
     }
 
     public Long partitionLead(TopicPartition tp) {
         TopicPartitionState topicPartitionState = assignedState(tp);
-        return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position - topicPartitionState.logStartOffset;
+        return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position.offset - topicPartitionState.logStartOffset;
     }
 
     public void updateHighWatermark(TopicPartition tp, long highWatermark) {
@@ -389,8 +421,10 @@ public class SubscriptionState {
     public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
         assignment.stream().forEach(state -> {
-            if (state.value().hasValidPosition())
-                allConsumed.put(state.topicPartition(), new OffsetAndMetadata(state.value().position));
+            TopicPartitionState partitionState = state.value();
+            if (partitionState.hasValidPosition())
+                allConsumed.put(state.topicPartition(), new OffsetAndMetadata(partitionState.position.offset,
+                        partitionState.position.offsetEpoch, ""));
         });
         return allConsumed;
     }
@@ -403,9 +437,9 @@ public class SubscriptionState {
         requestOffsetReset(partition, defaultResetStrategy);
     }
 
-    public void setResetPending(Set<TopicPartition> partitions, long nextAllowResetTimeMs) {
+    public void setNextAllowedRetry(Set<TopicPartition> partitions, long nextAllowResetTimeMs) {
         for (TopicPartition partition : partitions) {
-            assignedState(partition).setResetPending(nextAllowResetTimeMs);
+            assignedState(partition).setNextAllowedRetry(nextAllowResetTimeMs);
         }
     }
 
@@ -426,7 +460,7 @@ public class SubscriptionState {
     }
 
     public Set<TopicPartition> missingFetchPositions() {
-        return collectPartitions(TopicPartitionState::isMissingPosition, Collectors.toSet());
+        return collectPartitions(state -> !state.hasPosition(), Collectors.toSet());
     }
 
     private <T extends Collection<TopicPartition>> T collectPartitions(Predicate<TopicPartitionState> filter, Collector<TopicPartition, ?, T> collector) {
@@ -436,12 +470,13 @@ public class SubscriptionState {
                 .collect(collector);
     }
 
+
     public void resetMissingPositions() {
         final Set<TopicPartition> partitionsWithNoOffsets = new HashSet<>();
         assignment.stream().forEach(state -> {
             TopicPartition tp = state.topicPartition();
             TopicPartitionState partitionState = state.value();
-            if (partitionState.isMissingPosition()) {
+            if (!partitionState.hasPosition()) {
                 if (defaultResetStrategy == OffsetResetStrategy.NONE)
                     partitionsWithNoOffsets.add(tp);
                 else
@@ -454,7 +489,12 @@ public class SubscriptionState {
     }
 
     public Set<TopicPartition> partitionsNeedingReset(long nowMs) {
-        return collectPartitions(state -> state.awaitingReset() && state.isResetAllowed(nowMs),
+        return collectPartitions(state -> state.awaitingReset() && !state.awaitingRetryBackoff(nowMs),
+                Collectors.toSet());
+    }
+
+    public Set<TopicPartition> partitionsNeedingValidation(long nowMs) {
+        return collectPartitions(state -> state.awaitingValidation() && !state.awaitingRetryBackoff(nowMs),
                 Collectors.toSet());
     }
 
@@ -482,9 +522,9 @@ public class SubscriptionState {
         assignedState(tp).resume();
     }
 
-    public void resetFailed(Set<TopicPartition> partitions, long nextRetryTimeMs) {
+    public void requestFailed(Set<TopicPartition> partitions, long nextRetryTimeMs) {
         for (TopicPartition partition : partitions)
-            assignedState(partition).resetFailed(nextRetryTimeMs);
+            assignedState(partition).requestFailed(nextRetryTimeMs);
     }
 
     public void movePartitionToEnd(TopicPartition tp) {
@@ -503,68 +543,148 @@ public class SubscriptionState {
     }
 
     private static class TopicPartitionState {
-        private Long position; // last consumed position
+
+        private FetchState fetchState;
+        private FetchPosition position; // last consumed position
+
         private Long highWatermark; // the high watermark from last fetch
         private Long logStartOffset; // the log start offset
         private Long lastStableOffset;
         private boolean paused;  // whether this partition has been paused by the user
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
-        private Long nextAllowedRetryTimeMs;
+        private Long nextRetryTimeMs;
+
 
         TopicPartitionState() {
             this.paused = false;
+            this.fetchState = FetchStates.INITIALIZING;
             this.position = null;
             this.highWatermark = null;
             this.logStartOffset = null;
             this.lastStableOffset = null;
             this.resetStrategy = null;
-            this.nextAllowedRetryTimeMs = null;
+            this.nextRetryTimeMs = null;
+        }
+
+        private void transitionState(FetchState newState, Runnable runIfTransitioned) {
+            FetchState nextState = this.fetchState.transitionTo(newState);
+            if (nextState.equals(newState)) {
+                this.fetchState = nextState;
+                runIfTransitioned.run();
+            }
         }
 
         private void reset(OffsetResetStrategy strategy) {
-            this.resetStrategy = strategy;
-            this.position = null;
-            this.nextAllowedRetryTimeMs = null;
+            transitionState(FetchStates.AWAIT_RESET, () -> {
+                this.resetStrategy = strategy;
+                this.nextRetryTimeMs = null;
+            });
         }
 
-        private boolean isResetAllowed(long nowMs) {
-            return nextAllowedRetryTimeMs == null || nowMs >= nextAllowedRetryTimeMs;
+        private boolean maybeValidatePosition(Metadata.LeaderAndEpoch currentLeaderAndEpoch) {
+            if (this.fetchState.equals(FetchStates.AWAIT_RESET)) {
+                return false;
+            }
+
+            if (currentLeaderAndEpoch.equals(Metadata.LeaderAndEpoch.noLeaderOrEpoch())) {
+                // Ignore empty LeaderAndEpochs
+                return false;
+            }
+
+            if (position != null && !position.safeToFetchFrom(currentLeaderAndEpoch)) {
+                FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeaderAndEpoch);
+                validatePosition(newPosition);
+            }
+            return this.fetchState.equals(FetchStates.AWAIT_VALIDATION);
+        }
+
+        private void validatePosition(FetchPosition position) {
+            if (position.offsetEpoch.isPresent()) {
+                transitionState(FetchStates.AWAIT_VALIDATION, () -> {
+                    this.position = position;
+                    this.nextRetryTimeMs = null;
+                });
+            } else {
+                // If we have no epoch information for the current position, then we can skip validation
+                transitionState(FetchStates.FETCHING, () -> {
+                    this.position = position;
+                    this.nextRetryTimeMs = null;
+                });
+            }
+        }
+
+        /**
+         * Clear the awaiting validation state and enter fetching.
+         */
+        private void validate() {
+            if (hasPosition()) {
+                transitionState(FetchStates.FETCHING, () -> {
+                    this.nextRetryTimeMs = null;
+                });
+            }
+        }
+
+        private boolean awaitingValidation() {
+            return fetchState.equals(FetchStates.AWAIT_VALIDATION);
+        }
+
+        private boolean awaitingRetryBackoff(long nowMs) {
+            return nextRetryTimeMs != null && nowMs < nextRetryTimeMs;
         }
 
         private boolean awaitingReset() {
-            return resetStrategy != null;
+            return fetchState.equals(FetchStates.AWAIT_RESET);
         }
 
-        private void setResetPending(long nextAllowedRetryTimeMs) {
-            this.nextAllowedRetryTimeMs = nextAllowedRetryTimeMs;
+        private void setNextAllowedRetry(long nextAllowedRetryTimeMs) {
+            this.nextRetryTimeMs = nextAllowedRetryTimeMs;
         }
 
-        private void resetFailed(long nextAllowedRetryTimeMs) {
-            this.nextAllowedRetryTimeMs = nextAllowedRetryTimeMs;
+        private void requestFailed(long nextAllowedRetryTimeMs) {
+            this.nextRetryTimeMs = nextAllowedRetryTimeMs;
         }
 
         private boolean hasValidPosition() {
-            return position != null;
+            return fetchState.hasValidPosition();
         }
 
-        private boolean isMissingPosition() {
-            return !hasValidPosition() && !awaitingReset();
+        private boolean hasPosition() {
+            return fetchState.hasPosition();
         }
 
         private boolean isPaused() {
             return paused;
         }
 
-        private void seek(long offset) {
-            this.position = offset;
-            this.resetStrategy = null;
-            this.nextAllowedRetryTimeMs = null;
+        private void seek(FetchPosition position) {
+            transitionState(FetchStates.FETCHING, () -> {
+                this.position = position;
+                this.resetStrategy = null;
+                this.nextRetryTimeMs = null;
+            });
         }
 
-        private void position(long offset) {
+        private void seekAndValidate(FetchPosition fetchPosition) {
+            seek(fetchPosition);
+            validatePosition(fetchPosition);
+        }
+
+        private void position(FetchPosition position) {
             if (!hasValidPosition())
                 throw new IllegalStateException("Cannot set a new position without a valid current position");
-            this.position = offset;
+            this.position = position;
+        }
+
+        private FetchPosition validPosition() {
+            if (hasValidPosition()) {
+                return position;
+            } else {
+                return null;
+            }
+        }
+
+        private FetchPosition position() {
+            return position;
         }
 
         private void pause() {
@@ -581,5 +701,149 @@ public class SubscriptionState {
 
     }
 
+    /**
+     * The fetch state of a partition. This class is used to determine valid state transitions and expose the some of
+     * the behavior of the current fetch state. Actual state variables are stored in the {@link TopicPartitionState}.
+     */
+    interface FetchState {
+        default FetchState transitionTo(FetchState newState) {
+            if (validTransitions().contains(newState)) {
+                return newState;
+            } else {
+                return this;
+            }
+        }
 
+        Collection<FetchState> validTransitions();
+
+        boolean hasPosition();
+
+        boolean hasValidPosition();
+    }
+
+    /**
+     * An enumeration of all the possible fetch states. The state transitions are encoded in the values returned by
+     * {@link FetchState#validTransitions}.
+     */
+    enum FetchStates implements FetchState {
+        INITIALIZING() {
+            @Override
+            public Collection<FetchState> validTransitions() {
+                return Arrays.asList(FetchStates.FETCHING, FetchStates.AWAIT_RESET, FetchStates.AWAIT_VALIDATION);
+            }
+
+            @Override
+            public boolean hasPosition() {
+                return false;
+            }
+
+            @Override
+            public boolean hasValidPosition() {
+                return false;
+            }
+        },
+
+        FETCHING() {
+            @Override
+            public Collection<FetchState> validTransitions() {
+                return Arrays.asList(FetchStates.FETCHING, FetchStates.AWAIT_RESET, FetchStates.AWAIT_VALIDATION);
+            }
+
+            @Override
+            public boolean hasPosition() {
+                return true;
+            }
+
+            @Override
+            public boolean hasValidPosition() {
+                return true;
+            }
+        },
+
+        AWAIT_RESET() {
+            @Override
+            public Collection<FetchState> validTransitions() {
+                return Arrays.asList(FetchStates.FETCHING, FetchStates.AWAIT_RESET);
+            }
+
+            @Override
+            public boolean hasPosition() {
+                return true;
+            }
+
+            @Override
+            public boolean hasValidPosition() {
+                return false;
+            }
+        },
+
+        AWAIT_VALIDATION() {
+            @Override
+            public Collection<FetchState> validTransitions() {
+                return Arrays.asList(FetchStates.FETCHING, FetchStates.AWAIT_RESET, FetchStates.AWAIT_VALIDATION);
+            }
+
+            @Override
+            public boolean hasPosition() {
+                return true;
+            }
+
+            @Override
+            public boolean hasValidPosition() {
+                return false;
+            }
+        }
+    }
+
+    /**
+     * Represents the position of a partition subscription.
+     *
+     * This includes the offset and epoch from the last record in
+     * the batch from a FetchResponse. It also includes the leader epoch at the time the batch was consumed.
+     *
+     * The last fetch epoch is used to
+     */
+    public static class FetchPosition {
+        public final long offset;
+        public final Optional<Integer> offsetEpoch;
+        public final Metadata.LeaderAndEpoch currentLeader;
+
+        public FetchPosition(long offset, Optional<Integer> offsetEpoch, Metadata.LeaderAndEpoch currentLeader) {
+            this.offset = offset;
+            this.offsetEpoch = Objects.requireNonNull(offsetEpoch);
+            this.currentLeader = Objects.requireNonNull(currentLeader);
+        }
+
+        /**
+         * Test if it is "safe" to fetch from a given leader and epoch. This effectively is testing if
+         * {@link Metadata.LeaderAndEpoch} known to the subscription is equal to the one supplied by the caller.
+         */
+        public boolean safeToFetchFrom(Metadata.LeaderAndEpoch leaderAndEpoch) {
+            return !currentLeader.leader.isEmpty() && currentLeader.equals(leaderAndEpoch);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            FetchPosition that = (FetchPosition) o;
+            return offset == that.offset &&
+                    offsetEpoch.equals(that.offsetEpoch) &&
+                    currentLeader.equals(that.currentLeader);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(offset, offsetEpoch, currentLeader);
+        }
+
+        @Override
+        public String toString() {
+            return "FetchPosition{" +
+                    "offset=" + offset +
+                    ", offsetEpoch=" + offsetEpoch +
+                    ", currentLeader=" + currentLeader +
+                    '}';
+        }
+    }
 }

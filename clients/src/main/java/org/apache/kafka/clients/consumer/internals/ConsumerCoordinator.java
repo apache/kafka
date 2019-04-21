@@ -60,6 +60,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -507,10 +508,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             final TopicPartition tp = entry.getKey();
-            final long offset = entry.getValue().offset();
-            log.info("Setting offset for partition {} to the committed offset {}", tp, offset);
+            final OffsetAndMetadata offsetAndMetadata = entry.getValue();
+            final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(tp);
+            final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+                    offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
+                    new ConsumerMetadata.LeaderAndEpoch(leaderAndEpoch.leader, Optional.empty()));
+
+            log.info("Setting offset for partition {} to the committed offset {}", tp, position);
             entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
-            this.subscriptions.seek(tp, offset);
+            this.subscriptions.seekAndValidate(tp, position);
         }
         return true;
     }

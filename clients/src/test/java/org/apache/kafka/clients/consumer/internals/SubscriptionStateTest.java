@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
@@ -27,12 +29,14 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class SubscriptionStateTest {
@@ -46,6 +50,7 @@ public class SubscriptionStateTest {
     private final TopicPartition tp1 = new TopicPartition(topic, 1);
     private final TopicPartition t1p0 = new TopicPartition(topic1, 0);
     private final MockRebalanceListener rebalanceListener = new MockRebalanceListener();
+    private final Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Node.noNode(), Optional.empty());
 
     @Test
     public void partitionAssignment() {
@@ -55,7 +60,7 @@ public class SubscriptionStateTest {
         assertFalse(state.hasAllFetchPositions());
         state.seek(tp0, 1);
         assertTrue(state.isFetchable(tp0));
-        assertEquals(1L, state.position(tp0).longValue());
+        assertEquals(1L, state.position(tp0).offset);
         state.assignFromUser(Collections.<TopicPartition>emptySet());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
@@ -167,11 +172,11 @@ public class SubscriptionStateTest {
     public void partitionReset() {
         state.assignFromUser(singleton(tp0));
         state.seek(tp0, 5);
-        assertEquals(5L, (long) state.position(tp0));
+        assertEquals(5L, state.position(tp0).offset);
         state.requestOffsetReset(tp0);
         assertFalse(state.isFetchable(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
-        assertEquals(null, state.position(tp0));
+        assertNotNull(state.position(tp0));
 
         // seek should clear the reset and make the partition fetchable
         state.seek(tp0, 0);
@@ -188,7 +193,7 @@ public class SubscriptionStateTest {
         assertTrue(state.partitionsAutoAssigned());
         assertTrue(state.assignFromSubscribed(singleton(tp0)));
         state.seek(tp0, 1);
-        assertEquals(1L, state.position(tp0).longValue());
+        assertEquals(1L, state.position(tp0).offset);
         assertTrue(state.assignFromSubscribed(singleton(tp1)));
         assertTrue(state.isAssigned(tp1));
         assertFalse(state.isAssigned(tp0));
@@ -212,7 +217,7 @@ public class SubscriptionStateTest {
     public void invalidPositionUpdate() {
         state.subscribe(singleton(topic), rebalanceListener);
         assertTrue(state.assignFromSubscribed(singleton(tp0)));
-        state.position(tp0, 0);
+        state.position(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), leaderAndEpoch));
     }
 
     @Test
@@ -230,7 +235,7 @@ public class SubscriptionStateTest {
 
     @Test(expected = IllegalStateException.class)
     public void cantChangePositionForNonAssignedPartition() {
-        state.position(tp0, 1);
+        state.position(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), leaderAndEpoch));
     }
 
     @Test(expected = IllegalStateException.class)

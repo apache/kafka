@@ -18,6 +18,7 @@ package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -314,6 +315,8 @@ public class Metadata implements Closeable {
                 if (metadata.isInternal())
                     internalTopics.add(metadata.topic());
                 for (MetadataResponse.PartitionMetadata partitionMetadata : metadata.partitionMetadata()) {
+
+                    // Even if the partition's metadata includes an error, we need to handle the update to catch new epochs
                     updatePartitionInfo(metadata.topic(), partitionMetadata, partitionInfo -> {
                         int epoch = partitionMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH);
                         partitions.add(new MetadataCache.PartitionInfoAndEpoch(partitionInfo, epoch));
@@ -358,8 +361,8 @@ public class Metadata implements Closeable {
                 }
             }
         } else {
-            // Old cluster format (no epochs)
-            lastSeenLeaderEpochs.clear();
+            // Handle old cluster formats as well as error responses where leader and epoch are missing
+            lastSeenLeaderEpochs.remove(tp);
             partitionInfoConsumer.accept(MetadataResponse.partitionMetaToInfo(topic, partitionMetadata));
         }
     }
@@ -444,4 +447,55 @@ public class Metadata implements Closeable {
         }
     }
 
+    public synchronized LeaderAndEpoch leaderAndEpoch(TopicPartition tp) {
+        return partitionInfoIfCurrent(tp)
+                .map(infoAndEpoch -> {
+                    Node leader = infoAndEpoch.partitionInfo().leader();
+                    return new LeaderAndEpoch(leader == null ? Node.noNode() : leader, Optional.of(infoAndEpoch.epoch()));
+                })
+                .orElse(new LeaderAndEpoch(Node.noNode(), lastSeenLeaderEpoch(tp)));
+    }
+
+    public static class LeaderAndEpoch {
+
+        public static final LeaderAndEpoch NO_LEADER_OR_EPOCH = new LeaderAndEpoch(Node.noNode(), Optional.empty());
+
+        public final Node leader;
+        public final Optional<Integer> epoch;
+
+        public LeaderAndEpoch(Node leader, Optional<Integer> epoch) {
+            this.leader = Objects.requireNonNull(leader);
+            this.epoch = Objects.requireNonNull(epoch);
+        }
+
+        public static LeaderAndEpoch noLeaderOrEpoch() {
+            return NO_LEADER_OR_EPOCH;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+
+            LeaderAndEpoch that = (LeaderAndEpoch) o;
+
+            if (!leader.equals(that.leader)) return false;
+            return epoch.equals(that.epoch);
+        }
+
+        @Override
+        public int hashCode() {
+            int result = leader.hashCode();
+            result = 31 * result + epoch.hashCode();
+            return result;
+        }
+
+        @Override
+        public String toString() {
+            return "LeaderAndEpoch{" +
+                    "leader=" + leader +
+                    ", epoch=" + epoch.map(Number::toString).orElse("absent") +
+                    '}';
+        }
+    }
 }
