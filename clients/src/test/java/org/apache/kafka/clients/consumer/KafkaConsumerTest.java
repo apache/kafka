@@ -39,6 +39,8 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
@@ -89,6 +91,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -1420,8 +1423,20 @@ public class KafkaConsumerTest {
         final ByteBuffer byteBuffer = ConsumerProtocol.serializeSubscription(new PartitionAssignor.Subscription(singletonList(topic)));
 
         // This member becomes the leader
-        final JoinGroupResponse leaderResponse = new JoinGroupResponse(Errors.NONE, 1, assignor.name(), "memberId", "memberId",
-                Collections.singletonMap("memberId", byteBuffer));
+        String memberId = "memberId";
+        final JoinGroupResponse leaderResponse = new JoinGroupResponse(
+                new JoinGroupResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setGenerationId(1).setProtocolName(assignor.name())
+                        .setLeader(memberId).setMemberId(memberId)
+                        .setMembers(Collections.singletonList(
+                                new JoinGroupResponseData.JoinGroupResponseMember()
+                                        .setMemberId(memberId)
+                                        .setMetadata(byteBuffer.array())
+                                )
+                        )
+        );
+
         client.prepareResponseFrom(leaderResponse, coordinator);
 
         // sync group fails due to disconnect
@@ -1635,7 +1650,12 @@ public class KafkaConsumerTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 JoinGroupRequest joinGroupRequest = (JoinGroupRequest) body;
-                PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(joinGroupRequest.groupProtocols().get(0).metadata());
+                Iterator<JoinGroupRequestData.JoinGroupRequestProtocol> protocolIterator =
+                        joinGroupRequest.data().protocols().iterator();
+                assertTrue(protocolIterator.hasNext());
+
+                ByteBuffer protocolMetadata = ByteBuffer.wrap(protocolIterator.next().metadata());
+                PartitionAssignor.Subscription subscription = ConsumerProtocol.deserializeSubscription(protocolMetadata);
                 return subscribedTopics.equals(new HashSet<>(subscription.topics()));
             }
         }, joinGroupFollowerResponse(assignor, 1, "memberId", "leaderId", Errors.NONE), coordinator);
@@ -1707,8 +1727,15 @@ public class KafkaConsumerTest {
     }
 
     private JoinGroupResponse joinGroupFollowerResponse(PartitionAssignor assignor, int generationId, String memberId, String leaderId, Errors error) {
-        return new JoinGroupResponse(error, generationId, assignor.name(), memberId, leaderId,
-                Collections.emptyMap());
+        return new JoinGroupResponse(
+                new JoinGroupResponseData()
+                        .setErrorCode(error.code())
+                        .setGenerationId(generationId)
+                        .setProtocolName(assignor.name())
+                        .setLeader(leaderId)
+                        .setMemberId(memberId)
+                        .setMembers(Collections.emptyList())
+        );
     }
 
     private SyncGroupResponse syncGroupResponse(List<TopicPartition> partitions, Errors error) {

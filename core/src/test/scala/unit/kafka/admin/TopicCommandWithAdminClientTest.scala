@@ -28,6 +28,9 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{ListTopicsOptions, NewTopic, AdminClient => JAdminClient}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.TestName
@@ -465,7 +468,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val deletePath = DeleteTopicsTopicZNode.path(testTopicName)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deletePath))
     topicService.deleteTopic(deleteOpts)
-    assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deletePath))
+    TestUtils.verifyTopicDeletion(zkClient, testTopicName, 1, servers)
   }
 
   @Test
@@ -483,7 +486,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val deleteOffsetTopicPath = DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deleteOffsetTopicPath))
     topicService.deleteTopic(deleteOffsetTopicOpts)
-    assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deleteOffsetTopicPath))
+    TestUtils.verifyTopicDeletion(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, 1, servers)
   }
 
   @Test
@@ -515,9 +518,35 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     waitForTopicCreated(testTopicName)
 
     try {
+      // check which partition is on broker 0 which we'll kill
+      val testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
+        .all().get().asScala(testTopicName)
+      val partitionOnBroker0 = testTopicDescription.partitions().asScala.find(_.leader().id() == 0).get.partition()
+
       killBroker(0)
+
+      // wait until the topic metadata for the test topic is propagated to each alive broker
+      TestUtils.waitUntilTrue(() => {
+        servers
+          .filterNot(_.config.brokerId == 0)
+          .foldLeft(true) {
+            (result, server) => {
+              val topicMetadatas = server.dataPlaneRequestProcessor.metadataCache
+                .getTopicMetadata(Set(testTopicName), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
+              val testPartitionMetadata = topicMetadatas.find(_.topic().equals(testTopicName)).get.partitionMetadata().asScala.find(_.partition() == partitionOnBroker0)
+              testPartitionMetadata match {
+                case None => fail(s"Partition metadata is not found in metadata cache")
+                case Some(metadata) => {
+                  result && metadata.error() == Errors.LEADER_NOT_AVAILABLE
+                }
+              }
+            }
+          }
+      }, s"Partition metadata for $testTopicName is not propagated")
+
+      // grab the console output and assert
       val output = TestUtils.grabConsoleOutput(
-        topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--unavailable-partitions"))))
+          topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--unavailable-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
       assertTrue(rows(0).endsWith("Leader: none\tReplicas: 0\tIsr: "))
@@ -534,6 +563,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
     try {
       killBroker(0)
+      val aliveServers = servers.filterNot(_.config.brokerId == 0)
+      TestUtils.waitUntilMetadataIsPropagated(aliveServers, testTopicName, 0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-replicated-partitions"))))
       val rows = output.split("\n")
@@ -554,10 +585,34 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
     try {
       killBroker(0)
+      val aliveServers = servers.filterNot(_.config.brokerId == 0)
+      TestUtils.waitUntilMetadataIsPropagated(aliveServers, testTopicName, 0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
+    } finally {
+      restartDeadBrokers()
+    }
+  }
+
+  @Test
+  def testDescribeAtMinIsrPartitions(): Unit = {
+    val configMap = new java.util.HashMap[String, String]()
+    configMap.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "4")
+
+    adminClient.createTopics(
+      Collections.singletonList(new NewTopic(testTopicName, 1, 6).configs(configMap))).all().get()
+    waitForTopicCreated(testTopicName)
+
+    try {
+      killBroker(0)
+      killBroker(1)
+      val output = TestUtils.grabConsoleOutput(
+        topicService.describeTopic(new TopicCommandOptions(Array("--at-min-isr-partitions"))))
+      val rows = output.split("\n")
+      assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
+      assertEquals(1, rows.length);
     } finally {
       restartDeadBrokers()
     }
@@ -596,6 +651,8 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
 
     try {
       killBroker(0)
+      val aliveServers = servers.filterNot(_.config.brokerId == 0)
+      TestUtils.waitUntilMetadataIsPropagated(aliveServers, underMinIsrTopic, 0)
       val output = TestUtils.grabConsoleOutput(
         topicService.describeTopic(new TopicCommandOptions(Array("--under-min-isr-partitions"))))
       val rows = output.split("\n")

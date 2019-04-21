@@ -33,7 +33,7 @@ import scala.collection.JavaConverters._
 
 class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
-  override def propertyOverrides(properties: Properties): Unit =
+  override def brokerPropertyOverrides(properties: Properties): Unit =
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
 
   def topicsReq(topics: Seq[CreatableTopic],

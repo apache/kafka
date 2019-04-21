@@ -22,6 +22,8 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.JoinGroupRequestData;
+import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -215,7 +217,7 @@ public class AbstractCoordinatorTest {
                     return false;
                 }
                 JoinGroupRequest joinGroupRequest = (JoinGroupRequest) body;
-                if (!joinGroupRequest.memberId().equals(memberId)) {
+                if (!joinGroupRequest.data().memberId().equals(memberId)) {
                     return false;
                 }
                 return true;
@@ -691,8 +693,15 @@ public class AbstractCoordinatorTest {
     }
 
     private JoinGroupResponse joinGroupFollowerResponse(int generationId, String memberId, String leaderId, Errors error) {
-        return new JoinGroupResponse(error, generationId, "dummy-subprotocol", memberId, leaderId,
-                Collections.<String, ByteBuffer>emptyMap());
+        return new JoinGroupResponse(
+                new JoinGroupResponseData()
+                        .setErrorCode(error.code())
+                        .setGenerationId(generationId)
+                        .setProtocolName("dummy-subprotocol")
+                        .setMemberId(memberId)
+                        .setLeader(leaderId)
+                        .setMembers(Collections.emptyList())
+        );
     }
 
     private JoinGroupResponse joinGroupResponse(Errors error) {
@@ -725,15 +734,22 @@ public class AbstractCoordinatorTest {
         }
 
         @Override
-        protected List<JoinGroupRequest.ProtocolMetadata> metadata() {
-            return Collections.singletonList(new JoinGroupRequest.ProtocolMetadata("dummy-subprotocol", EMPTY_DATA));
+        protected JoinGroupRequestData.JoinGroupRequestProtocolSet metadata() {
+            return new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+                    Collections.singleton(new JoinGroupRequestData.JoinGroupRequestProtocol()
+                            .setName("dummy-subprotocol")
+                            .setMetadata(EMPTY_DATA.array())).iterator()
+            );
         }
 
         @Override
-        protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, Map<String, ByteBuffer> allMemberMetadata) {
+        protected Map<String, ByteBuffer> performAssignment(String leaderId,
+                                                            String protocol,
+                                                            List<JoinGroupResponseData.JoinGroupResponseMember> allMemberMetadata) {
             Map<String, ByteBuffer> assignment = new HashMap<>();
-            for (Map.Entry<String, ByteBuffer> metadata : allMemberMetadata.entrySet())
-                assignment.put(metadata.getKey(), EMPTY_DATA);
+            for (JoinGroupResponseData.JoinGroupResponseMember member : allMemberMetadata) {
+                assignment.put(member.memberId(), EMPTY_DATA);
+            }
             return assignment;
         }
 

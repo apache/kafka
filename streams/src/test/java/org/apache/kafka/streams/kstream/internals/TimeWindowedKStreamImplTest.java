@@ -51,7 +51,6 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
 public class TimeWindowedKStreamImplTest {
-
     private static final String TOPIC = "input";
     private final StreamsBuilder builder = new StreamsBuilder();
     private final ConsumerRecordFactory<String, String> recordFactory =
@@ -75,14 +74,13 @@ public class TimeWindowedKStreamImplTest {
             .toStream()
             .foreach(results::put);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }
         assertThat(results.get(new Windowed<>("1", new TimeWindow(0, 500))), equalTo(2L));
         assertThat(results.get(new Windowed<>("2", new TimeWindow(500, 1000))), equalTo(1L));
         assertThat(results.get(new Windowed<>("1", new TimeWindow(500, 1000))), equalTo(1L));
     }
-
 
     @Test
     public void shouldReduceWindowed() {
@@ -92,7 +90,7 @@ public class TimeWindowedKStreamImplTest {
             .toStream()
             .foreach(results::put);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }
         assertThat(results.get(new Windowed<>("1", new TimeWindow(0, 500))), equalTo("1+2"));
@@ -111,7 +109,7 @@ public class TimeWindowedKStreamImplTest {
             .toStream()
             .foreach(results::put);
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }
         assertThat(results.get(new Windowed<>("1", new TimeWindow(0, 500))), equalTo("0+1+2"));
@@ -126,7 +124,7 @@ public class TimeWindowedKStreamImplTest {
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.Long()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             final WindowStore<String, Long> windowStore = driver.getWindowStore("count-store");
             final List<KeyValue<Windowed<String>, Long>> data =
@@ -147,7 +145,7 @@ public class TimeWindowedKStreamImplTest {
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             final WindowStore<String, String> windowStore = driver.getWindowStore("reduced");
             final List<KeyValue<Windowed<String>, String>> data =
@@ -169,7 +167,7 @@ public class TimeWindowedKStreamImplTest {
                 .withKeySerde(Serdes.String())
                 .withValueSerde(Serdes.String()));
 
-        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props, 0L)) {
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             final WindowStore<String, String> windowStore = driver.getWindowStore("aggregated");
             final List<KeyValue<Windowed<String>, String>> data =

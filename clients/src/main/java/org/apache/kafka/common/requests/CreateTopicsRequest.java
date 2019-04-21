@@ -17,12 +17,12 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
@@ -50,7 +50,6 @@ public class CreateTopicsRequest extends AbstractRequest {
     }
 
     private final CreateTopicsRequestData data;
-    private final short version;
 
     public static final int NO_NUM_PARTITIONS = -1;
     public static final short NO_REPLICATION_FACTOR = -1;
@@ -58,13 +57,11 @@ public class CreateTopicsRequest extends AbstractRequest {
     private CreateTopicsRequest(CreateTopicsRequestData data, short version) {
         super(ApiKeys.CREATE_TOPICS, version);
         this.data = data;
-        this.version = version;
     }
 
     public CreateTopicsRequest(Struct struct, short version) {
         super(ApiKeys.CREATE_TOPICS, version);
         this.data = new CreateTopicsRequestData(struct, version);
-        this.version = version;
     }
 
     public CreateTopicsRequestData data() {
@@ -96,6 +93,6 @@ public class CreateTopicsRequest extends AbstractRequest {
      */
     @Override
     public Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 }

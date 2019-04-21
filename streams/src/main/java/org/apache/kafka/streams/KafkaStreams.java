@@ -49,6 +49,8 @@ import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
+import org.apache.kafka.streams.processor.internals.SinkNode;
+import org.apache.kafka.streams.processor.internals.SourceNode;
 import org.apache.kafka.streams.processor.internals.StateDirectory;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamsMetadataState;
@@ -155,23 +157,23 @@ public class KafkaStreams implements AutoCloseable {
      *
      * <pre>
      *                 +--------------+
-     *         +<----- | Created (0)  |
+     *         +&lt;----- | Created (0)  |
      *         |       +-----+--------+
      *         |             |
      *         |             v
      *         |       +----+--+------+
      *         |       | Re-          |
-     *         +<----- | Balancing (1)| -------->+
+     *         +&lt;----- | Balancing (1)| --------&gt;+
      *         |       +-----+-+------+          |
      *         |             | ^                 |
      *         |             v |                 |
      *         |       +--------------+          v
-     *         |       | Running (2)  | -------->+
+     *         |       | Running (2)  | --------&gt;+
      *         |       +------+-------+          |
      *         |              |                  |
      *         |              v                  |
      *         |       +------+-------+     +----+-------+
-     *         +-----> | Pending      |<--- | Error (5)  |
+     *         +-----&gt; | Pending      |&lt;--- | Error (5)  |
      *                 | Shutdown (3) |     +------------+
      *                 +------+-------+
      *                        |
@@ -191,7 +193,7 @@ public class KafkaStreams implements AutoCloseable {
      *   the instance will be in the ERROR state. The user will need to close it.
      */
     public enum State {
-        CREATED(1, 3), REBALANCING(2, 3, 5), RUNNING(1, 3, 5), PENDING_SHUTDOWN(4), NOT_RUNNING, ERROR(3, 5);
+        CREATED(1, 3), REBALANCING(2, 3, 5), RUNNING(1, 3, 5), PENDING_SHUTDOWN(4), NOT_RUNNING, ERROR(3);
 
         private final Set<Integer> validTransitions = new HashSet<>();
 
@@ -634,6 +636,26 @@ public class KafkaStreams implements AutoCloseable {
         this(internalTopologyBuilder, config, clientSupplier, Time.SYSTEM);
     }
 
+    @SuppressWarnings("unchecked")
+    private void configureSerDes(final Set<SinkNode> sinks, final Set<SourceNode> sources) {
+        for (final SinkNode sn : sinks) {
+            if (sn.getKeySerializer() != null) {
+                sn.getKeySerializer().configure(config.originals(), true);
+            }
+            if (sn.getValueSerializer() != null) {
+                sn.getValueSerializer().configure(config.originals(), false);
+            }
+        }
+        for (final SourceNode sn : sources) {
+            if (sn.getKeyDeSerializer() != null) {
+                sn.getKeyDeSerializer().configure(config.originals(), true);
+            }
+            if (sn.getValueDeSerializer() != null) {
+                sn.getValueDeSerializer().configure(config.originals(), false);
+            }
+        }
+    }
+
     private KafkaStreams(final InternalTopologyBuilder internalTopologyBuilder,
                          final StreamsConfig config,
                          final KafkaClientSupplier clientSupplier,
@@ -670,6 +692,7 @@ public class KafkaStreams implements AutoCloseable {
         // sanity check to fail-fast in case we cannot build a ProcessorTopology due to an exception
         final ProcessorTopology taskTopology = internalTopologyBuilder.build();
 
+        configureSerDes(taskTopology.sinks(), taskTopology.sources());
         streamsMetadataState = new StreamsMetadataState(
                 internalTopologyBuilder,
                 parseHostInfo(config.getString(StreamsConfig.APPLICATION_SERVER_CONFIG)));
@@ -683,6 +706,7 @@ public class KafkaStreams implements AutoCloseable {
             log.warn("Negative cache size passed in. Reverting to cache size of 0 bytes.");
         }
         final ProcessorTopology globalTaskTopology = internalTopologyBuilder.buildGlobalStateTopology();
+
         final long cacheSizePerThread = totalCacheSize / (threads.length + (globalTaskTopology == null ? 0 : 1));
         final boolean createStateDirectory = taskTopology.hasPersistentLocalStore() ||
                 (globalTaskTopology != null && globalTaskTopology.hasPersistentGlobalStore());
@@ -696,6 +720,8 @@ public class KafkaStreams implements AutoCloseable {
         final StateRestoreListener delegatingStateRestoreListener = new DelegatingStateRestoreListener();
         GlobalStreamThread.State globalThreadState = null;
         if (globalTaskTopology != null) {
+            configureSerDes(globalTaskTopology.sinks(), globalTaskTopology.sources());
+
             final String globalThreadId = clientId + "-GlobalStreamThread";
             globalStreamThread = new GlobalStreamThread(globalTaskTopology,
                                                         config,
@@ -857,7 +883,6 @@ public class KafkaStreams implements AutoCloseable {
                 // notify all the threads to stop; avoid deadlocks by stopping any
                 // further state reports from the thread since we're shutting down
                 for (final StreamThread thread : threads) {
-                    thread.setStateListener(null);
                     thread.shutdown();
                 }
 
@@ -872,7 +897,6 @@ public class KafkaStreams implements AutoCloseable {
                 }
 
                 if (globalStreamThread != null) {
-                    globalStreamThread.setStateListener(null);
                     globalStreamThread.shutdown();
                 }
 

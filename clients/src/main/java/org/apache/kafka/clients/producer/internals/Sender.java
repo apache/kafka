@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -223,6 +224,10 @@ public class Sender implements Runnable {
         }
     }
 
+    private boolean hasPendingTransactionalRequests() {
+        return transactionManager != null && transactionManager.hasPendingRequests() && transactionManager.hasOngoingTransaction();
+    }
+
     /**
      * The main run loop for the sender thread
      */
@@ -241,18 +246,36 @@ public class Sender implements Runnable {
         log.debug("Beginning shutdown of Kafka producer I/O thread, sending remaining records.");
 
         // okay we stopped accepting requests but there may still be
-        // requests in the accumulator or waiting for acknowledgment,
+        // requests in the transaction manager, accumulator or waiting for acknowledgment,
         // wait until these are completed.
-        while (!forceClose && (this.accumulator.hasUndrained() || this.client.inFlightRequestCount() > 0)) {
+        while (!forceClose && ((this.accumulator.hasUndrained() || this.client.inFlightRequestCount() > 0) || hasPendingTransactionalRequests())) {
             try {
                 run(time.milliseconds());
             } catch (Exception e) {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
         }
+
+        // Abort the transaction if any commit or abort didn't go through the transaction manager's queue
+        while (!forceClose && transactionManager != null && transactionManager.hasOngoingTransaction()) {
+            if (!transactionManager.isCompleting()) {
+                log.info("Aborting incomplete transaction due to shutdown");
+                transactionManager.beginAbort();
+            }
+            try {
+                run(time.milliseconds());
+            } catch (Exception e) {
+                log.error("Uncaught error in kafka producer I/O thread: ", e);
+            }
+        }
+
         if (forceClose) {
-            // We need to fail all the incomplete batches and wake up the threads waiting on
+            // We need to fail all the incomplete transactional requests and batches and wake up the threads waiting on
             // the futures.
+            if (transactionManager != null) {
+                log.debug("Aborting incomplete transactional requests due to forced shutdown");
+                transactionManager.close();
+            }
             log.debug("Aborting incomplete batches due to forced shutdown");
             this.accumulator.abortIncompleteBatches();
         }
@@ -478,9 +501,16 @@ public class Sender implements Runnable {
         initiateClose();
     }
 
+    public boolean isRunning() {
+        return running;
+    }
+
     private ClientResponse sendAndAwaitInitProducerIdRequest(Node node) throws IOException {
         String nodeId = node.idString();
-        InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(null);
+        InitProducerIdRequestData requestData = new InitProducerIdRequestData()
+                .setTransactionalId(null)
+                .setTransactionTimeoutMs(Integer.MAX_VALUE);
+        InitProducerIdRequest.Builder builder = new InitProducerIdRequest.Builder(requestData);
         ClientRequest request = client.newClientRequest(nodeId, builder, time.milliseconds(), true, requestTimeoutMs, null);
         return NetworkClientUtils.sendAndReceive(client, request, time);
     }
@@ -504,7 +534,7 @@ public class Sender implements Runnable {
                     Errors error = initProducerIdResponse.error();
                     if (error == Errors.NONE) {
                         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(
-                                initProducerIdResponse.producerId(), initProducerIdResponse.epoch());
+                                initProducerIdResponse.data.producerId(), initProducerIdResponse.data.producerEpoch());
                         transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
                         return;
                     } else if (error.exception() instanceof RetriableException) {

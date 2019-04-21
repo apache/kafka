@@ -71,7 +71,8 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
             super.init(context);
             if (queryableName != null) {
                 store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
-                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V>(context), sendOldValues);
+                tupleForwarder = new TupleForwarder<>(store, context,
+                    new ForwardingCacheFlushListener<>(context), sendOldValues);
             }
         }
 

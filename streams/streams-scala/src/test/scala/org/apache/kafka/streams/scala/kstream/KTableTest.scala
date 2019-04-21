@@ -18,8 +18,12 @@
  */
 package org.apache.kafka.streams.scala.kstream
 
+import java.time.Duration
+
+import org.apache.kafka.streams.kstream.{SessionWindows, TimeWindows, Windowed}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.Serdes._
+import org.apache.kafka.streams.scala.kstream.Suppressed.BufferConfig
 import org.apache.kafka.streams.scala.utils.TestDriver
 import org.apache.kafka.streams.scala.{ByteArrayKeyValueStore, StreamsBuilder}
 import org.junit.runner.RunWith
@@ -135,6 +139,226 @@ class KTableTest extends FlatSpec with Matchers with TestDriver {
     testDriver.readRecord[String, Long](sinkTopic).value shouldBe 2
     testDriver.getKeyValueStore[String, Long](stateStore).get("1") shouldBe 2
 
+    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+
+    testDriver.close()
+  }
+
+  "windowed KTable#suppress" should "correctly suppress results using Suppressed.untilTimeLimit" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+    val window = TimeWindows.of(Duration.ofSeconds(1L))
+    val suppression = Suppressed.untilTimeLimit[Windowed[String]](Duration.ofSeconds(2L), BufferConfig.unbounded())
+
+    val table: KTable[Windowed[String], Long] = builder
+      .stream[String, String](sourceTopic)
+      .groupByKey
+      .windowedBy(window)
+      .count
+      .suppress(suppression)
+
+    table.toStream((k, _) => s"${k.window().start()}:${k.window().end()}:${k.key()}").to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+
+    {
+      // publish key=1 @ time 0 => count==1
+      testDriver.pipeRecord(sourceTopic, ("1", "value1"), 0L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // publish key=1 @ time 1 => count==2
+      testDriver.pipeRecord(sourceTopic, ("1", "value2"), 1L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // move event time past the first window, but before the suppression window
+      testDriver.pipeRecord(sourceTopic, ("2", "value1"), 1001L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // move event time riiiight before suppression window ends
+      testDriver.pipeRecord(sourceTopic, ("2", "value2"), 1999L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // publish a late event before suppression window terminates => count==3
+      testDriver.pipeRecord(sourceTopic, ("1", "value3"), 999L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // move event time right past the suppression window of the first window.
+      testDriver.pipeRecord(sourceTopic, ("2", "value3"), 2001L)
+      val record = testDriver.readRecord[String, Long](sinkTopic)
+      record.key shouldBe "0:1000:1"
+      record.value shouldBe 3L
+    }
+    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+
+    testDriver.close()
+  }
+
+  "windowed KTable#suppress" should "correctly suppress results using Suppressed.untilWindowCloses" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+    val window = TimeWindows.of(Duration.ofSeconds(1L)).grace(Duration.ofSeconds(1L))
+    val suppression = Suppressed.untilWindowCloses[String](BufferConfig.unbounded())
+
+    val table: KTable[Windowed[String], Long] = builder
+      .stream[String, String](sourceTopic)
+      .groupByKey
+      .windowedBy(window)
+      .count
+      .suppress(suppression)
+
+    table.toStream((k, _) => s"${k.window().start()}:${k.window().end()}:${k.key()}").to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+
+    {
+      // publish key=1 @ time 0 => count==1
+      testDriver.pipeRecord(sourceTopic, ("1", "value1"), 0L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // publish key=1 @ time 1 => count==2
+      testDriver.pipeRecord(sourceTopic, ("1", "value2"), 1L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // move event time past the window, but before the grace period
+      testDriver.pipeRecord(sourceTopic, ("2", "value1"), 1001L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // move event time riiiight before grace period ends
+      testDriver.pipeRecord(sourceTopic, ("2", "value2"), 1999L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // publish a late event before grace period terminates => count==3
+      testDriver.pipeRecord(sourceTopic, ("1", "value3"), 999L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // move event time right past the grace period of the first window.
+      testDriver.pipeRecord(sourceTopic, ("2", "value3"), 2001L)
+      val record = testDriver.readRecord[String, Long](sinkTopic)
+      record.key shouldBe "0:1000:1"
+      record.value shouldBe 3L
+    }
+    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+
+    testDriver.close()
+  }
+
+  "session windowed KTable#suppress" should "correctly suppress results using Suppressed.untilWindowCloses" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+    // Very similar to SuppressScenarioTest.shouldSupportFinalResultsForSessionWindows
+    val window = SessionWindows.`with`(Duration.ofMillis(5L)).grace(Duration.ofMillis(10L))
+    val suppression = Suppressed.untilWindowCloses[String](BufferConfig.unbounded())
+
+    val table: KTable[Windowed[String], Long] = builder
+      .stream[String, String](sourceTopic)
+      .groupByKey
+      .windowedBy(window)
+      .count
+      .suppress(suppression)
+
+    table.toStream((k, _) => s"${k.window().start()}:${k.window().end()}:${k.key()}").to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+
+    {
+      // first window
+      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 0L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // first window
+      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 1L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // new window, but grace period hasn't ended for first window
+      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 8L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // late event for first window, included since grade period hasn't passed
+      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 2L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // push stream time forward to flush other events through
+      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 30L)
+      // too-late event should get dropped from the stream
+      testDriver.pipeRecord(sourceTopic, ("k1", "v1"), 3L)
+      // should now have to results
+      val r1 = testDriver.readRecord[String, Long](sinkTopic)
+      r1.key shouldBe "0:2:k1"
+      r1.value shouldBe 3L
+      val r2 = testDriver.readRecord[String, Long](sinkTopic)
+      r2.key shouldBe "8:8:k1"
+      r2.value shouldBe 1
+    }
+    testDriver.readRecord[String, Long](sinkTopic) shouldBe null
+
+    testDriver.close()
+  }
+
+  "non-windowed KTable#suppress" should "correctly suppress results using Suppressed.untilTimeLimit" in {
+    val builder = new StreamsBuilder()
+    val sourceTopic = "source"
+    val sinkTopic = "sink"
+    val suppression = Suppressed.untilTimeLimit[String](Duration.ofSeconds(2L), BufferConfig.unbounded())
+
+    val table: KTable[String, Long] = builder
+      .stream[String, String](sourceTopic)
+      .groupByKey
+      .count
+      .suppress(suppression)
+
+    table.toStream.to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+
+    {
+      // publish key=1 @ time 0 => count==1
+      testDriver.pipeRecord(sourceTopic, ("1", "value1"), 0L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // publish key=1 @ time 1 => count==2
+      testDriver.pipeRecord(sourceTopic, ("1", "value2"), 1L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // move event time past the window, but before the grace period
+      testDriver.pipeRecord(sourceTopic, ("2", "value1"), 1001L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // move event time riiiight before grace period ends
+      testDriver.pipeRecord(sourceTopic, ("2", "value2"), 1999L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // publish a late event before grace period terminates => count==3
+      testDriver.pipeRecord(sourceTopic, ("1", "value3"), 999L)
+      Option(testDriver.readRecord[String, Long](sinkTopic)) shouldBe None
+    }
+    {
+      // move event time right past the grace period of the first window.
+      testDriver.pipeRecord(sourceTopic, ("2", "value3"), 2001L)
+      val record = testDriver.readRecord[String, Long](sinkTopic)
+      record.key shouldBe "1"
+      record.value shouldBe 3L
+    }
     testDriver.readRecord[String, Long](sinkTopic) shouldBe null
 
     testDriver.close()

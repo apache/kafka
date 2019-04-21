@@ -943,6 +943,14 @@ class Log(@volatile var dir: File,
           shallowOffsetOfMaxTimestamp = appendInfo.offsetOfMaxTimestamp,
           records = validRecords)
 
+        // Increment the log end offset. We do this immediately after the append because a
+        // write to the transaction index below may fail and we want to ensure that the offsets
+        // of future appends still grow monotonically. The resulting transaction index inconsistency
+        // will be cleaned up after the log directory is recovered. Note that the end offset of the
+        // ProducerStateManager will not be updated and the last stable offset will not advance
+        // if the append to the transaction index fails.
+        updateLogEndOffset(appendInfo.lastOffset + 1)
+
         // update the producer state
         for ((_, producerAppendInfo) <- updatedProducers) {
           producerAppendInfo.maybeCacheTxnFirstOffsetMetadata(logOffsetMetadata)
@@ -952,16 +960,14 @@ class Log(@volatile var dir: File,
         // update the transaction index with the true last stable offset. The last offset visible
         // to consumers using READ_COMMITTED will be limited by this value and the high watermark.
         for (completedTxn <- completedTxns) {
-          val lastStableOffset = producerStateManager.completeTxn(completedTxn)
+          val lastStableOffset = producerStateManager.lastStableOffset(completedTxn)
           segment.updateTxnIndex(completedTxn, lastStableOffset)
+          producerStateManager.completeTxn(completedTxn)
         }
 
         // always update the last producer id map offset so that the snapshot reflects the current offset
         // even if there isn't any idempotent data being written
         producerStateManager.updateMapEndOffset(appendInfo.lastOffset + 1)
-
-        // increment the log end offset
-        updateLogEndOffset(appendInfo.lastOffset + 1)
 
         // update the first unstable offset (which is used to compute LSO)
         updateFirstUnstableOffset()

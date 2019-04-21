@@ -52,6 +52,14 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         this(name, topics, null, keyDeserializer, valDeserializer);
     }
 
+    public Deserializer getKeyDeSerializer() {
+        return keyDeserializer;
+    }
+
+    public Deserializer getValueDeSerializer() {
+        return valDeserializer;
+    }
+
     K deserializeKey(final String topic, final Headers headers, final byte[] data) {
         return keyDeserializer.deserialize(topic, headers, data);
     }
