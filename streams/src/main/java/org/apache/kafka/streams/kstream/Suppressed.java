@@ -33,11 +33,20 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
 
     }
 
+    /**
+     * Marker interface for a buffer configuration that will strictly enforce size constraints
+     * (bytes and/or number of records) on the buffer, so it is suitable for reducing duplicate
+     * results downstream, but does not promise to eliminate them entirely.
+     */
+    interface EagerBufferConfig extends BufferConfig<EagerBufferConfig> {
+
+    }
+
     interface BufferConfig<BC extends BufferConfig<BC>> {
         /**
          * Create a size-constrained buffer in terms of the maximum number of keys it will store.
          */
-        static BufferConfig<?> maxRecords(final long recordLimit) {
+        static EagerBufferConfig maxRecords(final long recordLimit) {
             return new EagerBufferConfigImpl(recordLimit, Long.MAX_VALUE);
         }
 
@@ -49,7 +58,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
         /**
          * Create a size-constrained buffer in terms of the maximum number of bytes it will use.
          */
-        static BufferConfig<?> maxBytes(final long byteLimit) {
+        static EagerBufferConfig maxBytes(final long byteLimit) {
             return new EagerBufferConfigImpl(Long.MAX_VALUE, byteLimit);
         }
 
@@ -108,7 +117,7 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
          * This buffer is "not strict" in the sense that it may emit early, so it is suitable for reducing
          * duplicate results downstream, but does not promise to eliminate them.
          */
-        BufferConfig emitEarlyWhenFull();
+        EagerBufferConfig emitEarlyWhenFull();
     }
 
     /**
