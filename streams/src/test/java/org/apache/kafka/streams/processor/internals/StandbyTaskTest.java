@@ -167,7 +167,7 @@ public class StandbyTaskTest {
 
     @After
     public void cleanup() throws IOException {
-        if (task != null) {
+        if (task != null && !task.isClosed()) {
             task.close(true, false);
             task = null;
         }
@@ -369,7 +369,7 @@ public class StandbyTaskTest {
         );
 
         task.suspend();
-        task.closeStateManager(true);
+        task.close(true, false);
 
         final File taskDir = stateDirectory.directoryForTask(taskId);
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
