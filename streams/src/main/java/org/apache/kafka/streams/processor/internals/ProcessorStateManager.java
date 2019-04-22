@@ -281,13 +281,13 @@ public class ProcessorStateManager extends AbstractStateManager {
                     log.debug("Closing storage engine {}", store.name());
                     try {
                         store.close();
+                        registeredStores.put(store.name(), Optional.empty());
                     } catch (final Exception e) {
                         if (firstException == null) {
                             firstException = new ProcessorStateException(String.format("%sFailed to close state store %s", logPrefix, store.name()), e);
                         }
                         log.error("Failed to close state store {}: ", store.name(), e);
                     }
-                    registeredStores.put(store.name(), Optional.empty());
                 } else {
                     log.info("Skipping to close non-initialized store {}", entry.getKey());
                 }
