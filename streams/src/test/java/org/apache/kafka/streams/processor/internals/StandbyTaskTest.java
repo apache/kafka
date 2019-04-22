@@ -104,8 +104,9 @@ public class StandbyTaskTest {
     private final MockStateRestoreListener stateRestoreListener = new MockStateRestoreListener();
 
     private final Set<TopicPartition> topicPartitions = Collections.emptySet();
-    private final ProcessorTopology topology = ProcessorTopology.withLocalStores(
-        asList(new MockKeyValueStoreBuilder(storeName1, false).build(), new MockKeyValueStoreBuilder(storeName2, true).build()),
+    private final ProcessorTopology topology = ProcessorTopologyFactories.withLocalStores(
+        asList(new MockKeyValueStoreBuilder(storeName1, false).build(),
+               new MockKeyValueStoreBuilder(storeName2, true).build()),
         mkMap(
             mkEntry(storeName1, storeChangelogTopicName1),
             mkEntry(storeName2, storeChangelogTopicName2)
@@ -113,8 +114,9 @@ public class StandbyTaskTest {
     );
     private final TopicPartition globalTopicPartition = new TopicPartition(globalStoreName, 0);
     private final Set<TopicPartition> ktablePartitions = Utils.mkSet(globalTopicPartition);
-    private final ProcessorTopology ktableTopology = ProcessorTopology.withLocalStores(
-        singletonList(new MockKeyValueStoreBuilder(globalTopicPartition.topic(), true).withLoggingDisabled().build()),
+    private final ProcessorTopology ktableTopology = ProcessorTopologyFactories.withLocalStores(
+        singletonList(new MockKeyValueStoreBuilder(globalTopicPartition.topic(), true)
+                          .withLoggingDisabled().build()),
         mkMap(
             mkEntry(globalStoreName, globalTopicPartition.topic())
         )
@@ -165,7 +167,7 @@ public class StandbyTaskTest {
 
     @After
     public void cleanup() throws IOException {
-        if (task != null) {
+        if (task != null && !task.isClosed()) {
             task.close(true, false);
             task = null;
         }
@@ -367,7 +369,7 @@ public class StandbyTaskTest {
         );
 
         task.suspend();
-        task.closeStateManager(true);
+        task.close(true, false);
 
         final File taskDir = stateDirectory.directoryForTask(taskId);
         final OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(taskDir, ProcessorStateManager.CHECKPOINT_FILE_NAME));
