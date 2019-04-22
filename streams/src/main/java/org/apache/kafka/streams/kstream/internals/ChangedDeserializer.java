@@ -20,6 +20,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.nio.ByteBuffer;
+import java.util.Map;
 
 public class ChangedDeserializer<T> implements Deserializer<Change<T>> {
 
@@ -37,6 +38,12 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>> {
 
     public void setInner(final Deserializer<T> inner) {
         this.inner = inner;
+    }
+
+    @Override
+    public void configure(final Map<String, ?> configs,
+                          final boolean isKey) {
+        inner.configure(configs, isKey);
     }
 
     @Override
