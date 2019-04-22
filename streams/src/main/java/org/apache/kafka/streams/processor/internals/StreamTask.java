@@ -280,6 +280,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         taskInitialized = true;
 
         idleStartTime = RecordQueue.UNKNOWN;
+
+        stateMgr.ensureStoresRegistered();
     }
 
     /**

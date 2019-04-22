@@ -89,6 +89,17 @@ public class GlobalStateManagerImplTest {
     private ProcessorTopology topology;
     private InternalMockProcessorContext processorContext;
 
+    static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
+                                              final Map<String, String> storeToChangelogTopic) {
+        return new ProcessorTopology(Collections.emptyList(),
+                                     Collections.emptyMap(),
+                                     Collections.emptyMap(),
+                                     Collections.emptyList(),
+                                     stateStores,
+                                     storeToChangelogTopic,
+                                     Collections.emptySet());
+    }
+
     @Before
     public void before() throws IOException {
         final Map<String, String> storeToTopic = new HashMap<>();
@@ -103,7 +114,7 @@ public class GlobalStateManagerImplTest {
         store3 = new NoOpReadOnlyStore<>(storeName3);
         store4 = new NoOpReadOnlyStore<>(storeName4);
 
-        topology = ProcessorTopology.withGlobalStores(Utils.<StateStore>mkList(store1, store2, store3, store4), storeToTopic);
+        topology = withGlobalStores(Utils.<StateStore>mkList(store1, store2, store3, store4), storeToTopic);
 
         streamsConfig = new StreamsConfig(new Properties() {
             {
