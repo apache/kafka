@@ -167,10 +167,10 @@ The following metrics are emitted:
     record-age-ms-min
     record-age-ms-max
     record-age-ms-avg
-    replication-lag-ms      # time it takes records to propagate source->target
-    replication-lag-ms-min
-    replication-lag-ms-max
-    replication-lag-ms-avg
+    replication-latecny-ms  # time it takes records to propagate source->target
+    replication-latency-ms-min
+    replication-latency-ms-max
+    replication-latency-ms-avg
     byte-rate               # average number of bytes/sec in replicated records
 
 These metrics do not discern between created-at and log-append timestamps.

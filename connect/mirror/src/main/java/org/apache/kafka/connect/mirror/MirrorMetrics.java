@@ -61,17 +61,17 @@ class MirrorMetrics {
     private static final MetricNameTemplate BYTE_RATE = new MetricNameTemplate(
             "byte-rate", SOURCE_CONNECTOR_GROUP,
             "Average number of bytes replicated per second.", TAGS);
-    private static final MetricNameTemplate REPLICATION_LAG = new MetricNameTemplate(
-            "replication-lag-ms", SOURCE_CONNECTOR_GROUP,
+    private static final MetricNameTemplate REPLICATION_LATENCY = new MetricNameTemplate(
+            "replication-latency-ms", SOURCE_CONNECTOR_GROUP,
             "Time it takes records to get replicated from source to target cluster.", TAGS);
-    private static final MetricNameTemplate REPLICATION_LAG_MAX = new MetricNameTemplate(
-            "replication-lag-ms-max", SOURCE_CONNECTOR_GROUP,
+    private static final MetricNameTemplate REPLICATION_LATENCY_MAX = new MetricNameTemplate(
+            "replication-latency-ms-max", SOURCE_CONNECTOR_GROUP,
             "Time it takes records to get replicated from source to target cluster.", TAGS);
-    private static final MetricNameTemplate REPLICATION_LAG_MIN = new MetricNameTemplate(
-            "replication-lag-ms-min", SOURCE_CONNECTOR_GROUP,
+    private static final MetricNameTemplate REPLICATION_LATENCY_MIN = new MetricNameTemplate(
+            "replication-latency-ms-min", SOURCE_CONNECTOR_GROUP,
             "Time it takes records to get replicated from source to target cluster.", TAGS);
-    private static final MetricNameTemplate REPLICATION_LAG_AVG = new MetricNameTemplate(
-            "replication-lag-ms-avg", SOURCE_CONNECTOR_GROUP,
+    private static final MetricNameTemplate REPLICATION_LATENCY_AVG = new MetricNameTemplate(
+            "replication-latency-ms-avg", SOURCE_CONNECTOR_GROUP,
             "Time it takes records to get replicated from source to target cluster.", TAGS);
 
     private final Metrics metrics; 
@@ -86,7 +86,7 @@ class MirrorMetrics {
         metrics.sensor("record-count");
         metrics.sensor("byte-rate");
         metrics.sensor("record-age");
-        metrics.sensor("replication-lag");
+        metrics.sensor("replication-latency");
     }
 
     void countRecord(TopicPartition topicPartition) {
@@ -97,8 +97,8 @@ class MirrorMetrics {
         partitionMetrics(topicPartition).recordAgeSensor.record((double) ageMillis);
     }
 
-    void replicationLag(TopicPartition topicPartition, long millis) {
-        partitionMetrics(topicPartition).replicationLagSensor.record((double) millis);
+    void replicationLatency(TopicPartition topicPartition, long millis) {
+        partitionMetrics(topicPartition).replicationLatencySensor.record((double) millis);
     }
 
     void recordBytes(TopicPartition topicPartition, long bytes) {
@@ -117,7 +117,7 @@ class MirrorMetrics {
         private final Sensor recordSensor;
         private final Sensor byteRateSensor;
         private final Sensor recordAgeSensor;
-        private final Sensor replicationLagSensor;
+        private final Sensor replicationLatencySensor;
      
         PartitionMetrics(TopicPartition topicPartition) {
             Map<String, String> tags = new LinkedHashMap<>();
@@ -137,11 +137,11 @@ class MirrorMetrics {
             recordAgeSensor.add(metrics.metricInstance(RECORD_AGE_MIN, tags), new Min());
             recordAgeSensor.add(metrics.metricInstance(RECORD_AGE_AVG, tags), new Avg());
 
-            replicationLagSensor = metrics.sensor("replication-lag");
-            replicationLagSensor.add(metrics.metricInstance(REPLICATION_LAG, tags), new Value());
-            replicationLagSensor.add(metrics.metricInstance(REPLICATION_LAG_MAX, tags), new Max());
-            replicationLagSensor.add(metrics.metricInstance(REPLICATION_LAG_MIN, tags), new Min());
-            replicationLagSensor.add(metrics.metricInstance(REPLICATION_LAG_AVG, tags), new Avg());
+            replicationLatencySensor = metrics.sensor("replication-latency");
+            replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY, tags), new Value());
+            replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_MAX, tags), new Max());
+            replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_MIN, tags), new Min());
+            replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_AVG, tags), new Avg());
         }
     }
 }

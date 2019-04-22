@@ -150,9 +150,9 @@ public class MirrorSourceTask extends SourceTask {
             return;
         }
         TopicPartition topicPartition = new TopicPartition(record.topic(), record.kafkaPartition());
-        long lag = System.currentTimeMillis() - record.timestamp();
+        long latency = System.currentTimeMillis() - record.timestamp();
         metrics.countRecord(topicPartition);
-        metrics.replicationLag(topicPartition, lag);
+        metrics.replicationLatency(topicPartition, latency);
         TopicPartition sourceTopicPartition = MirrorUtils.unwrapPartition(record.sourcePartition());
         long upstreamOffset = MirrorUtils.unwrapOffset(record.sourceOffset());
         long downstreamOffset = metadata.offset();

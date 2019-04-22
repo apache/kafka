@@ -47,11 +47,6 @@ public class MirrorClientConfig extends AbstractConfig {
         return getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
     }
 
-    long maxOffsetLag() {
-        // hard-coded b/c we don't expose this property yet
-        return 100;
-    }
-
     Map<String, Object> adminConfig() {
         return valuesWithPrefixOverride(ADMIN_CLIENT_PREFIX);
     }
