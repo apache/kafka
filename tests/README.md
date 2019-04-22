@@ -357,7 +357,7 @@ For a tutorial on how to setup and run the Kafka system tests, see
 https://cwiki.apache.org/confluence/display/KAFKA/tutorial+-+set+up+and+run+Kafka+system+tests+with+ducktape
 
 * Install Virtual Box from [https://www.virtualbox.org/](https://www.virtualbox.org/) (run `$ vboxmanage --version` to check if it's installed).
-* Install Vagrant >= 1.6.4 from [http://www.vagrantup.com/](http://www.vagrantup.com/) (run `vagrant --version` to check if it's installed).
+* Install Vagrant >= 1.6.4 from [https://www.vagrantup.com/](https://www.vagrantup.com/) (run `vagrant --version` to check if it's installed).
 * Install system test dependencies, including ducktape, a command-line tool and library for testing distributed systems. We recommend to use virtual env for system test development
 
         $ cd kafka/tests
@@ -401,12 +401,12 @@ Preparation
 In these steps, we will create an IAM role which has permission to create and destroy EC2 instances,
 set up a keypair used for ssh access to the test driver and worker machines, and create a security group to allow the test driver and workers to all communicate via TCP.
 
-* [Create an IAM role](http://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html). We'll give this role the ability to launch or kill additional EC2 machines.
+* [Create an IAM role](https://docs.aws.amazon.com/IAM/latest/UserGuide/id_roles_create_for-user.html). We'll give this role the ability to launch or kill additional EC2 machines.
  - Create role "kafkatest-master"
  - Role type: Amazon EC2
  - Attach policy: AmazonEC2FullAccess (this will allow our test-driver to create and destroy EC2 instances)
 
-* If you haven't already, [set up a keypair to use for SSH access](http://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html). For the purpose
+* If you haven't already, [set up a keypair to use for SSH access](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-key-pairs.html). For the purpose
 of this quickstart, let's say the keypair name is kafkatest, and you've saved the private key in kafktest.pem
 
 * Next, create a EC2 security group called "kafkatest".
