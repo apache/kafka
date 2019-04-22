@@ -309,7 +309,11 @@ public class RestServer {
             config, ConnectRestExtension.class);
 
         long herderRequestTimeoutMs = ConnectorsResource.REQUEST_TIMEOUT_MS;
-        Integer rebalanceTimeoutMs = config.getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
+
+        Integer rebalanceTimeoutMs =
+            config.typeOf(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG) == null ? null :
+            config.getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
+
         if (rebalanceTimeoutMs != null) {
             herderRequestTimeoutMs = Math.min(herderRequestTimeoutMs, rebalanceTimeoutMs.longValue());
         }
