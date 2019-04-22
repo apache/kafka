@@ -189,11 +189,11 @@ subprojects {
                   pom.project {
                       name 'Apache Kafka'
                       packaging 'jar'
-                      url 'http://kafka.apache.org'
+                      url 'https://kafka.apache.org'
                       licenses {
                           license {
                               name 'The Apache Software License, Version 2.0'
-                              url 'http://www.apache.org/licenses/LICENSE-2.0.txt'
+                              url 'https://www.apache.org/licenses/LICENSE-2.0.txt'
                               distribution 'repo'
                           }
                       }
@@ -1420,7 +1420,7 @@ project(':connect:api') {
 
   javadoc {
     include "**/org/apache/kafka/connect/**" // needed for the `javadocAll` task
-    options.links "http://docs.oracle.com/javase/7/docs/api/"
+    options.links "https://docs.oracle.com/javase/8/docs/api/"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -1699,5 +1699,5 @@ task aggregatedJavadoc(type: Javadoc) {
   classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
   includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
-  options.links "http://docs.oracle.com/javase/7/docs/api/"
+  options.links "https://docs.oracle.com/javase/8/docs/api/"
 }
