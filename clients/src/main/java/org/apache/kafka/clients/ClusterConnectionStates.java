@@ -72,11 +72,9 @@ final class ClusterConnectionStates {
      */
     public boolean isBlackedOut(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
-        if (state == null)
-            return false;
-        else
-            return state.state.isDisconnected() &&
-                   now - state.lastConnectAttemptMs < state.reconnectBackoffMs;
+        return state != null
+                && state.state.isDisconnected()
+                && now - state.lastConnectAttemptMs < state.reconnectBackoffMs;
     }
 
     /**
