@@ -17,4 +17,11 @@
 if [ "x$KAFKA_HEAP_OPTS" = "x" ]; then
     export KAFKA_HEAP_OPTS="-Xmx512M"
 fi
-exec $(dirname $0)/kafka-run-class.sh kafka.tools.ConsumerPerformance "$@"
+
+if [ -z "$(readlink $0)" ]; then
+  base_dir=$(dirname $0)/..
+else
+  base_dir=$(dirname $(readlink $0))/..
+fi
+
+exec $base_dir/bin/kafka-run-class.sh kafka.tools.ConsumerPerformance "$@"

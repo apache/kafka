@@ -20,7 +20,7 @@ then
   exit 1
 fi
 
-# CYGWIN == 1 if Cygwin is detected, else 0.
+# CYGINW == 1 if Cygwin is detected, else 0.
 if [[ $(uname -a) =~ "CYGWIN" ]]; then
   CYGWIN=1
 else
@@ -45,7 +45,11 @@ should_include_file() {
   fi
 }
 
-base_dir=$(dirname $0)/..
+if [ -z "$(readlink $0)" ]; then
+  base_dir=$(dirname $0)/..
+else
+  base_dir=$(dirname $(readlink $0))/..
+fi
 
 if [ -z "$SCALA_VERSION" ]; then
   SCALA_VERSION=2.12.8

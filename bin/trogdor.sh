@@ -47,4 +47,11 @@ case ${action} in
 esac
 
 export INCLUDE_TEST_JARS=1
-exec $(dirname $0)/kafka-run-class.sh "${CLASS}" "$@"
+
+if [ -z "$(readlink $0)" ]; then
+  base_dir=$(dirname $0)/..
+else
+  base_dir=$(dirname $(readlink $0))/..
+fi
+
+exec $base_dir/bin/kafka-run-class.sh "${CLASS}" "$@"

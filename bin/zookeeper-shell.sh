@@ -20,4 +20,10 @@ then
 	exit 1
 fi
 
-exec $(dirname $0)/kafka-run-class.sh org.apache.zookeeper.ZooKeeperMain -server "$@"
+if [ -z "$(readlink $0)" ]; then
+  base_dir=$(dirname $0)/..
+else
+  base_dir=$(dirname $(readlink $0))/..
+fi
+
+exec $base_dir/bin/kafka-run-class.sh org.apache.zookeeper.ZooKeeperMain -server "$@"

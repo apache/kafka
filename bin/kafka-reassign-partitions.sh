@@ -14,4 +14,10 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-exec $(dirname $0)/kafka-run-class.sh kafka.admin.ReassignPartitionsCommand "$@"
+if [ -z "$(readlink $0)" ]; then
+  base_dir=$(dirname $0)/..
+else
+  base_dir=$(dirname $(readlink $0))/..
+fi
+
+exec $base_dir/bin/kafka-run-class.sh kafka.admin.ReassignPartitionsCommand "$@"
