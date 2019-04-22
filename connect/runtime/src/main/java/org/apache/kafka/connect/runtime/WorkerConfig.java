@@ -329,6 +329,10 @@ public class WorkerConfig extends AbstractConfig {
         }
     }
 
+    public Integer getRebalanceTimeout() {
+        return null;
+    }
+
     @Override
     protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
