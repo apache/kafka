@@ -318,8 +318,9 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
 
   protected class ConsumerAssignmentPoller(consumer: Consumer[Array[Byte], Array[Byte]],
                                            topicsToSubscribe: List[String],
-                                           partitionsToAssign: Set[TopicPartition]) extends ShutdownableThread("daemon-consumer-assignment", false)
-  {
+                                           partitionsToAssign: Set[TopicPartition])
+    extends ShutdownableThread("daemon-consumer-assignment", false) {
+
     def this(consumer: Consumer[Array[Byte], Array[Byte]], topicsToSubscribe: List[String]) {
       this(consumer, topicsToSubscribe, Set.empty[TopicPartition])
     }
@@ -344,6 +345,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
         partitionAssignment = Set.empty[TopicPartition]
       }
     }
+
     if (partitionAssignment.isEmpty) {
       consumer.subscribe(topicsToSubscribe.asJava, rebalanceListener)
     } else {

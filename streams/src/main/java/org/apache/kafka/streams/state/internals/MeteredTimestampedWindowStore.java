@@ -26,6 +26,8 @@ import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 
+import java.util.Map;
+
 /**
  * A Metered {@link MeteredTimestampedWindowStore} wrapper that is used for recording operation metrics, and hence its
  * inner WindowStore implementation do not need to provide its own metrics collecting functionality.
@@ -50,9 +52,22 @@ class MeteredTimestampedWindowStore<K, V>
     @SuppressWarnings("unchecked")
     @Override
     void initStoreSerde(final ProcessorContext context) {
+        final Serde<K> usedKeySerde;
+        final Serde<ValueAndTimestamp<V>> usedValueSerde;
+        final Map<String, Object> conf = context.appConfigs();
+        if (keySerde == null) {
+            usedKeySerde = (Serde<K>) context.keySerde();
+        } else {
+            usedKeySerde = keySerde;
+            usedKeySerde.configure(conf, true);
+        }
+        if (valueSerde == null) {
+            usedValueSerde = (Serde<ValueAndTimestamp<V>>) context.valueSerde();
+        } else {
+            usedValueSerde = valueSerde;
+            usedValueSerde.configure(conf, false);
+        }
         serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
-            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
-            valueSerde == null ? new ValueAndTimestampSerde<>((Serde<V>) context.keySerde()) : valueSerde);
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()), usedKeySerde, usedValueSerde);
     }
 }

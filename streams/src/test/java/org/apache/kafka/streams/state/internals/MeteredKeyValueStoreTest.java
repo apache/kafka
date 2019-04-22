@@ -40,6 +40,7 @@ import org.junit.runner.RunWith;
 
 import java.util.Collections;
 import java.util.List;
+import java.util.HashMap;
 import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -92,6 +93,7 @@ public class MeteredKeyValueStoreTest {
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         expect(context.metrics()).andReturn(new MockStreamsMetrics(metrics));
         expect(context.taskId()).andReturn(taskId);
+        expect(context.appConfigs()).andReturn(new HashMap<>());
         expect(inner.name()).andReturn("metered").anyTimes();
     }
 
