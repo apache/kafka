@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
@@ -69,6 +70,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -1508,7 +1510,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void seek(TopicPartition partition, long offset) {
-        seek(partition, new OffsetAndMetadata(offset, null));
+        if (offset < 0)
+            throw new IllegalArgumentException("seek offset must not be a negative number");
+
+        acquireAndEnsureOpen();
+        try {
+            log.info("Seeking to offset {} for partition {}", offset, partition);
+            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                    offset,
+                    Optional.empty(), // This will ensure we skip validation
+                    this.metadata.leaderAndEpoch(partition));
+            this.subscriptions.seek(partition, newPosition);
+        } finally {
+            release();
+        }
     }
 
     /**
@@ -1535,8 +1550,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } else {
                 log.info("Seeking to offset {} for partition {}", offset, partition);
             }
+            Metadata.LeaderAndEpoch currentLeaderAndEpoch = this.metadata.leaderAndEpoch(partition);
+            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                    offsetAndMetadata.offset(),
+                    offsetAndMetadata.leaderEpoch(),
+                    currentLeaderAndEpoch);
             this.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
-            this.subscriptions.seek(partition, offset);
+            this.subscriptions.seekAndValidate(partition, newPosition);
         } finally {
             release();
         }
@@ -1658,9 +1678,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             Timer timer = time.timer(timeout);
             do {
-                Long offset = this.subscriptions.position(partition);
-                if (offset != null)
-                    return offset;
+                SubscriptionState.FetchPosition position = this.subscriptions.validPosition(partition);
+                if (position != null)
+                    return position.offset;
 
                 updateFetchPositions(timer);
                 client.poll(timer);
@@ -2196,6 +2216,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return true iff the operation completed without timing out
      */
     private boolean updateFetchPositions(final Timer timer) {
+        // If any partitions have been truncated due to a leader change, we need to validate the offsets
+        fetcher.validateOffsetsIfNeeded();
+
         cachedSubscriptionHashAllFetchPositions = subscriptions.hasAllFetchPositions();
         if (cachedSubscriptionHashAllFetchPositions) return true;
 

@@ -1722,7 +1722,31 @@ public class ConsumerCoordinatorTest {
 
         assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
         assertTrue(subscriptions.hasAllFetchPositions());
-        assertEquals(100L, subscriptions.position(t1p).longValue());
+        assertEquals(100L, subscriptions.position(t1p).offset);
+    }
+
+    @Test
+    public void testRefreshOffsetWithValidation() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        subscriptions.assignFromUser(singleton(t1p));
+
+        // Initial leader epoch of 4
+        MetadataResponse metadataResponse = TestUtils.metadataUpdateWith("kafka-cluster", 1,
+                Collections.emptyMap(), singletonMap(topic1, 1), tp -> 4);
+        client.updateMetadata(metadataResponse);
+
+        // Load offsets from previous epoch
+        client.prepareResponse(offsetFetchResponse(t1p, Errors.NONE, "", 100L, 3));
+        coordinator.refreshCommittedOffsetsIfNeeded(time.timer(Long.MAX_VALUE));
+
+        // Offset gets loaded, but requires validation
+        assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
+        assertFalse(subscriptions.hasAllFetchPositions());
+        assertTrue(subscriptions.awaitingValidation(t1p));
+        assertEquals(subscriptions.position(t1p).offset, 100L);
+        assertNull(subscriptions.validPosition(t1p));
     }
 
     @Test
@@ -1756,7 +1780,7 @@ public class ConsumerCoordinatorTest {
 
         assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
         assertTrue(subscriptions.hasAllFetchPositions());
-        assertEquals(100L, subscriptions.position(t1p).longValue());
+        assertEquals(100L, subscriptions.position(t1p).offset);
     }
 
     @Test
@@ -1797,7 +1821,7 @@ public class ConsumerCoordinatorTest {
 
         assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
         assertTrue(subscriptions.hasAllFetchPositions());
-        assertEquals(100L, subscriptions.position(t1p).longValue());
+        assertEquals(100L, subscriptions.position(t1p).offset);
     }
 
     @Test
@@ -1825,7 +1849,7 @@ public class ConsumerCoordinatorTest {
 
         assertEquals(Collections.emptySet(), subscriptions.missingFetchPositions());
         assertTrue(subscriptions.hasAllFetchPositions());
-        assertEquals(500L, subscriptions.position(t1p).longValue());
+        assertEquals(500L, subscriptions.position(t1p).offset);
         assertTrue(coordinator.coordinatorUnknown());
     }
 
@@ -2023,7 +2047,7 @@ public class ConsumerCoordinatorTest {
         time.sleep(autoCommitIntervalMs); // sleep for a while to ensure auto commit does happen
         coordinator.maybeAutoCommitOffsetsAsync(time.milliseconds());
         assertFalse(coordinator.coordinatorUnknown());
-        assertEquals(100L, subscriptions.position(t1p).longValue());
+        assertEquals(100L, subscriptions.position(t1p).offset);
     }
 
     private ConsumerCoordinator prepareCoordinatorForCloseTest(final boolean useGroupManagement,
@@ -2205,6 +2229,12 @@ public class ConsumerCoordinatorTest {
     private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset) {
         OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset,
                 Optional.empty(), metadata, partitionLevelError);
+        return new OffsetFetchResponse(Errors.NONE, singletonMap(tp, data));
+    }
+
+    private OffsetFetchResponse offsetFetchResponse(TopicPartition tp, Errors partitionLevelError, String metadata, long offset, int epoch) {
+        OffsetFetchResponse.PartitionData data = new OffsetFetchResponse.PartitionData(offset,
+                Optional.of(epoch), metadata, partitionLevelError);
         return new OffsetFetchResponse(Errors.NONE, singletonMap(tp, data));
     }
 
