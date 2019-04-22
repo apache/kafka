@@ -52,11 +52,11 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
         this(name, topics, null, keyDeserializer, valDeserializer);
     }
 
-    public Deserializer getKeyDeSerializer() {
+    public Deserializer getKeyDeserializer() {
         return keyDeserializer;
     }
 
-    public Deserializer getValueDeSerializer() {
+    public Deserializer getValueDeserializer() {
         return valDeserializer;
     }
 

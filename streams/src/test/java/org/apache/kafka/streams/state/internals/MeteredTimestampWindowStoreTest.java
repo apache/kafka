@@ -19,12 +19,14 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
@@ -34,13 +36,19 @@ import org.easymock.EasyMock;
 import org.junit.Before;
 import org.junit.Test;
 
+import static org.easymock.EasyMock.anyObject;
+import static org.easymock.EasyMock.eq;
+import static org.easymock.EasyMock.expectLastCall;
+import static org.easymock.EasyMock.mock;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertNull;
 
 public class MeteredTimestampWindowStoreTest {
     private InternalMockProcessorContext context;
     @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
-    private final MeteredTimestampedWindowStore<String, String> store = new MeteredTimestampedWindowStore<>(
+    private MeteredTimestampedWindowStore<String, String> store = new MeteredTimestampedWindowStore<>(
         innerStoreMock,
         10L, // any size
         "scope",
@@ -67,6 +75,73 @@ public class MeteredTimestampWindowStoreTest {
             NoOpRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
         );
+    }
+
+    @Test
+    public void shouldGetSerdesFromConfigWithoutUserSerdes() {
+        store = new MeteredTimestampedWindowStore<>(
+            innerStoreMock,
+            10L, // any size
+            "scope",
+            new MockTime(),
+            null,
+            null
+        );
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test");
+        final Serde mockSerde = mock(Serde.class);
+
+        new InternalMockProcessorContext(
+            TestUtils.tempDirectory(),
+            mockSerde,
+            mockSerde,
+            streamsMetrics,
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            NoOpRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
+        );
+        replay(mockSerde, innerStoreMock);
+
+        store.init(context, store);
+
+        verify(mockSerde);
+    }
+
+    @Test
+    public void shouldConfigureUserSerdes() {
+        final Serde<String> mockKeySerde = mock(Serde.class);
+        mockKeySerde.configure(anyObject(), eq(true));
+        expectLastCall();
+
+        final Serde<ValueAndTimestamp<String>> mockValueSerde = mock(Serde.class);
+        mockValueSerde.configure(anyObject(), eq(false));
+        expectLastCall();
+
+        store = new MeteredTimestampedWindowStore<>(
+            innerStoreMock,
+            10L, // any size
+            "scope",
+            new MockTime(),
+            mockKeySerde,
+            mockValueSerde
+        );
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test");
+        final Serde mockSerde = mock(Serde.class);
+
+        new InternalMockProcessorContext(
+            TestUtils.tempDirectory(),
+            mockSerde,
+            mockSerde,
+            streamsMetrics,
+            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
+            NoOpRecordCollector::new,
+            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
+        );
+        replay(mockKeySerde, mockValueSerde, innerStoreMock);
+
+        store.init(context, store);
+        verify(mockKeySerde, mockValueSerde);
     }
 
     @Test

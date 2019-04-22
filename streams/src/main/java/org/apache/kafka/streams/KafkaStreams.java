@@ -647,11 +647,11 @@ public class KafkaStreams implements AutoCloseable {
             }
         }
         for (final SourceNode sn : sources) {
-            if (sn.getKeyDeSerializer() != null) {
-                sn.getKeyDeSerializer().configure(config.originals(), true);
+            if (sn.getKeyDeserializer() != null) {
+                sn.getKeyDeserializer().configure(config.originals(), true);
             }
-            if (sn.getValueDeSerializer() != null) {
-                sn.getValueDeSerializer().configure(config.originals(), false);
+            if (sn.getValueDeserializer() != null) {
+                sn.getValueDeserializer().configure(config.originals(), false);
             }
         }
     }
