@@ -37,8 +37,6 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 public class AdminClientConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 
-    private static final boolean ENABLE_INDIRECT_RESOLUTION = false;
-
     /**
      * <code>bootstrap.servers</code>
      */
@@ -195,7 +193,7 @@ public class AdminClientConfig extends AbstractConfig {
     }
 
     protected AdminClientConfig(Map<?, ?> props, boolean doLog) {
-        super(CONFIG, props, doLog, ENABLE_INDIRECT_RESOLUTION);
+        super(CONFIG, props, doLog);
     }
 
     public static Set<String> configNames() {

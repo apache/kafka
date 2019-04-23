@@ -45,7 +45,7 @@ public abstract class ConverterConfig extends AbstractConfig {
     }
 
     protected ConverterConfig(ConfigDef configDef, Map<String, ?> props) {
-        super(configDef, props, true, false);
+        super(configDef, props, true);
     }
 
     /**

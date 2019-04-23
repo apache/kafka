@@ -27,7 +27,7 @@ import java.util.Map;
 public class SimpleConfig extends AbstractConfig {
 
     public SimpleConfig(ConfigDef configDef, Map<?, ?> originals) {
-        super(configDef, originals, false, false);
+        super(configDef, originals, false);
     }
 
 }

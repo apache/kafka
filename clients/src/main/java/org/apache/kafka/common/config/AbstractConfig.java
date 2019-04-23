@@ -61,10 +61,9 @@ public class AbstractConfig {
      * @param originals the name-value pairs of the configuration
      * @param configProviders the map of properties of config providers which will be instantiated by the constructor to resolve any variables in {@code originals}
      * @param doLog whether the configurations should be logged
-     * @param enableAutoResolution to enable/disable automatic resolution of indirect variable
      */
     @SuppressWarnings("unchecked")
-    public AbstractConfig(ConfigDef definition, Map<?, ?> originals,  Map<?, ?> configProviders, boolean doLog, boolean enableAutoResolution) {
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals,  Map<?, ?> configProviders, boolean doLog) {
         /* check that all the keys are really strings */
         Map<String, String> indirectConfigMap = new HashMap<String, String>();
         for (Map.Entry<?, ?> entry : originals.entrySet()) {
@@ -74,11 +73,8 @@ public class AbstractConfig {
                 indirectConfigMap.put((String) entry.getKey(), (String) entry.getValue());
         }
 
-        if (enableAutoResolution) {
-            this.originals = resolveConfigVariables(indirectConfigMap, configProviders, (Map<String, Object>) originals);
-        } else {
-            this.originals = (Map<String, ?>) originals;
-        }
+        this.originals = resolveConfigVariables(indirectConfigMap, configProviders, (Map<String, Object>) originals);
+
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
         for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
@@ -91,20 +87,13 @@ public class AbstractConfig {
             logAll();
     }
 
-    /**
-     * Construct a configuration with a ConfigDef, the configuration properties, optional {ConfigProviders}.
-     * @param definition the definition of the configurations
-     * @param originals the name-value pairs of the configuration and config providers.
-     * @param doLog whether the configurations should be logged
-     * @param enableAutoResolution to enable/disable automatic resolution of indirect variable
-     */
-
-    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog, boolean enableAutoResolution) {
-        this(definition, originals, Collections.emptyMap(), doLog, enableAutoResolution);
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
+        this(definition, originals, Collections.emptyMap(), false);
     }
 
-    public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
-        this(definition, originals, true, false);
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
+        this(definition, originals, Collections.emptyMap(), doLog);
+
     }
 
     /**
@@ -414,14 +403,14 @@ public class AbstractConfig {
         Map<String, ConfigProvider> providers;
 
         if (configProviders == null || configProviders.isEmpty()) {
-            providers = instantiateConfigProvider(indirectVariables);
+            providers = instantiateConfigProvider(indirectVariables, original);
         } else {
 
             for (Map.Entry<?, ?> entry : configProviders.entrySet()) {
                 if (!(entry.getKey() instanceof String))
                     configProviders.remove(entry.getKey());
             }
-            providers = instantiateConfigProvider((Map<String, ?>) configProviders);
+            providers = instantiateConfigProvider((Map<String, String>) configProviders, original);
         }
         if (!providers.isEmpty()) {
             ConfigTransformer configTransformer = new ConfigTransformer(providers);
@@ -432,8 +421,18 @@ public class AbstractConfig {
         return original;
     }
 
-    private Map<String, ConfigProvider> instantiateConfigProvider(Map<String, ?> indirectConfigs) {
-        final String configProviders = (String) indirectConfigs.get(CONFIG_PROVIDERS_CONFIG);
+    private Map<String, Object> getClassConfigProperties(String prefix, Map<String, ?> originals) {
+        Map<String, Object> result = new HashMap<>();
+        for (Map.Entry<String, ?> entry : originals.entrySet()) {
+            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
+                result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+            }
+        }
+        return result;
+    }
+
+    private Map<String, ConfigProvider> instantiateConfigProvider(Map<String, String> indirectConfigs, Map<String, Object> originals) {
+        final String configProviders = indirectConfigs.get(CONFIG_PROVIDERS_CONFIG);
 
         if (configProviders == null || configProviders.isEmpty())
             return Collections.emptyMap();
@@ -443,20 +442,20 @@ public class AbstractConfig {
         for (String provider: configProviders.split(",")) {
             String providerClass = CONFIG_PROVIDERS_CONFIG + "." + provider + ".class";
             if (indirectConfigs.containsKey(providerClass))
-                providerMap.put(provider, (String) indirectConfigs.get(providerClass));
+                providerMap.put(provider, indirectConfigs.get(providerClass));
 
         }
         // Instantiate Config Providers
         Map<String, ConfigProvider> configProviderInstances = new HashMap<String, ConfigProvider>();
-        for (Map.Entry<?, ?> entry : providerMap.entrySet()) {
-            if ((entry.getKey() instanceof String) && (entry.getValue() instanceof String)) {
-                try {
-                    Class cls = Class.forName(entry.getValue().toString());
-                    ConfigProvider provider = (ConfigProvider) cls.newInstance();
-                    configProviderInstances.put(entry.getKey().toString(), provider);
-                } catch (ClassNotFoundException | IllegalAccessException | InstantiationException e) {
-                    log.warn("Failed to initialize the class:" + entry.getValue().toString());
-                }
+        for (Map.Entry<String, String> entry : providerMap.entrySet()) {
+            try {
+                String prefix = CONFIG_PROVIDERS_CONFIG + "." + entry.getKey() + ".";
+                Map<String, ?> configProperties = getClassConfigProperties(prefix, originals);
+                ConfigProvider provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
+                provider.configure(configProperties);
+                configProviderInstances.put(entry.getKey(), provider);
+            } catch (ClassNotFoundException e) {
+                log.warn("Failed to initialize the class:" + entry.getValue());
             }
         }
 

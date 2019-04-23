@@ -352,7 +352,7 @@ public class AbstractConfigTest {
     }
 
     @Test
-    public void testIndirectConfigResolutionInValidTestCases() {
+    public void testIndirectConfigResolutionInvalidTestCases() {
         Properties props;
         TestIndirectConfigResolution config;
 
@@ -406,11 +406,11 @@ public class AbstractConfigTest {
         }
 
         public TestIndirectConfigResolution(Map<?, ?> props) {
-            super(CONFIG, props, true, true);
+            super(CONFIG, props, true);
         }
 
         public TestIndirectConfigResolution(Map<?, ?> props, Map<?, ?> providers) {
-            super(CONFIG, props, providers, true, true);
+            super(CONFIG, props, providers, true);
         }
     }
 

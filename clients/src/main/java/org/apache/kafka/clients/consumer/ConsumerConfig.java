@@ -42,8 +42,6 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 public class ConsumerConfig extends AbstractConfig {
     private static final ConfigDef CONFIG;
 
-    private static final boolean ENABLE_INDIRECT_RESOLUTION = false;
-
     /*
      * NOTE: DO NOT CHANGE EITHER CONFIG STRINGS OR THEIR JAVA VARIABLE NAMES AS
      * THESE ARE PART OF THE PUBLIC API AND CHANGE WILL BREAK USER CODE.
@@ -514,7 +512,7 @@ public class ConsumerConfig extends AbstractConfig {
     }
 
     protected ConsumerConfig(Map<?, ?> props, boolean doLog) {
-        super(CONFIG, props, doLog, ENABLE_INDIRECT_RESOLUTION);
+        super(CONFIG, props, doLog);
     }
 
     public static Set<String> configNames() {

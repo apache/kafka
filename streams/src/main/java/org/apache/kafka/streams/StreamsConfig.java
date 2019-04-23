@@ -849,7 +849,7 @@ public class StreamsConfig extends AbstractConfig {
 
     protected StreamsConfig(final Map<?, ?> props,
                             final boolean doLog) {
-        super(CONFIG, props, doLog, ENABLE_INDIRECT_RESOLUTION);
+        super(CONFIG, props, doLog);
         eosEnabled = EXACTLY_ONCE.equals(getString(PROCESSING_GUARANTEE_CONFIG));
     }
 
