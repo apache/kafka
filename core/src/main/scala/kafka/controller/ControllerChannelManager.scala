@@ -354,8 +354,8 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
   def addStopReplicaRequestForBrokers(brokerIds: Seq[Int], topicPartition: TopicPartition, deletePartition: Boolean): Unit = {
     brokerIds.filter(_ >= 0).foreach { brokerId =>
       def callback(stopReplicaResponse: AbstractResponse): Unit = {
-        if (deletePartition && controllerContext.isTopicQueuedUpForDeletion(topicPartition.topic))
-          controller.eventManager.put(controller.TopicDeletionStopReplicaResponseReceived(stopReplicaResponse, brokerId))
+        if (deletePartition)
+          controller.eventManager.put(controller.StopAndDeleteReplicaResponseReceived(stopReplicaResponse, brokerId))
       }
 
       stopReplicaRequestMap.getOrElseUpdate(brokerId, Seq.empty[StopReplicaRequestInfo])

@@ -1155,15 +1155,20 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  case class TopicDeletionStopReplicaResponseReceived(stopReplicaResponseObj: AbstractResponse, replicaId: Int) extends ControllerEvent {
+  case class StopAndDeleteReplicaResponseReceived(stopReplicaResponseObj: AbstractResponse, replicaId: Int) extends ControllerEvent {
 
     def state = ControllerState.TopicDeletion
 
     override def process(): Unit = {
       if (!isActive) return
       val stopReplicaResponse = stopReplicaResponseObj.asInstanceOf[StopReplicaResponse]
-      debug(s"Delete topic callback invoked for $stopReplicaResponse")
+
+      // Here we are only handling partitions which are part of topic deletion
       val responseMap = stopReplicaResponse.responses.asScala
+        .filterKeys(tp => controllerContext.isTopicQueuedUpForDeletion(tp.topic))
+      if (responseMap.nonEmpty)
+        debug(s"Delete topic callback invoked on StopReplica response received from broker $replicaId: $stopReplicaResponse")
+
       val partitionsInError =
         if (stopReplicaResponse.error != Errors.NONE) responseMap.keySet
         else responseMap.filter { case (_, error) => error != Errors.NONE }.keySet
