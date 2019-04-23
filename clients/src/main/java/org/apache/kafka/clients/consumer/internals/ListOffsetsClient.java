@@ -40,7 +40,7 @@ public class ListOffsetsClient extends AsyncClient<
         ListOffsetsClient.ResultData> {
 
 
-    ListOffsetsClient(ConsumerNetworkClient client, LogContext logContext) {
+    public ListOffsetsClient(ConsumerNetworkClient client, LogContext logContext) {
         super(client, logContext);
     }
 
@@ -76,6 +76,11 @@ public class ListOffsetsClient extends AsyncClient<
         for (Map.Entry<TopicPartition, ListOffsetRequest.PartitionData> entry : requestData.timestampsToSearch.entrySet()) {
             TopicPartition topicPartition = entry.getKey();
             ListOffsetResponse.PartitionData partitionData = response.responseData().get(topicPartition);
+            if (partitionData == null) {
+                logger().warn("Missing partition {} from response, ignoring", topicPartition);
+                partitionsToRetry.add(topicPartition);
+                continue;
+            }
             Errors error = partitionData.error;
             if (error == Errors.NONE) {
                 handleOkPartitionResponse(topicPartition, partitionData, fetchedOffsets);

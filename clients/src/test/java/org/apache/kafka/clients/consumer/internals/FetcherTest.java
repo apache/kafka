@@ -91,6 +91,9 @@ import org.junit.After;
 import org.junit.Assert;
 import org.junit.Before;
 import org.junit.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mock;
+import org.mockito.Mockito;
 
 import java.io.DataOutputStream;
 import java.lang.reflect.Field;
@@ -115,6 +118,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import static java.util.Collections.list;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
@@ -157,6 +161,7 @@ public class FetcherTest {
     private Metrics metrics;
     private ConsumerNetworkClient consumerClient;
     private Fetcher<?, ?> fetcher;
+    private ListOffsetsClient listOffsetsClient;
 
     private MemoryRecords records;
     private MemoryRecords nextRecords;
@@ -1302,6 +1307,21 @@ public class FetcherTest {
     @Test
     public void testListOffsetSendsReadCommitted() {
         testListOffsetsSendsIsolationLevel(IsolationLevel.READ_COMMITTED);
+    }
+
+    @Test
+    public void testListOffsetSendsReadCommitted2() {
+        buildFetcher(OffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(), new ByteArrayDeserializer(),
+                Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED);
+
+        assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, OffsetResetStrategy.LATEST);
+
+        ArgumentCaptor<ListOffsetsClient.RequestData> captor = ArgumentCaptor.forClass(ListOffsetsClient.RequestData.class);
+        Mockito.doCallRealMethod().when(listOffsetsClient).prepareRequest(Mockito.any(Node.class), captor.capture());
+
+        fetcher.resetOffsetsIfNeeded();
+        assertEquals(captor.getValue().isolationLevel, IsolationLevel.READ_COMMITTED);
     }
 
     private void testListOffsetsSendsIsolationLevel(IsolationLevel isolationLevel) {
@@ -2832,7 +2852,8 @@ public class FetcherTest {
                 time,
                 retryBackoffMs,
                 requestTimeoutMs,
-                IsolationLevel.READ_UNCOMMITTED) {
+                IsolationLevel.READ_UNCOMMITTED,
+                listOffsetsClient) {
             @Override
             protected FetchSessionHandler sessionHandler(int id) {
                 final FetchSessionHandler handler = super.sessionHandler(id);
@@ -3388,7 +3409,8 @@ public class FetcherTest {
                 time,
                 retryBackoffMs,
                 requestTimeoutMs,
-                isolationLevel);
+                isolationLevel,
+                listOffsetsClient);
     }
 
     private void buildDependencies(MetricConfig metricConfig, OffsetResetStrategy offsetResetStrategy) {
@@ -3402,6 +3424,7 @@ public class FetcherTest {
         consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time,
                 100, 1000, Integer.MAX_VALUE);
         metricsRegistry = new FetcherMetricsRegistry(metricConfig.tags().keySet(), "consumer" + groupId);
+        listOffsetsClient = Mockito.spy(new ListOffsetsClient(consumerClient, new LogContext()));
     }
 
     private <T> List<Long> collectRecordOffsets(List<ConsumerRecord<T, T>> records) {

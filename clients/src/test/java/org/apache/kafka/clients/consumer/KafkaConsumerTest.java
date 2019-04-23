@@ -27,6 +27,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.Heartbeat;
+import org.apache.kafka.clients.consumer.internals.ListOffsetsClient;
 import org.apache.kafka.clients.consumer.internals.PartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.Cluster;
@@ -1910,7 +1911,8 @@ public class KafkaConsumerTest {
                 time,
                 retryBackoffMs,
                 requestTimeoutMs,
-                IsolationLevel.READ_UNCOMMITTED);
+                IsolationLevel.READ_UNCOMMITTED,
+                new ListOffsetsClient(consumerClient, loggerFactory));
 
         return new KafkaConsumer<>(
                 loggerFactory,

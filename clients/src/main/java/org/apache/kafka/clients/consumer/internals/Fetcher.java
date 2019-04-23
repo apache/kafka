@@ -159,7 +159,8 @@ public class Fetcher<K, V> implements Closeable {
                    Time time,
                    long retryBackoffMs,
                    long requestTimeoutMs,
-                   IsolationLevel isolationLevel) {
+                   IsolationLevel isolationLevel,
+                   ListOffsetsClient listOffsetsClient) {
         this.log = logContext.logger(Fetcher.class);
         this.logContext = logContext;
         this.time = time;
@@ -181,7 +182,7 @@ public class Fetcher<K, V> implements Closeable {
         this.isolationLevel = isolationLevel;
         this.sessionHandlers = new HashMap<>();
         this.offsetsForLeaderEpochClient = new OffsetsForLeaderEpochClient(client, logContext);
-        this.listOffsetsClient = new ListOffsetsClient(client, logContext);
+        this.listOffsetsClient = listOffsetsClient;
     }
 
     /**
