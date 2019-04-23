@@ -214,8 +214,8 @@ class ControllerContext {
     topicsToBeDeleted.contains(topic)
   }
 
-  def isTopicIneligibleForDeletion(topic: String): Boolean = {
-    topicsIneligibleForDeletion.contains(topic)
+  def isTopicEligibleForDeletion(topic: String): Boolean = {
+    topicsToBeDeleted.contains(topic) && !topicsIneligibleForDeletion.contains(topic)
   }
 
   def topicsQueuedForDeletion: Set[String] = {

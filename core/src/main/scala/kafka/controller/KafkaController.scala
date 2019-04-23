@@ -1165,7 +1165,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
       // Here we are only handling partitions which are part of topic deletion
       val responseMap = stopReplicaResponse.responses.asScala
-        .filterKeys(tp => controllerContext.isTopicQueuedUpForDeletion(tp.topic))
+        .filterKeys(tp => controllerContext.isTopicEligibleForDeletion(tp.topic))
       if (responseMap.nonEmpty)
         debug(s"Delete topic callback invoked on StopReplica response received from broker $replicaId: $stopReplicaResponse")
 
