@@ -16,10 +16,14 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -116,6 +120,7 @@ public class AbstractHerderTest {
     private final String kafkaClusterId = "I4ZmrWqfT2e-upky_4fdPA";
     private final int generation = 5;
     private final String connector = "connector";
+    private final ConnectorClientConfigOverridePolicy ignoreConnectorClientConfigOverridePolicy = null;
 
     @MockStrict private Worker worker;
     @MockStrict private WorkerConfigTransformer transformer;
@@ -179,8 +184,9 @@ public class AbstractHerderTest {
         ConnectorTaskId taskId = new ConnectorTaskId(connector, 0);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
+                                 ConnectorClientConfigOverridePolicy.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, ignoreConnectorClientConfigOverridePolicy)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -219,8 +225,9 @@ public class AbstractHerderTest {
         String workerId = "workerId";
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
+                                 ConnectorClientConfigOverridePolicy.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, ignoreConnectorClientConfigOverridePolicy)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -253,7 +260,7 @@ public class AbstractHerderTest {
 
     @Test(expected = BadRequestException.class)
     public void testConfigValidationEmptyConfig() {
-        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class);
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, ignoreConnectorClientConfigOverridePolicy);
         replayAll();
 
         herder.validateConnectorConfig(new HashMap<String, String>());
@@ -263,7 +270,7 @@ public class AbstractHerderTest {
 
     @Test()
     public void testConfigValidationMissingName() {
-        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class);
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, ignoreConnectorClientConfigOverridePolicy);
         replayAll();
 
         Map<String, String> config = Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSourceConnector.class.getName());
@@ -288,7 +295,7 @@ public class AbstractHerderTest {
 
     @Test(expected = ConfigException.class)
     public void testConfigValidationInvalidTopics() {
-        AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class);
+        AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, ignoreConnectorClientConfigOverridePolicy);
         replayAll();
 
         Map<String, String> config = new HashMap<>();
@@ -303,7 +310,7 @@ public class AbstractHerderTest {
 
     @Test()
     public void testConfigValidationTransformsExtendResults() {
-        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class);
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, ignoreConnectorClientConfigOverridePolicy);
 
         // 2 transform aliases defined -> 2 plugin lookups
         Set<PluginDesc<Transformation>> transformations = new HashSet<>();
@@ -349,6 +356,43 @@ public class AbstractHerderTest {
         verifyAll();
     }
 
+    @Test()
+    public void testConfigValidationPrincipalOnlyOverride() {
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, new PrincipalConnectorClientConfigOverridePolicy());
+        replayAll();
+
+        // Define 2 transformations. One has a class defined and so can get embedded configs, the other is missing
+        // class info that should generate an error.
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSourceConnector.class.getName());
+        config.put(ConnectorConfig.NAME_CONFIG, "connector-name");
+        config.put("required", "value"); // connector required config
+        config.put("producer." + ProducerConfig.ACKS_CONFIG, "none");
+        config.put("producer." + SaslConfigs.SASL_JAAS_CONFIG, "jaas_config");
+
+        ConfigInfos result = herder.validateConnectorConfig(config);
+        assertEquals(herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)), ConnectorType.SOURCE);
+
+        // We expect there to be errors due to now allowed override policy for ACKS.... Note that these assertions depend heavily on
+        // the config fields for SourceConnectorConfig, but we expect these to change rarely.
+        assertEquals(TestSourceConnector.class.getName(), result.name());
+        // Each transform also gets its own group
+        List<String> expectedGroups = Arrays.asList(
+            ConnectorConfig.COMMON_GROUP,
+            ConnectorConfig.TRANSFORMS_GROUP,
+            ConnectorConfig.ERROR_GROUP
+        );
+        assertEquals(expectedGroups, result.groups());
+        assertEquals(1, result.errorCount());
+        // Base connector config has 13 fields, connector's configs add 2, and 2 producer overrides
+        assertEquals(17, result.values().size());
+        assertEquals("producer." + ProducerConfig.ACKS_CONFIG, result.values().get(15).configValue().name());
+        assertFalse(result.values().get(15).configValue().errors().isEmpty());
+        assertEquals("producer." + SaslConfigs.SASL_JAAS_CONFIG, result.values().get(16).configValue().name());
+        assertTrue(result.values().get(16).configValue().errors().isEmpty());
+        verifyAll();
+    }
+
     @Test
     public void testReverseTransformConfigs() {
         // Construct a task config with constant values for TEST_KEY and TEST_KEY2
@@ -372,15 +416,17 @@ public class AbstractHerderTest {
         assertFalse(reverseTransformed.get(0).containsKey(TEST_KEY3));
     }
 
-    private AbstractHerder createConfigValidationHerder(Class<? extends Connector> connectorClass) {
+    private AbstractHerder createConfigValidationHerder(Class<? extends Connector> connectorClass,
+                                                        ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
 
 
         ConfigBackingStore configStore = strictMock(ConfigBackingStore.class);
         StatusBackingStore statusStore = strictMock(StatusBackingStore.class);
 
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
-                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
+                .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
+                                 ConnectorClientConfigOverridePolicy.class)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, connectorClientConfigOverridePolicy)
                 .addMockedMethod("generation")
                 .createMock();
         EasyMock.expect(herder.generation()).andStubReturn(generation);
