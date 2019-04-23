@@ -260,27 +260,27 @@ public class RestServerTest {
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
 
 
-      EasyMock.expect(herder.plugins()).andStubReturn(plugins);
-      EasyMock.expect(plugins.newPlugins(Collections.EMPTY_LIST,
-          workerConfig,
-          ConnectRestExtension.class)).andStubReturn(Collections.EMPTY_LIST);
+        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
+            workerConfig,
+            ConnectRestExtension.class)).andStubReturn(Collections.emptyList());
 
-      final Capture<Callback<Collection<String>>> connectorsCallback = EasyMock.newCapture();
-      herder.connectors(EasyMock.capture(connectorsCallback));
-      PowerMock.expectLastCall().andAnswer(() -> {
-        connectorsCallback.getValue().onCompletion(null, Arrays.asList("a", "b"));
-        return null;
-      });
+        final Capture<Callback<Collection<String>>> connectorsCallback = EasyMock.newCapture();
+        herder.connectors(EasyMock.capture(connectorsCallback));
+        PowerMock.expectLastCall().andAnswer(() -> {
+            connectorsCallback.getValue().onCompletion(null, Arrays.asList("a", "b"));
+            return null;
+        });
 
-      PowerMock.replayAll();
+        PowerMock.replayAll();
 
-      server = new RestServer(workerConfig);
-      server.start(new HerderProvider(herder), herder.plugins());
-      HttpRequest request = new HttpGet("/connectors");
-      CloseableHttpClient httpClient = HttpClients.createMinimal();
-      HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
-      CloseableHttpResponse response = httpClient.execute(httpHost, request);
+        server = new RestServer(workerConfig);
+        server.start(new HerderProvider(herder), herder.plugins());
+        HttpRequest request = new HttpGet("/connectors");
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
+        HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
 
-      Assert.assertEquals(200, response.getStatusLine().getStatusCode());
+        Assert.assertEquals(200, response.getStatusLine().getStatusCode());
     }
 }
