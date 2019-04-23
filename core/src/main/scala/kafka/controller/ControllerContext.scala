@@ -26,8 +26,8 @@ class ControllerContext {
   val stats = new ControllerStats
   var offlinePartitionCount = 0
   var shuttingDownBrokerIds: mutable.Set[Int] = mutable.Set.empty
-  var liveBrokers: Set[Broker] = Set.empty
-  var liveBrokerEpochs: Map[Int, Long] = Map.empty
+  private var liveBrokers: Set[Broker] = Set.empty
+  private var liveBrokerEpochs: Map[Int, Long] = Map.empty
   var epoch: Int = KafkaController.InitialControllerEpoch
   var epochZkVersion: Int = KafkaController.InitialControllerEpochZkVersion
 
@@ -40,10 +40,10 @@ class ControllerContext {
   val replicasOnOfflineDirs: mutable.Map[Int, Set[TopicPartition]] = mutable.Map.empty
 
   val topicsToBeDeleted = mutable.Set.empty[String]
+
   /** The following topicsWithDeletionStarted variable is used to properly update the offlinePartitionCount metric.
    * When a topic is going through deletion, we don't want to keep track of its partition state
-   * changes in the offlinePartitionCount metric, see the PartitionStateMachine#updateControllerMetrics
-   * for detailed logic. This goal means if some partitions of a topic are already
+   * changes in the offlinePartitionCount metric. This goal means if some partitions of a topic are already
    * in OfflinePartition state when deletion starts, we need to change the corresponding partition
    * states to NonExistentPartition first before starting the deletion.
    *
@@ -126,6 +126,7 @@ class ControllerContext {
   def liveOrShuttingDownBrokerIds: Set[Int] = liveBrokerEpochs.keySet
   def liveOrShuttingDownBrokers: Set[Broker] = liveBrokers
   def liveBrokerIdAndEpochs: Map[Int, Long] = liveBrokerEpochs
+  def liveOrShuttingDownBroker(brokerId: Int): Option[Broker] = liveOrShuttingDownBrokers.find(_.id == brokerId)
 
   def partitionsOnBroker(brokerId: Int): Set[TopicPartition] = {
     partitionAssignments.flatMap {

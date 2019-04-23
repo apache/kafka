@@ -683,7 +683,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     controllerContext.partitionLeadershipInfo.clear()
     controllerContext.shuttingDownBrokerIds = mutable.Set.empty[Int]
     // register broker modifications handlers
-    registerBrokerModificationsHandler(controllerContext.liveBrokers.map(_.id))
+    registerBrokerModificationsHandler(controllerContext.liveOrShuttingDownBrokerIds)
     // update the leader and isr cache for all existing partitions from Zookeeper
     updateLeaderAndIsrCache()
     // start the channel manager
@@ -1343,7 +1343,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     override def process(): Unit = {
       if (!isActive) return
       val newMetadataOpt = zkClient.getBroker(brokerId)
-      val oldMetadataOpt = controllerContext.liveBrokers.find(_.id == brokerId)
+      val oldMetadataOpt = controllerContext.liveOrShuttingDownBroker(brokerId)
       if (newMetadataOpt.nonEmpty && oldMetadataOpt.nonEmpty) {
         val oldMetadata = oldMetadataOpt.get
         val newMetadata = newMetadataOpt.get

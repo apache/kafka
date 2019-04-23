@@ -129,10 +129,6 @@ class ZkPartitionStateMachine(config: KafkaConfig,
   private val controllerId = config.brokerId
   this.logIdent = s"[PartitionStateMachine controllerId=$controllerId] "
 
-  override def handleStateChanges(partitions: Seq[TopicPartition], targetState: PartitionState): Map[TopicPartition, Throwable] = {
-    handleStateChanges(partitions, targetState, None)
-  }
-
   /**
     * Try to change the state of the given partitions to the given targetState, using the given
     * partitionLeaderElectionStrategyOpt if a leader election is required.
@@ -439,7 +435,7 @@ object PartitionLeaderElectionAlgorithms {
     assignment.find(id => liveReplicas.contains(id) && isr.contains(id)).orElse {
       if (uncleanLeaderElectionEnabled) {
         val leaderOpt = assignment.find(liveReplicas.contains)
-        if (!leaderOpt.isEmpty)
+        if (leaderOpt.isDefined)
           controllerContext.stats.uncleanLeaderElectionRate.mark()
         leaderOpt
       } else {

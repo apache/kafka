@@ -97,7 +97,7 @@ class TopicDeletionManagerTest {
 
     // Broker 2 is taken offline
     val failedBrokerId = 2
-    val offlineBroker = controllerContext.liveBrokers.find(_.id == failedBrokerId).get
+    val offlineBroker = controllerContext.liveOrShuttingDownBroker(failedBrokerId).get
     val lastEpoch = controllerContext.liveBrokerIdAndEpochs(failedBrokerId)
     controllerContext.removeLiveBrokers(Set(failedBrokerId))
     assertEquals(Set(1, 3), controllerContext.liveBrokerIds)
@@ -169,7 +169,7 @@ class TopicDeletionManagerTest {
 
     // Broker 2 fails
     val failedBrokerId = 2
-    val offlineBroker = controllerContext.liveBrokers.find(_.id == failedBrokerId).get
+    val offlineBroker = controllerContext.liveOrShuttingDownBroker(failedBrokerId).get
     val lastEpoch = controllerContext.liveBrokerIdAndEpochs(failedBrokerId)
     controllerContext.removeLiveBrokers(Set(failedBrokerId))
     assertEquals(Set(1, 3), controllerContext.liveBrokerIds)

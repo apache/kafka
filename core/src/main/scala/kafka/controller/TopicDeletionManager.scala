@@ -259,9 +259,9 @@ class TopicDeletionManager(config: KafkaConfig,
       val unseenPartitionsForDeletion = unseenTopicsForDeletion.flatMap(controllerContext.partitionsForTopic)
       partitionStateMachine.handleStateChanges(unseenPartitionsForDeletion.toSeq, OfflinePartition)
       partitionStateMachine.handleStateChanges(unseenPartitionsForDeletion.toSeq, NonExistentPartition)
-      // adding of unseenTopicsForDeletion to topicsBeingDeleted must be done after the partition state changes
-      // to make sure the offlinePartitionCount metric is properly updated
-      controllerContext.topicsWithDeletionStarted ++= unseenTopicsForDeletion
+      // adding of unseenTopicsForDeletion to topics with deletion started must be done after the partition
+      // state changes to make sure the offlinePartitionCount metric is properly updated
+      controllerContext.beginTopicDeletion(unseenTopicsForDeletion)
     }
 
     client.sendMetadataUpdate(partitions)

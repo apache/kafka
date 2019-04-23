@@ -85,7 +85,8 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
  * 4. ReplicaDeletionStarted: If replica deletion starts, it is moved to this state. Valid previous state is OfflineReplica
  * 5. ReplicaDeletionSuccessful: If replica responds with no error code in response to a delete replica request, it is
  *                        moved to this state. Valid previous state is ReplicaDeletionStarted
- * 6. ReplicaDeletionIneligible: If replica deletion fails, it is moved to this state. Valid previous state is ReplicaDeletionStarted
+ * 6. ReplicaDeletionIneligible: If replica deletion fails, it is moved to this state. Valid previous states are
+ *                        ReplicaDeletionStarted and OfflineReplica
  * 7. NonExistentReplica: If a replica is deleted successfully, it is moved to this state. Valid previous state is
  *                        ReplicaDeletionSuccessful
  */
@@ -99,7 +100,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
   private val controllerId = config.brokerId
   this.logIdent = s"[ReplicaStateMachine controllerId=$controllerId] "
 
-  def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
+  override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
     if (replicas.nonEmpty) {
       try {
         controllerBrokerRequestBatch.newBatch()

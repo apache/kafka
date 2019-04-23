@@ -23,27 +23,40 @@ case class ElectionResult(topicPartition: TopicPartition, leaderAndIsr: Option[L
 
 object ElectionUtil {
 
-  def leaderForOffline(partition: TopicPartition,
-                       leaderIsrAndControllerEpochOpt: Option[LeaderIsrAndControllerEpoch],
-                       uncleanLeaderElectionEnabled: Boolean,
-                       controllerContext: ControllerContext): ElectionResult = {
+  private def leaderForOffline(partition: TopicPartition,
+                               leaderIsrAndControllerEpochOpt: Option[LeaderIsrAndControllerEpoch],
+                               uncleanLeaderElectionEnabled: Boolean,
+                               controllerContext: ControllerContext): ElectionResult = {
+
     val assignment = controllerContext.partitionReplicaAssignment(partition)
     val liveReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, partition))
-    if (leaderIsrAndControllerEpochOpt.nonEmpty) {
-      val leaderIsrAndControllerEpoch = leaderIsrAndControllerEpochOpt.get
-      val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr
-      val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment, isr, liveReplicas.toSet, uncleanLeaderElectionEnabled, controllerContext)
-      val newLeaderAndIsrOpt = leaderOpt.map { leader =>
-        val newIsr = if (isr.contains(leader)) isr.filter(replica => controllerContext.isReplicaOnline(replica, partition))
-        else List(leader)
-        leaderIsrAndControllerEpoch.leaderAndIsr.newLeaderAndIsr(leader, newIsr)
-      }
-      ElectionResult(partition, newLeaderAndIsrOpt, liveReplicas)
-    } else {
-      ElectionResult(partition, None, liveReplicas)
+    leaderIsrAndControllerEpochOpt match {
+      case Some(leaderIsrAndControllerEpoch) =>
+        val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr
+        val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment, isr,
+          liveReplicas.toSet, uncleanLeaderElectionEnabled, controllerContext)
+        val newLeaderAndIsrOpt = leaderOpt.map { leader =>
+          val newIsr = if (isr.contains(leader)) isr.filter(replica => controllerContext.isReplicaOnline(replica, partition))
+          else List(leader)
+          leaderIsrAndControllerEpoch.leaderAndIsr.newLeaderAndIsr(leader, newIsr)
+        }
+        ElectionResult(partition, newLeaderAndIsrOpt, liveReplicas)
+
+      case None =>
+        ElectionResult(partition, None, liveReplicas)
     }
   }
 
+  /**
+   * Elect leaders for new or offline partitions.
+   *
+   * @param controllerContext Context with the current state of the cluster
+   * @param partitionsWithUncleanLeaderElectionState A sequence of tuples representing the partitions
+   *                                                 that need election, their leader/ISR state, and whether
+   *                                                 or not unclean leader election is enabled
+   *
+   * @return The election results
+   */
   def leaderForOffline(controllerContext: ControllerContext,
                        partitionsWithUncleanLeaderElectionState: Seq[(TopicPartition, Option[LeaderIsrAndControllerEpoch], Boolean)]): Seq[ElectionResult] = {
     partitionsWithUncleanLeaderElectionState.map { case (partition, leaderIsrAndControllerEpochOpt, uncleanLeaderElectionEnabled) =>
@@ -51,9 +64,9 @@ object ElectionUtil {
     }
   }
 
-  def leaderForReassign(partition: TopicPartition,
-                        leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
-                        controllerContext: ControllerContext): ElectionResult = {
+  private def leaderForReassign(partition: TopicPartition,
+                                leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
+                                controllerContext: ControllerContext): ElectionResult = {
     val reassignment = controllerContext.partitionsBeingReassigned(partition).newReplicas
     val liveReplicas = reassignment.filter(replica => controllerContext.isReplicaOnline(replica, partition))
     val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr
@@ -62,6 +75,15 @@ object ElectionUtil {
     ElectionResult(partition, newLeaderAndIsrOpt, reassignment)
   }
 
+  /**
+   * Elect leaders for partitions that are undergoing reassignment.
+   *
+   * @param controllerContext Context with the current state of the cluster
+   * @param leaderIsrAndControllerEpochs A sequence of tuples representing the partitions that need election
+   *                                     and their respective leader/ISR states
+   *
+   * @return The election results
+   */
   def leaderForReassign(controllerContext: ControllerContext,
                         leaderIsrAndControllerEpochs: Seq[(TopicPartition, LeaderIsrAndControllerEpoch)]): Seq[ElectionResult] = {
     leaderIsrAndControllerEpochs.map { case (partition, leaderIsrAndControllerEpoch) =>
@@ -69,9 +91,9 @@ object ElectionUtil {
     }
   }
 
-  def leaderForPreferredReplica(partition: TopicPartition,
-                                leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
-                                controllerContext: ControllerContext): ElectionResult = {
+  private def leaderForPreferredReplica(partition: TopicPartition,
+                                        leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
+                                        controllerContext: ControllerContext): ElectionResult = {
     val assignment = controllerContext.partitionReplicaAssignment(partition)
     val liveReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, partition))
     val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr
@@ -80,6 +102,15 @@ object ElectionUtil {
     ElectionResult(partition, newLeaderAndIsrOpt, assignment)
   }
 
+  /**
+   * Elect preferred leaders.
+   *
+   * @param controllerContext Context with the current state of the cluster
+   * @param leaderIsrAndControllerEpochs A sequence of tuples representing the partitions that need election
+   *                                     and their respective leader/ISR states
+   *
+   * @return The election results
+   */
   def leaderForPreferredReplica(controllerContext: ControllerContext,
                                 leaderIsrAndControllerEpochs: Seq[(TopicPartition, LeaderIsrAndControllerEpoch)]): Seq[ElectionResult] = {
     leaderIsrAndControllerEpochs.map { case (partition, leaderIsrAndControllerEpoch) =>
@@ -87,12 +118,13 @@ object ElectionUtil {
     }
   }
 
-  def leaderForControlledShutdown(partition: TopicPartition,
-                                  leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
-                                  shuttingDownBrokerIds: Set[Int],
-                                  controllerContext: ControllerContext): ElectionResult = {
+  private def leaderForControlledShutdown(partition: TopicPartition,
+                                          leaderIsrAndControllerEpoch: LeaderIsrAndControllerEpoch,
+                                          shuttingDownBrokerIds: Set[Int],
+                                          controllerContext: ControllerContext): ElectionResult = {
     val assignment = controllerContext.partitionReplicaAssignment(partition)
-    val liveOrShuttingDownReplicas = assignment.filter(replica => controllerContext.isReplicaOnline(replica, partition, includeShuttingDownBrokers = true))
+    val liveOrShuttingDownReplicas = assignment.filter(replica =>
+      controllerContext.isReplicaOnline(replica, partition, includeShuttingDownBrokers = true))
     val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr
     val leaderOpt = PartitionLeaderElectionAlgorithms.controlledShutdownPartitionLeaderElection(assignment, isr,
       liveOrShuttingDownReplicas.toSet, shuttingDownBrokerIds)
@@ -101,6 +133,15 @@ object ElectionUtil {
     ElectionResult(partition, newLeaderAndIsrOpt, liveOrShuttingDownReplicas)
   }
 
+  /**
+   * Elect leaders for partitions whose current leaders are shutting down.
+   *
+   * @param controllerContext Context with the current state of the cluster
+   * @param leaderIsrAndControllerEpochs A sequence of tuples representing the partitions that need election
+   *                                     and their respective leader/ISR states
+   *
+   * @return The election results
+   */
   def leaderForControlledShutdown(controllerContext: ControllerContext,
                                   leaderIsrAndControllerEpochs: Seq[(TopicPartition, LeaderIsrAndControllerEpoch)]): Seq[ElectionResult] = {
     val shuttingDownBrokerIds = controllerContext.shuttingDownBrokerIds.toSet

@@ -61,7 +61,7 @@ class ControllerChannelManager(controllerContext: ControllerContext, config: Kaf
     }
   )
 
-  controllerContext.liveBrokers.foreach(addNewBroker)
+  controllerContext.liveOrShuttingDownBrokers.foreach(addNewBroker)
 
   def startup() = {
     brokerLock synchronized {
@@ -354,7 +354,7 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
   def addStopReplicaRequestForBrokers(brokerIds: Seq[Int], topicPartition: TopicPartition, deletePartition: Boolean): Unit = {
     brokerIds.filter(_ >= 0).foreach { brokerId =>
       def callback(stopReplicaResponse: AbstractResponse): Unit = {
-        if (deletePartition)
+        if (deletePartition && controllerContext.isTopicQueuedUpForDeletion(topicPartition.topic))
           controller.eventManager.put(controller.TopicDeletionStopReplicaResponseReceived(stopReplicaResponse, brokerId))
       }
 
