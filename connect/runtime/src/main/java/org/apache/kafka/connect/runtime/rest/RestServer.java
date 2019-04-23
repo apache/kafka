@@ -23,7 +23,6 @@ import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
@@ -310,7 +309,9 @@ public class RestServer {
             config, ConnectRestExtension.class);
 
         long herderRequestTimeoutMs = ConnectorsResource.REQUEST_TIMEOUT_MS;
-        Integer rebalanceTimeoutMs = config.getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
+
+        Integer rebalanceTimeoutMs = config.getRebalanceTimeout();
+
         if (rebalanceTimeoutMs != null) {
             herderRequestTimeoutMs = Math.min(herderRequestTimeoutMs, rebalanceTimeoutMs.longValue());
         }
