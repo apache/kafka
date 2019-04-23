@@ -27,6 +27,8 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>> {
     private static final int NEWFLAG_SIZE = 1;
 
     private Deserializer<T> inner;
+    private boolean isKey;
+    private Map<String, ?> configs;
 
     public ChangedDeserializer(final Deserializer<T> inner) {
         this.inner = inner;
@@ -38,12 +40,22 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>> {
 
     public void setInner(final Deserializer<T> inner) {
         this.inner = inner;
+        if (inner == null) {
+            configs = null;
+        } else if (configs != null){
+            inner.configure(configs, isKey);
+        }
     }
 
     @Override
     public void configure(final Map<String, ?> configs,
                           final boolean isKey) {
-        inner.configure(configs, isKey);
+        if (inner != null) {
+            inner.configure(configs, isKey);
+        } else {
+            this.configs = configs;
+            this.isKey = isKey;
+        }
     }
 
     @Override
