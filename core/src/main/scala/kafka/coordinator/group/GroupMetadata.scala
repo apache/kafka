@@ -23,7 +23,6 @@ import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
-import org.apache.kafka.common.requests.JoinGroupRequest
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, immutable, mutable}
@@ -249,10 +248,12 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     * [For static members only]: Replace the old member id with the new one,
     * keep everything else unchanged and return the updated member.
     */
-  def maybeReplaceGroupInstance(oldMemberId: String,
-                                newMemberId: String,
-                                groupInstanceId: Option[String]): MemberMetadata = {
-    assert(groupInstanceId.isDefined)
+  def replaceGroupInstance(oldMemberId: String,
+                           newMemberId: String,
+                           groupInstanceId: Option[String]): MemberMetadata = {
+    if(groupInstanceId.isEmpty) {
+      throw new IllegalArgumentException(s"unexpected null group.instance.id in replaceGroupInstance")
+    }
     val oldMember = members.remove(oldMemberId)
       .getOrElse(throw new IllegalArgumentException(s"Cannot replace non-existing member id $oldMemberId"))
 
@@ -274,12 +275,16 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def hasStaticMember(groupInstanceId: Option[String]) = groupInstanceId.isDefined && staticMembers.contains(groupInstanceId.get)
 
   def getStaticMemberId(groupInstanceId: Option[String]) = {
-    assert(groupInstanceId.isDefined)
+    if(groupInstanceId.isEmpty) {
+      throw new IllegalArgumentException(s"unexpected null group.instance.id in getStaticMemberId")
+    }
     staticMembers(groupInstanceId.get)
   }
 
   def addStaticMember(groupInstanceId: Option[String], newMemberId: String) = {
-    assert(groupInstanceId.isDefined)
+    if(groupInstanceId.isEmpty) {
+      throw new IllegalArgumentException(s"unexpected null group.instance.id in addStaticMember")
+    }
     staticMembers.put(groupInstanceId.get, newMemberId)
   }
 
@@ -387,7 +392,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       throw new IllegalStateException("Cannot obtain member metadata for group in state %s".format(state))
     members.map{ case (memberId, memberMetadata) => new JoinGroupResponseMember()
         .setMemberId(memberId)
-        .setGroupInstanceId(memberMetadata.groupInstanceId.getOrElse(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID))
+        .setGroupInstanceId(memberMetadata.groupInstanceId.orNull)
         .setMetadata(memberMetadata.metadata(protocol.get))
     }.toList
   }

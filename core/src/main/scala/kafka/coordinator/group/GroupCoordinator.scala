@@ -181,10 +181,10 @@ class GroupCoordinator(val brokerId: Int,
           val oldMemberId = group.getStaticMemberId(groupInstanceId)
 
           if (group.is(Stable)) {
-            debug("Static member $groupInstanceId with unknown member id rejoins, assigning new member id $newMemberId. " +
-              "No rebalance will be triggered.")
+            info(s"Static member $groupInstanceId with unknown member id rejoins, assigning new member id $newMemberId, while" +
+              s"old member $oldMemberId will be removed. No rebalance will be triggered.")
 
-            val oldMember = group.maybeReplaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
+            val oldMember = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
 
             // Heartbeat of old member id will expire without affection since the group no longer contains that member id.
             // New heartbeat shall be scheduled with new member id.
@@ -205,17 +205,16 @@ class GroupCoordinator(val brokerId: Int,
             val knownStaticMember = group.get(oldMemberId)
             updateMemberAndRebalance(group, knownStaticMember, protocols, responseCallback)
           }
-        } else {
-          if (requireKnownMemberId) {
+        } else if (requireKnownMemberId) {
             // If member id required (dynamic membership), register the member in the pending member list
             // and send back a response to call for another join group request with allocated member id.
             group.addPendingMember(newMemberId)
             addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
             responseCallback(joinError(newMemberId, Errors.MEMBER_ID_REQUIRED))
-          } else {
-            addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, newMemberId, groupInstanceId, clientId, clientHost, protocolType,
-              protocols, group, responseCallback)
-          }
+        } else {
+          addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, newMemberId, groupInstanceId,
+            clientId, clientHost, protocolType, protocols, group, responseCallback)
+
         }
       }
     }

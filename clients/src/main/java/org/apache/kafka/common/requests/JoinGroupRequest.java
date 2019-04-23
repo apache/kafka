@@ -52,7 +52,6 @@ public class JoinGroupRequest extends AbstractRequest {
     private final short version;
 
     public static final String UNKNOWN_MEMBER_ID = "";
-    public static final String EMPTY_GROUP_INSTANCE_ID = "";
 
     private static final int MAX_GROUP_INSTANCE_ID_LENGTH = 249;
 
@@ -61,7 +60,7 @@ public class JoinGroupRequest extends AbstractRequest {
      * static member id.
      */
     public static void validateGroupInstanceId(String id) {
-        if (id.equals(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID))
+        if (id.equals(""))
             throw new InvalidConfigurationException("Group instance id must be non-empty string");
         if (id.equals(".") || id.equals(".."))
             throw new InvalidConfigurationException("Group instance id cannot be \".\" or \"..\"");

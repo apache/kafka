@@ -24,7 +24,6 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.requests.IsolationLevel;
-import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Collections;
@@ -280,7 +279,7 @@ public class ConsumerConfig extends AbstractConfig {
                                 .define(GROUP_ID_CONFIG, Type.STRING, null, Importance.HIGH, GROUP_ID_DOC)
                                 .define(GROUP_INSTANCE_ID_CONFIG,
                                         Type.STRING,
-                                        JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID,
+                                        null,
                                         Importance.MEDIUM,
                                         GROUP_INSTANCE_ID_DOC)
                                 .define(SESSION_TIMEOUT_MS_CONFIG,

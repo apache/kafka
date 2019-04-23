@@ -675,11 +675,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
 
             String groupInstanceId = config.getString(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
-            if (groupInstanceId.equals(JoinGroupRequest.EMPTY_GROUP_INSTANCE_ID)) {
-                this.groupInstanceId = Optional.empty();
-            } else {
+            if (groupInstanceId != null) {
                 JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
                 this.groupInstanceId = Optional.of(groupInstanceId);
+            } else {
+                this.groupInstanceId = Optional.empty();
             }
 
             LogContext logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId + "] ");
