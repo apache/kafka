@@ -168,7 +168,7 @@ import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.MetadataRequest.convertToMetadataRequestTopic;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
-
+import org.apache.kafka.clients.CommonClientConfigs;
 /**
  * The default implementation of {@link AdminClient}. An instance of this class is created by invoking one of the
  * {@code create()} methods in {@code AdminClient}. Users should not refer to this class directly.
