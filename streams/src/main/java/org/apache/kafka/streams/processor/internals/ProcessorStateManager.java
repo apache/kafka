@@ -135,16 +135,16 @@ public class ProcessorStateManager extends AbstractStateManager {
             final TopicPartition storePartition = new TopicPartition(topic, getPartition(topic));
 
             if (isStandby) {
-            log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", storeName, topic);
-            restoreCallbacks.put(topic, stateRestoreCallback);
-        } else {
-            log.trace("Restoring state store {} from changelog topic {}", storeName, topic);
-            final StateRestorer restorer = new StateRestorer(storePartition,
-                                                             new CompositeRestoreListener(stateRestoreCallback),
-                                                             checkpointableOffsets.get(storePartition),
-                                                             offsetLimit(storePartition),
-                                                             store.persistent(),
-                                                             storeName);
+                log.trace("Preparing standby replica of persistent state store {} with changelog topic {}", storeName, topic);
+                restoreCallbacks.put(topic, stateRestoreCallback);
+            } else {
+                log.trace("Restoring state store {} from changelog topic {}", storeName, topic);
+                final StateRestorer restorer = new StateRestorer(storePartition,
+                                                                 new CompositeRestoreListener(stateRestoreCallback),
+                                                                 checkpointableOffsets.get(storePartition),
+                                                                 offsetLimit(storePartition),
+                                                                 store.persistent(),
+                                                                 storeName);
 
                 changelogReader.register(restorer);
             }
