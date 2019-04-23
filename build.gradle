@@ -604,7 +604,15 @@ for ( sv in availableScalaVersions ) {
   }
 }
 
-def connectPkgs = ['connect:api', 'connect:runtime', 'connect:transforms', 'connect:json', 'connect:file', 'connect:basic-auth-extension']
+def connectPkgs = [
+    'connect:api',
+    'connect:basic-auth-extension',
+    'connect:file',
+    'connect:json',
+    'connect:runtime',
+    'connect:transforms'
+]
+
 def pkgs = [
     'clients',
     'examples',
