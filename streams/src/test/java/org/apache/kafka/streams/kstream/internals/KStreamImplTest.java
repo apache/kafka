@@ -486,25 +486,43 @@ public class KStreamImplTest {
     }
 
     @Test
-    public void shouldNotAllowNullTransformSupplierOnTransform() {
+    public void shouldNotAllowNullTransformerSupplierOnTransform() {
         final Exception e = assertThrows(NullPointerException.class, () -> testStream.transform(null));
         assertEquals("transformerSupplier can't be null", e.getMessage());
     }
 
     @Test
-    public void shouldNotAllowNullTransformSupplierOnFlatTransform() {
+    public void shouldNotAllowNullTransformerSupplierOnFlatTransform() {
         final Exception e = assertThrows(NullPointerException.class, () -> testStream.flatTransform(null));
         assertEquals("transformerSupplier can't be null", e.getMessage());
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTransformSupplierOnTransformValues() {
-        testStream.transformValues((ValueTransformerSupplier) null);
+    @Test
+    public void shouldNotAllowNullValueTransformerWithKeySupplierOnTransformValues() {
+        final Exception e =
+            assertThrows(NullPointerException.class, () -> testStream.transformValues((ValueTransformerWithKeySupplier) null));
+        assertEquals("valueTransformerSupplier can't be null", e.getMessage());
     }
 
-    @Test(expected = NullPointerException.class)
-    public void shouldNotAllowNullTransformSupplierOnTransformValuesWithKey() {
-        testStream.transformValues((ValueTransformerWithKeySupplier) null);
+    @Test
+    public void shouldNotAllowNullValueTransformerSupplierOnTransformValues() {
+        final Exception e =
+            assertThrows(NullPointerException.class, () -> testStream.transformValues((ValueTransformerSupplier) null));
+        assertEquals("valueTransformerSupplier can't be null", e.getMessage());
+    }
+
+    @Test
+    public void shouldNotAllowNullValueTransformerWithKeySupplierOnFlatTransformValues() {
+        final Exception e =
+            assertThrows(NullPointerException.class, () -> testStream.flatTransformValues((ValueTransformerWithKeySupplier) null));
+        assertEquals("valueTransformerSupplier can't be null", e.getMessage());
+    }
+
+    @Test
+    public void shouldNotAllowNullValueTransformerSupplierOnFlatTransformValues() {
+        final Exception e =
+            assertThrows(NullPointerException.class, () -> testStream.flatTransformValues((ValueTransformerSupplier) null));
+        assertEquals("valueTransformerSupplier can't be null", e.getMessage());
     }
 
     @Test(expected = NullPointerException.class)

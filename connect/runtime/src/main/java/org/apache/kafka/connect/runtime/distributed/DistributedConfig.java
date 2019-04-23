@@ -268,6 +268,11 @@ public class DistributedConfig extends WorkerConfig {
                         STATUS_STORAGE_REPLICATION_FACTOR_CONFIG_DOC);
     }
 
+    @Override
+    public Integer getRebalanceTimeout() {
+        return getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
+    }
+
     public DistributedConfig(Map<String, String> props) {
         super(CONFIG, props);
     }

@@ -385,8 +385,6 @@ public class RoundTripWorker implements TaskWorker {
                         log.debug("{}: Consumer got WakeupException", id, e);
                     } catch (TimeoutException e) {
                         log.debug("{}: Consumer got TimeoutException", id, e);
-                    } finally {
-                        lock.unlock();
                     }
                 }
             } catch (Throwable e) {

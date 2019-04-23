@@ -23,6 +23,9 @@ import java.util.Map;
 /**
  * An interface to that allows developers to customize the RocksDB settings for a given Store.
  * Please read the <a href="https://github.com/facebook/rocksdb/wiki/RocksDB-Tuning-Guide">RocksDB Tuning Guide</a>.
+ *
+ * Note: if you choose to set options.setTableFormatConfig(tableConfig) with a new BlockBasedTableConfig you should
+ * probably also set the filter for that tableConfig, most likely with tableConfig.setFilter(new BloomFilter());
  */
 public interface RocksDBConfigSetter {
 

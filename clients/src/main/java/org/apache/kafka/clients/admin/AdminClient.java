@@ -368,7 +368,9 @@ public abstract class AdminClient implements AutoCloseable {
      * @param configs         The resources with their configs (topic is the only resource type with configs that can
      *                        be updated currently)
      * @return                The AlterConfigsResult
+     * @deprecated Since 2.3. Use {@link #incrementalAlterConfigs(Map)}.
      */
+    @Deprecated
     public AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs) {
         return alterConfigs(configs, new AlterConfigsOptions());
     }
@@ -385,8 +387,52 @@ public abstract class AdminClient implements AutoCloseable {
      *                        be updated currently)
      * @param options         The options to use when describing configs
      * @return                The AlterConfigsResult
+     * @deprecated Since 2.3. Use {@link #incrementalAlterConfigs(Map, AlterConfigsOptions)}.
      */
+    @Deprecated
     public abstract AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options);
+
+    /**
+     * Incrementally updates the configuration for the specified resources with default options.
+     *
+     * This is a convenience method for #{@link AdminClient#incrementalAlterConfigs(Map, AlterConfigsOptions)} with default options.
+     * See the overload for more details.*
+     *
+     * This operation is supported by brokers with version 2.3.0 or higher.
+     *
+     * @param configs         The resources with their configs
+     * @return                The IncrementalAlterConfigsResult
+     */
+    public AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource, Collection<AlterConfigOp>> configs) {
+        return incrementalAlterConfigs(configs, new AlterConfigsOptions());
+    }
+
+
+    /**
+     * Incrementally update the configuration for the specified resources.
+     *
+     * Updates are not transactional so they may succeed for some resources while fail for others. The configs for
+     * a particular resource are updated atomically.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code IncrementalAlterConfigsResult}:</p>
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   if the authenticated user didn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TopicAuthorizationException}
+     *   if the authenticated user didn't have alter access to the Topic.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidRequestException}
+     *   if the request details are invalid. e.g., a configuration key was specified more than once for a resource</li>
+     * </ul>*
+     *
+     * This operation is supported by brokers with version 2.3.0 or higher.
+     *
+     * @param configs         The resources with their configs
+     * @param options         The options to use when altering configs
+     * @return                The IncrementalAlterConfigsResult
+     */
+    public abstract AlterConfigsResult incrementalAlterConfigs(Map<ConfigResource,
+            Collection<AlterConfigOp>> configs, AlterConfigsOptions options);
 
     /**
      * Change the log directory for the specified replicas. If the replica does not exist on the broker, the result

@@ -308,10 +308,18 @@ public class RestServer {
             config.getList(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG),
             config, ConnectRestExtension.class);
 
+        long herderRequestTimeoutMs = ConnectorsResource.REQUEST_TIMEOUT_MS;
+
+        Integer rebalanceTimeoutMs = config.getRebalanceTimeout();
+
+        if (rebalanceTimeoutMs != null) {
+            herderRequestTimeoutMs = Math.min(herderRequestTimeoutMs, rebalanceTimeoutMs.longValue());
+        }
+
         ConnectRestExtensionContext connectRestExtensionContext =
             new ConnectRestExtensionContextImpl(
                 new ConnectRestConfigurable(resourceConfig),
-                new ConnectClusterStateImpl(provider)
+                new ConnectClusterStateImpl(herderRequestTimeoutMs, provider)
             );
         for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
             connectRestExtension.register(connectRestExtensionContext);

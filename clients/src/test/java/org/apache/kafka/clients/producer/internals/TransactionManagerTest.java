@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
@@ -137,7 +138,7 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testSenderShutdownWithPendingAddPartitions() throws Exception {
+    public void testSenderShutdownWithPendingTransactions() throws Exception {
         long pid = 13131L;
         short epoch = 1;
         doInitTransactions(pid, epoch);
@@ -151,6 +152,12 @@ public class TransactionManagerTest {
         prepareProduceResponse(Errors.NONE, pid, epoch);
 
         sender.initiateClose();
+        sender.run(time.milliseconds());
+        TransactionalRequestResult result = transactionManager.beginCommit();
+        sender.run(time.milliseconds());
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, pid, epoch);
+        sender.run(time.milliseconds());
+        assertTrue(result.isCompleted());
         sender.run();
 
         assertTrue(sendFuture.isDone());
@@ -703,8 +710,8 @@ public class TransactionManagerTest {
 
         client.prepareUnsupportedVersionResponse(body -> {
             InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
-            assertEquals(initProducerIdRequest.transactionalId(), transactionalId);
-            assertEquals(initProducerIdRequest.transactionTimeoutMs(), transactionTimeoutMs);
+            assertEquals(initProducerIdRequest.data.transactionalId(), transactionalId);
+            assertEquals(initProducerIdRequest.data.transactionTimeoutMs(), transactionTimeoutMs);
             return true;
         });
 
@@ -2381,21 +2388,26 @@ public class TransactionManagerTest {
         }, new FindCoordinatorResponse(error, brokerNode), shouldDisconnect);
     }
 
-    private void prepareInitPidResponse(Errors error, boolean shouldDisconnect, long pid, short epoch) {
+    private void prepareInitPidResponse(Errors error, boolean shouldDisconnect, long producerId, short producerEpoch) {
+        InitProducerIdResponseData responseData = new InitProducerIdResponseData()
+                .setErrorCode(error.code())
+                .setProducerEpoch(producerEpoch)
+                .setProducerId(producerId)
+                .setThrottleTimeMs(0);
         client.prepareResponse(body -> {
             InitProducerIdRequest initProducerIdRequest = (InitProducerIdRequest) body;
-            assertEquals(initProducerIdRequest.transactionalId(), transactionalId);
-            assertEquals(initProducerIdRequest.transactionTimeoutMs(), transactionTimeoutMs);
+            assertEquals(initProducerIdRequest.data.transactionalId(), transactionalId);
+            assertEquals(initProducerIdRequest.data.transactionTimeoutMs(), transactionTimeoutMs);
             return true;
-        }, new InitProducerIdResponse(0, error, pid, epoch), shouldDisconnect);
+        }, new InitProducerIdResponse(responseData), shouldDisconnect);
     }
 
-    private void sendProduceResponse(Errors error, final long pid, final short epoch) {
-        client.respond(produceRequestMatcher(pid, epoch), produceResponse(tp0, 0, error, 0));
+    private void sendProduceResponse(Errors error, final long producerId, final short producerEpoch) {
+        client.respond(produceRequestMatcher(producerId, producerEpoch), produceResponse(tp0, 0, error, 0));
     }
 
-    private void prepareProduceResponse(Errors error, final long pid, final short epoch) {
-        client.prepareResponse(produceRequestMatcher(pid, epoch), produceResponse(tp0, 0, error, 0));
+    private void prepareProduceResponse(Errors error, final long producerId, final short producerEpoch) {
+        client.prepareResponse(produceRequestMatcher(producerId, producerEpoch), produceResponse(tp0, 0, error, 0));
     }
     private MockClient.RequestMatcher produceRequestMatcher(final long pid, final short epoch) {
         return body -> {

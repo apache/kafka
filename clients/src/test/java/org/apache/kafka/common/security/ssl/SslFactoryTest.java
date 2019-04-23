@@ -25,6 +25,7 @@ import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLHandshakeException;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.test.TestSslUtils;
@@ -120,11 +121,84 @@ public class SslFactoryTest {
         assertNotSame("SSL context not recreated", sslContext, sslFactory.sslContext());
         sslContext = sslFactory.sslContext();
 
+        // Verify that context is recreated after validation on reconfigure() if config is not changed, but keystore file was modified
+        keyStoreFile.setLastModified(System.currentTimeMillis() + 15000);
+        sslFactory.validateReconfiguration(sslConfig);
+        sslFactory.reconfigure(sslConfig);
+        assertNotSame("SSL context not recreated", sslContext, sslFactory.sslContext());
+        sslContext = sslFactory.sslContext();
+
         // Verify that the context is not recreated if modification time cannot be determined
         keyStoreFile.setLastModified(System.currentTimeMillis() + 20000);
         Files.delete(keyStoreFile.toPath());
         sslFactory.reconfigure(sslConfig);
         assertSame("SSL context recreated unnecessarily", sslContext, sslFactory.sslContext());
+    }
+
+    @Test
+    public void testReconfigurationWithoutTruststore() throws Exception {
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> sslConfig = TestSslUtils
+            .createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+        sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(sslConfig);
+        SSLContext sslContext = sslFactory.sslContext();
+        assertNotNull("SSL context not created", sslContext);
+        assertSame("SSL context recreated unnecessarily", sslContext, sslFactory.sslContext());
+        assertFalse(sslFactory.createSslEngine("localhost", 0).getUseClientMode());
+
+        trustStoreFile = File.createTempFile("truststore", ".jks");
+        sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG);
+        sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG);
+        sslConfig.remove(SslConfigs.SSL_TRUSTSTORE_TYPE_CONFIG);
+        sslFactory.reconfigure(sslConfig);
+        assertNotSame("SSL context not recreated", sslContext, sslFactory.sslContext());
+
+        trustStoreFile = File.createTempFile("truststore", ".jks");
+        sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        try {
+            sslFactory.reconfigure(sslConfig);
+            fail("Truststore configured dynamically for listener without previous truststore");
+        } catch (ConfigException e) {
+            // Expected exception
+        }
+    }
+
+    @Test
+    public void testReconfigurationWithoutKeystore() throws Exception {
+        File trustStoreFile = File.createTempFile("truststore", ".jks");
+        Map<String, Object> sslConfig = TestSslUtils
+            .createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        sslConfig.remove(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
+        sslConfig.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
+        sslConfig.remove(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG);
+        SslFactory sslFactory = new SslFactory(Mode.SERVER);
+        sslFactory.configure(sslConfig);
+        SSLContext sslContext = sslFactory.sslContext();
+        assertNotNull("SSL context not created", sslContext);
+        assertSame("SSL context recreated unnecessarily", sslContext, sslFactory.sslContext());
+        assertFalse(sslFactory.createSslEngine("localhost", 0).getUseClientMode());
+
+        trustStoreFile = File.createTempFile("truststore", ".jks");
+        sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        sslConfig.remove(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG);
+        sslConfig.remove(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG);
+        sslConfig.remove(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG);
+        sslFactory.reconfigure(sslConfig);
+        assertNotSame("SSL context not recreated", sslContext, sslFactory.sslContext());
+
+        trustStoreFile = File.createTempFile("truststore", ".jks");
+        sslConfig = TestSslUtils.createSslConfig(false, true, Mode.SERVER, trustStoreFile, "server");
+        try {
+            sslFactory.reconfigure(sslConfig);
+            fail("Keystore configured dynamically for listener without previous keystore");
+        } catch (ConfigException e) {
+            // Expected exception
+        }
     }
 
     @Test
