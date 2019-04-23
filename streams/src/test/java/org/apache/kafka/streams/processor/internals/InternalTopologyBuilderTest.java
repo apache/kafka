@@ -55,6 +55,7 @@ import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -781,40 +782,66 @@ public class InternalTopologyBuilderTest {
         new InternalTopologyBuilder.Source(null, Collections.emptySet(), null);
     }
 
-    @Test(expected = IllegalArgumentException.class)
+    @Test
     public void shouldThrowIfTopicAndPatternAreNull() {
-        new InternalTopologyBuilder.Source("name", null, null);
-    }
-
-    @Test(expected = IllegalArgumentException.class)
-    public void shouldThrowIfBothTopicAndPatternAreNotNull() {
-        new InternalTopologyBuilder.Source("name", Collections.emptySet(), Pattern.compile(""));
+        final Exception e = assertThrows(IllegalArgumentException.class, () -> new InternalTopologyBuilder.Source("name", null, null));
+        assertEquals("Either topics or pattern must be not-null, but both are null.", e.getMessage());
     }
 
     @Test
-    public void shouldCompareSourceNodeWithTopicList() {
+    public void shouldThrowIfBothTopicAndPatternAreNotNull() {
+        final Exception e = assertThrows(IllegalArgumentException.class, () -> new InternalTopologyBuilder.Source("name", Collections.emptySet(), Pattern.compile("")));
+        assertEquals("Either topics or pattern must be null, but both are not null.", e.getMessage());
+    }
+
+    @Test
+    public void sourceShouldBeEqualIfNameAndTopicListAreTheSame() {
         final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", Collections.singleton("topic"), null);
         final InternalTopologyBuilder.Source sameAsBase = new InternalTopologyBuilder.Source("name", Collections.singleton("topic"), null);
+
+        assertThat(base, equalTo(sameAsBase));
+    }
+
+    @Test
+    public void sourceShouldBeEqualIfNameAndPatternAreTheSame() {
+        final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic"));
+        final InternalTopologyBuilder.Source sameAsBase = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic"));
+
+        assertThat(base, equalTo(sameAsBase));
+    }
+
+    @Test
+    public void sourceShouldNotBeEqualForDifferentNamesWithSameTopicList() {
+        final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", Collections.singleton("topic"), null);
         final InternalTopologyBuilder.Source differentName = new InternalTopologyBuilder.Source("name2", Collections.singleton("topic"), null);
+
+        assertThat(base, not(equalTo(differentName)));
+    }
+
+    @Test
+    public void sourceShouldNotBeEqualForDifferentNamesWithSamePattern() {
+        final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic"));
+        final InternalTopologyBuilder.Source differentName = new InternalTopologyBuilder.Source("name2", null, Pattern.compile("topic"));
+
+        assertThat(base, not(equalTo(differentName)));
+    }
+
+    @Test
+    public void sourceShouldNotBeEqualForDifferentTopicList() {
+        final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", Collections.singleton("topic"), null);
         final InternalTopologyBuilder.Source differentTopicList = new InternalTopologyBuilder.Source("name", Collections.emptySet(), null);
         final InternalTopologyBuilder.Source differentTopic = new InternalTopologyBuilder.Source("name", Collections.singleton("topic2"), null);
 
-        assertThat(base, equalTo(sameAsBase));
-        assertThat(base, not(equalTo(differentName)));
         assertThat(base, not(equalTo(differentTopicList)));
         assertThat(base, not(equalTo(differentTopic)));
     }
 
     @Test
-    public void shouldCompareSourceNodeWithTopicPattern() {
+    public void sourceShouldNotBeEqualForDifferentPattern() {
         final InternalTopologyBuilder.Source base = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic"));
-        final InternalTopologyBuilder.Source sameAsBase = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic"));
-        final InternalTopologyBuilder.Source differentName = new InternalTopologyBuilder.Source("name2", null, Pattern.compile("topic"));
         final InternalTopologyBuilder.Source differentPattern = new InternalTopologyBuilder.Source("name", null, Pattern.compile("topic2"));
         final InternalTopologyBuilder.Source overlappingPattern = new InternalTopologyBuilder.Source("name", null, Pattern.compile("top*"));
 
-        assertThat(base, equalTo(sameAsBase));
-        assertThat(base, not(equalTo(differentName)));
         assertThat(base, not(equalTo(differentPattern)));
         assertThat(base, not(equalTo(overlappingPattern)));
     }
