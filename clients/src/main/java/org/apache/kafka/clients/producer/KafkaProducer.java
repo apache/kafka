@@ -612,6 +612,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void initTransactions() {
         throwIfNoTransactionManager();
+        throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.initializeTransactions();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
@@ -632,6 +633,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void beginTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
+        throwIfProducerClosed();
         transactionManager.beginTransaction();
     }
 
@@ -662,6 +664,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          String consumerGroupId) throws ProducerFencedException {
         throwIfNoTransactionManager();
+        throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.sendOffsetsToTransaction(offsets, consumerGroupId);
         sender.wakeup();
         result.await();
@@ -692,6 +695,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void commitTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
+        throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.beginCommit();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
@@ -719,6 +723,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      */
     public void abortTransaction() throws ProducerFencedException {
         throwIfNoTransactionManager();
+        throwIfProducerClosed();
         TransactionalRequestResult result = transactionManager.beginAbort();
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
@@ -849,7 +854,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     // Verify that this producer instance has not been closed. This method throws IllegalStateException if the producer
     // has already been closed.
     private void throwIfProducerClosed() {
-        if (ioThread == null || !ioThread.isAlive())
+        if (sender == null || !sender.isRunning())
             throw new IllegalStateException("Cannot perform operation after producer has been closed");
     }
 
@@ -1118,7 +1123,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * This method waits up to <code>timeout</code> for the producer to complete the sending of all incomplete requests.
      * <p>
      * If the producer is unable to complete all requests before the timeout expires, this method will fail
-     * any unsent and unacknowledged records immediately.
+     * any unsent and unacknowledged records immediately. It will also abort the ongoing transaction if it's not
+     * already completing.
      * <p>
      * If invoked from within a {@link Callback} this method will not block and will be equivalent to
      * <code>close(Duration.ofMillis(0))</code>. This is done since no further sending will happen while
@@ -1184,7 +1190,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         ClientUtils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
         ClientUtils.closeQuietly(partitioner, "producer partitioner", firstException);
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
-        log.debug("Kafka producer has been closed");
         Throwable exception = firstException.get();
         if (exception != null && !swallowException) {
             if (exception instanceof InterruptException) {
@@ -1192,6 +1197,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             throw new KafkaException("Failed to close kafka producer", exception);
         }
+        log.debug("Kafka producer has been closed");
     }
 
     private static Map<String, Object> propsToMap(Properties properties) {

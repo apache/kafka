@@ -185,7 +185,7 @@
         Some stream processing applications don't require state, which means the processing of a message is independent from
         the processing of all other messages.
         However, being able to maintain state opens up many possibilities for sophisticated stream processing applications: you
-        can join input streams, or group and aggregate data records. Many such stateful operators are provided by the <a href="/{{version}}/documentation/streams/developer-guide#streams_dsl"><b>Kafka Streams DSL</b></a>.
+        can join input streams, or group and aggregate data records. Many such stateful operators are provided by the <a href="/{{version}}/documentation/streams/developer-guide/dsl-api.html"><b>Kafka Streams DSL</b></a>.
     </p>
     <p>
         Kafka Streams provides so-called <b>state stores</b>, which can be used by stream processing applications to store and query data.
@@ -224,7 +224,7 @@
 
     <p>
         Besides the guarantee that each record will be processed exactly-once, another issue that many stream processing application will face is how to
-        handle <a href="https://www.confluent.io/wp-content/uploads/streams-tables-two-sides-same-coin.pdf">out-of-order data</a> that may impact their business logic. In Kafka Streams, there are two causes that could potentially
+        handle <a href="https://dl.acm.org/citation.cfm?id=3242155">out-of-order data</a> that may impact their business logic. In Kafka Streams, there are two causes that could potentially
         result in out-of-order data arrivals with respect to their timestamps:
     </p>
 

@@ -21,6 +21,7 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
@@ -39,6 +40,7 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -51,10 +53,12 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(EasyMockRunner.class)
@@ -91,12 +95,60 @@ public class MeteredKeyValueStoreTest {
         metrics.config().recordLevel(Sensor.RecordingLevel.DEBUG);
         expect(context.metrics()).andReturn(new MockStreamsMetrics(metrics));
         expect(context.taskId()).andReturn(taskId);
+        expect(context.appConfigs()).andReturn(new HashMap<>());
         expect(inner.name()).andReturn("metered").anyTimes();
     }
 
     private void init() {
         replay(inner, context);
         metered.init(context, metered);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldGetSerdesFromConfigWithoutUserSerdes() {
+        metered = new MeteredKeyValueStore<>(
+            inner,
+            "scope",
+            new MockTime(),
+            null,
+            null
+        );
+        final Serde mockSerde = mock(Serde.class);
+        replay(mockSerde);
+        expect(context.keySerde()).andReturn(mockSerde);
+        expect(context.valueSerde()).andReturn(mockSerde);
+
+        init();
+        verify(context, mockSerde);
+    }
+
+    @Test
+    public void shouldConfigureUserSerdes() {
+        final Serde<String> mockKeySerde = mock(Serde.class);
+        mockKeySerde.configure(anyObject(), eq(true));
+        expectLastCall();
+
+        final Serde<String> mockValueSerde = mock(Serde.class);
+        mockValueSerde.configure(anyObject(), eq(false));
+        expectLastCall();
+
+        replay(mockKeySerde, mockValueSerde);
+
+        metered = new MeteredKeyValueStore<>(
+            inner,
+            "scope",
+            new MockTime(),
+            mockKeySerde,
+            mockValueSerde
+        );
+
+        reset(context);
+        expect(context.metrics()).andReturn(new MockStreamsMetrics(metrics)).anyTimes();
+        expect(context.taskId()).andReturn(taskId).anyTimes();
+
+        init();
+        verify(context, mockKeySerde, mockValueSerde);
     }
 
     @Test
@@ -241,6 +293,14 @@ public class MeteredKeyValueStoreTest {
         assertTrue(metered.setFlushListener(null, false));
 
         verify(cachedKeyValueStore);
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionIfGetReturnsNull() {
+        expect(inner.get(Bytes.wrap("a".getBytes()))).andReturn(null);
+
+        init();
+        assertNull(metered.get("a"));
     }
 
     @Test

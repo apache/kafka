@@ -24,6 +24,9 @@ import kafka.log.LogConfig
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
+import org.apache.kafka.clients.admin.AlterConfigOp
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{ApiException, InvalidConfigurationException, InvalidPartitionsException, InvalidReplicaAssignmentException, InvalidRequestException, ReassignmentInProgressException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.internals.Topic
@@ -38,7 +41,7 @@ import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError, Describe
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 
-import scala.collection.{mutable, _}
+import scala.collection.{Map, mutable, _}
 import scala.collection.JavaConverters._
 
 class AdminManager(val config: KafkaConfig,
@@ -364,59 +367,17 @@ class AdminManager(val config: KafkaConfig,
   def alterConfigs(configs: Map[ConfigResource, AlterConfigsRequest.Config], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, config) =>
 
-      def validateConfigPolicy(resourceType: ConfigResource.Type): Unit = {
-        alterConfigPolicy match {
-          case Some(policy) =>
-            val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
-            policy.validate(new AlterConfigPolicy.RequestMetadata(
-              new ConfigResource(resourceType, resource.name), configEntriesMap.asJava))
-          case None =>
-        }
-      }
       try {
+        val configEntriesMap = config.entries.asScala.map(entry => (entry.name, entry.value)).toMap
+
+        val configProps = new Properties
+        config.entries.asScala.foreach { configEntry =>
+          configProps.setProperty(configEntry.name, configEntry.value)
+        }
+
         resource.`type` match {
-          case ConfigResource.Type.TOPIC =>
-            val topic = resource.name
-
-            val properties = new Properties
-            config.entries.asScala.foreach { configEntry =>
-              properties.setProperty(configEntry.name, configEntry.value)
-            }
-
-            adminZkClient.validateTopicConfig(topic, properties)
-            validateConfigPolicy(ConfigResource.Type.TOPIC)
-            if (!validateOnly) {
-              info(s"Updating topic $topic with new configuration $config")
-              adminZkClient.changeTopicConfig(topic, properties)
-            }
-
-            resource -> ApiError.NONE
-
-          case ConfigResource.Type.BROKER =>
-            val brokerId = if (resource.name == null || resource.name.isEmpty)
-              None
-            else {
-              val id = resourceNameToBrokerId(resource.name)
-              if (id != this.config.brokerId)
-                throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received $resource.name")
-              Some(id)
-            }
-            val configProps = new Properties
-            config.entries.asScala.foreach { configEntry =>
-              configProps.setProperty(configEntry.name, configEntry.value)
-            }
-
-            val perBrokerConfig = brokerId.nonEmpty
-            this.config.dynamicConfig.validate(configProps, perBrokerConfig)
-            validateConfigPolicy(ConfigResource.Type.BROKER)
-            if (!validateOnly) {
-              if (perBrokerConfig)
-                this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
-              adminZkClient.changeBrokerConfig(brokerId,
-                this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
-            }
-
-            resource -> ApiError.NONE
+          case ConfigResource.Type.TOPIC => alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
+          case ConfigResource.Type.BROKER => alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
           case resourceType =>
             throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
         }
@@ -435,6 +396,133 @@ class AdminManager(val config: KafkaConfig,
           resource -> ApiError.fromThrowable(e)
       }
     }.toMap
+  }
+
+  private def alterTopicConfigs(resource: ConfigResource, validateOnly: Boolean,
+                                configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
+    val topic = resource.name
+    adminZkClient.validateTopicConfig(topic, configProps)
+    validateConfigPolicy(resource, configEntriesMap)
+    if (!validateOnly) {
+      info(s"Updating topic $topic with new configuration $config")
+      adminZkClient.changeTopicConfig(topic, configProps)
+    }
+
+    resource -> ApiError.NONE
+  }
+
+  private def alterBrokerConfigs(resource: ConfigResource, validateOnly: Boolean,
+                                 configProps: Properties, configEntriesMap: Map[String, String]): (ConfigResource, ApiError) = {
+    val brokerId = getBrokerId(resource)
+    val perBrokerConfig = brokerId.nonEmpty
+    this.config.dynamicConfig.validate(configProps, perBrokerConfig)
+    validateConfigPolicy(resource, configEntriesMap)
+    if (!validateOnly) {
+      if (perBrokerConfig)
+        this.config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(configProps)
+      adminZkClient.changeBrokerConfig(brokerId,
+        this.config.dynamicConfig.toPersistentProps(configProps, perBrokerConfig))
+    }
+
+    resource -> ApiError.NONE
+  }
+
+  private def getBrokerId(resource: ConfigResource) = {
+    if (resource.name == null || resource.name.isEmpty)
+      None
+    else {
+      val id = resourceNameToBrokerId(resource.name)
+      if (id != this.config.brokerId)
+        throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received $resource.name")
+      Some(id)
+    }
+  }
+
+  private def validateConfigPolicy(resource: ConfigResource, configEntriesMap: Map[String, String]): Unit = {
+    alterConfigPolicy match {
+      case Some(policy) =>
+        policy.validate(new AlterConfigPolicy.RequestMetadata(
+          new ConfigResource(resource.`type`(), resource.name), configEntriesMap.asJava))
+      case None =>
+    }
+  }
+
+  def incrementalAlterConfigs(configs: Map[ConfigResource, List[AlterConfigOp]], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
+    configs.map { case (resource, alterConfigOps) =>
+      try {
+        //throw InvalidRequestException if any duplicate keys
+        val duplicateKeys = alterConfigOps.groupBy(config => config.configEntry().name())
+          .mapValues(_.size).filter(_._2 > 1).keys.toSet
+        if (duplicateKeys.nonEmpty)
+          throw new InvalidRequestException(s"Error due to duplicate config keys : ${duplicateKeys.mkString(",")}")
+
+        val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry().name(), entry.configEntry().value())).toMap
+
+        resource.`type` match {
+          case ConfigResource.Type.TOPIC =>
+            val configProps = adminZkClient.fetchEntityConfig(ConfigType.Topic, resource.name)
+            prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys)
+            alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
+
+          case ConfigResource.Type.BROKER =>
+            val brokerId = getBrokerId(resource)
+            val perBrokerConfig = brokerId.nonEmpty
+
+            val persistentProps = if (perBrokerConfig) adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.get.toString)
+            else adminZkClient.fetchEntityConfig(ConfigType.Broker, ConfigEntityName.Default)
+
+            val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
+            prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
+            alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
+          case resourceType =>
+            throw new InvalidRequestException(s"AlterConfigs is only supported for topics and brokers, but resource type is $resourceType")
+        }
+      } catch {
+        case e @ (_: ConfigException | _: IllegalArgumentException) =>
+          val message = s"Invalid config value for resource $resource: ${e.getMessage}"
+          info(message)
+          resource -> ApiError.fromThrowable(new InvalidRequestException(message, e))
+        case e: Throwable =>
+          // Log client errors at a lower level than unexpected exceptions
+          val message = s"Error processing alter configs request for resource $resource, config $alterConfigOps"
+          if (e.isInstanceOf[ApiException])
+            info(message, e)
+          else
+            error(message, e)
+          resource -> ApiError.fromThrowable(e)
+      }
+    }.toMap
+  }
+
+  private def prepareIncrementalConfigs(alterConfigOps: List[AlterConfigOp], configProps: Properties, configKeys: Map[String, ConfigKey]): Unit = {
+
+    def listType(configName: String, configKeys: Map[String, ConfigKey]): Boolean = {
+      val configKey = configKeys(configName)
+      if (configKey == null)
+        throw new InvalidConfigurationException(s"Unknown topic config name: $configName")
+      configKey.`type` == ConfigDef.Type.LIST
+    }
+
+    alterConfigOps.foreach { alterConfigOp =>
+      alterConfigOp.opType() match {
+        case OpType.SET => configProps.setProperty(alterConfigOp.configEntry().name(), alterConfigOp.configEntry().value())
+        case OpType.DELETE => configProps.remove(alterConfigOp.configEntry().name())
+        case OpType.APPEND => {
+          if (!listType(alterConfigOp.configEntry().name(), configKeys))
+            throw new InvalidRequestException(s"Config value append is not allowed for config key: ${alterConfigOp.configEntry().name()}")
+          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val newValueList =  oldValueList ::: alterConfigOp.configEntry().value().split(",").toList
+          configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
+        }
+        case OpType.SUBTRACT => {
+          if (!listType(alterConfigOp.configEntry().name(), configKeys))
+            throw new InvalidRequestException(s"Config value subtract is not allowed for config key: ${alterConfigOp.configEntry().name()}")
+          val oldValueList = configProps.getProperty(alterConfigOp.configEntry().name()).split(",").toList
+          val newValueList =  oldValueList.diff(alterConfigOp.configEntry().value().split(",").toList)
+          configProps.setProperty(alterConfigOp.configEntry().name(), newValueList.mkString(","))
+        }
+      }
+    }
   }
 
   def shutdown() {

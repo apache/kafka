@@ -33,6 +33,8 @@ import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.RecordCollectorImpl;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.WindowStore;
@@ -58,6 +60,7 @@ import static java.time.Instant.ofEpochMilli;
 import static java.util.Arrays.asList;
 import static java.util.Objects.requireNonNull;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -1396,6 +1399,40 @@ public class RocksDBWindowStoreTest {
         assertThat(toList(windowStore.fetch(key2, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))), equalTo(expectedKey2));
         final List expectedKey3 = asList("3", "6", "9");
         assertThat(toList(windowStore.fetch(key3, ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))), equalTo(expectedKey3));
+    }
+
+    @Test
+    public void shouldReturnSameResultsForSingleKeyFetchAndEqualKeyRangeFetch() {
+        windowStore = createWindowStore(context, false);
+
+        windowStore.put(1, "one", 0L);
+        windowStore.put(2, "two", 1L);
+        windowStore.put(2, "two", 2L);
+        windowStore.put(3, "three", 3L);
+
+        final WindowStoreIterator<String> singleKeyIterator = windowStore.fetch(2, 0L, 5L);
+        final KeyValueIterator<Windowed<Integer>, String> keyRangeIterator = windowStore.fetch(2, 2, 0L, 5L);
+
+        assertEquals(singleKeyIterator.next().value, keyRangeIterator.next().value);
+        assertEquals(singleKeyIterator.next().value, keyRangeIterator.next().value);
+        assertFalse(singleKeyIterator.hasNext());
+        assertFalse(keyRangeIterator.hasNext());
+    }
+
+    @Test
+    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
+        windowStore = createWindowStore(context, false);
+
+        LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        final KeyValueIterator iterator = windowStore.fetch(-1, 1, 0L, 10L);
+        assertFalse(iterator.hasNext());
+
+        final List<String> messages = appender.getMessages();
+        assertThat(messages, hasItem("Returning empty iterator for fetch with invalid key range: from > to. "
+            + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. "
+            + "Note that the built-in numerical serdes do not follow this for negative numbers"));
     }
 
     private void putFirstBatch(final WindowStore<Integer, String> store,

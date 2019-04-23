@@ -639,6 +639,26 @@ public class KafkaConsumerTest {
     }
 
     @Test
+    public void testOffsetIsValidAfterSeek() {
+        Time time = new MockTime();
+        SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.LATEST);
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+
+        initMetadata(client, Collections.singletonMap(topic, 1));
+        Node node = metadata.fetch().nodes().get(0);
+
+        PartitionAssignor assignor = new RoundRobinAssignor();
+
+        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
+                true, groupId);
+        consumer.assign(singletonList(tp0));
+        consumer.seek(tp0, 20L);
+        consumer.poll(Duration.ZERO);
+        assertEquals(subscription.validPosition(tp0).offset, 20L);
+    }
+
+    @Test
     public void testCommitsFetchedDuringAssign() {
         long offset1 = 10000;
         long offset2 = 20000;

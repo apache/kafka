@@ -45,6 +45,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -140,7 +141,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
     @Override
     public StateStore getGlobalStore(final String name) {
-        return globalStores.get(name);
+        return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
 
     @Override
@@ -203,7 +204,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 store.name(),
                 converterForStore(store)
             );
-            globalStores.put(store.name(), store);
+            globalStores.put(store.name(), Optional.of(store));
         } finally {
             globalConsumer.unsubscribe();
         }
@@ -306,12 +307,20 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     @Override
     public void flush() {
         log.debug("Flushing all global globalStores registered in the state manager");
-        for (final StateStore store : this.globalStores.values()) {
-            try {
-                log.trace("Flushing global store={}", store.name());
-                store.flush();
-            } catch (final Exception e) {
-                throw new ProcessorStateException(String.format("Failed to flush global state store %s", store.name()), e);
+        for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
+            if (entry.getValue().isPresent()) {
+                final StateStore store = entry.getValue().get();
+                try {
+                    log.trace("Flushing global store={}", store.name());
+                    store.flush();
+                } catch (final Exception e) {
+                    throw new ProcessorStateException(
+                        String.format("Failed to flush global state store %s", store.name()),
+                        e
+                    );
+                }
+            } else {
+                throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
             }
         }
     }
@@ -324,20 +333,24 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                 return;
             }
             final StringBuilder closeFailed = new StringBuilder();
-            for (final Map.Entry<String, StateStore> entry : globalStores.entrySet()) {
-                log.debug("Closing global storage engine {}", entry.getKey());
-                try {
-                    entry.getValue().close();
-                } catch (final Exception e) {
-                    log.error("Failed to close global state store {}", entry.getKey(), e);
-                    closeFailed.append("Failed to close global state store:")
-                            .append(entry.getKey())
-                            .append(". Reason: ")
-                            .append(e.toString())
-                            .append("\n");
+            for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
+                if (entry.getValue().isPresent()) {
+                    log.debug("Closing global storage engine {}", entry.getKey());
+                    try {
+                        entry.getValue().get().close();
+                    } catch (final Exception e) {
+                        log.error("Failed to close global state store {}", entry.getKey(), e);
+                        closeFailed.append("Failed to close global state store:")
+                                   .append(entry.getKey())
+                                   .append(". Reason: ")
+                                   .append(e.toString())
+                                   .append("\n");
+                    }
+                    globalStores.put(entry.getKey(), Optional.empty());
+                } else {
+                    log.info("Skipping to close non-initialized store {}", entry.getKey());
                 }
             }
-            globalStores.clear();
             if (closeFailed.length() > 0) {
                 throw new ProcessorStateException("Exceptions caught during close of 1 or more global state globalStores\n" + closeFailed);
             }

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.DoubleSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -24,6 +23,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedTable;
@@ -64,7 +64,7 @@ public class KGroupedTableImplTest {
             .groupBy(MockMapper.selectValueKeyValueMapper());
     }
 
-    @Test(expected = InvalidTopicException.class)
+    @Test(expected = TopologyException.class)
     public void shouldNotAllowInvalidStoreNameOnAggregate() {
         groupedTable.aggregate(
             MockInitializer.STRING_INIT,
@@ -116,7 +116,7 @@ public class KGroupedTableImplTest {
             Materialized.as("store"));
     }
 
-    @Test(expected = InvalidTopicException.class)
+    @Test(expected = TopologyException.class)
     public void shouldNotAllowInvalidStoreNameOnReduce() {
         groupedTable.reduce(
             MockReducer.STRING_ADDER,
