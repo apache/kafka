@@ -485,7 +485,7 @@ public class InMemorySessionStoreTest {
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
-        LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
+        LogCaptureAppender.setClassLoggerToDebug(InMemorySessionStore.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
         final String keyFrom = Serdes.String().deserializer().deserialize("", Serdes.Integer().serializer().serialize("", -1));
