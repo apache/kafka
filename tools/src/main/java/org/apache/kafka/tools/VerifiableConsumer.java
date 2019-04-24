@@ -610,7 +610,7 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, res.getString("groupId"));
 
         String groupInstanceId = res.getString("groupInstanceId");
-        if (groupInstanceId != null) {
+        if (!groupInstanceId.equals("None")) {
             consumerProps.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         }
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, res.getString("brokerList"));
