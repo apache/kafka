@@ -155,20 +155,4 @@ public class TestOutputTopic<K, V> {
         }
         return output;
     }
-
-    public Iterable<ProducerRecord<K, V>> iterableRecords() {
-        return driver.iterableOutput(topic, keyDeserializer, valueDeserializer);
-    };
-
-    public Iterable<KeyValue<K, V>> iterableKeyValues() {
-        final Deque<KeyValue<K, V>> output = new LinkedList<>();
-        iterableRecords().forEach(record -> output.add(new KeyValue<>(record.key(), record.value())));
-        return output;
-    }
-
-    public Iterable<V> iterableValues() {
-        final Deque<V> output = new LinkedList<>();
-        iterableRecords().forEach(record -> output.add(record.value()));
-        return output;
-    }
 }

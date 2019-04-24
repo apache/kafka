@@ -85,33 +85,4 @@ public class SimpleTopicTest {
     assertThat(output, hasItems("This", "is", "an", "example"));
     assertThat(output.size(), equalTo(inputList.size()));
   }
-
-  @Test
-  public void testIterable() {
-    List<String> inputList = Arrays.asList("This", "is", "an", "example");
-    LinkedList<String> expected = new LinkedList<>();
-    for(String v: inputList) {
-      expected.add(v);
-    }
-    //Feed list of words to inputTopic and no kafka key, timestamp is irrelevant in this case
-    inputTopic.pipeValueList(inputList);
-    Iterable<String> output = outputTopic.iterableValues();
-    assertThat(output, hasItems("This", "is", "an", "example"));
-    output.forEach(value -> {
-      assertThat(value, equalTo(expected.poll()));
-    });
-    assertThat(expected.isEmpty(), equalTo(true));
-
-    inputTopic.pipeInput("jukka");
-    for(String v: inputList) {
-      expected.add(v);
-    }
-    expected.add("jukka");
-    System.out.println("new");
-    outputTopic.iterableValues().forEach(value -> {
-      assertThat(value, equalTo(expected.poll()));
-      System.out.println(value);
-    });
-    assertThat(expected.isEmpty(), equalTo(true));
-  }
 }
