@@ -240,7 +240,7 @@ public class StreamsResetter {
         executeOption = optionParser.accepts("execute", "Execute the command.");
         dryRunOption = optionParser.accepts("dry-run", "Display the actions that would be performed without executing the reset commands.");
         helpOption = optionParser.accepts("help", "Print usage information.").forHelp();
-        versionOption = optionParser.accepts("version", "Print version information.").forHelp();
+        versionOption = optionParser.accepts("version", "Print version information and exit.").forHelp();
 
         // TODO: deprecated in 1.0; can be removed eventually: https://issues.apache.org/jira/browse/KAFKA-7606
         optionParser.accepts("zookeeper", "Zookeeper option is deprecated by bootstrap.servers, as the reset tool would no longer access Zookeeper directly.");

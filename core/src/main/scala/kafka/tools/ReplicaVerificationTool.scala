@@ -106,7 +106,7 @@ object ReplicaVerificationTool extends Logging {
                          .ofType(classOf[java.lang.Long])
                          .defaultsTo(30 * 1000L)
     val helpOpt = parser.accepts("help", "Print usage information.").forHelp()
-    val versionOpt = parser.accepts("version", "Print version information.").forHelp()
+    val versionOpt = parser.accepts("version", "Print version information and exit.").forHelp()
 
     val options = parser.parse(args: _*)
 

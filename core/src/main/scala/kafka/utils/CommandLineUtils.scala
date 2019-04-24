@@ -38,7 +38,7 @@ object CommandLineUtils extends Logging {
   }
 
   def isPrintVersionNeeded(commandOpts: CommandDefaultOptions): Boolean = {
-    return commandOpts.options.has(commandOpts.versionOpt)
+    commandOpts.options.has(commandOpts.versionOpt)
   }
 
   /**
