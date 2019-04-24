@@ -159,30 +159,24 @@
     </p>
 
     <p>
-        Any stream processing technology must therefore provide <strong>first-class support for streams and tables</strong>.
-        Kafka's Streams API provides such functionality through its core abstractions for 
-        <a id="streams_concepts_kstream" href="/{{version}}/documentation/streams/developer-guide/dsl-api#streams_concepts_kstream">streams</a>
-        <code class="interpreted-text" data-role="ref">&lt;streams_concepts_kstreams&gt;</code>
-        and <a id="streams_concepts_ktable" href="/{{version}}/documentation/streams/developer-guide/dsl-api#streams_concepts_ktable">tables</a>
-        <code class="interpreted-text" data-role="ref">&lt;streams_concepts_kstreams&gt;</code>,
-        which we will talk about in a minute. Now, an interesting observation is that there is actually a <strong>close relationship between streams and tables</strong>,
-        the so-called stream-table duality. And Kafka exploits this duality in many ways: for example, to make your applications
-        <a id="streams-developer-guide-execution-scaling" href="/{{version}}/documentation/streams/developer-guide/running-app#elastic-scaling-of-your-application">elastic</a>
-        <code class="interpreted-text" data-role="ref">elastic &lt;streams_developer-guide_execution-scaling&gt;</code>,
-        to support <a id="streams_architecture_recovery" href="/{{version}}/documentation/streams/architecture#streams_architecture_recovery">fault-tolerant stateful processing</a>
-        <code class="interpreted-text" data-role="ref">&lt;streams_developer-guide_state-store_fault-tolerance&gt;</code>,
-        or to run <a id="streams-developer-guide-interactive-queries" href="/{{version}}/documentation/streams/developer-guide/interactive-queries#interactive-queries">interactive queries</a>
-        <code class="interpreted-text" data-role="ref">&lt;streams_concepts_interactive-queries&gt;</code>
-        against your application's latest processing results. And, beyond its internal usage, the Kafka Streams API
-        also allows developers to exploit this duality in their own applications.
-    </p>
+      Any stream processing technology must therefore provide <strong>first-class support for streams and tables</strong>.
+      Kafka's Streams API provides such functionality through its core abstractions for 
+      <a id="streams_concepts_kstream" href="/{{version}}/documentation/streams/developer-guide/dsl-api#streams_concepts_kstream">streams</a>
+      and <a id="streams_concepts_ktable" href="/{{version}}/documentation/streams/developer-guide/dsl-api#streams_concepts_ktable">tables</a>,
+      which we will talk about in a minute. Now, an interesting observation is that there is actually a <strong>close relationship between streams and tables</strong>,
+      the so-called stream-table duality. And Kafka exploits this duality in many ways: for example, to make your applications
+      <a id="streams-developer-guide-execution-scaling" href="/{{version}}/documentation/streams/developer-guide/running-app#elastic-scaling-of-your-application">elastic</a>,
+      to support <a id="streams_architecture_recovery" href="/{{version}}/documentation/streams/architecture#streams_architecture_recovery">fault-tolerant stateful processing</a>,
+      or to run <a id="streams-developer-guide-interactive-queries" href="/{{version}}/documentation/streams/developer-guide/interactive-queries#interactive-queries">interactive queries</a>
+      against your application's latest processing results. And, beyond its internal usage, the Kafka Streams API
+      also allows developers to exploit this duality in their own applications.
+  </p>
 
-    <p>
-        Before we discuss concepts such as <a id="streams-developer-guide-dsl-aggregating" href="/{{version}}/documentation/streams/developer-guide/dsl-api#aggregating">aggregations</a>
-        <code class="interpreted-text" data-role="ref">&lt;streams_concepts_aggregations&gt;</code>,
-        in Kafka Streams we must first introduce <strong>tables</strong> in more detail, and talk about the aforementioned stream-table duality.
-        Essentially, this duality means that a stream can be viewed as a table, and a table can be viewed as a stream.
-    </p>
+  <p>
+      Before we discuss concepts such as <a id="streams-developer-guide-dsl-aggregating" href="/{{version}}/documentation/streams/developer-guide/dsl-api#aggregating">aggregations</a>
+      in Kafka Streams, we must first introduce <strong>tables</strong> in more detail, and talk about the aforementioned stream-table duality.
+      Essentially, this duality means that a stream can be viewed as a table, and a table can be viewed as a stream.
+  </p>
 
     <h3><a id="streams_state" href="#streams_state">States</a></h3>
 
