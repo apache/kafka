@@ -209,7 +209,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
       case OfflineReplica =>
         validReplicas.foreach { replica =>
           controllerBrokerRequestBatch.addStopReplicaRequestForBrokers(Seq(replicaId), replica.topicPartition,
-            deletePartition = false)
+            deletePartition = false, topicDeletionInProgress = false)
         }
         val (replicasWithLeadershipInfo, replicasWithoutLeadershipInfo) = validReplicas.partition { replica =>
           controllerContext.partitionLeadershipInfo.contains(replica.topicPartition)
@@ -239,9 +239,11 @@ class ZkReplicaStateMachine(config: KafkaConfig,
           val currentState = controllerContext.replicaState(replica)
           logSuccessfulTransition(replicaId, replica.topicPartition, currentState, ReplicaDeletionStarted)
           controllerContext.putReplicaState(replica, ReplicaDeletionStarted)
+          val topicDeletionInProgress = controllerContext.isTopicQueuedUpForDeletion(replica.topicPartition.topic)
           controllerBrokerRequestBatch.addStopReplicaRequestForBrokers(Seq(replicaId),
             replica.topicPartition,
-            deletePartition = true)
+            deletePartition = true,
+            topicDeletionInProgress)
         }
       case ReplicaDeletionIneligible =>
         validReplicas.foreach { replica =>

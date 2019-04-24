@@ -351,15 +351,16 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
     addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(topicPartition))
   }
 
-  def addStopReplicaRequestForBrokers(brokerIds: Seq[Int], topicPartition: TopicPartition, deletePartition: Boolean): Unit = {
+  def addStopReplicaRequestForBrokers(brokerIds: Seq[Int],
+                                      topicPartition: TopicPartition,
+                                      deletePartition: Boolean,
+                                      topicDeletionInProgress: Boolean): Unit = {
     brokerIds.filter(_ >= 0).foreach { brokerId =>
-      def stopAndDeleteReceivedCallback(stopReplicaResponse: AbstractResponse): Unit = {
-        controller.eventManager.put(controller.StopAndDeleteReplicaResponseReceived(stopReplicaResponse, brokerId))
+      def topicDeletionCallback(stopReplicaResponse: AbstractResponse): Unit = {
+        controller.eventManager.put(controller.TopicDeletionStopReplicaResponseReceived(stopReplicaResponse, brokerId))
       }
 
-      // Only provide a callback if the replica is being deleted. This ensures that requests
-      // will be batched for the common case of controlled shutdown.
-      val responseReceivedCallback = if (deletePartition) stopAndDeleteReceivedCallback _ else null
+      val responseReceivedCallback = if (deletePartition && topicDeletionInProgress) topicDeletionCallback _ else null
       stopReplicaRequestMap.getOrElseUpdate(brokerId, Seq.empty[StopReplicaRequestInfo])
       val v = stopReplicaRequestMap(brokerId)
       stopReplicaRequestMap(brokerId) = v :+ StopReplicaRequestInfo(PartitionAndReplica(topicPartition, brokerId),

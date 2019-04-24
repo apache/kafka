@@ -188,7 +188,7 @@ class TopicDeletionManager(config: KafkaConfig,
 
   def isTopicQueuedUpForDeletion(topic: String): Boolean = {
     if (isDeleteTopicEnabled) {
-      controllerContext.topicsToBeDeleted.contains(topic)
+      controllerContext.isTopicQueuedUpForDeletion(topic)
     } else
       false
   }
@@ -215,7 +215,9 @@ class TopicDeletionManager(config: KafkaConfig,
    * @return Whether or not deletion can be retried for the topic
    */
   private def isTopicEligibleForDeletion(topic: String): Boolean = {
-    controllerContext.topicsToBeDeleted.contains(topic) && (!isTopicDeletionInProgress(topic) && !isTopicIneligibleForDeletion(topic))
+    controllerContext.isTopicQueuedUpForDeletion(topic) &&
+      !isTopicDeletionInProgress(topic) &&
+      !isTopicIneligibleForDeletion(topic)
   }
 
   /**
@@ -284,7 +286,7 @@ class TopicDeletionManager(config: KafkaConfig,
    * 1. Move all dead replicas directly to ReplicaDeletionIneligible state. Also mark the respective topics ineligible
    *    for deletion if some replicas are dead since it won't complete successfully anyway
    * 2. Move all alive replicas to ReplicaDeletionStarted state so they can be deleted successfully
-   *@param replicasForTopicsToBeDeleted
+   * @param replicasForTopicsToBeDeleted
    */
   private def startReplicaDeletion(replicasForTopicsToBeDeleted: Set[PartitionAndReplica]) {
     replicasForTopicsToBeDeleted.groupBy(_.topic).keys.foreach { topic =>
