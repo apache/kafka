@@ -33,6 +33,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * Convenience class for making asynchronous requests to the ListOffsets API
+ */
 public class ListOffsetsClient extends AsyncClient<
         ListOffsetsClient.RequestData,
         ListOffsetRequest,
@@ -154,7 +157,6 @@ public class ListOffsetsClient extends AsyncClient<
         }
     }
 
-
     static class RequestData {
         final Map<TopicPartition, ListOffsetRequest.PartitionData> timestampsToSearch;
         final boolean requireTimestamp;
@@ -188,7 +190,6 @@ public class ListOffsetsClient extends AsyncClient<
             this.partitionsToRetry = new HashSet<>();
         }
     }
-
 
     static class ListOffsetData {
         final long offset;
