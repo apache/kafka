@@ -353,14 +353,17 @@ class ControllerBrokerRequestBatch(controller: KafkaController, stateChangeLogge
 
   def addStopReplicaRequestForBrokers(brokerIds: Seq[Int],
                                       topicPartition: TopicPartition,
-                                      deletePartition: Boolean,
-                                      topicDeletionInProgress: Boolean): Unit = {
+                                      deletePartition: Boolean): Unit = {
     brokerIds.filter(_ >= 0).foreach { brokerId =>
       def topicDeletionCallback(stopReplicaResponse: AbstractResponse): Unit = {
         controller.eventManager.put(controller.TopicDeletionStopReplicaResponseReceived(stopReplicaResponse, brokerId))
       }
 
-      val responseReceivedCallback = if (deletePartition && topicDeletionInProgress) topicDeletionCallback _ else null
+      val responseReceivedCallback = if (deletePartition && controllerContext.isTopicDeletionInProgress(topicPartition.topic))
+        topicDeletionCallback _
+      else
+        null
+
       stopReplicaRequestMap.getOrElseUpdate(brokerId, Seq.empty[StopReplicaRequestInfo])
       val v = stopReplicaRequestMap(brokerId)
       stopReplicaRequestMap(brokerId) = v :+ StopReplicaRequestInfo(PartitionAndReplica(topicPartition, brokerId),

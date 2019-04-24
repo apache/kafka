@@ -206,7 +206,7 @@ class ControllerContext {
     topicsWithDeletionStarted ++= topics
   }
 
-  def isTopicWithDeletionStarted(topic: String): Boolean = {
+  def isTopicDeletionInProgress(topic: String): Boolean = {
     topicsWithDeletionStarted.contains(topic)
   }
 
@@ -262,7 +262,7 @@ class ControllerContext {
   private def updatePartitionStateMetrics(partition: TopicPartition,
                                           currentState: PartitionState,
                                           targetState: PartitionState): Unit = {
-    if (!isTopicWithDeletionStarted(partition.topic)) {
+    if (!isTopicDeletionInProgress(partition.topic)) {
       if (currentState != OfflinePartition && targetState == OfflinePartition) {
         offlinePartitionCount = offlinePartitionCount + 1
       } else if (currentState == OfflinePartition && targetState != OfflinePartition) {
