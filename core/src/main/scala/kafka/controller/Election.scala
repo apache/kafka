@@ -21,7 +21,7 @@ import org.apache.kafka.common.TopicPartition
 
 case class ElectionResult(topicPartition: TopicPartition, leaderAndIsr: Option[LeaderAndIsr], liveReplicas: Seq[Int])
 
-object ElectionUtil {
+object Election {
 
   private def leaderForOffline(partition: TopicPartition,
                                leaderIsrAndControllerEpochOpt: Option[LeaderIsrAndControllerEpoch],

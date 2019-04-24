@@ -18,7 +18,7 @@ package kafka.controller
 
 import kafka.api.LeaderAndIsr
 import kafka.common.StateChangeFailedException
-import kafka.controller.ElectionUtil._
+import kafka.controller.Election._
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult

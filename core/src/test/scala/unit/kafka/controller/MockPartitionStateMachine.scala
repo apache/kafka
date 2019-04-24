@@ -17,7 +17,7 @@
 package kafka.controller
 
 import kafka.common.StateChangeFailedException
-import kafka.controller.ElectionUtil._
+import kafka.controller.Election._
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.mutable
