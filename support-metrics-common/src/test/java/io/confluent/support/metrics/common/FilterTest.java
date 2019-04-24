@@ -83,8 +83,8 @@ public class FilterTest {
 
     // Then
     assertEquals(properties.size() - 1, filtered.size());
-    assertFalse(filtered.contains("one"));
-    assertTrue(filtered.contains("two"));
+    assertFalse(filtered.containsKey("one"));
+    assertTrue(filtered.containsKey("two"));
     assertEquals(properties.get("two"), filtered.get("two"));
   }
 
@@ -125,8 +125,8 @@ public class FilterTest {
 
     // Then
     assertEquals(properties.size(), filtered.size());
-    assertTrue(filtered.contains("one"));
-    assertTrue(filtered.contains("two"));
+    assertTrue(filtered.containsKey("one"));
+    assertTrue(filtered.containsKey("two"));
   }
 
 }
