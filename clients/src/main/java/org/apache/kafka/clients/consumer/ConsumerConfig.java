@@ -471,7 +471,7 @@ public class ConsumerConfig extends AbstractConfig {
                                         EXCLUDE_INTERNAL_TOPICS_DOC)
                                 .defineInternal(LEAVE_GROUP_ON_CLOSE_CONFIG,
                                         Type.BOOLEAN,
-                                    true,
+                                        true,
                                         Importance.LOW)
                                 .define(ISOLATION_LEVEL_CONFIG,
                                         Type.STRING,
