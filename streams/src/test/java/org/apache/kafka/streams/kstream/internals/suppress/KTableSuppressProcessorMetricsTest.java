@@ -136,7 +136,7 @@ public class KTableSuppressProcessorMetricsTest {
         final String storeName = "test-store";
 
         final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(storeName, String(),
-                                                                                  new FullChangeSerde<>(Long()))
+                                                                                  FullChangeSerde.castOrWrap(Long()))
             .withLoggingDisabled()
             .build();
 
