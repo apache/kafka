@@ -64,7 +64,7 @@ public class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
         suppressionEmitSensor = Sensors.suppressionEmitSensor(internalProcessorContext);
 
         buffer = requireNonNull((TimeOrderedKeyValueBuffer<K, Change<V>>) context.getStateStore(storeName));
-        buffer.setSerdesIfNull((Serde<K>) context.keySerde(), FullChangeSerde.castOrWrap((Serde<V>)context.valueSerde()));
+        buffer.setSerdesIfNull((Serde<K>) context.keySerde(), FullChangeSerde.castOrWrap((Serde<V>) context.valueSerde()));
     }
 
     @Override
