@@ -24,20 +24,15 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.requests.ListOffsetRequest;
 import org.apache.kafka.common.requests.ListOffsetResponse;
-import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.kafka.test.TestUtils.assertOptional;
@@ -46,6 +41,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("deprecation")
 public class ListOffsetsClientTest {
 
     private ConsumerNetworkClient consumerClient;
@@ -94,12 +90,12 @@ public class ListOffsetsClientTest {
     public void testOkV0Response() {
         ListOffsetsClient offsetClient = newClient();
         RequestFuture<ListOffsetsClient.ResultData> future = offsetClient.sendAsyncRequest(
-                Node.noNode(), new ListOffsetsClient.RequestData(
-                        Collections.singletonMap(tp0, new ListOffsetRequest.PartitionData(-1, Optional.empty())),
-                        false, IsolationLevel.READ_COMMITTED));
+            Node.noNode(), new ListOffsetsClient.RequestData(
+                Collections.singletonMap(tp0, new ListOffsetRequest.PartitionData(-1, Optional.empty())),
+                false, IsolationLevel.READ_COMMITTED));
 
         ListOffsetResponse resp = new ListOffsetResponse(Collections.singletonMap(tp0,
-                new ListOffsetResponse.PartitionData(Errors.NONE, Collections.singletonList(10L))));
+            new ListOffsetResponse.PartitionData(Errors.NONE, Collections.singletonList(10L))));
         client.prepareResponse(resp);
         consumerClient.pollNoWakeup();
 
@@ -115,12 +111,12 @@ public class ListOffsetsClientTest {
     public void testOkV1Response() {
         ListOffsetsClient offsetClient = newClient();
         RequestFuture<ListOffsetsClient.ResultData> future = offsetClient.sendAsyncRequest(
-                Node.noNode(), new ListOffsetsClient.RequestData(
-                        Collections.singletonMap(tp0, new ListOffsetRequest.PartitionData(-1, Optional.of(1))),
-                        false, IsolationLevel.READ_COMMITTED));
+            Node.noNode(), new ListOffsetsClient.RequestData(
+                Collections.singletonMap(tp0, new ListOffsetRequest.PartitionData(-1, Optional.of(1))),
+                false, IsolationLevel.READ_COMMITTED));
 
         ListOffsetResponse resp = new ListOffsetResponse(Collections.singletonMap(tp0,
-                new ListOffsetResponse.PartitionData(Errors.NONE, -1, 10L, Optional.of(1))));
+            new ListOffsetResponse.PartitionData(Errors.NONE, -1, 10L, Optional.of(1))));
         client.prepareResponse(resp);
         consumerClient.pollNoWakeup();
 
@@ -137,12 +133,12 @@ public class ListOffsetsClientTest {
     public void testErrorResponse() {
         ListOffsetsClient offsetClient = newClient();
         RequestFuture<ListOffsetsClient.ResultData> future = offsetClient.sendAsyncRequest(
-                Node.noNode(), new ListOffsetsClient.RequestData(
-                        Collections.singletonMap(tp0, new ListOffsetRequest.PartitionData(-1, Optional.of(1))),
-                        false, IsolationLevel.READ_COMMITTED));
+            Node.noNode(), new ListOffsetsClient.RequestData(
+                Collections.singletonMap(tp0, new ListOffsetRequest.PartitionData(-1, Optional.of(1))),
+                false, IsolationLevel.READ_COMMITTED));
 
         ListOffsetResponse resp = new ListOffsetResponse(Collections.singletonMap(tp0,
-                new ListOffsetResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION, -1, -1, Optional.empty())));
+            new ListOffsetResponse.PartitionData(Errors.UNKNOWN_TOPIC_OR_PARTITION, -1, -1, Optional.empty())));
         client.prepareResponse(resp);
         consumerClient.pollNoWakeup();
 
@@ -155,13 +151,13 @@ public class ListOffsetsClientTest {
     public void testTimestampsNotSupportedByBroker() {
         ListOffsetsClient offsetClient = newClient();
         RequestFuture<ListOffsetsClient.ResultData> future = offsetClient.sendAsyncRequest(
-                Node.noNode(), new ListOffsetsClient.RequestData(
-                        Collections.singletonMap(tp0, new ListOffsetRequest.PartitionData(-1, Optional.of(1))),
-                        false, IsolationLevel.READ_COMMITTED));
+            Node.noNode(), new ListOffsetsClient.RequestData(
+                Collections.singletonMap(tp0, new ListOffsetRequest.PartitionData(-1, Optional.of(1))),
+                false, IsolationLevel.READ_COMMITTED));
 
         // When we get this error, we treat it as a valid empty response (no offsets returned)
         ListOffsetResponse resp = new ListOffsetResponse(Collections.singletonMap(tp0,
-                new ListOffsetResponse.PartitionData(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, -1, -1, Optional.empty())));
+            new ListOffsetResponse.PartitionData(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, -1, -1, Optional.empty())));
         client.prepareResponse(resp);
         consumerClient.pollNoWakeup();
 
@@ -174,12 +170,12 @@ public class ListOffsetsClientTest {
     public void testUnauthorizedTopic() {
         ListOffsetsClient offsetClient = newClient();
         RequestFuture<ListOffsetsClient.ResultData> future = offsetClient.sendAsyncRequest(
-                Node.noNode(), new ListOffsetsClient.RequestData(
-                        Collections.singletonMap(tp0, new ListOffsetRequest.PartitionData(-1, Optional.of(1))),
-                        false, IsolationLevel.READ_COMMITTED));
+            Node.noNode(), new ListOffsetsClient.RequestData(
+                Collections.singletonMap(tp0, new ListOffsetRequest.PartitionData(-1, Optional.of(1))),
+                false, IsolationLevel.READ_COMMITTED));
 
         ListOffsetResponse resp = new ListOffsetResponse(Collections.singletonMap(tp0,
-                new ListOffsetResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED, -1, -1, Optional.empty())));
+            new ListOffsetResponse.PartitionData(Errors.TOPIC_AUTHORIZATION_FAILED, -1, -1, Optional.empty())));
         client.prepareResponse(resp);
         consumerClient.pollNoWakeup();
 
