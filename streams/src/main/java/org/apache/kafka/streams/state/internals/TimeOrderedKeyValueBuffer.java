@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
@@ -45,6 +46,26 @@ public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
 
         public ProcessorRecordContext recordContext() {
             return recordContext;
+        }
+
+        @Override
+        public String toString() {
+            return "Eviction{key=" + key + ", value=" + value + ", recordContext=" + recordContext + '}';
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            final Eviction<?, ?> eviction = (Eviction<?, ?>) o;
+            return Objects.equals(key, eviction.key) &&
+                Objects.equals(value, eviction.value) &&
+                Objects.equals(recordContext, eviction.recordContext);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(key, value, recordContext);
         }
     }
 

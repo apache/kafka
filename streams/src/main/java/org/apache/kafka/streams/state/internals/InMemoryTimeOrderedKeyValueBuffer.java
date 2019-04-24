@@ -126,7 +126,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         }
 
         @Override
-        public StateStore build() {
+        public InMemoryTimeOrderedKeyValueBuffer<K, V> build() {
             return new InMemoryTimeOrderedKeyValueBuffer<>(storeName, loggingEnabled, keySerde, valSerde);
         }
 
