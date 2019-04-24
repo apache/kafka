@@ -2161,7 +2161,9 @@ public class ConsumerCoordinatorTest {
                 retryBackoffMs,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-                null);
+                null,
+                true
+        );
     }
 
     private FindCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {

@@ -801,7 +801,7 @@ class GroupMetadataManagerTest {
     assertEquals(staticMemberId, group.getStaticMemberId(groupInstanceId))
   }
 
-    @Test
+  @Test
   def testStoreEmptyGroup() {
     val generation = 27
     val protocolType = "consumer"

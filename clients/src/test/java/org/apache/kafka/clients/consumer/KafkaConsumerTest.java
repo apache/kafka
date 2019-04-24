@@ -1894,7 +1894,8 @@ public class KafkaConsumerTest {
                 retryBackoffMs,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-                interceptors);
+                interceptors,
+                true);
 
         Fetcher<String, String> fetcher = new Fetcher<>(
                 loggerFactory,

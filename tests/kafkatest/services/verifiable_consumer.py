@@ -223,7 +223,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         node.account.create_file(VerifiableConsumer.CONFIG_FILE, self.prop_file)
         self.security_config.setup_node(node)
         # apply group.instance.id to the node for static membership validation
-        # node.group_instance_id = "empty_group_instance_id"
+        node.group_instance_id = None
         if self.static_membership:
             node.group_instance_id = self.group_id + "-instance-" + str(idx)
         cmd = self.start_cmd(node)
