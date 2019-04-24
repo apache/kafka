@@ -120,7 +120,7 @@ public class StreamTaskTest {
     private final TopicPartition changelogPartition = new TopicPartition("store-changelog", 0);
     private final Long offset = 543L;
 
-    private final ProcessorTopology topology = ProcessorTopology.withSources(
+    private final ProcessorTopology topology = withSources(
         Utils.mkList(source1, source2, processorStreamTime, processorSystemTime),
         mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
     );
@@ -152,6 +152,29 @@ public class StreamTaskTest {
             punctuatedAt = timestamp;
         }
     };
+
+    static ProcessorTopology withRepartitionTopics(final List<ProcessorNode> processorNodes,
+                                                   final Map<String, SourceNode> sourcesByTopic,
+                                                   final Set<String> repartitionTopics) {
+        return new ProcessorTopology(processorNodes,
+                                     sourcesByTopic,
+                                     Collections.emptyMap(),
+                                     Collections.emptyList(),
+                                     Collections.emptyList(),
+                                     Collections.emptyMap(),
+                                     repartitionTopics);
+    }
+
+    static ProcessorTopology withSources(final List<ProcessorNode> processorNodes,
+                                         final Map<String, SourceNode> sourcesByTopic) {
+        return new ProcessorTopology(processorNodes,
+                                     sourcesByTopic,
+                                     Collections.emptyMap(),
+                                     Collections.emptyList(),
+                                     Collections.emptyList(),
+                                     Collections.emptyMap(),
+                                     Collections.emptySet());
+    }
 
     private StreamsConfig createConfig(final boolean enableEoS) {
         final String canonicalPath;
@@ -196,7 +219,7 @@ public class StreamTaskTest {
     public void shouldHandleInitTransactionsTimeoutExceptionOnCreation() {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
-        final ProcessorTopology topology = ProcessorTopology.withSources(
+        final ProcessorTopology topology = withSources(
             asList(source1, source2, processorStreamTime, processorSystemTime),
             mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source2))
         );
@@ -246,7 +269,7 @@ public class StreamTaskTest {
     public void shouldHandleInitTransactionsTimeoutExceptionOnResume() {
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
-        final ProcessorTopology topology = ProcessorTopology.withSources(
+        final ProcessorTopology topology = withSources(
             asList(source1, source2, processorStreamTime, processorSystemTime),
             mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source2))
         );
@@ -325,13 +348,13 @@ public class StreamTaskTest {
     public void testProcessOrder() {
         task = createStatelessTask(createConfig(false));
 
-        task.addRecords(partition1, Arrays.asList(
+        task.addRecords(partition1, asList(
             getConsumerRecord(partition1, 10),
             getConsumerRecord(partition1, 20),
             getConsumerRecord(partition1, 30)
         ));
 
-        task.addRecords(partition2, Arrays.asList(
+        task.addRecords(partition2, asList(
             getConsumerRecord(partition2, 25),
             getConsumerRecord(partition2, 35),
             getConsumerRecord(partition2, 45)
@@ -401,12 +424,12 @@ public class StreamTaskTest {
     public void testPauseResume() {
         task = createStatelessTask(createConfig(false));
 
-        task.addRecords(partition1, Arrays.asList(
+        task.addRecords(partition1, asList(
             getConsumerRecord(partition1, 10),
             getConsumerRecord(partition1, 20)
         ));
 
-        task.addRecords(partition2, Arrays.asList(
+        task.addRecords(partition2, asList(
             getConsumerRecord(partition2, 35),
             getConsumerRecord(partition2, 45),
             getConsumerRecord(partition2, 55),
@@ -420,7 +443,7 @@ public class StreamTaskTest {
         assertEquals(1, consumer.paused().size());
         assertTrue(consumer.paused().contains(partition2));
 
-        task.addRecords(partition1, Arrays.asList(
+        task.addRecords(partition1, asList(
             getConsumerRecord(partition1, 30),
             getConsumerRecord(partition1, 40),
             getConsumerRecord(partition1, 50)
@@ -458,14 +481,14 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        task.addRecords(partition1, Arrays.asList(
+        task.addRecords(partition1, asList(
             getConsumerRecord(partition1, 20),
             getConsumerRecord(partition1, 142),
             getConsumerRecord(partition1, 155),
             getConsumerRecord(partition1, 160)
         ));
 
-        task.addRecords(partition2, Arrays.asList(
+        task.addRecords(partition2, asList(
             getConsumerRecord(partition2, 25),
             getConsumerRecord(partition2, 145),
             getConsumerRecord(partition2, 159),
@@ -543,13 +566,13 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
 
-        task.addRecords(partition1, Arrays.asList(
+        task.addRecords(partition1, asList(
             getConsumerRecord(partition1, 20),
             getConsumerRecord(partition1, 30),
             getConsumerRecord(partition1, 40)
         ));
 
-        task.addRecords(partition2, Arrays.asList(
+        task.addRecords(partition2, asList(
             getConsumerRecord(partition2, 25),
             getConsumerRecord(partition2, 35),
             getConsumerRecord(partition2, 45)
@@ -1108,7 +1131,7 @@ public class StreamTaskTest {
     }
 
     @Test
-    public void shouldWrapProducerFencedExceptionWithTaskMigragedExceptionForBeginTransaction() {
+    public void shouldWrapProducerFencedExceptionWithTaskMigratedExceptionForBeginTransaction() {
         task = createStatelessTask(createConfig(true));
         producer.fenceProducer();
 
@@ -1354,12 +1377,12 @@ public class StreamTaskTest {
     public void shouldReturnOffsetsForRepartitionTopicsForPurging() {
         final TopicPartition repartition = new TopicPartition("repartition", 1);
 
-        final ProcessorTopology topology = ProcessorTopology.withRepartitionTopics(
+        final ProcessorTopology topology = withRepartitionTopics(
             Utils.mkList(source1, source2),
             mkMap(mkEntry(topic1, source1), mkEntry(repartition.topic(), source2)),
             Collections.singleton(repartition.topic())
         );
-        consumer.assign(Arrays.asList(partition1, repartition));
+        consumer.assign(asList(partition1, repartition));
 
         task = new StreamTask(
             taskId00,
@@ -1426,7 +1449,7 @@ public class StreamTaskTest {
     }
 
     private StreamTask createStatefulTask(final StreamsConfig config, final boolean logged) {
-        final ProcessorTopology topology = ProcessorTopology.with(
+        final ProcessorTopology topology = ProcessorTopologyFactories.with(
             Utils.mkList(source1, source2),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2)),
             singletonList(stateStore),
@@ -1448,7 +1471,7 @@ public class StreamTaskTest {
     }
 
     private StreamTask createStatefulTaskThatThrowsExceptionOnClose() {
-        final ProcessorTopology topology = ProcessorTopology.with(
+        final ProcessorTopology topology = ProcessorTopologyFactories.with(
             Utils.mkList(source1, source3),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3)),
             singletonList(stateStore),
@@ -1470,7 +1493,7 @@ public class StreamTaskTest {
     }
 
     private StreamTask createStatelessTask(final StreamsConfig streamsConfig) {
-        final ProcessorTopology topology = ProcessorTopology.withSources(
+        final ProcessorTopology topology = withSources(
             Utils.mkList(source1, source2, processorStreamTime, processorSystemTime),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
         );
@@ -1497,7 +1520,7 @@ public class StreamTaskTest {
 
     // this task will throw exception when processing (on partition2), flushing, suspending and closing
     private StreamTask createTaskThatThrowsException(final boolean enableEos) {
-        final ProcessorTopology topology = ProcessorTopology.withSources(
+        final ProcessorTopology topology = withSources(
             Utils.mkList(source1, source3, processorStreamTime, processorSystemTime),
             mkMap(mkEntry(topic1, source1), mkEntry(topic2, source3))
         );
