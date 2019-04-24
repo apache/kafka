@@ -28,6 +28,7 @@ import static java.util.Objects.requireNonNull;
 public final class FullChangeSerde<T> implements Serde<Change<T>> {
     private final Serde<T> inner;
 
+    @SuppressWarnings("unchecked")
     public static <T> FullChangeSerde<T> castOrWrap(final Serde<T> serde) {
         if (serde == null) {
             return null;
