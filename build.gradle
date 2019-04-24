@@ -1250,6 +1250,7 @@ project(':support-metrics-client') {
     compile project(':support-metrics-common')
 
     testCompile project(':core').sourceSets.test.output
+    testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testCompile libs.junit
     testCompile libs.mockitoCore
   }
@@ -1325,6 +1326,7 @@ project(':support-metrics-common') {
     compile project(':core')
 
     testCompile project(':core').sourceSets.test.output
+    testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
     testCompile libs.junit
     testCompile libs.mockitoCore
   }
