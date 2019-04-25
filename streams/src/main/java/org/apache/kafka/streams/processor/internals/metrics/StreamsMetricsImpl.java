@@ -62,6 +62,9 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     public static final String RATE_SUFFIX = "-rate";
     public static final String TOTAL_SUFFIX = "-total";
 
+    public static final String THREAD_LEVEL_GROUP = "stream-metrics";
+    public static final String TASK_LEVEL_GROUP = "stream-task-metrics";
+
     public static final String PROCESSOR_NODE_METRICS_GROUP = "stream-processor-node-metrics";
     public static final String PROCESSOR_NODE_ID_TAG = "processor-node-id";
 
