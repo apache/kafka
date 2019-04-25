@@ -29,16 +29,13 @@ import org.apache.zookeeper.data.Stat
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{Before, Test}
+import org.mockito.Mockito
 import org.scalatest.junit.JUnitSuite
-
-import scala.collection.mutable
 
 class PartitionStateMachineTest extends JUnitSuite {
   private var controllerContext: ControllerContext = null
   private var mockZkClient: KafkaZkClient = null
   private var mockControllerBrokerRequestBatch: ControllerBrokerRequestBatch = null
-  private var mockTopicDeletionManager: TopicDeletionManager = null
-  private var partitionState: mutable.Map[TopicPartition, PartitionState] = null
   private var partitionStateMachine: PartitionStateMachine = null
 
   private val brokerId = 5
@@ -53,11 +50,12 @@ class PartitionStateMachineTest extends JUnitSuite {
     controllerContext.epoch = controllerEpoch
     mockZkClient = EasyMock.createMock(classOf[KafkaZkClient])
     mockControllerBrokerRequestBatch = EasyMock.createMock(classOf[ControllerBrokerRequestBatch])
-    mockTopicDeletionManager = EasyMock.createMock(classOf[TopicDeletionManager])
-    partitionState = mutable.Map.empty[TopicPartition, PartitionState]
-    partitionStateMachine = new PartitionStateMachine(config, new StateChangeLogger(brokerId, true, None), controllerContext,
-      mockZkClient, partitionState, mockControllerBrokerRequestBatch)
-    partitionStateMachine.setTopicDeletionManager(mockTopicDeletionManager)
+    partitionStateMachine = new ZkPartitionStateMachine(config, new StateChangeLogger(brokerId, true, None), controllerContext,
+      mockZkClient, mockControllerBrokerRequestBatch)
+  }
+
+  private def partitionState(partition: TopicPartition): PartitionState = {
+    controllerContext.partitionState(partition)
   }
 
   @Test
@@ -82,7 +80,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   def testNewPartitionToOnlinePartitionTransition(): Unit = {
     controllerContext.setLiveBrokerAndEpochs(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
-    partitionState.put(partition, NewPartition)
+    controllerContext.putPartitionState(partition, NewPartition)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockZkClient.createTopicPartitionStatesRaw(Map(partition -> leaderIsrAndControllerEpoch), controllerContext.epochZkVersion))
@@ -100,7 +98,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   def testNewPartitionToOnlinePartitionTransitionZkUtilsExceptionFromCreateStates(): Unit = {
     controllerContext.setLiveBrokerAndEpochs(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
-    partitionState.put(partition, NewPartition)
+    controllerContext.putPartitionState(partition, NewPartition)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockZkClient.createTopicPartitionStatesRaw(Map(partition -> leaderIsrAndControllerEpoch), controllerContext.epochZkVersion))
@@ -116,7 +114,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   def testNewPartitionToOnlinePartitionTransitionErrorCodeFromCreateStates(): Unit = {
     controllerContext.setLiveBrokerAndEpochs(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
-    partitionState.put(partition, NewPartition)
+    controllerContext.putPartitionState(partition, NewPartition)
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(LeaderAndIsr(brokerId, List(brokerId)), controllerEpoch)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockZkClient.createTopicPartitionStatesRaw(Map(partition -> leaderIsrAndControllerEpoch), controllerContext.epochZkVersion))
@@ -130,14 +128,14 @@ class PartitionStateMachineTest extends JUnitSuite {
 
   @Test
   def testNewPartitionToOfflinePartitionTransition(): Unit = {
-    partitionState.put(partition, NewPartition)
+    controllerContext.putPartitionState(partition, NewPartition)
     partitionStateMachine.handleStateChanges(partitions, OfflinePartition)
     assertEquals(OfflinePartition, partitionState(partition))
   }
 
   @Test
   def testInvalidNewPartitionToNonexistentPartitionTransition(): Unit = {
-    partitionState.put(partition, NewPartition)
+    controllerContext.putPartitionState(partition, NewPartition)
     partitionStateMachine.handleStateChanges(partitions, NonExistentPartition)
     assertEquals(NewPartition, partitionState(partition))
   }
@@ -146,7 +144,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   def testOnlinePartitionToOnlineTransition(): Unit = {
     controllerContext.setLiveBrokerAndEpochs(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
-    partitionState.put(partition, OnlinePartition)
+    controllerContext.putPartitionState(partition, OnlinePartition)
     val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
@@ -179,7 +177,7 @@ class PartitionStateMachineTest extends JUnitSuite {
       TestUtils.createBrokerAndEpoch(otherBrokerId, "host", 0)))
     controllerContext.shuttingDownBrokerIds.add(brokerId)
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId, otherBrokerId))
-    partitionState.put(partition, OnlinePartition)
+    controllerContext.putPartitionState(partition, OnlinePartition)
     val leaderAndIsr = LeaderAndIsr(brokerId, List(brokerId, otherBrokerId))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
@@ -209,21 +207,21 @@ class PartitionStateMachineTest extends JUnitSuite {
 
   @Test
   def testOnlinePartitionToOfflineTransition(): Unit = {
-    partitionState.put(partition, OnlinePartition)
+    controllerContext.putPartitionState(partition, OnlinePartition)
     partitionStateMachine.handleStateChanges(partitions, OfflinePartition)
     assertEquals(OfflinePartition, partitionState(partition))
   }
 
   @Test
   def testInvalidOnlinePartitionToNonexistentPartitionTransition(): Unit = {
-    partitionState.put(partition, OnlinePartition)
+    controllerContext.putPartitionState(partition, OnlinePartition)
     partitionStateMachine.handleStateChanges(partitions, NonExistentPartition)
     assertEquals(OnlinePartition, partitionState(partition))
   }
 
   @Test
   def testInvalidOnlinePartitionToNewPartitionTransition(): Unit = {
-    partitionState.put(partition, OnlinePartition)
+    controllerContext.putPartitionState(partition, OnlinePartition)
     partitionStateMachine.handleStateChanges(partitions, NewPartition)
     assertEquals(OnlinePartition, partitionState(partition))
   }
@@ -232,7 +230,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   def testOfflinePartitionToOnlinePartitionTransition(): Unit = {
     controllerContext.setLiveBrokerAndEpochs(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
-    partitionState.put(partition, OfflinePartition)
+    controllerContext.putPartitionState(partition, OfflinePartition)
     val leaderAndIsr = LeaderAndIsr(LeaderAndIsr.NoLeader, List(brokerId))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
@@ -263,7 +261,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   def testOfflinePartitionToOnlinePartitionTransitionZkUtilsExceptionFromStateLookup(): Unit = {
     controllerContext.setLiveBrokerAndEpochs(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
-    partitionState.put(partition, OfflinePartition)
+    controllerContext.putPartitionState(partition, OfflinePartition)
     val leaderAndIsr = LeaderAndIsr(LeaderAndIsr.NoLeader, List(brokerId))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
@@ -284,7 +282,7 @@ class PartitionStateMachineTest extends JUnitSuite {
   def testOfflinePartitionToOnlinePartitionTransitionErrorCodeFromStateLookup(): Unit = {
     controllerContext.setLiveBrokerAndEpochs(Map(TestUtils.createBrokerAndEpoch(brokerId, "host", 0)))
     controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
-    partitionState.put(partition, OfflinePartition)
+    controllerContext.putPartitionState(partition, OfflinePartition)
     val leaderAndIsr = LeaderAndIsr(LeaderAndIsr.NoLeader, List(brokerId))
     val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
@@ -305,14 +303,14 @@ class PartitionStateMachineTest extends JUnitSuite {
 
   @Test
   def testOfflinePartitionToNonexistentPartitionTransition(): Unit = {
-    partitionState.put(partition, OfflinePartition)
+    controllerContext.putPartitionState(partition, OfflinePartition)
     partitionStateMachine.handleStateChanges(partitions, NonExistentPartition)
     assertEquals(NonExistentPartition, partitionState(partition))
   }
 
   @Test
   def testInvalidOfflinePartitionToNewPartitionTransition(): Unit = {
-    partitionState.put(partition, OfflinePartition)
+    controllerContext.putPartitionState(partition, OfflinePartition)
     partitionStateMachine.handleStateChanges(partitions, NewPartition)
     assertEquals(OfflinePartition, partitionState(partition))
   }
@@ -356,23 +354,21 @@ class PartitionStateMachineTest extends JUnitSuite {
 
     val partitionIds = Seq(0, 1, 2, 3)
     val topic = "test"
-    val partitions = partitionIds.map(new TopicPartition("test", _))
+    val partitions = partitionIds.map(new TopicPartition(topic, _))
 
     partitions.foreach { partition =>
       controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     }
 
-    EasyMock.expect(mockTopicDeletionManager.isTopicWithDeletionStarted(topic)).andReturn(false)
-    EasyMock.expectLastCall().anyTimes()
     prepareMockToElectLeaderForPartitions(partitions)
-    EasyMock.replay(mockZkClient, mockTopicDeletionManager)
+    EasyMock.replay(mockZkClient)
 
     partitionStateMachine.handleStateChanges(partitions, NewPartition)
     partitionStateMachine.handleStateChanges(partitions, OfflinePartition)
-    assertEquals(s"There should be ${partitions.size} offline partition(s)", partitions.size, partitionStateMachine.offlinePartitionCount)
+    assertEquals(s"There should be ${partitions.size} offline partition(s)", partitions.size, controllerContext.offlinePartitionCount)
 
     partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Some(OfflinePartitionLeaderElectionStrategy))
-    assertEquals(s"There should be no offline partition(s)", 0, partitionStateMachine.offlinePartitionCount)
+    assertEquals(s"There should be no offline partition(s)", 0, controllerContext.offlinePartitionCount)
   }
 
   /**
@@ -383,15 +379,14 @@ class PartitionStateMachineTest extends JUnitSuite {
   def testNoOfflinePartitionsChangeForTopicsBeingDeleted() = {
     val partitionIds = Seq(0, 1, 2, 3)
     val topic = "test"
-    val partitions = partitionIds.map(new TopicPartition("test", _))
+    val partitions = partitionIds.map(new TopicPartition(topic, _))
 
-    EasyMock.expect(mockTopicDeletionManager.isTopicWithDeletionStarted(topic)).andReturn(true)
-    EasyMock.expectLastCall().anyTimes()
-    EasyMock.replay(mockTopicDeletionManager)
+    controllerContext.topicsToBeDeleted.add(topic)
+    controllerContext.topicsWithDeletionStarted.add(topic)
 
     partitionStateMachine.handleStateChanges(partitions, NewPartition)
     partitionStateMachine.handleStateChanges(partitions, OfflinePartition)
-    assertEquals(s"There should be no offline partition(s)", 0, partitionStateMachine.offlinePartitionCount)
+    assertEquals(s"There should be no offline partition(s)", 0, controllerContext.offlinePartitionCount)
   }
 
   /**
@@ -411,52 +406,21 @@ class PartitionStateMachineTest extends JUnitSuite {
       controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
     }
 
-    val props = TestUtils.createBrokerConfig(brokerId, "zkConnect")
-    props.put(KafkaConfig.DeleteTopicEnableProp, "true")
-
-    val customConfig = KafkaConfig.fromProps(props)
-
-    def createMockReplicaStateMachine() = {
-      val replicaStateMachine: ReplicaStateMachine = EasyMock.createMock(classOf[ReplicaStateMachine])
-      EasyMock.expect(replicaStateMachine.areAllReplicasForTopicDeleted(topic)).andReturn(false).anyTimes()
-      EasyMock.expect(replicaStateMachine.isAtLeastOneReplicaInDeletionStartedState(topic)).andReturn(false).anyTimes()
-      EasyMock.expect(replicaStateMachine.isAnyReplicaInState(topic, ReplicaDeletionIneligible)).andReturn(false).anyTimes()
-      EasyMock.expect(replicaStateMachine.replicasInState(topic, ReplicaDeletionIneligible)).andReturn(Set.empty).anyTimes()
-      EasyMock.expect(replicaStateMachine.replicasInState(topic, ReplicaDeletionStarted)).andReturn(Set.empty).anyTimes()
-      EasyMock.expect(replicaStateMachine.replicasInState(topic, ReplicaDeletionSuccessful)).andReturn(Set.empty).anyTimes()
-      EasyMock.expect(replicaStateMachine.handleStateChanges(EasyMock.anyObject[Seq[PartitionAndReplica]],
-        EasyMock.anyObject[ReplicaState], EasyMock.anyObject[Callbacks]))
-
-      EasyMock.expectLastCall().anyTimes()
-      replicaStateMachine
-    }
-    val replicaStateMachine = createMockReplicaStateMachine()
-    partitionStateMachine = new PartitionStateMachine(customConfig, new StateChangeLogger(brokerId, true, None), controllerContext,
-      mockZkClient, partitionState, mockControllerBrokerRequestBatch)
-
-    def createMockController() = {
-      val mockController: KafkaController = EasyMock.createMock(classOf[KafkaController])
-      EasyMock.expect(mockController.controllerContext).andReturn(controllerContext).anyTimes()
-      EasyMock.expect(mockController.config).andReturn(customConfig).anyTimes()
-      EasyMock.expect(mockController.partitionStateMachine).andReturn(partitionStateMachine).anyTimes()
-      EasyMock.expect(mockController.replicaStateMachine).andReturn(replicaStateMachine).anyTimes()
-      EasyMock.expect(mockController.sendUpdateMetadataRequest(Seq.empty, partitions.toSet))
-      EasyMock.expectLastCall().anyTimes()
-      mockController
-    }
-
-    val mockController = createMockController()
-    val mockEventManager: ControllerEventManager = EasyMock.createMock(classOf[ControllerEventManager])
-    EasyMock.replay(mockController, replicaStateMachine, mockEventManager)
-
-    val topicDeletionManager = new TopicDeletionManager(mockController, mockEventManager, mockZkClient)
-    partitionStateMachine.setTopicDeletionManager(topicDeletionManager)
+    val partitionStateMachine = new MockPartitionStateMachine(controllerContext, uncleanLeaderElectionEnabled = false)
+    val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
+    val deletionClient = Mockito.mock(classOf[DeletionClient])
+    val topicDeletionManager = new TopicDeletionManager(config, controllerContext,
+      replicaStateMachine, partitionStateMachine, deletionClient)
 
     partitionStateMachine.handleStateChanges(partitions, NewPartition)
     partitionStateMachine.handleStateChanges(partitions, OfflinePartition)
-    assertEquals(s"There should be ${partitions.size} offline partition(s)", partitions.size, mockController.partitionStateMachine.offlinePartitionCount)
+    partitions.foreach { partition =>
+      val replica = PartitionAndReplica(partition, brokerId)
+      controllerContext.putReplicaState(replica, OfflineReplica)
+    }
 
+    assertEquals(s"There should be ${partitions.size} offline partition(s)", partitions.size, controllerContext.offlinePartitionCount)
     topicDeletionManager.enqueueTopicsForDeletion(Set(topic))
-    assertEquals(s"There should be no offline partition(s)", 0, partitionStateMachine.offlinePartitionCount)
+    assertEquals(s"There should be no offline partition(s)", 0, controllerContext.offlinePartitionCount)
   }
 }
