@@ -18,6 +18,8 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 
 import java.util.Map;
@@ -284,6 +286,16 @@ public class DistributedConfig extends WorkerConfig {
                 .define(CONNECT_PROTOCOL_CONFIG,
                         ConfigDef.Type.STRING,
                         CONNECT_PROTOCOL_DEFAULT,
+                        ConfigDef.LambdaValidator.with(
+                            (name, value) -> {
+                                try {
+                                    ConnectProtocolCompatibility.compatibility((String) value);
+                                } catch (Throwable t) {
+                                    throw new ConfigException(name, value, "Invalid Connect protocol "
+                                            + "compatibility");
+                                }
+                            },
+                            () -> "[" + Utils.join(ConnectProtocolCompatibility.values(), ", ") + "]"),
                         ConfigDef.Importance.LOW,
                         CONNECT_PROTOCOL_DOC)
                 .define(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG,
