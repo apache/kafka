@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.clients.producer.Callback;
@@ -44,6 +46,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -413,6 +416,54 @@ public class RecordAccumulatorTest {
             }
         };
         t.start();
+    }
+
+    @Test
+    public void testSplitAwaitFlushComplete() throws Exception {
+        RecordAccumulator accum = createTestRecordAccumulator(1024, 10 * 1024, CompressionType.GZIP, 10);
+
+        // Create a big batch
+        byte[] value = new byte[256];
+        // Create a batch such that it fails with RecordBatchTooLargeException
+        accum.append(new TopicPartition(topic, 0), 0L, null, value, null, null, maxBlockTimeMs, false);
+        accum.append(new TopicPartition(topic, 0), 0L, null, value, null, null, maxBlockTimeMs, false);
+
+        CountDownLatch flushInProgress = new CountDownLatch(1);
+        Iterator<ProducerBatch> incompleteBatches = accum.incompleteBatches().copyAll().iterator();
+
+        // Assert that there is only one batch
+        Assert.assertTrue(incompleteBatches.hasNext());
+        ProducerBatch producerBatch = incompleteBatches.next();
+        Assert.assertFalse(incompleteBatches.hasNext());
+
+        AtomicBoolean timedOut = new AtomicBoolean(false);
+        Thread thread = new Thread(() -> {
+            Assert.assertTrue(accum.hasIncomplete());
+            accum.beginFlush();
+            Assert.assertTrue(accum.flushInProgress());
+            try {
+                flushInProgress.countDown();
+                accum.awaitFlushCompletion(2000);
+            } catch (TimeoutException timeoutException) {
+              // Catch it and set the timedout variable
+              // This is the only valid path for this thread.
+                timedOut.set(true);
+            } catch (InterruptedException e) {
+            }
+        });
+        thread.start();
+        flushInProgress.await();
+        // Wait for 100ms to make sure that the flush is actually in progress
+        Thread.sleep(100);
+
+        // Split the big batch and re-enqueue
+        accum.splitAndReenqueue(producerBatch);
+        accum.deallocate(producerBatch);
+
+        thread.join();
+        // The thread would have failed with timeout exception because the child batches
+        // are not evaluated and it would have waited for 2seconds before the timeout.
+        Assert.assertTrue("The thread should have timed out", timedOut.get());
     }
 
     @Test

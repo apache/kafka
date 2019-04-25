@@ -38,6 +38,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.RecordBatchTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.header.Header;
@@ -685,6 +686,13 @@ public final class RecordAccumulator {
         return flushesInProgress.get() > 0;
     }
 
+    /**
+     * This method should be used only for testing.
+     */
+    IncompleteBatches incompleteBatches() {
+        return incomplete;
+    }
+
     /* Visible for testing */
     Map<TopicPartition, Deque<ProducerBatch>> batches() {
         return Collections.unmodifiableMap(batches);
@@ -709,17 +717,29 @@ public final class RecordAccumulator {
      */
     public void awaitFlushCompletion(long timeoutMs) throws InterruptedException {
         try {
+            boolean retry;
             Long expireMs = System.currentTimeMillis() + timeoutMs;
-            for (ProducerBatch batch : this.incomplete.copyAll()) {
-                Long currentMs = System.currentTimeMillis();
-                if (currentMs > expireMs) {
-                    throw new TimeoutException("Failed to flush accumulated records within" + timeoutMs + "milliseconds.");
+            do {
+                retry = false;
+                for (ProducerBatch batch : this.incomplete.copyAll()) {
+                    Long currentMs = System.currentTimeMillis();
+                    if (currentMs > expireMs) {
+                        throw new TimeoutException("Failed to flush accumulated records within" + timeoutMs + "milliseconds.");
+                    }
+                    boolean completed = batch.produceFuture.await(Math.max(expireMs - currentMs, 0), TimeUnit.MILLISECONDS);
+                    if (!completed) {
+                        throw new TimeoutException("Failed to flush accumulated records within" + timeoutMs + "milliseconds.");
+                    }
+                    // If the produceFuture failed with RecordBatchTooLargeException, it means that the
+                    // batch was split into smaller batches and re-enqueued into the RecordAccumulator by Sender thread.
+                    // This if condition will make sure to retry and send all the split batches.
+                    // Note that, More records get sent to the broker than necessary because the retry mechanism
+                    // will also include all the newly added records via kafkaProducer.send() api.
+                    if (batch.produceFuture.error() instanceof RecordBatchTooLargeException) {
+                        retry = true;
+                    }
                 }
-                boolean completed = batch.produceFuture.await(Math.max(expireMs - currentMs, 0), TimeUnit.MILLISECONDS);
-                if (!completed) {
-                    throw new TimeoutException("Failed to flush accumulated records within" + timeoutMs + "milliseconds.");
-                }
-            }
+            } while (retry);
         } finally {
             this.flushesInProgress.decrementAndGet();
         }
