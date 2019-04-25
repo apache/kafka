@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams.test;
 
 import org.apache.kafka.common.header.Headers;
@@ -10,28 +26,26 @@ import java.util.List;
 import java.util.stream.Collectors;
 
 /**
- * This class makes it easier to write tests with {@link TopologyTestDriver} and
- * combines functionality of {@link TopologyTestDriver} and {@link ConsumerRecordFactory}.
- * To use {@code TestInputTopic} create new class with topicName and correct Serdes or Serealizers
+ * TestInputTopic is used to pipe records to topic in {@link TopologyTestDriver}.
+ * This class combines functionality of {@link TopologyTestDriver} and {@link ConsumerRecordFactory}.
+ * To use {@code TestInputTopic} create new class with topicName and correct Serdes or Serializers
  * In actual test code, you can pipe new message values, keys and values or list of {@link KeyValue}
- * without needing to care serdes. You need to have own TestInputTopic for each topic.
+ * without needing to pass serdes each time. You need to have own TestInputTopic object for each topic.
  *
  *
- * <h2>Processing messages</h2>*
+ * <h2>Processing messages</h2>
  * <pre>{@code
- *      private TestInputTopic<String, String> inputTopic;
- * @Before
- *      ...
- *     inputTopic = new TestInputTopic<String, String>(testDriver, inputTopic, new Serdes.StringSerde(), new Serdes.StringSerde());
- *
- * @Test
+ *     private TestInputTopic<String, String> inputTopic;
+ *     ...
+ *     inputTopic = new TestInputTopic<>(testDriver, inputTopic, new Serdes.StringSerde(), new Serdes.StringSerde());
  *     ...
  *     inputTopic.pipeInput("Hello");
- * </pre>
+ * }</pre>
  *
- * @param <K> the type of the key
- * @param <V> the type of the value
- * @see TopologyTestDriver, ConsumerRecordFactory
+ * @param <K> the type of the Kafka key
+ * @param <V> the type of the Kafka value
+ * @see TopologyTestDriver
+ * @see ConsumerRecordFactory
  */
 
 public class TestInputTopic<K, V> {
@@ -46,7 +60,7 @@ public class TestInputTopic<K, V> {
      * Uses current system time as start timestamp.
      * Auto-advance is disabled.
      *
-     * @param driver          @link TopologyTestDriver to use
+     * @param driver          TopologyTestDriver to use
      * @param topicName       the topic name used
      * @param keySerializer   the key serializer
      * @param valueSerializer the value serializer
@@ -64,7 +78,7 @@ public class TestInputTopic<K, V> {
      * Create a test input topic to pipe messages in.
      * Auto-advance is disabled.
      *
-     * @param driver           @link TopologyTestDriver to use
+     * @param driver           TopologyTestDriver to use
      * @param topicName        the topic name used
      * @param keySerializer    the key serializer
      * @param valueSerializer  the value serializer
@@ -83,7 +97,7 @@ public class TestInputTopic<K, V> {
     /**
      * Create a test input topic to pipe messages in.
      *
-     * @param driver           @link TopologyTestDriver to use
+     * @param driver           TopologyTestDriver to use
      * @param topicName        the topic name used
      * @param keySerializer    the key serializer
      * @param valueSerializer  the value serializer
@@ -106,7 +120,7 @@ public class TestInputTopic<K, V> {
      * Uses current system time as start timestamp.
      * Auto-advance is disabled.
      *
-     * @param driver     @link TopologyTestDriver to use
+     * @param driver     TopologyTestDriver to use
      * @param topicName  the topic name used
      * @param keySerde   the key serializer
      * @param valueSerde the value serializer
@@ -124,7 +138,7 @@ public class TestInputTopic<K, V> {
      * Create a test input topic to pipe messages in.
      * Auto-advance is disabled.
      *
-     * @param driver           @link TopologyTestDriver to use
+     * @param driver           TopologyTestDriver to use
      * @param topicName        the topic name used
      * @param keySerde         the key serializer
      * @param valueSerde       the value serializer
@@ -143,7 +157,7 @@ public class TestInputTopic<K, V> {
     /**
      * Create a test input topic to pipe messages in.
      *
-     * @param driver           @link TopologyTestDriver to use
+     * @param driver           TopologyTestDriver to use
      * @param topicName        the topic name used
      * @param keySerde         the key serializer
      * @param valueSerde       the value serializer
@@ -246,6 +260,7 @@ public class TestInputTopic<K, V> {
     /**
      * Send input messages with the given KeyValue  list on the topic  then commit each message individually.
      * The timestamp will be generated based on the constructor provided start time and time will auto advance.
+     *
      * @param keyValues the list of KeyValue records
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
@@ -254,7 +269,7 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send input messages with the given value liest on the topic then commit each message individually.
+     * Send input messages with the given value list on the topic then commit each message individually.
      * The timestamp will be generated based on the constructor provided start time and time will auto advance.
      *
      * @param values the list of KeyValue records
@@ -268,9 +283,10 @@ public class TestInputTopic<K, V> {
     /**
      * Send input messages with the given KeyValue  list on the topic  then commit each message individually.
      * Does not auto advance internally tracked time.
-     * @param keyValues the list of KeyValue records
+     *
+     * @param keyValues      the list of KeyValue records
      * @param startTimestamp the timestamp for the first generated record
-     * @param advanceMs the time difference between two consecutive generated records
+     * @param advanceMs      the time difference between two consecutive generated records
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeKeyValueList(List<KeyValue<K, V>> keyValues,
@@ -280,12 +296,12 @@ public class TestInputTopic<K, V> {
     }
 
     /**
-     * Send input messages with the given value liest on the topic then commit each message individually.
+     * Send input messages with the given value list on the topic then commit each message individually.
      * The timestamp will be generated based on the constructor provided start time and time will auto advance.
      *
-     * @param values the list of KeyValue records
+     * @param values         the list of KeyValue records
      * @param startTimestamp the timestamp for the first generated record
-     * @param advanceMs the time difference between two consecutive generated records
+     * @param advanceMs      the time difference between two consecutive generated records
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public void pipeValueList(List<V> values,

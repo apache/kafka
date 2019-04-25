@@ -1,11 +1,12 @@
 /*
- * Copyright 2018 the original author or authors.
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
- *
- *      https://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -23,66 +24,60 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
-import java.util.Collection;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
-import java.util.stream.Collectors;
 
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.CoreMatchers.equalTo;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.CoreMatchers.hasItems;
+import static org.hamcrest.CoreMatchers.nullValue;
+import static org.hamcrest.MatcherAssert.assertThat;
 
 /**
- * TestInputOutputTopicTest
- * @author Jukka Karvanen / jukinimi.com
+ * SimpleTopicTest to demonstrate simple Kafka Streams test
  */
 public class SimpleTopicTest {
 
-  private TopologyTestDriver testDriver;
-  private TestInputTopic<String, String> inputTopic;
-  private TestOutputTopic<String, String> outputTopic;
+    private TopologyTestDriver testDriver;
+    private TestInputTopic<String, String> inputTopic;
+    private TestOutputTopic<String, String> outputTopic;
 
-  @Before
-  public void setup() {
-    final StreamsBuilder builder = new StreamsBuilder();
-    TestStream app = new TestStream();
-    //Create Actual Stream Processing pipeline
-    app.createStream(builder);
-    testDriver = new TopologyTestDriver(builder.build(),app.config);
-    inputTopic = new TestInputTopic<String, String>(testDriver, TestStream.INPUT_TOPIC, new Serdes.StringSerde(), new Serdes.StringSerde());
-    outputTopic = new TestOutputTopic<String, String>(testDriver, TestStream.OUTPUT_TOPIC, new Serdes.StringSerde(), new Serdes.StringSerde());
-  }
-
-  @After
-  public void tearDown() {
-    try {
-      testDriver.close();
-    } catch (final RuntimeException e) {
-      // https://issues.apache.org/jira/browse/KAFKA-6647 causes exception when executed in Windows, ignoring it
-      // Logged stacktrace cannot be avoided
-      System.out.println("Ignoring exception, test failing in Windows due this exception:" + e.getLocalizedMessage());
+    @Before
+    public void setup() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        TestStream app = new TestStream();
+        //Create Actual Stream Processing pipeline
+        app.createStream(builder);
+        testDriver = new TopologyTestDriver(builder.build(), app.config);
+        inputTopic = new TestInputTopic<>(testDriver, TestStream.INPUT_TOPIC, new Serdes.StringSerde(), new Serdes.StringSerde());
+        outputTopic = new TestOutputTopic<>(testDriver, TestStream.OUTPUT_TOPIC, new Serdes.StringSerde(), new Serdes.StringSerde());
     }
-  }
 
-  @Test
-  public void testOneWord() {
-    //Feed word "Hello" to inputTopic and no kafka key, timestamp is irrelevant in this case
-    inputTopic.pipeInput("Hello");
-    assertThat(outputTopic.readValue(), equalTo("Hello"));
-    //No more output in topic
-    assertThat(outputTopic.readRecord(), nullValue());
-  }
+    @After
+    public void tearDown() {
+        try {
+            testDriver.close();
+        } catch (final RuntimeException e) {
+            // https://issues.apache.org/jira/browse/KAFKA-6647 causes exception when executed in Windows, ignoring it
+            // Logged stacktrace cannot be avoided
+            System.out.println("Ignoring exception, test failing in Windows due this exception:" + e.getLocalizedMessage());
+        }
+    }
 
-  @Test
-  public void testListWord() {
-    List<String> inputList = Arrays.asList("This", "is", "an", "example");
-    //Feed list of words to inputTopic and no kafka key, timestamp is irrelevant in this case
-    inputTopic.pipeValueList(inputList);
-    List<String> output = outputTopic.readValuesToList();
-    //Easier to test with hamcrest library collections or assertj
-    assertThat(output, hasItems("This", "is", "an", "example"));
-    assertThat(output.size(), equalTo(inputList.size()));
-  }
+    @Test
+    public void testOneWord() {
+        //Feed word "Hello" to inputTopic and no kafka key, timestamp is irrelevant in this case
+        inputTopic.pipeInput("Hello");
+        assertThat(outputTopic.readValue(), equalTo("Hello"));
+        //No more output in topic
+        assertThat(outputTopic.readRecord(), nullValue());
+    }
+
+    @Test
+    public void testListWord() {
+        List<String> inputList = Arrays.asList("This", "is", "an", "example");
+        //Feed list of words to inputTopic and no kafka key, timestamp is irrelevant in this case
+        inputTopic.pipeValueList(inputList);
+        List<String> output = outputTopic.readValuesToList();
+        assertThat(output, hasItems("This", "is", "an", "example"));
+        assertThat(output.size(), equalTo(inputList.size()));
+    }
 }

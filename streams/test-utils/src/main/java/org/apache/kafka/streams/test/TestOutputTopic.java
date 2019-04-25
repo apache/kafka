@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams.test;
 
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -6,40 +22,35 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.TopologyTestDriver;
 
-import java.util.Deque;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
+ * TestOutputTopic is used to read records from topic in {@link TopologyTestDriver}.
  * This class makes it easier to write tests with {@link TopologyTestDriver}.
- * To use {@code TestOutputTopic} create new class with topicName and correct Serdes or Deserealizers
+ * To use {@code TestOutputTopic} create new class with topicName and correct Serdes or Deserializers
  * In actual test code, you can read message values, keys, {@link KeyValue} or {@link ProducerRecord}
- * without needing to care serdes. You need to have own TestOutputTopic for each topic.
+  * without needing to pass serdes each time You need to have own TestOutputTopic for each topic.
+ * <p>
+ * If you need to test key, value and headers, use {@link #readRecord()} methods.
+ * Using {@link #readKeyValue()} you get directly KeyValue, but have no access to headers any more
+ * Using {@link #readValue()} you get directly value, but have no access to key or  headers any more
  *
- * If you need to test key, value and headers, use @{link #readRecord} methods.
- * Using @{link #readKeyValue} you get directly KeyValue, but have no access to headers any more
- * Using @{link #readValue} and @{link #readKey} you get directly Key or Value, but have no access to headers any more
- * Note, if using @{link #readKey} and @{link #readValue} in sequence, you get the key of first record and value of the next one
- *
- * <h2>Processing messages</h2>*
+ * <h2>Processing messages</h2>
  * <pre>{@code
- *      private TestOutputTopic<String, Long> outputTopic;
- * @Before
+ *     private TestOutputTopic<String, Long> outputTopic;
  *      ...
- *     outputTopic = new TestOutputTopic<String, Long>(testDriver, outputTopic, new Serdes.StringSerde(), new Serdes.LongSerde());
- *
- * @Test
+ *     outputTopic = new TestOutputTopic<>(testDriver, outputTopic, new Serdes.StringSerde(), new Serdes.LongSerde());
  *     ...
  *     assertThat(outputTopic.readValue()).isEqual(1);
- * </pre>
+ * }</pre>
  *
- * @param <K> the type of the key
- * @param <V> the type of the value
- *
- * @see TopologyTestDriver, ConsumerRecordFactory
+ * @param <K> the type of the Kafka key
+ * @param <V> the type of the Kafka value
+ * @see TopologyTestDriver
+ * @see ConsumerRecordFactory
  */
 public class TestOutputTopic<K, V> {
     //Possibility to use in subclasses
@@ -87,9 +98,9 @@ public class TestOutputTopic<K, V> {
     }
 
     /**
-     * Read one Record from output topic.
+     * Read one Record KeyValue from output topic.
      *
-     * @return Next output as ProducerRecord
+     * @return Next output as KeyValue
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public KeyValue<K, V> readKeyValue() {
@@ -110,7 +121,7 @@ public class TestOutputTopic<K, V> {
 
     /**
      * Read output to map.
-     * If the existing key is modified, it can appear twice in output and is replaced in map
+     * If the existing key is modified, it can appear twice in output, but replaced in map
      *
      * @return Map of output by key
      */
@@ -125,8 +136,7 @@ public class TestOutputTopic<K, V> {
     }
 
     /**
-     * Read output KeyValues to map.
-     * If the existing key is modified, it can appear twice in output and is replaced in map
+     * Read all KeyValues from topic to List.
      *
      * @return List of output KeyValues
      */
@@ -141,10 +151,9 @@ public class TestOutputTopic<K, V> {
     }
 
     /**
-     * Read values to list.
-     * If the existing key is modified, it can appear twice in output and is replaced in map
+     * Read all values from topic to List.
      *
-     * @return List of output KeyValues
+     * @return List of output values
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public List<V> readValuesToList() {
