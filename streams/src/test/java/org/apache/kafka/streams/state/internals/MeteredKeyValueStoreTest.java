@@ -21,6 +21,7 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
@@ -39,8 +40,8 @@ import org.junit.Test;
 import org.junit.runner.RunWith;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -52,6 +53,7 @@ import static org.easymock.EasyMock.expect;
 import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.reset;
 import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -100,6 +102,53 @@ public class MeteredKeyValueStoreTest {
     private void init() {
         replay(inner, context);
         metered.init(context, metered);
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    public void shouldGetSerdesFromConfigWithoutUserSerdes() {
+        metered = new MeteredKeyValueStore<>(
+            inner,
+            "scope",
+            new MockTime(),
+            null,
+            null
+        );
+        final Serde mockSerde = mock(Serde.class);
+        replay(mockSerde);
+        expect(context.keySerde()).andReturn(mockSerde);
+        expect(context.valueSerde()).andReturn(mockSerde);
+
+        init();
+        verify(context, mockSerde);
+    }
+
+    @Test
+    public void shouldConfigureUserSerdes() {
+        final Serde<String> mockKeySerde = mock(Serde.class);
+        mockKeySerde.configure(anyObject(), eq(true));
+        expectLastCall();
+
+        final Serde<String> mockValueSerde = mock(Serde.class);
+        mockValueSerde.configure(anyObject(), eq(false));
+        expectLastCall();
+
+        replay(mockKeySerde, mockValueSerde);
+
+        metered = new MeteredKeyValueStore<>(
+            inner,
+            "scope",
+            new MockTime(),
+            mockKeySerde,
+            mockValueSerde
+        );
+
+        reset(context);
+        expect(context.metrics()).andReturn(new MockStreamsMetrics(metrics)).anyTimes();
+        expect(context.taskId()).andReturn(taskId).anyTimes();
+
+        init();
+        verify(context, mockKeySerde, mockValueSerde);
     }
 
     @Test

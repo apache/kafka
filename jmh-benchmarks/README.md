@@ -1,11 +1,11 @@
 ###JMH-Benchmark module
 
-This module contains benchmarks written using [JMH](http://openjdk.java.net/projects/code-tools/jmh/) from OpenJDK.
+This module contains benchmarks written using [JMH](https://openjdk.java.net/projects/code-tools/jmh/) from OpenJDK.
 Writing correct micro-benchmarks is Java (or another JVM language) is difficult and there are many non-obvious pitfalls (many
 due to compiler optimizations). JMH is a framework for running and analyzing benchmarks (micro or macro) written in Java (or
 another JVM language).
 
-For help in writing correct JMH tests, the best place to start is the [sample code](http://hg.openjdk.java.net/code-tools/jmh/file/tip/jmh-samples/src/main/java/org/openjdk/jmh/samples/) provided
+For help in writing correct JMH tests, the best place to start is the [sample code](https://hg.openjdk.java.net/code-tools/jmh/file/tip/jmh-samples/src/main/java/org/openjdk/jmh/samples/) provided
 by the JMH project.
 
 Typically, JMH is expected to run as a separate project in Maven. The jmh-benchmarks module uses
