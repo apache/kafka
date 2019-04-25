@@ -37,6 +37,8 @@ import java.util.Map;
 import java.util.Set;
 
 class NamedCache {
+    private static final int REFERENCE_SIZE = 8; // assume 8 byte references for a safe upper bound
+
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
     private final String name;
     private final NavigableMap<Bytes, LRUNode> cache = new ConcurrentSkipListMap<>();
@@ -123,6 +125,7 @@ class NamedCache {
         if (evicted != null) {
             entries.add(new ThreadCache.DirtyEntry(evicted.key, evicted.entry.value(), evicted.entry));
             dirtyKeys.remove(evicted.key);
+            currentSizeBytes -= REFERENCE_SIZE; // reference to key removed from dirtyKeys
         }
 
         for (final Bytes key : dirtyKeys) {
@@ -137,6 +140,7 @@ class NamedCache {
             }
         }
         // clear dirtyKeys before the listener is applied as it may be re-entrant.
+        currentSizeBytes -= dirtyKeys.size() * REFERENCE_SIZE;
         dirtyKeys.clear();
         listener.apply(entries);
         for (final Bytes key : deleted) {
@@ -165,11 +169,15 @@ class NamedCache {
             // put element
             putHead(node);
             cache.put(key, node);
+            currentSizeBytes += 2 * REFERENCE_SIZE; // reference to key, node added to cache
         }
         if (value.isDirty()) {
             // first remove and then add so we can maintain ordering as the arrival order of the records.
-            dirtyKeys.remove(key);
+            final boolean wasPresent = dirtyKeys.remove(key);
             dirtyKeys.add(key);
+            if (!wasPresent) {
+                currentSizeBytes += REFERENCE_SIZE; // reference to (new) key added to dirtyKeys
+            }
         }
         currentSizeBytes += node.size();
     }
@@ -230,6 +238,7 @@ class NamedCache {
         currentSizeBytes -= eldest.size();
         remove(eldest);
         cache.remove(eldest.key);
+        currentSizeBytes -= 2 * REFERENCE_SIZE; // reference to key, node removed from cache
         if (eldest.entry.isDirty()) {
             flush(eldest);
         }
@@ -329,9 +338,9 @@ class NamedCache {
 
         long size() {
             return key.get().length +
-                8 + // entry
-                8 + // previous
-                8 + // next
+                REFERENCE_SIZE + // entry
+                REFERENCE_SIZE + // previous
+                REFERENCE_SIZE + // next
                 entry.size();
         }
 
