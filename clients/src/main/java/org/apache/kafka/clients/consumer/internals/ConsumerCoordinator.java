@@ -784,11 +784,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             OffsetCommitRequestData.OffsetCommitRequestTopic topic = requestTopicDataMap
                     .getOrDefault(topicPartition.topic(),
                             new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                                    .setName(topicPartition.topic())
                     );
-
-            if (topic.name().equals("")) {
-                topic.setName(topicPartition.topic());
-            }
 
             topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
                     .setPartitionIndex(topicPartition.partition())
