@@ -87,6 +87,14 @@ public interface PartitionAssignor {
     }
 
     /**
+     * Return the version of the assignor which indicate how the user metadata encodings
+     * and the assignment algorithm gets evolved.
+     */
+    default short version() {
+        return (short) 0;
+    }
+
+    /**
      * Unique name for this assignor (e.g. "range" or "roundrobin" or "sticky")
      * @return non-null unique name
      */
