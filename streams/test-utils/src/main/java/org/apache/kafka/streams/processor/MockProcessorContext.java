@@ -218,7 +218,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
         final String threadName = "mock-processor-context-virtual-thread";
         this.metrics = new StreamsMetricsImpl(new Metrics(metricConfig), threadName);
-        final Sensor skippedRecordsSensor = skipRecordSensor(metrics);
+        skipRecordSensor(metrics);
     }
 
     @Override
