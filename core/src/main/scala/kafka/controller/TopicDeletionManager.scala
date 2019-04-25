@@ -32,6 +32,7 @@ trait DeletionClient {
   def sendMetadataUpdate(partitions: Set[TopicPartition]): Unit
   def createDeleteTopicFlagPath(): Unit
   def getTopicDeletionFlag(): String
+  def removePartitionsFromReassignedPartitions(partitionsToBeRemoved: Set[TopicPartition]): Unit
 }
 
 class ControllerDeletionClient(controller: KafkaController, zkClient: KafkaZkClient) extends DeletionClient {
@@ -59,6 +60,10 @@ class ControllerDeletionClient(controller: KafkaController, zkClient: KafkaZkCli
 
   override def getTopicDeletionFlag(): String = {
     zkClient.getTopicDeletionFlag
+  }
+
+  override def removePartitionsFromReassignedPartitions(partitionsToBeRemoved: Set[TopicPartition]): Unit = {
+    controller.maybeRemoveFromZkReassignment((tp, _) => partitionsToBeRemoved.contains(tp))
   }
 }
 
@@ -259,6 +264,8 @@ class TopicDeletionManager(config: KafkaConfig,
   }
 
   private def completeDeleteTopic(topic: String): Unit = {
+    // abort pending partition reassignments for deleted topic
+    abortPartitionReassignmentForTopic(topic)
     // deregister partition change listener on the deleted topic. This is to prevent the partition change listener
     // firing before the new topic listener when a deleted topic gets auto created
     client.mutePartitionModifications(topic)
@@ -267,6 +274,14 @@ class TopicDeletionManager(config: KafkaConfig,
     replicaStateMachine.handleStateChanges(replicasForDeletedTopic.toSeq, NonExistentReplica)
     client.deleteTopic(topic, controllerContext.epochZkVersion)
     controllerContext.removeTopic(topic)
+  }
+
+  private def abortPartitionReassignmentForTopic(topic: String): Unit = {
+    val partitionsBeingReassignedForDeletedTopic =
+      controllerContext.partitionsBeingReassigned.filter(_.topic().equals(topic))
+    if (partitionsBeingReassignedForDeletedTopic.nonEmpty) {
+      client.removePartitionsFromReassignedPartitions(partitionsBeingReassignedForDeletedTopic)
+    }
   }
 
   /**

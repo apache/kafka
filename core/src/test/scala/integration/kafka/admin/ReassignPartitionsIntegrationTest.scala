@@ -18,7 +18,9 @@
 package kafka.admin
 
 import java.io.Closeable
+import java.util.concurrent.TimeUnit
 import java.util.{Collections, HashMap, List}
+
 import kafka.admin.ReassignPartitionsCommand._
 import kafka.api.KAFKA_2_7_IV1
 import kafka.server.{IsrChangePropagationConfig, KafkaConfig, KafkaServer, ZkIsrManager}
@@ -282,6 +284,51 @@ class ReassignPartitionsIntegrationTest extends ZooKeeperTestHarness {
       PartitionReassignmentState(Seq(3, 2, 1), Seq(3, 2, 1), true))
     waitForVerifyAssignment(cluster.adminClient, assignment, false,
       VerifyAssignmentResult(finalAssignment))
+  }
+
+  @Test
+  def shouldFinishReassignmentAfterTopicDeletion() {
+    val topicName = "bar" // Pre-created topic in ReassignPartitionsTestCluster
+    cluster = new ReassignPartitionsTestCluster(zkConnect)
+    cluster.setup()
+
+    val topicPartition = new TopicPartition(topicName, 0)
+    // Original assignment = [3, 2,1], assign as something else
+    val targetReplicas = Seq(0, 1, 4)
+    cluster.produceMessages(topicName, 0, 10000)
+
+    val assignment =
+      s"""
+         |{
+         |  "version":1,
+         |  "partitions": [
+         |    {
+         |      "topic":"$topicName",
+         |      "partition": ${topicPartition.partition()},
+         |      "replicas": [${targetReplicas.mkString(",")}],
+         |      "log_dirs": ["any","any","any"]
+         |    }
+         |  ]
+         |}
+         |""".stripMargin
+
+    // Given a small throttle to delay partition reassignment
+    runExecuteAssignment(cluster.adminClient, false, assignment, 1L, -1L)
+
+
+    // Make sure all brokers have received partition reassignment request
+    TestUtils.waitUntilTrue(() => cluster.servers.forall(_.getLogManager.getLog(topicPartition).isDefined),
+      "reassignment for topic not started.")
+
+    // Delete the topic
+    cluster.adminClient.deleteTopics(Seq(topicName).asJava)
+    TestUtils.verifyTopicDeletion(zkClient, topicName, 1, cluster.servers)
+
+    val ongoingTopicReassignment =
+      cluster.adminClient
+        .listPartitionReassignments(Set(topicPartition).asJava).reassignments()
+        .get(10L, TimeUnit.SECONDS)
+    assertTrue(ongoingTopicReassignment.isEmpty)
   }
 
   /**
