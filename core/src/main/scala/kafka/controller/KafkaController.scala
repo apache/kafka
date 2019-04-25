@@ -1063,7 +1063,7 @@ class KafkaController(val config: KafkaConfig,
    *
    * @param shouldRemoveReassignment Predicate indicating which partition reassignments should be removed
    */
-  private def maybeRemoveFromZkReassignment(shouldRemoveReassignment: (TopicPartition, Seq[Int]) => Boolean): Unit = {
+  private[controller] def maybeRemoveFromZkReassignment(shouldRemoveReassignment: (TopicPartition, Seq[Int]) => Boolean): Unit = {
     if (!zkClient.reassignPartitionsInProgress())
       return
 

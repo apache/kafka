@@ -1229,6 +1229,47 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     testCreatePartitions(topicName, false)
   }
 
+  @Test
+  def shouldFinishReassignmentAfterTopicDeletion() {
+
+    //Given partitions on 3 of 3 brokers
+    val brokers = Array(100, 101, 102)
+
+    // start servers with topic deletion enabled
+    servers = brokers.map(i => createBrokerConfig(i, zkConnect, enableDeleteTopic = true, enableControlledShutdown = false, logDirCount = 3))
+      .map(c => createServer(KafkaConfig.fromProps(c)))
+
+    createTopic(zkClient, topicName, Map(
+      0 -> Seq(100, 101)
+    ), servers = servers)
+
+    val topicPartition = new TopicPartition(topicName, 0)
+    //Given a small throttle to delay partition reassignment
+    val initialThrottle = Throttle(1)
+
+    val numMessages = 1000
+    val msgSize = 100 * 1000
+    produceMessages(topicName, numMessages, acks = 0, msgSize)
+
+    //Start rebalance which will move replica on 100 -> replica on 102
+    val newAssignment = generateAssignment(zkClient, Array(101, 102), generateAssignmentJson(topicName), true)._1
+
+    // Start reassignment
+    ReassignPartitionsCommand.executeAssignment(zkClient, None,
+      ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Map.empty), initialThrottle)
+
+    // make sure all brokers have received partition reassignment request
+    TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager().getLog(topicPartition).isDefined),
+      "reassignment for topic not started.")
+
+    // delete the topic
+    adminZkClient.deleteTopic(topicName)
+    TestUtils.verifyTopicDeletion(zkClient, topicName, 1, servers)
+
+    //Await completion
+    waitForZkReassignmentToComplete()
+  }
+
   /**
     * Asserts that a replica is being reassigned from the given replicas to the target replicas
     */
