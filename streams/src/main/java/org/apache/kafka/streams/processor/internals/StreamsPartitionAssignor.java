@@ -674,7 +674,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                 }
             }
         }
-
         taskManager.setPartitionsByHostState(partitionsByHostState);
 
         final Map<String, Assignment> assignment;

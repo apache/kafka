@@ -518,7 +518,7 @@ public class EosIntegrationTest {
                     && streams1.allMetadata().iterator().next().topicPartitions().size() == 1
                     && streams2.allMetadata().iterator().next().topicPartitions().size() == 1,
                 MAX_WAIT_TIME_MS,
-                    "Should have rebalanced.");
+                "Should have rebalanced.");
 
             writeInputData(dataAfterSecondRebalance);
 
