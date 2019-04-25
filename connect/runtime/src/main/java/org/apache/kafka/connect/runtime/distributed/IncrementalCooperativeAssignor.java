@@ -48,6 +48,8 @@ import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.Lea
  * cooperative strategy for rebalancing. {@see
  * https://cwiki.apache.org/confluence/display/KAFKA/KIP-415%3A+Incremental+Cooperative
  * +Rebalancing+in+Kafka+Connect} for a description of the assignment policy.
+ *
+ * Note that this class is NOT thread-safe.
  */
 public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private final Logger log;
