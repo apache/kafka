@@ -1724,10 +1724,11 @@ public class KafkaConsumerTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 OffsetCommitRequest commitRequest = (OffsetCommitRequest) body;
+                Map<TopicPartition, Long> commitErrors = commitRequest.offsets();
+
                 for (Map.Entry<TopicPartition, Long> partitionOffset : partitionOffsets.entrySet()) {
-                    OffsetCommitRequest.PartitionData partitionData = commitRequest.offsetData().get(partitionOffset.getKey());
                     // verify that the expected offset has been committed
-                    if (partitionData.offset != partitionOffset.getValue()) {
+                    if (!commitErrors.get(partitionOffset.getKey()).equals(partitionOffset.getValue())) {
                         commitReceived.set(false);
                         return false;
                     }
