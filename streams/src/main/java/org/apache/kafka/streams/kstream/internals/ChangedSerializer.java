@@ -43,7 +43,7 @@ public class ChangedSerializer<T> implements Serializer<Change<T>> {
         this.inner = inner;
         if (inner == null) {
             configs = null;
-        } else if (configs != null){
+        } else if (configs != null) {
             inner.configure(configs, isKey);
         }
     }

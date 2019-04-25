@@ -42,7 +42,7 @@ public class ChangedDeserializer<T> implements Deserializer<Change<T>> {
         this.inner = inner;
         if (inner == null) {
             configs = null;
-        } else if (configs != null){
+        } else if (configs != null) {
             inner.configure(configs, isKey);
         }
     }
