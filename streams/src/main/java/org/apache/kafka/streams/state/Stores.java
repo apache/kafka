@@ -216,7 +216,7 @@ public final class Stores {
      * <p>
      * This store supplier can be passed into a {@link WindowStoreBuilder}.
      * If you want to create a {@link TimestampedWindowStoreBuilder} you should use
-     * {@link #persistentWindowWithTimestampStore(String, Duration, Duration, boolean)} to create a store supplier instead.
+     * {@link #persistentTimestampedWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
      *
      * @param name                  name of the store (cannot be {@code null})
      * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
@@ -239,7 +239,7 @@ public final class Stores {
      * Create a persistent {@link WindowBytesStoreSupplier}.
      * <p>
      * This store supplier can be passed into a {@link TimestampedWindowStoreBuilder}.
-     * If you want to create a {@link WindowStoreBuilder WindowWithTimestampStore} you should use
+     * If you want to create a {@link WindowStoreBuilder TimestampedWindowStore} you should use
      * {@link #persistentWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
      *
      * @param name                  name of the store (cannot be {@code null})
@@ -325,18 +325,19 @@ public final class Stores {
                                                                final Duration windowSize,
                                                                final boolean retainDuplicates) throws IllegalArgumentException {
         Objects.requireNonNull(name, "name cannot be null");
-        final String rpMsgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
-        final long retentionMs = ApiUtils.validateMillisecondDuration(retentionPeriod, rpMsgPrefix);
-        final String wsMsgPrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
-        final long windowSizeMs = ApiUtils.validateMillisecondDuration(windowSize, wsMsgPrefix);
 
-        Objects.requireNonNull(name, "name cannot be null");
+        final String repartitionPeriodErrorMessagePrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        final long retentionMs = ApiUtils.validateMillisecondDuration(retentionPeriod, repartitionPeriodErrorMessagePrefix);
         if (retentionMs < 0L) {
             throw new IllegalArgumentException("retentionPeriod cannot be negative");
         }
+
+        final String windowSizeErrorMessagePrefix = prepareMillisCheckFailMsgPrefix(windowSize, "windowSize");
+        final long windowSizeMs = ApiUtils.validateMillisecondDuration(windowSize, windowSizeErrorMessagePrefix);
         if (windowSizeMs < 0L) {
             throw new IllegalArgumentException("windowSize cannot be negative");
         }
+
         if (windowSizeMs > retentionMs) {
             throw new IllegalArgumentException("The retention period of the window store "
                 + name + " must be no smaller than its window size. Got size=["
