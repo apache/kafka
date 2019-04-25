@@ -389,9 +389,15 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public KStream<K, V> through(final String topic, final Produced<K, V> produced) {
+        Objects.requireNonNull(topic, "topic can't be null");
+        Objects.requireNonNull(produced, "Produced can't be null");
         final ProducedInternal<K, V> producedInternal = new ProducedInternal<>(produced);
-        producedInternal.withKeySerde(producedInternal.keySerde() != null ? producedInternal.keySerde() : keySerde);
-        producedInternal.withValueSerde(producedInternal.valueSerde() != null ? producedInternal.valueSerde() : valSerde);
+        if (producedInternal.keySerde() == null) {
+            producedInternal.withKeySerde(keySerde);
+        }
+        if (producedInternal.valueSerde() == null) {
+            producedInternal.withValueSerde(valSerde);
+        }
         to(topic, producedInternal);
         return builder.stream(
             Collections.singleton(topic),
@@ -414,8 +420,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(produced, "Produced can't be null");
         final ProducedInternal<K, V> producedInternal = new ProducedInternal<>(produced);
-        producedInternal.withKeySerde(producedInternal.keySerde() != null ? producedInternal.keySerde() : keySerde);
-        producedInternal.withValueSerde(producedInternal.valueSerde() != null ? producedInternal.valueSerde() : valSerde);
+        if (producedInternal.keySerde() == null) {
+            producedInternal.withKeySerde(keySerde);
+        }
+        if (producedInternal.valueSerde() == null) {
+            producedInternal.withValueSerde(valSerde);
+        }
         to(new StaticTopicNameExtractor<>(topic), producedInternal);
     }
 
@@ -429,8 +439,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(topicExtractor, "topic extractor can't be null");
         Objects.requireNonNull(produced, "Produced can't be null");
         final ProducedInternal<K, V> producedInternal = new ProducedInternal<>(produced);
-        producedInternal.withKeySerde(producedInternal.keySerde() != null ? producedInternal.keySerde() : keySerde);
-        producedInternal.withValueSerde(producedInternal.valueSerde() != null ? producedInternal.valueSerde() : valSerde);
+        if (producedInternal.keySerde() == null) {
+            producedInternal.withKeySerde(keySerde);
+        }
+        if (producedInternal.valueSerde() == null) {
+            producedInternal.withValueSerde(valSerde);
+        }
         to(topicExtractor, producedInternal);
     }
 
