@@ -289,7 +289,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def removeStaticMember(groupInstanceId: Option[String]) = {
-    staticMembers.remove(groupInstanceId.orNull)
+    if (groupInstanceId.isDefined) {
+      staticMembers.remove(groupInstanceId.get)
+    }
   }
 
   def currentState = state
