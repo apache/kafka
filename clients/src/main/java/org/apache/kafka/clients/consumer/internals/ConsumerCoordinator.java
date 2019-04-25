@@ -823,7 +823,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 if (error == Errors.NONE) {
                     log.debug("Committed offset {} for partition {}", offset, tp);
                 } else {
-                    log.error("Offset commit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                    if (error.exception() instanceof RetriableException) {
+                        log.warn("Offset commit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                    } else {
+                        log.error("Offset commit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                    }
 
                     if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                         future.raise(new GroupAuthorizationException(groupId));
