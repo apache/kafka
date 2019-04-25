@@ -227,7 +227,12 @@ class TransactionStateManager(brokerId: Int,
   private def getAndMaybeAddTransactionState(transactionalId: String,
                                              createdTxnMetadataOpt: Option[TransactionMetadata]): Either[Errors, Option[CoordinatorEpochAndTxnMetadata]] = {
     inReadLock(stateLock) {
-      val partitionId = partitionFor(transactionalId)
+      val partitionId = try {
+        partitionFor(transactionalId)
+      } catch {
+        case _: CoordinatorNotAvailableException =>
+          return Left(Errors.COORDINATOR_NOT_AVAILABLE)
+      }
       if (loadingPartitions.exists(_.txnPartitionId == partitionId))
         Left(Errors.COORDINATOR_LOAD_IN_PROGRESS)
       else if (leavingPartitions.exists(_.txnPartitionId == partitionId))
