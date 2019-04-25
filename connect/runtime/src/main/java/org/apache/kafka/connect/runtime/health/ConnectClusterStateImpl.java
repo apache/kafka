@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime.health;
 
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectClusterState;
 import org.apache.kafka.connect.health.ConnectorHealth;
 import org.apache.kafka.connect.health.ConnectorState;
@@ -24,32 +25,35 @@ import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.health.TaskState;
 import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
-import org.apache.kafka.connect.util.Callback;
+import org.apache.kafka.connect.util.FutureCallback;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 public class ConnectClusterStateImpl implements ConnectClusterState {
+    
+    private final long herderRequestTimeoutMs;
+    private final HerderProvider herderProvider;
 
-    private HerderProvider herderProvider;
-
-    public ConnectClusterStateImpl(HerderProvider herderProvider) {
+    public ConnectClusterStateImpl(long connectorsTimeoutMs, HerderProvider herderProvider) {
+        this.herderRequestTimeoutMs = connectorsTimeoutMs;
         this.herderProvider = herderProvider;
     }
 
     @Override
     public Collection<String> connectors() {
-        final Collection<String> connectors = new ArrayList<>();
-        herderProvider.get().connectors(new Callback<java.util.Collection<String>>() {
-            @Override
-            public void onCompletion(Throwable error, Collection<String> result) {
-                connectors.addAll(result);
-            }
-        });
-        return connectors;
+        FutureCallback<Collection<String>> connectorsCallback = new FutureCallback<>();
+        herderProvider.get().connectors(connectorsCallback);
+        try {
+            return connectorsCallback.get(herderRequestTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException e) {
+            throw new ConnectException("Failed to retrieve list of connectors", e);
+        }
     }
 
     @Override

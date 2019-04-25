@@ -468,7 +468,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val deletePath = DeleteTopicsTopicZNode.path(testTopicName)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deletePath))
     topicService.deleteTopic(deleteOpts)
-    assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deletePath))
+    TestUtils.verifyTopicDeletion(zkClient, testTopicName, 1, servers)
   }
 
   @Test
@@ -486,7 +486,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val deleteOffsetTopicPath = DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deleteOffsetTopicPath))
     topicService.deleteTopic(deleteOffsetTopicOpts)
-    assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deleteOffsetTopicPath))
+    TestUtils.verifyTopicDeletion(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, 1, servers)
   }
 
   @Test

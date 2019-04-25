@@ -50,7 +50,7 @@ import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
  *   AssignedPartitions => [Topic Partitions]
  *     Topic            => String
  *     Partitions       => [int32]
- *     UserData   => Bytes
+ *   UserData           => Bytes
  *   ErrorCode          => [int16]
  * </pre>
  *

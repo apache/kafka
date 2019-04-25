@@ -34,77 +34,19 @@ public class ProcessorTopology {
     private final Map<String, String> storeToChangelogTopic;
     private final Set<String> repartitionTopics;
 
-    public static ProcessorTopology with(final List<ProcessorNode> processorNodes,
-                                         final Map<String, SourceNode> sourcesByTopic,
-                                         final List<StateStore> stateStoresByName,
-                                         final Map<String, String> storeToChangelogTopic) {
-        return new ProcessorTopology(processorNodes,
-                sourcesByTopic,
-                Collections.<String, SinkNode>emptyMap(),
-                stateStoresByName,
-                Collections.<StateStore>emptyList(),
-                storeToChangelogTopic,
-                Collections.<String>emptySet());
-    }
-
-    static ProcessorTopology withSources(final List<ProcessorNode> processorNodes,
-                                         final Map<String, SourceNode> sourcesByTopic) {
-        return new ProcessorTopology(processorNodes,
-                sourcesByTopic,
-                Collections.<String, SinkNode>emptyMap(),
-                Collections.<StateStore>emptyList(),
-                Collections.<StateStore>emptyList(),
-                Collections.<String, String>emptyMap(),
-                Collections.<String>emptySet());
-    }
-
-    static ProcessorTopology withLocalStores(final List<StateStore> stateStores,
-                                             final Map<String, String> storeToChangelogTopic) {
-        return new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
-                Collections.<String, SourceNode>emptyMap(),
-                Collections.<String, SinkNode>emptyMap(),
-                stateStores,
-                Collections.<StateStore>emptyList(),
-                storeToChangelogTopic,
-                Collections.<String>emptySet());
-    }
-
-    static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
-                                              final Map<String, String> storeToChangelogTopic) {
-        return new ProcessorTopology(Collections.<ProcessorNode>emptyList(),
-                Collections.<String, SourceNode>emptyMap(),
-                Collections.<String, SinkNode>emptyMap(),
-                Collections.<StateStore>emptyList(),
-                stateStores,
-                storeToChangelogTopic,
-                Collections.<String>emptySet());
-    }
-
-    static ProcessorTopology withRepartitionTopics(final List<ProcessorNode> processorNodes,
-                                                   final Map<String, SourceNode> sourcesByTopic,
-                                                   final Set<String> repartitionTopics) {
-        return new ProcessorTopology(processorNodes,
-                sourcesByTopic,
-                Collections.<String, SinkNode>emptyMap(),
-                Collections.<StateStore>emptyList(),
-                Collections.<StateStore>emptyList(),
-                Collections.<String, String>emptyMap(),
-                repartitionTopics);
-    }
-
     public ProcessorTopology(final List<ProcessorNode> processorNodes,
                              final Map<String, SourceNode> sourcesByTopic,
                              final Map<String, SinkNode> sinksByTopic,
                              final List<StateStore> stateStores,
                              final List<StateStore> globalStateStores,
-                             final Map<String, String> stateStoreToChangelogTopic,
+                             final Map<String, String> storeToChangelogTopic,
                              final Set<String> repartitionTopics) {
         this.processorNodes = Collections.unmodifiableList(processorNodes);
         this.sourcesByTopic = Collections.unmodifiableMap(sourcesByTopic);
         this.sinksByTopic = Collections.unmodifiableMap(sinksByTopic);
         this.stateStores = Collections.unmodifiableList(stateStores);
         this.globalStateStores = Collections.unmodifiableList(globalStateStores);
-        this.storeToChangelogTopic = Collections.unmodifiableMap(stateStoreToChangelogTopic);
+        this.storeToChangelogTopic = Collections.unmodifiableMap(storeToChangelogTopic);
         this.repartitionTopics = Collections.unmodifiableSet(repartitionTopics);
     }
 

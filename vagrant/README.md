@@ -3,7 +3,7 @@
 Using Vagrant to get up and running.
 
 1) Install Virtual Box [https://www.virtualbox.org/](https://www.virtualbox.org/)
-2) Install Vagrant >= 1.6.4 [http://www.vagrantup.com/](http://www.vagrantup.com/)
+2) Install Vagrant >= 1.6.4 [https://www.vagrantup.com/](https://www.vagrantup.com/)
 3) Install Vagrant Plugins:
 
     $ vagrant plugin install vagrant-hostmanager
