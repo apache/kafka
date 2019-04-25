@@ -278,9 +278,9 @@ public class TopologyTestDriver implements Closeable {
 
         metrics = new Metrics(metricConfig, mockWallClockTime);
 
-        String threadName = "topology-test-driver-virtual-thread";
+        final String threadName = "topology-test-driver-virtual-thread";
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, threadName);
-        Sensor skippedRecordsSensor = streamsMetrics.threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
+        final Sensor skippedRecordsSensor = streamsMetrics.threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
         final String threadLevelGroup = "stream-metrics";
         skippedRecordsSensor.add(new MetricName("skipped-records-rate",
                                                 threadLevelGroup,
