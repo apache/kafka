@@ -1523,7 +1523,7 @@ public class FetcherTest {
             latchEarliestDone.await();
             consumerClient.pollNoWakeup();
             latchEarliestFinish.await();
-            assertEquals(new Long(10), subscriptions.position(tp0));
+            assertEquals(10, subscriptions.position(tp0).offset);
         } finally {
             es.shutdown();
             es.awaitTermination(10000, TimeUnit.MILLISECONDS);

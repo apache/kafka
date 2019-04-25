@@ -674,17 +674,11 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     private void resetOffsetIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy, ListOffsetData offsetData) {
-        // we might lose the assignment while fetching the offset, or the user might seek to a different offset,
-        // so verify it is still assigned and still in need of the requested reset
-        if (!subscriptions.isAssigned(partition)) {
-            log.debug("Skipping reset of partition {} since it is no longer assigned", partition);
-        } else {
-            SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
-                    offsetData.offset, offsetData.leaderEpoch, metadata.leaderAndEpoch(partition));
-            log.info("Resetting offset for partition {} to offset {}.", partition, position);
-            offsetData.leaderEpoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(partition, epoch));
-            subscriptions.maybeSeek(partition, position.offset, requestedResetStrategy);
-        }
+        SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+                offsetData.offset, offsetData.leaderEpoch, metadata.leaderAndEpoch(partition));
+        log.info("Resetting offset for partition {} to offset {}.", partition, position);
+        offsetData.leaderEpoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(partition, epoch));
+        subscriptions.maybeSeek(partition, position.offset, requestedResetStrategy);
     }
 
     private void resetOffsetsAsync(Map<TopicPartition, Long> partitionResetTimestamps) {

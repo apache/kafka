@@ -107,7 +107,7 @@ public class PartitionStates<S> {
     /**
      * Returns the partition state values in order.
      */
-    List<S> partitionStateValues() {
+    public List<S> partitionStateValues() {
         return new ArrayList<>(map.values());
     }
 
