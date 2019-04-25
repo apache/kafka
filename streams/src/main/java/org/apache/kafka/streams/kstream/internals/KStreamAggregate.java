@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.AbstractProcessor;
@@ -25,6 +26,8 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.skipRecordSensor;
 
 public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, K, V, T> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamAggregate.class);
@@ -56,12 +59,15 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         private KeyValueStore<K, T> store;
         private StreamsMetricsImpl metrics;
         private TupleForwarder<K, T> tupleForwarder;
+        private Sensor skippedRecordsSensor;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
+            skippedRecordsSensor = skipRecordSensor(metrics);
+
             store = (KeyValueStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<>(context), sendOldValues);
         }
@@ -75,7 +81,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
                     "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                     key, value, context().topic(), context().partition(), context().offset()
                 );
-                metrics.skippedRecordsSensor().record();
+                skippedRecordsSensor.record();
                 return;
             }
 

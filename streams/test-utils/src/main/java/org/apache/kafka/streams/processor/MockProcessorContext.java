@@ -16,11 +16,15 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Count;
+import org.apache.kafka.common.metrics.stats.Rate;
+import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -42,6 +46,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.TimeUnit;
 
 /**
  * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their {@link Processor},
@@ -214,10 +219,20 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.stateDir = stateDir;
         final MetricConfig metricConfig = new MetricConfig();
         metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
-        this.metrics = new StreamsMetricsImpl(
-            new Metrics(metricConfig),
-            "mock-processor-context-virtual-thread"
-        );
+        String threadName = "mock-processor-context-virtual-thread";
+        this.metrics = new StreamsMetricsImpl(new Metrics(metricConfig), threadName);
+        Sensor skippedRecordsSensor = metrics.threadLevelSensor("skipped-records", Sensor.RecordingLevel.INFO);
+        final String threadLevelGroup = "stream-metrics";
+        skippedRecordsSensor.add(new MetricName("skipped-records-rate",
+                                                threadLevelGroup,
+                                                "The average per-second number of skipped records",
+                                                metrics.tagMap()),
+                                 new Rate(TimeUnit.SECONDS, new Count()));
+        skippedRecordsSensor.add(new MetricName("skipped-records-total",
+                                                threadLevelGroup,
+                                                "The total number of skipped records",
+                                                metrics.tagMap()),
+                                 new Total());
     }
 
     @Override

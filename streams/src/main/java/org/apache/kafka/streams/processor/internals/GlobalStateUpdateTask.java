@@ -27,6 +27,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.skipRecordSensor;
+
 /**
  * Updates the state for all Global State Stores.
  */
@@ -69,7 +71,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                     source,
                     deserializationExceptionHandler,
                     logContext,
-                    processorContext.metrics().skippedRecordsSensor()
+                    skipRecordSensor(processorContext.metrics())
                 )
             );
         }
