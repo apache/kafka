@@ -25,7 +25,6 @@ import org.junit.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.function.IntUnaryOperator;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -93,14 +92,11 @@ public class IncrementalCooperativeAssignorTest {
 
     @Test
     public void testAssignConnectorsWhenImbalanced() {
-        int num = 2;
-        IntUnaryOperator arithmeticProgression = i -> i * ((i - 1) + 2 * num) / 2;
-        List<WorkerLoad> existingAssignment = IntStream.range(0, 3)
-                .mapToObj(i -> workerLoad("worker" + i,
-                        arithmeticProgression.applyAsInt(i), num + i,
-                        arithmeticProgression.applyAsInt(i), num + i))
-                .collect(Collectors.toList());
-        existingAssignment.add(emptyWorkerLoad("worker4"));
+        List<WorkerLoad> existingAssignment = new ArrayList<>();
+        existingAssignment.add(workerLoad("worker0", 0, 2, 0, 2));
+        existingAssignment.add(workerLoad("worker1", 2, 3, 2, 3));
+        existingAssignment.add(workerLoad("worker2", 5, 4, 5, 4));
+        existingAssignment.add(emptyWorkerLoad("worker3"));
 
         List<String> newConnectors = newConnectors(9, 24);
         List<ConnectorTaskId> newTasks = newTasks(9, 24);
