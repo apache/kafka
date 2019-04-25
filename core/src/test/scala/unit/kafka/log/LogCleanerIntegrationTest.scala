@@ -194,7 +194,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     // we simulate the unexpected error with an interrupt
     cleaner.cleaners.foreach(_.interrupt())
     // wait until interruption is propagated to all the threads
-    TestUtils.waitUntilTrue (
+    TestUtils.waitUntilTrue(
       () => cleaner.cleaners.foldLeft(true)((result, thread) => {
         thread.isThreadFailed && result
       }), "Threads didn't terminate unexpectedly"
