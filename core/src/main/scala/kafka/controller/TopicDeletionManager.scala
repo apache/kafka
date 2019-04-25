@@ -93,7 +93,7 @@ class TopicDeletionManager(config: KafkaConfig,
 
   def init(initialTopicsToBeDeleted: Set[String], initialTopicsIneligibleForDeletion: Set[String]): Unit = {
     if (isDeleteTopicEnabled) {
-      controllerContext.topicsToBeDeleted ++= initialTopicsToBeDeleted
+      controllerContext.queueTopicDeletion(initialTopicsIneligibleForDeletion)
       controllerContext.topicsIneligibleForDeletion ++= initialTopicsIneligibleForDeletion & controllerContext.topicsToBeDeleted
     } else {
       // if delete topic is disabled clean the topic entries under /admin/delete_topics
@@ -116,7 +116,7 @@ class TopicDeletionManager(config: KafkaConfig,
    */
   def enqueueTopicsForDeletion(topics: Set[String]) {
     if (isDeleteTopicEnabled) {
-      controllerContext.topicsToBeDeleted ++= topics
+      controllerContext.queueTopicDeletion(topics)
       resumeDeletions()
     }
   }
