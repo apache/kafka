@@ -78,6 +78,13 @@ public interface PartitionAssignor {
         onAssignment(assignment);
     }
 
+    /**
+     * Indicate which rebalance protocol this assignor can would work with;
+     * By default it should always work with {@link RebalanceProtocol#EAGER}.
+     */
+    default List<RebalanceProtocol> supportedProtocols() {
+        return Collections.singletonList(RebalanceProtocol.EAGER);
+    }
 
     /**
      * Unique name for this assignor (e.g. "range" or "roundrobin" or "sticky")
@@ -85,13 +92,38 @@ public interface PartitionAssignor {
      */
     String name();
 
+    enum RebalanceProtocol {
+        EAGER((byte) 0), COOPERATIVE((byte) 1);
+
+        private final byte id;
+
+        RebalanceProtocol(byte id) {
+            this.id = id;
+        }
+
+        public byte id() {
+            return id;
+        }
+
+        public static RebalanceProtocol forId(byte id) {
+            switch (id) {
+                case 0:
+                    return EAGER;
+                case 1:
+                    return COOPERATIVE;
+                default:
+                    throw new IllegalArgumentException("Unknown rebalance protocol id: " + id);
+            }
+        }
+    }
+
     class Subscription {
         private final Short version;
         private final List<String> topics;
         private final ByteBuffer userData;
         private final List<TopicPartition> ownedPartitions;
 
-        public Subscription(Short version, List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+        Subscription(Short version, List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
             this.version = version;
             this.topics = topics;
             this.userData = userData;
@@ -104,8 +136,12 @@ public interface PartitionAssignor {
                 throw new IllegalArgumentException("Subscription version smaller than 1 should not have owned partitions");
         }
 
-        public Subscription(Short version, List<String> topics, ByteBuffer userData) {
+        Subscription(Short version, List<String> topics, ByteBuffer userData) {
             this(version, topics, userData, Collections.emptyList());
+        }
+
+        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+            this(CONSUMER_PROTOCOL_V1, topics, userData, ownedPartitions);
         }
 
         public Subscription(List<String> topics, ByteBuffer userData) {
@@ -116,7 +152,7 @@ public interface PartitionAssignor {
             this(topics, ByteBuffer.wrap(new byte[0]));
         }
 
-        public Short version() {
+        Short version() {
             return version;
         }
 
@@ -148,7 +184,7 @@ public interface PartitionAssignor {
         private final ByteBuffer userData;
         private final ConsumerProtocol.Errors error;
 
-        public Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.Errors error) {
+        Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.Errors error) {
             this.version = version;
             this.partitions = partitions;
             this.userData = userData;
@@ -161,8 +197,12 @@ public interface PartitionAssignor {
                 throw new IllegalArgumentException("Assignment version smaller than 1 should not have error code.");
         }
 
-        public Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData) {
+        Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData) {
             this(version, partitions, userData, ConsumerProtocol.Errors.NONE);
+        }
+
+        public Assignment(List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.Errors error) {
+            this(CONSUMER_PROTOCOL_V1, partitions, userData, error);
         }
 
         public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
@@ -173,7 +213,7 @@ public interface PartitionAssignor {
             this(partitions, ByteBuffer.wrap(new byte[0]));
         }
 
-        public Short version() {
+        Short version() {
             return version;
         }
 
