@@ -1239,6 +1239,8 @@ project(':streams:test-utils') {
 
 project(':support-metrics-client') {
   archivesBaseName = "support-metrics-client"
+  version = cpVersion
+  group = "io.confluent.support"
 
   dependencies {
     compile libs.avro
@@ -1316,6 +1318,8 @@ project(':support-metrics-client') {
 
 project(':support-metrics-common') {
   archivesBaseName = "support-metrics-common"
+  version = cpVersion
+  group = "io.confluent.support"
 
   dependencies {
     compile libs.avro
