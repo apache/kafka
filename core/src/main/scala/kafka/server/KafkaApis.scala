@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.{AdminUtils, RackAwareMode}
-import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
+import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.controller.KafkaController
@@ -1298,12 +1298,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for sending a join-group response
     def sendResponseCallback(joinResult: JoinGroupResult) {
-      val members = joinResult.members map { case (memberId, metadataArray) =>
-        new JoinGroupResponseData.JoinGroupResponseMember()
-          .setMemberId(memberId)
-          .setMetadata(metadataArray)
-      }
-
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
         val responseBody = new JoinGroupResponse(
           new JoinGroupResponseData()
@@ -1313,7 +1307,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setProtocolName(joinResult.subProtocol)
             .setLeader(joinResult.leaderId)
             .setMemberId(joinResult.memberId)
-            .setMembers(members.toSeq.asJava)
+            .setMembers(joinResult.members.asJava)
         )
 
         trace("Sending join group response %s for correlation id %d to client %s."
@@ -1337,8 +1331,17 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       )
     } else {
+      val encodedGroupInstanceId = joinGroupRequest.data().groupInstanceId
+      val groupInstanceId =
+        if (encodedGroupInstanceId == null ||
+        config.interBrokerProtocolVersion < KAFKA_2_3_IV0)
+          None
+        else
+          Some(encodedGroupInstanceId)
+
       // Only return MEMBER_ID_REQUIRED error if joinGroupRequest version is >= 4
-      val requireKnownMemberId = joinGroupRequest.version >= 4
+      // and groupInstanceId is configured to unknown.
+      val requireKnownMemberId = joinGroupRequest.version >= 4 && groupInstanceId.isEmpty
 
       // let the coordinator handle join-group
       val protocols = joinGroupRequest.data().protocols().asScala.map(protocol =>
@@ -1346,6 +1349,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       groupCoordinator.handleJoinGroup(
         joinGroupRequest.data().groupId,
         joinGroupRequest.data().memberId,
+        groupInstanceId,
         requireKnownMemberId,
         request.header.clientId,
         request.session.clientAddress.toString,

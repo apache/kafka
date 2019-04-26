@@ -33,8 +33,9 @@ class ConsumerState:
 
 class ConsumerEventHandler(object):
 
-    def __init__(self, node, verify_offsets):
+    def __init__(self, node, verify_offsets, idx):
         self.node = node
+        self.idx = idx
         self.state = ConsumerState.Dead
         self.revoked_count = 0
         self.assigned_count = 0
@@ -165,7 +166,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         }
 
     def __init__(self, context, num_nodes, kafka, topic, group_id,
-                 max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
+                 static_membership=False, max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor",
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
                  on_record_consumed=None, reset_policy="earliest", verify_offsets=True):
@@ -179,6 +180,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.topic = topic
         self.group_id = group_id
         self.reset_policy = reset_policy
+        self.static_membership = static_membership
         self.max_messages = max_messages
         self.session_timeout_sec = session_timeout_sec
         self.enable_autocommit = enable_autocommit
@@ -202,7 +204,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def _worker(self, idx, node):
         with self.lock:
             if node not in self.event_handlers:
-                self.event_handlers[node] = ConsumerEventHandler(node, self.verify_offsets)
+                self.event_handlers[node] = ConsumerEventHandler(node, self.verify_offsets, idx)
             handler = self.event_handlers[node]
 
         node.account.ssh("mkdir -p %s" % VerifiableConsumer.PERSISTENT_ROOT, allow_fail=False)
@@ -220,6 +222,10 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         self.logger.info(self.prop_file)
         node.account.create_file(VerifiableConsumer.CONFIG_FILE, self.prop_file)
         self.security_config.setup_node(node)
+        # apply group.instance.id to the node for static membership validation
+        node.group_instance_id = None
+        if self.static_membership:
+            node.group_instance_id = self.group_id + "-instance-" + str(idx)
         cmd = self.start_cmd(node)
         self.logger.debug("VerifiableConsumer %d command: %s" % (idx, cmd))
 
@@ -286,8 +292,8 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         cmd += self.impl.exec_cmd(node)
         if self.on_record_consumed:
             cmd += " --verbose"
-        cmd += " --reset-policy %s --group-id %s --topic %s --broker-list %s --session-timeout %s --assignment-strategy %s %s" % \
-               (self.reset_policy, self.group_id, self.topic, self.kafka.bootstrap_servers(self.security_config.security_protocol),
+        cmd += " --reset-policy %s --group-id %s --topic %s --group-instance-id %s --broker-list %s --session-timeout %s --assignment-strategy %s %s" % \
+               (self.reset_policy, self.group_id, self.topic, node.group_instance_id, self.kafka.bootstrap_servers(self.security_config.security_protocol),
                self.session_timeout_sec*1000, self.assignment_strategy, "--enable-autocommit" if self.enable_autocommit else "")
                
         if self.max_messages > 0:
@@ -364,6 +370,11 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
     def num_rebalances(self):
         with self.lock:
             return max(handler.assigned_count for handler in self.event_handlers.itervalues())
+
+    def num_revokes_for_alive(self, keep_alive=1):
+        with self.lock:
+            return max([handler.revoked_count for handler in self.event_handlers.itervalues()
+                       if handler.idx <= keep_alive])
 
     def joined_nodes(self):
         with self.lock:
