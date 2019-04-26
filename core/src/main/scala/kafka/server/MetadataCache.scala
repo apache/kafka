@@ -19,9 +19,8 @@ package kafka.server
 
 import java.util.{Collections, Optional}
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import java.util.stream.Collectors
 
-import scala.collection.{Seq, Set, mutable}
+import scala.collection.{JavaConverters, Seq, Set, mutable}
 import scala.collection.JavaConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
@@ -33,6 +32,7 @@ import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
+
 
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
@@ -198,19 +198,17 @@ class MetadataCache(brokerId: Int) extends Logging {
 
   def getPartitionReplicaEndpoints(topic: String, partitionId: Int, listenerName: ListenerName): Map[Int, Node] = {
     val snapshot = metadataSnapshot
-    snapshot.partitionStates.get(topic).flatMap(_.get(partitionId)) map { partitionInfo =>
+    snapshot.partitionStates.get(topic).flatMap(_.get(partitionId)).map(partitionInfo => {
       val replicaIds = partitionInfo.basePartitionState.replicas
-      replicaIds.stream().collect(Collectors.toMap(
-        replicaId => replicaId,
-        replicaId =>
+      JavaConverters.asScalaBuffer(replicaIds)
+        .map(replicaId => replicaId.intValue() -> {
           snapshot.aliveNodes.get(replicaId.longValue()) match {
             case Some(nodeMap) =>
               nodeMap.getOrElse(listenerName, Node.noNode)
             case None =>
               Node.noNode
-          })
-      )
-    }
+          }}).toMap
+    }).getOrElse(Map.empty[Int, Node])
   }
 
   def getControllerId: Option[Int] = metadataSnapshot.controllerId

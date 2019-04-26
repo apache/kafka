@@ -535,11 +535,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       fetchRequest.isFromFollower)
 
     val clientMetadata = new ClientMetadata(
-      fetchRequest.metadata().rackId(),
+      fetchRequest.rackId(),
       clientId,
       request.context.clientAddress,
       request.context.principal,
-      request.context.listenerName)
+      request.context.listenerName.value())
 
     def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
       new FetchResponse.PartitionData[T](error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,

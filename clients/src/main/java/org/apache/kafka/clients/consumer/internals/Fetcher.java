@@ -218,7 +218,7 @@ public class Fetcher<K, V> implements Closeable {
                     .setMaxBytes(this.maxBytes)
                     .metadata(data.metadata())
                     .toForget(data.toForget())
-                    .rackId("TODO actually set this");
+                    .rackId("my-rack-id"); // TODO actually set this
             if (log.isDebugEnabled()) {
                 log.debug("Sending {} {} to broker {}", isolationLevel, data.toString(), fetchTarget);
             }
@@ -897,10 +897,12 @@ public class Fetcher<K, V> implements Closeable {
     private Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
         Map<Node, FetchSessionHandler.Builder> fetchable = new LinkedHashMap<>();
         for (TopicPartition partition : fetchablePartitions()) {
-            Node node = metadata.partitionInfoIfCurrent(partition)
-                    .map(MetadataCache.PartitionInfoAndEpoch::partitionInfo)
-                    .map(PartitionInfo::leader)
-                    .orElse(null);
+            Node node = subscriptions.preferredReadReplica(partition)
+                    .flatMap(nodeId -> Optional.ofNullable(metadata.fetch().nodeById(nodeId)))
+                    .orElse(metadata.partitionInfoIfCurrent(partition)
+                            .map(MetadataCache.PartitionInfoAndEpoch::partitionInfo)
+                            .map(PartitionInfo::leader)
+                            .orElse(null));
             if (node == null) {
                 metadata.requestUpdate();
             } else if (client.isUnavailable(node)) {
@@ -1002,6 +1004,12 @@ public class Fetcher<K, V> implements Closeable {
                     log.trace("Updating last stable offset for partition {} to {}", tp, partition.lastStableOffset);
                     subscriptions.updateLastStableOffset(tp, partition.lastStableOffset);
                 }
+
+                if (partition.preferredReadReplica.isPresent()) {
+                    log.trace("Setting the preferred read replica for partition {} to {}", tp, partition.preferredReadReplica.get());
+                    subscriptions.updatePreferredReadReplica(tp, partition.preferredReadReplica.get());
+                }
+
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||
                        error == Errors.KAFKA_STORAGE_ERROR ||
@@ -1012,6 +1020,9 @@ public class Fetcher<K, V> implements Closeable {
                 log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
+                // Go back to the leader
+                subscriptions.clearPreferredReadReplica(tp);
+
                 if (fetchOffset != subscriptions.position(tp)) {
                     log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
                             "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));

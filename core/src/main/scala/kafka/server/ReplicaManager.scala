@@ -28,7 +28,6 @@ import kafka.cluster.{BrokerEndPoint, Partition, Replica}
 import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
-import kafka.security.auth.Authorizer
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
@@ -36,6 +35,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -48,7 +48,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.replica.ReplicaSelector.ClientMetadata
-import org.apache.kafka.common.replica.{LeaderReplicaSelector, MostCaughtUpReplicaSelector, ReplicaSelector}
+import org.apache.kafka.common.replica.{LeaderReplicaSelector, ReplicaSelector}
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -215,7 +215,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  var replicaSelector: ReplicaSelector
+  private var replicaSelector: ReplicaSelector = null
 
 
   val leaderCount = newGauge(
@@ -945,23 +945,29 @@ class ReplicaManager(val config: KafkaConfig,
           fetchOnlyFromLeader = fetchOnlyFromLeader,
           minOneMessage = minOneMessage)
 
-        val preferredReadReplica: Option[Int] = if (clientMetadata.equals(ClientMetadata.NO_METADATA)) {
-          partition.leaderReplicaIdOpt
-        } else {
-          val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), clientMetadata.listenerName)
-          val replicaInfos: Set[ReplicaSelector.ReplicaInfo] = partition.allReplicas.map(
-            replica => new ReplicaSelector.ReplicaInfo() {
-              override def isLeader: Boolean = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId))
+        // If we are the leader, determine the preferred read-replica
+        val preferredReadReplica: Option[Int] =
+          if (partition.leaderReplicaIfLocal.isDefined) {
+            if (clientMetadata.equals(ClientMetadata.NO_METADATA)) {
+              partition.leaderReplicaIdOpt
+            } else {
+              val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
+              val replicaInfos: Set[ReplicaSelector.ReplicaInfo] = partition.allReplicas.map(
+                replica => new ReplicaSelector.ReplicaInfo() {
+                  override def isLeader: Boolean = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId))
 
-              override def getEndpoint: Node = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode())
+                  override def getEndpoint: Node = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode())
 
-              override def logOffset(): Long = replica.logEndOffset
+                  override def logOffset(): Long = replica.logEndOffset
 
-              override def lastCaughtUpTimeMs(): Long = replica.lastCaughtUpTimeMs
-            })
-          Option.apply(replicaSelector.select(tp, clientMetadata, replicaInfos.asJava).orElse(null))
-            .map(_.getEndpoint.id())
-        }
+                  override def lastCaughtUpTimeMs(): Long = replica.lastCaughtUpTimeMs
+                })
+              Option.apply(replicaSelector.select(tp, clientMetadata, replicaInfos.asJava).orElse(null))
+                .map(_.getEndpoint.id())
+            }
+          } else {
+            Option.empty
+          }
 
         val fetchDataInfo = if (shouldLeaderThrottle(quota, tp, replicaId)) {
           // If the partition is being throttled, simply return an empty set.

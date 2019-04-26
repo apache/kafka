@@ -33,6 +33,7 @@ import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.replica.ReplicaSelector.ClientMetadata
 import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderAndIsrRequest}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
@@ -519,7 +520,8 @@ class ReplicaManagerTest {
           tp0 -> new PartitionData(1, 0, 100000, Optional.empty()),
           tp1 -> new PartitionData(1, 0, 100000, Optional.empty())),
         responseCallback = fetchCallback,
-        isolationLevel = IsolationLevel.READ_UNCOMMITTED
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED,
+        clientMetadata = ClientMetadata.NO_METADATA
       )
       val tp0Replica = replicaManager.localReplica(tp0)
       assertTrue(tp0Replica.isDefined)
@@ -791,7 +793,9 @@ class ReplicaManagerTest {
       hardMaxBytesLimit = false,
       fetchInfos = Seq(partition -> partitionData),
       responseCallback = fetchCallback,
-      isolationLevel = isolationLevel)
+      isolationLevel = isolationLevel,
+      clientMetadata = ClientMetadata.NO_METADATA
+    )
 
     result
   }
