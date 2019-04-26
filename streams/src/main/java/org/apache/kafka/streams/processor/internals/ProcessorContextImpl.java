@@ -147,7 +147,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                final V value,
                                final To to) {
         final ProcessorNode previousNode = currentNode();
-        final long currentTimestamp = recordContext.timestamp;
+        final long currentTimestamp = recordContext.timestamp();
 
         try {
             toInternal.update(to);
@@ -170,7 +170,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                 forward(child, key, value);
             }
         } finally {
-            recordContext.timestamp = currentTimestamp;
+            recordContext.setTimestamp(currentTimestamp);
             setCurrentNode(previousNode);
         }
     }
