@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.utils;
 
-import java.util.AbstractSet;
+import java.util.AbstractCollection;
 import java.util.Iterator;
 import java.util.NoSuchElementException;
 
@@ -40,7 +40,7 @@ import java.util.NoSuchElementException;
  *
  * This set does not allow null elements.  It does not have internal synchronization.
  */
-public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> extends AbstractSet<E> {
+public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection.Element> extends AbstractCollection<E> {
     public interface Element {
         int prev();
         void setPrev(int prev);
@@ -127,7 +127,7 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
         element.setPrev(INVALID_INDEX);
     }
 
-    private class ImplicitLinkedHashSetIterator implements Iterator<E> {
+    private class ImplicitLinkedHashCollectionIterator implements Iterator<E> {
         private Element cur = head;
 
         private Element next = indexToElement(head, elements, head.next());
@@ -154,7 +154,7 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
             if (cur == head) {
                 throw new IllegalStateException();
             }
-            ImplicitLinkedHashSet.this.remove(cur);
+            ImplicitLinkedHashCollection.this.remove(cur);
             cur = head;
         }
     }
@@ -174,8 +174,12 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
      */
     @Override
     final public Iterator<E> iterator() {
-        return new ImplicitLinkedHashSetIterator();
+        return new ImplicitLinkedHashCollectionIterator();
     }
+
+    /* private ListIterator<E> listIterator() {
+        return new ImplicitLinkedHashCollectionIterator();
+    } */
 
     final int slot(Element[] curElements, Object e) {
         return (e.hashCode() & 0x7fffffff) % curElements.length;
@@ -402,30 +406,30 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
     }
 
     /**
-     * Create a new ImplicitLinkedHashSet.
+     * Create a new ImplicitLinkedHashCollection.
      */
-    public ImplicitLinkedHashSet() {
+    public ImplicitLinkedHashCollection() {
         this(0);
     }
 
     /**
-     * Create a new ImplicitLinkedHashSet.
+     * Create a new ImplicitLinkedHashCollection.
      *
      * @param expectedNumElements   The number of elements we expect to have in this set.
      *                              This is used to optimize by setting the capacity ahead
      *                              of time rather than growing incrementally.
      */
-    public ImplicitLinkedHashSet(int expectedNumElements) {
+    public ImplicitLinkedHashCollection(int expectedNumElements) {
         clear(expectedNumElements);
     }
 
     /**
-     * Create a new ImplicitLinkedHashSet.
+     * Create a new ImplicitLinkedHashCollection.
      *
      * @param iter                  We will add all the elements accessible through this iterator
      *                              to the set.
      */
-    public ImplicitLinkedHashSet(Iterator<E> iter) {
+    public ImplicitLinkedHashCollection(Iterator<E> iter) {
         clear(0);
         while (iter.hasNext()) {
             mustAdd(iter.next());
@@ -455,6 +459,56 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
             this.elements = new Element[calculateCapacity(expectedNumElements)];
             this.size = 0;
         }
+    }
+
+    /**
+     * Compares the specified object with this one for equality. Returns
+     * {@code true} if and only if the specified object is also a
+     * {@code ImplicitLinkedHashCollection}, the objects have the same size,
+     * and all corresponding pairs of elements in the two objects are
+     * <i>equal</i>. (Two elements {@code e1} and {@code e2} are <i>equal</i>
+     * if {@code e1.equals(e2) && eq.hashCode() == e2.hashCode()}.)
+     *
+     * @param o The object to be compared for equality
+     *
+     * @return {@code true} if the specified object is equal to this one
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (o == this)
+            return true;
+
+        if (!(o instanceof ImplicitLinkedHashCollection))
+            return false;
+        ImplicitLinkedHashCollection<?> ilhs = (ImplicitLinkedHashCollection<?>) o;
+
+        if (size != ilhs.size) {
+            return false;
+        }
+
+        Iterator<E> thisItr = iterator();
+        Iterator<?> thatItr = ilhs.iterator();
+        while (thisItr.hasNext() && thatItr.hasNext()) {
+            if (!thisItr.next().equals(thatItr.next())) {
+                return false;
+            }
+        }
+
+        return !(thisItr.hasNext() || thatItr.hasNext());
+    }
+
+    /**
+     * Returns the hash code value for this object.
+     *
+     * @return the hash code value for this object
+     */
+    @Override
+    public int hashCode() {
+        int hashCode = 0;
+        for (E e : this) {
+            hashCode = 31 * hashCode + e.hashCode();
+        }
+        return hashCode;
     }
 
     // Visible for testing

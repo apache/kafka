@@ -28,20 +28,21 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Random;
 
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
 
 /**
- * A unit test for ImplicitLinkedHashSet.
+ * A unit test for ImplicitLinkedHashCollection.
  */
-public class ImplicitLinkedHashSetTest {
+public class ImplicitLinkedHashCollectionTest {
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
 
-    final static class TestElement implements ImplicitLinkedHashSet.Element {
-        private int prev = ImplicitLinkedHashSet.INVALID_INDEX;
-        private int next = ImplicitLinkedHashSet.INVALID_INDEX;
+    final static class TestElement implements ImplicitLinkedHashCollection.Element {
+        private int prev = ImplicitLinkedHashCollection.INVALID_INDEX;
+        private int next = ImplicitLinkedHashCollection.INVALID_INDEX;
         private final int val;
 
         TestElement(int val) {
@@ -89,13 +90,13 @@ public class ImplicitLinkedHashSetTest {
 
     @Test
     public void testNullForbidden() {
-        ImplicitLinkedHashMultiSet<TestElement> multiSet = new ImplicitLinkedHashMultiSet<>();
+        ImplicitLinkedHashMultiCollection<TestElement> multiSet = new ImplicitLinkedHashMultiCollection<>();
         assertFalse(multiSet.add(null));
     }
 
     @Test
     public void testInsertDelete() {
-        ImplicitLinkedHashSet<TestElement> set = new ImplicitLinkedHashSet<>(100);
+        ImplicitLinkedHashCollection<TestElement> set = new ImplicitLinkedHashCollection<>(100);
         assertTrue(set.add(new TestElement(1)));
         TestElement second = new TestElement(2);
         assertTrue(set.add(second));
@@ -144,7 +145,7 @@ public class ImplicitLinkedHashSetTest {
 
     @Test
     public void testTraversal() {
-        ImplicitLinkedHashSet<TestElement> set = new ImplicitLinkedHashSet<>();
+        ImplicitLinkedHashCollection<TestElement> set = new ImplicitLinkedHashCollection<>();
         expectTraversal(set.iterator());
         assertTrue(set.add(new TestElement(2)));
         expectTraversal(set.iterator(), 2);
@@ -175,7 +176,7 @@ public class ImplicitLinkedHashSetTest {
 
     @Test
     public void testCollisions() {
-        ImplicitLinkedHashSet<TestElement> set = new ImplicitLinkedHashSet<>(5);
+        ImplicitLinkedHashCollection<TestElement> set = new ImplicitLinkedHashCollection<>(5);
         assertEquals(11, set.numSlots());
         assertTrue(set.add(new TestElement(11)));
         assertTrue(set.add(new TestElement(0)));
@@ -191,7 +192,7 @@ public class ImplicitLinkedHashSetTest {
 
     @Test
     public void testEnlargement() {
-        ImplicitLinkedHashSet<TestElement> set = new ImplicitLinkedHashSet<>(5);
+        ImplicitLinkedHashCollection<TestElement> set = new ImplicitLinkedHashCollection<>(5);
         assertEquals(11, set.numSlots());
         for (int i = 0; i < 6; i++) {
             assertTrue(set.add(new TestElement(i)));
@@ -212,7 +213,7 @@ public class ImplicitLinkedHashSetTest {
     public void testManyInsertsAndDeletes() {
         Random random = new Random(123);
         LinkedHashSet<Integer> existing = new LinkedHashSet<>();
-        ImplicitLinkedHashSet<TestElement> set = new ImplicitLinkedHashSet<>();
+        ImplicitLinkedHashCollection<TestElement> set = new ImplicitLinkedHashCollection<>();
         for (int i = 0; i < 100; i++) {
             addRandomElement(random, existing, set);
             addRandomElement(random, existing, set);
@@ -222,8 +223,33 @@ public class ImplicitLinkedHashSetTest {
         }
     }
 
+    @Test
+    public void testEqualsAndHashCode() {
+        ImplicitLinkedHashCollection<TestElement> c1 = new ImplicitLinkedHashCollection<>();
+        ImplicitLinkedHashCollection<TestElement> c2 = new ImplicitLinkedHashCollection<>();
+        assertEquals(c1, c2);
+        assertEquals(c1.hashCode(), c2.hashCode());
+
+        c1.add(new TestElement(1));
+        c1.add(new TestElement(2));
+        c2.add(new TestElement(1));
+        c2.add(new TestElement(2));
+        assertEquals(c1, c2);
+        assertEquals(c1.hashCode(), c2.hashCode());
+
+        c1.add(new TestElement(3));
+        assertNotEquals(c1, c2);
+        assertNotEquals(c1.hashCode(), c2.hashCode());
+
+        c1.add(new TestElement(4));
+        c2.add(new TestElement(4));
+        c2.add(new TestElement(3));
+        assertNotEquals(c1, c2);
+        assertNotEquals(c1.hashCode(), c2.hashCode());
+    }
+
     private void addRandomElement(Random random, LinkedHashSet<Integer> existing,
-                                  ImplicitLinkedHashSet<TestElement> set) {
+                                  ImplicitLinkedHashCollection<TestElement> set) {
         int next;
         do {
             next = random.nextInt();
@@ -233,7 +259,7 @@ public class ImplicitLinkedHashSetTest {
     }
 
     private void removeRandomElement(Random random, Collection<Integer> existing,
-                             ImplicitLinkedHashSet<TestElement> set) {
+                             ImplicitLinkedHashCollection<TestElement> set) {
         int removeIdx = random.nextInt(existing.size());
         Iterator<Integer> iter = existing.iterator();
         Integer element = null;
