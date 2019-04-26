@@ -832,15 +832,12 @@ class Partition(val topicPartition: TopicPartition,
       curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicas.contains(replica)
     }.toSeq.sortBy(_.logEndOffsetMetadata)(new LogOffsetMetadata.OffsetOrdering)
 
-    val mostInSyncReplica: Replica = allInSyncReplicas.head
-
     LogReadInfo(
       fetchedData = fetchedData,
       highWatermark = initialHighWatermark,
       logStartOffset = initialLogStartOffset,
       logEndOffset = initialLogEndOffset,
-      lastStableOffset = initialLastStableOffset,
-      mostInSyncReplicaId = mostInSyncReplica.brokerId)
+      lastStableOffset = initialLastStableOffset)
   }
 
   def fetchOffsetForTimestamp(timestamp: Long,
