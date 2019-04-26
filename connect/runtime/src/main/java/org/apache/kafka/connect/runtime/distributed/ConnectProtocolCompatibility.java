@@ -16,9 +16,8 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.Locale;
-import java.util.Map;
 
 /**
  * An enumeration of the modes available to the worker to signal which Connect protocols are
@@ -27,13 +26,9 @@ import java.util.Map;
  * {@code EAGER} signifies that this worker only supports prompt release of assigned connectors
  * and tasks in every rebalance. Corresponds to Connect protocol V0.
  *
- * {@code COOPERATIVE} signifies that this worker only supports release and acquisition of
- * connectors and tasks based on policy that applies incremental and cooperative rebalancing.
- * Corresponds to Connect protocol V1 or greater.
- *
- * {@code COMPATIBLE} signifies that this worker supports both eager and cooperative Connect
- * protocols and will use the version that is elected by the Kafka broker coordinator during
- * rebalancing.
+ * {@code COMPATIBLE} signifies that this worker supports both eager and incremental cooperative
+ * Connect protocols and will use the version that is elected by the Kafka broker coordinator
+ * during rebalancing.
  */
 public enum ConnectProtocolCompatibility {
     EAGER {
@@ -50,22 +45,19 @@ public enum ConnectProtocolCompatibility {
         }
     };
 
-    // Support both lower case and upper case values
-    private static final Map<String, ConnectProtocolCompatibility> REVERSE = new HashMap<>(values().length * 2);
-
-    static {
-        for (ConnectProtocolCompatibility mode : values()) {
-            REVERSE.put(mode.name(), mode);
-            REVERSE.put(mode.name().toLowerCase(Locale.ROOT), mode);
-        }
-    }
-
+    /**
+     * Return the enum that corresponds to the name that is given as an argument;
+     * if the no mapping is found {@code IllegalArgumentException} is thrown.
+     *
+     * @param name the name of the protocol compatibility mode
+     * @return the enum that corresponds to the protocol compatibility mode
+     */
     public static ConnectProtocolCompatibility compatibility(String name) {
-        ConnectProtocolCompatibility compat = REVERSE.get(name);
-        if (compat == null) {
-            throw new IllegalArgumentException("Unknown Connect protocol compatibility mode: " + name);
-        }
-        return compat;
+        return Arrays.stream(ConnectProtocolCompatibility.values())
+                .filter(mode -> mode.name().equalsIgnoreCase(name))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Unknown Connect protocol compatibility mode: " + name));
     }
 
     @Override
