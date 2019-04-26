@@ -1007,11 +1007,13 @@ class KafkaController(val config: KafkaConfig,
 
   private def processUncleanLeaderElectionEnable(): Unit = {
     if (!isActive) return
+    info(s"Unclean leader election has been enabled by default")
     partitionStateMachine.triggerOnlinePartitionStateChange()
   }
 
   private def processTopicUncleanLeaderElectionEnable(topic: String): Unit = {
     if (!isActive) return
+    info(s"Unclean leader election has been enabled for topic $topic")
     partitionStateMachine.triggerOnlinePartitionStateChange(topic)
   }
 

@@ -92,8 +92,11 @@ class TopicDeletionManager(config: KafkaConfig,
   val isDeleteTopicEnabled: Boolean = config.deleteTopicEnable
 
   def init(initialTopicsToBeDeleted: Set[String], initialTopicsIneligibleForDeletion: Set[String]): Unit = {
+    info(s"Initializing manager with initial deletions: $initialTopicsToBeDeleted, " +
+      s"initial ineligible deletions: $initialTopicsIneligibleForDeletion")
+
     if (isDeleteTopicEnabled) {
-      controllerContext.queueTopicDeletion(initialTopicsIneligibleForDeletion)
+      controllerContext.queueTopicDeletion(initialTopicsToBeDeleted)
       controllerContext.topicsIneligibleForDeletion ++= initialTopicsIneligibleForDeletion & controllerContext.topicsToBeDeleted
     } else {
       // if delete topic is disabled clean the topic entries under /admin/delete_topics
