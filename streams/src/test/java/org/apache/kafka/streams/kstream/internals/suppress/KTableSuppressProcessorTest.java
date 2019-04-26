@@ -72,11 +72,12 @@ public class KTableSuppressProcessorTest {
 
             final String storeName = "test-store";
 
-            final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName)
+            final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(storeName, keySerde, FullChangeSerde.castOrWrap(valueSerde))
                 .withLoggingDisabled()
                 .build();
+
             final KTableSuppressProcessor<K, V> processor =
-                new KTableSuppressProcessor<>(getImpl(suppressed), storeName, keySerde, new FullChangeSerde<>(valueSerde));
+                new KTableSuppressProcessor<>((SuppressedInternal<K>) suppressed, storeName);
 
             final MockInternalProcessorContext context = new MockInternalProcessorContext();
             buffer.init(context, buffer);
@@ -201,7 +202,6 @@ public class KTableSuppressProcessorTest {
         // note the record is in the past, but the window end is in the future, so we still have to buffer,
         // even though the grace period is 0.
         final long timestamp = 5L;
-        final long streamTime = 99L;
         final long windowEnd = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, windowEnd));
@@ -237,8 +237,12 @@ public class KTableSuppressProcessorTest {
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
 
+    /**
+     * It's desirable to drop tombstones for final-results windowed streams, since (as described in the
+     * {@link SuppressedInternal} javadoc), they are unnecessary to emit.
+     */
     @Test
-    public void finalResultsShouldSuppressTombstonesForTimeWindows() {
+    public void finalResultsShouldDropTombstonesForTimeWindows() {
         final Harness<Windowed<String>, Long> harness =
             new Harness<>(finalResults(ofMillis(0L)), timeWindowedSerdeFrom(String.class, 100L), Long());
         final MockInternalProcessorContext context = harness.context;
@@ -253,8 +257,13 @@ public class KTableSuppressProcessorTest {
         assertThat(context.forwarded(), hasSize(0));
     }
 
+
+    /**
+     * It's desirable to drop tombstones for final-results windowed streams, since (as described in the
+     * {@link SuppressedInternal} javadoc), they are unnecessary to emit.
+     */
     @Test
-    public void finalResultsShouldSuppressTombstonesForSessionWindows() {
+    public void finalResultsShouldDropTombstonesForSessionWindows() {
         final Harness<Windowed<String>, Long> harness =
             new Harness<>(finalResults(ofMillis(0L)), sessionWindowedSerdeFrom(String.class), Long());
         final MockInternalProcessorContext context = harness.context;
@@ -269,8 +278,12 @@ public class KTableSuppressProcessorTest {
         assertThat(context.forwarded(), hasSize(0));
     }
 
+    /**
+     * It's NOT OK to drop tombstones for non-final-results windowed streams, since we may have emitted some results for
+     * the window before getting the tombstone (see the {@link SuppressedInternal} javadoc).
+     */
     @Test
-    public void suppressShouldNotSuppressTombstonesForTimeWindows() {
+    public void suppressShouldNotDropTombstonesForTimeWindows() {
         final Harness<Windowed<String>, Long> harness =
             new Harness<>(untilTimeLimit(ofMillis(0), maxRecords(0)), timeWindowedSerdeFrom(String.class, 100L), Long());
         final MockInternalProcessorContext context = harness.context;
@@ -288,8 +301,13 @@ public class KTableSuppressProcessorTest {
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
 
+
+    /**
+     * It's NOT OK to drop tombstones for non-final-results windowed streams, since we may have emitted some results for
+     * the window before getting the tombstone (see the {@link SuppressedInternal} javadoc).
+     */
     @Test
-    public void suppressShouldNotSuppressTombstonesForSessionWindows() {
+    public void suppressShouldNotDropTombstonesForSessionWindows() {
         final Harness<Windowed<String>, Long> harness =
             new Harness<>(untilTimeLimit(ofMillis(0), maxRecords(0)), sessionWindowedSerdeFrom(String.class), Long());
         final MockInternalProcessorContext context = harness.context;
@@ -307,8 +325,13 @@ public class KTableSuppressProcessorTest {
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
 
+
+    /**
+     * It's SUPER NOT OK to drop tombstones for non-windowed streams, since we may have emitted some results for
+     * the key before getting the tombstone (see the {@link SuppressedInternal} javadoc).
+     */
     @Test
-    public void suppressShouldNotSuppressTombstonesForKTable() {
+    public void suppressShouldNotDropTombstonesForKTable() {
         final Harness<String, Long> harness =
             new Harness<>(untilTimeLimit(ofMillis(0), maxRecords(0)), String(), Long());
         final MockInternalProcessorContext context = harness.context;
@@ -416,8 +439,8 @@ public class KTableSuppressProcessorTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private <K extends Windowed> SuppressedInternal<K> finalResults(final Duration grace) {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <K extends Windowed> SuppressedInternal<K> finalResults(final Duration grace) {
         return ((FinalResultsSuppressionBuilder) untilWindowCloses(unbounded())).buildFinalResultsSuppression(grace);
     }
 
@@ -441,11 +464,7 @@ public class KTableSuppressProcessorTest {
         };
     }
 
-    private static <K> SuppressedInternal<K> getImpl(final Suppressed<K> suppressed) {
-        return (SuppressedInternal<K>) suppressed;
-    }
-
-    private <K> Serde<Windowed<K>> timeWindowedSerdeFrom(final Class<K> rawType, final long windowSize) {
+    private static <K> Serde<Windowed<K>> timeWindowedSerdeFrom(final Class<K> rawType, final long windowSize) {
         final Serde<K> kSerde = Serdes.serdeFrom(rawType);
         return new Serdes.WrapperSerde<>(
             new TimeWindowedSerializer<>(kSerde.serializer()),

@@ -25,21 +25,21 @@ import java.util.Map;
 
 import static java.util.Objects.requireNonNull;
 
-public class FullChangeSerde<T> implements Serde<Change<T>> {
+public final class FullChangeSerde<T> implements Serde<Change<T>> {
     private final Serde<T> inner;
 
     @SuppressWarnings("unchecked")
-    public static <T> FullChangeSerde<T> castOrWrap(final Serde<?> serde) {
+    public static <T> FullChangeSerde<T> castOrWrap(final Serde<T> serde) {
         if (serde == null) {
             return null;
         } else if (serde instanceof FullChangeSerde) {
             return (FullChangeSerde<T>) serde;
         } else {
-            return new FullChangeSerde<T>((Serde<T>) serde);
+            return new FullChangeSerde<>(serde);
         }
     }
 
-    public FullChangeSerde(final Serde<T> inner) {
+    private FullChangeSerde(final Serde<T> inner) {
         this.inner = requireNonNull(inner);
     }
 
