@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.commons.lang3.reflect.TypeLiteral;
+import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -32,6 +34,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.function.Consumer;
 
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -321,6 +324,73 @@ public class AbstractConfigTest {
         }
     }
 
+    @Test
+    public void testGenericClassInstantiation() {
+        TypeLiteral<Consumer<String>> stringConsumerType = new TypeLiteral<Consumer<String>>() {};
+        String stringConsumerConfig = "string.consumer.class";
+        ConfigDef testConfigDef = new ConfigDef()
+            .define(
+                stringConsumerConfig,
+                Type.CLASS,
+                null,
+                Importance.HIGH,
+                ""
+            );
+
+        AbstractConfig testConfig = new AbstractConfig(
+            testConfigDef,
+            Collections.singletonMap(stringConsumerConfig, StringPrinter.class.getName())
+        );
+        Consumer<String> stringConsumer = testConfig.getConfiguredInstance(
+            stringConsumerConfig,
+            stringConsumerType
+        );
+        // Sanity check to make sure the created consumer actually accepts Strings
+        stringConsumer.accept("");
+
+        testConfig = new AbstractConfig(
+            testConfigDef,
+            Collections.singletonMap(stringConsumerConfig, IntegerPrinter.class.getName())
+        );
+        try {
+            stringConsumer = testConfig.getConfiguredInstance(
+                stringConsumerConfig,
+                stringConsumerType
+            );
+            fail("Should have failed to load class but successfully instantiated " + stringConsumer);
+        } catch (KafkaException e) {
+            // Expected Exception
+        }
+
+        Map<String, Object> originalConfigs = new HashMap<>();
+        originalConfigs.put("kept.config", "kept.value");
+        originalConfigs.put("to.be.overridden", "to.be.overridden");
+        testConfig = new AbstractConfig(testConfigDef, originalConfigs);
+        List<Consumer<String>> stringConsumers = testConfig.getConfiguredInstances(
+            Arrays.asList(StringPrinter.class.getName(), ConfigurableStringPrinter.class.getName()),
+            stringConsumerType,
+            Collections.singletonMap("to.be.overridden", "overridden")
+        );
+
+        assertEquals(StringPrinter.class, stringConsumers.get(0).getClass());
+        assertEquals(ConfigurableStringPrinter.class, stringConsumers.get(1).getClass());
+        Map<String, Object> expectedConfigs = new HashMap<>();
+        expectedConfigs.put("kept.config", "kept.value");
+        expectedConfigs.put("to.be.overridden", "overridden");
+        assertEquals(expectedConfigs, ((ConfigurableStringPrinter) stringConsumers.get(1)).configs());
+
+        try {
+            stringConsumers = testConfig.getConfiguredInstances(
+                Arrays.asList(StringPrinter.class.getName(), IntegerPrinter.class.getName()),
+                stringConsumerType,
+                Collections.emptyMap()
+            );
+            fail("Should have failed to load classes but successfully instantiated " + stringConsumers);
+        } catch (KafkaException e) {
+            // Expected Exception
+        }
+    }
+
     private static class ClassTestConfig extends AbstractConfig {
         static final Class<?> DEFAULT_CLASS = FakeMetricsReporter.class;
         static final Class<?> VISIBLE_CLASS = JmxReporter.class;
@@ -409,6 +479,34 @@ public class AbstractConfigTest {
 
         public FakeMetricsReporterConfig(Map<?, ?> props) {
             super(CONFIG, props);
+        }
+    }
+
+    public static class StringPrinter implements Consumer<String> {
+        @Override
+        public void accept(String s) {
+            System.out.println(s);
+        }
+    }
+
+    public static class ConfigurableStringPrinter extends StringPrinter implements Configurable {
+
+        private Map<String, ?> configs;
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+            this.configs = configs;
+        }
+
+        public Map<String, ?> configs() {
+            return new HashMap<>(configs);
+        }
+    }
+
+    public static class IntegerPrinter implements Consumer<Integer> {
+        @Override
+        public void accept(Integer i) {
+            System.out.println(i);
         }
     }
 }

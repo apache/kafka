@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config;
 
+import org.apache.commons.lang3.reflect.TypeLiteral;
+import org.apache.commons.lang3.reflect.TypeUtils;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.types.Password;
@@ -23,6 +25,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -308,6 +311,37 @@ public class AbstractConfig {
     }
 
     /**
+     * Get a configured instance of the given type specified by the given configuration key. If the object implements
+     * Configurable configure it using the configuration.
+     * <p>
+     * For example, to create a {@code Consumer<String>} for a key "configKey":
+     * <pre>
+     *   AbstractConfig config = ...
+     *   Consumer&lt;String&gt; stringConsumer = config.getConfiguredInstance("configKey", new TypeLiteral&lt;Consumer&lt;String&gt;&gt;() {});
+     * </pre>
+     * <p>
+     * If a non-generic type is desired, the {@link #getConfiguredInstance(String, Class)} method is likely to be
+     * less verbose and therefore preferable.
+     * @param key The configuration key for the class
+     * @param t A {@link TypeLiteral} containing a type the class should satisfy
+     * @return A configured instance of the class
+     */
+    @SuppressWarnings("unchecked")
+    public <T> T getConfiguredInstance(String key, TypeLiteral<T> t) {
+        Class<?> c = getClass(key);
+        if (c == null)
+            return null;
+        Object o = Utils.newInstance(c);
+        if (!TypeUtils.isInstance(o, t.value))
+            throw new KafkaException(c.getName() + " is not an instance of " + t.value.getTypeName());
+        if (o instanceof Configurable)
+            ((Configurable) o).configure(originals());
+        // Still technically an unchecked conversion, but we've verified with TypeUtils.isInstance()
+        // that this should be acceptable
+        return (T) o;
+    }
+
+    /**
      * Get a list of configured instances of the given class specified by the given configuration key. The configuration
      * may specify either null or an empty string to indicate no configured instances. In both cases, this method
      * returns an empty list to indicate no configured instances.
@@ -316,6 +350,27 @@ public class AbstractConfig {
      * @return The list of configured instances
      */
     public <T> List<T> getConfiguredInstances(String key, Class<T> t) {
+        return getConfiguredInstances(key, t, Collections.emptyMap());
+    }
+
+    /**
+     * Get a list of configured instances of the given type specified by the given configuration key. The configuration
+     * may specify either null or an empty string to indicate no configured instances. In both cases, this method
+     * returns an empty list to indicate no configured instances.
+     * <p>
+     * For example, to create several instances of {@code Consumer<String>} for a key "configKey":
+     * <pre>
+     *   AbstractConfig config = ...
+     *   List&lt;Consumer&lt;String&gt;&gt; stringConsumers = config.getConfiguredInstances("configKey", new TypeLiteral&lt;Consumer&lt;String&gt;&gt;() {});
+     * </pre>
+     * <p>
+     * If a non-generic type is desired, the {@link #getConfiguredInstances(String, Class)} method is likely to be
+     * less verbose and therefore preferable.
+     * @param key The configuration key for the class
+     * @param t A {@link TypeLiteral} containing a type the class should satisfy
+     * @return The list of configured instances
+     */
+    public <T> List<T> getConfiguredInstances(String key, TypeLiteral<T> t) {
         return getConfiguredInstances(key, t, Collections.emptyMap());
     }
 
@@ -332,6 +387,28 @@ public class AbstractConfig {
         return getConfiguredInstances(getList(key), t, configOverrides);
     }
 
+    /**
+     * Get a list of configured instances of the given type specified by the given configuration key. The configuration
+     * may specify either null or an empty string to indicate no configured instances. In both cases, this method
+     * returns an empty list to indicate no configured instances.
+     * <p>
+     * For example, to create several instances of {@code Consumer<String>} for a key "configKey":
+     * <pre>
+     *   AbstractConfig config = ...
+     *   Map&lt;String, Object&gt; overrides = Collections.singletonMap("overriddenProperty", "newValue");
+     *   List&lt;Consumer&lt;String&gt;&gt; stringConsumers = config.getConfiguredInstances("configKey", new TypeLiteral&lt;Consumer&lt;String&gt;&gt;() {}, overrides);
+     * </pre>
+     * <p>
+     * If a non-generic type is desired, the {@link #getConfiguredInstances(String, Class, Map)} method is likely to be
+     * less verbose and therefore preferable.
+     * @param key The configuration key for the class
+     * @param t A {@link TypeLiteral} containing a type the class should satisfy
+     * @param configOverrides Configuration overrides to use.
+     * @return The list of configured instances
+     */
+    public <T> List<T> getConfiguredInstances(String key, TypeLiteral<T> t, Map<String, Object> configOverrides) {
+        return getConfiguredInstances(getList(key), t, configOverrides);
+    }
 
     /**
      * Get a list of configured instances of the given class specified by the given configuration key. The configuration
@@ -365,6 +442,67 @@ public class AbstractConfig {
             if (o instanceof Configurable)
                 ((Configurable) o).configure(configPairs);
             objects.add(t.cast(o));
+        }
+        return objects;
+    }
+
+    /**
+     * Get a list of configured instances of the given type specified by the given list of class names. The configuration
+     * may specify either null or an empty list to indicate no configured instances. In both cases, this method
+     * returns an empty list to indicate no configured instances.
+     * <p>
+     * For example, to create several instances of {@code Consumer<String>}:
+     * <pre>
+     *   Consumer&lt;String&gt; printString = new Consumer&lt;String&gt;() {
+     *     &#064;Override
+     *     public void accept(String s) {
+     *       System.out.println(s);
+     *     }
+     *   }
+     *
+     *   Consumer&lt;String&gt; greeter = new Consumer&lt;String&gt;() {
+     *     &#064;Override
+     *     public void accept(String name) {
+     *       System.out.println("Hello, " + name + "!");
+     *     }
+     *   }
+     *
+     *   List&lt;String&gt; classNames = Arrays.asList(printString.getClass().getName(), greeter.getClass().getName());
+     *   AbstractConfig config = ...
+     *   Map&lt;String, Object&gt; overrides = Collections.singletonMap("overriddenProperty", "newValue");
+     *   List&lt;Consumer&lt;String&gt;&gt; stringConsumers = config.getConfiguredInstances(classNames, new TypeLiteral&lt;Consumer&lt;String&gt;&gt;() {}, overrides);
+     * </pre>
+     * <p>
+     * If a non-generic type is desired, the {@link #getConfiguredInstances(List, Class, Map)} method is likely to be
+     * less verbose and therefore preferable.
+     * @param classNames The list of class names of the instances to create
+     * @param t A {@link TypeLiteral} containing a type the class should satisfy
+     * @param configOverrides Configuration overrides to use.
+     * @return The list of configured instances
+     */
+    @SuppressWarnings("unchecked")
+    public <T> List<T> getConfiguredInstances(List<String> classNames, TypeLiteral<T> t, Map<String, Object> configOverrides) {
+        List<T> objects = new ArrayList<>();
+        if (classNames == null)
+            return objects;
+        Map<String, Object> configPairs = originals();
+        configPairs.putAll(configOverrides);
+        for (String klass : classNames) {
+            Object o;
+            try {
+                // We'll do our own type checking later and don't need verification here, so
+                // using Object.class is fine
+                o = Utils.newInstance(klass, Object.class);
+            } catch (ClassNotFoundException e) {
+                throw new KafkaException(klass + " ClassNotFoundException exception occurred", e);
+            }
+            if (!TypeUtils.isInstance(o, t.value))
+                throw new KafkaException(klass + " is not an instance of " + t.value.getTypeName());
+            if (o instanceof Configurable)
+                ((Configurable) o).configure(configPairs);
+            // Still technically an unchecked conversion, but we've verified with TypeUtils.isInstance()
+            // that this should be acceptable
+            objects.add((T) o);
         }
         return objects;
     }

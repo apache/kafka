@@ -952,6 +952,8 @@ project(':clients') {
     testRuntime libs.jacksonDatabind
     testRuntime libs.jacksonJDK8Datatypes
     testCompile libs.jacksonJaxrsJsonProvider
+
+    compile 'org.apache.commons:commons-lang3:3.9'
   }
 
   task determineCommitId {
