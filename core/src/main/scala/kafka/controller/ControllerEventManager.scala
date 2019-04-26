@@ -110,6 +110,8 @@ class ControllerEventManager(controllerId: Int,
     put(event)
   }
 
+  def isEmpty: Boolean = queue.isEmpty
+
   class ControllerEventThread(name: String) extends ShutdownableThread(name = name, isInterruptible = false) {
     logIdent = s"[ControllerEventThread controllerId=$controllerId] "
 

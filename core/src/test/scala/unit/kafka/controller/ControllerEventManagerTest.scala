@@ -65,6 +65,9 @@ class ControllerEventManagerTest {
     val queueTimeHistogram = Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
       .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Histogram]
 
+    TestUtils.waitUntilTrue(() => controllerEventManager.isEmpty,
+      "Timed out waiting for processing of all events")
+
     assertEquals(2, queueTimeHistogram.count)
     assertEquals(0, queueTimeHistogram.min, 0.01)
     assertEquals(500, queueTimeHistogram.max, 0.01)
