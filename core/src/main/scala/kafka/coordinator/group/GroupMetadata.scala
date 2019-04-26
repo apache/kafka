@@ -193,6 +193,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   // Static membership mapping [key: group.instance.id, value: member.id]
   private val staticMembers = new mutable.HashMap[String, String]
   private val pendingMembers = new mutable.HashSet[String]
+  private final val MEMBER_ID_DELIMITER = "-"
   private var numMembersAwaitingJoin = 0
   private val supportedProtocols = new mutable.HashMap[String, Integer]().withDefaultValue(0)
   private val offsets = new mutable.HashMap[TopicPartition, CommitRecordMetadataAndOffset]
@@ -343,7 +344,52 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     timeout.max(member.rebalanceTimeoutMs)
   }
 
-  def generateMemberIdSuffix = UUID.randomUUID().toString
+  def generateMemberId(clientId: String,
+                       groupInstanceId: Option[String]): String = {
+    groupInstanceId match {
+      case None =>
+        clientId + MEMBER_ID_DELIMITER + UUID.randomUUID().toString
+      case Some(instanceId) =>
+        instanceId + MEMBER_ID_DELIMITER + currentStateTimestamp.get
+    }
+  }
+
+  // This validation doesn't handle the case where a static member changes
+  // its group.instance.id while maintains the same member.id. That edge case should
+  // be handled by session timeout old static member registration
+  // with associated old member.id, so that the flipped member will be evicted and
+  // ask to rejoin due to UNKNOWN_MEMBER_ID.
+  def validateMemberIdIfStatic(memberId: String): Boolean = {
+    val delimiterIdx = memberId.lastIndexOf(MEMBER_ID_DELIMITER)
+    // Member id must have formatted with valid delimiter as [prefix]-[suffix] to
+    // be validated.
+    if (delimiterIdx == -1) {
+      info(s"given member.id $memberId was ill-formatted without delimiter '-'.")
+      true
+    } else {
+      val memberIdPrefix = Some(memberId.substring(0, delimiterIdx))
+      val isKnownStaticMember = hasStaticMember(memberIdPrefix)
+
+      if (isKnownStaticMember) {
+        val storedMemberId = getStaticMemberId(memberIdPrefix)
+        if (memberId != storedMemberId) {
+          logFencingInstanceIdError(memberId, memberIdPrefix, storedMemberId)
+          false
+        } else {
+          true
+        }
+      } else {
+        true
+      }
+    }
+  }
+
+  def logFencingInstanceIdError(newMemberId: String,
+                                groupInstanceId: Option[String],
+                                oldMemberId: String) {
+    error(s"given member.id $newMemberId is identified as a known static member ${groupInstanceId.get}," +
+      s"but not matching the expected member.id $oldMemberId")
+  }
 
   def canRebalance = GroupMetadata.validPreviousStates(PreparingRebalance).contains(state)
 

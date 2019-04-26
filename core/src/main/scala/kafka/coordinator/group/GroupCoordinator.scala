@@ -175,7 +175,7 @@ class GroupCoordinator(val brokerId: Int,
       } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else {
-        val newMemberId = clientId + "-" + group.generateMemberIdSuffix
+        val newMemberId = group.generateMemberId(clientId, groupInstanceId)
 
         if (group.hasStaticMember(groupInstanceId)) {
           val oldMemberId = group.getStaticMemberId(groupInstanceId)
@@ -249,11 +249,17 @@ class GroupCoordinator(val brokerId: Int,
             clientId, clientHost, protocolType, protocols, group, responseCallback)
         }
       } else {
-        val isKnownGroupInstanceId = group.hasStaticMember(groupInstanceId)
-        val groupInstanceIdNotFound = groupInstanceId.isDefined && !isKnownGroupInstanceId
+        val staticMemberId = if (group.hasStaticMember(groupInstanceId))
+          Some(group.getStaticMemberId(groupInstanceId))
+        else
+          None
+        val groupInstanceIdNotFound = groupInstanceId.isDefined && staticMemberId.isEmpty
 
-        if (isKnownGroupInstanceId && group.getStaticMemberId(groupInstanceId) != memberId) {
+        if (staticMemberId.isDefined && staticMemberId.get != memberId) {
           // given member id doesn't match with the groupInstanceId. Inform duplicate instance to shut down immediately.
+          group.logFencingInstanceIdError(memberId, groupInstanceId, staticMemberId.get)
+          error(s"given member.id $memberId is identified as a known static member ${groupInstanceId.get}," +
+            s"but not matching the expected member.id ${staticMemberId.get}")
           responseCallback(joinError(memberId, Errors.FENCED_INSTANCE_ID))
         } else if (!group.has(memberId) || groupInstanceIdNotFound) {
             // If the dynamic member trying to register with an unrecognized id, or
@@ -347,7 +353,9 @@ class GroupCoordinator(val brokerId: Int,
                           groupAssignment: Map[String, Array[Byte]],
                           responseCallback: SyncCallback) {
     group.inLock {
-      if (!group.has(memberId)) {
+      if (!group.validateMemberIdIfStatic(memberId)) {
+        responseCallback(Array.empty, Errors.FENCED_INSTANCE_ID)
+      } else if (!group.has(memberId)) {
         responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
       } else if (generationId != group.generationId) {
         responseCallback(Array.empty, Errors.ILLEGAL_GENERATION)
@@ -495,44 +503,37 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
       case Some(group) => group.inLock {
-        group.currentState match {
-          case Dead =>
-            // if the group is marked as dead, it means some other thread has just removed the group
-            // from the coordinator metadata; it is likely that the group has migrated to some other
-            // coordinator OR the group is in a transient unstable phase. Let the member retry
-            // joining without the specified member id.
-            responseCallback(Errors.UNKNOWN_MEMBER_ID)
-
-          case Empty =>
-            responseCallback(Errors.UNKNOWN_MEMBER_ID)
-
-          case CompletingRebalance =>
-            if (!group.has(memberId))
+        if (!group.validateMemberIdIfStatic(memberId)) {
+          responseCallback(Errors.FENCED_INSTANCE_ID)
+        } else if (!group.has(memberId)) {
+          responseCallback(Errors.UNKNOWN_MEMBER_ID)
+        } else if (generationId != group.generationId) {
+          responseCallback(Errors.ILLEGAL_GENERATION)
+        } else {
+          group.currentState match {
+            case Dead =>
+              // if the group is marked as dead, it means some other thread has just removed the group
+              // from the coordinator metadata; it is likely that the group has migrated to some other
+              // coordinator OR the group is in a transient unstable phase. Let the member retry
+              // joining without the specified member id.
               responseCallback(Errors.UNKNOWN_MEMBER_ID)
-            else
-              responseCallback(Errors.REBALANCE_IN_PROGRESS)
 
-          case PreparingRebalance =>
-            if (!group.has(memberId)) {
+            case Empty =>
               responseCallback(Errors.UNKNOWN_MEMBER_ID)
-            } else if (generationId != group.generationId) {
-              responseCallback(Errors.ILLEGAL_GENERATION)
-            } else {
-              val member = group.get(memberId)
-              completeAndScheduleNextHeartbeatExpiration(group, member)
-              responseCallback(Errors.REBALANCE_IN_PROGRESS)
-            }
 
-          case Stable =>
-            if (!group.has(memberId)) {
-              responseCallback(Errors.UNKNOWN_MEMBER_ID)
-            } else if (generationId != group.generationId) {
-              responseCallback(Errors.ILLEGAL_GENERATION)
-            } else {
-              val member = group.get(memberId)
-              completeAndScheduleNextHeartbeatExpiration(group, member)
-              responseCallback(Errors.NONE)
-            }
+            case CompletingRebalance =>
+                responseCallback(Errors.REBALANCE_IN_PROGRESS)
+
+            case PreparingRebalance =>
+                val member = group.get(memberId)
+                completeAndScheduleNextHeartbeatExpiration(group, member)
+                responseCallback(Errors.REBALANCE_IN_PROGRESS)
+
+            case Stable =>
+                val member = group.get(memberId)
+                completeAndScheduleNextHeartbeatExpiration(group, member)
+                responseCallback(Errors.NONE)
+          }
         }
       }
     }
@@ -598,6 +599,8 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       if (group.is(Dead)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
+      } else if (!group.validateMemberIdIfStatic(memberId)) {
+        responseCallback(offsetMetadata.mapValues(_ => Errors.FENCED_INSTANCE_ID))
       } else if ((generationId < 0 && group.is(Empty)) || (producerId != NO_PRODUCER_ID)) {
         // The group is only using Kafka to store offsets.
         // Also, for transactional offset commits we don't need to validate group membership and the generation.

@@ -123,7 +123,6 @@ public abstract class AbstractCoordinator implements Closeable {
     protected final Time time;
     protected final long retryBackoffMs;
 
-
     private HeartbeatThread heartbeatThread = null;
     private boolean rejoinNeeded = true;
     private boolean needsJoinPrepare = true;
@@ -133,6 +132,8 @@ public abstract class AbstractCoordinator implements Closeable {
     private Generation generation = Generation.NO_GENERATION;
 
     private RequestFuture<Void> findCoordinatorFuture = null;
+
+    protected final String fencedInstanceErrorMessage = "Received fatal exception: duplicate group.instance.id {} detected";
 
     /**
      * Initialize the coordination manager.
@@ -558,12 +559,14 @@ public abstract class AbstractCoordinator implements Closeable {
                 markCoordinatorUnknown();
                 log.debug("Attempt to join group failed due to obsolete coordinator information: {}", error.message());
                 future.raise(error);
+            } else if (error == Errors.FENCED_INSTANCE_ID) {
+                log.error(fencedInstanceErrorMessage, groupInstanceId);
+                future.raise(error);
             } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL
                     || error == Errors.INVALID_SESSION_TIMEOUT
                     || error == Errors.INVALID_GROUP_ID
                     || error == Errors.GROUP_AUTHORIZATION_FAILED
-                    || error == Errors.GROUP_MAX_SIZE_REACHED
-                    || error == Errors.FENCED_INSTANCE_ID) {
+                    || error == Errors.GROUP_MAX_SIZE_REACHED) {
                 // log the error and re-throw the exception
                 log.error("Attempt to join group failed due to fatal error: {}", error.message());
                 if (error == Errors.GROUP_MAX_SIZE_REACHED) {
@@ -656,6 +659,9 @@ public abstract class AbstractCoordinator implements Closeable {
                     future.raise(new GroupAuthorizationException(groupId));
                 } else if (error == Errors.REBALANCE_IN_PROGRESS) {
                     log.debug("SyncGroup failed because the group began another rebalance");
+                    future.raise(error);
+                } else if (error == Errors.FENCED_INSTANCE_ID) {
+                    log.error(fencedInstanceErrorMessage, groupInstanceId);
                     future.raise(error);
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
                         || error == Errors.ILLEGAL_GENERATION) {
@@ -922,6 +928,9 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.info("Attempt to heartbeat failed since generation {} is not current", generation.generationId);
                 resetGeneration();
                 future.raise(Errors.ILLEGAL_GENERATION);
+            } else if (error == Errors.FENCED_INSTANCE_ID) {
+                log.error(fencedInstanceErrorMessage, groupInstanceId);
+                future.raise(error);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
                 log.info("Attempt to heartbeat failed for since member id {} is not valid.", generation.memberId);
                 resetGeneration();

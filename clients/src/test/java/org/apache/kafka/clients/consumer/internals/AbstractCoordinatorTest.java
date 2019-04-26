@@ -20,6 +20,7 @@ import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -243,7 +244,7 @@ public class AbstractCoordinatorTest {
     }
 
     @Test
-    public void testJoinGroupRequestWithMemberIdMisMatch() {
+    public void testJoinGroupRequestWithFencedInstanceIdException() {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
@@ -254,6 +255,45 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.FENCED_INSTANCE_ID));
 
         RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
+        assertEquals(Errors.FENCED_INSTANCE_ID.message(), future.exception().getMessage());
+        // Make sure the exception is fatal.
+        assertFalse(future.isRetriable());
+    }
+
+    @Test
+    public void testSyncGroupRequestWithFencedInstanceIdException() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+
+        final String memberId = "memberId";
+        final int generation = -1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.FENCED_INSTANCE_ID));
+        try {
+            coordinator.ensureActiveGroup();
+            fail("Failed to catch expected FencedInstanceIdException");
+        } catch (FencedInstanceIdException e) {
+            assertEquals(Errors.FENCED_INSTANCE_ID.message(), e.getMessage());
+        }
+    }
+
+    @Test
+    public void testHeartbeatRequestWithFencedInstanceIdException() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+
+        final String memberId = "memberId";
+        final int generation = -1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+        mockClient.prepareResponse(heartbeatResponse(Errors.FENCED_INSTANCE_ID));
+
+        coordinator.ensureActiveGroup();
+
+        RequestFuture<Void> future = coordinator.sendHeartbeatRequest();
         assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
         assertEquals(Errors.FENCED_INSTANCE_ID.message(), future.exception().getMessage());
         // Make sure the exception is fatal.

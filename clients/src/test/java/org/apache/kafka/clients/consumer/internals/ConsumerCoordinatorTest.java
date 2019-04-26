@@ -32,6 +32,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OffsetMetadataTooLarge;
 import org.apache.kafka.common.errors.WakeupException;
@@ -2065,6 +2066,32 @@ public class ConsumerCoordinatorTest {
         assertEquals(100L, subscriptions.position(t1p).offset);
     }
 
+    @Test(expected = FencedInstanceIdException.class)
+    public void testCommitOffsetRequestSyncWithFencedInstanceIdException() {
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        // sync commit with invalid partitions should throw if we have no callback
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.FENCED_INSTANCE_ID);
+        coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE));
+    }
+
+    @Test
+    public void testCommitOffsetRequestAsyncWithFencedInstanceIdException() {
+        subscriptions.assignFromUser(singleton(t1p));
+
+        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
+
+        prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.FENCED_INSTANCE_ID);
+
+        AtomicBoolean matchingException = new AtomicBoolean(false);
+        coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), callback(
+                Errors.FENCED_INSTANCE_ID.message(), matchingException));
+        coordinator.invokeCompletedOffsetCommitCallbacks();
+        assertTrue(matchingException.get());
+    }
+
     private ConsumerCoordinator prepareCoordinatorForCloseTest(final boolean useGroupManagement,
                                                                final boolean autoCommit,
                                                                final Optional<String> groupInstanceId) {
@@ -2268,6 +2295,27 @@ public class ConsumerCoordinatorTest {
         };
     }
 
+    private OffsetCommitCallback callback(final Map<TopicPartition, OffsetAndMetadata> expectedOffsets,
+                                          final AtomicBoolean success) {
+        return new OffsetCommitCallback() {
+            @Override
+            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                if (expectedOffsets.equals(offsets) && exception == null)
+                    success.set(true);
+            }
+        };
+    }
+
+    private OffsetCommitCallback callback(final String expectedMessage, final AtomicBoolean success) {
+        return new OffsetCommitCallback() {
+            @Override
+            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+                if (exception != null && expectedMessage.equals(exception.getMessage()))
+                    success.set(true);
+            }
+        };
+    }
+
     private void joinAsFollowerAndReceiveAssignment(String consumerId,
                                                     ConsumerCoordinator coordinator,
                                                     List<TopicPartition> assignment) {
@@ -2326,17 +2374,6 @@ public class ConsumerCoordinatorTest {
                     }
                 }
                 return true;
-            }
-        };
-    }
-
-    private OffsetCommitCallback callback(final Map<TopicPartition, OffsetAndMetadata> expectedOffsets,
-                                          final AtomicBoolean success) {
-        return new OffsetCommitCallback() {
-            @Override
-            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                if (expectedOffsets.equals(offsets) && exception == null)
-                    success.set(true);
             }
         };
     }

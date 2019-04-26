@@ -75,6 +75,12 @@ class GroupCoordinatorTest {
   private val groupInstanceId = Some("groupInstanceId")
   private val leaderInstanceId = Some("leader")
   private val followerInstanceId = Some("follower")
+  private val invalidTimestamp = "12345"
+
+  def getInvalidMemberId(groupInstanceId : Option[String]): String = {
+      groupInstanceId.get + "-" + invalidTimestamp
+  }
+
   private val metadata = Array[Byte]()
   private val protocols = List(("range", metadata))
   private val protocolSuperset = List(("range", metadata), ("roundrobin", metadata))
@@ -469,8 +475,9 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     assertNotEquals(rebalanceResult.leaderId, joinGroupResult.leaderId)
+    // Old leader will get fenced because its member.id is detected to be generated older than what we currently store on broker map.
     val oldLeaderSyncGroupResult = syncGroupLeader(groupId, rebalanceResult.generation, rebalanceResult.leaderId, Map.empty)
-    assertEquals(Errors.UNKNOWN_MEMBER_ID, oldLeaderSyncGroupResult._2)
+    assertEquals(Errors.FENCED_INSTANCE_ID, oldLeaderSyncGroupResult._2)
 
     EasyMock.reset(replicaManager)
     val newLeaderSyncGroupResult = syncGroupLeader(groupId, rebalanceResult.generation, joinGroupResult.leaderId, Map.empty)
@@ -569,7 +576,7 @@ class GroupCoordinatorTest {
     EasyMock.reset(replicaManager)
     // Sync with old member id will fail because the member id is updated
     val syncGroupWithOldMemberIdResult = syncGroupFollower(groupId, rebalanceResult.generation, rebalanceResult.followerId)
-    assertEquals(Errors.UNKNOWN_MEMBER_ID, syncGroupWithOldMemberIdResult._2)
+    assertEquals(Errors.FENCED_INSTANCE_ID, syncGroupWithOldMemberIdResult._2)
 
     EasyMock.reset(replicaManager)
     val syncGroupWithNewMemberIdResult = syncGroupFollower(groupId, rebalanceResult.generation, joinGroupResult.memberId)
@@ -675,7 +682,6 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     val joinGroupResult = staticJoinGroup(groupId, rebalanceResult.followerId, leaderInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
-
     assertEquals(Errors.FENCED_INSTANCE_ID, joinGroupResult.error)
   }
 
@@ -685,8 +691,52 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     val joinGroupResult = staticJoinGroup(groupId, rebalanceResult.leaderId, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
-
     assertEquals(Errors.FENCED_INSTANCE_ID, joinGroupResult.error)
+  }
+
+  @Test
+  def staticMemberSyncAsLeaderWithInvalidMemberId() {
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+
+    EasyMock.reset(replicaManager)
+    val syncGroupResult = syncGroupLeader(groupId, rebalanceResult.generation, getInvalidMemberId(leaderInstanceId), Map.empty)
+    assertEquals(Errors.FENCED_INSTANCE_ID, syncGroupResult._2)
+  }
+
+  @Test
+  def staticMemberHeartbeatLeaderWithInvalidMemberId() {
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+
+    EasyMock.reset(replicaManager)
+    val syncGroupResult = syncGroupLeader(groupId, rebalanceResult.generation, rebalanceResult.leaderId, Map.empty)
+    assertEquals(Errors.NONE, syncGroupResult._2)
+
+    EasyMock.reset(replicaManager)
+    val validHeartbeatResult = heartbeat(groupId, rebalanceResult.leaderId, rebalanceResult.generation)
+    assertEquals(Errors.NONE, validHeartbeatResult)
+
+    EasyMock.reset(replicaManager)
+    val invalidHeartbeatResult = heartbeat(groupId, getInvalidMemberId(leaderInstanceId), rebalanceResult.generation)
+    assertEquals(Errors.FENCED_INSTANCE_ID, invalidHeartbeatResult)
+  }
+
+  @Test
+  def staticMemberCommitOffsetWithInvalidMemberId() {
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+
+    EasyMock.reset(replicaManager)
+    val syncGroupResult = syncGroupLeader(groupId, rebalanceResult.generation, rebalanceResult.leaderId, Map.empty)
+    assertEquals(Errors.NONE, syncGroupResult._2)
+
+    val tp = new TopicPartition("topic", 0)
+    val offset = offsetAndMetadata(0)
+    EasyMock.reset(replicaManager)
+    val validOffsetCommitResult = commitOffsets(groupId, rebalanceResult.leaderId, rebalanceResult.generation, Map(tp -> offset))
+    assertEquals(Errors.NONE, validOffsetCommitResult(tp))
+
+    EasyMock.reset(replicaManager)
+    val invalidOffsetCommitResult = commitOffsets(groupId, getInvalidMemberId(leaderInstanceId), rebalanceResult.generation, Map(tp -> offset))
+    assertEquals(Errors.FENCED_INSTANCE_ID, invalidOffsetCommitResult(tp))
   }
 
   @Test
@@ -989,7 +1039,7 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, joinGroupError)
 
     EasyMock.reset(replicaManager)
-    val heartbeatResult = heartbeat(groupId, assignedMemberId, 2)
+    val heartbeatResult = heartbeat(groupId, assignedMemberId, 1)
     assertEquals(Errors.REBALANCE_IN_PROGRESS, heartbeatResult)
   }
 
