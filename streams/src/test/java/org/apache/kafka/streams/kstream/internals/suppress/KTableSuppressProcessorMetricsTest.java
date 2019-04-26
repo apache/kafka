@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
@@ -31,8 +32,6 @@ import org.junit.Test;
 import java.time.Duration;
 import java.util.Map;
 
-import static org.apache.kafka.common.serialization.Serdes.Long;
-import static org.apache.kafka.common.serialization.Serdes.String;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
@@ -135,8 +134,10 @@ public class KTableSuppressProcessorMetricsTest {
     public void shouldRecordMetrics() {
         final String storeName = "test-store";
 
-        final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(storeName, String(),
-                                                                                  FullChangeSerde.castOrWrap(Long()))
+        final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(
+            storeName, Serdes.String(),
+            FullChangeSerde.castOrWrap(Serdes.Long())
+        )
             .withLoggingDisabled()
             .build();
 
