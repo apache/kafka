@@ -17,9 +17,13 @@
 package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
@@ -35,6 +39,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
@@ -44,6 +49,8 @@ import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.TestUtils;
+import org.hamcrest.Matchers;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
@@ -53,6 +60,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.stream.Collectors;
 
 import static java.lang.Long.MAX_VALUE;
 import static java.time.Duration.ofMillis;
@@ -62,6 +70,7 @@ import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateAfterTest;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.cleanStateBeforeTest;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
@@ -73,7 +82,7 @@ import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 
-@Category({IntegrationTest.class})
+@Category(IntegrationTest.class)
 public class SuppressionIntegrationTest {
     @ClassRule
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(
@@ -147,7 +156,7 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    private KTable<String, Long> buildCountsTable(final String input, final StreamsBuilder builder) {
+    private static KTable<String, Long> buildCountsTable(final String input, final StreamsBuilder builder) {
         return builder
             .table(
                 input,
@@ -158,6 +167,139 @@ public class SuppressionIntegrationTest {
             )
             .groupBy((k, v) -> new KeyValue<>(v, k), Grouped.with(STRING_SERDE, STRING_SERDE))
             .count(Materialized.<String, Long, KeyValueStore<Bytes, byte[]>>as("counts").withCachingDisabled());
+    }
+
+    @Test
+    public void shouldUseDefaultSerdes() {
+        final String testId = "-shouldInheritSerdes";
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
+        final String input = "input" + testId;
+        final String outputSuppressed = "output-suppressed" + testId;
+        final String outputRaw = "output-raw" + testId;
+
+        cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, String> inputStream = builder.stream(input);
+
+        final KTable<String, String> valueCounts = inputStream
+            .groupByKey()
+            .aggregate(() -> "()", (key, value, aggregate) -> aggregate + ",(" + key + ": " + value + ")");
+
+        valueCounts
+            .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxRecords(1L).emitEarlyWhenFull()))
+            .toStream()
+            .to(outputSuppressed);
+
+        valueCounts
+            .toStream()
+            .to(outputRaw);
+
+        final Properties streamsConfig = getStreamsConfig(appId);
+        streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+
+        final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
+        try {
+            produceSynchronously(
+                input,
+                asList(
+                    new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
+                    new KeyValueTimestamp<>("k1", "v2", scaledTime(1L)),
+                    new KeyValueTimestamp<>("k2", "v1", scaledTime(2L)),
+                    new KeyValueTimestamp<>("x", "x", scaledTime(3L))
+                )
+            );
+            final boolean rawRecords = waitForAnyRecord(outputRaw);
+            final boolean suppressedRecords = waitForAnyRecord(outputSuppressed);
+            assertThat(rawRecords, Matchers.is(true));
+            assertThat(suppressedRecords, is(true));
+        } finally {
+            driver.close();
+            cleanStateAfterTest(CLUSTER, driver);
+        }
+    }
+
+    @Test
+    public void shouldInheritSerdes() {
+        final String testId = "-shouldInheritSerdes";
+        final String appId = getClass().getSimpleName().toLowerCase(Locale.getDefault()) + testId;
+        final String input = "input" + testId;
+        final String outputSuppressed = "output-suppressed" + testId;
+        final String outputRaw = "output-raw" + testId;
+
+        cleanStateBeforeTest(CLUSTER, input, outputRaw, outputSuppressed);
+
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        final KStream<String, String> inputStream = builder.stream(input);
+
+        // count sets the serde to Long
+        final KTable<String, Long> valueCounts = inputStream
+            .groupByKey()
+            .count();
+
+        valueCounts
+            .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxRecords(1L).emitEarlyWhenFull()))
+            .toStream()
+            .to(outputSuppressed);
+
+        valueCounts
+            .toStream()
+            .to(outputRaw);
+
+        final Properties streamsConfig = getStreamsConfig(appId);
+        streamsConfig.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+        streamsConfig.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
+
+        final KafkaStreams driver = IntegrationTestUtils.getStartedStreams(streamsConfig, builder, true);
+        try {
+            produceSynchronously(
+                input,
+                asList(
+                    new KeyValueTimestamp<>("k1", "v1", scaledTime(0L)),
+                    new KeyValueTimestamp<>("k1", "v2", scaledTime(1L)),
+                    new KeyValueTimestamp<>("k2", "v1", scaledTime(2L)),
+                    new KeyValueTimestamp<>("x", "x", scaledTime(3L))
+                )
+            );
+            final boolean rawRecords = waitForAnyRecord(outputRaw);
+            final boolean suppressedRecords = waitForAnyRecord(outputSuppressed);
+            assertThat(rawRecords, Matchers.is(true));
+            assertThat(suppressedRecords, is(true));
+        } finally {
+            driver.close();
+            cleanStateAfterTest(CLUSTER, driver);
+        }
+    }
+
+    private static boolean waitForAnyRecord(final String topic) {
+        final Properties properties = new Properties();
+        properties.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        properties.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
+
+        try (final Consumer<Object, Object> consumer = new KafkaConsumer<>(properties)) {
+            final List<TopicPartition> partitions =
+                consumer.partitionsFor(topic)
+                        .stream()
+                        .map(pi -> new TopicPartition(pi.topic(), pi.partition()))
+                        .collect(Collectors.toList());
+            consumer.assign(partitions);
+            consumer.seekToBeginning(partitions);
+            final long start = System.currentTimeMillis();
+            while ((System.currentTimeMillis() - start) < DEFAULT_TIMEOUT) {
+                final ConsumerRecords<Object, Object> records = consumer.poll(ofMillis(500));
+
+                if (!records.isEmpty()) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
     }
 
     @Test
@@ -336,7 +478,7 @@ public class SuppressionIntegrationTest {
 
         valueCounts
             // this is a bit brittle, but I happen to know that the entries are a little over 100 bytes in size.
-            .suppress(untilTimeLimit(Duration.ofMillis(MAX_VALUE), maxBytes(200L).emitEarlyWhenFull()))
+            .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxBytes(200L).emitEarlyWhenFull()))
             .toStream()
             .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
 
@@ -396,7 +538,7 @@ public class SuppressionIntegrationTest {
 
         valueCounts
             // this is a bit brittle, but I happen to know that the entries are a little over 100 bytes in size.
-            .suppress(untilTimeLimit(Duration.ofMillis(MAX_VALUE), maxBytes(200L).shutDownWhenFull()))
+            .suppress(untilTimeLimit(ofMillis(MAX_VALUE), maxBytes(200L).shutDownWhenFull()))
             .toStream()
             .to(outputSuppressed, Produced.with(STRING_SERDE, Serdes.Long()));
 
@@ -490,17 +632,18 @@ public class SuppressionIntegrationTest {
         }
     }
 
-    private Properties getStreamsConfig(final String appId) {
+    private static Properties getStreamsConfig(final String appId) {
         return mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, appId),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
             mkEntry(StreamsConfig.POLL_MS_CONFIG, Integer.toString(COMMIT_INTERVAL)),
             mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Integer.toString(COMMIT_INTERVAL)),
-            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, AT_LEAST_ONCE)
+            mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, AT_LEAST_ONCE),
+            mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath())
         ));
     }
 
-    private String scaledWindowKey(final String key, final long unscaledStart, final long unscaledEnd) {
+    private static String scaledWindowKey(final String key, final long unscaledStart, final long unscaledEnd) {
         return new Windowed<>(key, new TimeWindow(scaledTime(unscaledStart), scaledTime(unscaledEnd))).toString();
     }
 
@@ -508,11 +651,11 @@ public class SuppressionIntegrationTest {
      * scaling to ensure that there are commits in between the various test events,
      * just to exercise that everything works properly in the presence of commits.
      */
-    private long scaledTime(final long unscaledTime) {
+    private static long scaledTime(final long unscaledTime) {
         return COMMIT_INTERVAL * 2 * unscaledTime;
     }
 
-    private void produceSynchronously(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
+    private static void produceSynchronously(final String topic, final List<KeyValueTimestamp<String, String>> toProduce) {
         final Properties producerConfig = mkProperties(mkMap(
             mkEntry(ProducerConfig.CLIENT_ID_CONFIG, "anything"),
             mkEntry(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ((Serializer<String>) STRING_SERIALIZER).getClass().getName()),
@@ -522,12 +665,12 @@ public class SuppressionIntegrationTest {
         IntegrationTestUtils.produceSynchronously(producerConfig, false, topic, Optional.empty(), toProduce);
     }
 
-    private void verifyErrorShutdown(final KafkaStreams driver) throws InterruptedException {
+    private static void verifyErrorShutdown(final KafkaStreams driver) throws InterruptedException {
         waitForCondition(() -> !driver.state().isRunning(), TIMEOUT_MS, "Streams didn't shut down.");
         assertThat(driver.state(), is(KafkaStreams.State.ERROR));
     }
 
-    private void verifyOutput(final String topic, final List<KeyValueTimestamp<String, Long>> keyValueTimestamps) {
+    private static void verifyOutput(final String topic, final List<KeyValueTimestamp<String, Long>> keyValueTimestamps) {
         final Properties properties = mkProperties(
             mkMap(
                 mkEntry(ConsumerConfig.GROUP_ID_CONFIG, "test-group"),

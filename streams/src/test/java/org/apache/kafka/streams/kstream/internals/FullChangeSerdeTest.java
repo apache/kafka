@@ -29,7 +29,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 
 public class FullChangeSerdeTest {
-    private final FullChangeSerde<String> serde = new FullChangeSerde<>(Serdes.String());
+    private final FullChangeSerde<String> serde = FullChangeSerde.castOrWrap(Serdes.String());
 
     @Test
     public void shouldRoundTripNull() {
@@ -77,31 +77,28 @@ public class FullChangeSerdeTest {
         );
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldConfigureSerde() {
         final Serde<Void> mock = EasyMock.mock(Serde.class);
         mock.configure(emptyMap(), false);
         EasyMock.expectLastCall();
         EasyMock.replay(mock);
-        final FullChangeSerde<Void> serde = new FullChangeSerde<>(mock);
+        final FullChangeSerde<Void> serde = FullChangeSerde.castOrWrap(mock);
         serde.configure(emptyMap(), false);
         EasyMock.verify(mock);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldCloseSerde() {
         final Serde<Void> mock = EasyMock.mock(Serde.class);
         mock.close();
         EasyMock.expectLastCall();
         EasyMock.replay(mock);
-        final FullChangeSerde<Void> serde = new FullChangeSerde<>(mock);
+        final FullChangeSerde<Void> serde = FullChangeSerde.castOrWrap(mock);
         serde.close();
         EasyMock.verify(mock);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldConfigureSerializer() {
         final Serde<Void> mockSerde = EasyMock.mock(Serde.class);
@@ -111,13 +108,12 @@ public class FullChangeSerdeTest {
         mockSerializer.configure(emptyMap(), false);
         EasyMock.expectLastCall();
         EasyMock.replay(mockSerializer);
-        final Serializer<Change<Void>> serializer = new FullChangeSerde<>(mockSerde).serializer();
+        final Serializer<Change<Void>> serializer = FullChangeSerde.castOrWrap(mockSerde).serializer();
         serializer.configure(emptyMap(), false);
         EasyMock.verify(mockSerde);
         EasyMock.verify(mockSerializer);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldCloseSerializer() {
         final Serde<Void> mockSerde = EasyMock.mock(Serde.class);
@@ -127,13 +123,12 @@ public class FullChangeSerdeTest {
         mockSerializer.close();
         EasyMock.expectLastCall();
         EasyMock.replay(mockSerializer);
-        final Serializer<Change<Void>> serializer = new FullChangeSerde<>(mockSerde).serializer();
+        final Serializer<Change<Void>> serializer = FullChangeSerde.castOrWrap(mockSerde).serializer();
         serializer.close();
         EasyMock.verify(mockSerde);
         EasyMock.verify(mockSerializer);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldConfigureDeserializer() {
         final Serde<Void> mockSerde = EasyMock.mock(Serde.class);
@@ -143,13 +138,12 @@ public class FullChangeSerdeTest {
         mockDeserializer.configure(emptyMap(), false);
         EasyMock.expectLastCall();
         EasyMock.replay(mockDeserializer);
-        final Deserializer<Change<Void>> serializer = new FullChangeSerde<>(mockSerde).deserializer();
+        final Deserializer<Change<Void>> serializer = FullChangeSerde.castOrWrap(mockSerde).deserializer();
         serializer.configure(emptyMap(), false);
         EasyMock.verify(mockSerde);
         EasyMock.verify(mockDeserializer);
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldCloseDeserializer() {
         final Serde<Void> mockSerde = EasyMock.mock(Serde.class);
@@ -159,7 +153,7 @@ public class FullChangeSerdeTest {
         mockDeserializer.close();
         EasyMock.expectLastCall();
         EasyMock.replay(mockDeserializer);
-        final Deserializer<Change<Void>> serializer = new FullChangeSerde<>(mockSerde).deserializer();
+        final Deserializer<Change<Void>> serializer = FullChangeSerde.castOrWrap(mockSerde).deserializer();
         serializer.close();
         EasyMock.verify(mockSerde);
         EasyMock.verify(mockDeserializer);
