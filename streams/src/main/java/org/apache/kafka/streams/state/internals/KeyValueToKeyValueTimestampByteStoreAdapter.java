@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 
@@ -28,10 +29,20 @@ import java.util.List;
 import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
 import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.rawValue;
 
-public class KeyValueByteProxyStore implements KeyValueStore<Bytes, byte[]> {
+/**
+ * This class is used to ensure backward compatibility at DSL level between
+ * {@link org.apache.kafka.streams.state.TimestampedKeyValueStore} and {@link KeyValueStore}.
+ * <p>
+ * If a user provides a supplier for plain {@code KeyValueStores} via
+ * {@link org.apache.kafka.streams.kstream.Materialized#as(KeyValueBytesStoreSupplier)} this adapter is used to
+ * translate between old a new {@code byte[]} format of the value.
+ *
+ * @see KeyValueToKeyValueTimestampeIteratorAdapter
+ */
+public class KeyValueToKeyValueTimestampByteStoreAdapter implements KeyValueStore<Bytes, byte[]> {
     final KeyValueStore<Bytes, byte[]> store;
 
-    KeyValueByteProxyStore(final KeyValueStore<Bytes, byte[]> store) {
+    KeyValueToKeyValueTimestampByteStoreAdapter(final KeyValueStore<Bytes, byte[]> store) {
         if (!store.persistent()) {
             throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
         }
@@ -104,12 +115,12 @@ public class KeyValueByteProxyStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
-        return new KeyValueIteratorProxy<>(store.range(from, to));
+        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.range(from, to));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        return new KeyValueIteratorProxy<>(store.all());
+        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.all());
     }
 
     @Override

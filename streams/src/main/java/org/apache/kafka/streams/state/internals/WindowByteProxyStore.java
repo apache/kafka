@@ -63,14 +63,14 @@ class WindowByteProxyStore implements WindowStore<Bytes, byte[]> {
     public WindowStoreIterator<byte[]> fetch(final Bytes key,
                                              final long timeFrom,
                                              final long timeTo) {
-        return new WindowIteratorProxy(store.fetch(key, timeFrom, timeTo));
+        return new WindowToTimestampedWindowIteratorAdapter(store.fetch(key, timeFrom, timeTo));
     }
 
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key,
                                              final Instant from,
                                              final Instant to) {
-        return new WindowIteratorProxy(store.fetch(key, from, to));
+        return new WindowToTimestampedWindowIteratorAdapter(store.fetch(key, from, to));
     }
 
     @Override
@@ -79,7 +79,7 @@ class WindowByteProxyStore implements WindowStore<Bytes, byte[]> {
                                                            final Bytes to,
                                                            final long timeFrom,
                                                            final long timeTo) {
-        return new KeyValueIteratorProxy<>(store.fetch(from, to, timeFrom, timeTo));
+        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.fetch(from, to, timeFrom, timeTo));
     }
 
     @Override
@@ -87,25 +87,25 @@ class WindowByteProxyStore implements WindowStore<Bytes, byte[]> {
                                                            final Bytes to,
                                                            final Instant fromTime,
                                                            final Instant toTime) {
-        return new KeyValueIteratorProxy<>(store.fetch(from, to, fromTime, toTime));
+        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.fetch(from, to, fromTime, toTime));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-        return new KeyValueIteratorProxy<>(store.all());
+        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.all());
     }
 
     @Override
     @SuppressWarnings("deprecation")
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
                                                               final long timeTo) {
-        return new KeyValueIteratorProxy<>(store.fetchAll(timeFrom, timeTo));
+        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant from,
                                                               final Instant to) {
-        return new KeyValueIteratorProxy<>(store.fetchAll(from, to));
+        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.fetchAll(from, to));
     }
 
     @Override
@@ -140,11 +140,11 @@ class WindowByteProxyStore implements WindowStore<Bytes, byte[]> {
     }
 
 
-    private static class WindowIteratorProxy
-        extends KeyValueIteratorProxy<Long>
+    private static class WindowToTimestampedWindowIteratorAdapter
+        extends KeyValueToKeyValueTimestampeIteratorAdapter<Long>
         implements WindowStoreIterator<byte[]> {
 
-        WindowIteratorProxy(final KeyValueIterator<Long, byte[]> innerIterator) {
+        WindowToTimestampedWindowIteratorAdapter(final KeyValueIterator<Long, byte[]> innerIterator) {
             super(innerIterator);
         }
     }

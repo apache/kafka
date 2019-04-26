@@ -21,10 +21,17 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 
 import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
 
-class KeyValueIteratorProxy<K> implements KeyValueIterator<K, byte[]> {
+/**
+ * This class is used to ensure backward compatibility at DSL level between
+ * {@link org.apache.kafka.streams.state.TimestampedKeyValueStore} and
+ * {@link org.apache.kafka.streams.state.KeyValueStore}.
+ *
+ * @see KeyValueToKeyValueTimestampByteStoreAdapter
+ */
+class KeyValueToKeyValueTimestampeIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
     private final KeyValueIterator<K, byte[]> innerIterator;
 
-    KeyValueIteratorProxy(final KeyValueIterator<K, byte[]> innerIterator) {
+    KeyValueToKeyValueTimestampeIteratorAdapter(final KeyValueIterator<K, byte[]> innerIterator) {
         this.innerIterator = innerIterator;
     }
 
