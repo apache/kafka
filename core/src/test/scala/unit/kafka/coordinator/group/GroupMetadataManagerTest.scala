@@ -818,6 +818,7 @@ class GroupMetadataManagerTest {
       assertEquals(protocol, deserializedGroupMetadata.protocolOrNull)
       assertEquals(1, deserializedGroupMetadata.allMembers.size)
       assertTrue(deserializedGroupMetadata.allMembers.contains(memberId))
+      assertTrue(deserializedGroupMetadata.allStaticMembers.isEmpty)
     }
   }
 

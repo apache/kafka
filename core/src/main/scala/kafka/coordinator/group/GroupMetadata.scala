@@ -302,6 +302,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def allMembers = members.keySet
 
+  def allStaticMembers = staticMembers.keySet
+
   def numPending = pendingMembers.size
 
   def allMemberMetadata = members.values.toList
