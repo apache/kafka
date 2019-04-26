@@ -168,7 +168,7 @@ class VerifiableConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
                  max_messages=-1, session_timeout_sec=30, enable_autocommit=False,
                  assignment_strategy="org.apache.kafka.clients.consumer.RangeAssignor",
                  version=DEV_BRANCH, stop_timeout_sec=30, log_level="INFO", jaas_override_variables=None,
-                 on_record_consumed=None, reset_policy="latest", verify_offsets=True):
+                 on_record_consumed=None, reset_policy="earliest", verify_offsets=True):
         """
         :param jaas_override_variables: A dict of variables to be used in the jaas.conf template file
         """
