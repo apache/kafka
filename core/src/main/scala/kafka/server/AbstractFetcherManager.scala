@@ -82,7 +82,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         deadFetcherThreadCount
       }
     }
-  })
+  }, Map("clientId" -> clientId))
 
   // visible for testing
   private[server] def deadFetcherThreadCount = fetcherThreadMap.count(_._2.isThreadFailed)
