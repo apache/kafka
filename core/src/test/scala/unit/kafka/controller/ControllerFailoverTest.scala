@@ -62,7 +62,7 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
     createTopic(topic, 1, 1)
     val topicPartition = new TopicPartition("topic1", 0)
     TestUtils.waitUntilTrue(() =>
-      initialController.partitionStateMachine.partitionsInState(OnlinePartition).contains(topicPartition),
+      initialController.controllerContext.partitionsInState(OnlinePartition).contains(topicPartition),
       s"Partition $topicPartition did not transition to online state")
 
     // Wait until we have verified that we have resigned

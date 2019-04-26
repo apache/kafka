@@ -201,8 +201,8 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val (controller, controllerId) = getController()
     val allReplicasForTopic = getAllReplicasFromAssignment(topic, expectedReplicaAssignment)
     TestUtils.waitUntilTrue(() => {
-      val replicasInDeletionSuccessful = controller.kafkaController.replicaStateMachine.replicasInState(topic, ReplicaDeletionSuccessful)
-      val offlineReplicas = controller.kafkaController.replicaStateMachine.replicasInState(topic, OfflineReplica)
+      val replicasInDeletionSuccessful = controller.kafkaController.controllerContext.replicasInState(topic, ReplicaDeletionSuccessful)
+      val offlineReplicas = controller.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
       allReplicasForTopic == (replicasInDeletionSuccessful union offlineReplicas)
     }, s"Not all replicas for topic $topic are in states of either ReplicaDeletionSuccessful or OfflineReplica")
 
