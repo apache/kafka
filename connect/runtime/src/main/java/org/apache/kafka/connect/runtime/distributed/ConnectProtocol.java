@@ -106,7 +106,7 @@ public class ConnectProtocol {
 
     /**
      * The fields are serialized in sequence as follows:
-     * Subscription V1:
+     * Subscription V0:
      * <pre>
      *   Version            => Int16
      *   Url                => [String]
@@ -144,7 +144,7 @@ public class ConnectProtocol {
 
     /**
      * The fields are serialized in sequence as follows:
-     * Complete Assignment V1:
+     * Complete Assignment V0:
      * <pre>
      *   Version            => Int16
      *   Error              => Int16

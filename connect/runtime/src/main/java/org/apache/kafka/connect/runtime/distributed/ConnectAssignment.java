@@ -225,12 +225,14 @@ public class ConnectAssignment extends ConnectProtocol.Assignment {
     }
 
     private static Collection<String> extractConnectors(Struct struct, String key) {
+        assert REVOKED_KEY_NAME.equals(key) || ASSIGNMENT_KEY_NAME.equals(key);
+
         Object[] connectors = struct.getArray(key);
         if (connectors == null) {
             return Collections.emptyList();
         }
         List<String> connectorIds = new ArrayList<>();
-        for (Object structObj : struct.getArray(key)) {
+        for (Object structObj : connectors) {
             Struct assignment = (Struct) structObj;
             String connector = assignment.getString(CONNECTOR_KEY_NAME);
             for (Object taskIdObj : assignment.getArray(TASKS_KEY_NAME)) {
@@ -244,12 +246,14 @@ public class ConnectAssignment extends ConnectProtocol.Assignment {
     }
 
     private static Collection<ConnectorTaskId> extractTasks(Struct struct, String key) {
+        assert REVOKED_KEY_NAME.equals(key) || ASSIGNMENT_KEY_NAME.equals(key);
+
         Object[] tasks = struct.getArray(key);
         if (tasks == null) {
             return Collections.emptyList();
         }
         List<ConnectorTaskId> tasksIds = new ArrayList<>();
-        for (Object structObj : struct.getArray(key)) {
+        for (Object structObj : tasks) {
             Struct assignment = (Struct) structObj;
             String connector = assignment.getString(CONNECTOR_KEY_NAME);
             for (Object taskIdObj : assignment.getArray(TASKS_KEY_NAME)) {
