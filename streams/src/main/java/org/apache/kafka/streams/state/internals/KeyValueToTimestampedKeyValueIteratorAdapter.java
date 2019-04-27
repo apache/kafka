@@ -26,12 +26,12 @@ import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTime
  * {@link org.apache.kafka.streams.state.TimestampedKeyValueStore} and
  * {@link org.apache.kafka.streams.state.KeyValueStore}.
  *
- * @see KeyValueToKeyValueTimestampByteStoreAdapter
+ * @see KeyValueToTimestampedKeyValueByteStoreAdapter
  */
-class KeyValueToKeyValueTimestampeIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
+class KeyValueToTimestampedKeyValueIteratorAdapter<K> implements KeyValueIterator<K, byte[]> {
     private final KeyValueIterator<K, byte[]> innerIterator;
 
-    KeyValueToKeyValueTimestampeIteratorAdapter(final KeyValueIterator<K, byte[]> innerIterator) {
+    KeyValueToTimestampedKeyValueIteratorAdapter(final KeyValueIterator<K, byte[]> innerIterator) {
         this.innerIterator = innerIterator;
     }
 

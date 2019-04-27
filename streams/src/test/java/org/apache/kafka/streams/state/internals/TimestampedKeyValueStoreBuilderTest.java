@@ -141,7 +141,7 @@ public class TimestampedKeyValueStoreBuilderTest {
             .withLoggingDisabled()
             .withCachingDisabled()
             .build();
-        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(KeyValueToKeyValueTimestampByteStoreAdapter.class));
+        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(KeyValueToTimestampedKeyValueByteStoreAdapter.class));
     }
 
     @SuppressWarnings("all")

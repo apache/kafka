@@ -37,12 +37,12 @@ import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserial
  * {@link org.apache.kafka.streams.kstream.Materialized#as(KeyValueBytesStoreSupplier)} this adapter is used to
  * translate between old a new {@code byte[]} format of the value.
  *
- * @see KeyValueToKeyValueTimestampeIteratorAdapter
+ * @see KeyValueToTimestampedKeyValueIteratorAdapter
  */
-public class KeyValueToKeyValueTimestampByteStoreAdapter implements KeyValueStore<Bytes, byte[]> {
+public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueStore<Bytes, byte[]> {
     final KeyValueStore<Bytes, byte[]> store;
 
-    KeyValueToKeyValueTimestampByteStoreAdapter(final KeyValueStore<Bytes, byte[]> store) {
+    KeyValueToTimestampedKeyValueByteStoreAdapter(final KeyValueStore<Bytes, byte[]> store) {
         if (!store.persistent()) {
             throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
         }
@@ -115,12 +115,12 @@ public class KeyValueToKeyValueTimestampByteStoreAdapter implements KeyValueStor
     @Override
     public KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                  final Bytes to) {
-        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.range(from, to));
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.range(from, to));
     }
 
     @Override
     public KeyValueIterator<Bytes, byte[]> all() {
-        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.all());
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.all());
     }
 
     @Override

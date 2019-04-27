@@ -81,8 +81,8 @@ public final class Stores {
     /**
      * Create a persistent {@link KeyValueBytesStoreSupplier}.
      * <p>
-     * This store supplier can be passed into a {@link KeyValueStoreBuilder}.
-     * If you want to create a {@link TimestampedKeyValueStoreBuilder KeyValueWithTimestampStore} you should use
+     * This store supplier can be passed into a {@link #keyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
+     * If you want to create a {@link TimestampedKeyValueStore} you should use
      * {@link #persistentTimestampedKeyValueStore(String)} to create a store supplier instead.
      *
      * @param name  name of the store (cannot be {@code null})
@@ -97,8 +97,9 @@ public final class Stores {
     /**
      * Create a persistent {@link KeyValueBytesStoreSupplier}.
      * <p>
-     * This store supplier can be passed into a {@link TimestampedKeyValueStoreBuilder}.
-     * If you want to create a {@link KeyValueStoreBuilder KeyValueStore} you should use
+     * This store supplier can be passed into a
+     * {@link #timestampedKeyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
+     * If you want to create a {@link KeyValueStore} you should use
      * {@link #persistentKeyValueStore(String)} to create a store supplier instead.
      *
      * @param name  name of the store (cannot be {@code null})
@@ -113,7 +114,8 @@ public final class Stores {
     /**
      * Create an in-memory {@link KeyValueBytesStoreSupplier}.
      * <p>
-     * This store supplier can be passed into a {@link KeyValueStoreBuilder} or {@link TimestampedKeyValueStoreBuilder}.
+     * This store supplier can be passed into a {@link #keyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}
+     * or {@link #timestampedKeyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
      *
      * @param name  name of the store (cannot be {@code null})
      * @return an instance of a {@link KeyValueBytesStoreSupplier} than can be used to
@@ -142,7 +144,8 @@ public final class Stores {
     /**
      * Create a LRU Map {@link KeyValueBytesStoreSupplier}.
      * <p>
-     * This store supplier can be passed into a {@link KeyValueStoreBuilder} or {@link TimestampedKeyValueStoreBuilder}.
+     * This store supplier can be passed into a {@link #keyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}
+     * or {@link #timestampedKeyValueStoreBuilder(KeyValueBytesStoreSupplier, Serde, Serde)}.
      *
      * @param name          name of the store (cannot be {@code null})
      * @param maxCacheSize  maximum number of items in the LRU (cannot be negative)
@@ -214,8 +217,8 @@ public final class Stores {
     /**
      * Create a persistent {@link WindowBytesStoreSupplier}.
      * <p>
-     * This store supplier can be passed into a {@link WindowStoreBuilder}.
-     * If you want to create a {@link TimestampedWindowStoreBuilder} you should use
+     * This store supplier can be passed into a {@link #windowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
+     * If you want to create a {@link TimestampedWindowStore} you should use
      * {@link #persistentTimestampedWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
      *
      * @param name                  name of the store (cannot be {@code null})
@@ -238,8 +241,9 @@ public final class Stores {
     /**
      * Create a persistent {@link WindowBytesStoreSupplier}.
      * <p>
-     * This store supplier can be passed into a {@link TimestampedWindowStoreBuilder}.
-     * If you want to create a {@link WindowStoreBuilder TimestampedWindowStore} you should use
+     * This store supplier can be passed into a
+     * {@link #timestampedWindowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
+     * If you want to create a {@link WindowStore} you should use
      * {@link #persistentWindowStore(String, Duration, Duration, boolean)} to create a store supplier instead.
      *
      * @param name                  name of the store (cannot be {@code null})
@@ -309,7 +313,8 @@ public final class Stores {
     /**
      * Create an in-memory {@link WindowBytesStoreSupplier}.
      * <p>
-     * This store supplier can be passed into a {@link WindowStoreBuilder} or {@link TimestampedWindowStoreBuilder}.
+     * This store supplier can be passed into a {@link #windowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)} or
+     * {@link #timestampedWindowStoreBuilder(WindowBytesStoreSupplier, Serde, Serde)}.
      *
      * @param name                  name of the store (cannot be {@code null})
      * @param retentionPeriod       length of time to retain data in the store (cannot be negative)
@@ -387,6 +392,9 @@ public final class Stores {
 
     /**
      * Creates a {@link StoreBuilder} than can be used to build a {@link KeyValueStore}.
+     * <p>
+     * The provided supplier should <strong>not</strong> be a supplier for
+     * {@link TimestampedKeyValueStore TimestampedKeyValueStores}.
      *
      * @param supplier      a {@link KeyValueBytesStoreSupplier} (cannot be {@code null})
      * @param keySerde      the key serde to use
@@ -403,6 +411,21 @@ public final class Stores {
         return new KeyValueStoreBuilder<>(supplier, keySerde, valueSerde, Time.SYSTEM);
     }
 
+    /**
+     * Creates a {@link StoreBuilder} than can be used to build a {@link TimestampedKeyValueStore}.
+     * <p>
+     * The provided supplier should <strong>not</strong> be a supplier for
+     * {@link KeyValueStore KeyValueStores}. For this case, passed in timestamps will be dropped and not stores in the
+     * key-value-store. On read, no valid timestamp but a dummy timestamp will be returned.
+     *
+     * @param supplier      a {@link KeyValueBytesStoreSupplier} (cannot be {@code null})
+     * @param keySerde      the key serde to use
+     * @param valueSerde    the value serde to use; if the serialized bytes is {@code null} for put operations,
+     *                      it is treated as delete
+     * @param <K>           key type
+     * @param <V>           value type
+     * @return an instance of a {@link StoreBuilder} that can build a {@link KeyValueStore}
+     */
     public static <K, V> StoreBuilder<TimestampedKeyValueStore<K, V>> timestampedKeyValueStoreBuilder(final KeyValueBytesStoreSupplier supplier,
                                                                                                       final Serde<K> keySerde,
                                                                                                       final Serde<V> valueSerde) {
@@ -412,6 +435,9 @@ public final class Stores {
 
     /**
      * Creates a {@link StoreBuilder} that can be used to build a {@link WindowStore}.
+     * <p>
+     * The provided supplier should <strong>not</strong> be a supplier for
+     * {@link TimestampedWindowStore TimestampedWindowStores}.
      *
      * @param supplier      a {@link WindowBytesStoreSupplier} (cannot be {@code null})
      * @param keySerde      the key serde to use
@@ -430,6 +456,10 @@ public final class Stores {
 
     /**
      * Creates a {@link StoreBuilder} that can be used to build a {@link TimestampedWindowStore}.
+     * <p>
+     * The provided supplier should <strong>not</strong> be a supplier for
+     * {@link WindowStore WindowStores}. For this case, passed in timestamps will be dropped and not stores in the
+     * windows-store. On read, no valid timestamp but a dummy timestamp will be returned.
      *
      * @param supplier      a {@link WindowBytesStoreSupplier} (cannot be {@code null})
      * @param keySerde      the key serde to use

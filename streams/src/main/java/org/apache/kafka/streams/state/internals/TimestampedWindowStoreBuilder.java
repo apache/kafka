@@ -45,7 +45,7 @@ public class TimestampedWindowStoreBuilder<K, V>
     public TimestampedWindowStore<K, V> build() {
         WindowStore<Bytes, byte[]> store = storeSupplier.get();
         if (!(store instanceof TimestampedBytesStore) && store.persistent()) {
-            store = new WindowByteProxyStore(store);
+            store = new WindowToTimestampedWindowByteStoreAdapter(store);
         }
         return new MeteredTimestampedWindowStore<>(
             maybeWrapCaching(maybeWrapLogging(store)),

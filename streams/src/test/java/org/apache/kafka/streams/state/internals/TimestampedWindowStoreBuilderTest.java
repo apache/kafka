@@ -156,7 +156,7 @@ public class TimestampedWindowStoreBuilderTest {
             .withLoggingDisabled()
             .withCachingDisabled()
             .build();
-        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(WindowByteProxyStore.class));
+        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(WindowToTimestampedWindowByteStoreAdapter.class));
     }
 
     @SuppressWarnings("all")

@@ -49,7 +49,7 @@ public class TimestampedKeyValueStoreBuilder<K, V>
     public TimestampedKeyValueStore<K, V> build() {
         KeyValueStore<Bytes, byte[]> store = storeSupplier.get();
         if (!(store instanceof TimestampedBytesStore) && store.persistent()) {
-            store = new KeyValueToKeyValueTimestampByteStoreAdapter(store);
+            store = new KeyValueToTimestampedKeyValueByteStoreAdapter(store);
         }
         return new MeteredTimestampedKeyValueStore<>(
             maybeWrapCaching(maybeWrapLogging(store)),

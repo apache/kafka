@@ -29,10 +29,10 @@ import java.time.Instant;
 import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
 import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.rawValue;
 
-class WindowByteProxyStore implements WindowStore<Bytes, byte[]> {
+class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, byte[]> {
     final WindowStore<Bytes, byte[]> store;
 
-    WindowByteProxyStore(final WindowStore<Bytes, byte[]> store) {
+    WindowToTimestampedWindowByteStoreAdapter(final WindowStore<Bytes, byte[]> store) {
         if (!store.persistent()) {
             throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
         }
@@ -79,7 +79,7 @@ class WindowByteProxyStore implements WindowStore<Bytes, byte[]> {
                                                            final Bytes to,
                                                            final long timeFrom,
                                                            final long timeTo) {
-        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.fetch(from, to, timeFrom, timeTo));
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetch(from, to, timeFrom, timeTo));
     }
 
     @Override
@@ -87,25 +87,25 @@ class WindowByteProxyStore implements WindowStore<Bytes, byte[]> {
                                                            final Bytes to,
                                                            final Instant fromTime,
                                                            final Instant toTime) {
-        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.fetch(from, to, fromTime, toTime));
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetch(from, to, fromTime, toTime));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.all());
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.all());
     }
 
     @Override
     @SuppressWarnings("deprecation")
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
                                                               final long timeTo) {
-        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetchAll(timeFrom, timeTo));
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final Instant from,
                                                               final Instant to) {
-        return new KeyValueToKeyValueTimestampeIteratorAdapter<>(store.fetchAll(from, to));
+        return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.fetchAll(from, to));
     }
 
     @Override
@@ -141,7 +141,7 @@ class WindowByteProxyStore implements WindowStore<Bytes, byte[]> {
 
 
     private static class WindowToTimestampedWindowIteratorAdapter
-        extends KeyValueToKeyValueTimestampeIteratorAdapter<Long>
+        extends KeyValueToTimestampedKeyValueIteratorAdapter<Long>
         implements WindowStoreIterator<byte[]> {
 
         WindowToTimestampedWindowIteratorAdapter(final KeyValueIterator<Long, byte[]> innerIterator) {
