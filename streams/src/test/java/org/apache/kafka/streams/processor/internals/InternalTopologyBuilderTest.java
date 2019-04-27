@@ -777,9 +777,10 @@ public class InternalTopologyBuilderTest {
             new MockProcessorSupplier());
     }
 
-    @Test(expected = NullPointerException.class)
+    @Test
     public void shouldThrowIfNameIsNull() {
-        new InternalTopologyBuilder.Source(null, Collections.emptySet(), null);
+        final Exception e = assertThrows(NullPointerException.class, () -> new InternalTopologyBuilder.Source(null, Collections.emptySet(), null));
+        assertEquals("name cannot be null", e.getMessage());
     }
 
     @Test

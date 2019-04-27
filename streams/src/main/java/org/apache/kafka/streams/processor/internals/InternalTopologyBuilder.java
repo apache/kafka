@@ -1402,7 +1402,7 @@ public class InternalTopologyBuilder {
         int size;
 
         AbstractNode(final String name) {
-            Objects.requireNonNull(name);
+            Objects.requireNonNull(name, "name cannot be null");
             this.name = name;
             this.size = 1;
         }
