@@ -542,7 +542,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   private def testControllerMove(fun: () => Unit): Unit = {
     val controller = getController().kafkaController
     val appender = LogCaptureAppender.createAndRegister()
-    val previousLevel = LogCaptureAppender.setClassLoggerLevel(controller.eventManager.thread.getClass, Level.INFO)
+    val previousLevel = LogCaptureAppender.setClassLoggerLevel(controller.getClass, Level.INFO)
 
     try {
       TestUtils.waitUntilTrue(() => {
@@ -569,9 +569,11 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       TestUtils.waitUntilTrue(() => !controller.isActive, "Controller fails to resign")
 
       // Expect to capture the ControllerMovedException in the log of ControllerEventThread
+      println(appender.getMessages.find(e => e.getLevel == Level.INFO
+        && e.getThrowableInformation != null))
       val event = appender.getMessages.find(e => e.getLevel == Level.INFO
         && e.getThrowableInformation != null
-        && e.getThrowableInformation.getThrowable.getClass.getName.equals(new ControllerMovedException("").getClass.getName))
+        && e.getThrowableInformation.getThrowable.getClass.getName.equals(classOf[ControllerMovedException].getName))
       assertTrue(event.isDefined)
 
     } finally {
