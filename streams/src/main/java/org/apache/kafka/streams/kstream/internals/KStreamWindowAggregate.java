@@ -128,8 +128,23 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                     tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, sendOldValues ? oldAgg : null);
                 } else {
                     log.debug(
-                        "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{}) expiration=[{}]",
-                        key, context().topic(), context().partition(), context().offset(), context().timestamp(), windowStart, windowEnd, closeTime
+                        "Skipping record for expired window. " +
+                            "key=[{}] " +
+                            "topic=[{}] " +
+                            "partition=[{}] " +
+                            "offset=[{}] " +
+                            "timestamp=[{}] " +
+                            "window=[{},{}) " +
+                            "expiration=[{}] " +
+                            "streamTime=[{}]",
+                        key,
+                        context().topic(),
+                        context().partition(),
+                        context().offset(),
+                        context().timestamp(),
+                        windowStart, windowEnd,
+                        closeTime,
+                        observedStreamTime
                     );
                     lateRecordDropSensor.record();
                 }
