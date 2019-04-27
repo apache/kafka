@@ -18,6 +18,7 @@
 package org.apache.kafka.connect.runtime.health;
 
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.health.ConnectClusterDetails;
 import org.apache.kafka.connect.health.ConnectClusterState;
 import org.apache.kafka.connect.health.ConnectorHealth;
 import org.apache.kafka.connect.health.ConnectorState;
@@ -25,7 +26,6 @@ import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.health.TaskState;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
-import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.util.FutureCallback;
 
 import java.util.Collection;
@@ -39,10 +39,16 @@ import java.util.concurrent.TimeoutException;
 public class ConnectClusterStateImpl implements ConnectClusterState {
     
     private final long herderRequestTimeoutMs;
+    private final ConnectClusterDetails clusterDetails;
     private final Herder herder;
 
-    public ConnectClusterStateImpl(long connectorsTimeoutMs, Herder herder) {
+    public ConnectClusterStateImpl(
+        long connectorsTimeoutMs,
+        ConnectClusterDetails clusterDetails,
+        Herder herder
+    ) {
         this.herderRequestTimeoutMs = connectorsTimeoutMs;
+        this.clusterDetails = clusterDetails;
         this.herder = herder;
     }
 
@@ -90,24 +96,8 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
     }
 
     @Override
-    public Map<Integer, Map<String, String>> taskConfigs(String connName) {
-        FutureCallback<List<TaskInfo>> taskInfosCallback = new FutureCallback<>();
-        herder.taskConfigs(connName, taskInfosCallback);
-        List<TaskInfo> taskInfos;
-        try {
-            taskInfos = taskInfosCallback.get(herderRequestTimeoutMs, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException | ExecutionException | TimeoutException e) {
-            throw new ConnectException(
-                String.format("Failed to retrieve task configurations for connector '%s'", connName),
-                e
-            );
-        }
-        return taskConfigs(taskInfos);
-    }
-
-    @Override
-    public String kafkaClusterId() {
-        return herder.kafkaClusterId();
+    public ConnectClusterDetails clusterDetails() {
+        return clusterDetails;
     }
 
     private Map<Integer, TaskState> taskStates(List<ConnectorStateInfo.TaskState> states) {
@@ -121,17 +111,5 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
             );
         }
         return taskStates;
-    }
-
-    private Map<Integer, Map<String, String>> taskConfigs(List<TaskInfo> infos) {
-        Map<Integer, Map<String, String>> taskConfigs = new HashMap<>();
-        
-        for (TaskInfo info : infos) {
-            taskConfigs.put(
-                info.id().task(),
-                info.config()
-            );
-        }
-        return taskConfigs;
     }
 }
