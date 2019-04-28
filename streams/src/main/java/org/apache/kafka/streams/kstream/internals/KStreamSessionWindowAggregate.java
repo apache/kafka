@@ -78,7 +78,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
     private class KStreamSessionWindowAggregateProcessor extends AbstractProcessor<K, V> {
 
         private SessionStore<K, Agg> store;
-        private TupleForwarder<Windowed<K>, Agg> tupleForwarder;
+        private SessionTupleForwarder<K, Agg> tupleForwarder;
         private StreamsMetricsImpl metrics;
         private InternalProcessorContext internalProcessorContext;
         private Sensor lateRecordDropSensor;
@@ -93,7 +93,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
             lateRecordDropSensor = Sensors.lateRecordDropSensor(internalProcessorContext);
 
             store = (SessionStore<K, Agg>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<>(context), sendOldValues);
+            tupleForwarder = new SessionTupleForwarder<>(store, context, new SessionCacheFlushListener<>(context), sendOldValues);
         }
 
         @Override
@@ -109,10 +109,10 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                 return;
             }
 
-            observedStreamTime = Math.max(observedStreamTime, context().timestamp());
+            final long timestamp = context().timestamp();
+            observedStreamTime = Math.max(observedStreamTime, timestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
-            final long timestamp = context().timestamp();
             final List<KeyValue<Windowed<K>, Agg>> merged = new ArrayList<>();
             final SessionWindow newSessionWindow = new SessionWindow(timestamp, timestamp);
             SessionWindow mergedWindow = newSessionWindow;
@@ -148,7 +148,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                     context().topic(),
                     context().partition(),
                     context().offset(),
-                    context().timestamp(),
+                    timestamp,
                     mergedWindow.start(),
                     mergedWindow.end(),
                     closeTime,

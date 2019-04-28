@@ -20,9 +20,12 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
@@ -32,6 +35,7 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     public final ArrayList<String> processed = new ArrayList<>();
     public final ArrayList<K> processedKeys = new ArrayList<>();
     public final ArrayList<V> processedValues = new ArrayList<>();
+    public final Map<K, ValueAndTimestamp<V>> lastValueAndTimestampPerKey = new HashMap<>();
 
     public final ArrayList<Long> punctuatedStreamTime = new ArrayList<>();
     public final ArrayList<Long> punctuatedSystemTime = new ArrayList<>();
@@ -77,6 +81,11 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     public void process(final K key, final V value) {
         processedKeys.add(key);
         processedValues.add(value);
+        if (value != null) {
+            lastValueAndTimestampPerKey.put(key, ValueAndTimestamp.make(value, context().timestamp()));
+        } else {
+            lastValueAndTimestampPerKey.remove(key);
+        }
         processed.add(
             (key == null ? "null" : key) +
             ":" + (value == null ? "null" : value) +
