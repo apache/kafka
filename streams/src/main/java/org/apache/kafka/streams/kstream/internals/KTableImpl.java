@@ -385,7 +385,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     public <K1> KStream<K1, V> toStream(final KeyValueMapper<? super K, ? super V, ? extends K1> mapper) {
         return toStream().selectKey(mapper);
     }
-
+    @SuppressWarnings("unchecked")
     @Override
     public KTable<K, V> suppress(final Suppressed<? super K> suppressed) {
         final String name;
@@ -401,14 +401,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String storeName =
             suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
 
-        final ProcessorSupplier<K, Change<V>> suppressionSupplier =
-            () -> new KTableSuppressProcessor<>(
+        final KTableSuppressProcessor<K, V> kTableSuppressProcessor = new KTableSuppressProcessor<>(
                 suppressedInternal,
                 storeName,
                 keySerde,
                 valSerde == null ? null : new FullChangeSerde<>(valSerde)
-            );
+        );
 
+        final KTableSuppressSupplier<K, V> suppressionSupplier = new KTableSuppressSupplier(kTableSuppressProcessor, storeName);
 
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,
