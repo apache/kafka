@@ -19,6 +19,7 @@ package org.apache.kafka.streams;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
@@ -91,6 +92,7 @@ public interface TopologyDescription {
          * @return the name of the node
          */
         String name();
+
         /**
          * The predecessors of this node within a sub-topology.
          * Note, sources do not have any predecessors.
@@ -98,6 +100,7 @@ public interface TopologyDescription {
          * @return set of all predecessors
          */
         Set<Node> predecessors();
+
         /**
          * The successor of this node within a sub-topology.
          * Note, sinks do not have any successors.
@@ -131,6 +134,16 @@ public interface TopologyDescription {
          * @return the pattern used to match topic names
          */
         Pattern topicPattern();
+
+        /**
+         * Names of key serde class used for this source node
+         */
+        String keySerdeName();
+
+        /**
+         * Names of value serde class used for this source node
+         */
+        String valueSerdeName();
     }
 
     /**
@@ -141,7 +154,30 @@ public interface TopologyDescription {
          * The names of all connected stores.
          * @return set of store names
          */
+        @Deprecated
         Set<String> stores();
+
+        /**
+         * The names of all connected stores.
+         * @return set of stores
+         */
+        Set<Store> storeSet();
+    }
+
+    /**
+     * A state store of a topology
+     */
+    interface Store {
+        /**
+         * Name of the stat store
+         */
+        String name();
+
+
+        /**
+         * Names of serde classes that are associated with the store
+         */
+        List<String> serdeNames();
     }
 
     /**
@@ -161,6 +197,16 @@ public interface TopologyDescription {
          * @return the {@link TopicNameExtractor} class used get the topic name
          */
         TopicNameExtractor topicNameExtractor();
+
+        /**
+         * Names of key serde class used for this source node
+         */
+        String keySerdeName();
+
+        /**
+         * Names of value serde class used for this source node
+         */
+        String valueSerdeName();
     }
 
     /**

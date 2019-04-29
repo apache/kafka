@@ -26,13 +26,13 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
 public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
 
-    OptimizableRepartitionNode(final String nodeName,
-                               final String sourceName,
-                               final ProcessorParameters processorParameters,
-                               final Serde<K> keySerde,
-                               final Serde<V> valueSerde,
-                               final String sinkName,
-                               final String repartitionTopic) {
+    private OptimizableRepartitionNode(final String nodeName,
+                                       final String sourceName,
+                                       final ProcessorParameters processorParameters,
+                                       final Serde<K> keySerde,
+                                       final Serde<V> valueSerde,
+                                       final String sinkName,
+                                       final String repartitionTopic) {
 
         super(
             nodeName,

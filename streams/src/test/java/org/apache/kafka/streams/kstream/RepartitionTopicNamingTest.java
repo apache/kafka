@@ -68,7 +68,6 @@ public class RepartitionTopicNamingTest {
         // the first named repartition topic
         assertTrue(optimizedTopology.contains(firstRepartitionTopicName + "-repartition"));
 
-
         assertThat(unOptimizedTopology, is(EXPECTED_UNOPTIMIZED_TOPOLOGY));
         // now 4 repartition topic
         assertThat(4, is(getCountOfRepartitionTopicsFound(unOptimizedTopology, repartitionTopicPattern)));
@@ -238,8 +237,8 @@ public class RepartitionTopicNamingTest {
     @Test
     public void shouldKeepRepartitionTopicNameForJoins() {
 
-        final String expectedLeftRepartitionTopic = "(topic: my-join-left-repartition)";
-        final String expectedRightRepartitionTopic = "(topic: my-join-right-repartition)";
+        final String expectedLeftRepartitionTopic = "topic: my-join-left-repartition";
+        final String expectedRightRepartitionTopic = "topic: my-join-right-repartition";
 
 
         final String joinTopologyFirst = buildStreamJoin(false);
@@ -256,7 +255,7 @@ public class RepartitionTopicNamingTest {
     @Test
     public void shouldKeepRepartitionTopicNameForGroupByKeyTimeWindows() {
 
-        final String expectedTimeWindowRepartitionTopic = "(topic: time-window-grouping-repartition)";
+        final String expectedTimeWindowRepartitionTopic = "topic: time-window-grouping-repartition";
 
         final String timeWindowGroupingRepartitionTopology = buildStreamGroupByKeyTimeWindows(false, true);
         assertTrue(timeWindowGroupingRepartitionTopology.contains(expectedTimeWindowRepartitionTopic));
@@ -268,9 +267,10 @@ public class RepartitionTopicNamingTest {
     @Test
     public void shouldKeepRepartitionTopicNameForGroupByTimeWindows() {
 
-        final String expectedTimeWindowRepartitionTopic = "(topic: time-window-grouping-repartition)";
+        final String expectedTimeWindowRepartitionTopic = "topic: time-window-grouping-repartition";
 
         final String timeWindowGroupingRepartitionTopology = buildStreamGroupByKeyTimeWindows(false, false);
+
         assertTrue(timeWindowGroupingRepartitionTopology.contains(expectedTimeWindowRepartitionTopic));
 
         final String timeWindowGroupingUpdatedTopology = buildStreamGroupByKeyTimeWindows(true, false);
@@ -281,7 +281,7 @@ public class RepartitionTopicNamingTest {
     @Test
     public void shouldKeepRepartitionTopicNameForGroupByKeyNoWindows() {
 
-        final String expectedNoWindowRepartitionTopic = "(topic: kstream-grouping-repartition)";
+        final String expectedNoWindowRepartitionTopic = "topic: kstream-grouping-repartition";
 
         final String noWindowGroupingRepartitionTopology = buildStreamGroupByKeyNoWindows(false, true);
         assertTrue(noWindowGroupingRepartitionTopology.contains(expectedNoWindowRepartitionTopic));
@@ -293,7 +293,7 @@ public class RepartitionTopicNamingTest {
     @Test
     public void shouldKeepRepartitionTopicNameForGroupByNoWindows() {
 
-        final String expectedNoWindowRepartitionTopic = "(topic: kstream-grouping-repartition)";
+        final String expectedNoWindowRepartitionTopic = "topic: kstream-grouping-repartition";
 
         final String noWindowGroupingRepartitionTopology = buildStreamGroupByKeyNoWindows(false, false);
         assertTrue(noWindowGroupingRepartitionTopology.contains(expectedNoWindowRepartitionTopic));
@@ -306,7 +306,7 @@ public class RepartitionTopicNamingTest {
     @Test
     public void shouldKeepRepartitionTopicNameForGroupByKeySessionWindows() {
 
-        final String expectedSessionWindowRepartitionTopic = "(topic: session-window-grouping-repartition)";
+        final String expectedSessionWindowRepartitionTopic = "topic: session-window-grouping-repartition";
 
         final String sessionWindowGroupingRepartitionTopology = buildStreamGroupByKeySessionWindows(false, true);
         assertTrue(sessionWindowGroupingRepartitionTopology.contains(expectedSessionWindowRepartitionTopic));
@@ -318,7 +318,7 @@ public class RepartitionTopicNamingTest {
     @Test
     public void shouldKeepRepartitionTopicNameForGroupBySessionWindows() {
 
-        final String expectedSessionWindowRepartitionTopic = "(topic: session-window-grouping-repartition)";
+        final String expectedSessionWindowRepartitionTopic = "topic: session-window-grouping-repartition";
 
         final String sessionWindowGroupingRepartitionTopology = buildStreamGroupByKeySessionWindows(false, false);
         assertTrue(sessionWindowGroupingRepartitionTopology.contains(expectedSessionWindowRepartitionTopic));
@@ -329,7 +329,7 @@ public class RepartitionTopicNamingTest {
 
     @Test
     public void shouldKeepRepartitionNameForGroupByKTable() {
-        final String expectedKTableGroupByRepartitionTopic = "(topic: ktable-group-by-repartition)";
+        final String expectedKTableGroupByRepartitionTopic = "topic: ktable-group-by-repartition";
 
         final String ktableGroupByTopology = buildKTableGroupBy(false);
         assertTrue(ktableGroupByTopology.contains(expectedKTableGroupByRepartitionTopic));
@@ -523,7 +523,7 @@ public class RepartitionTopicNamingTest {
 
     private static final String EXPECTED_OPTIMIZED_TOPOLOGY = "Topologies:\n" +
             "   Sub-topology: 0\n" +
-            "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
+            "    Source: KSTREAM-SOURCE-0000000000 (topics: [input], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
             "      --> KSTREAM-MAP-0000000001\n" +
             "    Processor: KSTREAM-MAP-0000000001 (stores: [])\n" +
             "      --> KSTREAM-FILTER-0000000002, KSTREAM-FILTER-0000000040\n" +
@@ -540,13 +540,13 @@ public class RepartitionTopicNamingTest {
             "    Processor: KSTREAM-PROCESSOR-0000000004 (stores: [])\n" +
             "      --> none\n" +
             "      <-- KSTREAM-MAPVALUES-0000000003\n" +
-            "    Sink: KSTREAM-SINK-0000000039 (topic: count-stream-repartition)\n" +
+            "    Sink: KSTREAM-SINK-0000000039 (topic: count-stream-repartition, keySerde: StringSerializer, valueSerde: StringSerializer)\n" +
             "      <-- KSTREAM-FILTER-0000000040\n" +
             "\n" +
             "  Sub-topology: 1\n" +
-            "    Source: KSTREAM-SOURCE-0000000041 (topics: [count-stream-repartition])\n" +
+            "    Source: KSTREAM-SOURCE-0000000041 (topics: [count-stream-repartition], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
             "      --> KSTREAM-FILTER-0000000020, KSTREAM-AGGREGATE-0000000007, KSTREAM-AGGREGATE-0000000014, KSTREAM-FILTER-0000000029\n" +
-            "    Processor: KSTREAM-AGGREGATE-0000000007 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000006])\n" +
+            "    Processor: KSTREAM-AGGREGATE-0000000007 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000006, serdes: [StringSerde, LongSerde])])\n" +
             "      --> KTABLE-TOSTREAM-0000000011\n" +
             "      <-- KSTREAM-SOURCE-0000000041\n" +
             "    Processor: KTABLE-TOSTREAM-0000000011 (stores: [])\n" +
@@ -561,22 +561,22 @@ public class RepartitionTopicNamingTest {
             "    Processor: KSTREAM-PEEK-0000000021 (stores: [])\n" +
             "      --> KSTREAM-REDUCE-0000000023\n" +
             "      <-- KSTREAM-FILTER-0000000020\n" +
-            "    Processor: KSTREAM-WINDOWED-0000000033 (stores: [KSTREAM-JOINTHIS-0000000035-store])\n" +
+            "    Processor: KSTREAM-WINDOWED-0000000033 (stores: [(KSTREAM-JOINTHIS-0000000035-store, serdes: [StringSerde, StringSerde])])\n" +
             "      --> KSTREAM-JOINTHIS-0000000035\n" +
             "      <-- KSTREAM-FILTER-0000000029\n" +
-            "    Processor: KSTREAM-WINDOWED-0000000034 (stores: [KSTREAM-JOINOTHER-0000000036-store])\n" +
+            "    Processor: KSTREAM-WINDOWED-0000000034 (stores: [(KSTREAM-JOINOTHER-0000000036-store, serdes: [StringSerde, LongSerde])])\n" +
             "      --> KSTREAM-JOINOTHER-0000000036\n" +
             "      <-- KTABLE-TOSTREAM-0000000011\n" +
-            "    Processor: KSTREAM-AGGREGATE-0000000014 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000013])\n" +
+            "    Processor: KSTREAM-AGGREGATE-0000000014 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000013, serdes: [StringSerde, IntegerSerde])])\n" +
             "      --> KTABLE-TOSTREAM-0000000018\n" +
             "      <-- KSTREAM-SOURCE-0000000041\n" +
-            "    Processor: KSTREAM-JOINOTHER-0000000036 (stores: [KSTREAM-JOINTHIS-0000000035-store])\n" +
+            "    Processor: KSTREAM-JOINOTHER-0000000036 (stores: [(KSTREAM-JOINTHIS-0000000035-store, serdes: [StringSerde, StringSerde])])\n" +
             "      --> KSTREAM-MERGE-0000000037\n" +
             "      <-- KSTREAM-WINDOWED-0000000034\n" +
-            "    Processor: KSTREAM-JOINTHIS-0000000035 (stores: [KSTREAM-JOINOTHER-0000000036-store])\n" +
+            "    Processor: KSTREAM-JOINTHIS-0000000035 (stores: [(KSTREAM-JOINOTHER-0000000036-store, serdes: [StringSerde, LongSerde])])\n" +
             "      --> KSTREAM-MERGE-0000000037\n" +
             "      <-- KSTREAM-WINDOWED-0000000033\n" +
-            "    Processor: KSTREAM-REDUCE-0000000023 (stores: [KSTREAM-REDUCE-STATE-STORE-0000000022])\n" +
+            "    Processor: KSTREAM-REDUCE-0000000023 (stores: [(KSTREAM-REDUCE-STATE-STORE-0000000022, serdes: [StringSerde, StringSerde])])\n" +
             "      --> KTABLE-TOSTREAM-0000000027\n" +
             "      <-- KSTREAM-PEEK-0000000021\n" +
             "    Processor: KSTREAM-MERGE-0000000037 (stores: [])\n" +
@@ -588,19 +588,19 @@ public class RepartitionTopicNamingTest {
             "    Processor: KTABLE-TOSTREAM-0000000027 (stores: [])\n" +
             "      --> KSTREAM-SINK-0000000028\n" +
             "      <-- KSTREAM-REDUCE-0000000023\n" +
-            "    Sink: KSTREAM-SINK-0000000012 (topic: outputTopic_0)\n" +
+            "    Sink: KSTREAM-SINK-0000000012 (topic: outputTopic_0, keySerde: StringSerializer, valueSerde: LongSerializer)\n" +
             "      <-- KTABLE-TOSTREAM-0000000011\n" +
-            "    Sink: KSTREAM-SINK-0000000019 (topic: outputTopic_1)\n" +
+            "    Sink: KSTREAM-SINK-0000000019 (topic: outputTopic_1, keySerde: StringSerializer, valueSerde: IntegerSerializer)\n" +
             "      <-- KTABLE-TOSTREAM-0000000018\n" +
-            "    Sink: KSTREAM-SINK-0000000028 (topic: outputTopic_2)\n" +
+            "    Sink: KSTREAM-SINK-0000000028 (topic: outputTopic_2, keySerde: StringSerializer, valueSerde: StringSerializer)\n" +
             "      <-- KTABLE-TOSTREAM-0000000027\n" +
-            "    Sink: KSTREAM-SINK-0000000038 (topic: outputTopicForJoin)\n" +
+            "    Sink: KSTREAM-SINK-0000000038 (topic: outputTopicForJoin, keySerde: StringSerializer, valueSerde: null)\n" +
             "      <-- KSTREAM-MERGE-0000000037\n\n";
 
 
     private static final String EXPECTED_UNOPTIMIZED_TOPOLOGY = "Topologies:\n" +
             "   Sub-topology: 0\n" +
-            "    Source: KSTREAM-SOURCE-0000000000 (topics: [input])\n" +
+            "    Source: KSTREAM-SOURCE-0000000000 (topics: [input], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
             "      --> KSTREAM-MAP-0000000001\n" +
             "    Processor: KSTREAM-MAP-0000000001 (stores: [])\n" +
             "      --> KSTREAM-FILTER-0000000020, KSTREAM-FILTER-0000000002, KSTREAM-FILTER-0000000009, KSTREAM-FILTER-0000000016, KSTREAM-FILTER-0000000029\n" +
@@ -635,68 +635,68 @@ public class RepartitionTopicNamingTest {
             "    Processor: KSTREAM-PROCESSOR-0000000004 (stores: [])\n" +
             "      --> none\n" +
             "      <-- KSTREAM-MAPVALUES-0000000003\n" +
-            "    Sink: KSTREAM-SINK-0000000008 (topic: count-stream-repartition)\n" +
+            "    Sink: KSTREAM-SINK-0000000008 (topic: count-stream-repartition, keySerde: null, valueSerde: null)\n" +
             "      <-- KSTREAM-FILTER-0000000009\n" +
-            "    Sink: KSTREAM-SINK-0000000015 (topic: aggregate-stream-repartition)\n" +
+            "    Sink: KSTREAM-SINK-0000000015 (topic: aggregate-stream-repartition, keySerde: null, valueSerde: null)\n" +
             "      <-- KSTREAM-FILTER-0000000016\n" +
-            "    Sink: KSTREAM-SINK-0000000024 (topic: reduced-stream-repartition)\n" +
+            "    Sink: KSTREAM-SINK-0000000024 (topic: reduced-stream-repartition, keySerde: null, valueSerde: null)\n" +
             "      <-- KSTREAM-FILTER-0000000025\n" +
-            "    Sink: KSTREAM-SINK-0000000030 (topic: joined-stream-left-repartition)\n" +
+            "    Sink: KSTREAM-SINK-0000000030 (topic: joined-stream-left-repartition, keySerde: StringSerializer, valueSerde: StringSerializer)\n" +
             "      <-- KSTREAM-FILTER-0000000031\n" +
             "\n" +
             "  Sub-topology: 1\n" +
-            "    Source: KSTREAM-SOURCE-0000000010 (topics: [count-stream-repartition])\n" +
+            "    Source: KSTREAM-SOURCE-0000000010 (topics: [count-stream-repartition], keySerde: null, valueSerde: null)\n" +
             "      --> KSTREAM-AGGREGATE-0000000007\n" +
-            "    Processor: KSTREAM-AGGREGATE-0000000007 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000006])\n" +
+            "    Processor: KSTREAM-AGGREGATE-0000000007 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000006, serdes: [StringSerde, LongSerde])])\n" +
             "      --> KTABLE-TOSTREAM-0000000011\n" +
             "      <-- KSTREAM-SOURCE-0000000010\n" +
             "    Processor: KTABLE-TOSTREAM-0000000011 (stores: [])\n" +
             "      --> KSTREAM-SINK-0000000012, KSTREAM-WINDOWED-0000000034\n" +
             "      <-- KSTREAM-AGGREGATE-0000000007\n" +
-            "    Source: KSTREAM-SOURCE-0000000032 (topics: [joined-stream-left-repartition])\n" +
+            "    Source: KSTREAM-SOURCE-0000000032 (topics: [joined-stream-left-repartition], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n" +
             "      --> KSTREAM-WINDOWED-0000000033\n" +
-            "    Processor: KSTREAM-WINDOWED-0000000033 (stores: [KSTREAM-JOINTHIS-0000000035-store])\n" +
+            "    Processor: KSTREAM-WINDOWED-0000000033 (stores: [(KSTREAM-JOINTHIS-0000000035-store, serdes: [StringSerde, StringSerde])])\n" +
             "      --> KSTREAM-JOINTHIS-0000000035\n" +
             "      <-- KSTREAM-SOURCE-0000000032\n" +
-            "    Processor: KSTREAM-WINDOWED-0000000034 (stores: [KSTREAM-JOINOTHER-0000000036-store])\n" +
+            "    Processor: KSTREAM-WINDOWED-0000000034 (stores: [(KSTREAM-JOINOTHER-0000000036-store, serdes: [StringSerde, LongSerde])])\n" +
             "      --> KSTREAM-JOINOTHER-0000000036\n" +
             "      <-- KTABLE-TOSTREAM-0000000011\n" +
-            "    Processor: KSTREAM-JOINOTHER-0000000036 (stores: [KSTREAM-JOINTHIS-0000000035-store])\n" +
+            "    Processor: KSTREAM-JOINOTHER-0000000036 (stores: [(KSTREAM-JOINTHIS-0000000035-store, serdes: [StringSerde, StringSerde])])\n" +
             "      --> KSTREAM-MERGE-0000000037\n" +
             "      <-- KSTREAM-WINDOWED-0000000034\n" +
-            "    Processor: KSTREAM-JOINTHIS-0000000035 (stores: [KSTREAM-JOINOTHER-0000000036-store])\n" +
+            "    Processor: KSTREAM-JOINTHIS-0000000035 (stores: [(KSTREAM-JOINOTHER-0000000036-store, serdes: [StringSerde, LongSerde])])\n" +
             "      --> KSTREAM-MERGE-0000000037\n" +
             "      <-- KSTREAM-WINDOWED-0000000033\n" +
             "    Processor: KSTREAM-MERGE-0000000037 (stores: [])\n" +
             "      --> KSTREAM-SINK-0000000038\n" +
             "      <-- KSTREAM-JOINTHIS-0000000035, KSTREAM-JOINOTHER-0000000036\n" +
-            "    Sink: KSTREAM-SINK-0000000012 (topic: outputTopic_0)\n" +
+            "    Sink: KSTREAM-SINK-0000000012 (topic: outputTopic_0, keySerde: StringSerializer, valueSerde: LongSerializer)\n" +
             "      <-- KTABLE-TOSTREAM-0000000011\n" +
-            "    Sink: KSTREAM-SINK-0000000038 (topic: outputTopicForJoin)\n" +
+            "    Sink: KSTREAM-SINK-0000000038 (topic: outputTopicForJoin, keySerde: StringSerializer, valueSerde: null)\n" +
             "      <-- KSTREAM-MERGE-0000000037\n" +
             "\n" +
             "  Sub-topology: 2\n" +
-            "    Source: KSTREAM-SOURCE-0000000017 (topics: [aggregate-stream-repartition])\n" +
+            "    Source: KSTREAM-SOURCE-0000000017 (topics: [aggregate-stream-repartition], keySerde: null, valueSerde: null)\n" +
             "      --> KSTREAM-AGGREGATE-0000000014\n" +
-            "    Processor: KSTREAM-AGGREGATE-0000000014 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000013])\n" +
+            "    Processor: KSTREAM-AGGREGATE-0000000014 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000013, serdes: [StringSerde, IntegerSerde])])\n" +
             "      --> KTABLE-TOSTREAM-0000000018\n" +
             "      <-- KSTREAM-SOURCE-0000000017\n" +
             "    Processor: KTABLE-TOSTREAM-0000000018 (stores: [])\n" +
             "      --> KSTREAM-SINK-0000000019\n" +
             "      <-- KSTREAM-AGGREGATE-0000000014\n" +
-            "    Sink: KSTREAM-SINK-0000000019 (topic: outputTopic_1)\n" +
+            "    Sink: KSTREAM-SINK-0000000019 (topic: outputTopic_1, keySerde: StringSerializer, valueSerde: IntegerSerializer)\n" +
             "      <-- KTABLE-TOSTREAM-0000000018\n" +
             "\n" +
             "  Sub-topology: 3\n" +
-            "    Source: KSTREAM-SOURCE-0000000026 (topics: [reduced-stream-repartition])\n" +
+            "    Source: KSTREAM-SOURCE-0000000026 (topics: [reduced-stream-repartition], keySerde: null, valueSerde: null)\n" +
             "      --> KSTREAM-REDUCE-0000000023\n" +
-            "    Processor: KSTREAM-REDUCE-0000000023 (stores: [KSTREAM-REDUCE-STATE-STORE-0000000022])\n" +
+            "    Processor: KSTREAM-REDUCE-0000000023 (stores: [(KSTREAM-REDUCE-STATE-STORE-0000000022, serdes: [StringSerde, StringSerde])])\n" +
             "      --> KTABLE-TOSTREAM-0000000027\n" +
             "      <-- KSTREAM-SOURCE-0000000026\n" +
             "    Processor: KTABLE-TOSTREAM-0000000027 (stores: [])\n" +
             "      --> KSTREAM-SINK-0000000028\n" +
             "      <-- KSTREAM-REDUCE-0000000023\n" +
-            "    Sink: KSTREAM-SINK-0000000028 (topic: outputTopic_2)\n" +
+            "    Sink: KSTREAM-SINK-0000000028 (topic: outputTopic_2, keySerde: StringSerializer, valueSerde: StringSerializer)\n" +
             "      <-- KTABLE-TOSTREAM-0000000027\n\n";
 
 

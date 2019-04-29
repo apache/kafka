@@ -872,6 +872,10 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(selector, "selector can't be null");
         Objects.requireNonNull(grouped, "grouped can't be null");
         final GroupedInternal<KR, V> groupedInternal = new GroupedInternal<>(grouped);
+        if (groupedInternal.valueSerde() == null) {
+            groupedInternal.withValueSerde(valSerde);
+        }
+
         final ProcessorGraphNode<K, V> selectKeyMapNode = internalSelectKey(selector, new NamedInternal(groupedInternal.name()));
         selectKeyMapNode.keyChangingOperation(true);
 
@@ -901,6 +905,12 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     @Override
     public KGroupedStream<K, V> groupByKey(final Grouped<K, V> grouped) {
         final GroupedInternal<K, V> groupedInternal = new GroupedInternal<>(grouped);
+        if (groupedInternal.keySerde() == null) {
+            groupedInternal.withKeySerde(keySerde);
+        }
+        if (groupedInternal.valueSerde() == null) {
+            groupedInternal.withValueSerde(valSerde);
+        }
 
         return new KGroupedStreamImpl<>(
             name,

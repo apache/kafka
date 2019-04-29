@@ -127,9 +127,15 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             }
             // we can inherit parent key and value serde if user do not provide specific overrides, more specifically:
             // we preserve the key following the order of 1) materialized, 2) parent
-            keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
+            if (materializedInternal.keySerde() == null) {
+                materializedInternal.withKeySerde(this.keySerde);
+            }
+            keySerde = materializedInternal.keySerde();
             // we preserve the value following the order of 1) materialized, 2) parent
-            valueSerde = materializedInternal.valueSerde() != null ? materializedInternal.valueSerde() : this.valSerde;
+            if (materializedInternal.valueSerde() == null) {
+                materializedInternal.withValueSerde(this.valSerde);
+            }
+            valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.queryableStoreName();
             // only materialize if materialized is specified and it has queryable name
             storeBuilder = queryableStoreName != null ? (new KeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
@@ -212,7 +218,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             if (materializedInternal.storeName() == null) {
                 builder.newStoreName(MAPVALUES_NAME);
             }
-            keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
+            if (materializedInternal.keySerde() == null) {
+                materializedInternal.withKeySerde(this.keySerde);
+            }
+            keySerde = materializedInternal.keySerde();
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.queryableStoreName();
             // only materialize if materialized is specified and it has queryable name
@@ -317,7 +326,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         if (materializedInternal != null) {
             // don't inherit parent value serde, since this operation may change the value type, more specifically:
             // we preserve the key following the order of 1) materialized, 2) parent, 3) null
-            keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
+            if (materializedInternal.keySerde() == null) {
+                materializedInternal.withKeySerde(this.keySerde);
+            }
+            keySerde = materializedInternal.keySerde();
             // we preserve the value following the order of 1) materialized, 2) null
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.queryableStoreName();
@@ -541,7 +553,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final StoreBuilder<KeyValueStore<K, VR>> storeBuilder;
 
         if (materializedInternal != null) {
-            keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
+            if (materializedInternal.keySerde() == null) {
+                materializedInternal.withKeySerde(this.keySerde);
+            }
+            keySerde = materializedInternal.keySerde();
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.storeName();
             storeBuilder = new KeyValueStoreMaterializer<>(materializedInternal).materialize();

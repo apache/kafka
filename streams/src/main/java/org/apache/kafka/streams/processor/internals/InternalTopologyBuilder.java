@@ -50,6 +50,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 public class InternalTopologyBuilder {
 
@@ -191,7 +192,7 @@ public class InternalTopologyBuilder {
 
     private static class ProcessorNodeFactory extends NodeFactory {
         private final ProcessorSupplier<?, ?> supplier;
-        private final Set<String> stateStoreNames = new HashSet<>();
+        private final Set<StoreBuilder> stateStoreBuilders = new HashSet<>();
 
         ProcessorNodeFactory(final String name,
                              final String[] predecessors,
@@ -200,18 +201,27 @@ public class InternalTopologyBuilder {
             this.supplier = supplier;
         }
 
-        public void addStateStore(final String stateStoreName) {
-            stateStoreNames.add(stateStoreName);
+        public void addStateStore(final StoreBuilder storeBuilder) {
+            stateStoreBuilders.add(storeBuilder);
         }
 
         @Override
         public ProcessorNode build() {
-            return new ProcessorNode<>(name, supplier.get(), stateStoreNames);
+            return new ProcessorNode<>(name, supplier.get(), stateStoreBuilders.stream().map(StoreBuilder::name).collect(Collectors.toSet()));
         }
 
         @Override
         Processor describe() {
-            return new Processor(name, new HashSet<>(stateStoreNames));
+            final HashSet<Store> stores = new HashSet<>();
+            for (final StoreBuilder<?> storeBuilder : stateStoreBuilders) {
+                final List<String> serdeNames = storeBuilder.serdes() != null ?
+                    storeBuilder.serdes().stream().map(s -> s != null ? s.getClass().getSimpleName() : "null").collect(Collectors.toList()) :
+                    Collections.emptyList();
+                final Store store = new Store(storeBuilder.name(), serdeNames);
+                stores.add(store);
+            }
+
+            return new Processor(name, stores);
         }
     }
 
@@ -282,7 +292,9 @@ public class InternalTopologyBuilder {
 
         @Override
         Source describe() {
-            return new Source(name, new HashSet<>(topics), pattern);
+            return new Source(name, new HashSet<>(topics), pattern,
+                keyDeserializer != null ? keyDeserializer.getClass().getSimpleName() : "null",
+                valDeserializer != null ? valDeserializer.getClass().getSimpleName() : "null");
         }
     }
 
@@ -322,7 +334,9 @@ public class InternalTopologyBuilder {
 
         @Override
         Sink describe() {
-            return new Sink(name, topicExtractor);
+            return new Sink(name, topicExtractor,
+                keySerializer != null ? keySerializer.getClass().getSimpleName() : "null",
+                valSerializer != null ? valSerializer.getClass().getSimpleName() : "null");
         }
     }
 
@@ -564,7 +578,7 @@ public class InternalTopologyBuilder {
             valueDeserializer));
         nodeToSourceTopics.put(sourceName, Arrays.asList(topics));
         nodeGrouper.add(sourceName);
-        nodeFactory.addStateStore(storeBuilder.name());
+        nodeFactory.addStateStore(storeBuilder);
         nodeFactories.put(processorName, nodeFactory);
         nodeGrouper.add(processorName);
         nodeGrouper.unite(processorName, predecessors);
@@ -667,7 +681,7 @@ public class InternalTopologyBuilder {
         final NodeFactory nodeFactory = nodeFactories.get(processorName);
         if (nodeFactory instanceof ProcessorNodeFactory) {
             final ProcessorNodeFactory processorNodeFactory = (ProcessorNodeFactory) nodeFactory;
-            processorNodeFactory.addStateStore(stateStoreName);
+            processorNodeFactory.addStateStore(stateStoreFactory.builder);
             connectStateStoreNameToSourceTopicsOrPattern(stateStoreName, processorNodeFactory);
         } else {
             throw new TopologyException("cannot connect a state store " + stateStoreName + " to a source node or a sink node.");
@@ -940,7 +954,8 @@ public class InternalTopologyBuilder {
             final ProcessorNode<?, ?> predecessorNode = processorMap.get(predecessor);
             predecessorNode.addChild(node);
         }
-        for (final String stateStoreName : factory.stateStoreNames) {
+        for (final StoreBuilder storeBuilder : factory.stateStoreBuilders) {
+            final String stateStoreName = storeBuilder.name();
             if (!stateStoreMap.containsKey(stateStoreName)) {
                 if (stateFactories.containsKey(stateStoreName)) {
                     final StateStoreFactory stateStoreFactory = stateFactories.get(stateStoreName);
@@ -1253,13 +1268,12 @@ public class InternalTopologyBuilder {
             if (isGlobalSource(node)) {
                 // we found a GlobalStore node group; those contain exactly two node: {sourceNode,processorNode}
                 it.remove(); // remove sourceNode from group
-                final String processorNode = nodes.iterator().next(); // get remaining processorNode
+                final NodeFactory sourceNode = nodeFactories.get(node);
+                final NodeFactory processorNode = nodeFactories.get(nodes.iterator().next()); // get remaining processorNode
 
                 description.addGlobalStore(new GlobalStore(
-                    node,
+                    sourceNode,
                     processorNode,
-                    ((ProcessorNodeFactory) nodeFactories.get(processorNode)).stateStoreNames.iterator().next(),
-                    nodeToSourceTopics.get(node).get(0),
                     id
                 ));
                 break;
@@ -1313,7 +1327,8 @@ public class InternalTopologyBuilder {
 
         // add all nodes
         for (final String nodeName : nodeNames) {
-            nodesByName.put(nodeName, nodeFactories.get(nodeName).describe());
+            final NodeFactory node = nodeFactories.get(nodeName);
+            nodesByName.put(nodeName, node.describe());
         }
 
         // connect each node to its predecessors and successors
@@ -1336,13 +1351,42 @@ public class InternalTopologyBuilder {
         private final Processor processor;
         private final int id;
 
-        public GlobalStore(final String sourceName,
-                           final String processorName,
+        GlobalStore(final NodeFactory sourceNode,
+                    final NodeFactory processorNode,
+                    final int id) {
+            final SourceNodeFactory sourceNodeFactory = (SourceNodeFactory) sourceNode;
+            final ProcessorNodeFactory processNodeFactory = (ProcessorNodeFactory) processorNode;
+            source = new Source(sourceNode.name,
+                new HashSet<>(sourceNodeFactory.topics),
+                sourceNodeFactory.pattern,
+                sourceNodeFactory.keyDeserializer != null ? sourceNodeFactory.keyDeserializer.getClass().getSimpleName() : "null",
+                sourceNodeFactory.valDeserializer != null ? sourceNodeFactory.valDeserializer.getClass().getSimpleName() : "null");
+            final HashSet<Store> stores = new HashSet<>();
+            for (final StoreBuilder<?> storeBuilder : processNodeFactory.stateStoreBuilders) {
+                final List<String> serdeNames = storeBuilder.serdes() != null ?
+                    storeBuilder.serdes().stream().map(s -> s != null ? s.getClass().getSimpleName() : "null").collect(Collectors.toList()) :
+                    Collections.emptyList();
+                final Store store = new Store(storeBuilder.name(), serdeNames);
+                stores.add(store);
+            }
+            processor = new Processor(processorNode.name, stores);
+            source.successors.add(processor);
+            processor.predecessors.add(source);
+            this.id = id;
+        }
+
+        public GlobalStore(final String sourceNodeName,
+                           final String processorNodeName,
+                           final String sourceTopicName,
                            final String storeName,
-                           final String topicName,
                            final int id) {
-            source = new Source(sourceName, Collections.singleton(topicName), null);
-            processor = new Processor(processorName, Collections.singleton(storeName));
+            source = new Source(sourceNodeName,
+                Collections.singleton(sourceTopicName),
+                null,
+                "null",
+                "null");
+
+            processor = new Processor(processorNodeName, Collections.singleton(new Store(storeName, Arrays.asList("null", "null"))));
             source.successors.add(processor);
             processor.predecessors.add(source);
             this.id = id;
@@ -1430,13 +1474,25 @@ public class InternalTopologyBuilder {
     public final static class Source extends AbstractNode implements TopologyDescription.Source {
         private final Set<String> topics;
         private final Pattern topicPattern;
+        private final String keySerdeName;
+        private final String valueSerdeName;
 
         public Source(final String name,
                       final Set<String> topics,
                       final Pattern pattern) {
+            this(name, topics, pattern, null, null);
+        }
+
+        public Source(final String name,
+                      final Set<String> topics,
+                      final Pattern pattern,
+                      final String keySerdeName,
+                      final String valueSerdeName) {
             super(name);
             this.topics = topics;
             this.topicPattern = pattern;
+            this.keySerdeName = keySerdeName;
+            this.valueSerdeName = valueSerdeName;
         }
 
         @Deprecated
@@ -1461,10 +1517,20 @@ public class InternalTopologyBuilder {
         }
 
         @Override
+        public String keySerdeName() {
+            return keySerdeName;
+        }
+
+        @Override
+        public String valueSerdeName() {
+            return valueSerdeName;
+        }
+
+        @Override
         public String toString() {
             final String topicsString = topics == null ? topicPattern.toString() : topics.toString();
             
-            return "Source: " + name + " (topics: " + topicsString + ")\n      --> " + nodeNames(successors);
+            return "Source: " + name + " (topics: " + topicsString + ", keySerde: " + keySerdeName + ", valueSerde: " + valueSerdeName + ")\n      --> " + nodeNames(successors);
         }
 
         @Override
@@ -1490,19 +1556,69 @@ public class InternalTopologyBuilder {
         }
     }
 
+    public final static class Store implements TopologyDescription.Store {
+        private final String name;
+        private final List<String> serdeNames;
+
+        public Store(final String name, final List<String> serdeNames) {
+            this.name = name;
+            this.serdeNames = serdeNames;
+        }
+
+        @Override
+        public String name() {
+            return name;
+        }
+
+        @Override
+        public List<String> serdeNames() {
+            return serdeNames;
+        }
+
+        @Override
+        public String toString() {
+            return "(" + name + ", serdes: " + serdeNames + ")";
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+
+            final Store store = (Store) o;
+            return name.equals(store.name) && serdeNames.equals(store.serdeNames);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(name, serdeNames);
+        }
+    }
+
     public final static class Processor extends AbstractNode implements TopologyDescription.Processor {
-        private final Set<String> stores;
+        private final Set<Store> stores;
 
         public Processor(final String name,
-                         final Set<String> stores) {
+                         final Set<Store> stores) {
             super(name);
             this.stores = stores;
         }
 
+        @Deprecated
         @Override
         public Set<String> stores() {
+            return Collections.unmodifiableSet(stores.stream().map(Store::name).collect(Collectors.toSet()));
+        }
+
+        @Override
+        public Set<org.apache.kafka.streams.TopologyDescription.Store> storeSet() {
             return Collections.unmodifiableSet(stores);
         }
+
 
         @Override
         public String toString() {
@@ -1535,17 +1651,37 @@ public class InternalTopologyBuilder {
 
     public final static class Sink extends AbstractNode implements TopologyDescription.Sink {
         private final TopicNameExtractor topicNameExtractor;
+        private final String keySerdeName;
+        private final String valueSerdeName;
 
         public Sink(final String name,
                     final TopicNameExtractor topicNameExtractor) {
-            super(name);
-            this.topicNameExtractor = topicNameExtractor;
+            this(name, topicNameExtractor, null, null);
         }
 
         public Sink(final String name,
                     final String topic) {
+            this(name, topic, null, null);
+        }
+
+        public Sink(final String name,
+                    final TopicNameExtractor topicNameExtractor,
+                    final String keySerdeName,
+                    final String valueSerdeName) {
+            super(name);
+            this.topicNameExtractor = topicNameExtractor;
+            this.keySerdeName = keySerdeName;
+            this.valueSerdeName = valueSerdeName;
+        }
+
+        public Sink(final String name,
+                    final String topic,
+                    final String keySerdeName,
+                    final String valueSerdeName) {
             super(name);
             this.topicNameExtractor = new StaticTopicNameExtractor(topic);
+            this.keySerdeName = keySerdeName;
+            this.valueSerdeName = valueSerdeName;
         }
 
         @Override
@@ -1572,11 +1708,21 @@ public class InternalTopologyBuilder {
         }
 
         @Override
+        public String keySerdeName() {
+            return keySerdeName;
+        }
+
+        @Override
+        public String valueSerdeName() {
+            return valueSerdeName;
+        }
+
+        @Override
         public String toString() {
             if (topicNameExtractor instanceof StaticTopicNameExtractor) {
-                return "Sink: " + name + " (topic: " + topic() + ")\n      <-- " + nodeNames(predecessors);
+                return "Sink: " + name + " (topic: " + topic() + ", keySerde: " + keySerdeName + ", valueSerde: " + valueSerdeName + ")\n      <-- " + nodeNames(predecessors);
             }
-            return "Sink: " + name + " (extractor class: " + topicNameExtractor + ")\n      <-- "
+            return "Sink: " + name + " (extractor class: " + topicNameExtractor + ", keySerde: " + keySerdeName + ", valueSerde: " + valueSerdeName + ")\n      <-- "
                 + nodeNames(predecessors);
         }
 

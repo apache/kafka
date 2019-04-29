@@ -144,7 +144,6 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
 
         final Topology topology = builder.build(streamsConfiguration);
         final String topologyString = topology.describe().toString();
-        System.out.println(topologyString);
 
         if (optimizationConfig.equals(StreamsConfig.OPTIMIZE)) {
             assertEquals(EXPECTED_OPTIMIZED_TOPOLOGY, topologyString);
@@ -193,13 +192,11 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
         return keyValueList;
     }
 
-
-
     private static final String EXPECTED_OPTIMIZED_TOPOLOGY = "Topologies:\n"
                                                               + "   Sub-topology: 0\n"
-                                                              + "    Source: KSTREAM-SOURCE-0000000000 (topics: [inputA])\n"
+                                                              + "    Source: KSTREAM-SOURCE-0000000000 (topics: [inputA], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n"
                                                               + "      --> KSTREAM-MAP-0000000002\n"
-                                                              + "    Source: KSTREAM-SOURCE-0000000001 (topics: [inputB])\n"
+                                                              + "    Source: KSTREAM-SOURCE-0000000001 (topics: [inputB], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n"
                                                               + "      --> KSTREAM-MAP-0000000003\n"
                                                               + "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n"
                                                               + "      --> KSTREAM-MERGE-0000000004\n"
@@ -213,16 +210,16 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
                                                               + "    Processor: KSTREAM-FILTER-0000000021 (stores: [])\n"
                                                               + "      --> KSTREAM-SINK-0000000020\n"
                                                               + "      <-- KSTREAM-MERGE-0000000004\n"
-                                                              + "    Sink: KSTREAM-SINK-0000000020 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition)\n"
+                                                              + "    Sink: KSTREAM-SINK-0000000020 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition, keySerde: null, valueSerde: null)\n"
                                                               + "      <-- KSTREAM-FILTER-0000000021\n"
                                                               + "\n"
                                                               + "  Sub-topology: 1\n"
-                                                              + "    Source: KSTREAM-SOURCE-0000000022 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition])\n"
+                                                              + "    Source: KSTREAM-SOURCE-0000000022 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition], keySerde: null, valueSerde: null)\n"
                                                               + "      --> KSTREAM-AGGREGATE-0000000006, KSTREAM-AGGREGATE-0000000013\n"
-                                                              + "    Processor: KSTREAM-AGGREGATE-0000000013 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000012])\n"
+                                                              + "    Processor: KSTREAM-AGGREGATE-0000000013 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000012, serdes: [null, LongSerde])])\n"
                                                               + "      --> KTABLE-TOSTREAM-0000000017\n"
                                                               + "      <-- KSTREAM-SOURCE-0000000022\n"
-                                                              + "    Processor: KSTREAM-AGGREGATE-0000000006 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000005])\n"
+                                                              + "    Processor: KSTREAM-AGGREGATE-0000000006 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000005, serdes: [null, LongSerde])])\n"
                                                               + "      --> KTABLE-TOSTREAM-0000000010\n"
                                                               + "      <-- KSTREAM-SOURCE-0000000022\n"
                                                               + "    Processor: KTABLE-TOSTREAM-0000000017 (stores: [])\n"
@@ -234,17 +231,16 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
                                                               + "    Processor: KTABLE-TOSTREAM-0000000010 (stores: [])\n"
                                                               + "      --> KSTREAM-SINK-0000000011\n"
                                                               + "      <-- KSTREAM-AGGREGATE-0000000006\n"
-                                                              + "    Sink: KSTREAM-SINK-0000000011 (topic: outputTopic_0)\n"
+                                                              + "    Sink: KSTREAM-SINK-0000000011 (topic: outputTopic_0, keySerde: StringSerializer, valueSerde: LongSerializer)\n"
                                                               + "      <-- KTABLE-TOSTREAM-0000000010\n"
-                                                              + "    Sink: KSTREAM-SINK-0000000019 (topic: outputTopic_1)\n"
+                                                              + "    Sink: KSTREAM-SINK-0000000019 (topic: outputTopic_1, keySerde: StringSerializer, valueSerde: StringSerializer)\n"
                                                               + "      <-- KSTREAM-MAPVALUES-0000000018\n\n";
-
 
     private static final String EXPECTED_UNOPTIMIZED_TOPOLOGY = "Topologies:\n"
                                                                 + "   Sub-topology: 0\n"
-                                                                + "    Source: KSTREAM-SOURCE-0000000000 (topics: [inputA])\n"
+                                                                + "    Source: KSTREAM-SOURCE-0000000000 (topics: [inputA], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n"
                                                                 + "      --> KSTREAM-MAP-0000000002\n"
-                                                                + "    Source: KSTREAM-SOURCE-0000000001 (topics: [inputB])\n"
+                                                                + "    Source: KSTREAM-SOURCE-0000000001 (topics: [inputB], keySerde: StringDeserializer, valueSerde: StringDeserializer)\n"
                                                                 + "      --> KSTREAM-MAP-0000000003\n"
                                                                 + "    Processor: KSTREAM-MAP-0000000002 (stores: [])\n"
                                                                 + "      --> KSTREAM-MERGE-0000000004\n"
@@ -261,27 +257,27 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
                                                                 + "    Processor: KSTREAM-FILTER-0000000015 (stores: [])\n"
                                                                 + "      --> KSTREAM-SINK-0000000014\n"
                                                                 + "      <-- KSTREAM-MERGE-0000000004\n"
-                                                                + "    Sink: KSTREAM-SINK-0000000007 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition)\n"
+                                                                + "    Sink: KSTREAM-SINK-0000000007 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition, keySerde: null, valueSerde: null)\n"
                                                                 + "      <-- KSTREAM-FILTER-0000000008\n"
-                                                                + "    Sink: KSTREAM-SINK-0000000014 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition)\n"
+                                                                + "    Sink: KSTREAM-SINK-0000000014 (topic: KSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition, keySerde: null, valueSerde: null)\n"
                                                                 + "      <-- KSTREAM-FILTER-0000000015\n"
                                                                 + "\n"
                                                                 + "  Sub-topology: 1\n"
-                                                                + "    Source: KSTREAM-SOURCE-0000000009 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition])\n"
+                                                                + "    Source: KSTREAM-SOURCE-0000000009 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000005-repartition], keySerde: null, valueSerde: null)\n"
                                                                 + "      --> KSTREAM-AGGREGATE-0000000006\n"
-                                                                + "    Processor: KSTREAM-AGGREGATE-0000000006 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000005])\n"
+                                                                + "    Processor: KSTREAM-AGGREGATE-0000000006 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000005, serdes: [null, LongSerde])])\n"
                                                                 + "      --> KTABLE-TOSTREAM-0000000010\n"
                                                                 + "      <-- KSTREAM-SOURCE-0000000009\n"
                                                                 + "    Processor: KTABLE-TOSTREAM-0000000010 (stores: [])\n"
                                                                 + "      --> KSTREAM-SINK-0000000011\n"
                                                                 + "      <-- KSTREAM-AGGREGATE-0000000006\n"
-                                                                + "    Sink: KSTREAM-SINK-0000000011 (topic: outputTopic_0)\n"
+                                                                + "    Sink: KSTREAM-SINK-0000000011 (topic: outputTopic_0, keySerde: StringSerializer, valueSerde: LongSerializer)\n"
                                                                 + "      <-- KTABLE-TOSTREAM-0000000010\n"
                                                                 + "\n"
                                                                 + "  Sub-topology: 2\n"
-                                                                + "    Source: KSTREAM-SOURCE-0000000016 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition])\n"
+                                                                + "    Source: KSTREAM-SOURCE-0000000016 (topics: [KSTREAM-AGGREGATE-STATE-STORE-0000000012-repartition], keySerde: null, valueSerde: null)\n"
                                                                 + "      --> KSTREAM-AGGREGATE-0000000013\n"
-                                                                + "    Processor: KSTREAM-AGGREGATE-0000000013 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000012])\n"
+                                                                + "    Processor: KSTREAM-AGGREGATE-0000000013 (stores: [(KSTREAM-AGGREGATE-STATE-STORE-0000000012, serdes: [null, LongSerde])])\n"
                                                                 + "      --> KTABLE-TOSTREAM-0000000017\n"
                                                                 + "      <-- KSTREAM-SOURCE-0000000016\n"
                                                                 + "    Processor: KTABLE-TOSTREAM-0000000017 (stores: [])\n"
@@ -290,7 +286,7 @@ public class RepartitionWithMergeOptimizingIntegrationTest {
                                                                 + "    Processor: KSTREAM-MAPVALUES-0000000018 (stores: [])\n"
                                                                 + "      --> KSTREAM-SINK-0000000019\n"
                                                                 + "      <-- KTABLE-TOSTREAM-0000000017\n"
-                                                                + "    Sink: KSTREAM-SINK-0000000019 (topic: outputTopic_1)\n"
+                                                                + "    Sink: KSTREAM-SINK-0000000019 (topic: outputTopic_1, keySerde: StringSerializer, valueSerde: StringSerializer)\n"
                                                                 + "      <-- KSTREAM-MAPVALUES-0000000018\n\n";
 
 }

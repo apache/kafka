@@ -21,7 +21,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
+import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -86,5 +88,10 @@ abstract public class AbstractStoreBuilder<K, V, T extends StateStore> implement
     @Override
     public String name() {
         return name;
+    }
+
+    @Override
+    public List<Serde> serdes() {
+        return Arrays.asList(keySerde, valueSerde);
     }
 }
