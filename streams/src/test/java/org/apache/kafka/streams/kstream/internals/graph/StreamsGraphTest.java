@@ -50,7 +50,7 @@ public class StreamsGraphTest {
         final KStream<String, String> stream = builder.stream("topic");
         final KStream<String, String> streamII = builder.stream("other-topic");
         final ValueJoiner<String, String, String> valueJoiner = (v, v2) -> v + v2;
-        
+
         final KStream<String, String> joinedStream = stream.join(streamII, valueJoiner, JoinWindows.of(ofMillis(5000)));
 
         // build step one
