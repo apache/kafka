@@ -391,7 +391,7 @@ public final class Stores {
     }
 
     /**
-     * Creates a {@link StoreBuilder} than can be used to build a {@link KeyValueStore}.
+     * Creates a {@link StoreBuilder} that can be used to build a {@link KeyValueStore}.
      * <p>
      * The provided supplier should <strong>not</strong> be a supplier for
      * {@link TimestampedKeyValueStore TimestampedKeyValueStores}.
@@ -412,10 +412,10 @@ public final class Stores {
     }
 
     /**
-     * Creates a {@link StoreBuilder} than can be used to build a {@link TimestampedKeyValueStore}.
+     * Creates a {@link StoreBuilder} that can be used to build a {@link TimestampedKeyValueStore}.
      * <p>
      * The provided supplier should <strong>not</strong> be a supplier for
-     * {@link KeyValueStore KeyValueStores}. For this case, passed in timestamps will be dropped and not stores in the
+     * {@link KeyValueStore KeyValueStores}. For this case, passed in timestamps will be dropped and not stored in the
      * key-value-store. On read, no valid timestamp but a dummy timestamp will be returned.
      *
      * @param supplier      a {@link KeyValueBytesStoreSupplier} (cannot be {@code null})
@@ -458,7 +458,7 @@ public final class Stores {
      * Creates a {@link StoreBuilder} that can be used to build a {@link TimestampedWindowStore}.
      * <p>
      * The provided supplier should <strong>not</strong> be a supplier for
-     * {@link WindowStore WindowStores}. For this case, passed in timestamps will be dropped and not stores in the
+     * {@link WindowStore WindowStores}. For this case, passed in timestamps will be dropped and not stored in the
      * windows-store. On read, no valid timestamp but a dummy timestamp will be returned.
      *
      * @param supplier      a {@link WindowBytesStoreSupplier} (cannot be {@code null})
