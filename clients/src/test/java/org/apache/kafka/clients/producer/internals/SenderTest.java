@@ -1915,14 +1915,14 @@ public class SenderTest {
                                        TopicPartition tp) throws Exception {
         int maxRetries = 1;
         String topic = tp.topic();
-        long deliveryTimeoutMs = 3000L;
+        int deliveryTimeoutMs = 3000;
         long totalSize = 1024 * 1024;
         String metricGrpName = "producer-metrics";
         // Set a good compression ratio.
         CompressionRatioEstimator.setEstimation(topic, CompressionType.GZIP, 0.2f);
         try (Metrics m = new Metrics()) {
             accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.GZIP,
-                0L, 0L, deliveryTimeoutMs, m, metricGrpName, time, new ApiVersions(), txnManager,
+                0, 0L, deliveryTimeoutMs, m, metricGrpName, time, new ApiVersions(), txnManager,
                 new BufferPool(totalSize, batchSize, metrics, time, "producer-internal-metrics"));
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, true, MAX_REQUEST_SIZE, ACKS_ALL, maxRetries,
@@ -2025,7 +2025,7 @@ public class SenderTest {
 
     @Test
     public void testInflightBatchesExpireOnDeliveryTimeout() throws InterruptedException {
-        long deliveryTimeoutMs = 1500L;
+        int deliveryTimeoutMs = 1500;
         setupWithTransactionState(null, true, null);
 
         // Send first ProduceRequest
@@ -2051,7 +2051,7 @@ public class SenderTest {
 
     @Test
     public void testWhenFirstBatchExpireNoSendSecondBatchIfGuaranteeOrder() throws InterruptedException {
-        long deliveryTimeoutMs = 1500L;
+        int deliveryTimeoutMs = 1500;
         setupWithTransactionState(null, true, null);
 
         // Send first ProduceRequest
@@ -2168,7 +2168,7 @@ public class SenderTest {
 
     @Test
     public void testExpiredBatchesInMultiplePartitions() throws Exception {
-        long deliveryTimeoutMs = 1500L;
+        int deliveryTimeoutMs = 1500;
         setupWithTransactionState(null, true, null);
 
         // Send multiple ProduceRequest across multiple partitions.
@@ -2308,9 +2308,9 @@ public class SenderTest {
     }
 
     private void setupWithTransactionState(TransactionManager transactionManager, boolean guaranteeOrder, Map<String, String> metricTags, BufferPool pool) {
-        long deliveryTimeoutMs = 1500L;
+        int deliveryTimeoutMs = 1500;
         String metricGrpName = "producer-metrics";
-        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0L, 0L,
+        this.accumulator = new RecordAccumulator(logContext, batchSize, CompressionType.NONE, 0, 0,
             deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager, pool);
         this.senderMetricsRegistry = new SenderMetricsRegistry(this.metrics);
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, guaranteeOrder, MAX_REQUEST_SIZE, ACKS_ALL,

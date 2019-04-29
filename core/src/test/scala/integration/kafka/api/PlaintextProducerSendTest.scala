@@ -45,6 +45,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   def testBatchSizeZero() {
     val producer = createProducer(brokerList = brokerList,
       lingerMs = Int.MaxValue,
+      deliveryTimeoutMs = Int.MaxValue,
       batchSize = 0)
     sendAndVerify(producer)
   }
@@ -53,13 +54,14 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
   def testSendCompressedMessageWithLogAppendTime() {
     val producer = createProducer(brokerList = brokerList,
       compressionType = "gzip",
-      lingerMs = Int.MaxValue)
+      lingerMs = Int.MaxValue,
+      deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME)
   }
 
   @Test
   def testSendNonCompressedMessageWithLogAppendTime() {
-    val producer = createProducer(brokerList = brokerList, lingerMs = Int.MaxValue)
+    val producer = createProducer(brokerList = brokerList, lingerMs = Int.MaxValue, deliveryTimeoutMs = Int.MaxValue)
     sendAndVerifyTimestamp(producer, TimestampType.LOG_APPEND_TIME)
   }
 
