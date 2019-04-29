@@ -30,7 +30,6 @@ import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.runtime.AbstractHerder;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.TestSinkConnector;
 import org.apache.kafka.connect.runtime.TestSourceConnector;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -187,7 +186,7 @@ public class ConnectorPluginsResourceTest {
 
         plugins = PowerMock.createMock(Plugins.class);
         herder = PowerMock.createMock(AbstractHerder.class);
-        connectorPluginsResource = new ConnectorPluginsResource(new HerderProvider(herder));
+        connectorPluginsResource = new ConnectorPluginsResource(herder);
     }
 
     private void expectPlugins() {
