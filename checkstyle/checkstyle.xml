@@ -127,8 +127,15 @@
       <property name="max" value="16"/>
     </module>
     <module name="JavaNCSS">
+      <!-- LinkedIn: These need to be larger than the upstream (Apache open source) defaults since we need to be able to add
+           functionality without needing to refactor methods, classes and files before upstream does the refactor.
+        -->
       <!-- default is 50 -->
-      <property name="methodMaximum" value="100"/>
+      <property name="methodMaximum" value="150"/>
+      <!-- default is 1500 -->
+      <property name="classMaximum" value="2000" />
+      <!-- default is 2500 -->
+      <property name="fileMaximum" value="2500" />
     </module>
     <module name="NPathComplexity">
       <!-- default is 200 -->
