@@ -32,6 +32,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.Reconfigurable
 import org.apache.kafka.common.config.SecurityConfig
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
+import org.apache.kafka.common.config._
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SaslConfigs, SslClientAuth, SslConfigs, TopicConfig}
 import org.apache.kafka.common.metrics.Sensor
@@ -123,6 +124,10 @@ object Defaults {
   val AutoCreateTopicsEnable = true
   val MinInSyncReplicas = 1
   val MessageDownConversionEnable = true
+  val RemoteLogStorageEnable = false
+  val RemoteStorageManager = ""
+  val RemoteLogRetentionMinutes = 7 * 24 * 60L
+  val RemoteLogRetentionBytes = 1024 * 1024 * 1024L
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMs = RequestTimeoutMs
@@ -350,6 +355,14 @@ object KafkaConfig {
   val CreateTopicPolicyClassNameProp = "create.topic.policy.class.name"
   val AlterConfigPolicyClassNameProp = "alter.config.policy.class.name"
   val LogMessageDownConversionEnableProp = LogConfigPrefix + "message.downconversion.enable"
+
+  // Remote log storage config //
+  val RemoteLogStorageEnableProp = "remote.log.storage.enable"
+  val RemoteLogStorageManagerProp = "remote.log.storage.manager.config"
+  val RemoteLogRetentionMillisProp = "remote.log.retention.ms"
+  val RemoteLogRetentionMinutesProp = "remote.log.retention.minutes"
+  val RemoteLogRetentionBytesProp = "remote.log.retention.bytes"
+
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsProp = "controller.socket.timeout.ms"
   val DefaultReplicationFactorProp = "default.replication.factor"
@@ -665,7 +678,12 @@ object KafkaConfig {
     "implement the <code>org.apache.kafka.server.policy.CreateTopicPolicy</code> interface."
   val AlterConfigPolicyClassNameDoc = "The alter configs policy class that should be used for validation. The class should " +
     "implement the <code>org.apache.kafka.server.policy.AlterConfigPolicy</code> interface."
-  val LogMessageDownConversionEnableDoc = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC;
+  val LogMessageDownConversionEnableDoc = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_DOC
+  val RemoteLogStorageEnableDoc = "Whether to enable remote log storage or not."
+  val RemoteStorageManagerDoc = "Fully qualified classname of RemoteLogStorageManager implementation."
+  val RemoteLogRetentionMillisDoc = "Remote log retention in milli seconds, after which remote log segment is deleted."
+  val RemoteLogRetentionMinutesDoc = "Remote log retention in minutes, after which remote log segment is deleted."
+  val RemoteLogRetentionBytesDoc = "Remote log size retention in bytes, after which remote log segment is deleted."
 
   /** ********* Replication configuration ***********/
   val ControllerSocketTimeoutMsDoc = "The socket timeout for controller-to-broker channels"
@@ -948,6 +966,11 @@ object KafkaConfig {
       .define(CreateTopicPolicyClassNameProp, CLASS, null, LOW, CreateTopicPolicyClassNameDoc)
       .define(AlterConfigPolicyClassNameProp, CLASS, null, LOW, AlterConfigPolicyClassNameDoc)
       .define(LogMessageDownConversionEnableProp, BOOLEAN, Defaults.MessageDownConversionEnable, LOW, LogMessageDownConversionEnableDoc)
+      .define(RemoteLogStorageEnableProp, BOOLEAN, Defaults.RemoteLogStorageEnable, LOW, RemoteLogStorageEnableDoc)
+      .define(RemoteLogStorageManagerProp, BOOLEAN, Defaults.RemoteStorageManager, LOW, RemoteStorageManagerDoc)
+      .define(RemoteLogRetentionMillisProp, BOOLEAN, null, LOW, RemoteLogRetentionMillisDoc)
+      .define(RemoteLogRetentionMinutesProp, BOOLEAN, Defaults.RemoteLogRetentionMinutes, LOW, RemoteLogRetentionMinutesDoc)
+      .define(RemoteLogRetentionBytesProp, BOOLEAN, Defaults.RemoteLogRetentionBytes, LOW, RemoteLogRetentionBytesDoc)
 
       /** ********* Replication configuration ***********/
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.ControllerSocketTimeoutMs, MEDIUM, ControllerSocketTimeoutMsDoc)
@@ -1249,6 +1272,22 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   def logMessageTimestampType = TimestampType.forName(getString(KafkaConfig.LogMessageTimestampTypeProp))
   def logMessageTimestampDifferenceMaxMs: Long = getLong(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp)
   def logMessageDownConversionEnable: Boolean = getBoolean(KafkaConfig.LogMessageDownConversionEnableProp)
+
+  /** Remote log storage config **/
+  def remoteLogStorageEnable: Boolean = getBoolean(KafkaConfig.RemoteLogStorageEnableProp)
+  def remoteLogStorageManager: String = getString(KafkaConfig.RemoteLogStorageManagerProp)
+  def remoteLogRetentionBytes: Long = getLong(KafkaConfig.RemoteLogRetentionBytesProp)
+  def remoteLogRetentionMillis: Long = {
+    val millisInMinute = 60L * 1000L
+
+    val millis: java.lang.Long =
+      Option(getLong(KafkaConfig.RemoteLogRetentionMillisProp)).getOrElse(
+        getLong(KafkaConfig.RemoteLogRetentionMinutesProp) * millisInMinute
+      )
+
+    if (millis < 0) return -1
+    millis
+  }
 
   /** ********* Replication configuration ***********/
   val controllerSocketTimeoutMs: Int = getInt(KafkaConfig.ControllerSocketTimeoutMsProp)
