@@ -184,16 +184,6 @@ public class WorkerGroupMember {
         return coordinator.memberId();
     }
 
-    /**
-     * Get the local client ID of the worker. This id is unique locally and it's primarily used for
-     * logging.
-     *
-     * @return the client ID of this worker
-     */
-    public String clientId() {
-        return clientId;
-    }
-
     public void requestRejoin() {
         coordinator.requestRejoin();
     }
