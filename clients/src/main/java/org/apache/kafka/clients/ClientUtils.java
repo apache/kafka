@@ -91,7 +91,7 @@ public final class ClientUtils {
         return addresses;
     }
 
-    public static void closeQuietly(Closeable c, String name, AtomicReference<Throwable> firstException) {
+    public static void closeQuietly(AutoCloseable c, String name, AtomicReference<Throwable> firstException) {
         if (c != null) {
             try {
                 c.close();

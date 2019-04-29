@@ -717,6 +717,29 @@ public class SelectorTest {
         assertNull(selector.lowestPriorityChannel());
     }
 
+    @Test
+    public void testMetricsCleanupOnSelectorClose() throws Exception {
+        Metrics metrics = new Metrics();
+        RuntimeException runtimeException = new RuntimeException();
+        Selector selector = new ImmediatelyConnectingSelector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
+            @Override
+            public void close(String id) {
+                throw runtimeException;
+            }
+        };
+        assertTrue(metrics.metrics().size() > 1);
+        String id = "0";
+        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+        try {
+            selector.close();
+        } catch (Exception e) {
+            assertEquals(e, runtimeException);
+        }
+
+        // We should only have one remaining metric for kafka-metrics-count, which is a global metric
+        assertEquals(1, metrics.metrics().size());
+    }
+
 
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));

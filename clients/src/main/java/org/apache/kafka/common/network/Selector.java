@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
+import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -52,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A nioSelector interface for doing non-blocking multi-connection network I/O.
@@ -361,15 +363,20 @@ public class Selector implements Selectable, AutoCloseable {
         try {
             for (String id : connections)
                 close(id);
-            try {
-                this.nioSelector.close();
-            } catch (IOException | SecurityException e) {
-                log.error("Exception closing nioSelector:", e);
-            }
         } finally {
-            sensors.close();
+            // If there is any exception thrown in close(id), we should still be able
+            // to close the remaining objects, especially the sensors because keeping
+            // the sensors may lead to failure to start up the ReplicaFetcherThread if
+            // the old sensors with the same names has not yet been cleaned up.
+            AtomicReference<Throwable> firstException = new AtomicReference<>();
+            ClientUtils.closeQuietly(nioSelector, "nioSelector", firstException);
+            ClientUtils.closeQuietly(sensors, "sensors", firstException);
+            ClientUtils.closeQuietly(channelBuilder, "channelBuilder", firstException);
+            Throwable exception = firstException.get();
+            if (exception instanceof RuntimeException) {
+                throw (RuntimeException) exception;
+            }
         }
-        channelBuilder.close();
     }
 
     /**
