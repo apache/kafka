@@ -29,6 +29,7 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertTrue;
 
 public class LoggingContextTest {
 
@@ -174,21 +175,20 @@ public class LoggingContextTest {
         String context = MDC.get(LoggingContext.CONNECTOR_CONTEXT);
         if (context != null) {
             assertEquals(
+                "Context should begin with connector name when the connector name is non-null",
                 connectorName != null,
-                connectorName != null ? context.startsWith("[" + connectorName) : false
+                context.startsWith("[" + connectorName)
             );
-            assertEquals(
-                scope != null,
-                scope != null ? context.contains(scope.toString()) : false
-            );
-            assertEquals(
-                taskId != null,
-                taskId != null ? context.contains(taskId.toString()) : false
-            );
+            if (scope != null) {
+                assertTrue("Context should contain the scope", context.contains(scope.toString()));
+            }
+            if (taskId != null) {
+                assertTrue("Context should contain the taskId", context.contains(taskId.toString()));
+            }
         } else {
-            assertNull("No logging context found, but expected it includes name of connector", connectorName);
-            assertNull("No logging context found, but expected it includes task ID", taskId);
-            assertNull("No logging context found, but expected it includes scope", scope);
+            assertNull("No logging context found, expected null connector name", connectorName);
+            assertNull("No logging context found, expected null task ID", taskId);
+            assertNull("No logging context found, expected null scope", scope);
         }
     }
 
