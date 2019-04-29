@@ -29,12 +29,12 @@ buildscript {
 
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
-    classpath "org.ajoberstar:grgit:1.9.3"
-    classpath 'com.github.ben-manes:gradle-versions-plugin:0.20.0'
+    classpath "org.ajoberstar.grgit:grgit-core:3.1.1"
+    classpath 'com.github.ben-manes:gradle-versions-plugin:0.21.0'
     classpath 'org.scoverage:gradle-scoverage:2.5.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.3'
+    classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.4'
     classpath 'org.owasp:dependency-check-gradle:4.0.2'
-    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.17.0"
+    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.23.0"
     classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.9"
   }
 }
@@ -91,7 +91,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "5.1.1"
+  gradleVersion = "5.4.1"
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
 
@@ -120,7 +120,7 @@ if (file('.git').exists()) {
   rat {
     // Exclude everything under the directory that git should be ignoring via .gitignore or that isn't checked in. These
     // restrict us only to files that are checked in or are staged.
-    def repo = Grgit.open(project.getRootDir())
+    def repo = Grgit.open(currentDir: project.getRootDir())
     excludes = new ArrayList<String>(repo.clean(ignore: false, directories: true, dryRun: true))
     // And some of the files that we have checked in should also be excluded from this check
     excludes.addAll([
@@ -432,7 +432,7 @@ subprojects {
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = checkstyleConfigProperties("import-control.xml")
-    toolVersion = '8.10'
+    toolVersion = '8.20'
   }
 
   configure(checkstyleMain) {
@@ -448,7 +448,7 @@ subprojects {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
   spotbugs {
-    toolVersion = '3.1.8'
+    toolVersion = '3.1.12'
     excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
     ignoreFailures = false
   }
@@ -467,7 +467,7 @@ subprojects {
     apply plugin: "jacoco"
 
     jacoco {
-      toolVersion = "0.8.2"
+      toolVersion = "0.8.3"
     }
 
     // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
