@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedWorkerState;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.ConnectorsAndTasks;
 import org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.WorkerLoad;
@@ -53,14 +54,16 @@ import static org.apache.kafka.connect.runtime.distributed.WorkerCoordinator.Lea
  */
 public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private final Logger log;
+    private final Time time;
     private final int maxDelay;
     private ConnectorsAndTasks previousAssignment;
     private long scheduledRebalance;
     private Set<String> candidateWorkersForReassignment;
     private int delay;
 
-    public IncrementalCooperativeAssignor(LogContext logContext, int maxDelay) {
+    public IncrementalCooperativeAssignor(LogContext logContext, Time time, int maxDelay) {
         this.log = logContext.logger(IncrementalCooperativeAssignor.class);
+        this.time = time;
         this.maxDelay = maxDelay;
         this.previousAssignment = ConnectorsAndTasks.EMPTY;
         this.scheduledRebalance = 0;
@@ -266,7 +269,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                                        ConnectorsAndTasks newSubmissions,
                                        List<WorkerLoad> completeWorkerAssignment) {
         if (!lostAssignments.isEmpty()) {
-            final long now = System.currentTimeMillis();
+            final long now = time.milliseconds();
             log.debug("Found the following connectors and tasks missing from previous assignment: "
                     + lostAssignments);
 

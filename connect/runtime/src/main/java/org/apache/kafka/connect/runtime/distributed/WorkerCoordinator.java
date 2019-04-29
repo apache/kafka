@@ -110,7 +110,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
         this.listener = listener;
         this.rejoinRequested = false;
         this.protocolCompatibility = protocolCompatibility;
-        this.incrementalAssignor = new IncrementalCooperativeAssignor(logContext, maxDelay);
+        this.incrementalAssignor = new IncrementalCooperativeAssignor(logContext, time, maxDelay);
         this.eagerAssignor = new EagerAssignor(logContext);
         this.currentConnectProtocol = protocolCompatibility == COMPATIBLE
                                       ? CONNECT_PROTOCOL_V1
@@ -182,7 +182,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
             case COMPATIBLE:
                 return new JoinGroupRequestProtocolCollection(Arrays.asList(
                         new JoinGroupRequestProtocol()
-                                .setName(protocolCompatibility.protocol())
+                                .setName(COMPATIBLE.protocol())
                                 .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(workerState).array()),
                         new JoinGroupRequestProtocol()
                                 .setName(EAGER.protocol())

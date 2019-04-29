@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.junit.After;
 import org.junit.Before;
@@ -38,7 +39,9 @@ public class IncrementalCooperativeAssignorTest {
     public void setup() {
         LogContext loggerFactory = new LogContext();
         assignor = new IncrementalCooperativeAssignor(
-                loggerFactory, DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT);
+                loggerFactory,
+                Time.SYSTEM,
+                DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT);
     }
 
     @After
