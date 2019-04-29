@@ -652,7 +652,7 @@ public class NetworkClient implements KafkaClient {
             int idx = (offset + i) % nodes.size();
             Node node = nodes.get(idx);
             int currInflight = this.inFlightRequests.count(node.idString());
-            if (currInflight == 0 && isReady(node, now)) {
+            if (currInflight == 0 && canSendRequest(node.idString(), now)) {
                 // if we find an established connection with no in-flight requests we can stop right away
                 log.trace("Found least loaded node {} connected with no in-flight requests", node);
                 return node;

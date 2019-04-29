@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemorySessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.MemoryNavigableLRUCache;
@@ -272,6 +273,26 @@ public class Stores {
             windowSize,
             retainDuplicates,
             false);
+    }
+
+    /**
+     * Create an in-memory {@link SessionBytesStoreSupplier}.
+     * @param name              name of the store (cannot be {@code null})
+     * @param retentionPeriod   length ot time to retain data in the store (cannot be negative)
+     *                          Note that the retention period must be at least long enough to contain the
+     *                          windowed data's entire life cycle, from window-start through window-end,
+     *                          and for the entire grace period.
+     * @return an instance of a {@link  SessionBytesStoreSupplier}
+     */
+    public static SessionBytesStoreSupplier inMemorySessionStore(final String name, final Duration retentionPeriod) {
+        Objects.requireNonNull(name, "name cannot be null");
+
+        final String msgPrefix = prepareMillisCheckFailMsgPrefix(retentionPeriod, "retentionPeriod");
+        final long retentionPeriodMs = ApiUtils.validateMillisecondDuration(retentionPeriod, msgPrefix);
+        if (retentionPeriodMs < 0) {
+            throw new IllegalArgumentException("retentionPeriod cannot be negative");
+        }
+        return new InMemorySessionBytesStoreSupplier(name, retentionPeriodMs);
     }
 
     /**

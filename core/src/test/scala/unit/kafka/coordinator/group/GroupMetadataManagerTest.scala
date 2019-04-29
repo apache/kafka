@@ -59,6 +59,7 @@ class GroupMetadataManagerTest {
   var defaultOffsetRetentionMs = Long.MaxValue
 
   val groupId = "foo"
+  val groupInstanceId = Some("bar")
   val groupPartitionId = 0
   val groupTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId)
   val protocolType = "protocolType"
@@ -775,6 +776,53 @@ class GroupMetadataManagerTest {
   }
 
   @Test
+  def testloadGroupWithStaticMember() {
+    val generation = 27
+    val protocolType = "consumer"
+    val staticMemberId = "staticMemberId"
+    val dynamicMemberId = "dynamicMemberId"
+
+    val staticMember = new MemberMetadata(staticMemberId, groupId, groupInstanceId, "", "", rebalanceTimeout, sessionTimeout,
+      protocolType, List(("protocol", Array[Byte]())))
+
+    val dynamicMember = new MemberMetadata(dynamicMemberId, groupId, None, "", "", rebalanceTimeout, sessionTimeout,
+      protocolType, List(("protocol", Array[Byte]())))
+
+    val members = Seq(staticMember, dynamicMember)
+
+    val group = GroupMetadata.loadGroup(groupId, Empty, generation, protocolType, null, null, None, members, time)
+
+    assertTrue(group.is(Empty))
+    assertEquals(generation, group.generationId)
+    assertEquals(Some(protocolType), group.protocolType)
+    assertTrue(group.has(staticMemberId))
+    assertTrue(group.has(dynamicMemberId))
+    assertTrue(group.hasStaticMember(groupInstanceId))
+    assertEquals(staticMemberId, group.getStaticMemberId(groupInstanceId))
+  }
+
+  @Test
+  def testReadFromOldGroupMetadata() {
+    val generation = 1
+    val protocol = "range"
+    val memberId = "memberId"
+    val oldApiVersions = Array(KAFKA_0_9_0, KAFKA_0_10_1_IV0, KAFKA_2_1_IV0)
+
+    for (apiVersion <- oldApiVersions) {
+      val groupMetadataRecord = buildStableGroupRecordWithMember(generation, protocolType, protocol, memberId, apiVersion = apiVersion)
+
+      val deserializedGroupMetadata = GroupMetadataManager.readGroupMessageValue(groupId, groupMetadataRecord.value(), time)
+      assertEquals(groupId, deserializedGroupMetadata.groupId)
+      assertEquals(generation, deserializedGroupMetadata.generationId)
+      assertEquals(protocolType, deserializedGroupMetadata.protocolType.get)
+      assertEquals(protocol, deserializedGroupMetadata.protocolOrNull)
+      assertEquals(1, deserializedGroupMetadata.allMembers.size)
+      assertTrue(deserializedGroupMetadata.allMembers.contains(memberId))
+      assertTrue(deserializedGroupMetadata.allStaticMembers.isEmpty)
+    }
+  }
+
+  @Test
   def testStoreEmptyGroup() {
     val generation = 27
     val protocolType = "consumer"
@@ -875,7 +923,7 @@ class GroupMetadataManagerTest {
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
     group.add(member, _ => ())
     group.transitionTo(PreparingRebalance)
@@ -904,7 +952,7 @@ class GroupMetadataManagerTest {
 
     val group = new GroupMetadata(groupId, Empty, time)
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", Array[Byte]())))
     group.add(member, _ => ())
     group.transitionTo(PreparingRebalance)
@@ -1403,7 +1451,7 @@ class GroupMetadataManagerTest {
     groupMetadataManager.addGroup(group)
 
     val subscription = new Subscription(List(topic).asJava)
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeout, sessionTimeout,
       protocolType, List(("protocol", ConsumerProtocol.serializeSubscription(subscription).array())))
     group.add(member, _ => ())
     group.transitionTo(PreparingRebalance)
@@ -1896,7 +1944,7 @@ class GroupMetadataManagerTest {
                                                assignmentSize: Int = 0,
                                                apiVersion: ApiVersion = ApiVersion.latestVersion): SimpleRecord = {
     val memberProtocols = List((protocol, Array.emptyByteArray))
-    val member = new MemberMetadata(memberId, groupId, "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, "clientId", "clientHost", 30000, 10000, protocolType, memberProtocols)
     val group = GroupMetadata.loadGroup(groupId, Stable, generation, protocolType, protocol, memberId,
       if (apiVersion >= KAFKA_2_1_IV0) Some(time.milliseconds()) else None, Seq(member), time)
     val groupMetadataKey = GroupMetadataManager.groupMetadataKey(groupId)
