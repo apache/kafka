@@ -573,13 +573,13 @@ class Log(@volatile var dir: File,
     if (logSegments.isEmpty) {
       // no existing segments, create a new mutable segment beginning at offset 0
       addSegment(LogSegment.open(dir = dir,
-        baseOffset = 0,
+        baseOffset = logStartOffset,
         config,
         time = time,
         fileAlreadyExists = false,
         initFileSize = this.initFileSize,
         preallocate = config.preallocate))
-      0
+      logStartOffset
     } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
       val nextOffset = retryOnOffsetOverflow {
         recoverLog()
@@ -588,7 +588,9 @@ class Log(@volatile var dir: File,
       // reset the index size of the currently active log segment to allow more entries
       activeSegment.resizeIndexes(config.maxIndexSize)
       nextOffset
-    } else 0
+    } else {
+      0
+    }
   }
 
   private def updateLogEndOffset(messageOffset: Long) {
