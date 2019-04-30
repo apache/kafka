@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -31,6 +30,7 @@ import org.apache.kafka.common.metrics.stats.SampledStat;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -369,9 +369,9 @@ public class Selector implements Selectable, AutoCloseable {
             // the sensors may lead to failure to start up the ReplicaFetcherThread if
             // the old sensors with the same names has not yet been cleaned up.
             AtomicReference<Throwable> firstException = new AtomicReference<>();
-            ClientUtils.closeQuietly(nioSelector, "nioSelector", firstException);
-            ClientUtils.closeQuietly(sensors, "sensors", firstException);
-            ClientUtils.closeQuietly(channelBuilder, "channelBuilder", firstException);
+            Utils.closeQuietly(nioSelector, "nioSelector", firstException);
+            Utils.closeQuietly(sensors, "sensors", firstException);
+            Utils.closeQuietly(channelBuilder, "channelBuilder", firstException);
             Throwable exception = firstException.get();
             if (exception instanceof RuntimeException && !(exception instanceof SecurityException)) {
                 throw (RuntimeException) exception;
