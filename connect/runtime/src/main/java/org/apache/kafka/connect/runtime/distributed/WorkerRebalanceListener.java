@@ -32,7 +32,8 @@ public interface WorkerRebalanceListener {
 
     /**
      * Invoked when a rebalance operation starts, revoking ownership for the set of connectors
-     * and tasks.
+     * and tasks. Depending on the Connect protocol version, the collection of revoked connectors
+     * or tasks might refer to all or some of the connectors and tasks running on the worker.
      */
     void onRevoked(String leader, Collection<String> connectors, Collection<ConnectorTaskId> tasks);
 }
