@@ -2384,7 +2384,7 @@ public class TransactionManagerTest {
             assertEquals(CoordinatorType.forId(findCoordinatorRequest.data().keyType()), coordinatorType);
             assertEquals(findCoordinatorRequest.data().key(), coordinatorKey);
             return true;
-        }, findCoordinatorResponse(error, brokerNode), shouldDisconnect);
+        }, FindCoordinatorResponse.prepareResponse(error, brokerNode), shouldDisconnect);
     }
 
     private void prepareInitPidResponse(Errors error, boolean shouldDisconnect, long producerId, short producerEpoch) {
@@ -2507,10 +2507,6 @@ public class TransactionManagerTest {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, 10);
         Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(tp, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
-    }
-
-    private FindCoordinatorResponse findCoordinatorResponse(Errors error, Node node) {
-        return FindCoordinatorResponse.prepareResponse(error, node);
     }
 
     private void doInitTransactions(long pid, short epoch) {

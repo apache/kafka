@@ -57,24 +57,21 @@ public class FindCoordinatorRequest extends AbstractRequest {
     }
 
     private final FindCoordinatorRequestData data;
-    private final short version;
 
     private FindCoordinatorRequest(FindCoordinatorRequestData data, short version) {
         super(ApiKeys.FIND_COORDINATOR, version);
         this.data = data;
-        this.version = version;
     }
 
     public FindCoordinatorRequest(Struct struct, short version) {
         super(ApiKeys.FIND_COORDINATOR, version);
         this.data = new FindCoordinatorRequestData(struct, version);
-        this.version = version;
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         FindCoordinatorResponseData response = new FindCoordinatorResponseData();
-        if (version >= 2) {
+        if (version() >= 2) {
             response.setThrottleTimeMs(throttleTimeMs);
         }
         Errors error = Errors.forException(e);
@@ -87,7 +84,7 @@ public class FindCoordinatorRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 
     public FindCoordinatorRequestData data() {
