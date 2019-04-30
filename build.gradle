@@ -31,10 +31,10 @@ buildscript {
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
     classpath "org.ajoberstar.grgit:grgit-core:$versions.grgit"
-    classpath "com.github.ben-manes:gradle-versions-plugin:$versions.versionsPlugin"
+    classpath "com.github.ben-manes:gradle-versions-plugin:$versions.gradleVersionsPlugin"
     classpath "org.scoverage:gradle-scoverage:$versions.scoveragePlugin"
     classpath "com.github.jengelman.gradle.plugins:shadow:$versions.shadowPlugin"
-    classpath "org.owasp:dependency-check-gradle:$versions.owaspPlugin"
+    classpath "org.owasp:dependency-check-gradle:$versions.owaspDepCheckPlugin"
     classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
     classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
   }
