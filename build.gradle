@@ -1253,6 +1253,7 @@ project(':support-metrics-client') {
 
     testCompile project(':core').sourceSets.test.output
     testCompile project(':clients').sourceSets.test.output // for org.apache.kafka.test.IntegrationTest
+    testCompile project(':support-metrics-common').sourceSets.test.output // for io.confluent.support.metrics.common.kafka.EmbeddedKafkaCluster
     testCompile libs.junit
     testCompile libs.mockitoCore
   }
