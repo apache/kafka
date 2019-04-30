@@ -571,7 +571,7 @@ class Log(@volatile var dir: File,
     completeSwapOperations(swapFiles)
 
     if (logSegments.isEmpty) {
-      // no existing segments, create a new mutable segment beginning at offset 0
+      // no existing segments, create a new mutable segment beginning at logStartOffset
       addSegment(LogSegment.open(dir = dir,
         baseOffset = logStartOffset,
         config,

@@ -2932,18 +2932,17 @@ class LogTest {
   @Test
   def shouldDeleteStartOffsetBreachedSegmentsWhenPolicyDoesNotIncludeDelete(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes, timestamp = 10L)
-    val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000, cleanupPolicy = "compact")
-
-    // Create log with start offset ahead of the first log segment
-    val log = createLog(logDir, logConfig, brokerTopicStats, logStartOffset = 5L)
+    val recordsPerSegment = 5
+    val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * recordsPerSegment, retentionMs = 10000, cleanupPolicy = "compact")
+    val log = createLog(logDir, logConfig, brokerTopicStats)
 
     // append some messages to create some segments
     for (_ <- 0 until 15)
       log.appendAsLeader(createRecords, leaderEpoch = 0)
 
-    // Three segments should be created, with the first one entirely preceding the log start offset
+    // Three segments should be created
     assertEquals(3, log.logSegments.count(_ => true))
-    assertTrue(log.logSegments.slice(1, 2).head.baseOffset <= log.logStartOffset)
+    log.maybeIncrementLogStartOffset(recordsPerSegment)
 
     // The first segment, which is entirely before the log start offset, should be deleted
     // Of the remaining the segments, the first can overlap the log start offset and the rest must have a base offset
