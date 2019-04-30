@@ -193,7 +193,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   // Static membership mapping [key: group.instance.id, value: member.id]
   private val staticMembers = new mutable.HashMap[String, String]
   private val pendingMembers = new mutable.HashSet[String]
-  private final val MEMBER_ID_DELIMITER = "-"
+  private val MEMBER_ID_DELIMITER = "-"
   private var numMembersAwaitingJoin = 0
   private val supportedProtocols = new mutable.HashMap[String, Integer]().withDefaultValue(0)
   private val offsets = new mutable.HashMap[TopicPartition, CommitRecordMetadataAndOffset]
@@ -356,9 +356,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   // This validation doesn't handle the case where a static member changes
   // its group.instance.id while maintains the same member.id. That edge case should
-  // be handled by session timeout old static member registration
-  // with associated old member.id, so that the flipped member will be evicted and
-  // ask to rejoin due to UNKNOWN_MEMBER_ID.
+  // be caused by a hacked consumer client since current client logic doesn't
+  // support group.instance.id change on runtime.
   def validateMemberIdIfStatic(memberId: String): Boolean = {
     val delimiterIdx = memberId.lastIndexOf(MEMBER_ID_DELIMITER)
     // Member id must have formatted with valid delimiter as [prefix]-[suffix] to
