@@ -373,9 +373,10 @@ public class Selector implements Selectable, AutoCloseable {
             ClientUtils.closeQuietly(sensors, "sensors", firstException);
             ClientUtils.closeQuietly(channelBuilder, "channelBuilder", firstException);
             Throwable exception = firstException.get();
-            if (exception instanceof RuntimeException) {
+            if (exception instanceof RuntimeException && !(exception instanceof SecurityException)) {
                 throw (RuntimeException) exception;
             }
+
         }
     }
 

@@ -53,12 +53,7 @@ import java.util.Set;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertNotNull;
-import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertTrue;
-import static org.junit.Assert.fail;
+import static org.junit.Assert.*;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -720,21 +715,18 @@ public class SelectorTest {
     @Test
     public void testMetricsCleanupOnSelectorClose() throws Exception {
         Metrics metrics = new Metrics();
-        RuntimeException runtimeException = new RuntimeException();
         Selector selector = new ImmediatelyConnectingSelector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
             @Override
             public void close(String id) {
-                throw runtimeException;
+                throw new RuntimeException();
             }
         };
         assertTrue(metrics.metrics().size() > 1);
         String id = "0";
         selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
-        try {
-            selector.close();
-        } catch (Exception e) {
-            assertEquals(e, runtimeException);
-        }
+
+        // Close the selector and ensure a RuntimeException has been throw
+        assertThrows(RuntimeException.class, selector::close);
 
         // We should only have one remaining metric for kafka-metrics-count, which is a global metric
         assertEquals(1, metrics.metrics().size());
