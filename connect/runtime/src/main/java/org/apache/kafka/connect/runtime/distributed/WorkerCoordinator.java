@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -39,7 +40,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Optional;
 
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
@@ -70,33 +70,23 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     /**
      * Initialize the coordination manager.
      */
-    public WorkerCoordinator(LogContext logContext,
+    public WorkerCoordinator(GroupRebalanceConfig config,
+                             LogContext logContext,
                              ConsumerNetworkClient client,
-                             String groupId,
-                             int rebalanceTimeoutMs,
-                             int sessionTimeoutMs,
-                             int heartbeatIntervalMs,
                              Metrics metrics,
                              String metricGrpPrefix,
                              Time time,
-                             long retryBackoffMs,
                              String restUrl,
                              ConfigBackingStore configStorage,
                              WorkerRebalanceListener listener,
                              ConnectProtocolCompatibility protocolCompatibility,
                              int maxDelay) {
-        super(logContext,
+        super(config,
+              logContext,
               client,
-              groupId,
-              Optional.empty(),
-              rebalanceTimeoutMs,
-              sessionTimeoutMs,
-              heartbeatIntervalMs,
               metrics,
               metricGrpPrefix,
-              time,
-              retryBackoffMs,
-              true);
+              time);
         this.log = logContext.logger(WorkerCoordinator.class);
         this.restUrl = restUrl;
         this.configStorage = configStorage;
