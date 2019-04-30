@@ -20,10 +20,14 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
@@ -45,6 +49,7 @@ import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilderTest;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -610,4 +615,31 @@ public class StandbyTaskTest {
         assertTrue(closedStateManager.get());
     }
 
+    @Test
+    public void shouldRecordTaskClosedMetricOnClose() throws IOException {
+        final Metrics metrics = new Metrics();
+        final Sensor sensor = metrics.sensor("internal.testThreadName.s.task-closed",
+                                             Sensor.RecordingLevel.INFO);
+        final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
+        sensor.add( metricName, new Total());
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "threadName");
+        final StandbyTask task = new StandbyTask(
+            taskId,
+            ktablePartitions,
+            ktableTopology,
+            consumer,
+            changelogReader,
+            createConfig(baseDir),
+            streamsMetrics,
+            stateDirectory
+        );
+
+        final boolean clean = true;
+        final boolean isZombie = false;
+        task.close(clean, isZombie);
+
+        final KafkaMetric metric = metrics.metric(metricName);
+        final double totalCloses = metric.measurable().measure(metric.config(), System.currentTimeMillis());
+        assertThat(totalCloses, equalTo(1.0));
+    }
 }
