@@ -112,7 +112,7 @@ class AdminClient(val time: Time,
   def findCoordinator(groupId: String, timeoutMs: Long = 0): Node = {
     val requestBuilder = new FindCoordinatorRequest.Builder(
         new FindCoordinatorRequestData()
-          .setKeyType(CoordinatorType.GROUP.id())
+          .setKeyType(CoordinatorType.GROUP.id)
           .setKey(groupId))
 
     def sendRequest: Try[FindCoordinatorResponse] =
