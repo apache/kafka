@@ -161,9 +161,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
         waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, 4).orElse(true),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
 
-        // Just wait a sec
-        Thread.sleep(1_000);
-
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME);
 
@@ -204,9 +201,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, 4).orElse(true),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
-
-        // Just wait a sec
-        Thread.sleep(1_000);
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME + 3);
@@ -257,9 +251,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
         waitForCondition(() -> this.assertWorkersUp(4),
                 WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
 
-        // Just wait a sec
-        Thread.sleep(1_000);
-
         waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, 4).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
 
@@ -305,9 +296,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
 
         waitForCondition(() -> this.assertWorkersUp(2),
                 WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
-
-        // Just wait a sec
-        Thread.sleep(1_000);
 
         waitForCondition(this::assertConnectorAndTasksAreBalanced,
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");

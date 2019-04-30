@@ -56,12 +56,12 @@ public class ConnectProtocolCompatibilityTest {
 
     @Mock
     private KafkaConfigBackingStore configStorage;
-    private ClusterConfigState configState1;
+    private ClusterConfigState configState;
 
     @Before
     public void setup() {
         configStorage = mock(KafkaConfigBackingStore.class);
-        configState1 = new ClusterConfigState(
+        configState = new ClusterConfigState(
                 1L,
                 Collections.singletonMap(connectorId1, 1),
                 Collections.singletonMap(connectorId1, new HashMap<>()),
@@ -77,7 +77,7 @@ public class ConnectProtocolCompatibilityTest {
 
     @Test
     public void testEagerToEagerMetadata() {
-        when(configStorage.snapshot()).thenReturn(configState1);
+        when(configStorage.snapshot()).thenReturn(configState);
         ExtendedWorkerState workerState = new ExtendedWorkerState(LEADER_URL, configStorage.snapshot().offset(), null);
         ByteBuffer metadata = ConnectProtocol.serializeMetadata(workerState);
         ConnectProtocol.WorkerState state = ConnectProtocol.deserializeMetadata(metadata);
@@ -88,7 +88,7 @@ public class ConnectProtocolCompatibilityTest {
 
     @Test
     public void testCoopToCoopMetadata() {
-        when(configStorage.snapshot()).thenReturn(configState1);
+        when(configStorage.snapshot()).thenReturn(configState);
         ExtendedWorkerState workerState = new ExtendedWorkerState(LEADER_URL, configStorage.snapshot().offset(), null);
         ByteBuffer metadata = IncrementalCooperativeConnectProtocol.serializeMetadata(workerState);
         ExtendedWorkerState state = IncrementalCooperativeConnectProtocol.deserializeMetadata(metadata);
@@ -99,7 +99,7 @@ public class ConnectProtocolCompatibilityTest {
 
     @Test
     public void testCoopToEagerMetadata() {
-        when(configStorage.snapshot()).thenReturn(configState1);
+        when(configStorage.snapshot()).thenReturn(configState);
         ExtendedWorkerState workerState = new ExtendedWorkerState(LEADER_URL, configStorage.snapshot().offset(), null);
         ByteBuffer metadata = IncrementalCooperativeConnectProtocol.serializeMetadata(workerState);
         ConnectProtocol.WorkerState state = ConnectProtocol.deserializeMetadata(metadata);
@@ -110,7 +110,7 @@ public class ConnectProtocolCompatibilityTest {
 
     @Test
     public void testEagerToCoopMetadata() {
-        when(configStorage.snapshot()).thenReturn(configState1);
+        when(configStorage.snapshot()).thenReturn(configState);
         ConnectProtocol.WorkerState workerState = new ConnectProtocol.WorkerState(LEADER_URL, configStorage.snapshot().offset());
         ByteBuffer metadata = ConnectProtocol.serializeMetadata(workerState);
         ConnectProtocol.WorkerState state = IncrementalCooperativeConnectProtocol.deserializeMetadata(metadata);

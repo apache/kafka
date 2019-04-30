@@ -256,7 +256,6 @@ public class WorkerCoordinatorIncrementalTest {
         ExtendedWorkerState state = IncrementalCooperativeConnectProtocol
                 .deserializeMetadata(ByteBuffer.wrap(defaultMetadata.metadata()));
         assertEquals(1, state.offset());
-        System.out.println(state);
 
         PowerMock.verifyAll();
     }

@@ -289,7 +289,6 @@ public class EmbeddedConnectCluster {
      * @throws IOException if call to the REST api fails.
      */
     public void deleteConnector(String connName) throws IOException {
-        System.err.println("Deleting connector: " + connName);
         String url = endpointForResource(String.format("connectors/%s", connName));
         int status = executeDelete(url);
         if (status >= HttpServletResponse.SC_BAD_REQUEST) {
