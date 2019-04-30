@@ -474,7 +474,8 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         private Windowed<Bytes> getWindowedKey() {
             final Bytes key = retainDuplicates ? getKey(super.next.key) : super.next.key;
-            final TimeWindow timeWindow = new TimeWindow(super.currentTime, super.currentTime + windowSize);
+            final long endTime = super.currentTime + windowSize;
+            final TimeWindow timeWindow = new TimeWindow(super.currentTime, endTime < 0 ? Long.MAX_VALUE : endTime);
             return new Windowed<>(key, timeWindow);
         }
     }
