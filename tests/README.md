@@ -40,6 +40,10 @@ TC_PATHS="tests/kafkatest/tests/client/pluggable_test.py::PluggableConsumerTest.
 ```
 bash tests/docker/ducker-ak up -j 'openjdk:11'; tests/docker/run_tests.sh
 ```
+* Rebuild first and then run tests
+```
+REBUILD="t" bash tests/docker/run_tests.sh
+```
 
 * Notes
   - The scripts to run tests creates and destroys docker network named *knw*.
