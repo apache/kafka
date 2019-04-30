@@ -326,7 +326,7 @@ public class AbstractConfigTest {
 
     @Test
     public void testGenericClassInstantiation() {
-        TypeLiteral<Consumer<String>> stringConsumerType = new TypeLiteral<Consumer<String>>() {};
+        TypeLiteral<Consumer<String>> stringConsumerType = new TypeLiteral<Consumer<String>>() { };
         String stringConsumerConfig = "string.consumer.class";
         ConfigDef testConfigDef = new ConfigDef()
             .define(
