@@ -212,6 +212,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public void close() {
+        for (final InMemorySessionStoreIterator it : openIterators) {
+            it.close();
+        }
+
         endTimeMap.clear();
         openIterators.clear();
         open = false;

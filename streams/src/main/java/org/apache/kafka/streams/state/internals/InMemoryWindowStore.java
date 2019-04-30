@@ -242,6 +242,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Override
     public void close() {
+        for (final InMemoryWindowStoreIteratorWrapper it : openIterators) {
+            it.close();
+        }
+
         segmentMap.clear();
         open = false;
     }
