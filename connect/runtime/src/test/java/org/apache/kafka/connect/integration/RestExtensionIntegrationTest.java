@@ -51,8 +51,6 @@ import static org.junit.Assert.assertTrue;
 @Category(IntegrationTest.class)
 public class RestExtensionIntegrationTest {
 
-  private static final Logger log = LoggerFactory.getLogger(ExampleConnectIntegrationTest.class);
-
   private static final int NUM_WORKERS = 3;
 
   private EmbeddedConnectCluster connect;
@@ -63,17 +61,12 @@ public class RestExtensionIntegrationTest {
     Map<String, String> workerProps = new HashMap<>();
     workerProps.put(REST_EXTENSION_CLASSES_CONFIG, IntegrationTestRestExtension.class.getName());
 
-    // // setup Kafka broker properties
-    // Properties exampleBrokerProps = new Properties();
-    // exampleBrokerProps.put("auto.create.topics.enable", "false");
-
     // build a Connect cluster backed by Kafka and Zk
     connect = new EmbeddedConnectCluster.Builder()
         .name("connect-cluster")
         .numWorkers(NUM_WORKERS)
         .numBrokers(1)
         .workerProps(workerProps)
-        // .brokerProps(exampleBrokerProps)
         .build();
 
     // start the clusters
