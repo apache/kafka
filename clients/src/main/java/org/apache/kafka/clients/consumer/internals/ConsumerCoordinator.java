@@ -873,7 +873,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             future.raise(error);
                             return;
                         } else if (error == Errors.FENCED_INSTANCE_ID) {
-                            log.error(fencedInstanceErrorMessage, groupInstanceId);
+                            log.error(fencedInstanceErrorMessage, groupInstanceId, this.getClass().getName());
                             future.raise(error);
                             return;
                         } else if (error == Errors.UNKNOWN_MEMBER_ID

@@ -181,7 +181,7 @@ class GroupCoordinator(val brokerId: Int,
           val oldMemberId = group.getStaticMemberId(groupInstanceId)
 
           if (group.is(Stable)) {
-            info(s"Static member $groupInstanceId with unknown member id rejoins, assigning new member id $newMemberId, while" +
+            info(s"Static member $groupInstanceId with unknown member id rejoins, assigning new member id $newMemberId, while " +
               s"old member $oldMemberId will be removed. No rebalance will be triggered.")
 
             val oldMember = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
@@ -258,8 +258,6 @@ class GroupCoordinator(val brokerId: Int,
         if (staticMemberId.isDefined && staticMemberId.get != memberId) {
           // given member id doesn't match with the groupInstanceId. Inform duplicate instance to shut down immediately.
           group.logFencingInstanceIdError(memberId, groupInstanceId, staticMemberId.get)
-          error(s"given member.id $memberId is identified as a known static member ${groupInstanceId.get}," +
-            s"but not matching the expected member.id ${staticMemberId.get}")
           responseCallback(joinError(memberId, Errors.FENCED_INSTANCE_ID))
         } else if (!group.has(memberId) || groupInstanceIdNotFound) {
             // If the dynamic member trying to register with an unrecognized id, or

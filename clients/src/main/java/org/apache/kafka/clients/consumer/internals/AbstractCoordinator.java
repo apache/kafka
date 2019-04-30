@@ -21,6 +21,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
@@ -133,7 +134,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private RequestFuture<Void> findCoordinatorFuture = null;
 
-    protected final String fencedInstanceErrorMessage = "Received fatal exception: duplicate group.instance.id {} detected";
+    protected final String fencedInstanceErrorMessage = "Received fatal exception: duplicate group.instance.id {} detected in {}";
 
     /**
      * Initialize the coordination manager.
@@ -560,7 +561,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 log.debug("Attempt to join group failed due to obsolete coordinator information: {}", error.message());
                 future.raise(error);
             } else if (error == Errors.FENCED_INSTANCE_ID) {
-                log.error(fencedInstanceErrorMessage, groupInstanceId);
+                log.error(fencedInstanceErrorMessage, groupInstanceId, this.getClass().getName());
                 future.raise(error);
             } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL
                     || error == Errors.INVALID_SESSION_TIMEOUT
@@ -661,7 +662,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     log.debug("SyncGroup failed because the group began another rebalance");
                     future.raise(error);
                 } else if (error == Errors.FENCED_INSTANCE_ID) {
-                    log.error(fencedInstanceErrorMessage, groupInstanceId);
+                    log.error(fencedInstanceErrorMessage, groupInstanceId, this.getClass().getName());
                     future.raise(error);
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
                         || error == Errors.ILLEGAL_GENERATION) {
@@ -929,7 +930,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 resetGeneration();
                 future.raise(Errors.ILLEGAL_GENERATION);
             } else if (error == Errors.FENCED_INSTANCE_ID) {
-                log.error(fencedInstanceErrorMessage, groupInstanceId);
+                log.error(fencedInstanceErrorMessage, groupInstanceId, this.getClass().getName());
                 future.raise(error);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
                 log.info("Attempt to heartbeat failed for since member id {} is not valid.", generation.memberId);
@@ -1135,9 +1136,10 @@ public abstract class AbstractCoordinator implements Closeable {
                                             // as the duration of the rebalance timeout. If we stop sending heartbeats,
                                             // however, then the session timeout may expire before we can rejoin.
                                             heartbeat.receiveHeartbeat();
+                                        } else if (e instanceof FencedInstanceIdException) {
+                                            heartbeatThread.failed.set(e);
                                         } else {
                                             heartbeat.failHeartbeat();
-
                                             // wake up the thread if it's sleeping to reschedule the heartbeat
                                             AbstractCoordinator.this.notify();
                                         }
