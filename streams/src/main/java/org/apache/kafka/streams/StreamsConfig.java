@@ -509,6 +509,11 @@ public class StreamsConfig extends AbstractConfig {
                     "",
                     Importance.MEDIUM,
                     CLIENT_ID_DOC)
+            .define(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG,
+                    Type.STRING,
+                    null,
+                    Importance.MEDIUM,
+                    ConsumerConfig.GROUP_INSTANCE_ID_CONFIG)
             .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     LogAndFailExceptionHandler.class.getName(),
@@ -718,7 +723,6 @@ public class StreamsConfig extends AbstractConfig {
         tempConsumerDefaultOverrides.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000");
         tempConsumerDefaultOverrides.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         tempConsumerDefaultOverrides.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
-        tempConsumerDefaultOverrides.put("internal.leave.group.on.close", false);
         CONSUMER_DEFAULT_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 

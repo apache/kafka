@@ -2178,8 +2178,7 @@ public class ConsumerCoordinatorTest {
                 retryBackoffMs,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-                null,
-                true
+                null
         );
     }
 
