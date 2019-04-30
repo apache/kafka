@@ -134,6 +134,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
         removeExpiredSegments();
 
+        if (key == null) {
+            throw new NullPointerException("Tried to fetch with null key");
+        }
+
         // Only need to search if the record hasn't expired yet
         if (endTime > observedStreamTime - retentionPeriod) {
             final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(endTime);
@@ -154,6 +158,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                                                   final long latestSessionStartTime) {
         removeExpiredSegments();
 
+        if (key == null) {
+            throw new NullPointerException("Tried to fetch with null key");
+        }
+
         return registerNewIterator(key,
                                    key,
                                    latestSessionStartTime,
@@ -167,6 +175,10 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
         removeExpiredSegments();
+
+        if (keyFrom == null || keyTo == null) {
+            throw new NullPointerException("Tried to fetch with null key");
+        }
 
         if (keyFrom.compareTo(keyTo) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
@@ -185,12 +197,20 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes key) {
         removeExpiredSegments();
 
+        if (key == null) {
+            throw new NullPointerException("Tried to fetch with null key");
+        }
+
         return registerNewIterator(key, key, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
     }
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
         removeExpiredSegments();
+
+        if (from == null || to == null) {
+            throw new NullPointerException("Tried to fetch with null key");
+        }
 
         return registerNewIterator(from, to, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
     }
@@ -307,6 +327,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         @Override
         public void close() {
+            next = null;
+            recordIterator = null;
             callback.deregisterIterator(this);
         }
 

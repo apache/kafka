@@ -135,6 +135,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             } else {
                 segmentMap.computeIfPresent(windowStartTimestamp, (t, kvMap) -> {
                     kvMap.remove(keyBytes);
+                    if (kvMap.isEmpty()) {
+                        segmentMap.remove(windowStartTimestamp);
+                    }
                     return kvMap;
                 });
             }
@@ -144,6 +147,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     @Override
     public byte[] fetch(final Bytes key, final long windowStartTimestamp) {
         removeExpiredSegments();
+
+        if (key == null) {
+            throw new NullPointerException("Tried to fetch with null key");
+        }
 
         if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
             return null;
@@ -161,6 +168,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
         removeExpiredSegments();
+
+        if (key == null) {
+            throw new NullPointerException("Tried to fetch with null key");
+        }
 
         // add one b/c records expire exactly retentionPeriod ms after created
         final long minTime = Math.max(timeFrom, observedStreamTime - retentionPeriod + 1);
@@ -180,6 +191,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                                                            final long timeFrom,
                                                            final long timeTo) {
         removeExpiredSegments();
+
+        if (from == null || to == null) {
+            throw new NullPointerException("Tried to fetch with null key");
+        }
 
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
@@ -350,12 +365,9 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             return next != null;
         }
 
-        public void remove() {
-            throw new UnsupportedOperationException(
-                "remove() is not supported in " + getClass().getName());
-        }
-
         public void close() {
+            next = null;
+            recordIterator = null;
             callback.deregisterIterator(this);
         }
 
