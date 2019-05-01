@@ -673,6 +673,10 @@ public class MockClient implements KafkaClient {
             return state == State.CONNECTED && notThrottled(now);
         }
 
+        boolean isReadyDelayed(long now) {
+            return now < readyDelayedUntilMs;
+        }
+
         boolean notThrottled(long now) {
             return now > throttledUntilMs;
         }
@@ -705,7 +709,7 @@ public class MockClient implements KafkaClient {
                     return notThrottled(now);
 
                 case CONNECTING:
-                    if (now < readyDelayedUntilMs)
+                    if (isReadyDelayed(now))
                         return false;
                     state = State.CONNECTED;
                     return ready(now);
