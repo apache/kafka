@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.rocksdb.AbstractCompactionFilter;
+import org.rocksdb.AbstractCompactionFilterFactory;
 import org.rocksdb.AbstractComparator;
 import org.rocksdb.AbstractSlice;
+import org.rocksdb.AbstractWalFilter;
 import org.rocksdb.AccessHint;
 import org.rocksdb.BuiltinComparator;
 import org.rocksdb.Cache;
@@ -44,6 +47,8 @@ import org.rocksdb.WALRecoveryMode;
 
 import java.util.Collection;
 import java.util.List;
+import org.rocksdb.WalFilter;
+import org.rocksdb.WriteBufferManager;
 
 /**
  * The generic {@link Options} class allows users to set all configs on one object if only default column family
@@ -369,8 +374,9 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
     }
 
     @Override
-    public void setMaxSubcompactions(final int maxSubcompactions) {
+    public Options setMaxSubcompactions(final int maxSubcompactions) {
         dbOptions.setMaxSubcompactions(maxSubcompactions);
+        return this;
     }
 
     @Override
@@ -1352,6 +1358,138 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
     @Override
     public boolean forceConsistencyChecks() {
         return columnFamilyOptions.forceConsistencyChecks();
+    }
+
+    @Override
+    public Options setCompactionFilter(final AbstractCompactionFilter<? extends AbstractSlice<?>> compactionFilter) {
+        columnFamilyOptions.setCompactionFilter(compactionFilter);
+        return this;
+    }
+
+    @Override
+    public AbstractCompactionFilter<? extends AbstractSlice<?>> compactionFilter() {
+        return columnFamilyOptions.compactionFilter();
+    }
+
+    @Override
+    public Options setCompactionFilterFactory(final AbstractCompactionFilterFactory<? extends AbstractCompactionFilter<?>> compactionFilterFactory) {
+        columnFamilyOptions.setCompactionFilterFactory(compactionFilterFactory);
+        return this;
+    }
+
+    @Override
+    public AbstractCompactionFilterFactory<? extends AbstractCompactionFilter<?>> compactionFilterFactory() {
+        return columnFamilyOptions.compactionFilterFactory();
+    }
+
+    @Override
+    public Options setWalFilter(final AbstractWalFilter walFilter) {
+        dbOptions.setWalFilter(walFilter);
+        return this;
+    }
+
+    @Override
+    public WalFilter walFilter() {
+        return dbOptions.walFilter();
+    }
+
+    @Override
+    public Options setWriteBufferManager(final WriteBufferManager writeBufferManager) {
+        dbOptions.setWriteBufferManager(writeBufferManager);
+        return this;
+    }
+
+    @Override
+    public WriteBufferManager writeBufferManager() {
+        return dbOptions.writeBufferManager();
+    }
+
+    @Override
+    public Options setTtl(final long ttl) {
+        columnFamilyOptions.setTtl(ttl);
+        return this;
+    }
+
+    @Override
+    public long ttl() {
+        return columnFamilyOptions.ttl();
+    }
+
+    @Override
+    public Options setEnablePipelinedWrite(final boolean enablePipelinedWrite) {
+        dbOptions.setEnablePipelinedWrite(enablePipelinedWrite);
+        return this;
+    }
+
+    @Override
+    public boolean enablePipelinedWrite() {
+        return dbOptions.enablePipelinedWrite();
+    }
+
+    @Override
+    public Options setAllowIngestBehind(final boolean allowIngestBehind) {
+        dbOptions.setAllowIngestBehind(allowIngestBehind);
+        return this;
+    }
+
+    @Override
+    public boolean allowIngestBehind() {
+        return dbOptions.allowIngestBehind();
+    }
+
+    @Override
+    public Options setPreserveDeletes(final boolean preserveDeletes) {
+        dbOptions.setPreserveDeletes(preserveDeletes);
+        return this;
+    }
+
+    @Override
+    public boolean preserveDeletes() {
+        return dbOptions.preserveDeletes();
+    }
+
+    @Override
+    public Options setBottommostCompressionOptions(final CompressionOptions bottommostCompressionOptions) {
+        columnFamilyOptions.setBottommostCompressionOptions(bottommostCompressionOptions);
+        return this;
+    }
+
+    @Override
+    public CompressionOptions bottommostCompressionOptions() {
+        return columnFamilyOptions.bottommostCompressionOptions();
+    }
+
+    @Override
+    public Options setTwoWriteQueues(final boolean setTwoWriteQueues) {
+        dbOptions.setTwoWriteQueues(setTwoWriteQueues);
+        return this;
+    }
+
+    @Override
+    public boolean twoWriteQueues() {
+        return dbOptions.twoWriteQueues();
+    }
+
+    @Override
+    public Options setManualWalFlush(final boolean manualWalFlush) {
+        dbOptions.setManualWalFlush(manualWalFlush);
+        return this;
+    }
+
+    @Override
+    public boolean manualWalFlush() {
+        return dbOptions.manualWalFlush();
+    }
+
+    @Override
+    public Options setAtomicFlush(final boolean atomicFlush) {
+        dbOptions.setAtomicFlush(atomicFlush);
+        return this;
+    }
+
+    @Override
+    public boolean atomicFlush() {
+        return dbOptions.atomicFlush();
     }
 
     @Override

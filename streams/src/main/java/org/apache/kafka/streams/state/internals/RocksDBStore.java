@@ -35,11 +35,13 @@ import org.rocksdb.BloomFilter;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
+import org.rocksdb.CompactRangeOptions;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
 import org.rocksdb.DBOptions;
 import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
+import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -119,11 +121,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         userSpecifiedOptions = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, columnFamilyOptions);
 
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
-        tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
+        tableConfig.setBlockCache(new LRUCache(BLOCK_CACHE_SIZE));
         tableConfig.setBlockSize(BLOCK_SIZE);
-        
+
         filter = new BloomFilter();
-        tableConfig.setFilter(filter);
+        tableConfig.setFilterPolicy(filter);
 
         userSpecifiedOptions.optimizeFiltersForHits();
         userSpecifiedOptions.setTableFormatConfig(tableConfig);
@@ -558,7 +560,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         @Override
         public void toggleDbForBulkLoading() {
             try {
-                db.compactRange(columnFamily, true, 1, 0);
+                final CompactRangeOptions crOptions = new CompactRangeOptions();
+                crOptions.setChangeLevel(true);
+                crOptions.setTargetLevel(1);
+                crOptions.setTargetPathId(0);
+
+                db.compactRange(columnFamily, null, null, crOptions);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
             }
