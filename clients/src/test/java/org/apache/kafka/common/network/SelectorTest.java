@@ -59,6 +59,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -715,6 +716,26 @@ public class SelectorTest {
             selector.close(String.valueOf(i));
         }
         assertNull(selector.lowestPriorityChannel());
+    }
+
+    @Test
+    public void testMetricsCleanupOnSelectorClose() throws Exception {
+        Metrics metrics = new Metrics();
+        Selector selector = new ImmediatelyConnectingSelector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
+            @Override
+            public void close(String id) {
+                throw new RuntimeException();
+            }
+        };
+        assertTrue(metrics.metrics().size() > 1);
+        String id = "0";
+        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+
+        // Close the selector and ensure a RuntimeException has been throw
+        assertThrows(RuntimeException.class, selector::close);
+
+        // We should only have one remaining metric for kafka-metrics-count, which is a global metric
+        assertEquals(1, metrics.metrics().size());
     }
 
 
