@@ -80,6 +80,7 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 
@@ -1180,11 +1181,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
         }
 
-        ClientUtils.closeQuietly(interceptors, "producer interceptors", firstException);
-        ClientUtils.closeQuietly(metrics, "producer metrics", firstException);
-        ClientUtils.closeQuietly(keySerializer, "producer keySerializer", firstException);
-        ClientUtils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
-        ClientUtils.closeQuietly(partitioner, "producer partitioner", firstException);
+        Utils.closeQuietly(interceptors, "producer interceptors", firstException);
+        Utils.closeQuietly(metrics, "producer metrics", firstException);
+        Utils.closeQuietly(keySerializer, "producer keySerializer", firstException);
+        Utils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
+        Utils.closeQuietly(partitioner, "producer partitioner", firstException);
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         log.debug("Kafka producer has been closed");
         Throwable exception = firstException.get();
