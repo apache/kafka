@@ -722,4 +722,4 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         return output
 
     def java_class_name(self):
-        return "kafka.Kafka"
+        return "io.confluent.support.metrics.SupportedKafka"
