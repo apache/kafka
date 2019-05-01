@@ -22,12 +22,12 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -59,7 +59,7 @@ public class MeteredWindowStoreTest {
     private InternalMockProcessorContext context;
     @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = createNiceMock(WindowStore.class);
-    private MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
+    private final MeteredWindowStore<String, String> store = new MeteredWindowStore<>(
         innerStoreMock,
         10L, // any size
         "scope",
@@ -86,73 +86,6 @@ public class MeteredWindowStoreTest {
             NoOpRecordCollector::new,
             new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
         );
-    }
-
-    @Test
-    public void shouldGetSerdesFromConfigWithoutUserSerdes() {
-        store = new MeteredWindowStore<>(
-            innerStoreMock,
-            10L, // any size
-            "scope",
-            new MockTime(),
-            null,
-            null
-        );
-
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test");
-        final Serde mockSerde = mock(Serde.class);
-
-        new InternalMockProcessorContext(
-            TestUtils.tempDirectory(),
-            mockSerde,
-            mockSerde,
-            streamsMetrics,
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-            NoOpRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
-        );
-        replay(mockSerde, innerStoreMock);
-
-        store.init(context, store);
-
-        verify(mockSerde);
-    }
-
-    @Test
-    public void shouldConfigureUserSerdes() {
-        final Serde<String> mockKeySerde = mock(Serde.class);
-        mockKeySerde.configure(anyObject(), eq(true));
-        expectLastCall();
-
-        final Serde<String> mockValueSerde = mock(Serde.class);
-        mockValueSerde.configure(anyObject(), eq(false));
-        expectLastCall();
-
-        store = new MeteredWindowStore<>(
-            innerStoreMock,
-            10L, // any size
-            "scope",
-            new MockTime(),
-            mockKeySerde,
-            mockValueSerde
-        );
-
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "test");
-        final Serde mockSerde = mock(Serde.class);
-
-        new InternalMockProcessorContext(
-            TestUtils.tempDirectory(),
-            mockSerde,
-            mockSerde,
-            streamsMetrics,
-            new StreamsConfig(StreamsTestUtils.getStreamsConfig()),
-            NoOpRecordCollector::new,
-            new ThreadCache(new LogContext("testCache "), 0, streamsMetrics)
-        );
-        replay(mockKeySerde, mockValueSerde, innerStoreMock);
-
-        store.init(context, store);
-        verify(mockKeySerde, mockValueSerde);
     }
 
     @Test
@@ -195,7 +128,7 @@ public class MeteredWindowStoreTest {
 
     @Test
     public void shouldRecordFetchLatency() {
-        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.emptyWindowStoreIterator());
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1)).andReturn(KeyValueIterators.<byte[]>emptyWindowStoreIterator());
         replay(innerStoreMock);
 
         store.init(context, store);
@@ -208,7 +141,7 @@ public class MeteredWindowStoreTest {
 
     @Test
     public void shouldRecordFetchRangeLatency() {
-        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.emptyIterator());
+        expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1)).andReturn(KeyValueIterators.<Windowed<Bytes>, byte[]>emptyIterator());
         replay(innerStoreMock);
 
         store.init(context, store);
