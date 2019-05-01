@@ -29,6 +29,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.Closeable;
 import java.net.InetAddress;
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
 import java.util.ArrayList;
@@ -93,12 +95,22 @@ public final class ClientUtils {
 
     public static void closeQuietly(Closeable c, String name, AtomicReference<Throwable> firstException) {
         if (c != null) {
-            try {
-                c.close();
-            } catch (Throwable t) {
-                firstException.compareAndSet(null, t);
-                log.error("Failed to close " + name, t);
-            }
+            closeQuietly((Runnable) () -> {
+                try {
+                    c.close();
+                } catch (IOException e) {
+                    throw new UncheckedIOException(e);
+                }
+            }, name, firstException);
+        }
+    }
+
+    public static void closeQuietly(Runnable closeFn, String name, AtomicReference<Throwable> firstException) {
+        try {
+            closeFn.run();
+        } catch (Throwable t) {
+            firstException.compareAndSet(null, t);
+            log.error("Failed to close " + name, t);
         }
     }
 

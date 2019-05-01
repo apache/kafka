@@ -57,6 +57,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.requests.FetchMetadata;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.requests.IsolationLevel;
@@ -1691,11 +1692,33 @@ public class Fetcher<K, V> implements Closeable {
 
     }
 
-    @Override
-    public void close() {
+    private void closeFetchSessions(Timer timer) {
+        Cluster cluster = metadata.fetch();
+
+        for (Map.Entry<Integer, FetchSessionHandler> entry : sessionHandlers.entrySet()) {
+            Integer nodeId = entry.getKey();
+            int sessionId = entry.getValue().sessionId();
+            FetchMetadata closeSessionMetadata = new FetchMetadata(sessionId, FetchMetadata.FINAL_EPOCH);
+
+            final FetchRequest.Builder closeSessionRequest = FetchRequest.Builder
+                    .forConsumer(this.maxWaitMs, this.minBytes, Collections.emptyMap())
+                    .metadata(closeSessionMetadata);
+            client.send(cluster.nodeById(nodeId), closeSessionRequest);
+        }
+        client.poll(timer);
+    }
+
+    public void close(Timer timer) {
         if (nextInLineRecords != null)
             nextInLineRecords.drain();
         decompressionBufferSupplier.close();
+        closeFetchSessions(timer);
+        sessionHandlers.clear();
+    }
+
+    @Override
+    public void close() {
+        close(time.timer(Long.MAX_VALUE));
     }
 
     private Set<String> topicsForPartitions(Collection<TopicPartition> partitions) {
