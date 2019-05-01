@@ -18,8 +18,13 @@
 package org.apache.kafka.common.utils;
 
 import java.util.AbstractCollection;
+import java.util.AbstractSequentialList;
+import java.util.AbstractSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
 import java.util.NoSuchElementException;
+import java.util.Set;
 
 /**
  * A memory-efficient hash set which tracks the order of insertion of elements.
@@ -127,14 +132,21 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         element.setPrev(INVALID_INDEX);
     }
 
-    private class ImplicitLinkedHashCollectionIterator implements Iterator<E> {
+    private class ImplicitLinkedHashCollectionIterator implements ListIterator<E> {
+        private int cursor = 0;
         private Element cur = head;
 
         private Element next = indexToElement(head, elements, head.next());
+        private Element lastReturned;
 
         @Override
         public boolean hasNext() {
-            return next != head;
+            return cursor != size;
+        }
+
+        @Override
+        public boolean hasPrevious() {
+            return cursor != 0;
         }
 
         @Override
@@ -144,18 +156,119 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
             }
             cur = next;
             next = indexToElement(head, elements, cur.next());
+            ++cursor;
             @SuppressWarnings("unchecked")
             E returnValue = (E) cur;
+            lastReturned = returnValue;
             return returnValue;
         }
 
         @Override
-        public void remove() {
+        public E previous() {
             if (cur == head) {
+                throw new NoSuchElementException();
+            }
+            next = cur;
+            cur = indexToElement(head, elements, cur.prev());
+            --cursor;
+            @SuppressWarnings("unchecked")
+            E returnValue = (E) next;
+            lastReturned = returnValue;
+            return returnValue;
+        }
+
+        @Override
+        public int nextIndex() {
+            return cursor;
+        }
+
+        @Override
+        public int previousIndex() {
+            return cursor - 1;
+        }
+
+        @Override
+        public void remove() {
+            if (lastReturned == null) {
                 throw new IllegalStateException();
             }
-            ImplicitLinkedHashCollection.this.remove(cur);
-            cur = head;
+
+            int prev = lastReturned.prev();
+            ImplicitLinkedHashCollection.this.remove(lastReturned);
+            if (lastReturned == cur) {
+                cursor--;
+                cur = indexToElement(head, elements, prev);
+            } else {
+                next = indexToElement(head, elements, prev);
+            }
+
+            if (prev == HEAD_INDEX) {
+                lastReturned = null;
+            }
+        }
+
+        @Override
+        public void set(E e) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void add(E e) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private class ImplicitLinkedHashCollectionListView extends AbstractSequentialList<E> {
+
+        @Override
+        public ListIterator<E> listIterator(int index) {
+            if (index < 0 || index > size) {
+                throw new IndexOutOfBoundsException();
+            }
+
+            ListIterator<E> iter = ImplicitLinkedHashCollection.this.listIterator();
+            for (int i = 0; i < index; ++i) {
+                iter.next();
+            }
+            return iter;
+        }
+
+        @Override
+        public int size() {
+            return size;
+        }
+    }
+
+    private class ImplicitLinkedHashCollectionSetView extends AbstractSet<E> {
+
+        @Override
+        public Iterator<E> iterator() {
+            return ImplicitLinkedHashCollection.this.iterator();
+        }
+
+        @Override
+        public int size() {
+            return size;
+        }
+
+        @Override
+        public boolean add(E newElement) {
+            return ImplicitLinkedHashCollection.this.add(newElement);
+        }
+
+        @Override
+        public boolean remove(Object key) {
+            return ImplicitLinkedHashCollection.this.remove(key);
+        }
+
+        @Override
+        public boolean contains(Object key) {
+            return ImplicitLinkedHashCollection.this.contains(key);
+        }
+
+        @Override
+        public void clear() {
+            ImplicitLinkedHashCollection.this.clear();
         }
     }
 
@@ -174,12 +287,12 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      */
     @Override
     final public Iterator<E> iterator() {
-        return new ImplicitLinkedHashCollectionIterator();
+        return listIterator();
     }
 
-    /* private ListIterator<E> listIterator() {
+    private ListIterator<E> listIterator() {
         return new ImplicitLinkedHashCollectionIterator();
-    } */
+    }
 
     final int slot(Element[] curElements, Object e) {
         return (e.hashCode() & 0x7fffffff) % curElements.length;
@@ -461,18 +574,6 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         }
     }
 
-    /**
-     * Compares the specified object with this one for equality. Returns
-     * {@code true} if and only if the specified object is also a
-     * {@code ImplicitLinkedHashCollection}, the objects have the same size,
-     * and all corresponding pairs of elements in the two objects are
-     * <i>equal</i>. (Two elements {@code e1} and {@code e2} are <i>equal</i>
-     * if {@code e1.equals(e2) && eq.hashCode() == e2.hashCode()}.)
-     *
-     * @param o The object to be compared for equality
-     *
-     * @return {@code true} if the specified object is equal to this one
-     */
     @Override
     public boolean equals(Object o) {
         if (o == this)
@@ -482,37 +583,25 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
             return false;
         ImplicitLinkedHashCollection<?> ilhs = (ImplicitLinkedHashCollection<?>) o;
 
-        if (size != ilhs.size) {
-            return false;
-        }
-
-        Iterator<E> thisItr = iterator();
-        Iterator<?> thatItr = ilhs.iterator();
-        while (thisItr.hasNext() && thatItr.hasNext()) {
-            if (!thisItr.next().equals(thatItr.next())) {
-                return false;
-            }
-        }
-
-        return !(thisItr.hasNext() || thatItr.hasNext());
+        // List equality implies Set equality, so compare the List views to determine equality
+        return this.valuesList().equals(ilhs.valuesList());
     }
 
-    /**
-     * Returns the hash code value for this object.
-     *
-     * @return the hash code value for this object
-     */
     @Override
     public int hashCode() {
-        int hashCode = 0;
-        for (E e : this) {
-            hashCode = 31 * hashCode + e.hashCode();
-        }
-        return hashCode;
+        return this.valuesList().hashCode();
     }
 
     // Visible for testing
     final int numSlots() {
         return elements.length;
+    }
+
+    public List<E> valuesList() {
+        return new ImplicitLinkedHashCollectionListView();
+    }
+
+    public Set<E> valuesSet() {
+        return new ImplicitLinkedHashCollectionSetView();
     }
 }
