@@ -21,9 +21,9 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.WindowStore;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -41,133 +41,143 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 
 @RunWith(EasyMockRunner.class)
-public class TimestampedKeyValueStoreBuilderTest {
+public class TimestampedWindowStoreBuilderTest {
 
     @Mock(type = MockType.NICE)
-    private KeyValueBytesStoreSupplier supplier;
+    private WindowBytesStoreSupplier supplier;
     @Mock(type = MockType.NICE)
-    private KeyValueStore<Bytes, byte[]> inner;
-    private TimestampedKeyValueStoreBuilder<String, String> builder;
+    private WindowStore<Bytes, byte[]> inner;
+    private TimestampedWindowStoreBuilder<String, String> builder;
 
     @Before
     public void setUp() {
         expect(supplier.get()).andReturn(inner);
         expect(supplier.name()).andReturn("name");
         replay(supplier);
-        builder = new TimestampedKeyValueStoreBuilder<>(
+
+        builder = new TimestampedWindowStoreBuilder<>(
             supplier,
             Serdes.String(),
             Serdes.String(),
-            new MockTime()
-        );
+            new MockTime());
     }
 
     @Test
     public void shouldHaveMeteredStoreAsOuterStore() {
-        final TimestampedKeyValueStore<String, String> store = builder.build();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
+        final TimestampedWindowStore<String, String> store = builder.build();
+        assertThat(store, instanceOf(MeteredTimestampedWindowStore.class));
     }
 
     @Test
     public void shouldHaveChangeLoggingStoreByDefault() {
-        final TimestampedKeyValueStore<String, String> store = builder.build();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
+        final TimestampedWindowStore<String, String> store = builder.build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
-        assertThat(next, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
+        assertThat(next, instanceOf(ChangeLoggingTimestampedWindowBytesStore.class));
     }
 
     @Test
     public void shouldNotHaveChangeLoggingStoreWhenDisabled() {
-        final TimestampedKeyValueStore<String, String> store = builder.withLoggingDisabled().build();
+        final TimestampedWindowStore<String, String> store = builder.withLoggingDisabled().build();
         final StateStore next = ((WrappedStateStore) store).wrapped();
         assertThat(next, CoreMatchers.equalTo(inner));
     }
 
     @Test
     public void shouldHaveCachingStoreWhenEnabled() {
-        final TimestampedKeyValueStore<String, String> store = builder.withCachingEnabled().build();
+        final TimestampedWindowStore<String, String> store = builder.withCachingEnabled().build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
-        assertThat(wrapped, instanceOf(CachingKeyValueStore.class));
+        assertThat(store, instanceOf(MeteredTimestampedWindowStore.class));
+        assertThat(wrapped, instanceOf(CachingWindowStore.class));
     }
 
     @Test
     public void shouldHaveChangeLoggingStoreWhenLoggingEnabled() {
-        final TimestampedKeyValueStore<String, String> store = builder
+        final TimestampedWindowStore<String, String> store = builder
                 .withLoggingEnabled(Collections.emptyMap())
                 .build();
         final StateStore wrapped = ((WrappedStateStore) store).wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
-        assertThat(wrapped, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
+        assertThat(store, instanceOf(MeteredTimestampedWindowStore.class));
+        assertThat(wrapped, instanceOf(ChangeLoggingTimestampedWindowBytesStore.class));
         assertThat(((WrappedStateStore) wrapped).wrapped(), CoreMatchers.equalTo(inner));
     }
 
     @Test
     public void shouldHaveCachingAndChangeLoggingWhenBothEnabled() {
-        final TimestampedKeyValueStore<String, String> store = builder
+        final TimestampedWindowStore<String, String> store = builder
                 .withLoggingEnabled(Collections.emptyMap())
                 .withCachingEnabled()
                 .build();
         final WrappedStateStore caching = (WrappedStateStore) ((WrappedStateStore) store).wrapped();
         final WrappedStateStore changeLogging = (WrappedStateStore) caching.wrapped();
-        assertThat(store, instanceOf(MeteredTimestampedKeyValueStore.class));
-        assertThat(caching, instanceOf(CachingKeyValueStore.class));
-        assertThat(changeLogging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
+        assertThat(store, instanceOf(MeteredTimestampedWindowStore.class));
+        assertThat(caching, instanceOf(CachingWindowStore.class));
+        assertThat(changeLogging, instanceOf(ChangeLoggingTimestampedWindowBytesStore.class));
         assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
     }
 
     @Test
     public void shouldNotWrapTimestampedByteStore() {
         reset(supplier);
-        expect(supplier.get()).andReturn(new RocksDBTimestampedStore("name"));
+        expect(supplier.get()).andReturn(new RocksDBTimestampedWindowStore(
+            new RocksDBTimestampedSegmentedBytesStore(
+                "name",
+                "metric-scope",
+                10L,
+                5L,
+                new WindowKeySchema()),
+            false,
+            1L));
         expect(supplier.name()).andReturn("name");
         replay(supplier);
 
-        final TimestampedKeyValueStore<String, String> store = builder
+        final TimestampedWindowStore<String, String> store = builder
             .withLoggingDisabled()
             .withCachingDisabled()
             .build();
-        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(RocksDBTimestampedStore.class));
+        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(RocksDBTimestampedWindowStore.class));
     }
 
     @Test
     public void shouldWrapPlainKeyValueStoreAsTimestampStore() {
         reset(supplier);
-        expect(supplier.get()).andReturn(new RocksDBStore("name"));
+        expect(supplier.get()).andReturn(new RocksDBWindowStore(
+            new RocksDBSegmentedBytesStore(
+                "name",
+                "metric-scope",
+                10L,
+                5L,
+                new WindowKeySchema()),
+            false,
+            1L));
         expect(supplier.name()).andReturn("name");
         replay(supplier);
 
-        final TimestampedKeyValueStore<String, String> store = builder
+        final TimestampedWindowStore<String, String> store = builder
             .withLoggingDisabled()
             .withCachingDisabled()
             .build();
-        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(KeyValueToTimestampedKeyValueByteStoreAdapter.class));
+        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(WindowToTimestampedWindowByteStoreAdapter.class));
     }
 
     @SuppressWarnings("all")
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfInnerIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime());
+        new TimestampedWindowStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfKeySerdeIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
+        new TimestampedWindowStoreBuilder<>(supplier, null, Serdes.String(), new MockTime());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfValueSerdeIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
+        new TimestampedWindowStoreBuilder<>(supplier, Serdes.String(), null, new MockTime());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldThrowNullPointerIfTimeIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null);
-    }
-
-    @Test(expected = NullPointerException.class)
-    public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        new TimestampedKeyValueStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime());
+        new TimestampedWindowStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null);
     }
 
 }
