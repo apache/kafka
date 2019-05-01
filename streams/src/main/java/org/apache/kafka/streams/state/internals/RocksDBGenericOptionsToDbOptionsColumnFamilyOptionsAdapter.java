@@ -49,6 +49,7 @@ import java.util.Collection;
 import java.util.List;
 import org.rocksdb.WalFilter;
 import org.rocksdb.WriteBufferManager;
+import org.slf4j.LoggerFactory;
 
 /**
  * The generic {@link Options} class allows users to set all configs on one object if only default column family
@@ -60,6 +61,8 @@ import org.rocksdb.WriteBufferManager;
 class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options {
     private final DBOptions dbOptions;
     private final ColumnFamilyOptions columnFamilyOptions;
+
+    private static final org.slf4j.Logger LOG = LoggerFactory.getLogger(RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter.class);
 
     RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(final DBOptions dbOptions,
                                                                final ColumnFamilyOptions columnFamilyOptions) {
@@ -490,6 +493,7 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
 
     @Override
     public Options setWalTtlSeconds(final long walTtlSeconds) {
+        LOG.warn("option walTtlSeconds will be ignored: Streams does not expose RocksDB ttl functionality");
         dbOptions.setWalTtlSeconds(walTtlSeconds);
         return this;
     }
@@ -1406,6 +1410,7 @@ class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter extends Options
 
     @Override
     public Options setTtl(final long ttl) {
+        LOG.warn("options ttl will be ignored: Streams does not expose RocksDB ttl functionality");
         columnFamilyOptions.setTtl(ttl);
         return this;
     }
