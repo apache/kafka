@@ -263,8 +263,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         return serializeAssignments(assignments);
     }
 
-    // Factoring out with specific arguments to fix checkstyle error on method length.
-    // TODO: revisit passed arguments
     private void handleLostAssignments(ConnectorsAndTasks lostAssignments,
                                        ConnectorsAndTasks newSubmissions,
                                        List<WorkerLoad> completeWorkerAssignment) {
@@ -470,6 +468,14 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         return diff > 0 ? (int) Math.min(diff, maxDelay) : 0;
     }
 
+    /**
+     * Perform a round-robin assignment of connectors to workers with existing worker load. This
+     * assignment tries to balance the load between workers, by assigning connectors to workers
+     * that have equal load, starting with the least loaded workers.
+     *
+     * @param workerAssignment the current worker assignment
+     * @param connectors the connectors to be assigned
+     */
     protected void assignConnectors(List<WorkerLoad> workerAssignment, Collection<String> connectors) {
         workerAssignment.sort(WorkerLoad.connectorComparator());
         WorkerLoad first = workerAssignment.get(0);
@@ -492,6 +498,14 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         }
     }
 
+    /**
+     * Perform a round-robin assignment of tasks to workers with existing worker load. This
+     * assignment tries to balance the load between workers, by assigning tasks to workers that
+     * have equal load, starting with the least loaded workers.
+     *
+     * @param workerAssignment the current worker assignment
+     * @param tasks the tasks to be assigned
+     */
     protected void assignTasks(List<WorkerLoad> workerAssignment, Collection<ConnectorTaskId> tasks) {
         workerAssignment.sort(WorkerLoad.taskComparator());
         WorkerLoad first = workerAssignment.get(0);
