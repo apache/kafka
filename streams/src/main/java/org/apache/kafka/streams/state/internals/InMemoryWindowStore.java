@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
@@ -146,11 +147,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Override
     public byte[] fetch(final Bytes key, final long windowStartTimestamp) {
-        removeExpiredSegments();
 
-        if (key == null) {
-            throw new NullPointerException("Tried to fetch with null key");
-        }
+        Objects.requireNonNull(key, "key cannot be null");
+
+        removeExpiredSegments();
 
         if (windowStartTimestamp <= observedStreamTime - retentionPeriod) {
             return null;
@@ -167,11 +167,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     @Deprecated
     @Override
     public WindowStoreIterator<byte[]> fetch(final Bytes key, final long timeFrom, final long timeTo) {
-        removeExpiredSegments();
 
-        if (key == null) {
-            throw new NullPointerException("Tried to fetch with null key");
-        }
+        Objects.requireNonNull(key, "key cannot be null");
+
+        removeExpiredSegments();
 
         // add one b/c records expire exactly retentionPeriod ms after created
         final long minTime = Math.max(timeFrom, observedStreamTime - retentionPeriod + 1);
@@ -190,11 +189,10 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                                                            final Bytes to,
                                                            final long timeFrom,
                                                            final long timeTo) {
-        removeExpiredSegments();
+        Objects.requireNonNull(from, "from key cannot be null");
+        Objects.requireNonNull(to, "to key cannot be null");
 
-        if (from == null || to == null) {
-            throw new NullPointerException("Tried to fetch with null key");
-        }
+        removeExpiredSegments();
 
         if (from.compareTo(to) > 0) {
             LOG.warn("Returning empty iterator for fetch with invalid key range: from > to. "
