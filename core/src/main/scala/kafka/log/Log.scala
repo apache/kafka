@@ -564,7 +564,6 @@ class Log(@volatile var dir: File,
       segments.clear()
       loadSegmentFiles()
     }
-    deleteOldSegments()
 
     // Finally, complete any interrupted swap operations. To be crash-safe,
     // log files that are replaced by the swap segment should be renamed to .deleted
