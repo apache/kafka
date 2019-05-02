@@ -95,7 +95,7 @@ versions += [
   slf4j: "1.7.26",
   snappy: "1.1.7.3",
   spotbugs: "3.1.12",
-  spotbugsPlugin: "1.7.1",
+  spotbugsPlugin: "1.6.9",
   spotlessPlugin: "3.23.0",
   zkclient: "0.11",
   zookeeper: "3.4.14",
