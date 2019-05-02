@@ -811,7 +811,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     isolationLevel);
 
             config.logUnused();
-            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
+            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka consumer initialized");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
@@ -2201,12 +2201,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             firstException.compareAndSet(null, t);
             log.error("Failed to close coordinator", t);
         }
-        ClientUtils.closeQuietly(fetcher, "fetcher", firstException);
-        ClientUtils.closeQuietly(interceptors, "consumer interceptors", firstException);
-        ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
-        ClientUtils.closeQuietly(client, "consumer network client", firstException);
-        ClientUtils.closeQuietly(keyDeserializer, "consumer key deserializer", firstException);
-        ClientUtils.closeQuietly(valueDeserializer, "consumer value deserializer", firstException);
+        Utils.closeQuietly(fetcher, "fetcher", firstException);
+        Utils.closeQuietly(interceptors, "consumer interceptors", firstException);
+        Utils.closeQuietly(metrics, "consumer metrics", firstException);
+        Utils.closeQuietly(client, "consumer network client", firstException);
+        Utils.closeQuietly(keyDeserializer, "consumer key deserializer", firstException);
+        Utils.closeQuietly(valueDeserializer, "consumer value deserializer", firstException);
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         log.debug("Kafka consumer has been closed");
         Throwable exception = firstException.get();

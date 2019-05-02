@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -42,8 +43,12 @@ public class TimestampedWindowStoreBuilder<K, V>
 
     @Override
     public TimestampedWindowStore<K, V> build() {
+        WindowStore<Bytes, byte[]> store = storeSupplier.get();
+        if (!(store instanceof TimestampedBytesStore) && store.persistent()) {
+            store = new WindowToTimestampedWindowByteStoreAdapter(store);
+        }
         return new MeteredTimestampedWindowStore<>(
-            maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
+            maybeWrapCaching(maybeWrapLogging(store)),
             storeSupplier.windowSize(),
             storeSupplier.metricsScope(),
             time,

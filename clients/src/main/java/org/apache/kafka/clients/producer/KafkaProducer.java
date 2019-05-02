@@ -67,6 +67,7 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.net.InetSocketAddress;
@@ -423,7 +424,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
             this.ioThread.start();
             config.logUnused();
-            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
+            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka producer started");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed this is to prevent resource leak. see KAFKA-2121
@@ -1188,11 +1189,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
         }
 
-        ClientUtils.closeQuietly(interceptors, "producer interceptors", firstException);
-        ClientUtils.closeQuietly(metrics, "producer metrics", firstException);
-        ClientUtils.closeQuietly(keySerializer, "producer keySerializer", firstException);
-        ClientUtils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
-        ClientUtils.closeQuietly(partitioner, "producer partitioner", firstException);
+        Utils.closeQuietly(interceptors, "producer interceptors", firstException);
+        Utils.closeQuietly(metrics, "producer metrics", firstException);
+        Utils.closeQuietly(keySerializer, "producer keySerializer", firstException);
+        Utils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
+        Utils.closeQuietly(partitioner, "producer partitioner", firstException);
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         Throwable exception = firstException.get();
         if (exception != null && !swallowException) {
