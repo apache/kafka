@@ -49,12 +49,14 @@ public class KTableSuppressSupplier<K, V> implements KTableProcessorSupplier<K, 
 
     @Override
     public void enableSendingOldValues() {
+        throw new UnsupportedOperationException("enableSendingOldValues is not supported by KTableSuppressSupplier");
     }
 
     @Override
     public Processor<K, Change<V>> get() {
         return suppressProcessor;
     }
+
     private class KTableSuppressValueGetter implements KTableValueGetter<K, V> {
 
         private KeyValueStore<K, V> store;

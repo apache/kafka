@@ -449,9 +449,13 @@ public class KTableSuppressProcessorTest {
         final Properties properties = new Properties();
 
         builder.<String, String>stream("topic")
-                .groupByKey().windowedBy(TimeWindows.of(Duration.ofSeconds(30))).count()
+                .groupByKey()
+                .windowedBy(TimeWindows.of(Duration.ofSeconds(30)))
+                .count()
                 .suppress(Suppressed.untilTimeLimit(Duration.ofHours(1), Suppressed.BufferConfig.unbounded()))
-                .groupBy((k, v) -> KeyValue.pair(k, v)).count().toStream();
+                .groupBy((k, v) -> KeyValue.pair(k, v))
+                .count()
+                .toStream();
 
         builder.build(properties);
     }
