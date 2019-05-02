@@ -401,7 +401,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String storeName =
             suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
 
-
         final KTableSuppressProcessor<K, V> kTableSuppressProcessor = new KTableSuppressProcessor<>(
                 suppressedInternal,
                 storeName
