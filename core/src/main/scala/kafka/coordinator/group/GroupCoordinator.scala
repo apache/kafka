@@ -919,12 +919,16 @@ class GroupCoordinator(val brokerId: Int,
 
   def onCompleteJoin(group: GroupMetadata) {
     group.inLock {
-      // remove any members who haven't joined the group yet
-      group.notYetRejoinedMembers.foreach { failedMember =>
-        removeHeartbeatForLeavingMember(group, failedMember)
-        group.remove(failedMember.memberId)
-        group.removeStaticMember(failedMember.groupInstanceId)
-        // TODO: cut the socket connection to the client
+      val leaderId = group.leaderOrNull
+      if (leaderId != null) {
+        val leader = group.get(group.leaderOrNull)
+        if (!leader.isAwaitingJoin) {
+          removeHeartbeatForLeavingMember(group, leader)
+          group.remove(leaderId)
+          group.removeStaticMember(leader.groupInstanceId)
+          info(s"Group leader [member.id: $leaderId, group.instance.id: ${leader.groupInstanceId}] " +
+            s"failed to join before rebalance timeout. New leader ${group.leaderOrNull} was elected.")
+        }
       }
 
       if (!group.is(Dead)) {
@@ -947,7 +951,6 @@ class GroupCoordinator(val brokerId: Int,
 
           // trigger the awaiting join group response callback for all the members after rebalancing
           for (member <- group.allMemberMetadata) {
-            assert(member.awaitingJoinCallback != null)
             val joinResult = JoinGroupResult(
               members = if (group.isLeader(member.memberId)) {
                 group.currentMemberMetadata

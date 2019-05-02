@@ -296,8 +296,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def currentState = state
 
-  def notYetRejoinedMembers = members.values.filter(!_.isAwaitingJoin).toList
-
   def hasAllMembersJoined = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
 
   def allMembers = members.keySet
@@ -377,7 +375,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def initNextGeneration() = {
-    assert(notYetRejoinedMembers == List.empty[MemberMetadata])
     if (members.nonEmpty) {
       generationId += 1
       protocol = Some(selectProtocol)

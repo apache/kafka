@@ -732,6 +732,73 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertTrue(message.contains(invalidMemberId))
   }
 
+  @Test
+  def staticMemberFollowerFailToRejoinBeforeRebalanceTimeout() {
+    // Increase session timeout so that the follower won't be evicted when rebalance timeout is reached.
+    val initialRebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId, sessionTimeout = DefaultRebalanceTimeout * 2)
+
+    EasyMock.reset(replicaManager)
+    val newMemberInstanceId = Some("newMember")
+
+    val leaderId = initialRebalanceResult.leaderId
+
+    val newMemberJoinGroupFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocolSuperset, newMemberInstanceId)
+    assertGroupState(groupState = PreparingRebalance)
+
+    EasyMock.reset(replicaManager)
+    val leaderRejoinGroupResult = staticJoinGroup(groupId, leaderId, leaderInstanceId, protocolType, protocolSuperset, clockAdvance = DefaultRebalanceTimeout + 1)
+    checkJoinGroupResult(leaderRejoinGroupResult,
+      Errors.NONE,
+      initialRebalanceResult.generation + 1,
+      Set(leaderInstanceId, followerInstanceId, newMemberInstanceId),
+      groupId,
+      CompletingRebalance,
+      expectedLeaderId = leaderId,
+      expectedMemberId = leaderId)
+
+    val newMemberJoinGroupResult = Await.result(newMemberJoinGroupFuture, Duration(1, TimeUnit.MILLISECONDS))
+    assertEquals(Errors.NONE, newMemberJoinGroupResult.error)
+    checkJoinGroupResult(newMemberJoinGroupResult,
+      Errors.NONE,
+      initialRebalanceResult.generation + 1,
+      Set.empty,
+      groupId,
+      CompletingRebalance,
+      expectedLeaderId = leaderId)
+  }
+
+  @Test
+  def staticMemberLeaderFailToRejoinBeforeRebalanceTimeout() {
+    // Increase session timeout so that the leader won't be evicted when rebalance timeout is reached.
+    val initialRebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId, sessionTimeout = DefaultRebalanceTimeout * 2)
+
+    EasyMock.reset(replicaManager)
+    val newMemberInstanceId = Some("newMember")
+
+    val newMemberJoinGroupFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocolSuperset, newMemberInstanceId)
+    timer.advanceClock(1)
+    assertGroupState(groupState = PreparingRebalance)
+
+    EasyMock.reset(replicaManager)
+    val followerRejoinGroupResult = staticJoinGroup(groupId, initialRebalanceResult.followerId, followerInstanceId, protocolType, protocolSuperset, clockAdvance = DefaultRebalanceTimeout + 1)
+    checkJoinGroupResult(followerRejoinGroupResult,
+      Errors.NONE,
+      initialRebalanceResult.generation + 1,
+      Set.empty,
+      groupId,
+      CompletingRebalance,
+      expectedMemberId = initialRebalanceResult.followerId)
+
+    val newMemberJoinGroupResult = Await.result(newMemberJoinGroupFuture, Duration(1, TimeUnit.MILLISECONDS))
+    assertEquals(Errors.NONE, newMemberJoinGroupResult.error)
+    checkJoinGroupResult(newMemberJoinGroupResult,
+      Errors.NONE,
+      initialRebalanceResult.generation + 1,
+      Set(followerInstanceId, newMemberInstanceId),
+      groupId,
+      CompletingRebalance)
+  }
+
   private class RebalanceResult(val generation: Int,
                                 val leaderId: String,
                                 val leaderAssignment: Array[Byte],
@@ -746,12 +813,13 @@ class GroupCoordinatorTest extends JUnitSuite {
     *   - follower assignment
     */
   private def staticMembersJoinAndRebalance(leaderInstanceId: Option[String],
-                                            followerInstanceId: Option[String]): RebalanceResult = {
+                                            followerInstanceId: Option[String],
+                                            sessionTimeout: Int = DefaultSessionTimeout): RebalanceResult = {
     EasyMock.reset(replicaManager)
-    val leaderResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocolSuperset, leaderInstanceId)
+    val leaderResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocolSuperset, leaderInstanceId, sessionTimeout)
 
     EasyMock.reset(replicaManager)
-    val followerResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocolSuperset, followerInstanceId)
+    val followerResponseFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocolSuperset, followerInstanceId, sessionTimeout)
     // The goal for two timer advance is to let first group initial join complete and set newMemberAdded flag to false. Next advance is
     // to trigger the rebalance as needed for follower delayed join. One large time advance won't help because we could only populate one
     // delayed join from purgatory and the new delayed op is created at that time and never be triggered.
@@ -799,7 +867,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(expectedGroupInstanceIds.size, joinGroupResult.members.size)
     val resultedGroupInstanceIds = joinGroupResult.members.map(member => Some(member.groupInstanceId())).toSet
     assertEquals(expectedGroupInstanceIds, resultedGroupInstanceIds)
-    assertTrue(getGroup(groupId).is(expectedGroupState))
+    assertGroupState(groupState = expectedGroupState)
 
     if (!expectedLeaderId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID)) {
       assertEquals(expectedLeaderId, joinGroupResult.leaderId)
