@@ -480,11 +480,11 @@ class GroupCoordinatorTest extends JUnitSuite {
 
   @Test
   def staticMemberRejoinWithLeaderIdAndKnownMemberId() {
-    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId, sessionTimeout = DefaultRebalanceTimeout / 2)
 
     // A static leader with known id rejoin will trigger rebalance.
     EasyMock.reset(replicaManager)
-    val joinGroupResult = staticJoinGroup(groupId, rebalanceResult.leaderId, leaderInstanceId, protocolType, protocolSuperset, clockAdvance = DefaultSessionTimeout + 1)
+    val joinGroupResult = staticJoinGroup(groupId, rebalanceResult.leaderId, leaderInstanceId, protocolType, protocolSuperset, clockAdvance = DefaultRebalanceTimeout + 1)
     // Timeout follower in the meantime.
     assertFalse(getGroup(groupId).hasStaticMember(followerInstanceId))
     checkJoinGroupResult(joinGroupResult,
@@ -780,23 +780,28 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertGroupState(groupState = PreparingRebalance)
 
     EasyMock.reset(replicaManager)
-    val followerRejoinGroupResult = staticJoinGroup(groupId, initialRebalanceResult.followerId, followerInstanceId, protocolType, protocolSuperset, clockAdvance = DefaultRebalanceTimeout + 1)
-    checkJoinGroupResult(followerRejoinGroupResult,
-      Errors.NONE,
-      initialRebalanceResult.generation + 1,
-      Set.empty,
-      groupId,
-      CompletingRebalance,
-      expectedMemberId = initialRebalanceResult.followerId)
-
+    val oldFollowerRejoinGroupResult = staticJoinGroup(groupId, initialRebalanceResult.followerId, followerInstanceId, protocolType, protocolSuperset, clockAdvance = DefaultRebalanceTimeout + 1)
     val newMemberJoinGroupResult = Await.result(newMemberJoinGroupFuture, Duration(1, TimeUnit.MILLISECONDS))
-    assertEquals(Errors.NONE, newMemberJoinGroupResult.error)
-    checkJoinGroupResult(newMemberJoinGroupResult,
+
+    val (newLeaderResult, newFollowerResult) = if (oldFollowerRejoinGroupResult.leaderId == oldFollowerRejoinGroupResult.memberId)
+      (oldFollowerRejoinGroupResult, newMemberJoinGroupResult)
+    else
+      (newMemberJoinGroupResult, oldFollowerRejoinGroupResult)
+
+    checkJoinGroupResult(newLeaderResult,
       Errors.NONE,
       initialRebalanceResult.generation + 1,
       Set(followerInstanceId, newMemberInstanceId),
       groupId,
       CompletingRebalance)
+
+    checkJoinGroupResult(newFollowerResult,
+      Errors.NONE,
+      initialRebalanceResult.generation + 1,
+      Set.empty,
+      groupId,
+      CompletingRebalance,
+      expectedLeaderId = newLeaderResult.memberId)
   }
 
   private class RebalanceResult(val generation: Int,
