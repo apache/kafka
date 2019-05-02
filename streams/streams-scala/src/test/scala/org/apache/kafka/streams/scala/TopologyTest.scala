@@ -50,14 +50,13 @@ import org.apache.kafka.streams.scala.kstream._
 import org.apache.kafka.streams.{StreamsBuilder => StreamsBuilderJ, _}
 import org.junit.Assert._
 import org.junit._
-import org.scalatest.junit.JUnitSuite
 
 import _root_.scala.collection.JavaConverters._
 
 /**
  * Test suite that verifies that the topology built by the Java and Scala APIs match.
  */
-class TopologyTest extends JUnitSuite {
+class TopologyTest {
 
   private val inputTopic = "input-topic"
   private val userClicksTopic = "user-clicks-topic"

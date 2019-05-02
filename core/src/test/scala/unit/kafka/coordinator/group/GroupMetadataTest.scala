@@ -22,12 +22,11 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{Before, Test}
-import org.scalatest.junit.JUnitSuite
 
 /**
  * Test group state transitions and other GroupMetadata functionality
  */
-class GroupMetadataTest extends JUnitSuite {
+class GroupMetadataTest {
   private val protocolType = "consumer"
   private val groupId = "groupId"
   private val groupInstanceId = Some("groupInstanceId")

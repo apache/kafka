@@ -28,12 +28,12 @@ import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
+import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
 import scala.collection.Set
 
-class DynamicBrokerConfigTest extends JUnitSuite {
+class DynamicBrokerConfigTest {
 
   @Test
   def testConfigUpdate(): Unit = {

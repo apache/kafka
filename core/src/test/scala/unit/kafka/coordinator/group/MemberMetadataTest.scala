@@ -20,9 +20,8 @@ import java.util.Arrays
 
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
 
-class MemberMetadataTest extends JUnitSuite {
+class MemberMetadataTest {
   val groupId = "groupId"
   val groupInstanceId = Some("groupInstanceId")
   val clientId = "clientId"

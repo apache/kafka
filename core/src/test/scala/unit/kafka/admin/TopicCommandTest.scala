@@ -27,6 +27,7 @@ import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
 import org.junit.rules.TestName
 import org.junit.{After, Before, Rule, Test}
+import org.scalatest.Assertions.intercept
 
 import scala.util.Random
 
