@@ -498,11 +498,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private static class TimestampedKeyValueStoreReadWriteDecorator<K, V>
+    static class TimestampedKeyValueStoreReadWriteDecorator<K, V>
         extends KeyValueStoreReadWriteDecorator<K, ValueAndTimestamp<V>>
         implements TimestampedKeyValueStore<K, V> {
 
-        private TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner) {
+        TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner) {
             super(inner);
         }
     }
@@ -564,7 +564,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private static class TimestampedWindowStoreReadWriteDecorator<K, V>
+    static class TimestampedWindowStoreReadWriteDecorator<K, V>
         extends WindowStoreReadWriteDecorator<K, ValueAndTimestamp<V>>
         implements TimestampedWindowStore<K, V> {
 
