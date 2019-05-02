@@ -122,6 +122,8 @@ public class CachingSessionStoreTest {
         verifyWindowedKeyValue(all.next(), new Windowed<>(keyAA, new SessionWindow(0, 0)), "1");
         verifyWindowedKeyValue(all.next(), new Windowed<>(keyB, new SessionWindow(0, 0)), "1");
         assertFalse(all.hasNext());
+
+
     }
 
     @Test
