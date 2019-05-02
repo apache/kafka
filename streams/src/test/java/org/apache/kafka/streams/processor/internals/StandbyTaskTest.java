@@ -152,6 +152,9 @@ public class StandbyTaskTest {
     private final byte[] recordValue = intSerializer.serialize(null, 10);
     private final byte[] recordKey = intSerializer.serialize(null, 1);
 
+    private final String threadName = "threadName";
+    private final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(new Metrics(), threadName);
+
     @Before
     public void setup() throws Exception {
         restoreStateConsumer.reset();
@@ -182,7 +185,8 @@ public class StandbyTaskTest {
     @Test
     public void testStorePartitions() throws IOException {
         final StreamsConfig config = createConfig(baseDir);
-        task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        task = new StandbyTask(
+            taskId, topicPartitions, topology, consumer, changelogReader, config, streamsMetrics, stateDirectory);
         task.initializeStateStores();
         assertEquals(Utils.mkSet(partition2, partition1), new HashSet<>(task.checkpointedOffsets().keySet()));
     }
@@ -191,13 +195,25 @@ public class StandbyTaskTest {
     @Test
     public void testUpdateNonInitializedStore() throws IOException {
         final StreamsConfig config = createConfig(baseDir);
-        task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        task = new StandbyTask(
+            taskId, topicPartitions, topology, consumer, changelogReader, config, streamsMetrics, stateDirectory);
 
         restoreStateConsumer.assign(new ArrayList<>(task.checkpointedOffsets().keySet()));
 
         try {
             task.update(partition1,
-                        singletonList(new ConsumerRecord<>(partition1.topic(), partition1.partition(), 10, 0L, TimestampType.CREATE_TIME, 0L, 0, 0, recordKey, recordValue))
+                        singletonList(
+                            new ConsumerRecord<>(
+                                partition1.topic(),
+                                partition1.partition(),
+                                10,
+                                0L,
+                                TimestampType.CREATE_TIME,
+                                0L,
+                                0,
+                                0,
+                                recordKey,
+                                recordValue))
             );
             fail("expected an exception");
         } catch (final NullPointerException npe) {
@@ -209,7 +225,8 @@ public class StandbyTaskTest {
     @Test
     public void testUpdate() throws IOException {
         final StreamsConfig config = createConfig(baseDir);
-        task = new StandbyTask(taskId, topicPartitions, topology, consumer, changelogReader, config, null, stateDirectory);
+        task = new StandbyTask(
+            taskId, topicPartitions, topology, consumer, changelogReader, config, streamsMetrics, stateDirectory);
         task.initializeStateStores();
         final Set<TopicPartition> partition = Collections.singleton(partition2);
         restoreStateConsumer.assign(partition);
@@ -415,7 +432,7 @@ public class StandbyTaskTest {
             consumer,
             changelogReader,
             createConfig(baseDir),
-            null,
+            streamsMetrics,
             stateDirectory
         );
         task.initializeStateStores();
@@ -545,7 +562,7 @@ public class StandbyTaskTest {
             consumer,
             changelogReader,
             config,
-            null,
+            streamsMetrics,
             stateDirectory
         );
         task.initializeStateStores();
@@ -591,7 +608,7 @@ public class StandbyTaskTest {
             consumer,
             changelogReader,
             config,
-            null,
+            streamsMetrics,
             stateDirectory
         ) {
             @Override
@@ -615,14 +632,24 @@ public class StandbyTaskTest {
         assertTrue(closedStateManager.get());
     }
 
+    private MetricName setupCloseTaskMetric() {
+        final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
+        final Sensor sensor = streamsMetrics.threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
+        sensor.add(metricName, new Total());
+        return metricName;
+    }
+
+    private void verifyCloseTaskMetric(final double expected,
+                                       final StreamsMetricsImpl streamsMetrics,
+                                       final MetricName metricName) {
+        final KafkaMetric metric = (KafkaMetric) streamsMetrics.metrics().get(metricName);
+        final double totalCloses = metric.measurable().measure(metric.config(), System.currentTimeMillis());
+        assertThat(totalCloses, equalTo(expected));
+    }
+
     @Test
     public void shouldRecordTaskClosedMetricOnClose() throws IOException {
-        final Metrics metrics = new Metrics();
-        final Sensor sensor = metrics.sensor("internal.testThreadName.s.task-closed",
-                                             Sensor.RecordingLevel.INFO);
-        final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
-        sensor.add( metricName, new Total());
-        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(metrics, "threadName");
+        final MetricName metricName = setupCloseTaskMetric();
         final StandbyTask task = new StandbyTask(
             taskId,
             ktablePartitions,
@@ -638,8 +665,29 @@ public class StandbyTaskTest {
         final boolean isZombie = false;
         task.close(clean, isZombie);
 
-        final KafkaMetric metric = metrics.metric(metricName);
-        final double totalCloses = metric.measurable().measure(metric.config(), System.currentTimeMillis());
-        assertThat(totalCloses, equalTo(1.0));
+        final double expectedCloseTaskMetric = 1.0;
+        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
+    }
+
+    @Test
+    public void shouldRecordTaskClosedMetricOnCloseSuspended() throws IOException {
+        final MetricName metricName = setupCloseTaskMetric();
+        final StandbyTask task = new StandbyTask(
+            taskId,
+            ktablePartitions,
+            ktableTopology,
+            consumer,
+            changelogReader,
+            createConfig(baseDir),
+            streamsMetrics,
+            stateDirectory
+        );
+
+        final boolean clean = true;
+        final boolean isZombie = false;
+        task.closeSuspended(clean, isZombie, new RuntimeException());
+
+        final double expectedCloseTaskMetric = 1.0;
+        verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
     }
 }
