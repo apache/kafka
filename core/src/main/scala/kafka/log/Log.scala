@@ -564,23 +564,14 @@ class Log(@volatile var dir: File,
       segments.clear()
       loadSegmentFiles()
     }
+    deleteOldSegments()
 
     // Finally, complete any interrupted swap operations. To be crash-safe,
     // log files that are replaced by the swap segment should be renamed to .deleted
     // before the swap file is restored as the new segment file.
     completeSwapOperations(swapFiles)
 
-    if (logSegments.isEmpty) {
-      // no existing segments, create a new mutable segment beginning at logStartOffset
-      addSegment(LogSegment.open(dir = dir,
-        baseOffset = logStartOffset,
-        config,
-        time = time,
-        fileAlreadyExists = false,
-        initFileSize = this.initFileSize,
-        preallocate = config.preallocate))
-      logStartOffset
-    } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
+    if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
       val nextOffset = retryOnOffsetOverflow {
         recoverLog()
       }
@@ -628,6 +619,24 @@ class Log(@volatile var dir: File,
         }
       }
     }
+
+    if (logSegments.nonEmpty) {
+      val logEndOffset = activeSegment.readNextOffset - 1
+      if (logEndOffset < logStartOffset)
+        logSegments.foreach(deleteSegment)
+    }
+
+    if (logSegments.isEmpty) {
+      // no existing segments, create a new mutable segment beginning at logStartOffset
+      addSegment(LogSegment.open(dir = dir,
+        baseOffset = logStartOffset,
+        config,
+        time = time,
+        fileAlreadyExists = false,
+        initFileSize = this.initFileSize,
+        preallocate = config.preallocate))
+    }
+
     recoveryPoint = activeSegment.readNextOffset
     recoveryPoint
   }
