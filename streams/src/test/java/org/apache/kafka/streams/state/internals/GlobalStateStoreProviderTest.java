@@ -25,8 +25,10 @@ import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.NoOpReadOnlyStore;
 import org.junit.Before;
@@ -164,6 +166,18 @@ public class GlobalStateStoreProviderTest {
         for (final ReadOnlyKeyValueStore<String, ValueAndTimestamp<String>> store : stores) {
             assertThat(store, instanceOf(ReadOnlyKeyValueStore.class));
             assertThat(store, not(instanceOf(TimestampedKeyValueStore.class)));
+        }
+    }
+
+    @Test
+    public void shouldReturnTimestampedWindowStoreAsWindowStore() {
+        final GlobalStateStoreProvider provider = new GlobalStateStoreProvider(stores);
+        final List<ReadOnlyWindowStore<String, ValueAndTimestamp<String>>> stores =
+            provider.stores("ts-w-store", QueryableStoreTypes.windowStore());
+        assertEquals(1, stores.size());
+        for (final ReadOnlyWindowStore<String, ValueAndTimestamp<String>> store : stores) {
+            assertThat(store, instanceOf(ReadOnlyWindowStore.class));
+            assertThat(store, not(instanceOf(TimestampedWindowStore.class)));
         }
     }
 }
