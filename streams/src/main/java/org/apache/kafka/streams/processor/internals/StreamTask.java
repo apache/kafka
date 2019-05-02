@@ -498,6 +498,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             }
         } catch (final CommitFailedException | ProducerFencedException error) {
             throw new TaskMigratedException(this, error);
+        } catch (final TimeoutException error) {
+            log.error("Main thread times out while doing commit.");
+            throw error;
         }
 
         commitNeeded = false;
