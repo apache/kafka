@@ -255,10 +255,13 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
     @Override
     public void close() {
-        for (final InMemoryWindowStoreIteratorWrapper it : openIterators) {
-            it.close();
+        if (openIterators.size() != 0) {
+            LOG.warn("Closing {} open iterators for store {}", openIterators.size(), name);
+            for (final InMemoryWindowStoreIteratorWrapper it : openIterators) {
+                it.close();
+            }
         }
-
+        
         segmentMap.clear();
         open = false;
     }
