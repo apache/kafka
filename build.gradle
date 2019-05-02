@@ -26,16 +26,17 @@ buildscript {
     }
   }
   apply from: file('gradle/buildscript.gradle'), to: buildscript
+  apply from: "$rootDir/gradle/dependencies.gradle"
 
   dependencies {
     // For Apache Rat plugin to ignore non-Git files
-    classpath "org.ajoberstar.grgit:grgit-core:3.1.1"
-    classpath 'com.github.ben-manes:gradle-versions-plugin:0.21.0'
-    classpath 'org.scoverage:gradle-scoverage:2.5.0'
-    classpath 'com.github.jengelman.gradle.plugins:shadow:4.0.4'
-    classpath 'org.owasp:dependency-check-gradle:4.0.2'
-    classpath "com.diffplug.spotless:spotless-plugin-gradle:3.23.0"
-    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:1.6.9"
+    classpath "org.ajoberstar.grgit:grgit-core:$versions.grgit"
+    classpath "com.github.ben-manes:gradle-versions-plugin:$versions.gradleVersionsPlugin"
+    classpath "org.scoverage:gradle-scoverage:$versions.scoveragePlugin"
+    classpath "com.github.jengelman.gradle.plugins:shadow:$versions.shadowPlugin"
+    classpath "org.owasp:dependency-check-gradle:$versions.owaspDepCheckPlugin"
+    classpath "com.diffplug.spotless:spotless-plugin-gradle:$versions.spotlessPlugin"
+    classpath "gradle.plugin.com.github.spotbugs:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
   }
 }
 
@@ -43,11 +44,10 @@ apply plugin: "com.diffplug.gradle.spotless"
 spotless {
   scala {
     target 'streams/**/*.scala'
-    scalafmt('1.5.1').configFile('checkstyle/.scalafmt.conf')
+    scalafmt("$versions.scalafmt").configFile('checkstyle/.scalafmt.conf')
   }
 }
 
-apply from: "$rootDir/gradle/dependencies.gradle"
 
 allprojects {
 
@@ -91,7 +91,7 @@ allprojects {
 }
 
 ext {
-  gradleVersion = "5.4.1"
+  gradleVersion = "$versions.gradle"
   minJavaVersion = "8"
   buildVersionFileName = "kafka-version.properties"
 
@@ -432,7 +432,7 @@ subprojects {
   checkstyle {
     configFile = new File(rootDir, "checkstyle/checkstyle.xml")
     configProperties = checkstyleConfigProperties("import-control.xml")
-    toolVersion = '8.20'
+    toolVersion = "$versions.checkstyle"
   }
 
   configure(checkstyleMain) {
@@ -448,7 +448,7 @@ subprojects {
   test.dependsOn('checkstyleMain', 'checkstyleTest')
 
   spotbugs {
-    toolVersion = '3.1.12'
+    toolVersion = "$versions.spotbugs"
     excludeFilter = file("$rootDir/gradle/spotbugs-exclude.xml")
     ignoreFailures = false
   }
@@ -467,7 +467,7 @@ subprojects {
     apply plugin: "jacoco"
 
     jacoco {
-      toolVersion = "0.8.3"
+      toolVersion = "$versions.jacoco"
     }
 
     // NOTE: Jacoco Gradle plugin does not support "offline instrumentation" this means that classes mocked by PowerMock
