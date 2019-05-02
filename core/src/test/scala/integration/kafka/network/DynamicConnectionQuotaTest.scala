@@ -71,7 +71,6 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
   @Test
   def testDynamicConnectionQuota() {
-    val initialConnectionCount = connectionCount
     val maxConnectionsPerIP = 5
 
     def connectAndVerify() {
@@ -99,7 +98,6 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
   @Test
   def testDynamicListenerConnectionQuota(): Unit = {
-    val socketServer = servers.head.socketServer
     val initialConnectionCount = connectionCount
 
     def connectAndVerify() {
