@@ -66,6 +66,14 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
   }
 
   @Test
+  def shouldCorrectlyParseValidMinimumCancelOptions(): Unit = {
+    val args = Array(
+      "--zookeeper", "localhost:1234",
+      "--cancel")
+    ReassignPartitionsCommand.validateAndParseArgs(args)
+  }
+
+  @Test
   def shouldAllowThrottleOptionOnExecute(): Unit = {
     val args = Array(
       "--zookeeper", "localhost:1234",
@@ -99,7 +107,7 @@ class ReassignPartitionsCommandArgsTest extends JUnitSuite {
   @Test
   def shouldFailIfBlankArg(): Unit = {
     val args = Array(" ")
-    shouldFailWith("Command must include exactly one action: --generate, --execute or --verify", args)
+    shouldFailWith("Command must include exactly one action: --generate, --execute, --verify or --cancel", args)
   }
 
   /**

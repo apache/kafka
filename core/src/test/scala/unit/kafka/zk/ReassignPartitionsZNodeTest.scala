@@ -29,9 +29,10 @@ class ReassignPartitionsZNodeTest {
   private val partition1 = 0
   private val replica1 = 1
   private val replica2 = 2
+  private val replica3 = 3
 
-  private val reassignPartitionData = Map(new TopicPartition(topic, partition1) -> Seq(replica1, replica2))
-  private val reassignmentJson = """{"version":1,"partitions":[{"topic":"foo","partition":0,"replicas":[1,2]}]}"""
+  private val reassignPartitionData = Map(new TopicPartition(topic, partition1) -> Map("replicas"->Seq(replica1, replica2),"original_replicas"->Seq(replica1, replica3)))
+  private val reassignmentJson = """{"version":1,"partitions":[{"topic":"foo","partition":0,"replicas":[1,2],"original_replicas":[1,3]}]}"""
 
   @Test
   def testEncode() {
@@ -51,6 +52,7 @@ class ReassignPartitionsZNodeTest {
     val result = ReassignPartitionsZNode.decode(reassignmentJson.getBytes)
     assertTrue(result.isRight)
     val assignmentMap = result.right.get
-    assertEquals(Seq(replica1, replica2), assignmentMap(new TopicPartition(topic, partition1)))
+    assertEquals(Seq(replica1, replica2), assignmentMap(new TopicPartition(topic, partition1))("replicas"))
+    assertEquals(Seq(replica1, replica3), assignmentMap(new TopicPartition(topic, partition1))("original_replicas"))
   }
 }

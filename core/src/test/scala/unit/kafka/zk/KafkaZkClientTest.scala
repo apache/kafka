@@ -394,10 +394,10 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertEquals(Map.empty, zkClient.getPartitionReassignment)
 
     val reassignment = Map(
-      new TopicPartition("topic_a", 0) -> Seq(0, 1, 3),
-      new TopicPartition("topic_a", 1) -> Seq(2, 1, 3),
-      new TopicPartition("topic_b", 0) -> Seq(4, 5),
-      new TopicPartition("topic_c", 0) -> Seq(5, 3)
+      new TopicPartition("topic_a", 0) -> Map("replicas" -> Seq(0, 1, 3), "original_replicas" -> Seq(0, 1, 2)),
+      new TopicPartition("topic_a", 1) -> Map("replicas" -> Seq(2, 1, 3), "original_replicas" -> Seq(0, 1, 2)),
+      new TopicPartition("topic_b", 0) -> Map("replicas" -> Seq(4, 5), "original_replicas" -> Seq(3, 4)),
+      new TopicPartition("topic_c", 0) -> Map("replicas" -> Seq(5, 3), "original_replicas" -> Seq(5, 4))
     )
 
     // Should throw ControllerMovedException if the controller epoch zkVersion does not match
@@ -951,6 +951,15 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     assertFalse(zkClient.reassignPartitionsInProgress)
     zkClient.createRecursive(ReassignPartitionsZNode.path)
     assertTrue(zkClient.reassignPartitionsInProgress)
+  }
+
+  @Test
+  def testReassignCancelInPlace(): Unit = {
+    assertFalse(zkClient.reassignCancelInPlace)
+    zkClient.createReassignCancel()
+    assertTrue(zkClient.reassignCancelInPlace)
+    zkClient.deleteReassignCancel(controllerEpochZkVersion)
+    assertFalse(zkClient.reassignCancelInPlace)
   }
 
   @Test

@@ -787,7 +787,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Returns all reassignments.
    * @return the reassignments for each partition.
    */
-  def getPartitionReassignment: collection.Map[TopicPartition, Seq[Int]] = {
+  def getPartitionReassignment: collection.Map[TopicPartition, Map[String, Seq[Int]]] = {
     val getDataRequest = GetDataRequest(ReassignPartitionsZNode.path)
     val getDataResponse = retryRequestUntilConnected(getDataRequest)
     getDataResponse.resultCode match {
@@ -795,7 +795,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
         ReassignPartitionsZNode.decode(getDataResponse.data) match {
           case Left(e) =>
             logger.warn(s"Ignoring partition reassignment due to invalid json: ${e.getMessage}", e)
-            Map.empty[TopicPartition, Seq[Int]]
+            Map.empty[TopicPartition, Map[String, Seq[Int]]]
           case Right(assignments) => assignments
         }
       case Code.NONODE => Map.empty
@@ -811,7 +811,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    * @throws KeeperException if there is an error while setting or creating the znode
    */
-  def setOrCreatePartitionReassignment(reassignment: collection.Map[TopicPartition, Seq[Int]], expectedControllerEpochZkVersion: Int): Unit = {
+  def setOrCreatePartitionReassignment(reassignment: collection.Map[TopicPartition, Map[String, Seq[Int]]], expectedControllerEpochZkVersion: Int): Unit = {
 
     def set(reassignmentData: Array[Byte]): SetDataResponse = {
       val setDataRequest = SetDataRequest(ReassignPartitionsZNode.path, reassignmentData, ZkVersion.MatchAnyVersion)
@@ -839,7 +839,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param reassignment the reassignment to set on the reassignment znode.
    * @throws KeeperException if there is an error while creating the znode
    */
-  def createPartitionReassignment(reassignment: Map[TopicPartition, Seq[Int]])  = {
+  def createPartitionReassignment(reassignment: Map[TopicPartition, Map[String, Seq[Int]]])  = {
     createRecursive(ReassignPartitionsZNode.path, ReassignPartitionsZNode.encode(reassignment))
   }
 
@@ -857,6 +857,29 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    */
   def reassignPartitionsInProgress(): Boolean = {
     pathExists(ReassignPartitionsZNode.path)
+  }
+
+  /**
+    * Creates the partition reassignment cancel znode.
+    * @throws KeeperException if there is an error while creating the znode
+    */
+  def createReassignCancel()  = {
+    createRecursive(ReassignCancelZNode.path)
+  }
+
+  /**
+    * Deletes the partitio reassignment canel znode.
+    */
+  def deleteReassignCancel(expectedControllerEpochZkVersion: Int): Unit = {
+    deletePath(ReassignCancelZNode.path, expectedControllerEpochZkVersion)
+  }
+
+  /**
+    * Checks if reassign cancellation is in place
+    * @return true if /admin/reassign_cancel is in place , else false
+    */
+  def reassignCancelInPlace(): Boolean = {
+    pathExists(ReassignCancelZNode.path)
   }
 
   /**
