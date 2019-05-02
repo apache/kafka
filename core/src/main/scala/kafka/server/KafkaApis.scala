@@ -383,7 +383,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
           new OffsetAndMetadata(
             offset = partitionData.committedOffset(),
-            leaderEpoch = Optional.ofNullable(new Integer(partitionData.committedLeaderEpoch())),
+            leaderEpoch = Optional.ofNullable[Integer](partitionData.committedLeaderEpoch),
             metadata = metadata,
             commitTimestamp = partitionData.commitTimestamp() match {
               case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimestamp
