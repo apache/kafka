@@ -175,7 +175,7 @@ public class RestServerTest {
 
         server = new RestServer(workerConfig);
         server.initializeServer();
-        server.start(herder, herder.plugins());
+        server.initializeResources(herder);
 
         HttpOptions request = new HttpOptions("/connectors");
         request.addHeader("Content-Type", MediaType.WILDCARD);
@@ -219,7 +219,7 @@ public class RestServerTest {
 
         server = new RestServer(workerConfig);
         server.initializeServer();
-        server.start(herder, herder.plugins());
+        server.initializeResources(herder);
         HttpRequest request = new HttpGet("/connectors");
         request.addHeader("Referer", origin + "/page");
         request.addHeader("Origin", origin);
@@ -277,7 +277,7 @@ public class RestServerTest {
 
         server = new RestServer(workerConfig);
         server.initializeServer();
-        server.start(herder, herder.plugins());
+        server.initializeResources(herder);
         HttpRequest request = new HttpGet("/connectors");
         CloseableHttpClient httpClient = HttpClients.createMinimal();
         HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());

@@ -27,8 +27,11 @@ import org.junit.experimental.categories.Category;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.REST_EXTENSION_CLASSES_CONFIG;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 
 /**
  * A simple integration test to ensure that REST extensions are registered correctly.
@@ -37,11 +40,15 @@ import static org.apache.kafka.connect.runtime.WorkerConfig.REST_EXTENSION_CLASS
 public class RestExtensionIntegrationTest {
 
     private static final int NUM_WORKERS = 3;
+    private static final long REST_EXTENSION_REGISTRATION_TIMEOUT_MS = TimeUnit.MINUTES.toMillis(1);
 
     private EmbeddedConnectCluster connect;
 
+
     @Test
-    public void testImmediateRequestForListOfConnectors() throws IOException {
+    public void testImmediateRequestForListOfConnectors() throws IOException, InterruptedException {
+        IntegrationTestRestExtension.resetRegistered();
+
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(REST_EXTENSION_CLASSES_CONFIG, IntegrationTestRestExtension.class.getName());
@@ -56,6 +63,12 @@ public class RestExtensionIntegrationTest {
   
         // start the clusters
         connect.start();
+
+        waitForCondition(
+            IntegrationTestRestExtension::isRegistered,
+            REST_EXTENSION_REGISTRATION_TIMEOUT_MS,
+            "REST extension was never registered"
+        );
     }
 
     @After
@@ -65,9 +78,13 @@ public class RestExtensionIntegrationTest {
     }
   
     public static class IntegrationTestRestExtension implements ConnectRestExtension {
+
+        private static final AtomicBoolean REGISTERED = new AtomicBoolean(false);
+
         @Override
         public void register(ConnectRestExtensionContext restPluginContext) {
             restPluginContext.clusterState().connectors();
+            REGISTERED.set(true);
         }
     
         @Override
@@ -81,6 +98,14 @@ public class RestExtensionIntegrationTest {
         @Override
         public String version() {
             return "test";
+        }
+
+        public static boolean isRegistered() {
+            return REGISTERED.get();
+        }
+
+        public static void resetRegistered() {
+            REGISTERED.set(false);
         }
     }
 }

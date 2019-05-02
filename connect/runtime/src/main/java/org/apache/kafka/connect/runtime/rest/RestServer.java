@@ -24,7 +24,6 @@ import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorPluginsResource;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
@@ -34,7 +33,6 @@ import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
-import org.eclipse.jetty.server.Slf4jRequestLog;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.server.handler.DefaultHandler;
 import org.eclipse.jetty.server.handler.RequestLogHandler;
@@ -182,7 +180,7 @@ public class RestServer {
     }
 
     @SuppressWarnings("deprecation")
-    public void start(Herder herder, Plugins plugins) {
+    public void initializeResources(Herder herder) {
         log.info("Starting REST server");
 
         ResourceConfig resourceConfig = new ResourceConfig();
@@ -195,7 +193,7 @@ public class RestServer {
         resourceConfig.register(ConnectExceptionMapper.class);
         resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
 
-        registerRestExtensions(herder, plugins, resourceConfig);
+        registerRestExtensions(herder, resourceConfig);
 
         ServletContainer servletContainer = new ServletContainer(resourceConfig);
         ServletHolder servletHolder = new ServletHolder(servletContainer);
@@ -317,8 +315,8 @@ public class RestServer {
         return null;
     }
 
-    void registerRestExtensions(Herder herder, Plugins plugins, ResourceConfig resourceConfig) {
-        connectRestExtensions = plugins.newPlugins(
+    void registerRestExtensions(Herder herder, ResourceConfig resourceConfig) {
+        connectRestExtensions = herder.plugins().newPlugins(
             config.getList(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG),
             config, ConnectRestExtension.class);
 

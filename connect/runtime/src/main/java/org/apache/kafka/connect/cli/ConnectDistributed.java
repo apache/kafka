@@ -122,8 +122,6 @@ public class ConnectDistributed {
         log.info("Kafka Connect distributed worker initialization took {}ms", time.hiResClockMs() - initStart);
         try {
             connect.start();
-            // herder has initialized now, and ready to be used by the RestServer.
-            rest.start(herder, plugins);
         } catch (Exception e) {
             log.error("Failed to start Connect", e);
             connect.stop();
