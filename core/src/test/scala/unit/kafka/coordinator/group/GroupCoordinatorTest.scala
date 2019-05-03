@@ -37,14 +37,14 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
-import org.scalatest.junit.JUnitSuite
+import org.scalatest.Assertions.intercept
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future, Promise, TimeoutException}
 
-class GroupCoordinatorTest extends JUnitSuite {
+class GroupCoordinatorTest {
   type JoinGroupCallback = JoinGroupResult => Unit
   type SyncGroupCallbackParams = (Array[Byte], Errors)
   type SyncGroupCallback = (Array[Byte], Errors) => Unit

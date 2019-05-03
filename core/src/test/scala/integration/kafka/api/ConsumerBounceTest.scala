@@ -17,7 +17,6 @@ import java.time
 import java.util.concurrent._
 import java.util.{Collection, Collections, Properties}
 
-import util.control.Breaks._
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
@@ -505,7 +504,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }
   }
 
-  private def createTopicPartitions(topic: String, numPartitions: Int = 1, replicationFactor: Int = 1,
+  private def createTopicPartitions(topic: String, numPartitions: Int, replicationFactor: Int,
                                     topicConfig: Properties = new Properties): Set[TopicPartition] = {
     createTopic(topic, numPartitions = numPartitions, replicationFactor = replicationFactor, topicConfig = topicConfig)
     Range(0, numPartitions).map(part => new TopicPartition(topic, part)).toSet

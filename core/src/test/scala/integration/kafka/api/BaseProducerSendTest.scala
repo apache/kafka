@@ -34,6 +34,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer

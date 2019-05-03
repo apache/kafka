@@ -30,9 +30,8 @@ import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{Before, Test}
 import org.mockito.Mockito
-import org.scalatest.junit.JUnitSuite
 
-class PartitionStateMachineTest extends JUnitSuite {
+class PartitionStateMachineTest {
   private var controllerContext: ControllerContext = null
   private var mockZkClient: KafkaZkClient = null
   private var mockControllerBrokerRequestBatch: ControllerBrokerRequestBatch = null
