@@ -28,9 +28,8 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
 
     public EagerBufferConfigImpl(final long maxRecords,
                                  final long maxBytes,
-                                 final Map<String, String> topicConfig,
-                                 final boolean loggingEnabled) {
-        super(topicConfig, loggingEnabled);
+                                 final Map<String, String> logConfig) {
+        super(logConfig);
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
     }
@@ -42,12 +41,12 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
 
     @Override
     public Suppressed.EagerBufferConfig withMaxRecords(final long recordLimit) {
-        return new EagerBufferConfigImpl(recordLimit, maxBytes, topicConfig, loggingEnabled);
+        return new EagerBufferConfigImpl(recordLimit, maxBytes, logConfig);
     }
 
     @Override
     public Suppressed.EagerBufferConfig withMaxBytes(final long byteLimit) {
-        return new EagerBufferConfigImpl(maxRecords, byteLimit, topicConfig, loggingEnabled);
+        return new EagerBufferConfigImpl(maxRecords, byteLimit, logConfig);
     }
 
     @Override
@@ -90,11 +89,11 @@ public class EagerBufferConfigImpl extends BufferConfigInternal<Suppressed.Eager
 
     @Override
     public Suppressed.EagerBufferConfig withLoggingDisabled() {
-        return new EagerBufferConfigImpl(maxRecords, maxBytes, topicConfig, false);
+        return new EagerBufferConfigImpl(maxRecords, maxBytes, null);
     }
 
     @Override
     public Suppressed.EagerBufferConfig withLoggingEnabled(final Map<String, String> config) {
-        return new EagerBufferConfigImpl(maxRecords, maxBytes, config, true);
+        return new EagerBufferConfigImpl(maxRecords, maxBytes, config);
     }
 }

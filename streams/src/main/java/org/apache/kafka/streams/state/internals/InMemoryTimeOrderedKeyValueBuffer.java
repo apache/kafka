@@ -140,7 +140,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
         @Override
         public Map<String, String> logConfig() {
-            return logConfig;
+            return Collections.unmodifiableMap(logConfig);
         }
 
         @Override

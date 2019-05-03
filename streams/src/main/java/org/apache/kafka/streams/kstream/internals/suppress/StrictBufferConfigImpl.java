@@ -32,9 +32,8 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
     public StrictBufferConfigImpl(final long maxRecords,
                                   final long maxBytes,
                                   final BufferFullStrategy bufferFullStrategy,
-                                  final Map<String, String> topicConfig,
-                                  final boolean loggingEnabled) {
-        super(topicConfig, loggingEnabled);
+                                  final Map<String, String> topicConfig) {
+        super(topicConfig);
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
         this.bufferFullStrategy = bufferFullStrategy;
@@ -56,12 +55,12 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
 
     @Override
     public Suppressed.StrictBufferConfig withMaxRecords(final long recordLimit) {
-        return new StrictBufferConfigImpl(recordLimit, maxBytes, bufferFullStrategy, topicConfig, loggingEnabled);
+        return new StrictBufferConfigImpl(recordLimit, maxBytes, bufferFullStrategy, logConfig);
     }
 
     @Override
     public Suppressed.StrictBufferConfig withMaxBytes(final long byteLimit) {
-        return new StrictBufferConfigImpl(maxRecords, byteLimit, bufferFullStrategy, topicConfig, loggingEnabled);
+        return new StrictBufferConfigImpl(maxRecords, byteLimit, bufferFullStrategy, logConfig);
     }
 
     @Override
@@ -107,11 +106,11 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
 
     @Override
     public Suppressed.StrictBufferConfig withLoggingDisabled() {
-        return new StrictBufferConfigImpl(maxRecords, maxBytes, bufferFullStrategy, topicConfig, false);
+        return new StrictBufferConfigImpl(maxRecords, maxBytes, bufferFullStrategy, null);
     }
 
     @Override
     public Suppressed.StrictBufferConfig withLoggingEnabled(final Map<String, String> config) {
-        return new StrictBufferConfigImpl(maxRecords, maxBytes, bufferFullStrategy, config, true);
+        return new StrictBufferConfigImpl(maxRecords, maxBytes, bufferFullStrategy, config);
     }
 }
