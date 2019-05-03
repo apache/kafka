@@ -90,6 +90,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
     private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
     WriteOptions wOptions;
     FlushOptions fOptions;
+    private BloomFilter filter;
 
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
@@ -120,7 +121,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
         tableConfig.setBlockSize(BLOCK_SIZE);
-        tableConfig.setFilter(new BloomFilter());
+        
+        filter = new BloomFilter();
+        tableConfig.setFilter(filter);
 
         userSpecifiedOptions.optimizeFiltersForHits();
         userSpecifiedOptions.setTableFormatConfig(tableConfig);
@@ -376,6 +379,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]> {
         wOptions.close();
         fOptions.close();
         db.close();
+        filter.close();
 
         dbAccessor = null;
         userSpecifiedOptions = null;
