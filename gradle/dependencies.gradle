@@ -65,7 +65,7 @@ versions += [
   jmh: "1.21",
   hamcrest: "2.1",
   log4j: "1.2.17",
-  scalaLogging: "3.9.2",
+  scalaLogging: "3.9.0",
   jaxb: "2.3.0",
   jaxrs: "2.1.1",
   jfreechart: "1.0.0",
