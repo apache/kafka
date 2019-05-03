@@ -280,7 +280,7 @@ public class InternalTopologyBuilder {
 
         @Override
         Source describe() {
-            return new Source(name, new HashSet<>(topics), pattern);
+            return new Source(name, topics.size() == 0 ? null : new HashSet<>(topics), pattern);
         }
     }
 
@@ -1310,6 +1310,9 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.Node node1,
                            final TopologyDescription.Node node2) {
+            if (node1.equals(node2)) {
+                return 0;
+            }
             final int size1 = ((AbstractNode) node1).size;
             final int size2 = ((AbstractNode) node2).size;
 
@@ -1428,6 +1431,7 @@ public class InternalTopologyBuilder {
         int size;
 
         AbstractNode(final String name) {
+            Objects.requireNonNull(name, "name cannot be null");
             this.name = name;
             this.size = 1;
         }
@@ -1464,6 +1468,13 @@ public class InternalTopologyBuilder {
                       final Set<String> topics,
                       final Pattern pattern) {
             super(name);
+            if (topics == null && pattern == null) {
+                throw new IllegalArgumentException("Either topics or pattern must be not-null, but both are null.");
+            }
+            if (topics != null && pattern != null) {
+                throw new IllegalArgumentException("Either topics or pattern must be null, but both are not null.");
+            }
+
             this.topics = topics;
             this.topicPattern = pattern;
         }
@@ -1508,8 +1519,10 @@ public class InternalTopologyBuilder {
             final Source source = (Source) o;
             // omit successor to avoid infinite loops
             return name.equals(source.name)
-                && topics.equals(source.topics)
-                && topicPattern.equals(source.topicPattern);
+                && (topics == null && source.topics == null
+                    || topics != null && topics.equals(source.topics))
+                && (topicPattern == null && source.topicPattern == null
+                    || topicPattern != null && topicPattern.pattern().equals(source.topicPattern.pattern()));
         }
 
         @Override
@@ -1738,6 +1751,9 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.GlobalStore globalStore1,
                            final TopologyDescription.GlobalStore globalStore2) {
+            if (globalStore1.equals(globalStore2)) {
+                return 0;
+            }
             return globalStore1.id() - globalStore2.id();
         }
     }
@@ -1748,6 +1764,9 @@ public class InternalTopologyBuilder {
         @Override
         public int compare(final TopologyDescription.Subtopology subtopology1,
                            final TopologyDescription.Subtopology subtopology2) {
+            if (subtopology1.equals(subtopology2)) {
+                return 0;
+            }
             return subtopology1.id() - subtopology2.id();
         }
     }
