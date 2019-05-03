@@ -18,17 +18,21 @@ package org.apache.kafka.connect.integration;
 
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
+import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
 
+import javax.ws.rs.GET;
+import javax.ws.rs.Path;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.REST_EXTENSION_CLASSES_CONFIG;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -44,11 +48,8 @@ public class RestExtensionIntegrationTest {
 
     private EmbeddedConnectCluster connect;
 
-
     @Test
     public void testImmediateRequestForListOfConnectors() throws IOException, InterruptedException {
-        IntegrationTestRestExtension.resetRegistered();
-
         // setup Connect worker properties
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(REST_EXTENSION_CLASSES_CONFIG, IntegrationTestRestExtension.class.getName());
@@ -65,7 +66,7 @@ public class RestExtensionIntegrationTest {
         connect.start();
 
         waitForCondition(
-            IntegrationTestRestExtension::isRegistered,
+            this::extensionIsRegistered,
             REST_EXTENSION_REGISTRATION_TIMEOUT_MS,
             "REST extension was never registered"
         );
@@ -76,15 +77,32 @@ public class RestExtensionIntegrationTest {
         // stop all Connect, Kafka and Zk threads.
         connect.stop();
     }
-  
-    public static class IntegrationTestRestExtension implements ConnectRestExtension {
 
-        private static final AtomicBoolean REGISTERED = new AtomicBoolean(false);
+    private boolean extensionIsRegistered() {
+        try {
+            String extensionUrl = endpointForResource("integration-test-rest-extension/registered");
+            return "true".equals(connect.executeGet(extensionUrl));
+        } catch (ConnectRestException | IOException e) {
+            return false;
+        }
+    }
+
+    private String endpointForResource(String resource) throws IOException {
+        String url = connect.workers().stream()
+            .map(WorkerHandle::url)
+            .filter(Objects::nonNull)
+            .findFirst()
+            .orElseThrow(() -> new IOException("Connect workers have not been provisioned"))
+            .toString();
+        return url + resource;
+    }
+
+    public static class IntegrationTestRestExtension implements ConnectRestExtension {
 
         @Override
         public void register(ConnectRestExtensionContext restPluginContext) {
             restPluginContext.clusterState().connectors();
-            REGISTERED.set(true);
+            restPluginContext.configurable().register(new IntegrationTestRestExtensionResource());
         }
     
         @Override
@@ -100,12 +118,14 @@ public class RestExtensionIntegrationTest {
             return "test";
         }
 
-        public static boolean isRegistered() {
-            return REGISTERED.get();
-        }
+        @Path("integration-test-rest-extension")
+        public static class IntegrationTestRestExtensionResource {
 
-        public static void resetRegistered() {
-            REGISTERED.set(false);
+            @GET
+            @Path("/registered")
+            public boolean isRegistered() {
+                return true;
+            }
         }
     }
 }

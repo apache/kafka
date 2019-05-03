@@ -173,7 +173,7 @@ public class RestServer {
         try {
             jettyServer.start();
         } catch (Exception e) {
-            throw new ConnectException("Unable to start REST server", e);
+            throw new ConnectException("Unable to initialize REST server", e);
         }
 
         log.info("REST server listening at " + jettyServer.getURI() + ", advertising URL " + advertisedUrl());
@@ -181,7 +181,7 @@ public class RestServer {
 
     @SuppressWarnings("deprecation")
     public void initializeResources(Herder herder) {
-        log.info("Starting REST server");
+        log.info("Initializing REST resources");
 
         ResourceConfig resourceConfig = new ResourceConfig();
         resourceConfig.register(new JacksonJsonProvider());
@@ -225,10 +225,10 @@ public class RestServer {
         try {
             context.start();
         } catch (Exception e) {
-            throw new ConnectException("Unable to start REST server", e);
+            throw new ConnectException("Unable to initialize REST resources", e);
         }
 
-        log.info("REST server started and ready to handle requests");
+        log.info("REST resources initialized; server is started and ready to handle requests");
     }
 
     public URI serverUrl() {
