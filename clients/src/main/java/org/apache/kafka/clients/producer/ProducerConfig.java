@@ -184,6 +184,11 @@ public class ProducerConfig extends AbstractConfig {
      */
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
 
+    /**
+     * <code>metrics.replace.on.duplicate</code>
+     */
+    public static final String METRICS_REPLACE_ON_DUPLICATE_CONFIG = CommonClientConfigs.METRICS_REPLACE_ON_DUPLICATE_CONFIG;
+
     /** <code>metric.reporters</code> */
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
@@ -319,6 +324,11 @@ public class ProducerConfig extends AbstractConfig {
                                         new ConfigDef.NonNullValidator(),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+                                .define(METRICS_REPLACE_ON_DUPLICATE_CONFIG,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW,
+                                        CommonClientConfigs.METRICS_REPLACE_ON_DUPLICATE_DOC)
                                 .define(MAX_IN_FLIGHT_REQUESTS_PER_CONNECTION,
                                         Type.INT,
                                         5,

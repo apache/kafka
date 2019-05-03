@@ -87,6 +87,10 @@ public class CommonClientConfigs {
     public static final String METRICS_RECORDING_LEVEL_CONFIG = "metrics.recording.level";
     public static final String METRICS_RECORDING_LEVEL_DOC = "The highest recording level for metrics.";
 
+    public static final String METRICS_REPLACE_ON_DUPLICATE_CONFIG = "metrics.replace.on.duplicate";
+    public static final String METRICS_REPLACE_ON_DUPLICATE_DOC = "If set to true, then multiple sensors registering the same metric will not throw, but will instead log an error. This makes sensor registration errors non fatal.";
+
+
     public static final String METRIC_REPORTER_CLASSES_CONFIG = "metric.reporters";
     public static final String METRIC_REPORTER_CLASSES_DOC = "A list of classes to use as metrics reporters. Implementing the <code>org.apache.kafka.common.metrics.MetricsReporter</code> interface allows plugging in classes that will be notified of new metric creation. The JmxReporter is always included to register JMX statistics.";
 

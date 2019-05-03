@@ -100,11 +100,13 @@ public class AdminClientConfig extends AbstractConfig {
     private static final String METRICS_SAMPLE_WINDOW_MS_DOC = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_DOC;
 
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
+    public static final String METRICS_REPLACE_ON_DUPLICATE_CONFIG = CommonClientConfigs.METRICS_REPLACE_ON_DUPLICATE_CONFIG;
 
     public static final String SECURITY_PROTOCOL_CONFIG = CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
     public static final String DEFAULT_SECURITY_PROTOCOL = CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL;
     private static final String SECURITY_PROTOCOL_DOC = CommonClientConfigs.SECURITY_PROTOCOL_DOC;
     private static final String METRICS_RECORDING_LEVEL_DOC = CommonClientConfigs.METRICS_RECORDING_LEVEL_DOC;
+    private static final String METRICS_REPLACE_ON_DUPLICATE_DOC = CommonClientConfigs.METRICS_REPLACE_ON_DUPLICATE_DOC;
 
     public static final String RETRIES_CONFIG = CommonClientConfigs.RETRIES_CONFIG;
 
@@ -180,6 +182,11 @@ public class AdminClientConfig extends AbstractConfig {
                                            ClientDnsLookup.RESOLVE_CANONICAL_BOOTSTRAP_SERVERS_ONLY.toString()),
                                         Importance.MEDIUM,
                                         CLIENT_DNS_LOOKUP_DOC)
+                                .define(METRICS_REPLACE_ON_DUPLICATE_CONFIG,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW,
+                                        METRICS_REPLACE_ON_DUPLICATE_DOC)
                                 // security support
                                 .define(SECURITY_PROVIDERS_CONFIG,
                                         Type.STRING,

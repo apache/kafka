@@ -125,6 +125,11 @@ public class SensorTest {
             // pass
         }
 
+        // Unless duplicate sensors are allowed, then the sensor will be replaced with an error in the logs
+        metrics.setReplaceOnDuplicateMetric(true);
+        final Sensor anotherAnotherSensor = metrics.sensor("another-sensor");
+        anotherAnotherSensor.add(metrics.metricName("test-metric", "test-group"), new Avg());
+
         // note that adding a different metric with the same name is also a no-op
         assertTrue(sensor.add(metrics.metricName("test-metric", "test-group"), new WindowedSum()));
 

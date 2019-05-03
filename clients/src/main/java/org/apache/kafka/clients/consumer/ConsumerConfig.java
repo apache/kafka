@@ -201,6 +201,11 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
     /**
+     * <code>metrics.replace.on.duplicate</code>
+     */
+    public static final String METRIC_REPLACE_ON_DUPLICATE_CONFIG = CommonClientConfigs.METRICS_REPLACE_ON_DUPLICATE_CONFIG;
+
+    /**
      * <code>check.crcs</code>
      */
     public static final String CHECK_CRCS_CONFIG = "check.crcs";
@@ -439,6 +444,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         new ConfigDef.NonNullValidator(),
                                         Importance.LOW,
                                         CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
+                                .define(METRIC_REPLACE_ON_DUPLICATE_CONFIG,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW,
+                                        CommonClientConfigs.METRICS_REPLACE_ON_DUPLICATE_DOC)
                                 .define(KEY_DESERIALIZER_CLASS_CONFIG,
                                         Type.CLASS,
                                         Importance.HIGH,
