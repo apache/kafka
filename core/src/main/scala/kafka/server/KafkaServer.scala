@@ -249,6 +249,7 @@ class KafkaServer(
         kafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
         kafkaYammerMetrics.configure(config.originals)
         metrics = Server.initializeMetrics(config, time, clusterId)
+        metrics.setReplaceOnDuplicateMetric(config.metricReplaceOnDuplicate)
 
         /* register broker metrics */
         _brokerTopicStats = new BrokerTopicStats

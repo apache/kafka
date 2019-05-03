@@ -504,6 +504,7 @@ public class KafkaAdminClient extends AdminClient {
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             metrics = new Metrics(metricConfig, reporters, time, metricsContext);
+            metrics.setReplaceOnDuplicateMetric(config.getBoolean(AdminClientConfig.METRICS_REPLACE_ON_DUPLICATE_CONFIG));
             String metricGrpPrefix = "admin-client";
             channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
             selector = new Selector(config.getLong(AdminClientConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG),
@@ -1800,7 +1801,7 @@ public class KafkaAdminClient extends AdminClient {
             }
         };
     }
-   
+
     private Call getDeleteTopicsWithIdsCall(final DeleteTopicsOptions options,
                                             final Map<Uuid, KafkaFutureImpl<Void>> futures,
                                             final List<Uuid> topicIds,
