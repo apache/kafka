@@ -20,7 +20,6 @@ import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.connect.util.clusters.WorkerHandle;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
 import org.junit.Test;
@@ -31,7 +30,6 @@ import javax.ws.rs.Path;
 import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.connect.runtime.WorkerConfig.REST_EXTENSION_CLASSES_CONFIG;
@@ -80,21 +78,11 @@ public class RestExtensionIntegrationTest {
 
     private boolean extensionIsRegistered() {
         try {
-            String extensionUrl = endpointForResource("integration-test-rest-extension/registered");
+            String extensionUrl = connect.endpointForResource("integration-test-rest-extension/registered");
             return "true".equals(connect.executeGet(extensionUrl));
         } catch (ConnectRestException | IOException e) {
             return false;
         }
-    }
-
-    private String endpointForResource(String resource) throws IOException {
-        String url = connect.workers().stream()
-            .map(WorkerHandle::url)
-            .filter(Objects::nonNull)
-            .findFirst()
-            .orElseThrow(() -> new IOException("Connect workers have not been provisioned"))
-            .toString();
-        return url + resource;
     }
 
     public static class IntegrationTestRestExtension implements ConnectRestExtension {
