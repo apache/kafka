@@ -527,6 +527,8 @@ class GroupMetadataManager(brokerId: Int,
         val pendingOffsets = mutable.Map[Long, mutable.Map[GroupTopicPartition, CommitRecordMetadataAndOffset]]()
         val loadedGroups = mutable.Map[String, GroupMetadata]()
         val removedGroups = mutable.Set[String]()
+        var numMessagesRead = 0
+        var bytesRead = 0
 
         while (currOffset < logEndOffset && !shuttingDown.get()) {
           val fetchDataInfo = log.read(currOffset, config.loadBufferSize, maxOffset = None,
@@ -551,7 +553,6 @@ class GroupMetadataManager(brokerId: Int,
               fileRecords.readInto(buffer, 0)
               MemoryRecords.readableRecords(buffer)
           }
-
           memRecords.batches.asScala.foreach { batch =>
             val isTxnOffsetCommit = batch.isTransactional
             if (batch.isControlBatch) {
@@ -614,9 +615,13 @@ class GroupMetadataManager(brokerId: Int,
               }
             }
             currOffset = batch.nextOffset
+            batch.iterator().forEachRemaining(record => {
+              bytesRead += record.sizeInBytes()
+              numMessagesRead += 1
+            })
           }
         }
-
+        info(s"Number of messages/bytes read: $numMessagesRead/$bytesRead for topic $topicPartition")
         val (groupOffsets, emptyGroupOffsets) = loadedOffsets
           .groupBy(_._1.group)
           .mapValues(_.map { case (groupTopicPartition, offset) => (groupTopicPartition.topicPartition, offset) })
