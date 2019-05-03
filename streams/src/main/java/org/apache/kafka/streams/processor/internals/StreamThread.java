@@ -69,8 +69,6 @@ import static java.util.Collections.singleton;
 
 public class StreamThread extends Thread {
 
-    private final static AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
-
     /**
      * Stream thread states are the possible states that a stream thread can be in.
      * A thread must only be in one state at a time
@@ -600,8 +598,9 @@ public class StreamThread extends Thread {
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
                                       final StateDirectory stateDirectory,
-                                      final StateRestoreListener userStateRestoreListener) {
-        final String threadClientId = clientId + "-StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement();
+                                      final StateRestoreListener userStateRestoreListener,
+                                      final int threadIdx) {
+        final String threadClientId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadClientId);
         final LogContext logContext = new LogContext(logPrefix);
