@@ -98,6 +98,9 @@ public class CommonClientConfigs {
                                                          + "elapses the client will resend the request if necessary or fail the request if "
                                                          + "retries are exhausted.";
 
+    public static final String DEFAULT_CONNECT_READY_TIMEOUT_MS_CONFIG = "connections.ready.timeout.ms";
+    public static final String DEFAULT_CONNECT_READY_TIMEOUT_MS_DOC = "default timeout for the connection can not recieve the ApiVersionsResponse from servers. if in this time the connection is not ready,then close the connection and trigger update the metaData.";
+
 
     /**
      * Postprocess the configuration so that exponential backoff is disabled when reconnect backoff

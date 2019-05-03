@@ -105,6 +105,9 @@ public class NetworkClient implements KafkaClient {
     /* time in ms to wait before retrying to create connection to a server */
     private final long reconnectBackoffMs;
 
+    /* default timeout for the connection can not recieve the ApiVersionsResponse from servers */
+    private final long defaultConnectReadyTimeOutMs;
+
     private final ClientDnsLookup clientDnsLookup;
 
     private final Time time;
@@ -130,6 +133,7 @@ public class NetworkClient implements KafkaClient {
                          int maxInFlightRequestsPerConnection,
                          long reconnectBackoffMs,
                          long reconnectBackoffMax,
+                         long defaultConnectReadyTimeOutMs,
                          int socketSendBuffer,
                          int socketReceiveBuffer,
                          int defaultRequestTimeoutMs,
@@ -145,6 +149,7 @@ public class NetworkClient implements KafkaClient {
              maxInFlightRequestsPerConnection,
              reconnectBackoffMs,
              reconnectBackoffMax,
+             defaultConnectReadyTimeOutMs,
              socketSendBuffer,
              socketReceiveBuffer,
              defaultRequestTimeoutMs,
@@ -162,6 +167,7 @@ public class NetworkClient implements KafkaClient {
             int maxInFlightRequestsPerConnection,
             long reconnectBackoffMs,
             long reconnectBackoffMax,
+            long defaultConnectReadyTimeOutMs,
             int socketSendBuffer,
             int socketReceiveBuffer,
             int defaultRequestTimeoutMs,
@@ -178,6 +184,7 @@ public class NetworkClient implements KafkaClient {
              maxInFlightRequestsPerConnection,
              reconnectBackoffMs,
              reconnectBackoffMax,
+             defaultConnectReadyTimeOutMs,
              socketSendBuffer,
              socketReceiveBuffer,
              defaultRequestTimeoutMs,
@@ -195,6 +202,7 @@ public class NetworkClient implements KafkaClient {
                          int maxInFlightRequestsPerConnection,
                          long reconnectBackoffMs,
                          long reconnectBackoffMax,
+                         long defaultConnectReadyTimeOutMs,
                          int socketSendBuffer,
                          int socketReceiveBuffer,
                          int defaultRequestTimeoutMs,
@@ -210,6 +218,7 @@ public class NetworkClient implements KafkaClient {
              maxInFlightRequestsPerConnection,
              reconnectBackoffMs,
              reconnectBackoffMax,
+             defaultConnectReadyTimeOutMs,
              socketSendBuffer,
              socketReceiveBuffer,
              defaultRequestTimeoutMs,
@@ -228,6 +237,7 @@ public class NetworkClient implements KafkaClient {
                           int maxInFlightRequestsPerConnection,
                           long reconnectBackoffMs,
                           long reconnectBackoffMax,
+                          long defaultConnectReadyTimeOutMs,
                           int socketSendBuffer,
                           int socketReceiveBuffer,
                           int defaultRequestTimeoutMs,
@@ -251,13 +261,14 @@ public class NetworkClient implements KafkaClient {
         this.selector = selector;
         this.clientId = clientId;
         this.inFlightRequests = new InFlightRequests(maxInFlightRequestsPerConnection);
-        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, logContext);
+        this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax, defaultConnectReadyTimeOutMs, logContext);
         this.socketSendBuffer = socketSendBuffer;
         this.socketReceiveBuffer = socketReceiveBuffer;
         this.correlation = 0;
         this.randOffset = new Random();
         this.defaultRequestTimeoutMs = defaultRequestTimeoutMs;
         this.reconnectBackoffMs = reconnectBackoffMs;
+        this.defaultConnectReadyTimeOutMs = defaultConnectReadyTimeOutMs;
         this.time = time;
         this.discoverBrokerVersions = discoverBrokerVersions;
         this.apiVersions = apiVersions;
@@ -419,8 +430,14 @@ public class NetworkClient implements KafkaClient {
      * @param now the current timestamp
      */
     private boolean canSendRequest(String node, long now) {
-        return connectionStates.isReady(node, now) && selector.isChannelReady(node) &&
-            inFlightRequests.canSendMore(node);
+        boolean connectionReady = connectionStates.isReady(node, now);
+        if ((!connectionReady) && connectionStates.checkReadyTimeOut(node)) {
+            log.debug("node:{} is not read,and connection is timeOut,refresh the metaData", node);
+            metadataUpdater.requestUpdate();
+            connectionStates.disconnected(node, time.milliseconds());
+            selector.closeOnGraceful(node);
+        }
+        return connectionReady && selector.isChannelReady(node) && inFlightRequests.canSendMore(node);
     }
 
     /**

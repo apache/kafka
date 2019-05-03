@@ -171,6 +171,7 @@ public class ConnectionStressWorker implements TaskWorker {
                             1,
                             1000,
                             1000,
+                            30000,
                             4096,
                             4096,
                             1000,

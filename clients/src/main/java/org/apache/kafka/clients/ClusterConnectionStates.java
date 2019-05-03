@@ -20,6 +20,7 @@ import java.util.concurrent.ThreadLocalRandom;
 
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.net.InetAddress;
@@ -36,15 +37,18 @@ import java.util.Map;
 final class ClusterConnectionStates {
     private final long reconnectBackoffInitMs;
     private final long reconnectBackoffMaxMs;
+    private final long defaultConnectReadyTimeOutMs;
+
     private final static int RECONNECT_BACKOFF_EXP_BASE = 2;
     private final double reconnectBackoffMaxExp;
     private final Map<String, NodeConnectionState> nodeState;
     private final Logger log;
 
-    public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMaxMs, LogContext logContext) {
+    public ClusterConnectionStates(long reconnectBackoffMs, long reconnectBackoffMaxMs, long defaultConnectReadyTimeOutMs, LogContext logContext) {
         this.log = logContext.logger(ClusterConnectionStates.class);
         this.reconnectBackoffInitMs = reconnectBackoffMs;
         this.reconnectBackoffMaxMs = reconnectBackoffMaxMs;
+        this.defaultConnectReadyTimeOutMs = defaultConnectReadyTimeOutMs;
         this.reconnectBackoffMaxExp = Math.log(this.reconnectBackoffMaxMs / (double) Math.max(reconnectBackoffMs, 1)) / Math.log(RECONNECT_BACKOFF_EXP_BASE);
         this.nodeState = new HashMap<>();
     }
@@ -348,6 +352,14 @@ final class ClusterConnectionStates {
         return state;
     }
 
+    public boolean checkReadyTimeOut(String id) {
+        NodeConnectionState nodeConnectionState = nodeState.get(id);
+        if (nodeConnectionState != null && Time.SYSTEM.milliseconds() - nodeConnectionState.lastReadyTime  > defaultConnectReadyTimeOutMs) {
+            return true;
+        }
+        return false;
+    }
+
     /**
      * The state of our connection to a node.
      */
@@ -364,7 +376,7 @@ final class ClusterConnectionStates {
         private int addressIndex;
         private final String host;
         private final ClientDnsLookup clientDnsLookup;
-
+        long lastReadyTime;
         private NodeConnectionState(ConnectionState state, long lastConnectAttempt, long reconnectBackoffMs,
                 String host, ClientDnsLookup clientDnsLookup) {
             this.state = state;
@@ -377,6 +389,7 @@ final class ClusterConnectionStates {
             this.throttleUntilTimeMs = 0;
             this.host = host;
             this.clientDnsLookup = clientDnsLookup;
+            this.lastReadyTime = Time.SYSTEM.milliseconds();
         }
 
         public String host() {
@@ -412,7 +425,7 @@ final class ClusterConnectionStates {
         }
 
         public String toString() {
-            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ", " + throttleUntilTimeMs + ")";
+            return "NodeState(" + state + ", " + lastConnectAttemptMs + ", " + failedAttempts + ", " + throttleUntilTimeMs + ", " + lastReadyTime + ")";
         }
     }
 }

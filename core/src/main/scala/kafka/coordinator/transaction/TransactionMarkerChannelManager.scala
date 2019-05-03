@@ -72,6 +72,7 @@ object TransactionMarkerChannelManager {
       1,
       50,
       50,
+      30000,
       Selectable.USE_DEFAULT_BUFFER_SIZE,
       config.socketReceiveBufferBytes,
       config.requestTimeoutMs,

@@ -58,6 +58,11 @@ public interface Selectable {
     void close(String id);
 
     /**
+     * Close the connection identified and graceful by the given id
+     */
+    void closeOnGraceful(String id);
+
+    /**
      * Queue the given request for sending in the subsequent {@link #poll(long) poll()} calls
      * @param send The request to send
      */
