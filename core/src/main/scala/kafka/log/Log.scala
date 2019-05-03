@@ -620,9 +620,12 @@ class Log(@volatile var dir: File,
     }
 
     if (logSegments.nonEmpty) {
-      val logEndOffset = activeSegment.readNextOffset - 1
-      if (logEndOffset < logStartOffset)
+      val logEndOffset = activeSegment.readNextOffset
+      if (logEndOffset < logStartOffset) {
+        warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
+          "This could happen if segment files were deleted from the file system.")
         logSegments.foreach(deleteSegment)
+      }
     }
 
     if (logSegments.isEmpty) {
