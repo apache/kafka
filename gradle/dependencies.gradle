@@ -90,7 +90,7 @@ versions += [
   scalafmt: "1.5.1",
   scalatest: "3.0.7",
   scoverage: "1.3.1",
-  scoveragePlugin: "3.0.0",
+  scoveragePlugin: "2.5.0",
   shadowPlugin: "5.0.0",
   slf4j: "1.7.26",
   snappy: "1.1.7.3",
