@@ -134,19 +134,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                 }
             }
 
-            if (mergedWindow.end() > closeTime) {
-                if (!mergedWindow.equals(newSessionWindow)) {
-                    for (final KeyValue<Windowed<K>, Agg> session : merged) {
-                        store.remove(session.key);
-                        tupleForwarder.maybeForward(session.key, null, session.value);
-                    }
-                }
-
-                agg = aggregator.apply(key, value, agg);
-                final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);
-                store.put(sessionKey, agg);
-                tupleForwarder.maybeForward(sessionKey, agg, null);
-            } else {
+            if (mergedWindow.end() < closeTime) {
                 LOG.debug(
                     "Skipping record for expired window. " +
                         "key=[{}] " +
@@ -154,7 +142,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                         "partition=[{}] " +
                         "offset=[{}] " +
                         "timestamp=[{}] " +
-                        "window=[{},{}) " +
+                        "window=[{},{}] " +
                         "expiration=[{}] " +
                         "streamTime=[{}]",
                     key,
@@ -168,6 +156,18 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                     observedStreamTime
                 );
                 lateRecordDropSensor.record();
+            } else {
+                if (!mergedWindow.equals(newSessionWindow)) {
+                    for (final KeyValue<Windowed<K>, Agg> session : merged) {
+                        store.remove(session.key);
+                        tupleForwarder.maybeForward(session.key, null, session.value);
+                    }
+                }
+
+                agg = aggregator.apply(key, value, agg);
+                final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);
+                store.put(sessionKey, agg);
+                tupleForwarder.maybeForward(sessionKey, agg, null);
             }
         }
 
