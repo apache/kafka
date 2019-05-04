@@ -483,7 +483,7 @@ public class NetworkClient implements KafkaClient {
             abortedSends.add(clientResponse);
 
             if (isInternalRequest && clientRequest.apiKey() == ApiKeys.METADATA)
-                metadataUpdater.handleFailure(unsupportedVersionException);
+                metadataUpdater.handleFatalException(unsupportedVersionException);
         }
     }
 
@@ -714,7 +714,7 @@ public class NetworkClient implements KafkaClient {
             case AUTHENTICATION_FAILED:
                 AuthenticationException exception = disconnectState.exception();
                 connectionStates.authenticationFailed(nodeId, now, exception);
-                metadataUpdater.handleFailure(exception);
+                metadataUpdater.handleFatalException(exception);
                 log.error("Connection to node {} ({}) failed authentication due to: {}", nodeId,
                     disconnectState.remoteAddress(), exception.getMessage());
                 break;
@@ -1004,9 +1004,9 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
-        public void handleFailure(KafkaException exception) {
+        public void handleFatalException(KafkaException fatalException) {
             if (metadata.updateRequested())
-                metadata.failedUpdate(time.milliseconds(), exception);
+                metadata.failedUpdate(time.milliseconds(), fatalException);
             inProgressRequestVersion = null;
         }
 

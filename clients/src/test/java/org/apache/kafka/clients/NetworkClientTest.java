@@ -597,9 +597,9 @@ public class NetworkClientTest {
         }
 
         @Override
-        public void handleFailure(KafkaException exception) {
+        public void handleFatalException(KafkaException exception) {
             failure = exception;
-            updater.handleFailure(exception);
+            updater.handleFatalException(exception);
         }
 
         @Override

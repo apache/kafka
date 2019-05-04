@@ -105,7 +105,7 @@ public class AdminMetadataManager {
         }
 
         @Override
-        public void handleFailure(KafkaException e) {
+        public void handleFatalException(KafkaException e) {
             updateFailed(e);
         }
 

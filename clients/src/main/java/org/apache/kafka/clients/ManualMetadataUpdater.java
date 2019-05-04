@@ -74,7 +74,7 @@ public class ManualMetadataUpdater implements MetadataUpdater {
     }
 
     @Override
-    public void handleFailure(KafkaException exception) {
+    public void handleFatalException(KafkaException exception) {
         // We don't fail the broker on failures, but there should be sufficient information in the logs indicating the reason
         // for failure.
         log.debug("An error occurred in broker-to-broker communication.", exception);

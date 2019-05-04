@@ -65,7 +65,8 @@ public class Metadata implements Closeable {
     private int requestVersion; // bumped on every new topic addition
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
-    private KafkaException metadataException;
+    private KafkaException fatalException;
+    private KafkaException recoverableException;
     private MetadataCache cache = MetadataCache.empty();
     private boolean needUpdate;
     private final ClusterResourceListeners clusterResourceListeners;
@@ -203,8 +204,9 @@ public class Metadata implements Closeable {
      * If any non-retriable exceptions were encountered during metadata update, clear and return the exception.
      */
     public synchronized KafkaException getAndClearMetadataException() {
-        KafkaException metadataException = this.metadataException;
-        this.metadataException = null;
+        KafkaException metadataException = Optional.ofNullable(fatalException).orElse(recoverableException);
+        fatalException = null;
+        recoverableException = null;
         return metadataException;
     }
 
@@ -266,6 +268,7 @@ public class Metadata implements Closeable {
 
     private void maybeSetMetadataError(Cluster cluster) {
         // if we encounter any invalid topics, cache the exception to later throw to the user
+        recoverableException = null;
         checkInvalidTopics(cluster);
         checkUnauthorizedTopics(cluster);
     }
@@ -273,14 +276,16 @@ public class Metadata implements Closeable {
     private void checkInvalidTopics(Cluster cluster) {
         if (!cluster.invalidTopics().isEmpty()) {
             log.error("Metadata response reported invalid topics {}", cluster.invalidTopics());
-            metadataException = new InvalidTopicException(cluster.invalidTopics());
+            // We may be able to recover from this exception if metadata for this topic is no longer needed
+            recoverableException = new InvalidTopicException(cluster.invalidTopics());
         }
     }
 
     private void checkUnauthorizedTopics(Cluster cluster) {
         if (!cluster.unauthorizedTopics().isEmpty()) {
             log.error("Topic authorization failed for topics {}", cluster.unauthorizedTopics());
-            metadataException = new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
+            // We may be able to recover from this exception if metadata for this topic is no longer needed
+            recoverableException = new TopicAuthorizationException(new HashSet<>(cluster.unauthorizedTopics()));
         }
     }
 
@@ -363,7 +368,7 @@ public class Metadata implements Closeable {
      */
     public synchronized void failedUpdate(long now, KafkaException fatalException) {
         this.lastRefreshMs = now;
-        this.metadataException = fatalException;
+        this.fatalException = fatalException;
     }
 
     /**

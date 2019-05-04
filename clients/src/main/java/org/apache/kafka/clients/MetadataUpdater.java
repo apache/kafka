@@ -66,9 +66,9 @@ public interface MetadataUpdater extends Closeable {
     /**
      * Handle failure. Propagate the exception if awaiting metadata.
      *
-     * @param exception exception corresponding to the failure
+     * @param fatalException exception corresponding to the failure
      */
-    void handleFailure(KafkaException exception);
+    void handleFatalException(KafkaException fatalException);
 
     /**
      * Handle responses for metadata requests.
