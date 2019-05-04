@@ -192,32 +192,32 @@ public void tearDown() {
 public void shouldFlushStoreForFirstInput() {
     testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
     OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
 }
 
 @Test
 public void shouldNotUpdateStoreForSmallerValue() {
     testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-    Assert.assertThat(store.get("a"), equalTo(21L));
+    assertThat(store.get("a"), equalTo(21L));
     OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
 }
 
 @Test
 public void shouldNotUpdateStoreForLargerValue() {
     testDriver.pipeInput(recordFactory.create("input-topic", "a", 42L, 9999L));
-    Assert.assertThat(store.get("a"), equalTo(42L));
+    assertThat(store.get("a"), equalTo(42L));
     OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 42L);
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
 }
 
 @Test
 public void shouldUpdateStoreForNewKey() {
     testDriver.pipeInput(recordFactory.create("input-topic", "b", 21L, 9999L));
-    Assert.assertThat(store.get("b"), equalTo(21L));
+    assertThat(store.get("b"), equalTo(21L));
     OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
     OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "b", 21L);
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
 }
 
 @Test
@@ -226,18 +226,18 @@ public void shouldPunctuateIfEvenTimeAdvances() {
     OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
 
     testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
 
     testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 10000L));
     OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
 }
 
 @Test
 public void shouldPunctuateIfWallClockTimeAdvances() {
     testDriver.advanceWallClockTime(60000);
     OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-    Assert.assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+    assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
 }
 
 public class CustomMaxAggregatorSupplier implements ProcessorSupplier&lt;String, Long&gt; {
