@@ -18,6 +18,7 @@ package org.apache.kafka.streams;
 
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -30,6 +31,8 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
+import org.apache.kafka.streams.test.TestInputTopic;
+import org.apache.kafka.streams.test.TestOutputTopic;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -47,11 +50,15 @@ import static org.junit.Assert.assertNull;
 
 public class DeveloperGuideTesting {
     private TopologyTestDriver testDriver;
+    private TestInputTopic<String, Long> inputTopic;
+    private TestOutputTopic<String, Long> outputTopic;
     private KeyValueStore<String, Long> store;
 
     private StringDeserializer stringDeserializer = new StringDeserializer();
     private LongDeserializer longDeserializer = new LongDeserializer();
     private ConsumerRecordFactory<String, Long> recordFactory = new ConsumerRecordFactory<>(new StringSerializer(), new LongSerializer());
+    private Serde<String> stringSerde = new Serdes.StringSerde();
+    private Serde<Long> longSerde = new Serdes.LongSerde();
 
     @Before
     public void setup() {
@@ -74,6 +81,10 @@ public class DeveloperGuideTesting {
         props.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Long().getClass().getName());
         testDriver = new TopologyTestDriver(topology, props);
 
+        // setup test topics
+        inputTopic = new TestInputTopic<>(testDriver, "input-topic", stringSerde, longSerde);
+        outputTopic = new TestOutputTopic<>(testDriver, "result-topic", stringSerde, longSerde);
+
         // pre-populate store
         store = testDriver.getKeyValueStore("aggStore");
         store.put("a", 21L);
@@ -92,48 +103,55 @@ public class DeveloperGuideTesting {
     }
 
     @Test
+    public void shouldFlushStoreForFirstInputWithTopic() {
+        inputTopic.pipeInput("a", 1L, 9999L);
+        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
+        assertNull(outputTopic.readRecord());
+    }
+
+    @Test
     public void shouldNotUpdateStoreForSmallerValue() {
-        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
+        inputTopic.pipeInput("a", 1L, 9999L);
         assertThat(store.get("a"), equalTo(21L));
-        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
+        assertNull(outputTopic.readRecord());
     }
 
     @Test
     public void shouldNotUpdateStoreForLargerValue() {
-        testDriver.pipeInput(recordFactory.create("input-topic", "a", 42L, 9999L));
+        inputTopic.pipeInput("a", 42L, 9999L);
         assertThat(store.get("a"), equalTo(42L));
-        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 42L);
-        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 42L)));
+        assertNull(outputTopic.readRecord());
     }
 
     @Test
     public void shouldUpdateStoreForNewKey() {
-        testDriver.pipeInput(recordFactory.create("input-topic", "b", 21L, 9999L));
+        inputTopic.pipeInput("b", 21L, 9999L);
         assertThat(store.get("b"), equalTo(21L));
-        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "b", 21L);
-        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
+        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("b", 21L)));
+        assertNull(outputTopic.readRecord());
     }
 
     @Test
     public void shouldPunctuateIfEvenTimeAdvances() {
-        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
+        inputTopic.pipeInput("a", 1L, 9999L);
+        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
 
-        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 9999L));
-        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        inputTopic.pipeInput("a", 1L, 9999L);
+        assertNull(outputTopic.readRecord());
 
-        testDriver.pipeInput(recordFactory.create("input-topic", "a", 1L, 10000L));
-        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        inputTopic.pipeInput("a", 1L, 10000L);
+        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
+        assertNull(outputTopic.readRecord());
     }
 
     @Test
     public void shouldPunctuateIfWallClockTimeAdvances() {
         testDriver.advanceWallClockTime(60000);
-        OutputVerifier.compareKeyValue(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer), "a", 21L);
-        assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
+        assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>("a", 21L)));
+        assertNull(outputTopic.readRecord());
     }
 
     public class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
