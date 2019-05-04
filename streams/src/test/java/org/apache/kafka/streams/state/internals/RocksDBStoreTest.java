@@ -37,6 +37,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
+import org.rocksdb.Cache;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
 
@@ -69,6 +70,7 @@ public class RocksDBStoreTest {
     InternalMockProcessorContext context;
     RocksDBStore rocksDBStore;
     private static BloomFilter filter;
+    private static Cache cache;
 
     @Before
     public void setUp() {
@@ -81,6 +83,7 @@ public class RocksDBStoreTest {
             Serdes.String(),
             new StreamsConfig(props));
         filter = new BloomFilter();
+        cache = new LRUCache(50 * 1024 * 1024L);
     }
 
     RocksDBStore getRocksDBStore() {
@@ -90,6 +93,7 @@ public class RocksDBStoreTest {
     @After
     public void tearDown() {
         filter.close();
+        cache.close();
         rocksDBStore.close();
     }
 
@@ -496,7 +500,7 @@ public class RocksDBStoreTest {
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
 
             final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
-            tableConfig.setBlockCache(new LRUCache(50 * 1024 * 1024L));
+            tableConfig.setBlockCache(cache);
             tableConfig.setBlockSize(4096L);
             if (enableBloomFilters) {
                 tableConfig.setFilterPolicy(filter);

@@ -264,6 +264,8 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
             }
+
+            crOptions.close();
         }
     }
 

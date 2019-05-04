@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
+import org.rocksdb.Cache;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
@@ -88,10 +89,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     RocksDB db;
     RocksDBAccessor dbAccessor;
 
-    // the following option objects will be created in the constructor and closed in the close() method
+    // the following option objects will be created in openDB and closed in the close() method
     private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
     WriteOptions wOptions;
     FlushOptions fOptions;
+    private Cache cache;
     private BloomFilter filter;
 
     private volatile boolean prepareForBulkload = false;
@@ -121,7 +123,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         userSpecifiedOptions = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, columnFamilyOptions);
 
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
-        tableConfig.setBlockCache(new LRUCache(BLOCK_CACHE_SIZE));
+        cache = new LRUCache(BLOCK_CACHE_SIZE);
+        tableConfig.setBlockCache(cache);
         tableConfig.setBlockSize(BLOCK_SIZE);
 
         filter = new BloomFilter();
@@ -559,16 +562,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
         @Override
         public void toggleDbForBulkLoading() {
-            try {
-                final CompactRangeOptions crOptions = new CompactRangeOptions();
-                crOptions.setChangeLevel(true);
-                crOptions.setTargetLevel(1);
-                crOptions.setTargetPathId(0);
+            final CompactRangeOptions crOptions = new CompactRangeOptions();
+            crOptions.setChangeLevel(true);
+            crOptions.setTargetLevel(1);
+            crOptions.setTargetPathId(0);
 
+            try {
                 db.compactRange(columnFamily, null, null, crOptions);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
             }
+
+            crOptions.close();
         }
     }
 
