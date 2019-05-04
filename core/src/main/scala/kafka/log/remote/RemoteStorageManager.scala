@@ -21,17 +21,15 @@ import org.apache.kafka.common.{Configurable, TopicPartition}
 
 trait RemoteStorageManager extends Configurable {
 
-  def configure(configs: Map[String, _]): Unit
-
   /**
-   * Copies LogSegment provided by {@link RemoteLogManager}
+   * Copies LogSegment provided by [[RemoteLogManager]]
    * Returns the RDIs of the remote data
    * This method is used by the leader
    *
    * @param logSegment
    * @return
    */
-  def copyLogSegment(logSegment: LogSegment): (Boolean, Seq[RemoteLogIndexEntry])
+  def copyLogSegment(logSegment: LogSegment): (RDI, Seq[RemoteLogIndexEntry])
 
   /**
    * List the remote log segment files of the specified topicPartition

@@ -88,7 +88,7 @@ class LogManager(logDirs: Seq[File],
 
   def createRemoteLogManager(remoteLogManagerConfig: RemoteLogManagerConfig): Option[RemoteLogManager] = {
     if(remoteLogManagerConfig.remoteLogStorageEnable) {
-      val remoteLogManager: RemoteLogManager = new RemoteLogManager()
+      val remoteLogManager: RemoteLogManager = new RemoteLogManager(this)
       //todo:satish pass configs
       remoteLogManager.configure(null)
       Option(remoteLogManager)
@@ -97,7 +97,9 @@ class LogManager(logDirs: Seq[File],
     }
   }
 
-  private val remoteLogManager: Option[RemoteLogManager] = createRemoteLogManager(remoteLogManagerConfig)
+  private val _remoteLogManager: Option[RemoteLogManager] = createRemoteLogManager(remoteLogManagerConfig)
+
+  def remoteLogManager: Option[RemoteLogManager] = _remoteLogManager
 
   def reconfigureDefaultLogConfig(logConfig: LogConfig): Unit = {
     this._currentDefaultConfig = logConfig
@@ -154,11 +156,11 @@ class LogManager(logDirs: Seq[File],
 
   def onLeadershipChange(partitionsBecomeLeader: Set[Partition], partitionsBecomeFollower: Set[Partition]) = {
     // todo:satish make respective changes in remote log tasks
-    remoteLogManager.foreach((rlm: RemoteLogManager) => {
+    _remoteLogManager.foreach((rlm: RemoteLogManager) => {
       rlm.removePartitions(partitionsBecomeFollower.map( x=> x.topicPartition))
     })
 
-    remoteLogManager.foreach((rlm: RemoteLogManager) => {
+    _remoteLogManager.foreach((rlm: RemoteLogManager) => {
       rlm.addPartitions(partitionsBecomeLeader.map( x=> x.topicPartition))
     })
   }
@@ -516,7 +518,7 @@ class LogManager(logDirs: Seq[File],
       dirLocks.foreach(_.destroy())
     }
 
-    remoteLogManager.foreach(_.shutdown())
+    _remoteLogManager.foreach(_.shutdown())
 
     info("Shutdown complete.")
   }

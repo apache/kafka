@@ -16,14 +16,46 @@
  */
 package kafka.log.remote
 
+import java.io.File
+import java.nio.file.Files
 import java.util
-import scala.collection.Set
+import java.util.concurrent.{BlockingQueue, Executors, LinkedBlockingDeque}
+
+import kafka.log.{LogManager, LogSegment}
 import kafka.server.LogReadResult
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.{Configurable, TopicPartition}
 
-class RemoteLogManager extends Configurable {
+import scala.collection.Set
+
+class RemoteLogManager(logManager: LogManager) extends Configurable {
   var remoteStorageManager: RemoteStorageManager = _
+
+  val watchedSegments: BlockingQueue[LogSegment] = new LinkedBlockingDeque[LogSegment]()
+
+  //todo configurable no of tasks/threads
+  val threadPool = Executors.newSingleThreadExecutor()
+  threadPool.submit(new Runnable() {
+    override def run(): Unit = {
+      while (true) {
+        val segment = watchedSegments.take()
+
+        try {
+          val tuple = remoteStorageManager.copyLogSegment(segment)
+          val rdi = tuple._1
+          val entries = tuple._2
+          val file = segment.log.file()
+          val prefix = file.getName.substring(0, file.getName.indexOf("."))
+          val remoteLogIndex = new RemoteLogIndex(prefix.toLong, Files.createFile(new File(file.getParentFile, prefix).toPath).toFile)
+          entries.foreach(entry => remoteLogIndex.append(entry))
+          remoteLogIndex.flush()
+          remoteLogIndex.close()
+        } catch {
+          case _: Throwable => //todo log the message here for failed log copying and add them again in pending segments.
+        }
+      }
+    }
+  })
 
   /**
    * Configure this class with the given key-value pairs
@@ -31,7 +63,9 @@ class RemoteLogManager extends Configurable {
   override def configure(configs: util.Map[String, _]): Unit = {
     remoteStorageManager = Class.forName(configs.get("remote.log.storage.manager.class").toString)
       .getDeclaredConstructor().newInstance().asInstanceOf[RemoteStorageManager]
+    //todo filter configs with remote storage manager having key with prefix "remote.log.storage.manager.prop"
     remoteStorageManager.configure(configs)
+    //    remoteStorageManager.configure(configs.filterKeys( key => key.startsWith("remote.log.storage.manager")).)
   }
 
   /**
@@ -40,7 +74,18 @@ class RemoteLogManager extends Configurable {
    * Log Segment in a TopicPartition is copied to Remote Storage
    */
   def addPartitions(topicPartitions: Set[TopicPartition]): Boolean = {
-    false
+    // schedule monitoring topic/partition directories to fetch log segments and push it to remote storage.
+    val dirs: util.List[LogSegment] = new util.ArrayList[LogSegment]()
+    topicPartitions.foreach(tp => logManager.getLog(tp)
+      .foreach(log => {
+        val segment = log.activeSegment
+        log.logSegments.foreach(x => {
+          if (x != log.activeSegment) dirs.add(x)
+        })
+      }))
+
+    watchedSegments.addAll(dirs)
+    true
   }
 
   /**
@@ -66,11 +111,12 @@ class RemoteLogManager extends Configurable {
    * Stops all the threads and closes the instance.
    */
   def shutdown(): Unit = {
+    remoteStorageManager.shutdown()
   }
 
 }
 
 case class RemoteLogManagerConfig(remoteLogStorageEnable: Boolean,
-                                  remoteLogStorageManager: String,
+                                  remoteLogStorageManagerClass: String,
                                   remoteLogRetentionBytes: Long,
                                   remoteLogRetentionMillis: Long)

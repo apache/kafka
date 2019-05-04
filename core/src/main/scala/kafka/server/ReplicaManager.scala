@@ -35,6 +35,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
@@ -930,6 +931,18 @@ class ReplicaManager(val config: KafkaConfig,
                        quota: ReplicaQuota,
                        clientMetadata: Option[ClientMetadata]): Seq[(TopicPartition, LogReadResult)] = {
 
+    def createLogReadResult(e: Throwable) = {
+      LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+        highWatermark = -1L,
+        leaderLogStartOffset = -1L,
+        leaderLogEndOffset = -1L,
+        followerLogStartOffset = -1L,
+        fetchTimeMs = -1L,
+        readSize = 0,
+        lastStableOffset = None,
+        exception = Some(e))
+    }
+
     def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
       val offset = fetchInfo.fetchOffset
       val partitionFetchSize = fetchInfo.maxBytes
@@ -1008,22 +1021,19 @@ class ReplicaManager(val config: KafkaConfig,
       } catch {
         // NOTE: Failed fetch requests metric is not incremented for known exceptions since it
         // is supposed to indicate un-expected failure of a broker in handling a fetch request
-        case e@ (_: UnknownTopicOrPartitionException |
-                 _: NotLeaderForPartitionException |
-                 _: UnknownLeaderEpochException |
-                 _: FencedLeaderEpochException |
-                 _: ReplicaNotAvailableException |
-                 _: KafkaStorageException |
-                 _: OffsetOutOfRangeException) =>
-          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
-            highWatermark = Log.UnknownOffset,
-            leaderLogStartOffset = Log.UnknownOffset,
-            leaderLogEndOffset = Log.UnknownOffset,
-            followerLogStartOffset = Log.UnknownOffset,
-            fetchTimeMs = -1L,
-            readSize = 0,
-            lastStableOffset = None,
-            exception = Some(e))
+        case e@(_: UnknownTopicOrPartitionException |
+                _: NotLeaderForPartitionException |
+                _: UnknownLeaderEpochException |
+                _: FencedLeaderEpochException |
+                _: ReplicaNotAvailableException |
+                _: KafkaStorageException |
+                _: OffsetOutOfRangeException) =>
+            createLogReadResult(e)
+        case e: OffsetOutOfRangeException =>
+          // Incase of offset out of range errors, check for remote log manager to fetch from remote storage
+          // todo check if it is from a follower then do not return the data as the data may have already been copied
+          logManager.remoteLogManager.map(rlm => rlm.read(fetchMaxBytes, hardMaxBytesLimit, readPartitionInfo))
+            .getOrElse(createLogReadResult(e))
         case e: Throwable =>
           brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()
           brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
@@ -1032,15 +1042,7 @@ class ReplicaManager(val config: KafkaConfig,
           error(s"Error processing fetch with max size $adjustedMaxBytes from $fetchSource " +
             s"on partition $tp: $fetchInfo", e)
 
-          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
-            highWatermark = Log.UnknownOffset,
-            leaderLogStartOffset = Log.UnknownOffset,
-            leaderLogEndOffset = Log.UnknownOffset,
-            followerLogStartOffset = Log.UnknownOffset,
-            fetchTimeMs = -1L,
-            readSize = 0,
-            lastStableOffset = None,
-            exception = Some(e))
+          createLogReadResult(e)
       }
     }
 

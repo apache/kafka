@@ -29,6 +29,9 @@ import org.apache.kafka.common.utils.Utils
  *
  * Each remote log entry is represented with [[RemoteLogIndexEntry]]
  *
+ * todo-satish: currently it is using a channel to store the entries. We may go with memory mapped file later to
+ * read/write the entries.
+ *
  */
 class RemoteLogIndex(val startOffset: Long, @volatile var file: File) extends Logging {
 
