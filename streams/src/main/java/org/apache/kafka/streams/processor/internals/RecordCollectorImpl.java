@@ -59,7 +59,8 @@ public class RecordCollectorImpl implements RecordCollector {
         "No more records will be sent and no more offsets will be recorded for this task. " +
         "Enable TRACE logging to view failed record key and value.";
     private final static String EXCEPTION_MESSAGE = "%sAbort sending since %s with a previous record (timestamp %d) to topic %s due to %s";
-    private final static String PARAMETER_HINT = "\nYou can increase the producer config `delivery.timeout.ms` to avoid this error.";
+    private final static String PARAMETER_HINT = "\nYou can increase the producer configs `delivery.timeout.ms` and/or" +
+        "`retries` to avoid this error. Note that `retries` is set to infinite by default.";
 
     private volatile KafkaException sendException;
 
@@ -126,8 +127,7 @@ public class RecordCollectorImpl implements RecordCollector {
     ) {
         String errorLogMessage = LOG_MESSAGE;
         String errorMessage = EXCEPTION_MESSAGE;
-        // There is no documented API for detecting errors that could be solved by retrying, so we
-        // do the best we can
+        // There is no documented API for detecting errors that could be solved by retrying, so we do the best we can
         if (exception instanceof RetriableException) {
             errorLogMessage += PARAMETER_HINT;
             errorMessage += PARAMETER_HINT;
