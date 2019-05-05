@@ -19,6 +19,7 @@ package kafka.log.remote
 import kafka.log.{LogReadInfo, LogSegment}
 import org.apache.kafka.common.{Configurable, TopicPartition}
 
+// all these APIs are still experimental, in poc mode.
 trait RemoteStorageManager extends Configurable {
 
   /**
@@ -30,6 +31,14 @@ trait RemoteStorageManager extends Configurable {
    * @return
    */
   def copyLogSegment(logSegment: LogSegment): (RDI, Seq[RemoteLogIndexEntry])
+
+  /**
+   * Cancels the logsegment that is being copied currently to remote storage
+   *
+   * @param logSegment
+   * @return Returns true if it cancels copying else it returns false
+   */
+  def cancelCopyingLogSegment(logSegment: LogSegment): Boolean
 
   /**
    * List the remote log segment files of the specified topicPartition

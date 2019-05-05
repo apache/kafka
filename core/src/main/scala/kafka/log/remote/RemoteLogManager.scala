@@ -41,7 +41,11 @@ class RemoteLogManager(logManager: LogManager) extends Configurable {
         val segment = watchedSegments.take()
 
         try {
+          //todo-satish Not all LogSegments on different replicas are same. So, we need to avoid duplicating log-segments in remote
+          // tier with similar offset ranges.
           val tuple = remoteStorageManager.copyLogSegment(segment)
+          //todo-satish need to explore whether the above should return RDI as each RemoteLogIndexEntry has RDI. That entry
+          // can be optimized not to have RDI value for each entry.
           val rdi = tuple._1
           val entries = tuple._2
           val file = segment.log.file()
@@ -51,7 +55,7 @@ class RemoteLogManager(logManager: LogManager) extends Configurable {
           remoteLogIndex.flush()
           remoteLogIndex.close()
         } catch {
-          case _: Throwable => //todo log the message here for failed log copying and add them again in pending segments.
+          case _: Throwable => //todo-satish log the message here for failed log copying and add them again in pending segments.
         }
       }
     }
@@ -63,7 +67,7 @@ class RemoteLogManager(logManager: LogManager) extends Configurable {
   override def configure(configs: util.Map[String, _]): Unit = {
     remoteStorageManager = Class.forName(configs.get("remote.log.storage.manager.class").toString)
       .getDeclaredConstructor().newInstance().asInstanceOf[RemoteStorageManager]
-    //todo filter configs with remote storage manager having key with prefix "remote.log.storage.manager.prop"
+    //todo-satish filter configs with remote storage manager having key with prefix "remote.log.storage.manager.prop"
     remoteStorageManager.configure(configs)
     //    remoteStorageManager.configure(configs.filterKeys( key => key.startsWith("remote.log.storage.manager")).)
   }
@@ -78,7 +82,6 @@ class RemoteLogManager(logManager: LogManager) extends Configurable {
     val dirs: util.List[LogSegment] = new util.ArrayList[LogSegment]()
     topicPartitions.foreach(tp => logManager.getLog(tp)
       .foreach(log => {
-        val segment = log.activeSegment
         log.logSegments.foreach(x => {
           if (x != log.activeSegment) dirs.add(x)
         })
@@ -92,7 +95,14 @@ class RemoteLogManager(logManager: LogManager) extends Configurable {
    * Stops copy of LogSegment if TopicPartition ownership is moved from a broker.
    */
   def removePartitions(topicPartitions: Set[TopicPartition]): Boolean = {
-    false
+    topicPartitions.foreach(tp => {
+      logManager.getLog(tp).foreach(log => log.logSegments
+        .foreach(logSegment => {
+          watchedSegments.remove(logSegment)
+          remoteStorageManager.cancelCopyingLogSegment(logSegment)
+        }))
+    })
+    true
   }
 
   /**
@@ -104,6 +114,7 @@ class RemoteLogManager(logManager: LogManager) extends Configurable {
    * @return
    */
   def read(fetchMaxByes: Int, hardMaxBytesLimit: Boolean, readPartitionInfo: Seq[(TopicPartition, PartitionData)]): LogReadResult = {
+
     null
   }
 
