@@ -125,8 +125,8 @@ public class TokenInformation {
     public int hashCode() {
         int result = owner != null ? owner.hashCode() : 0;
         result = 31 * result + (renewers != null ? renewers.hashCode() : 0);
-        result = 31 * result + (int) (issueTimestamp ^ (issueTimestamp >>> 32));
-        result = 31 * result + (int) (maxTimestamp ^ (maxTimestamp >>> 32));
+        result = 31 * result + Long.hashCode(issueTimestamp);
+        result = 31 * result + Long.hashCode(maxTimestamp);
         result = 31 * result + (tokenId != null ? tokenId.hashCode() : 0);
         return result;
     }

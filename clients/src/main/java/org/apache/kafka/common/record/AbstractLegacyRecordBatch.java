@@ -446,7 +446,7 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
         @Override
         public int hashCode() {
             int result = record != null ? record.hashCode() : 0;
-            result = 31 * result + (int) (offset ^ (offset >>> 32));
+            result = 31 * result + Long.hashCode(offset);
             return result;
         }
     }

@@ -224,8 +224,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
         @Override
         public int hashCode() {
-            int result = (int) (producerId ^ (producerId >>> 32));
-            result = 31 * result + (int) (firstOffset ^ (firstOffset >>> 32));
+            int result = Long.hashCode(producerId);
+            result = 31 * result + Long.hashCode(firstOffset);
             return result;
         }
 
@@ -277,9 +277,9 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         @Override
         public int hashCode() {
             int result = error != null ? error.hashCode() : 0;
-            result = 31 * result + (int) (highWatermark ^ (highWatermark >>> 32));
-            result = 31 * result + (int) (lastStableOffset ^ (lastStableOffset >>> 32));
-            result = 31 * result + (int) (logStartOffset ^ (logStartOffset >>> 32));
+            result = 31 * result + Long.hashCode(highWatermark);
+            result = 31 * result + Long.hashCode(lastStableOffset);
+            result = 31 * result + Long.hashCode(logStartOffset);
             result = 31 * result + (abortedTransactions != null ? abortedTransactions.hashCode() : 0);
             result = 31 * result + (records != null ? records.hashCode() : 0);
             return result;

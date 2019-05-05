@@ -241,7 +241,7 @@ public class FileLogInputStream implements LogInputStream<FileLogInputStream.Fil
         public int hashCode() {
             FileChannel channel = fileRecords == null ? null : fileRecords.channel();
 
-            int result = (int) (offset ^ (offset >>> 32));
+            int result = Long.hashCode(offset);
             result = 31 * result + (channel != null ? channel.hashCode() : 0);
             result = 31 * result + position;
             result = 31 * result + batchSize;

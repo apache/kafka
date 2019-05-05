@@ -887,10 +887,6 @@ public final class Utils {
         return number & 0x7fffffff;
     }
 
-    public static int longHashcode(long value) {
-        return (int) (value ^ (value >>> 32));
-    }
-
     /**
      * Read a size-delimited byte buffer starting at the given offset.
      * @param buffer Buffer containing the size and data
