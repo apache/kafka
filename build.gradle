@@ -1374,9 +1374,13 @@ project(':jmh-benchmarks') {
   dependencies {
     compile project(':clients')
     compile project(':streams')
+    compile project(':core')
+    compile project(':clients').sourceSets.test.output
+    compile project(':core').sourceSets.test.output
     compile libs.jmhCore
     annotationProcessor libs.jmhGeneratorAnnProcess
     compile libs.jmhCoreBenchmarks
+    compile group: 'org.slf4j', name: 'slf4j-nop', version: '1.7.26'
   }
 
   jar {
