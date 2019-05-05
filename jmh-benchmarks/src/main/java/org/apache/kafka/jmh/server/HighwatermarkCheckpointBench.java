@@ -16,7 +16,6 @@ import kafka.utils.KafkaScheduler;
 import kafka.utils.MockTime;
 import kafka.utils.Scheduler;
 import kafka.utils.TestUtils;
-import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Utils;
@@ -71,7 +70,7 @@ public class HighwatermarkCheckpointBench {
 
 
     @Setup(Level.Trial)
-    public void setup() throws Exception {
+    public void setup() {
         this.scheduler = new KafkaScheduler(1, "scheduler-thread", true);
         this.brokerProperties = KafkaConfig.fromProps(TestUtils.createBrokerConfig(
                 0, TestUtils.MockZkConnect(), true, true, 9092, Option.empty(), Option.empty(),

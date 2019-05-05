@@ -66,7 +66,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
 
   /* the offset checkpoints holding the last cleaned point for each log */
   @volatile private var checkpoints = logDirs.map(dir =>
-    (dir, new OffsetCheckpointFile(new File(dir, offsetCheckpointFile), logDirFailureChannel))).toMap
+    (dir, OffsetCheckpointFile(new File(dir, offsetCheckpointFile), logDirFailureChannel))).toMap
 
   /* the set of logs currently being cleaned */
   private val inProgress = mutable.HashMap[TopicPartition, LogCleaningState]()

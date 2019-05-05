@@ -96,9 +96,9 @@ class LogManager(logDirs: Seq[File],
 
   private val dirLocks = lockLogDirs(liveLogDirs)
   @volatile private var recoveryPointCheckpoints = liveLogDirs.map(dir =>
-    (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile), logDirFailureChannel))).toMap
+    (dir, OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile), logDirFailureChannel))).toMap
   @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir =>
-    (dir, new OffsetCheckpointFile(new File(dir, LogStartOffsetCheckpointFile), logDirFailureChannel))).toMap
+    (dir, OffsetCheckpointFile(new File(dir, LogStartOffsetCheckpointFile), logDirFailureChannel))).toMap
 
   private val preferredLogDirs = new ConcurrentHashMap[TopicPartition, String]()
 

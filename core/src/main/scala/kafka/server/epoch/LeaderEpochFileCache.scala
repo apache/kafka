@@ -16,15 +16,17 @@
   */
 package kafka.server.epoch
 
+import java.io.IOException
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import kafka.server.checkpoints.LeaderEpochCheckpoint
+import kafka.server.checkpoints.{CheckpointFileEntry, LeaderEpochCheckpoint}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 
 import scala.collection.mutable.ListBuffer
+import java.util.regex.Pattern
 
 /**
  * Represents a cache of (LeaderEpoch => Offset) mappings for a particular replica.
@@ -253,8 +255,26 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
 }
 
 // Mapping of epoch to the first offset of the subsequent epoch
-case class EpochEntry(epoch: Int, startOffset: Long) {
+final case class EpochEntry(epoch: Int, startOffset: Long) extends CheckpointFileEntry {
   override def toString: String = {
     s"EpochEntry(epoch=$epoch, startOffset=$startOffset)"
   }
+
+  override def writeLine(stringBuilder: StringBuilder): Unit = {
+    stringBuilder
+      .append(epoch)
+      .append(' ')
+      .append(startOffset);
+  }
 }
+
+object EpochEntry {
+  val seperator: Pattern = Pattern.compile("\\s");
+  def apply(string: String): EpochEntry = {
+    seperator.split(string) match {
+      case Array(epoch, startOffset) => EpochEntry(epoch.toInt, startOffset.toLong)
+      case _ => throw new IOException(s"Expected 2 elements for EpochEntry")
+    }
+  }
+}
+

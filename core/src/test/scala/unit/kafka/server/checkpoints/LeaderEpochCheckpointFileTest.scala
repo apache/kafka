@@ -30,7 +30,7 @@ class LeaderEpochCheckpointFileTest extends Logging {
     val file = File.createTempFile("temp-checkpoint-file", System.nanoTime().toString)
     file.deleteOnExit()
 
-    val checkpoint = new LeaderEpochCheckpointFile(file)
+    val checkpoint = LeaderEpochCheckpointFile(file)
 
     //Given
     val epochs = Seq(EpochEntry(0, 1L), EpochEntry(1, 2L), EpochEntry(2, 3L))
@@ -57,12 +57,12 @@ class LeaderEpochCheckpointFileTest extends Logging {
     file.deleteOnExit()
 
     //Given a file with data in
-    val checkpoint = new LeaderEpochCheckpointFile(file)
+    val checkpoint = LeaderEpochCheckpointFile(file)
     val epochs = Seq(EpochEntry(0, 1L), EpochEntry(1, 2L), EpochEntry(2, 3L))
     checkpoint.write(epochs)
 
     //When we recreate
-    val checkpoint2 = new LeaderEpochCheckpointFile(file)
+    val checkpoint2 = LeaderEpochCheckpointFile(file)
 
     //The data should still be there
     assertEquals(epochs, checkpoint2.read())

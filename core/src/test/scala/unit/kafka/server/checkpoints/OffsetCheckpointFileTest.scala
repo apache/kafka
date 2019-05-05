@@ -30,7 +30,7 @@ class OffsetCheckpointFileTest extends Logging {
   @Test
   def shouldPersistAndOverwriteAndReloadFile(): Unit = {
 
-    val checkpoint = new OffsetCheckpointFile(TestUtils.tempFile())
+    val checkpoint = OffsetCheckpointFile(TestUtils.tempFile())
 
     //Given
     val offsets = Map(new TopicPartition("foo", 1) -> 5L, new TopicPartition("bar", 2) -> 10L)
@@ -54,7 +54,7 @@ class OffsetCheckpointFileTest extends Logging {
   @Test
   def shouldHandleMultipleLines(): Unit = {
 
-    val checkpoint = new OffsetCheckpointFile(TestUtils.tempFile())
+    val checkpoint = OffsetCheckpointFile(TestUtils.tempFile())
 
     //Given
     val offsets = Map(
@@ -76,13 +76,13 @@ class OffsetCheckpointFileTest extends Logging {
   def shouldReturnEmptyMapForEmptyFile(): Unit = {
 
     //When
-    val checkpoint = new OffsetCheckpointFile(TestUtils.tempFile())
+    val checkpoint = OffsetCheckpointFile(TestUtils.tempFile())
 
     //Then
     assertEquals(Map(), checkpoint.read())
 
     //When
-    checkpoint.write(Map())
+    checkpoint.write(Seq())
 
     //Then
     assertEquals(Map(), checkpoint.read())
@@ -92,10 +92,10 @@ class OffsetCheckpointFileTest extends Logging {
   def shouldThrowIfVersionIsNotRecognised(): Unit = {
     val file = TestUtils.tempFile()
     val logDirFailureChannel = new LogDirFailureChannel(10)
-    val checkpointFile = new CheckpointFile(file, OffsetCheckpointFile.CurrentVersion + 1,
-      OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
-    checkpointFile.write(Seq(new TopicPartition("foo", 5) -> 10L))
-    new OffsetCheckpointFile(checkpointFile.file, logDirFailureChannel).read()
+    val checkpointFile = CheckpointFile(file, OffsetCheckpointFile.CurrentVersion + 1, logDirFailureChannel, file.getParent, OffsetCheckpointFileEntry.apply)
+    val entry = OffsetCheckpointFileEntry(new TopicPartition("foo", 5), 10L)
+    checkpointFile.write(Seq(entry))
+    OffsetCheckpointFile(checkpointFile.file, logDirFailureChannel).read()
   }
 
 }

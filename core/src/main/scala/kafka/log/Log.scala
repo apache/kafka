@@ -223,7 +223,7 @@ class Log(@volatile var dir: File,
   private val lastFlushedTime = new AtomicLong(time.milliseconds)
 
   // Cache value of parent directory
-  def parentDir: String = dir.getParent
+  @volatile var parentDir: String = dir.getParent
 
   def initFileSize: Int = {
     if (config.preallocate)
@@ -358,7 +358,7 @@ class Log(@volatile var dir: File,
     val leaderEpochFile = LeaderEpochCheckpointFile.newFile(dir)
 
     def newLeaderEpochFileCache(): LeaderEpochFileCache = {
-      val checkpointFile = new LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel)
+      val checkpointFile = LeaderEpochCheckpointFile(leaderEpochFile, logDirFailureChannel)
       new LeaderEpochFileCache(topicPartition, logEndOffset _, checkpointFile)
     }
 
@@ -777,6 +777,7 @@ class Log(@volatile var dir: File,
         Utils.atomicMoveWithFallback(dir.toPath, renamedDir.toPath)
         if (renamedDir != dir) {
           dir = renamedDir
+          parentDir = renamedDir.getParent
           logSegments.foreach(_.updateDir(renamedDir))
           producerStateManager.logDir = dir
           // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference

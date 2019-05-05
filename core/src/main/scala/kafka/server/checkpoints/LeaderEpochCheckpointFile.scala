@@ -16,50 +16,37 @@
  */
 package kafka.server.checkpoints
 
-import java.io._
-import java.util.regex.Pattern
+import java.io.{File}
 
 import kafka.server.LogDirFailureChannel
 import kafka.server.epoch.EpochEntry
 
 import scala.collection._
 
-trait LeaderEpochCheckpoint {
+trait LeaderEpochCheckpoint extends Any {
   def write(epochs: Seq[EpochEntry])
   def read(): Seq[EpochEntry]
-}
-
-object LeaderEpochCheckpointFile {
-  private val LeaderEpochCheckpointFilename = "leader-epoch-checkpoint"
-  private val WhiteSpacesPattern = Pattern.compile("\\s+")
-  private val CurrentVersion = 0
-
-  def newFile(dir: File): File = new File(dir, LeaderEpochCheckpointFilename)
-
-  object Formatter extends CheckpointFileFormatter[EpochEntry] {
-
-    override def toLine(entry: EpochEntry): String = s"${entry.epoch} ${entry.startOffset}"
-
-    override def fromLine(line: String): Option[EpochEntry] = {
-      WhiteSpacesPattern.split(line) match {
-        case Array(epoch, offset) =>
-          Some(EpochEntry(epoch.toInt, offset.toLong))
-        case _ => None
-      }
-    }
-
-  }
 }
 
 /**
   * This class persists a map of (LeaderEpoch => Offsets) to a file (for a certain replica)
   */
-class LeaderEpochCheckpointFile(val file: File, logDirFailureChannel: LogDirFailureChannel = null) extends LeaderEpochCheckpoint {
-  import LeaderEpochCheckpointFile._
+class LeaderEpochCheckpointFile(val checkpointFile: CheckpointFile[EpochEntry]) extends AnyVal with LeaderEpochCheckpoint {
+  override def write(epochs: Seq[EpochEntry]): Unit = {
+    checkpointFile.write(epochs)
+  }
 
-  val checkpoint = new CheckpointFile[EpochEntry](file, CurrentVersion, Formatter, logDirFailureChannel, file.getParentFile.getParent)
+  override def read(): Seq[EpochEntry] = {
+    checkpointFile.read()
+  }
+}
 
-  def write(epochs: Seq[EpochEntry]): Unit = checkpoint.write(epochs)
-
-  def read(): Seq[EpochEntry] = checkpoint.read()
+object LeaderEpochCheckpointFile {
+  private val LeaderEpochCheckpointFilename = "leader-epoch-checkpoint"
+  val CurrentVersion = 0
+  def newFile(dir: File): File = new File(dir, LeaderEpochCheckpointFilename)
+  def apply(file: File, logDirFailureChannel: LogDirFailureChannel = null): LeaderEpochCheckpointFile = {
+    val checkpointFile = new CheckpointFile[EpochEntry](file, CurrentVersion, logDirFailureChannel, file.getParentFile.getParent, (t: String) => EpochEntry(t))
+    new LeaderEpochCheckpointFile(checkpointFile)
+  }
 }
