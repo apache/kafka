@@ -530,7 +530,7 @@ public class Struct {
             } else {
                 Object thisField = this.get(f);
                 Object otherField = other.get(f);
-                return (thisField == null) ? (otherField == null) : thisField.equals(otherField);
+                result = Objects.equals(thisField, otherField);
             }
             if (!result)
                 return false;
