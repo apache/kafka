@@ -1389,14 +1389,13 @@ project(':jmh-benchmarks') {
     }
   }
 
-
   task jmh(type: JavaExec, dependsOn: [':jmh-benchmarks:clean', ':jmh-benchmarks:shadowJar']) {
 
     main="-jar"
 
     doFirst {
       if (System.getProperty("jmhArgs")) {
-          args System.getProperty("jmhArgs").split(',')
+          args System.getProperty("jmhArgs").split(' ')
       }
       args = [shadowJar.archivePath, *args]
     }
