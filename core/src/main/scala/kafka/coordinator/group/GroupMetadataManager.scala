@@ -569,6 +569,7 @@ class GroupMetadataManager(brokerId: Int,
                     }
                 }
                 pendingOffsets.remove(batch.producerId)
+                bytesRead += record.sizeInBytes()
               }
             } else {
               var batchBaseOffset: Option[Long] = None
@@ -612,13 +613,11 @@ class GroupMetadataManager(brokerId: Int,
                   case unknownKey =>
                     throw new IllegalStateException(s"Unexpected message key $unknownKey while loading offsets and group metadata")
                 }
+                bytesRead += record.sizeInBytes()
               }
             }
+            numMessagesRead += 1
             currOffset = batch.nextOffset
-            batch.iterator().forEachRemaining(record => {
-              bytesRead += record.sizeInBytes()
-              numMessagesRead += 1
-            })
           }
         }
         info(s"Number of messages/bytes read: $numMessagesRead/$bytesRead for topic $topicPartition")
