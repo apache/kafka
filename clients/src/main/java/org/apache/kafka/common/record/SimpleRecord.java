@@ -94,8 +94,8 @@ public class SimpleRecord {
 
         SimpleRecord that = (SimpleRecord) o;
         return timestamp == that.timestamp &&
-                (key == null ? that.key == null : key.equals(that.key)) &&
-                (value == null ? that.value == null : value.equals(that.value)) &&
+                Objects.equals(key, that.key) &&
+                Objects.equals(value, that.value) &&
                 Arrays.equals(headers, that.headers);
     }
 

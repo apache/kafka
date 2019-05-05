@@ -21,6 +21,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Objects;
 
 /**
  * A class representing a delegation token details.
@@ -113,19 +114,11 @@ public class TokenInformation {
 
         TokenInformation that = (TokenInformation) o;
 
-        if (issueTimestamp != that.issueTimestamp) {
-            return false;
-        }
-        if (maxTimestamp != that.maxTimestamp) {
-            return false;
-        }
-        if (owner != null ? !owner.equals(that.owner) : that.owner != null) {
-            return false;
-        }
-        if (renewers != null ? !renewers.equals(that.renewers) : that.renewers != null) {
-            return false;
-        }
-        return tokenId != null ? tokenId.equals(that.tokenId) : that.tokenId == null;
+        return issueTimestamp == that.issueTimestamp &&
+            maxTimestamp == that.maxTimestamp &&
+            Objects.equals(owner, that.owner) &&
+            Objects.equals(renewers, that.renewers) &&
+            Objects.equals(tokenId, that.tokenId);
     }
 
     @Override
