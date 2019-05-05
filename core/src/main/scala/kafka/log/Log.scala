@@ -235,6 +235,9 @@ class Log(@volatile var dir: File,
   /* last time it was flushed */
   private val lastFlushedTime = new AtomicLong(time.milliseconds)
 
+  // Cache value of parent directory
+  @volatile var parentDir: String = dir.getParent
+
   def initFileSize: Int = {
     if (config.preallocate)
       config.segmentSize
@@ -962,6 +965,7 @@ class Log(@volatile var dir: File,
         Utils.atomicMoveWithFallback(dir.toPath, renamedDir.toPath)
         if (renamedDir != dir) {
           dir = renamedDir
+          parentDir = renamedDir.getParent
           logSegments.foreach(_.updateDir(renamedDir))
           producerStateManager.logDir = dir
           // re-initialize leader epoch cache so that LeaderEpochCheckpointFile.checkpoint can correctly reference
