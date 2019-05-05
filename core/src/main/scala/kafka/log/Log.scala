@@ -222,6 +222,9 @@ class Log(@volatile var dir: File,
   /* last time it was flushed */
   private val lastFlushedTime = new AtomicLong(time.milliseconds)
 
+  // Cache value of parent directory
+  def parentDir: String = dir.getParent
+
   def initFileSize: Int = {
     if (config.preallocate)
       config.segmentSize

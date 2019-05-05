@@ -17,7 +17,8 @@
 package kafka.server
 
 import java.io.File
-import java.util.Optional
+import java.util
+import java.util.{Optional, function}
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
@@ -1413,19 +1414,31 @@ class ReplicaManager(val config: KafkaConfig,
   def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =
     nonOfflinePartition(topicPartition).flatMap(_.leaderReplicaIfLocal.map(_.logEndOffset))
 
+  private def populateHWMMap(mapping: java.util.HashMap[String, util.HashMap[TopicPartition, Long]], optReplica: Option[Replica]): Unit = {
+    optReplica.foreach(replica => {
+      if (replica.log.isDefined) {
+        val dir = replica.log.get.parentDir
+        val tp = replica.topicPartition
+        val slot = mapping.computeIfAbsent(dir, new function.Function[String, util.HashMap[TopicPartition, Long]] {
+          override def apply(t: String): util.HashMap[TopicPartition, Long] = {
+            return new util.HashMap[TopicPartition, Long]()
+          }
+        })
+        slot.put(tp, replica.highWatermark.messageOffset)
+      }
+    })
+  }
+
   // Flushes the highwatermark value for all partitions to the highwatermark file
-  def checkpointHighWatermarks() {
-    val replicas = nonOfflinePartitionsIterator.flatMap { partition =>
-      val replicasList: mutable.Set[Replica] = mutable.Set()
-      partition.localReplica.foreach(replicasList.add)
-      partition.futureLocalReplica.foreach(replicasList.add)
-      replicasList
-    }.filter(_.log.isDefined).toBuffer
-    val replicasByDir = replicas.groupBy(_.log.get.dir.getParent)
-    for ((dir, reps) <- replicasByDir) {
-      val hwms = reps.map(r => r.topicPartition -> r.highWatermark.messageOffset).toMap
+  def checkpointHighWatermarks(): Unit = {
+    val hwmMap = new util.HashMap[String, util.HashMap[TopicPartition, Long]](allPartitions.size)
+    nonOfflinePartitionsIterator.foreach(partition => {
+      populateHWMMap(hwmMap, partition.localReplica)
+      populateHWMMap(hwmMap, partition.futureLocalReplica)
+    })
+    for ((dir, checkpoints) <- hwmMap.asScala) {
       try {
-        highWatermarkCheckpoints.get(dir).foreach(_.write(hwms))
+        highWatermarkCheckpoints.get(dir).foreach(_.write(checkpoints.asScala))
       } catch {
         case e: KafkaStorageException =>
           error(s"Error while writing to highwatermark file in directory $dir", e)
