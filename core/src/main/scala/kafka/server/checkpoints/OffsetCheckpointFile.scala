@@ -27,7 +27,7 @@ import scala.collection._
 class OffsetCheckpointFile(val checkpointFile: CheckpointFile[OffsetCheckpointFileEntry]) extends AnyVal {
   def file: File = checkpointFile.file
 
-  @deprecated("prefer using write(Seq[OffsetCheckpointFileEntry]) to avoid intermediate allocation")
+  @deprecated("prefer using write(Seq[OffsetCheckpointFileEntry]) to avoid intermediate allocation", "2.2.0")
   def write(entries: Map[TopicPartition, Long]): Unit = {
     val converted: Seq[OffsetCheckpointFileEntry] = entries.map({case (tp: TopicPartition, offset: Long) => new OffsetCheckpointFileEntry(tp, offset)})(collection.breakOut)
     write(converted)

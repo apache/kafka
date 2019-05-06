@@ -1420,7 +1420,11 @@ class ReplicaManager(val config: KafkaConfig,
         val dir = replica.log.get.parentDir
         val tp = replica.topicPartition
         val entry = new OffsetCheckpointFileEntry(tp, replica.highWatermark.messageOffset)
-        val slot = mapping.computeIfAbsent(dir, (_: String) => new util.ArrayList[OffsetCheckpointFileEntry]())
+        val slot = mapping.computeIfAbsent(dir, new function.Function[String, util.List[OffsetCheckpointFileEntry]] {
+          override def apply(t: String): util.List[OffsetCheckpointFileEntry] = {
+            new util.ArrayList[OffsetCheckpointFileEntry]()
+          }
+        })
         slot.add(entry)
       }
     })

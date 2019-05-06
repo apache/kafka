@@ -20,8 +20,7 @@ class CheckpointFileTest {
     val entries = Seq(
       new OffsetCheckpointFileEntry(new TopicPartition("foo", 0), 0L),
       new OffsetCheckpointFileEntry(new TopicPartition("foo", 1), 1L),
-      new OffsetCheckpointFileEntry(new TopicPartition("foo", 2), 2L),
-    )
+      new OffsetCheckpointFileEntry(new TopicPartition("foo", 2), 2L))
     checkpointFile.write(entries)
     val readEntries = checkpointFile.read()
     for (entry <- readEntries) {
