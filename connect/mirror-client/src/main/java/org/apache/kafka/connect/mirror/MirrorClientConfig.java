@@ -43,19 +43,19 @@ public class MirrorClientConfig extends AbstractConfig {
         super(CONFIG_DEF, props, false);
     }
 
-    ReplicationPolicy replicationPolicy() {
+    public ReplicationPolicy replicationPolicy() {
         return getConfiguredInstance(REPLICATION_POLICY_CLASS, ReplicationPolicy.class);
     }
 
-    Map<String, Object> adminConfig() {
+    public Map<String, Object> adminConfig() {
         return valuesWithPrefixOverride(ADMIN_CLIENT_PREFIX);
     }
 
-    Map<String, Object> consumerConfig() {
+    public Map<String, Object> consumerConfig() {
         return valuesWithPrefixOverride(CONSUMER_CLIENT_PREFIX);
     }
 
-    Map<String, Object> producerConfig() {
+    public Map<String, Object> producerConfig() {
         return valuesWithPrefixOverride(PRODUCER_CLIENT_PREFIX);
     }
 
@@ -71,6 +71,11 @@ public class MirrorClientConfig extends AbstractConfig {
             DefaultReplicationPolicy.class.getName(),
             ConfigDef.Importance.LOW,
             REPLICATION_POLICY_CLASS_DOC)
+        .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
+                Type.STRING,
+                CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
+                Importance.MEDIUM,
+                CommonClientConfigs.SECURITY_PROTOCOL_DOC)
         .withClientSslSupport()
         .withClientSaslSupport();
 }

@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.connect.source.SourceRecord;
 
 import org.junit.Test;
 
@@ -46,15 +47,21 @@ public class MirrorCheckpointTaskTest {
         offsetSyncStore.sync(new TopicPartition("target2.topic5", 6), 7L, 8L);
         Checkpoint checkpoint1 = mirrorCheckpointTask.checkpoint("group9", new TopicPartition("topic1", 2),
             new OffsetAndMetadata(10, null));
+        SourceRecord sourceRecord1 = mirrorCheckpointTask.checkpointRecord(checkpoint1, 123L);
         assertEquals(new TopicPartition("source1.topic1", 2), checkpoint1.topicPartition());
         assertEquals("group9", checkpoint1.consumerGroupId());
+        assertEquals("group9", Checkpoint.unwrapGroup(sourceRecord1.sourcePartition()));
         assertEquals(10, checkpoint1.upstreamOffset());
         assertEquals(11, checkpoint1.downstreamOffset());
+        assertEquals(123L, sourceRecord1.timestamp().longValue());
         Checkpoint checkpoint2 = mirrorCheckpointTask.checkpoint("group11", new TopicPartition("target2.topic5", 6),
             new OffsetAndMetadata(12, null));
+        SourceRecord sourceRecord2 = mirrorCheckpointTask.checkpointRecord(checkpoint2, 234L);
         assertEquals(new TopicPartition("topic5", 6), checkpoint2.topicPartition());
         assertEquals("group11", checkpoint2.consumerGroupId());
+        assertEquals("group11", Checkpoint.unwrapGroup(sourceRecord2.sourcePartition()));
         assertEquals(12, checkpoint2.upstreamOffset());
         assertEquals(13, checkpoint2.downstreamOffset());
+        assertEquals(234L, sourceRecord2.timestamp().longValue());
     }
 }

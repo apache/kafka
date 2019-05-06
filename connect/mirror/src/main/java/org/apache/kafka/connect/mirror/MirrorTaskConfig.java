@@ -21,7 +21,9 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Map;
 import java.util.Set;
+import java.util.List;
 import java.util.HashSet;
+import java.util.Collections;
 import java.util.stream.Collectors;
 
 public class MirrorTaskConfig extends MirrorConnectorConfig {
@@ -31,15 +33,29 @@ public class MirrorTaskConfig extends MirrorConnectorConfig {
     }
 
     Set<TopicPartition> taskTopicPartitions() {
-        return getList(TASK_TOPIC_PARTITIONS).stream()
+        List<String> fields = getList(TASK_TOPIC_PARTITIONS);
+        if (fields == null || fields.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return fields.stream()
             .map(MirrorUtils::decodeTopicPartition)
             .collect(Collectors.toSet());
     }
 
     Set<String> taskConsumerGroups() {
-        return new HashSet<>(getList(TASK_CONSUMER_GROUPS));
+        List<String> fields = getList(TASK_CONSUMER_GROUPS);
+        if (fields == null || fields.isEmpty()) {
+            return Collections.emptySet();
+        }
+        return new HashSet<>(fields);
     } 
 
+    MirrorMetrics metrics() {
+        MirrorMetrics metrics = new MirrorMetrics(this);
+        metricsReporters().forEach(metrics::addReporter);
+        return metrics;
+    }
+ 
     protected static final ConfigDef TASK_CONFIG_DEF = CONNECTOR_CONFIG_DEF
         .define(
             TASK_TOPIC_PARTITIONS,

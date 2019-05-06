@@ -116,4 +116,35 @@ public class MirrorClientTest {
         assertEquals(1, client.replicationHops("source3"));
         assertEquals(-1, client.replicationHops("source4"));
     }
+
+    @Test
+    public void sourceClustersTest() throws InterruptedException {
+        MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "heartbeats",
+            "source1.heartbeats", "source1.source2.heartbeats", "source3.source4.source5.heartbeats"));
+        Set<String> sources = client.sourceClusters();
+        assertTrue(sources.contains("source1"));
+        assertFalse(sources.contains("source2"));
+        assertTrue(sources.contains("source3"));
+        assertFalse(sources.contains("source4"));
+        assertFalse(sources.contains("source5"));
+        assertFalse(sources.contains("sourceX"));
+        assertFalse(sources.contains(""));
+        assertFalse(sources.contains(null));
+    }
+
+    @Test
+    public void upstreamClustersTest() throws InterruptedException {
+        MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "heartbeats",
+            "source1.heartbeats", "source1.source2.heartbeats", "source3.source4.source5.heartbeats"));
+        Set<String> sources = client.upstreamClusters();
+        assertTrue(sources.contains("source1"));
+        assertTrue(sources.contains("source2"));
+        assertTrue(sources.contains("source3"));
+        assertTrue(sources.contains("source4"));
+        assertTrue(sources.contains("source5"));
+        assertFalse(sources.contains("sourceX"));
+        assertFalse(sources.contains(""));
+        assertFalse(sources.contains(null));
+    }
+
 }

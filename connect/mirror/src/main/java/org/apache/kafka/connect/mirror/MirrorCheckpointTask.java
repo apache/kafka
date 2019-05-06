@@ -53,6 +53,7 @@ public class MirrorCheckpointTask extends SourceTask {
     private OffsetSyncStore offsetSyncStore;
     private boolean stopped;
     private ReentrantLock lock;
+    private MirrorMetrics metrics;
 
     public MirrorCheckpointTask() {}
 
@@ -80,6 +81,7 @@ public class MirrorCheckpointTask extends SourceTask {
         pollTimeout = config.consumerPollTimeout();
         offsetSyncStore = new OffsetSyncStore(config);
         sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
+        metrics = config.metrics();
     }
 
     @Override
@@ -181,5 +183,7 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public void commitRecord(SourceRecord record) {
+        metrics.checkpointLatency(Checkpoint.unwrapGroup(record.sourcePartition()),
+            System.currentTimeMillis() - record.timestamp());
     }
 }

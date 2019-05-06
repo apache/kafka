@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
  
 import java.time.Duration;
 import java.util.Set;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.HashMap;
@@ -88,8 +89,17 @@ public class MirrorClient implements AutoCloseable {
             .collect(Collectors.toSet());
     }
 
-    /** Finds upstream clusters based on incoming heartbeats */
+    /** Finds upstream clusters, which may be multiple hops away, based on incoming heartbeats. */
     public Set<String> upstreamClusters() throws InterruptedException {
+        return listTopics().stream()
+            .filter(this::isHeartbeatTopic)
+            .flatMap(x -> allSources(x).stream())
+            .distinct()
+            .collect(Collectors.toSet());
+    }
+
+    /** Finds clusters replicating directly to this one based on incoming heartbeats. */
+    public Set<String> sourceClusters() throws InterruptedException {
         return listTopics().stream()
             .filter(this::isHeartbeatTopic)
             .map(replicationPolicy::topicSource)
@@ -176,6 +186,17 @@ public class MirrorClient implements AutoCloseable {
     boolean isRemoteTopic(String topic) {
         return !replicationPolicy.isInternalTopic(topic)
             && replicationPolicy.topicSource(topic) != null;
+    }
+
+    Set<String> allSources(String topic) {
+        Set<String> sources = new HashSet<>();
+        String source = replicationPolicy.topicSource(topic);
+        while (source != null) {
+            sources.add(source);
+            topic = replicationPolicy.upstreamTopic(topic);
+            source = replicationPolicy.topicSource(topic);
+        }
+        return sources;
     }
 
     static protected boolean endOfStream(Consumer<?, ?> consumer, Collection<TopicPartition> assignments)

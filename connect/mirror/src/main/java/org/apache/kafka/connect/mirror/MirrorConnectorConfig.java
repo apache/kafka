@@ -198,12 +198,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
         return reporters;
     }
 
-    MirrorMetrics metrics() {
-        MirrorMetrics metrics = new MirrorMetrics(targetClusterAlias());
-        metricsReporters().forEach(metrics::addReporter);
-        return metrics;
-    }
- 
     String sourceClusterAlias() {
         return getString(SOURCE_CLUSTER_ALIAS);
     }

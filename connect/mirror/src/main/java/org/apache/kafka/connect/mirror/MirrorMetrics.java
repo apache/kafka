@@ -33,53 +33,71 @@ import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.LinkedHashMap;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /** Metrics for replicated topic-partitions */
 class MirrorMetrics {
 
     private static final String SOURCE_CONNECTOR_GROUP = MirrorSourceConnector.class.getSimpleName();
+    private static final String CHECKPOINT_CONNECTOR_GROUP = MirrorCheckpointConnector.class.getSimpleName();
 
-    private static final Set<String> TAGS = new HashSet<>(Arrays.asList("target", "topic", "partition"));
+    private static final Set<String> PARTITION_TAGS = new HashSet<>(Arrays.asList("target", "topic", "partition"));
+    private static final Set<String> GROUP_TAGS = new HashSet<>(Arrays.asList("source", "target", "group"));
     
     private static final MetricNameTemplate RECORD_COUNT = new MetricNameTemplate(
             "record-count", SOURCE_CONNECTOR_GROUP,
-            "Number of source records replicated to the target cluster.", TAGS);
+            "Number of source records replicated to the target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate RECORD_AGE = new MetricNameTemplate(
             "record-age-ms", SOURCE_CONNECTOR_GROUP,
-            "The age of incoming source records when replicated to the target cluster.", TAGS);
+            "The age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate RECORD_AGE_MAX = new MetricNameTemplate(
             "record-age-ms-max", SOURCE_CONNECTOR_GROUP,
-            "The age of incoming source records when replicated to the target cluster.", TAGS);
+            "The age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate RECORD_AGE_MIN = new MetricNameTemplate(
             "record-age-ms-min", SOURCE_CONNECTOR_GROUP,
-            "The age of incoming source records when replicated to the target cluster.", TAGS);
+            "The age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate RECORD_AGE_AVG = new MetricNameTemplate(
             "record-age-ms-avg", SOURCE_CONNECTOR_GROUP,
-            "The age of incoming source records when replicated to the target cluster.", TAGS);
+            "The age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate BYTE_RATE = new MetricNameTemplate(
             "byte-rate", SOURCE_CONNECTOR_GROUP,
-            "Average number of bytes replicated per second.", TAGS);
+            "Average number of bytes replicated per second.", PARTITION_TAGS);
     private static final MetricNameTemplate REPLICATION_LATENCY = new MetricNameTemplate(
             "replication-latency-ms", SOURCE_CONNECTOR_GROUP,
-            "Time it takes records to get replicated from source to target cluster.", TAGS);
+            "Time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate REPLICATION_LATENCY_MAX = new MetricNameTemplate(
             "replication-latency-ms-max", SOURCE_CONNECTOR_GROUP,
-            "Time it takes records to get replicated from source to target cluster.", TAGS);
+            "Time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate REPLICATION_LATENCY_MIN = new MetricNameTemplate(
             "replication-latency-ms-min", SOURCE_CONNECTOR_GROUP,
-            "Time it takes records to get replicated from source to target cluster.", TAGS);
+            "Time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
     private static final MetricNameTemplate REPLICATION_LATENCY_AVG = new MetricNameTemplate(
             "replication-latency-ms-avg", SOURCE_CONNECTOR_GROUP,
-            "Time it takes records to get replicated from source to target cluster.", TAGS);
+            "Time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
+
+    private static final MetricNameTemplate CHECKPOINT_LATENCY = new MetricNameTemplate(
+            "checkpoint-latency-ms", CHECKPOINT_CONNECTOR_GROUP,
+            "Time it takes consumer group offsets to replicate from source to target cluster.", GROUP_TAGS);
+    private static final MetricNameTemplate CHECKPOINT_LATENCY_MAX = new MetricNameTemplate(
+            "checkpoint-latency-ms-max", CHECKPOINT_CONNECTOR_GROUP,
+            "Time it takes consumer group offsets to replicate from source to target cluster.", GROUP_TAGS);
+    private static final MetricNameTemplate CHECKPOINT_LATENCY_MIN = new MetricNameTemplate(
+            "checkpoint-latency-ms-min", CHECKPOINT_CONNECTOR_GROUP,
+            "Time it takes consumer group offsets to replicate from source to target cluster.", GROUP_TAGS);
+    private static final MetricNameTemplate CHECKPOINT_LATENCY_AVG = new MetricNameTemplate(
+            "checkpoint-latency-ms-avg", CHECKPOINT_CONNECTOR_GROUP,
+            "Time it takes consumer group offsets to replicate from source to target cluster.", GROUP_TAGS);
+
 
     private final Metrics metrics; 
-    private final ConcurrentMap<TopicPartition, PartitionMetrics> partitionMetrics = new ConcurrentHashMap<>();
+    private final Map<TopicPartition, PartitionMetrics> partitionMetrics; 
+    private final Map<String, GroupMetrics> groupMetrics; 
+    private final String source;
     private final String target;
 
-    MirrorMetrics(String target) {
-        this.target = target;
+    MirrorMetrics(MirrorTaskConfig taskConfig) {
+        this.target = taskConfig.targetClusterAlias();
+        this.source = taskConfig.sourceClusterAlias();
         this.metrics = new Metrics();
 
         // for side-effect
@@ -87,30 +105,38 @@ class MirrorMetrics {
         metrics.sensor("byte-rate");
         metrics.sensor("record-age");
         metrics.sensor("replication-latency");
+
+        ReplicationPolicy replicationPolicy = taskConfig.replicationPolicy();
+        partitionMetrics = taskConfig.taskTopicPartitions().stream()
+            .map(x -> new TopicPartition(replicationPolicy.formatRemoteTopic(source, x.topic()), x.partition()))
+            .collect(Collectors.toMap(x -> x, x -> new PartitionMetrics(x)));
+
+        groupMetrics = taskConfig.taskConsumerGroups().stream()
+            .collect(Collectors.toMap(x -> x, x -> new GroupMetrics(x)));
     }
 
     void countRecord(TopicPartition topicPartition) {
-        partitionMetrics(topicPartition).recordSensor.record();
+        partitionMetrics.get(topicPartition).recordSensor.record();
     }
 
     void recordAge(TopicPartition topicPartition, long ageMillis) {
-        partitionMetrics(topicPartition).recordAgeSensor.record((double) ageMillis);
+        partitionMetrics.get(topicPartition).recordAgeSensor.record((double) ageMillis);
     }
 
     void replicationLatency(TopicPartition topicPartition, long millis) {
-        partitionMetrics(topicPartition).replicationLatencySensor.record((double) millis);
+        partitionMetrics.get(topicPartition).replicationLatencySensor.record((double) millis);
     }
 
     void recordBytes(TopicPartition topicPartition, long bytes) {
-        partitionMetrics(topicPartition).byteRateSensor.record((double) bytes);
+        partitionMetrics.get(topicPartition).byteRateSensor.record((double) bytes);
+    }
+
+    void checkpointLatency(String group, long millis) {
+        groupMetrics.get(group).checkpointLatencySensor.record((double) millis);
     }
 
     void addReporter(MetricsReporter reporter) {
         metrics.addReporter(reporter);
-    }
-
-    private PartitionMetrics partitionMetrics(TopicPartition topicPartition) {
-        return partitionMetrics.computeIfAbsent(topicPartition, x -> new PartitionMetrics(x));
     }
 
     private class PartitionMetrics {
@@ -142,6 +168,23 @@ class MirrorMetrics {
             replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_MAX, tags), new Max());
             replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_MIN, tags), new Min());
             replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_AVG, tags), new Avg());
+        }
+    }
+
+    private class GroupMetrics {
+        private final Sensor checkpointLatencySensor;
+
+        GroupMetrics(String group) {
+            Map<String, String> tags = new LinkedHashMap<>();
+            tags.put("source", source); 
+            tags.put("target", target); 
+            tags.put("group", group);
+ 
+            checkpointLatencySensor = metrics.sensor("checkpoint-latency");
+            checkpointLatencySensor.add(metrics.metricInstance(CHECKPOINT_LATENCY, tags), new Value());
+            checkpointLatencySensor.add(metrics.metricInstance(CHECKPOINT_LATENCY_MAX, tags), new Max());
+            checkpointLatencySensor.add(metrics.metricInstance(CHECKPOINT_LATENCY_MIN, tags), new Min());
+            checkpointLatencySensor.add(metrics.metricInstance(CHECKPOINT_LATENCY_AVG, tags), new Avg());
         }
     }
 }

@@ -147,6 +147,10 @@ public class Checkpoint {
         return partition;
     }
 
+    static String unwrapGroup(Map<String, ?> connectPartition) {
+        return connectPartition.get(CONSUMER_GROUP_ID_KEY).toString();
+    }
+
     byte[] recordKey() {
         return serializeKey().array();
     }
