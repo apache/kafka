@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.jmh.server;
 
 import kafka.cluster.Partition;
@@ -81,12 +97,9 @@ public class HighwatermarkCheckpointBench {
         final List<File> files =
                 JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
         this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
-                LogConfig.apply(),
-                CleanerConfig.apply(
-                        1, 4*1024*1024L, 0.9d,
-                        1024*1024, 32*1024*1024,
-                        Double.MAX_VALUE, 15 * 1000, true, "MD5"),
-                time);
+                LogConfig.apply(), CleanerConfig.apply(1, 4 * 1024 * 1024L, 0.9d,
+                        1024 * 1024, 32 * 1024 * 1024,
+                        Double.MAX_VALUE, 15 * 1000, true, "MD5"), time);
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
         final MetadataCache metadataCache =
@@ -99,7 +112,7 @@ public class HighwatermarkCheckpointBench {
                 this.brokerProperties,
                 this.metrics,
                 this.time,
-                null,//this.zkClient,
+                null,
                 this.scheduler,
                 this.logManager,
                 new AtomicBoolean(false),
