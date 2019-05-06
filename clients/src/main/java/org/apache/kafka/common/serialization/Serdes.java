@@ -19,6 +19,8 @@ package org.apache.kafka.common.serialization;
 import org.apache.kafka.common.utils.Bytes;
 
 import java.nio.ByteBuffer;
+import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 
@@ -122,6 +124,12 @@ public class Serdes {
     static public final class UUIDSerde extends WrapperSerde<UUID> {
         public UUIDSerde() {
             super(new UUIDSerializer(), new UUIDDeserializer());
+        }
+    }
+
+    static public final class ListSerde<T> extends WrapperSerde<List<T>> {
+        public ListSerde(Serde<T> serde, Comparator<T> comparator) {
+            super(new ListSerializer(serde.serializer()), new ListDeserializer<>(serde.deserializer(), comparator));
         }
     }
 
