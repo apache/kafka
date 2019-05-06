@@ -44,26 +44,23 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
         if (data == null || data.length == 0) {
             return null;
         }
-        @SuppressWarnings("serial")
-        List<T> deserializedList = new ArrayList<T>() {
-            @Override
-            public void sort(Comparator<? super T> c) {
-                super.sort(comparator);
-            }
-        };
-        DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data));
-        try {
+        try (final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data))) {
+            List<T> deserializedList = new ArrayList<T>() {
+                @Override
+                public void sort(Comparator<? super T> c) {
+                    super.sort(comparator);
+                }
+            };
             final int size = dis.readInt();
             for (int i = 0; i < size; i++) {
                 byte[] payload = new byte[dis.readInt()];
                 dis.read(payload);
                 deserializedList.add(deserializer.deserialize(topic, payload));
             }
-            dis.close();
+            return deserializedList;
         } catch (IOException e) {
             throw new RuntimeException("Unable to deserialize into a List", e);
         }
-        return deserializedList;
     }
 
     @Override

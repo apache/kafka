@@ -42,19 +42,17 @@ public class ListSerializer<T> implements Serializer<List<T>> {
         }
         final int size = data.size();
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
-        final DataOutputStream out = new DataOutputStream(baos);
-        try {
+        try (final DataOutputStream out = new DataOutputStream(baos)) {
             out.writeInt(size);
             for (T entry : data) {
                 final byte[] bytes = serializer.serialize(topic, entry);
                 out.writeInt(bytes.length);
                 out.write(bytes);
             }
-            out.close();
+            return baos.toByteArray();
         } catch (IOException e) {
             throw new RuntimeException("Failed to serialize List", e);
         }
-        return baos.toByteArray();
     }
 
     @Override
