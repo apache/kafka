@@ -662,7 +662,7 @@ public class KafkaProducerTest {
         Node node = metadata.fetch().nodes().get(0);
         client.throttle(node, 5000);
 
-        client.prepareResponse(new FindCoordinatorResponse(Errors.NONE, host1));
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, host1));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
 
         try (Producer<String, String> producer = new KafkaProducer<>(configs, new StringSerializer(),
