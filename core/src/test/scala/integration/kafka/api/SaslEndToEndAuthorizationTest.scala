@@ -21,6 +21,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.errors.{GroupAuthorizationException, TopicAuthorizationException}
 import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertTrue}
+import org.scalatest.Assertions.fail
 
 import scala.collection.immutable.List
 import scala.collection.JavaConverters._

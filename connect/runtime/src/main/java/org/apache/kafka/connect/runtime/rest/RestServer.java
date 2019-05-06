@@ -23,7 +23,6 @@ import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
 import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.WorkerConfig;
-import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
@@ -35,7 +34,6 @@ import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
-import org.eclipse.jetty.server.Slf4jRequestLog;
 import org.eclipse.jetty.server.handler.DefaultHandler;
 import org.eclipse.jetty.server.handler.HandlerCollection;
 import org.eclipse.jetty.server.handler.RequestLogHandler;
@@ -161,6 +159,7 @@ public class RestServer {
         return connector;
     }
 
+    @SuppressWarnings("deprecation")
     public void start(HerderProvider herderProvider, Plugins plugins) {
         log.info("Starting REST server");
 
@@ -196,7 +195,8 @@ public class RestServer {
         }
 
         RequestLogHandler requestLogHandler = new RequestLogHandler();
-        Slf4jRequestLog requestLog = new Slf4jRequestLog();
+        // Use fully qualified name to avoid deprecation warning
+        org.eclipse.jetty.server.Slf4jRequestLog requestLog = new org.eclipse.jetty.server.Slf4jRequestLog();
         requestLog.setLoggerName(RestServer.class.getCanonicalName());
         requestLog.setLogLatency(true);
         requestLogHandler.setRequestLog(requestLog);
@@ -310,7 +310,9 @@ public class RestServer {
             config, ConnectRestExtension.class);
 
         long herderRequestTimeoutMs = ConnectorsResource.REQUEST_TIMEOUT_MS;
-        Integer rebalanceTimeoutMs = config.getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
+
+        Integer rebalanceTimeoutMs = config.getRebalanceTimeout();
+
         if (rebalanceTimeoutMs != null) {
             herderRequestTimeoutMs = Math.min(herderRequestTimeoutMs, rebalanceTimeoutMs.longValue());
         }

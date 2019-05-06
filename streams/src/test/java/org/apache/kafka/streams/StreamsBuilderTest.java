@@ -22,11 +22,15 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.TopologyException;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
@@ -35,11 +39,13 @@ import org.apache.kafka.test.MockPredicate;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.Assert;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 
@@ -51,7 +57,14 @@ import static org.junit.Assert.assertTrue;
 
 public class StreamsBuilderTest {
 
+    private static final String STREAM_TOPIC     = "stream-topic";
+
+    private static final String STREAM_TOPIC_TWO = "stream-topic-two";
+
+    private static final String TABLE_TOPIC      = "table-topic";
+
     private final StreamsBuilder builder = new StreamsBuilder();
+
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
 
     @Test
@@ -65,10 +78,10 @@ public class StreamsBuilderTest {
     @Test
     public void shouldAllowJoinUnmaterializedFilteredKTable() {
         final KTable<Bytes, String> filteredKTable = builder
-            .<Bytes, String>table("table-topic")
+            .<Bytes, String>table(TABLE_TOPIC)
             .filter(MockPredicate.allGoodPredicate());
         builder
-            .<Bytes, String>stream("stream-topic")
+            .<Bytes, String>stream(STREAM_TOPIC)
             .join(filteredKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
@@ -88,10 +101,10 @@ public class StreamsBuilderTest {
     @Test
     public void shouldAllowJoinMaterializedFilteredKTable() {
         final KTable<Bytes, String> filteredKTable = builder
-            .<Bytes, String>table("table-topic")
+            .<Bytes, String>table(TABLE_TOPIC)
             .filter(MockPredicate.allGoodPredicate(), Materialized.as("store"));
         builder
-            .<Bytes, String>stream("stream-topic")
+            .<Bytes, String>stream(STREAM_TOPIC)
             .join(filteredKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
@@ -112,10 +125,10 @@ public class StreamsBuilderTest {
     @Test
     public void shouldAllowJoinUnmaterializedMapValuedKTable() {
         final KTable<Bytes, String> mappedKTable = builder
-            .<Bytes, String>table("table-topic")
+            .<Bytes, String>table(TABLE_TOPIC)
             .mapValues(MockMapper.noOpValueMapper());
         builder
-            .<Bytes, String>stream("stream-topic")
+            .<Bytes, String>stream(STREAM_TOPIC)
             .join(mappedKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
@@ -135,10 +148,10 @@ public class StreamsBuilderTest {
     @Test
     public void shouldAllowJoinMaterializedMapValuedKTable() {
         final KTable<Bytes, String> mappedKTable = builder
-            .<Bytes, String>table("table-topic")
+            .<Bytes, String>table(TABLE_TOPIC)
             .mapValues(MockMapper.noOpValueMapper(), Materialized.as("store"));
         builder
-            .<Bytes, String>stream("stream-topic")
+            .<Bytes, String>stream(STREAM_TOPIC)
             .join(mappedKTable, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
@@ -161,7 +174,7 @@ public class StreamsBuilderTest {
         final KTable<Bytes, String> table1 = builder.table("table-topic1");
         final KTable<Bytes, String> table2 = builder.table("table-topic2");
         builder
-            .<Bytes, String>stream("stream-topic")
+            .<Bytes, String>stream(STREAM_TOPIC)
             .join(table1.join(table2, MockValueJoiner.TOSTRING_JOINER), MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
@@ -183,7 +196,7 @@ public class StreamsBuilderTest {
         final KTable<Bytes, String> table1 = builder.table("table-topic1");
         final KTable<Bytes, String> table2 = builder.table("table-topic2");
         builder
-            .<Bytes, String>stream("stream-topic")
+            .<Bytes, String>stream(STREAM_TOPIC)
             .join(
                 table1.join(table2, MockValueJoiner.TOSTRING_JOINER, Materialized.as("store")),
                 MockValueJoiner.TOSTRING_JOINER);
@@ -205,8 +218,8 @@ public class StreamsBuilderTest {
 
     @Test
     public void shouldAllowJoinMaterializedSourceKTable() {
-        final KTable<Bytes, String> table = builder.table("table-topic");
-        builder.<Bytes, String>stream("stream-topic").join(table, MockValueJoiner.TOSTRING_JOINER);
+        final KTable<Bytes, String> table = builder.table(TABLE_TOPIC);
+        builder.<Bytes, String>stream(STREAM_TOPIC).join(table, MockValueJoiner.TOSTRING_JOINER);
         builder.build();
 
         final ProcessorTopology topology =
@@ -402,5 +415,73 @@ public class StreamsBuilderTest {
     public void shouldThrowExceptionWhenTopicNamesAreNull() {
         builder.stream(Arrays.asList(null, null));
         builder.build();
+    }
+
+    @Test
+    public void shouldUseSpecifiedNameForStreamSourceProcessor() {
+        final String expected = "source-node";
+        builder.stream(STREAM_TOPIC, Consumed.as(expected));
+        builder.stream(STREAM_TOPIC_TWO);
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        assertSpecifiedNameForOperation(topology, expected, "KSTREAM-SOURCE-0000000000");
+    }
+
+    @Test
+    public void shouldUseSpecifiedNameForTableSourceProcessor() {
+        final String expected = "source-node";
+        builder.table(STREAM_TOPIC, Consumed.as(expected));
+        builder.table(STREAM_TOPIC_TWO);
+        builder.build();
+
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+
+        assertSpecifiedNameForOperation(
+                topology,
+                expected,
+                expected + "-table-source",
+                "KSTREAM-SOURCE-0000000002",
+                "KTABLE-SOURCE-0000000003");
+    }
+
+    @Test
+    public void shouldUseSpecifiedNameForGlobalTableSourceProcessor() {
+        final String expected = "source-processor";
+        builder.globalTable(STREAM_TOPIC, Consumed.as(expected));
+        builder.globalTable(STREAM_TOPIC_TWO);
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+
+        assertSpecifiedNameForStateStore(
+                topology.globalStateStores(),
+                "stream-topic-STATE-STORE-0000000000",
+                "stream-topic-two-STATE-STORE-0000000003"
+        );
+    }
+
+    @Test
+    public void shouldUseSpecifiedNameForSinkProcessor() {
+        final String expected = "sink-processor";
+        final KStream<Object, Object> stream = builder.stream(STREAM_TOPIC);
+        stream.to(STREAM_TOPIC_TWO, Produced.as(expected));
+        stream.to(STREAM_TOPIC_TWO);
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
+        assertSpecifiedNameForOperation(topology, "KSTREAM-SOURCE-0000000000", expected, "KSTREAM-SINK-0000000001");
+    }
+
+    private void assertSpecifiedNameForOperation(final ProcessorTopology topology, final String... expected) {
+        final List<ProcessorNode> processors = topology.processors();
+        Assert.assertEquals("Invalid number of expected processors", expected.length, processors.size());
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals(expected[i], processors.get(i).name());
+        }
+    }
+
+    private void assertSpecifiedNameForStateStore(final List<StateStore> stores, final String... expected) {
+        Assert.assertEquals("Invalid number of expected state stores", expected.length, stores.size());
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals(expected[i], stores.get(i).name());
+        }
     }
 }

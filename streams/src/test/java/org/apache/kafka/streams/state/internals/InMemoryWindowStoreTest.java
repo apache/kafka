@@ -605,7 +605,7 @@ public class InMemoryWindowStoreTest {
         LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
-        final KeyValueIterator iterator = windowStore.fetch(-1, 1, 0L, 10L);
+        final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetch(-1, 1, 0L, 10L);
         assertFalse(iterator.hasNext());
 
         final List<String> messages = appender.getMessages();

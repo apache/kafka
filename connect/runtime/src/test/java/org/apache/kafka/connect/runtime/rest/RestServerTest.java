@@ -30,6 +30,7 @@ import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -250,5 +251,36 @@ public class RestServerTest {
                 response.getFirstHeader("Access-Control-Allow-Methods").getValue());
         }
         PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testStandaloneConfig() throws IOException  {
+        Map<String, String> workerProps = baseWorkerProps();
+        workerProps.put("offset.storage.file.filename", "/tmp");
+        WorkerConfig workerConfig = new StandaloneConfig(workerProps);
+
+
+        EasyMock.expect(herder.plugins()).andStubReturn(plugins);
+        EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
+            workerConfig,
+            ConnectRestExtension.class)).andStubReturn(Collections.emptyList());
+
+        final Capture<Callback<Collection<String>>> connectorsCallback = EasyMock.newCapture();
+        herder.connectors(EasyMock.capture(connectorsCallback));
+        PowerMock.expectLastCall().andAnswer(() -> {
+            connectorsCallback.getValue().onCompletion(null, Arrays.asList("a", "b"));
+            return null;
+        });
+
+        PowerMock.replayAll();
+
+        server = new RestServer(workerConfig);
+        server.start(new HerderProvider(herder), herder.plugins());
+        HttpRequest request = new HttpGet("/connectors");
+        CloseableHttpClient httpClient = HttpClients.createMinimal();
+        HttpHost httpHost = new HttpHost(server.advertisedUrl().getHost(), server.advertisedUrl().getPort());
+        CloseableHttpResponse response = httpClient.execute(httpHost, request);
+
+        Assert.assertEquals(200, response.getStatusLine().getStatusCode());
     }
 }

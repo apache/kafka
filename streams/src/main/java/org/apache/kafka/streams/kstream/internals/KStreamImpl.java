@@ -168,7 +168,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     public <KR> KStream<KR, V> selectKey(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper) {
         Objects.requireNonNull(mapper, "mapper can't be null");
 
-        final ProcessorGraphNode<K, V> selectKeyProcessorNode = internalSelectKey(mapper);
+        final ProcessorGraphNode<K, V> selectKeyProcessorNode = internalSelectKey(mapper, NamedInternal.empty());
 
         selectKeyProcessorNode.keyChangingOperation(true);
         builder.addGraphNode(this.streamsGraphNode, selectKeyProcessorNode);
@@ -178,9 +178,9 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
 
-    private <KR> ProcessorGraphNode<K, V> internalSelectKey(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper) {
-        final String name = builder.newProcessorName(KEY_SELECT_NAME);
-
+    private <KR> ProcessorGraphNode<K, V> internalSelectKey(final KeyValueMapper<? super K, ? super V, ? extends KR> mapper,
+                                                            final NamedInternal named) {
+        final String name = named.orElseGenerateWithPrefix(builder, KEY_SELECT_NAME);
         final KStreamMap<K, V, KR, V> kStreamMap = new KStreamMap<>((key, value) -> new KeyValue<>(mapper.apply(key, value), value));
 
         final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(kStreamMap, name);
@@ -241,8 +241,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     public void print(final Printed<K, V> printed) {
         Objects.requireNonNull(printed, "printed can't be null");
         final PrintedInternal<K, V> printedInternal = new PrintedInternal<>(printed);
-        final String name = builder.newProcessorName(PRINTING_NAME);
-
+        final String name = new NamedInternal(printedInternal.name()).orElseGenerateWithPrefix(builder, PRINTING_NAME);
         final ProcessorParameters<? super K, ? super V> processorParameters = new ProcessorParameters<>(printedInternal.build(this.name), name);
         final ProcessorGraphNode<? super K, ? super V> printNode = new ProcessorGraphNode<>(name, processorParameters);
 
@@ -385,18 +384,26 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public KStream<K, V> through(final String topic) {
-        return through(topic, Produced.with(null, null, null));
+        return through(topic, Produced.with(keySerde, valSerde, null));
     }
 
     @Override
     public KStream<K, V> through(final String topic, final Produced<K, V> produced) {
+        Objects.requireNonNull(topic, "topic can't be null");
+        Objects.requireNonNull(produced, "Produced can't be null");
         final ProducedInternal<K, V> producedInternal = new ProducedInternal<>(produced);
+        if (producedInternal.keySerde() == null) {
+            producedInternal.withKeySerde(keySerde);
+        }
+        if (producedInternal.valueSerde() == null) {
+            producedInternal.withValueSerde(valSerde);
+        }
         to(topic, producedInternal);
         return builder.stream(
             Collections.singleton(topic),
             new ConsumedInternal<>(
-                producedInternal.keySerde() != null ? producedInternal.keySerde() : keySerde,
-                producedInternal.valueSerde() != null ? producedInternal.valueSerde() : valSerde,
+                producedInternal.keySerde(),
+                producedInternal.valueSerde(),
                 new FailOnInvalidTimestamp(),
                 null
             )
@@ -405,31 +412,44 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
     @Override
     public void to(final String topic) {
-        to(topic, Produced.with(null, null, null));
+        to(topic, Produced.with(keySerde, valSerde, null));
     }
 
     @Override
     public void to(final String topic, final Produced<K, V> produced) {
         Objects.requireNonNull(topic, "topic can't be null");
         Objects.requireNonNull(produced, "Produced can't be null");
-        to(new StaticTopicNameExtractor<>(topic), new ProducedInternal<>(produced));
+        final ProducedInternal<K, V> producedInternal = new ProducedInternal<>(produced);
+        if (producedInternal.keySerde() == null) {
+            producedInternal.withKeySerde(keySerde);
+        }
+        if (producedInternal.valueSerde() == null) {
+            producedInternal.withValueSerde(valSerde);
+        }
+        to(new StaticTopicNameExtractor<>(topic), producedInternal);
     }
 
     @Override
     public void to(final TopicNameExtractor<K, V> topicExtractor) {
-        to(topicExtractor, Produced.with(null, null, null));
+        to(topicExtractor, Produced.with(keySerde, valSerde, null));
     }
 
     @Override
     public void to(final TopicNameExtractor<K, V> topicExtractor, final Produced<K, V> produced) {
         Objects.requireNonNull(topicExtractor, "topic extractor can't be null");
         Objects.requireNonNull(produced, "Produced can't be null");
-        to(topicExtractor, new ProducedInternal<>(produced));
+        final ProducedInternal<K, V> producedInternal = new ProducedInternal<>(produced);
+        if (producedInternal.keySerde() == null) {
+            producedInternal.withKeySerde(keySerde);
+        }
+        if (producedInternal.valueSerde() == null) {
+            producedInternal.withValueSerde(valSerde);
+        }
+        to(topicExtractor, producedInternal);
     }
 
     private void to(final TopicNameExtractor<K, V> topicExtractor, final ProducedInternal<K, V> produced) {
-        final String name = builder.newProcessorName(SINK_NAME);
-
+        final String name = new NamedInternal(produced.name()).orElseGenerateWithPrefix(builder, SINK_NAME);
         final StreamSinkNode<K, V> sinkNode = new StreamSinkNode<>(
             name,
             topicExtractor,
@@ -852,7 +872,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         Objects.requireNonNull(selector, "selector can't be null");
         Objects.requireNonNull(grouped, "grouped can't be null");
         final GroupedInternal<KR, V> groupedInternal = new GroupedInternal<>(grouped);
-        final ProcessorGraphNode<K, V> selectKeyMapNode = internalSelectKey(selector);
+        final ProcessorGraphNode<K, V> selectKeyMapNode = internalSelectKey(selector, new NamedInternal(groupedInternal.name()));
         selectKeyMapNode.keyChangingOperation(true);
 
         builder.addGraphNode(this.streamsGraphNode, selectKeyMapNode);
