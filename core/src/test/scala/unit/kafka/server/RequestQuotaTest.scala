@@ -274,7 +274,10 @@ class RequestQuotaTest extends BaseRequestTest {
           new OffsetFetchRequest.Builder("test-group", List(tp).asJava)
 
         case ApiKeys.FIND_COORDINATOR =>
-          new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, "test-group")
+          new FindCoordinatorRequest.Builder(
+              new FindCoordinatorRequestData()
+                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
+                .setKey("test-group"))
 
         case ApiKeys.JOIN_GROUP =>
           new JoinGroupRequest.Builder(
@@ -489,7 +492,8 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.OFFSET_COMMIT =>
         new OffsetCommitResponse(response, ApiKeys.OFFSET_COMMIT.latestVersion).throttleTimeMs
       case ApiKeys.OFFSET_FETCH => new OffsetFetchResponse(response).throttleTimeMs
-      case ApiKeys.FIND_COORDINATOR => new FindCoordinatorResponse(response).throttleTimeMs
+      case ApiKeys.FIND_COORDINATOR =>
+        new FindCoordinatorResponse(response, ApiKeys.FIND_COORDINATOR.latestVersion).throttleTimeMs
       case ApiKeys.JOIN_GROUP => new JoinGroupResponse(response).throttleTimeMs
       case ApiKeys.HEARTBEAT => new HeartbeatResponse(response).throttleTimeMs
       case ApiKeys.LEAVE_GROUP => new LeaveGroupResponse(response).throttleTimeMs

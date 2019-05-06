@@ -57,6 +57,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.PatternType.LITERAL
@@ -1171,22 +1172,22 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleFindCoordinatorRequest(request: RequestChannel.Request) {
     val findCoordinatorRequest = request.body[FindCoordinatorRequest]
 
-    if (findCoordinatorRequest.coordinatorType == FindCoordinatorRequest.CoordinatorType.GROUP &&
-        !authorize(request.session, Describe, Resource(Group, findCoordinatorRequest.coordinatorKey, LITERAL)))
+    if (findCoordinatorRequest.data.keyType == CoordinatorType.GROUP.id &&
+        !authorize(request.session, Describe, Resource(Group, findCoordinatorRequest.data.key, LITERAL)))
       sendErrorResponseMaybeThrottle(request, Errors.GROUP_AUTHORIZATION_FAILED.exception)
-    else if (findCoordinatorRequest.coordinatorType == FindCoordinatorRequest.CoordinatorType.TRANSACTION &&
-        !authorize(request.session, Describe, Resource(TransactionalId, findCoordinatorRequest.coordinatorKey, LITERAL)))
+    else if (findCoordinatorRequest.data.keyType == CoordinatorType.TRANSACTION.id &&
+        !authorize(request.session, Describe, Resource(TransactionalId, findCoordinatorRequest.data.key, LITERAL)))
       sendErrorResponseMaybeThrottle(request, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception)
     else {
       // get metadata (and create the topic if necessary)
-      val (partition, topicMetadata) = findCoordinatorRequest.coordinatorType match {
-        case FindCoordinatorRequest.CoordinatorType.GROUP =>
-          val partition = groupCoordinator.partitionFor(findCoordinatorRequest.coordinatorKey)
+      val (partition, topicMetadata) = CoordinatorType.forId(findCoordinatorRequest.data.keyType) match {
+        case CoordinatorType.GROUP =>
+          val partition = groupCoordinator.partitionFor(findCoordinatorRequest.data.key)
           val metadata = getOrCreateInternalTopic(GROUP_METADATA_TOPIC_NAME, request.context.listenerName)
           (partition, metadata)
 
-        case FindCoordinatorRequest.CoordinatorType.TRANSACTION =>
-          val partition = txnCoordinator.partitionFor(findCoordinatorRequest.coordinatorKey)
+        case CoordinatorType.TRANSACTION =>
+          val partition = txnCoordinator.partitionFor(findCoordinatorRequest.data.key)
           val metadata = getOrCreateInternalTopic(TRANSACTION_STATE_TOPIC_NAME, request.context.listenerName)
           (partition, metadata)
 
@@ -1195,8 +1196,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
+        def createFindCoordinatorResponse(error: Errors, node: Node): FindCoordinatorResponse = {
+          new FindCoordinatorResponse(
+              new FindCoordinatorResponseData()
+                .setErrorCode(error.code)
+                .setErrorMessage(error.message)
+                .setNodeId(node.id)
+                .setHost(node.host)
+                .setPort(node.port)
+                .setThrottleTimeMs(requestThrottleMs))
+        }
         val responseBody = if (topicMetadata.error != Errors.NONE) {
-          new FindCoordinatorResponse(requestThrottleMs, Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+          createFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
         } else {
           val coordinatorEndpoint = topicMetadata.partitionMetadata.asScala
             .find(_.partition == partition)
@@ -1205,9 +1216,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
           coordinatorEndpoint match {
             case Some(endpoint) if !endpoint.isEmpty =>
-              new FindCoordinatorResponse(requestThrottleMs, Errors.NONE, endpoint)
+              createFindCoordinatorResponse(Errors.NONE, endpoint)
             case _ =>
-              new FindCoordinatorResponse(requestThrottleMs, Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+              createFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
           }
         }
         trace("Sending FindCoordinator response %s for correlation id %d to client %s."

@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors.MemberIdRequiredException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
@@ -42,6 +43,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
@@ -661,7 +663,10 @@ public abstract class AbstractCoordinator implements Closeable {
         // initiate the group metadata request
         log.debug("Sending FindCoordinator request to broker {}", node);
         FindCoordinatorRequest.Builder requestBuilder =
-                new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, this.groupId);
+                new FindCoordinatorRequest.Builder(
+                        new FindCoordinatorRequestData()
+                            .setKeyType(CoordinatorType.GROUP.id())
+                            .setKey(this.groupId));
         return client.send(node, requestBuilder)
                 .compose(new FindCoordinatorResponseHandler());
     }
@@ -679,12 +684,12 @@ public abstract class AbstractCoordinator implements Closeable {
                 synchronized (AbstractCoordinator.this) {
                     // use MAX_VALUE - node.id as the coordinator id to allow separate connections
                     // for the coordinator in the underlying network client layer
-                    int coordinatorConnectionId = Integer.MAX_VALUE - findCoordinatorResponse.node().id();
+                    int coordinatorConnectionId = Integer.MAX_VALUE - findCoordinatorResponse.data().nodeId();
 
                     AbstractCoordinator.this.coordinator = new Node(
                             coordinatorConnectionId,
-                            findCoordinatorResponse.node().host(),
-                            findCoordinatorResponse.node().port());
+                            findCoordinatorResponse.data().host(),
+                            findCoordinatorResponse.data().port());
                     log.info("Discovered group coordinator {}", coordinator);
                     client.tryConnect(coordinator);
                     heartbeat.resetSessionTimeout();
@@ -693,7 +698,7 @@ public abstract class AbstractCoordinator implements Closeable {
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(new GroupAuthorizationException(groupId));
             } else {
-                log.debug("Group coordinator lookup failed: {}", error.message());
+                log.debug("Group coordinator lookup failed: {}", findCoordinatorResponse.data().errorMessage());
                 future.raise(error);
             }
         }

@@ -52,6 +52,7 @@ import org.apache.kafka.common.message.ElectPreferredLeadersRequestData.TopicPar
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -84,6 +85,7 @@ import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
@@ -445,7 +447,10 @@ public class RequestResponseTest {
 
     @Test(expected = UnsupportedVersionException.class)
     public void cannotUseFindCoordinatorV0ToFindTransactionCoordinator() {
-        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.TRANSACTION, "foobar");
+        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(
+                new FindCoordinatorRequestData()
+                    .setKeyType(CoordinatorType.TRANSACTION.id)
+                    .setKey("foobar"));
         builder.build((short) 0);
     }
 
@@ -697,12 +702,16 @@ public class RequestResponseTest {
     }
 
     private FindCoordinatorRequest createFindCoordinatorRequest(int version) {
-        return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, "test-group")
+        return new FindCoordinatorRequest.Builder(
+                new FindCoordinatorRequestData()
+                    .setKeyType(CoordinatorType.GROUP.id())
+                    .setKey("test-group"))
                 .build((short) version);
     }
 
     private FindCoordinatorResponse createFindCoordinatorResponse() {
-        return new FindCoordinatorResponse(Errors.NONE, new Node(10, "host1", 2014));
+        Node node = new Node(10, "host1", 2014);
+        return FindCoordinatorResponse.prepareResponse(Errors.NONE, node);
     }
 
     private FetchRequest createFetchRequest(int version, FetchMetadata metadata, List<TopicPartition> toForget) {
