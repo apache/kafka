@@ -80,9 +80,9 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
     }
 
     val electionResults = leaderElectionStrategy match {
-      case OfflinePartitionLeaderElectionStrategy =>
+      case OfflinePartitionLeaderElectionStrategy(isUnclean) =>
         val partitionsWithUncleanLeaderElectionState = validPartitionsForElection.map { case (partition, leaderIsrAndControllerEpoch) =>
-          (partition, Some(leaderIsrAndControllerEpoch), uncleanLeaderElectionEnabled)
+          (partition, Some(leaderIsrAndControllerEpoch), isUnclean || uncleanLeaderElectionEnabled)
         }
         leaderForOffline(controllerContext, partitionsWithUncleanLeaderElectionState)
       case ReassignPartitionLeaderElectionStrategy =>

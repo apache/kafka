@@ -2437,7 +2437,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
       sendResponseCallback(partitionErrors)
     } else {
-      replicaManager.electPreferredLeaders(controller, partitions, sendResponseCallback, electionRequest.data().timeoutMs())
+      replicaManager.electLeaders(
+        controller,
+        partitions,
+        electionRequest.electionType,
+        sendResponseCallback,
+        electionRequest.data().timeoutMs()
+      )
     }
   }
 

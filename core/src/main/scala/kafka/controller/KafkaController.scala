@@ -29,7 +29,9 @@ import kafka.utils._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk._
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.ElectionType
+import org.apache.kafka.common.KafkaException
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -273,7 +275,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     maybeTriggerPartitionReassignment(controllerContext.partitionsBeingReassigned.keySet)
     topicDeletionManager.tryTopicDeletion()
     val pendingPreferredReplicaElections = fetchPendingPreferredReplicaElections()
-    onPreferredReplicaElection(pendingPreferredReplicaElections, ZkTriggered)
+    onReplicaElection(pendingPreferredReplicaElections, ElectionType.PREFERRED, ZkTriggered)
     info("Starting the controller scheduler")
     kafkaScheduler.startup()
     if (config.autoLeaderRebalanceEnable) {
@@ -492,7 +494,11 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     info(s"New partition creation callback for ${newPartitions.mkString(",")}")
     partitionStateMachine.handleStateChanges(newPartitions.toSeq, NewPartition)
     replicaStateMachine.handleStateChanges(controllerContext.replicasForPartition(newPartitions).toSeq, NewReplica)
-    partitionStateMachine.handleStateChanges(newPartitions.toSeq, OnlinePartition, Some(OfflinePartitionLeaderElectionStrategy))
+    partitionStateMachine.handleStateChanges(
+      newPartitions.toSeq,
+      OnlinePartition,
+      Some(OfflinePartitionLeaderElectionStrategy(false))
+    )
     replicaStateMachine.handleStateChanges(controllerContext.replicasForPartition(newPartitions).toSeq, OnlineReplica)
   }
 
@@ -635,38 +641,50 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     removePartitionsFromReassignedPartitions(partitionsToBeRemovedFromReassignment)
   }
 
-  sealed trait ElectionType
-  object AutoTriggered extends ElectionType
-  object ZkTriggered extends ElectionType
-  object AdminClientTriggered extends ElectionType
+  sealed trait ElectionTrigger
+  object AutoTriggered extends ElectionTrigger
+  object ZkTriggered extends ElectionTrigger
+  object AdminClientTriggered extends ElectionTrigger
 
   /**
-    * Attempt to elect the preferred replica as leader for each of the given partitions.
+    * Attempt to elect a replica as leader for each of the given partitions.
     * @param partitions The partitions to have their preferred leader elected
-    * @param electionType The election type
+    * @param ElectionType The type of election to perform
+    * @param electionTrigger The reason for tigger this election
     * @return A map of failed elections where keys are partitions which had an error and the corresponding value is
     *         the exception that was thrown.
     */
-  private def onPreferredReplicaElection(partitions: Set[TopicPartition],
-                                         electionType: ElectionType): Map[TopicPartition, Throwable] = {
-    info(s"Starting preferred replica leader election for partitions ${partitions.mkString(",")}")
+  private[this] def onReplicaElection(
+    partitions: Set[TopicPartition],
+    electionType: ElectionType,
+    electionTrigger: ElectionTrigger
+  ): Map[TopicPartition, Throwable] = {
+    info(s"Starting replica leader election ($electionType) for partitions ${partitions.mkString(",")}")
     try {
-      val results = partitionStateMachine.handleStateChanges(partitions.toSeq, OnlinePartition,
-        Some(PreferredReplicaPartitionLeaderElectionStrategy))
-      if (electionType != AdminClientTriggered) {
+      val strategy = electionType match {
+        case ElectionType.PREFERRED => PreferredReplicaPartitionLeaderElectionStrategy
+        case ElectionType.UNCLEAN => OfflinePartitionLeaderElectionStrategy(true)
+      }
+
+      val results = partitionStateMachine.handleStateChanges(
+        partitions.toSeq,
+        OnlinePartition,
+        Some(strategy)
+      )
+      if (electionTrigger != AdminClientTriggered) {
         results.foreach { case (tp, throwable) =>
           if (throwable.isInstanceOf[ControllerMovedException]) {
-            error(s"Error completing preferred replica leader election for partition $tp because controller has moved to another broker.", throwable)
+            error(s"Error completing replica leader election ($electionType) for partition $tp because controller has moved to another broker.", throwable)
             throw throwable
           } else {
-            error(s"Error completing preferred replica leader election for partition $tp", throwable)
+            error(s"Error completing replica leader election ($electionType) for partition $tp", throwable)
           }
         }
       }
       return results;
     } finally {
-      if (electionType != AdminClientTriggered)
-        removePartitionsFromPreferredReplicaElection(partitions, electionType == AutoTriggered)
+      if (electionTrigger!= AdminClientTriggered)
+        removePartitionsFromPreferredReplicaElection(partitions, electionTrigger == AutoTriggered)
     }
   }
 
@@ -912,7 +930,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     if (!isTriggeredByAutoRebalance) {
       zkClient.deletePreferredReplicaElection(controllerContext.epochZkVersion)
       // Ensure we detect future preferred replica leader elections
-      eventManager.put(PreferredReplicaLeaderElection(None))
+      eventManager.put(ReplicaLeaderElection(None, ElectionType.PREFERRED))
     }
   }
 
@@ -1011,7 +1029,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           controllerContext.partitionsBeingReassigned.isEmpty &&
           !topicDeletionManager.isTopicQueuedUpForDeletion(tp.topic) &&
           controllerContext.allTopics.contains(tp.topic))
-        onPreferredReplicaElection(candidatePartitions.toSet, AutoTriggered)
+        onReplicaElection(candidatePartitions.toSet, ElectionType.PREFERRED, AutoTriggered)
       }
     }
   }
@@ -1551,12 +1569,20 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
 
   type ElectPreferredLeadersCallback = (Map[TopicPartition, Int], Map[TopicPartition, ApiError])=>Unit
 
-  def electPreferredLeaders(partitions: Set[TopicPartition], callback: ElectPreferredLeadersCallback = { (_,_) => }): Unit =
-    eventManager.put(PreferredReplicaLeaderElection(Some(partitions), AdminClientTriggered, callback))
+  def electLeaders(
+    partitions: Set[TopicPartition],
+    electionType: ElectionType,
+    callback: ElectPreferredLeadersCallback = { (_,_) => }
+  ): Unit = {
+    eventManager.put(ReplicaLeaderElection(Some(partitions), electionType, AdminClientTriggered, callback))
+  }
 
-  case class PreferredReplicaLeaderElection(partitionsFromAdminClientOpt: Option[Set[TopicPartition]],
-                                            electionType: ElectionType = ZkTriggered,
-                                            callback: ElectPreferredLeadersCallback = (_,_) =>{}) extends PreemptableControllerEvent {
+  case class ReplicaLeaderElection(
+    partitionsFromAdminClientOpt: Option[Set[TopicPartition]],
+    electionType: ElectionType,
+    electionTrigger: ElectionTrigger = ZkTriggered,
+    callback: ElectPreferredLeadersCallback = (_,_) =>{}
+  ) extends PreemptableControllerEvent {
     override def state: ControllerState = ControllerState.ManualLeaderBalance
 
     override def handlePreempt(): Unit = {
@@ -1575,7 +1601,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       } else {
         // We need to register the watcher if the path doesn't exist in order to detect future preferred replica
         // leader elections and we get the `path exists` check for free
-        if (electionType == AdminClientTriggered || zkClient.registerZNodeChangeHandlerAndCheckExistence(preferredReplicaElectionHandler)) {
+        if (electionTrigger == AdminClientTriggered || zkClient.registerZNodeChangeHandlerAndCheckExistence(preferredReplicaElectionHandler)) {
           val partitions = partitionsFromAdminClientOpt match {
             case Some(partitions) => partitions
             case None => zkClient.getPreferredReplicaElection
@@ -1600,7 +1626,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
             currentLeader != preferredReplica
           }
 
-          val electionErrors = onPreferredReplicaElection(electablePartitions, electionType)
+          val electionErrors = onReplicaElection(electablePartitions, electionType, electionTrigger)
           val successfulPartitions = electablePartitions -- electionErrors.keySet
           val results = electionErrors.map { case (partition, ex) =>
             val apiError = if (ex.isInstanceOf[StateChangeFailedException])
@@ -1613,7 +1639,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
             partitionsBeingDeleted.map(_ -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is being deleted")) ++
             invalidPartitions.map ( tp => tp -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, s"The partition does not exist.")
             )
-          debug(s"PreferredReplicaLeaderElection waiting: $successfulPartitions, results: $results")
+          debug(s"ReplicaLeaderElection waiting: $successfulPartitions, results: $results")
           callback(successfulPartitions.map(
               tp => tp->controllerContext.partitionReplicaAssignment(tp).head).toMap,
             results)
@@ -1738,7 +1764,7 @@ object IsrChangeNotificationHandler {
 class PreferredReplicaElectionHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChangeHandler {
   override val path: String = PreferredReplicaElectionZNode.path
 
-  override def handleCreation(): Unit = eventManager.put(controller.PreferredReplicaLeaderElection(None))
+  override def handleCreation(): Unit = eventManager.put(controller.ReplicaLeaderElection(None, ElectionType.PREFERRED))
 }
 
 class ControllerChangeHandler(controller: KafkaController, eventManager: ControllerEventManager) extends ZNodeChangeHandler {

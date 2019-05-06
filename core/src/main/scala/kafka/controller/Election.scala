@@ -57,10 +57,13 @@ object Election {
    *
    * @return The election results
    */
-  def leaderForOffline(controllerContext: ControllerContext,
-                       partitionsWithUncleanLeaderElectionState: Seq[(TopicPartition, Option[LeaderIsrAndControllerEpoch], Boolean)]): Seq[ElectionResult] = {
-    partitionsWithUncleanLeaderElectionState.map { case (partition, leaderIsrAndControllerEpochOpt, uncleanLeaderElectionEnabled) =>
-      leaderForOffline(partition, leaderIsrAndControllerEpochOpt, uncleanLeaderElectionEnabled, controllerContext)
+  def leaderForOffline(
+    controllerContext: ControllerContext,
+    partitionsWithUncleanLeaderElectionState: Seq[(TopicPartition, Option[LeaderIsrAndControllerEpoch], Boolean)]
+  ): Seq[ElectionResult] = {
+    partitionsWithUncleanLeaderElectionState.map {
+      case (partition, leaderIsrAndControllerEpochOpt, uncleanLeaderElectionEnabled) =>
+        leaderForOffline(partition, leaderIsrAndControllerEpochOpt, uncleanLeaderElectionEnabled, controllerContext)
     }
   }
 

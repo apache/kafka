@@ -70,7 +70,7 @@ abstract class PartitionStateMachine(controllerContext: ControllerContext) exten
       !controllerContext.isTopicQueuedUpForDeletion(partition.topic)
     }.toSeq
 
-    handleStateChanges(partitionsToTrigger, OnlinePartition, Some(OfflinePartitionLeaderElectionStrategy))
+    handleStateChanges(partitionsToTrigger, OnlinePartition, Some(OfflinePartitionLeaderElectionStrategy(false)))
     // TODO: If handleStateChanges catches an exception, it is not enough to bail out and log an error.
     // It is important to trigger leader election for those partitions.
   }
@@ -137,8 +137,11 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     * @param partitionLeaderElectionStrategyOpt The leader election strategy if a leader election is required.
     * @return partitions and corresponding throwable for those partitions which could not transition to the given state
     */
-  override def handleStateChanges(partitions: Seq[TopicPartition], targetState: PartitionState,
-                         partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy]): Map[TopicPartition, Throwable] = {
+  override def handleStateChanges(
+    partitions: Seq[TopicPartition],
+    targetState: PartitionState,
+    partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy]
+  ): Map[TopicPartition, Throwable] = {
     if (partitions.nonEmpty) {
       try {
         controllerBrokerRequestBatch.newBatch()
@@ -365,8 +368,8 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       return (Seq.empty, Seq.empty, failedElections.toMap)
     }
     val (partitionsWithoutLeaders, partitionsWithLeaders) = partitionLeaderElectionStrategy match {
-      case OfflinePartitionLeaderElectionStrategy =>
-        val partitionsWithUncleanLeaderElectionState = collectUncleanLeaderElectionState(validPartitionsForElection)
+      case OfflinePartitionLeaderElectionStrategy(isUnclean) =>
+        val partitionsWithUncleanLeaderElectionState = collectUncleanLeaderElectionState(validPartitionsForElection, isUnclean)
         leaderForOffline(controllerContext, partitionsWithUncleanLeaderElectionState).partition(_.leaderAndIsr.isEmpty)
       case ReassignPartitionLeaderElectionStrategy =>
         leaderForReassign(controllerContext, validPartitionsForElection).partition(_.leaderAndIsr.isEmpty)
@@ -394,21 +397,38 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     (successfulUpdates.keys.toSeq, updatesToRetry, failedElections.toMap ++ failedUpdates)
   }
 
-  private def collectUncleanLeaderElectionState(leaderIsrAndControllerEpochs: Seq[(TopicPartition, LeaderIsrAndControllerEpoch)]):
-  Seq[(TopicPartition, Option[LeaderIsrAndControllerEpoch], Boolean)] = {
-    val (partitionsWithNoLiveInSyncReplicas, partitionsWithLiveInSyncReplicas) = leaderIsrAndControllerEpochs.partition { case (partition, leaderIsrAndControllerEpoch) =>
-      val liveInSyncReplicas = leaderIsrAndControllerEpoch.leaderAndIsr.isr.filter(replica => controllerContext.isReplicaOnline(replica, partition))
-      liveInSyncReplicas.isEmpty
+  private def collectUncleanLeaderElectionState(
+    leaderIsrAndControllerEpochs: Seq[(TopicPartition, LeaderIsrAndControllerEpoch)],
+    isUnclean: Boolean
+  ): Seq[(TopicPartition, Option[LeaderIsrAndControllerEpoch], Boolean)] = {
+    val (partitionsWithNoLiveInSyncReplicas, partitionsWithLiveInSyncReplicas) = leaderIsrAndControllerEpochs.partition {
+      case (partition, leaderIsrAndControllerEpoch) =>
+        val liveInSyncReplicas = leaderIsrAndControllerEpoch
+          .leaderAndIsr
+          .isr
+          .filter(replica => controllerContext.isReplicaOnline(replica, partition))
+        liveInSyncReplicas.isEmpty
     }
-    val (logConfigs, failed) = zkClient.getLogConfigs(partitionsWithNoLiveInSyncReplicas.map { case (partition, _) => partition.topic }, config.originals())
+
+    val (logConfigs, failed) = zkClient.getLogConfigs(
+      partitionsWithNoLiveInSyncReplicas.map { case (partition, _) => partition.topic },
+      config.originals()
+    )
+
     partitionsWithNoLiveInSyncReplicas.map { case (partition, leaderIsrAndControllerEpoch) =>
       if (failed.contains(partition.topic)) {
         logFailedStateChange(partition, partitionState(partition), OnlinePartition, failed(partition.topic))
         (partition, None, false)
       } else {
-        (partition, Option(leaderIsrAndControllerEpoch), logConfigs(partition.topic).uncleanLeaderElectionEnable.booleanValue())
+        (
+          partition,
+          Option(leaderIsrAndControllerEpoch),
+          isUnclean || logConfigs(partition.topic).uncleanLeaderElectionEnable.booleanValue()
+        )
       }
-    } ++ partitionsWithLiveInSyncReplicas.map { case (partition, leaderIsrAndControllerEpoch) => (partition, Option(leaderIsrAndControllerEpoch), false) }
+    } ++ partitionsWithLiveInSyncReplicas.map { case (partition, leaderIsrAndControllerEpoch) =>
+      (partition, Option(leaderIsrAndControllerEpoch), false)
+    }
   }
 
   private def logInvalidTransition(partition: TopicPartition, targetState: PartitionState): Unit = {
@@ -458,10 +478,10 @@ object PartitionLeaderElectionAlgorithms {
 }
 
 sealed trait PartitionLeaderElectionStrategy
-case object OfflinePartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
-case object ReassignPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
-case object PreferredReplicaPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
-case object ControlledShutdownPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
+final case class OfflinePartitionLeaderElectionStrategy(isUnclean: Boolean) extends PartitionLeaderElectionStrategy
+final case object ReassignPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
+final case object PreferredReplicaPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
+final case object ControlledShutdownPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
 
 sealed trait PartitionState {
   def state: Byte

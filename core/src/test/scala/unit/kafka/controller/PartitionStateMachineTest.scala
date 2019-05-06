@@ -65,7 +65,11 @@ class PartitionStateMachineTest {
 
   @Test
   def testInvalidNonexistentPartitionToOnlinePartitionTransition(): Unit = {
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(OfflinePartitionLeaderElectionStrategy))
+    partitionStateMachine.handleStateChanges(
+      partitions,
+      OnlinePartition,
+      Option(OfflinePartitionLeaderElectionStrategy(false))
+    )
     assertEquals(NonExistentPartition, partitionState(partition))
   }
 
@@ -88,7 +92,11 @@ class PartitionStateMachineTest {
       partition, leaderIsrAndControllerEpoch, Seq(brokerId), isNew = true))
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch)
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(OfflinePartitionLeaderElectionStrategy))
+    partitionStateMachine.handleStateChanges(
+      partitions,
+      OnlinePartition,
+      Option(OfflinePartitionLeaderElectionStrategy(false))
+    )
     EasyMock.verify(mockZkClient, mockControllerBrokerRequestBatch)
     assertEquals(OnlinePartition, partitionState(partition))
   }
@@ -104,7 +112,11 @@ class PartitionStateMachineTest {
       .andThrow(new ZooKeeperClientException("test"))
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch)
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(OfflinePartitionLeaderElectionStrategy))
+    partitionStateMachine.handleStateChanges(
+      partitions,
+      OnlinePartition,
+      Option(OfflinePartitionLeaderElectionStrategy(false))
+    )
     EasyMock.verify(mockZkClient, mockControllerBrokerRequestBatch)
     assertEquals(NewPartition, partitionState(partition))
   }
@@ -120,7 +132,11 @@ class PartitionStateMachineTest {
       .andReturn(Seq(CreateResponse(Code.NODEEXISTS, null, Some(partition), null, ResponseMetadata(0, 0))))
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch)
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(OfflinePartitionLeaderElectionStrategy))
+    partitionStateMachine.handleStateChanges(
+      partitions,
+      OnlinePartition,
+      Option(OfflinePartitionLeaderElectionStrategy(false))
+    )
     EasyMock.verify(mockZkClient, mockControllerBrokerRequestBatch)
     assertEquals(NewPartition, partitionState(partition))
   }
@@ -251,7 +267,11 @@ class PartitionStateMachineTest {
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch)
 
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(OfflinePartitionLeaderElectionStrategy))
+    partitionStateMachine.handleStateChanges(
+      partitions,
+      OnlinePartition,
+      Option(OfflinePartitionLeaderElectionStrategy(false))
+    )
     EasyMock.verify(mockZkClient, mockControllerBrokerRequestBatch)
     assertEquals(OnlinePartition, partitionState(partition))
   }
@@ -272,7 +292,11 @@ class PartitionStateMachineTest {
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch)
 
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(OfflinePartitionLeaderElectionStrategy))
+    partitionStateMachine.handleStateChanges(
+      partitions,
+      OnlinePartition,
+      Option(OfflinePartitionLeaderElectionStrategy(false))
+    )
     EasyMock.verify(mockZkClient, mockControllerBrokerRequestBatch)
     assertEquals(OfflinePartition, partitionState(partition))
   }
@@ -295,7 +319,11 @@ class PartitionStateMachineTest {
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
     EasyMock.replay(mockZkClient, mockControllerBrokerRequestBatch)
 
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Option(OfflinePartitionLeaderElectionStrategy))
+    partitionStateMachine.handleStateChanges(
+      partitions,
+      OnlinePartition,
+      Option(OfflinePartitionLeaderElectionStrategy(false))
+    )
     EasyMock.verify(mockZkClient, mockControllerBrokerRequestBatch)
     assertEquals(OfflinePartition, partitionState(partition))
   }
@@ -366,7 +394,7 @@ class PartitionStateMachineTest {
     partitionStateMachine.handleStateChanges(partitions, OfflinePartition)
     assertEquals(s"There should be ${partitions.size} offline partition(s)", partitions.size, controllerContext.offlinePartitionCount)
 
-    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Some(OfflinePartitionLeaderElectionStrategy))
+    partitionStateMachine.handleStateChanges(partitions, OnlinePartition, Some(OfflinePartitionLeaderElectionStrategy(false)))
     assertEquals(s"There should be no offline partition(s)", 0, controllerContext.offlinePartitionCount)
   }
 

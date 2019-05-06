@@ -32,20 +32,21 @@ import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.ElectionType
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.{LogDirInfo, ReplicaInfo}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -1536,10 +1537,13 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def electPreferredLeaders(controller: KafkaController,
-                            partitions: Set[TopicPartition],
-                            responseCallback: Map[TopicPartition, ApiError] => Unit,
-                            requestTimeout: Long): Unit = {
+  def electLeaders(
+    controller: KafkaController,
+    partitions: Set[TopicPartition],
+    electionType: ElectionType,
+    responseCallback: Map[TopicPartition, ApiError] => Unit,
+    requestTimeout: Long
+  ): Unit = {
 
     val deadline = time.milliseconds() + requestTimeout
 
@@ -1559,6 +1563,6 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
 
-    controller.electPreferredLeaders(partitions, electionCallback)
+    controller.electLeaders(partitions, electionType, electionCallback)
   }
 }
