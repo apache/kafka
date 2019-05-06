@@ -37,6 +37,9 @@ public class ListSerializer<T> implements Serializer<List<T>> {
 
     @Override
     public byte[] serialize(String topic, List<T> data) {
+        if (data == null || data.size() == 0) {
+            return null;
+        }
         final int size = data.size();
         final ByteArrayOutputStream baos = new ByteArrayOutputStream();
         final DataOutputStream out = new DataOutputStream(baos);
