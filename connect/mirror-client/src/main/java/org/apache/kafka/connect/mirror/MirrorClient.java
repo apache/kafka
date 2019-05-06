@@ -121,6 +121,20 @@ public class MirrorClient implements AutoCloseable {
             .collect(Collectors.toSet());
     }
 
+    public Set<String> upstreamTopics() throws InterruptedException {
+        return remoteTopics().stream()
+            .map(x -> replicationPolicy.upstreamTopic(x))
+            .distinct()
+            .collect(Collectors.toSet());
+    }
+
+    public Set<String> upstreamTopics(String source) throws InterruptedException {
+        return remoteTopics(source).stream()
+            .map(x -> replicationPolicy.upstreamTopic(x))
+            .distinct()
+            .collect(Collectors.toSet());
+    }
+
     public Map<TopicPartition, OffsetAndMetadata> remoteConsumerOffsets(String consumerGroupId,
             String remoteClusterAlias, Duration timeout)
             throws InterruptedException, TimeoutException {

@@ -147,4 +147,29 @@ public class MirrorClientTest {
         assertFalse(sources.contains(null));
     }
 
+    @Test
+    public void remoteTopicsTest() throws InterruptedException {
+        MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "topic3",
+            "source1.topic4", "source1.source2.topic5", "source3.source4.source5.topic6"));
+        Set<String> remoteTopics = client.remoteTopics();
+        assertFalse(remoteTopics.contains("topic1"));
+        assertFalse(remoteTopics.contains("topic2"));
+        assertFalse(remoteTopics.contains("topic3"));
+        assertTrue(remoteTopics.contains("source1.topic4"));
+        assertTrue(remoteTopics.contains("source1.source2.topic5"));
+        assertTrue(remoteTopics.contains("source3.source4.source5.topic6"));
+    }
+ 
+    @Test
+    public void upstreamTopicsTest() throws InterruptedException {
+        MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "topic3",
+            "source1.topic4", "source1.source2.topic5", "source3.source4.source5.topic6"));
+        Set<String> upstreamTopics = client.upstreamTopics("source1");
+        assertFalse(upstreamTopics.contains("topic1"));
+        assertFalse(upstreamTopics.contains("topic2"));
+        assertFalse(upstreamTopics.contains("topic3"));
+        assertTrue(upstreamTopics.contains("topic4"));
+        assertTrue(upstreamTopics.contains("source2.topic5"));
+        assertFalse(upstreamTopics.contains("source4.source5.topic6"));
+    }
 }
