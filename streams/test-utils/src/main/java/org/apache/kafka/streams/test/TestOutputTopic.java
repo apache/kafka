@@ -26,13 +26,14 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * TestOutputTopic is used to read records from topic in {@link TopologyTestDriver}.
  * This class makes it easier to write tests with {@link TopologyTestDriver}.
  * To use {@code TestOutputTopic} create new class with topicName and correct Serdes or Deserializers
  * In actual test code, you can read message values, keys, {@link KeyValue} or {@link ProducerRecord}
-  * without needing to pass serdes each time You need to have own TestOutputTopic for each topic.
+ * without needing to pass serdes each time You need to have own TestOutputTopic for each topic.
  * <p>
  * If you need to test key, value and headers, use {@link #readRecord()} methods.
  * Using {@link #readKeyValue()} you get directly KeyValue, but have no access to headers any more
@@ -63,21 +64,39 @@ public class TestOutputTopic<K, V> {
     @SuppressWarnings({"WeakerAccess"})
     protected final Deserializer<V> valueDeserializer;
 
+    /**
+     * Create a test output topic to read messages from
+     *
+     * @param driver     TopologyTestDriver to use
+     * @param topicName  the topic name used
+     * @param keySerde   the key deserializer
+     * @param valueSerde the value deserializer
+     */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public TestOutputTopic(final TopologyTestDriver driver,
-                           final String topic,
+                           final String topicName,
                            final Serde<K> keySerde,
                            final Serde<V> valueSerde) {
-        this(driver, topic, keySerde.deserializer(), valueSerde.deserializer());
+        this(driver, topicName, keySerde.deserializer(), valueSerde.deserializer());
     }
 
+    /**
+     * Create a test output topic to read messages from
+     *
+     * @param driver            TopologyTestDriver to use
+     * @param topicName         the topic name used
+     * @param keyDeserializer   the key deserializer
+     * @param valueDeserializer the value deserializer
+     */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public TestOutputTopic(final TopologyTestDriver driver,
-                           final String topic,
+                           final String topicName,
                            final Deserializer<K> keyDeserializer,
                            final Deserializer<V> valueDeserializer) {
+        Objects.requireNonNull(driver, "TopologyTestDriver cannot be null");
+        Objects.requireNonNull(topicName, "topicName cannot be null");
         this.driver = driver;
-        this.topic = topic;
+        this.topic = topicName;
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
     }
@@ -163,5 +182,10 @@ public class TestOutputTopic<K, V> {
             output.add(outputValue);
         }
         return output;
+    }
+
+    @Override
+    public String toString() {
+        return "TestOutputTopic{topic='" + topic + "'}";
     }
 }

@@ -23,6 +23,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.TopologyTestDriver;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -54,6 +55,9 @@ public class TestInputTopic<K, V> {
     protected final TopologyTestDriver driver;
     @SuppressWarnings({"WeakerAccess"})
     protected final ConsumerRecordFactory<K, V> factory;
+    @SuppressWarnings({"WeakerAccess"})
+    protected final String topic;
+
 
     /**
      * Create a test input topic to pipe messages in.
@@ -70,8 +74,7 @@ public class TestInputTopic<K, V> {
                           final String topicName,
                           final Serializer<K> keySerializer,
                           final Serializer<V> valueSerializer) {
-        this.driver = driver;
-        this.factory = new ConsumerRecordFactory<>(topicName, keySerializer, valueSerializer);
+        this(driver, topicName, new ConsumerRecordFactory<>(topicName, keySerializer, valueSerializer));
     }
 
     /**
@@ -90,8 +93,7 @@ public class TestInputTopic<K, V> {
                           final Serializer<K> keySerializer,
                           final Serializer<V> valueSerializer,
                           final long startTimestampMs) {
-        this.driver = driver;
-        this.factory = new ConsumerRecordFactory<>(topicName, keySerializer, valueSerializer, startTimestampMs);
+        this(driver, topicName, new ConsumerRecordFactory<>(topicName, keySerializer, valueSerializer, startTimestampMs));
     }
 
     /**
@@ -111,8 +113,7 @@ public class TestInputTopic<K, V> {
                           final Serializer<V> valueSerializer,
                           final long startTimestampMs,
                           final long autoAdvanceMs) {
-        this.driver = driver;
-        this.factory = new ConsumerRecordFactory<>(topicName, keySerializer, valueSerializer, startTimestampMs, autoAdvanceMs);
+        this(driver, topicName, new ConsumerRecordFactory<>(topicName, keySerializer, valueSerializer, startTimestampMs, autoAdvanceMs));
     }
 
     /**
@@ -130,8 +131,7 @@ public class TestInputTopic<K, V> {
                           final String topicName,
                           final Serde<K> keySerde,
                           final Serde<V> valueSerde) {
-        this.driver = driver;
-        this.factory = new ConsumerRecordFactory<>(topicName, keySerde.serializer(), valueSerde.serializer());
+        this(driver, topicName, keySerde.serializer(), valueSerde.serializer());
     }
 
     /**
@@ -150,8 +150,7 @@ public class TestInputTopic<K, V> {
                           final Serde<K> keySerde,
                           final Serde<V> valueSerde,
                           final long startTimestampMs) {
-        this.driver = driver;
-        this.factory = new ConsumerRecordFactory<>(topicName, keySerde.serializer(), valueSerde.serializer(), startTimestampMs);
+        this(driver, topicName, keySerde.serializer(), valueSerde.serializer(), startTimestampMs);
     }
 
     /**
@@ -171,8 +170,27 @@ public class TestInputTopic<K, V> {
                           final Serde<V> valueSerde,
                           final long startTimestampMs,
                           final long autoAdvanceMs) {
+        this(driver, topicName, keySerde.serializer(), valueSerde.serializer(), startTimestampMs, autoAdvanceMs);
+    }
+
+    /**
+     * Create a test input topic to pipe messages in.
+     * Uses provided factory, Validate inputs
+     *
+     * @param driver    TopologyTestDriver to use
+     * @param topicName the topic name used
+     * @param factory   ConsumerRecordFactory to use
+     */
+    @SuppressWarnings("WeakerAccess")
+    protected TestInputTopic(final TopologyTestDriver driver,
+                             final String topicName,
+                             ConsumerRecordFactory<K, V> factory) {
+        Objects.requireNonNull(driver, "TopologyTestDriver cannot be null");
+        Objects.requireNonNull(topicName, "topicName cannot be null");
+        Objects.requireNonNull(factory, "ConsumerRecordFactory cannot be null");
         this.driver = driver;
-        this.factory = new ConsumerRecordFactory<>(topicName, keySerde.serializer(), valueSerde.serializer(), startTimestampMs, autoAdvanceMs);
+        this.topic = topicName;
+        this.factory = factory;
     }
 
     /**
@@ -292,7 +310,7 @@ public class TestInputTopic<K, V> {
     public void pipeKeyValueList(List<KeyValue<K, V>> keyValues,
                                  final long startTimestamp,
                                  final long advanceMs) {
-        driver.pipeInput(factory.create(keyValues));
+        driver.pipeInput(factory.create(keyValues, startTimestamp, advanceMs));
     }
 
     /**
@@ -308,7 +326,11 @@ public class TestInputTopic<K, V> {
                               final long startTimestamp,
                               final long advanceMs) {
         final List<KeyValue<K, V>> keyValues = values.stream().map(v -> new KeyValue<K, V>(null, v)).collect(Collectors.toList());
-        pipeKeyValueList(keyValues);
+        pipeKeyValueList(keyValues, startTimestamp, advanceMs);
     }
 
+    @Override
+    public String toString() {
+        return "TestInputTopic{topic='" + topic + "'}";
+    }
 }
