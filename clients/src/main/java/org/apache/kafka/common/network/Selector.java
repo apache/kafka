@@ -30,6 +30,7 @@ import org.apache.kafka.common.metrics.stats.SampledStat;
 import org.apache.kafka.common.metrics.stats.Total;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -52,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * A nioSelector interface for doing non-blocking multi-connection network I/O.
@@ -358,15 +360,24 @@ public class Selector implements Selectable, AutoCloseable {
     @Override
     public void close() {
         List<String> connections = new ArrayList<>(channels.keySet());
-        for (String id : connections)
-            close(id);
         try {
-            this.nioSelector.close();
-        } catch (IOException | SecurityException e) {
-            log.error("Exception closing nioSelector:", e);
+            for (String id : connections)
+                close(id);
+        } finally {
+            // If there is any exception thrown in close(id), we should still be able
+            // to close the remaining objects, especially the sensors because keeping
+            // the sensors may lead to failure to start up the ReplicaFetcherThread if
+            // the old sensors with the same names has not yet been cleaned up.
+            AtomicReference<Throwable> firstException = new AtomicReference<>();
+            Utils.closeQuietly(nioSelector, "nioSelector", firstException);
+            Utils.closeQuietly(sensors, "sensors", firstException);
+            Utils.closeQuietly(channelBuilder, "channelBuilder", firstException);
+            Throwable exception = firstException.get();
+            if (exception instanceof RuntimeException && !(exception instanceof SecurityException)) {
+                throw (RuntimeException) exception;
+            }
+
         }
-        sensors.close();
-        channelBuilder.close();
     }
 
     /**

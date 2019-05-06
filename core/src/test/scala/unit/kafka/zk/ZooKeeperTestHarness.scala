@@ -22,7 +22,6 @@ import javax.security.auth.login.Configuration
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.junit.{After, AfterClass, Before, BeforeClass}
 import org.junit.Assert._
-import org.scalatest.junit.JUnitSuite
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.test.IntegrationTest
 import org.junit.experimental.categories.Category
@@ -37,7 +36,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 
 @Category(Array(classOf[IntegrationTest]))
-abstract class ZooKeeperTestHarness extends JUnitSuite with Logging {
+abstract class ZooKeeperTestHarness extends Logging {
 
   val zkConnectionTimeout = 10000
   val zkSessionTimeout = 15000 // Allows us to avoid ZK session expiration due to GC up to 2/3 * 15000ms = 10 secs

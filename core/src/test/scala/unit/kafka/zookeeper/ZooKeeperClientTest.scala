@@ -32,6 +32,7 @@ import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.{CreateMode, WatchedEvent, ZooDefs}
 import org.junit.Assert.{assertArrayEquals, assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.{fail, intercept}
 
 import scala.collection.JavaConverters._
 

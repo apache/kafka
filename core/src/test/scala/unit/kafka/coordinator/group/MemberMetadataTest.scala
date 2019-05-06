@@ -20,10 +20,10 @@ import java.util.Arrays
 
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
 
-class MemberMetadataTest extends JUnitSuite {
+class MemberMetadataTest {
   val groupId = "groupId"
+  val groupInstanceId = Some("groupInstanceId")
   val clientId = "clientId"
   val clientHost = "clientHost"
   val memberId = "memberId"
@@ -36,7 +36,7 @@ class MemberMetadataTest extends JUnitSuite {
   def testMatchesSupportedProtocols() {
     val protocols = List(("range", Array.empty[Byte]))
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
     assertTrue(member.matches(protocols))
     assertFalse(member.matches(List(("range", Array[Byte](0)))))
@@ -48,7 +48,7 @@ class MemberMetadataTest extends JUnitSuite {
   def testVoteForPreferredProtocol() {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
     assertEquals("range", member.vote(Set("range", "roundrobin")))
     assertEquals("roundrobin", member.vote(Set("blah", "roundrobin")))
@@ -58,7 +58,7 @@ class MemberMetadataTest extends JUnitSuite {
   def testMetadata() {
     val protocols = List(("range", Array[Byte](0)), ("roundrobin", Array[Byte](1)))
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
     assertTrue(Arrays.equals(Array[Byte](0), member.metadata("range")))
     assertTrue(Arrays.equals(Array[Byte](1), member.metadata("roundrobin")))
@@ -68,7 +68,7 @@ class MemberMetadataTest extends JUnitSuite {
   def testMetadataRaisesOnUnsupportedProtocol() {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
     member.metadata("blah")
     fail()
@@ -78,11 +78,19 @@ class MemberMetadataTest extends JUnitSuite {
   def testVoteRaisesOnNoSupportedProtocols() {
     val protocols = List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte]))
 
-    val member = new MemberMetadata(memberId, groupId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, protocols)
     member.vote(Set("blah"))
     fail()
   }
 
+  @Test
+  def testHasValidGroupInstanceId() {
+    val protocols = List(("range", Array[Byte](0)), ("roundrobin", Array[Byte](1)))
 
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, protocols)
+    assertTrue(member.isStaticMember)
+    assertEquals(groupInstanceId, member.groupInstanceId)
+  }
 }

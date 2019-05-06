@@ -44,6 +44,7 @@ import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.junit.rules.Timeout
 import org.junit.Assert._
+import org.scalatest.Assertions.intercept
 
 import scala.util.Random
 import scala.collection.JavaConverters._
@@ -1587,8 +1588,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 }
 
 object AdminClientIntegrationTest {
-
-  import org.scalatest.Assertions._
 
   def checkValidAlterConfigs(client: AdminClient, topicResource1: ConfigResource, topicResource2: ConfigResource): Unit = {
     // Alter topics

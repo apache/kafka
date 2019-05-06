@@ -31,6 +31,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
 import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 

@@ -16,17 +16,64 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
-public interface TimeOrderedKeyValueBuffer extends StateStore {
-    void evictWhile(final Supplier<Boolean> predicate, final Consumer<KeyValue<Bytes, ContextualRecord>> callback);
+public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
+    final class Eviction<K, V> {
+        private final K key;
+        private final V value;
+        private final ProcessorRecordContext recordContext;
 
-    void put(final long time, final Bytes key, final ContextualRecord value);
+        Eviction(final K key, final V value, final ProcessorRecordContext recordContext) {
+            this.key = key;
+            this.value = value;
+            this.recordContext = recordContext;
+        }
+
+        public K key() {
+            return key;
+        }
+
+        public V value() {
+            return value;
+        }
+
+        public ProcessorRecordContext recordContext() {
+            return recordContext;
+        }
+
+        @Override
+        public String toString() {
+            return "Eviction{key=" + key + ", value=" + value + ", recordContext=" + recordContext + '}';
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            final Eviction<?, ?> eviction = (Eviction<?, ?>) o;
+            return Objects.equals(key, eviction.key) &&
+                Objects.equals(value, eviction.value) &&
+                Objects.equals(recordContext, eviction.recordContext);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(key, value, recordContext);
+        }
+    }
+
+    void setSerdesIfNull(final Serde<K> keySerde, final Serde<V> valueSerde);
+
+    void evictWhile(final Supplier<Boolean> predicate, final Consumer<Eviction<K, V>> callback);
+
+    void put(long time, K key, V value, ProcessorRecordContext recordContext);
 
     int numRecords();
 
