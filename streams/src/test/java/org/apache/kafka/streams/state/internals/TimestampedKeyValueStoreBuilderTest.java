@@ -24,7 +24,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.easymock.EasyMock;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.easymock.MockType;
@@ -35,6 +34,9 @@ import org.junit.runner.RunWith;
 
 import java.util.Collections;
 
+import static org.easymock.EasyMock.expect;
+import static org.easymock.EasyMock.replay;
+import static org.easymock.EasyMock.reset;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 
@@ -49,9 +51,9 @@ public class TimestampedKeyValueStoreBuilderTest {
 
     @Before
     public void setUp() {
-        EasyMock.expect(supplier.get()).andReturn(inner);
-        EasyMock.expect(supplier.name()).andReturn("name");
-        EasyMock.replay(supplier);
+        expect(supplier.get()).andReturn(inner);
+        expect(supplier.name()).andReturn("name");
+        replay(supplier);
         builder = new TimestampedKeyValueStoreBuilder<>(
             supplier,
             Serdes.String(),
@@ -112,6 +114,34 @@ public class TimestampedKeyValueStoreBuilderTest {
         assertThat(caching, instanceOf(CachingKeyValueStore.class));
         assertThat(changeLogging, instanceOf(ChangeLoggingTimestampedKeyValueBytesStore.class));
         assertThat(changeLogging.wrapped(), CoreMatchers.equalTo(inner));
+    }
+
+    @Test
+    public void shouldNotWrapTimestampedByteStore() {
+        reset(supplier);
+        expect(supplier.get()).andReturn(new RocksDBTimestampedStore("name"));
+        expect(supplier.name()).andReturn("name");
+        replay(supplier);
+
+        final TimestampedKeyValueStore<String, String> store = builder
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
+        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(RocksDBTimestampedStore.class));
+    }
+
+    @Test
+    public void shouldWrapPlainKeyValueStoreAsTimestampStore() {
+        reset(supplier);
+        expect(supplier.get()).andReturn(new RocksDBStore("name"));
+        expect(supplier.name()).andReturn("name");
+        replay(supplier);
+
+        final TimestampedKeyValueStore<String, String> store = builder
+            .withLoggingDisabled()
+            .withCachingDisabled()
+            .build();
+        assertThat(((WrappedStateStore) store).wrapped(), instanceOf(KeyValueToTimestampedKeyValueByteStoreAdapter.class));
     }
 
     @SuppressWarnings("all")

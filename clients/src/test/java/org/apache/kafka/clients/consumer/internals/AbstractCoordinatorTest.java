@@ -32,6 +32,7 @@ import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.JoinGroupResponse;
+import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.utils.LogContext;
@@ -47,6 +48,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -81,14 +83,16 @@ public class AbstractCoordinatorTest {
     private DummyCoordinator coordinator;
 
     private void setupCoordinator() {
-        setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS);
+        setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS,
+            Optional.empty());
     }
 
     private void setupCoordinator(int retryBackoffMs) {
-        setupCoordinator(retryBackoffMs, REBALANCE_TIMEOUT_MS);
+        setupCoordinator(retryBackoffMs, REBALANCE_TIMEOUT_MS,
+            Optional.empty());
     }
 
-    private void setupCoordinator(int retryBackoffMs, int rebalanceTimeoutMs) {
+    private void setupCoordinator(int retryBackoffMs, int rebalanceTimeoutMs, Optional<String> groupInstanceId) {
         LogContext logContext = new LogContext();
         this.mockTime = new MockTime();
         ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, 60 * 60 * 1000L,
@@ -103,7 +107,7 @@ public class AbstractCoordinatorTest {
         mockClient.updateMetadata(TestUtils.metadataUpdateWith(1, emptyMap()));
         this.node = metadata.fetch().nodes().get(0);
         this.coordinatorNode = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
-        this.coordinator = new DummyCoordinator(consumerClient, metrics, mockTime, rebalanceTimeoutMs, retryBackoffMs);
+        this.coordinator = new DummyCoordinator(consumerClient, metrics, mockTime, rebalanceTimeoutMs, retryBackoffMs, groupInstanceId);
     }
 
     @Test
@@ -171,7 +175,8 @@ public class AbstractCoordinatorTest {
 
     @Test
     public void testJoinGroupRequestTimeout() {
-        setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS);
+        setupCoordinator(RETRY_BACKOFF_MS, REBALANCE_TIMEOUT_MS,
+            Optional.empty());
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
@@ -188,7 +193,8 @@ public class AbstractCoordinatorTest {
     public void testJoinGroupRequestMaxTimeout() {
         // Ensure we can handle the maximum allowed rebalance timeout
 
-        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE);
+        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE,
+            Optional.empty());
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         coordinator.ensureCoordinatorReady(mockTime.timer(0));
 
@@ -232,6 +238,83 @@ public class AbstractCoordinatorTest {
         assertTrue(coordinator.hasMatchingGenerationId(generation));
         future = coordinator.sendJoinGroupRequest();
         assertTrue(consumerClient.poll(future, mockTime.timer(REBALANCE_TIMEOUT_MS)));
+    }
+
+    @Test
+    public void testJoinGroupRequestWithMemberIdMisMatch() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        final String memberId = "memberId";
+        final int generation = -1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.FENCED_INSTANCE_ID));
+
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
+        assertEquals(Errors.FENCED_INSTANCE_ID.message(), future.exception().getMessage());
+        // Make sure the exception is fatal.
+        assertFalse(future.isRetriable());
+    }
+
+    @Test
+    public void testJoinGroupRequestWithGroupInstanceIdNotFound() {
+        setupCoordinator();
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        coordinator.ensureCoordinatorReady(mockTime.timer(0));
+
+        final String memberId = "memberId";
+        final int generation = -1;
+
+        mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID));
+
+        RequestFuture<ByteBuffer> future = coordinator.sendJoinGroupRequest();
+
+        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
+        assertEquals(Errors.UNKNOWN_MEMBER_ID.message(), future.exception().getMessage());
+        assertTrue(coordinator.rejoinNeededOrPending());
+        assertTrue(coordinator.hasMatchingGenerationId(generation));
+    }
+
+    @Test
+    public void testLeaveGroupSentWithGroupInstanceIdUnSet() {
+        checkLeaveGroupRequestSent(Optional.empty());
+        checkLeaveGroupRequestSent(Optional.of("groupInstanceId"));
+    }
+
+    private void checkLeaveGroupRequestSent(Optional<String> groupInstanceId) {
+        setupCoordinator(RETRY_BACKOFF_MS, Integer.MAX_VALUE, groupInstanceId);
+
+        mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
+        mockClient.prepareResponse(joinGroupFollowerResponse(1, "memberId", "leaderId", Errors.NONE));
+        mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
+
+        final RuntimeException e = new RuntimeException();
+
+        // raise the error when the coordinator tries to send leave group request.
+        mockClient.prepareResponse(new MockClient.RequestMatcher() {
+            @Override
+            public boolean matches(AbstractRequest body) {
+                if (body instanceof LeaveGroupRequest)
+                    throw e;
+                return false;
+            }
+        }, heartbeatResponse(Errors.UNKNOWN_SERVER_ERROR));
+
+        try {
+            coordinator.ensureActiveGroup();
+            coordinator.close();
+            if (coordinator.isDynamicMember()) {
+                fail("Expected leavegroup to raise an error.");
+            }
+        } catch (RuntimeException exception) {
+            if (coordinator.isDynamicMember()) {
+                assertEquals(exception, e);
+            } else {
+                fail("Coordinator with group.instance.id set shouldn't send leave group request.");
+            }
+        }
     }
 
     @Test
@@ -723,9 +806,10 @@ public class AbstractCoordinatorTest {
                                 Metrics metrics,
                                 Time time,
                                 int rebalanceTimeoutMs,
-                                int retryBackoffMs) {
-            super(new LogContext(), client, GROUP_ID, rebalanceTimeoutMs, SESSION_TIMEOUT_MS,
-                    HEARTBEAT_INTERVAL_MS, metrics, METRIC_GROUP_PREFIX, time, retryBackoffMs, false);
+                                int retryBackoffMs,
+                                Optional<String> groupInstanceId) {
+            super(new LogContext(), client, GROUP_ID, groupInstanceId, rebalanceTimeoutMs,
+                    SESSION_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS, metrics, METRIC_GROUP_PREFIX, time, retryBackoffMs, !groupInstanceId.isPresent());
         }
 
         @Override

@@ -282,6 +282,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setGroupId("test-join-group")
               .setSessionTimeoutMs(200)
               .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+              .setGroupInstanceId(null)
               .setProtocolType("consumer")
               .setProtocols(
                 new JoinGroupRequestData.JoinGroupRequestProtocolSet(

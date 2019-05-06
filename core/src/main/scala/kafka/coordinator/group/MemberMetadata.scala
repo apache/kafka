@@ -22,8 +22,8 @@ import java.util
 import kafka.utils.nonthreadsafe
 import org.apache.kafka.common.protocol.Errors
 
-
 case class MemberSummary(memberId: String,
+                         groupInstanceId: Option[String],
                          clientId: String,
                          clientHost: String,
                          metadata: Array[Byte],
@@ -54,8 +54,9 @@ private object MemberMetadata {
  *                            and the group transitions to stable
  */
 @nonthreadsafe
-private[group] class MemberMetadata(val memberId: String,
+private[group] class MemberMetadata(var memberId: String,
                                     val groupId: String,
+                                    val groupInstanceId: Option[String],
                                     val clientId: String,
                                     val clientHost: String,
                                     val rebalanceTimeoutMs: Int,
@@ -69,6 +70,7 @@ private[group] class MemberMetadata(val memberId: String,
   var latestHeartbeat: Long = -1
   var isLeaving: Boolean = false
   var isNew: Boolean = false
+  val isStaticMember: Boolean = groupInstanceId.isDefined
 
   def isAwaitingJoin = awaitingJoinCallback != null
 
@@ -107,11 +109,11 @@ private[group] class MemberMetadata(val memberId: String,
   }
 
   def summary(protocol: String): MemberSummary = {
-    MemberSummary(memberId, clientId, clientHost, metadata(protocol), assignment)
+    MemberSummary(memberId, groupInstanceId, clientId, clientHost, metadata(protocol), assignment)
   }
 
   def summaryNoMetadata(): MemberSummary = {
-    MemberSummary(memberId, clientId, clientHost, Array.empty[Byte], Array.empty[Byte])
+    MemberSummary(memberId, groupInstanceId, clientId, clientHost, Array.empty[Byte], Array.empty[Byte])
   }
 
   /**
@@ -129,6 +131,7 @@ private[group] class MemberMetadata(val memberId: String,
   override def toString: String = {
     "MemberMetadata(" +
       s"memberId=$memberId, " +
+      s"groupInstanceId=$groupInstanceId, " +
       s"clientId=$clientId, " +
       s"clientHost=$clientHost, " +
       s"sessionTimeoutMs=$sessionTimeoutMs, " +

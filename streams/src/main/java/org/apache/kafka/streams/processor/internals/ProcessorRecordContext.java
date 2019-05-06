@@ -29,11 +29,11 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class ProcessorRecordContext implements RecordContext {
 
-    long timestamp;
-    final long offset;
-    final String topic;
-    final int partition;
-    final Headers headers;
+    private long timestamp;
+    private final long offset;
+    private final String topic;
+    private final int partition;
+    private final Headers headers;
 
     public ProcessorRecordContext(final long timestamp,
                                   final long offset,
@@ -46,13 +46,6 @@ public class ProcessorRecordContext implements RecordContext {
         this.topic = topic;
         this.partition = partition;
         this.headers = headers;
-    }
-
-    public ProcessorRecordContext(final long timestamp,
-                                  final long offset,
-                                  final int partition,
-                                  final String topic) {
-        this(timestamp, offset, partition, topic, null);
     }
 
     public void setTimestamp(final long timestamp) {
@@ -225,9 +218,13 @@ public class ProcessorRecordContext implements RecordContext {
             Objects.equals(headers, that.headers);
     }
 
+    /**
+     * Equality is implemented in support of tests, *not* for use in Hash collections, since this class is mutable.
+     */
+    @Deprecated
     @Override
     public int hashCode() {
-        return Objects.hash(timestamp, offset, topic, partition, headers);
+        throw new UnsupportedOperationException("ProcessorRecordContext is unsafe for use in Hash collections");
     }
 
     @Override

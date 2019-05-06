@@ -37,6 +37,7 @@ import org.apache.kafka.common.utils.Sanitizer
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.Test
+import org.scalatest.Assertions.intercept
 
 import scala.collection.{Seq, mutable}
 import scala.collection.JavaConverters._

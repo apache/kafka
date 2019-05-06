@@ -14,23 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.common.errors;
 
-import java.nio.ByteBuffer;
+public class FencedInstanceIdException extends ApiException {
+    private static final long serialVersionUID = 1L;
 
-import static org.apache.kafka.clients.consumer.ConsumerRecord.NO_TIMESTAMP;
-
-class StoreProxyUtils {
-
-    static byte[] getValueWithUnknownTimestamp(final byte[] rawValue) {
-        if (rawValue == null) {
-            return null;
-        }
-        return ByteBuffer
-            .allocate(8 + rawValue.length)
-            .putLong(NO_TIMESTAMP)
-            .put(rawValue)
-            .array();
+    public FencedInstanceIdException(String message) {
+        super(message);
     }
 
+    public FencedInstanceIdException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

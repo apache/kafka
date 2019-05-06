@@ -709,7 +709,7 @@ public class TransactionManager {
         lookupCoordinator(request.coordinatorType(), request.coordinatorKey());
     }
 
-    void setInFlightTransactionalRequestCorrelationId(int correlationId) {
+    void setInFlightCorrelationId(int correlationId) {
         inFlightRequestCorrelationId = correlationId;
     }
 

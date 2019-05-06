@@ -22,13 +22,14 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
+import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer.Eviction;
 import org.apache.kafka.test.MockInternalProcessorContext;
 import org.apache.kafka.test.MockInternalProcessorContext.MockRecordCollector;
 import org.apache.kafka.test.TestUtils;
@@ -55,7 +56,7 @@ import static org.hamcrest.Matchers.is;
 import static org.junit.Assert.fail;
 
 @RunWith(Parameterized.class)
-public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> {
+public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<String, String>> {
     private static final RecordHeaders V_1_CHANGELOG_HEADERS =
         new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
 
@@ -69,9 +70,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         return singletonList(
             new Object[] {
                 "in-memory buffer",
-                (Function<String, InMemoryTimeOrderedKeyValueBuffer>) name ->
-                    (InMemoryTimeOrderedKeyValueBuffer) new InMemoryTimeOrderedKeyValueBuffer
-                        .Builder(name)
+                (Function<String, InMemoryTimeOrderedKeyValueBuffer<String, String>>) name ->
+                    new InMemoryTimeOrderedKeyValueBuffer
+                        .Builder<>(name, Serdes.String(), Serdes.String())
                         .build()
             }
         );
@@ -96,7 +97,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
     }
 
 
-    private static void cleanup(final MockInternalProcessorContext context, final TimeOrderedKeyValueBuffer buffer) {
+    private static void cleanup(final MockInternalProcessorContext context, final TimeOrderedKeyValueBuffer<String, String> buffer) {
         try {
             buffer.close();
             Utils.delete(context.stateDir());
@@ -107,7 +108,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
 
     @Test
     public void shouldInit() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
         cleanup(context, buffer);
@@ -115,23 +116,23 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
 
     @Test
     public void shouldAcceptData() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        putRecord(buffer, context, "2p93nf", 0, "asdf");
+        putRecord(buffer, context, 0L, 0L, "asdf", "2p93nf");
         cleanup(context, buffer);
     }
 
     @Test
     public void shouldRejectNullValues() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
         try {
-            buffer.put(0, getBytes("asdf"), new ContextualRecord(
-                null,
-                new ProcessorRecordContext(0, 0, 0, "topic")
-            ));
+            buffer.put(0, "asdf",
+                       null,
+                       getContext(0)
+            );
             fail("expected an exception");
         } catch (final NullPointerException expected) {
             // expected
@@ -139,27 +140,12 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         cleanup(context, buffer);
     }
 
-    private static ContextualRecord getRecord(final String value) {
-        return getRecord(value, 0L);
-    }
-
-    private static ContextualRecord getRecord(final String value, final long timestamp) {
-        return new ContextualRecord(
-            value.getBytes(UTF_8),
-            new ProcessorRecordContext(timestamp, 0, 0, "topic")
-        );
-    }
-
-    private static Bytes getBytes(final String key) {
-        return Bytes.wrap(key.getBytes(UTF_8));
-    }
-
     @Test
     public void shouldRemoveData() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        putRecord(buffer, context, "qwer", 0, "asdf");
+        putRecord(buffer, context, 0L, 0L, "asdf", "qwer");
         assertThat(buffer.numRecords(), is(1));
         buffer.evictWhile(() -> true, kv -> { });
         assertThat(buffer.numRecords(), is(0));
@@ -168,90 +154,71 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
 
     @Test
     public void shouldRespectEvictionPredicate() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        final Bytes firstKey = getBytes("asdf");
-        final ContextualRecord firstRecord = getRecord("eyt");
-        putRecord(0, buffer, context, firstRecord, firstKey);
-        putRecord(buffer, context, "rtg", 1, "zxcv");
+        putRecord(buffer, context, 0L, 0L, "asdf", "eyt");
+        putRecord(buffer, context, 1L, 0L, "zxcv", "rtg");
         assertThat(buffer.numRecords(), is(2));
-        final List<KeyValue<Bytes, ContextualRecord>> evicted = new LinkedList<>();
+        final List<Eviction<String, String>> evicted = new LinkedList<>();
         buffer.evictWhile(() -> buffer.numRecords() > 1, evicted::add);
         assertThat(buffer.numRecords(), is(1));
-        assertThat(evicted, is(singletonList(new KeyValue<>(firstKey, firstRecord))));
+        assertThat(evicted, is(singletonList(new Eviction<>("asdf", "eyt", getContext(0L)))));
         cleanup(context, buffer);
     }
 
     @Test
     public void shouldTrackCount() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        putRecord(buffer, context, "oin", 0, "asdf");
+        putRecord(buffer, context, 0L, 0L, "asdf", "oin");
         assertThat(buffer.numRecords(), is(1));
-        putRecord(buffer, context, "wekjn", 1, "asdf");
+        putRecord(buffer, context, 1L, 0L, "asdf", "wekjn");
         assertThat(buffer.numRecords(), is(1));
-        putRecord(buffer, context, "24inf", 0, "zxcv");
+        putRecord(buffer, context, 0L, 0L, "zxcv", "24inf");
         assertThat(buffer.numRecords(), is(2));
         cleanup(context, buffer);
     }
 
     @Test
     public void shouldTrackSize() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        putRecord(buffer, context, "23roni", 0, "asdf");
+        putRecord(buffer, context, 0L, 0L, "asdf", "23roni");
         assertThat(buffer.bufferSize(), is(43L));
-        putRecord(buffer, context, "3l", 1, "asdf");
+        putRecord(buffer, context, 1L, 0L, "asdf", "3l");
         assertThat(buffer.bufferSize(), is(39L));
-        putRecord(buffer, context, "qfowin", 0, "zxcv");
+        putRecord(buffer, context, 0L, 0L, "zxcv", "qfowin");
         assertThat(buffer.bufferSize(), is(82L));
         cleanup(context, buffer);
     }
 
     @Test
     public void shouldTrackMinTimestamp() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        putRecord(buffer, context, "2093j", 1, "asdf");
+        putRecord(buffer, context, 1L, 0L, "asdf", "2093j");
         assertThat(buffer.minTimestamp(), is(1L));
-        putRecord(buffer, context, "3gon4i", 0, "zxcv");
+        putRecord(buffer, context, 0L, 0L, "zxcv", "3gon4i");
         assertThat(buffer.minTimestamp(), is(0L));
         cleanup(context, buffer);
     }
 
-    private static void putRecord(final TimeOrderedKeyValueBuffer buffer,
-                                  final MockInternalProcessorContext context,
-                                  final String value,
-                                  final int time,
-                                  final String key) {
-        putRecord(time, buffer, context, getRecord(value), getBytes(key));
-    }
-
-    private static void putRecord(final int time,
-                                  final TimeOrderedKeyValueBuffer buffer,
-                                  final MockInternalProcessorContext context,
-                                  final ContextualRecord firstRecord,
-                                  final Bytes firstKey) {
-        context.setRecordContext(firstRecord.recordContext());
-        buffer.put(time, firstKey, firstRecord);
-    }
-
     @Test
     public void shouldEvictOldestAndUpdateSizeAndCountAndMinTimestamp() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
 
-        putRecord(buffer, context, "o23i4", 1, "zxcv");
+        putRecord(buffer, context, 1L, 0L, "zxcv", "o23i4");
         assertThat(buffer.numRecords(), is(1));
         assertThat(buffer.bufferSize(), is(42L));
         assertThat(buffer.minTimestamp(), is(1L));
 
-        putRecord(buffer, context, "3ng", 0, "asdf");
+        putRecord(buffer, context, 0L, 0L, "asdf", "3ng");
         assertThat(buffer.numRecords(), is(2));
         assertThat(buffer.bufferSize(), is(82L));
         assertThat(buffer.minTimestamp(), is(0L));
@@ -260,14 +227,14 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         buffer.evictWhile(() -> true, kv -> {
             switch (callbackCount.incrementAndGet()) {
                 case 1: {
-                    assertThat(new String(kv.key.get(), UTF_8), is("asdf"));
+                    assertThat(kv.key(), is("asdf"));
                     assertThat(buffer.numRecords(), is(2));
                     assertThat(buffer.bufferSize(), is(82L));
                     assertThat(buffer.minTimestamp(), is(0L));
                     break;
                 }
                 case 2: {
-                    assertThat(new String(kv.key.get(), UTF_8), is("zxcv"));
+                    assertThat(kv.key(), is("zxcv"));
                     assertThat(buffer.numRecords(), is(1));
                     assertThat(buffer.bufferSize(), is(42L));
                     assertThat(buffer.minTimestamp(), is(1L));
@@ -288,12 +255,12 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
 
     @Test
     public void shouldFlush() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
-        putRecord(2, buffer, context, getRecord("2093j", 0L), getBytes("asdf"));
-        putRecord(1, buffer, context, getRecord("3gon4i", 1L), getBytes("zxcv"));
-        putRecord(0, buffer, context, getRecord("deadbeef", 2L), getBytes("deleteme"));
+        putRecord(buffer, context, 2L, 0L, "asdf", "2093j");
+        putRecord(buffer, context, 1L, 1L, "zxcv", "3gon4i");
+        putRecord(buffer, context, 0L, 2L, "deleteme", "deadbeef");
 
         // replace "deleteme" with a tombstone
         buffer.evictWhile(() -> buffer.minTimestamp() < 1, kv -> { });
@@ -357,17 +324,16 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         cleanup(context, buffer);
     }
 
-
     @Test
     public void shouldRestoreOldFormat() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
 
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, ""));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
 
         stateRestoreCallback.restoreBatch(asList(
             new ConsumerRecord<>("changelog-topic",
@@ -425,7 +391,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
-        final List<KeyValue<Bytes, ContextualRecord>> evicted = new LinkedList<>();
+        final List<Eviction<String, String>> evicted = new LinkedList<>();
         buffer.evictWhile(() -> true, evicted::add);
 
         // Several things to note:
@@ -437,22 +403,14 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         //   original format.
 
         assertThat(evicted, is(asList(
-            new KeyValue<>(
-                getBytes("zxcv"),
-                new ContextualRecord("3o4im".getBytes(UTF_8),
-                                     new ProcessorRecordContext(2,
-                                                                2,
-                                                                0,
-                                                                "changelog-topic",
-                                                                new RecordHeaders()))),
-            new KeyValue<>(
-                getBytes("asdf"),
-                new ContextualRecord("qwer".getBytes(UTF_8),
-                                     new ProcessorRecordContext(1,
-                                                                1,
-                                                                0,
-                                                                "changelog-topic",
-                                                                new RecordHeaders())))
+            new Eviction<>(
+                "zxcv",
+                "3o4im",
+                new ProcessorRecordContext(2L, 2, 0, "changelog-topic", new RecordHeaders())),
+            new Eviction<>(
+                "asdf",
+                "qwer",
+                new ProcessorRecordContext(1L, 1, 0, "changelog-topic", new RecordHeaders()))
         )));
 
         cleanup(context, buffer);
@@ -460,14 +418,14 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
 
     @Test
     public void shouldRestoreNewFormat() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
 
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, ""));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
 
         final RecordHeaders v1FlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
 
@@ -533,7 +491,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
-        final List<KeyValue<Bytes, ContextualRecord>> evicted = new LinkedList<>();
+        final List<Eviction<String, String>> evicted = new LinkedList<>();
         buffer.evictWhile(() -> true, evicted::add);
 
         // Several things to note:
@@ -541,41 +499,33 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         // * The record timestamps are properly restored, and not conflated with the record's buffer time.
         // * The keys and values are properly restored
         // * The record topic is set to the original input topic, *not* the changelog topic
-        // * The record offset preserves the origininal input record's offset, *not* the offset of the changelog record
+        // * The record offset preserves the original input record's offset, *not* the offset of the changelog record
 
 
         assertThat(evicted, is(asList(
-            new KeyValue<>(
-                getBytes("zxcv"),
-                new ContextualRecord("3o4im".getBytes(UTF_8),
-                                     new ProcessorRecordContext(2,
-                                                                0,
-                                                                0,
-                                                                "topic",
-                                                                null))),
-            new KeyValue<>(
-                getBytes("asdf"),
-                new ContextualRecord("qwer".getBytes(UTF_8),
-                                     new ProcessorRecordContext(1,
-                                                                0,
-                                                                0,
-                                                                "topic",
-                                                                null)))
-        )));
+            new Eviction<>(
+                "zxcv",
+                "3o4im",
+                getContext(2L)),
+            new Eviction<>(
+                "asdf",
+                "qwer",
+                getContext(1L)
+            ))));
 
         cleanup(context, buffer);
     }
 
     @Test
     public void shouldNotRestoreUnrecognizedVersionRecord() {
-        final TimeOrderedKeyValueBuffer buffer = bufferSupplier.apply(testName);
+        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
 
         final RecordBatchingStateRestoreCallback stateRestoreCallback =
             (RecordBatchingStateRestoreCallback) context.stateRestoreCallback(testName);
 
-        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, ""));
+        context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
 
         final RecordHeaders unknownFlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) -1})});
 
@@ -600,5 +550,27 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer> 
         } finally {
             cleanup(context, buffer);
         }
+    }
+
+    private static void putRecord(final TimeOrderedKeyValueBuffer<String, String> buffer,
+                                  final MockInternalProcessorContext context,
+                                  final long streamTime,
+                                  final long recordTimestamp,
+                                  final String key,
+                                  final String value) {
+        final ProcessorRecordContext recordContext = getContext(recordTimestamp);
+        context.setRecordContext(recordContext);
+        buffer.put(streamTime, key, value, recordContext);
+    }
+
+    private static ContextualRecord getRecord(final String value, final long timestamp) {
+        return new ContextualRecord(
+            value.getBytes(UTF_8),
+            getContext(timestamp)
+        );
+    }
+
+    private static ProcessorRecordContext getContext(final long recordTimestamp) {
+        return new ProcessorRecordContext(recordTimestamp, 0, 0, "topic", null);
     }
 }

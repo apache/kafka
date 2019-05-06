@@ -23,8 +23,8 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.BytesSerializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -50,7 +50,7 @@ import java.util.function.Supplier;
 
 import static java.util.Objects.requireNonNull;
 
-public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyValueBuffer {
+public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrderedKeyValueBuffer<K, V> {
     private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
     private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
     private static final RecordHeaders V_1_CHANGELOG_HEADERS =
@@ -63,6 +63,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
     private final String storeName;
     private final boolean loggingEnabled;
 
+    private Serde<K> keySerde;
+    private Serde<V> valueSerde;
+
     private long memBufferSize = 0L;
     private long minTimestamp = Long.MAX_VALUE;
     private RecordCollector collector;
@@ -74,13 +77,17 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
 
     private int partition;
 
-    public static class Builder implements StoreBuilder<StateStore> {
+    public static class Builder<K, V> implements StoreBuilder<StateStore> {
 
         private final String storeName;
+        private final Serde<K> keySerde;
+        private final Serde<V> valSerde;
         private boolean loggingEnabled = true;
 
-        public Builder(final String storeName) {
+        public Builder(final String storeName, final Serde<K> keySerde, final Serde<V> valSerde) {
             this.storeName = storeName;
+            this.keySerde = keySerde;
+            this.valSerde = valSerde;
         }
 
         /**
@@ -119,8 +126,8 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
         }
 
         @Override
-        public StateStore build() {
-            return new InMemoryTimeOrderedKeyValueBuffer(storeName, loggingEnabled);
+        public InMemoryTimeOrderedKeyValueBuffer<K, V> build() {
+            return new InMemoryTimeOrderedKeyValueBuffer<>(storeName, loggingEnabled, keySerde, valSerde);
         }
 
         @Override
@@ -182,9 +189,14 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
         }
     }
 
-    private InMemoryTimeOrderedKeyValueBuffer(final String storeName, final boolean loggingEnabled) {
+    private InMemoryTimeOrderedKeyValueBuffer(final String storeName,
+                                              final boolean loggingEnabled,
+                                              final Serde<K> keySerde,
+                                              final Serde<V> valueSerde) {
         this.storeName = storeName;
         this.loggingEnabled = loggingEnabled;
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
     }
 
     @Override
@@ -199,8 +211,15 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
     }
 
     @Override
+    public void setSerdesIfNull(final Serde<K> keySerde, final Serde<V> valueSerde) {
+        this.keySerde = this.keySerde == null ? keySerde : this.keySerde;
+        this.valueSerde = this.valueSerde == null ? valueSerde : this.valueSerde;
+    }
+
+    @Override
     public void init(final ProcessorContext context, final StateStore root) {
         final InternalProcessorContext internalProcessorContext = (InternalProcessorContext) context;
+
         bufferSizeSensor = Sensors.createBufferSizeSensor(this, internalProcessorContext);
         bufferCountSensor = Sensors.createBufferCountSensor(this, internalProcessorContext);
 
@@ -359,7 +378,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
 
     @Override
     public void evictWhile(final Supplier<Boolean> predicate,
-                           final Consumer<KeyValue<Bytes, ContextualRecord>> callback) {
+                           final Consumer<Eviction<K, V>> callback) {
         final Iterator<Map.Entry<BufferKey, ContextualRecord>> delegate = sortedMap.entrySet().iterator();
         int evictions = 0;
 
@@ -377,7 +396,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
                             next.getKey().time + "]"
                     );
                 }
-                callback.accept(new KeyValue<>(next.getKey().key, next.getValue()));
+                final K key = keySerde.deserializer().deserialize(changelogTopic, next.getKey().key.get());
+                final V value = valueSerde.deserializer().deserialize(changelogTopic, next.getValue().value());
+                callback.accept(new Eviction<>(key, value, next.getValue().recordContext()));
 
                 delegate.remove();
                 index.remove(next.getKey().key);
@@ -405,13 +426,17 @@ public final class InMemoryTimeOrderedKeyValueBuffer implements TimeOrderedKeyVa
 
     @Override
     public void put(final long time,
-                    final Bytes key,
-                    final ContextualRecord contextualRecord) {
-        requireNonNull(contextualRecord.value(), "value cannot be null");
-        requireNonNull(contextualRecord.recordContext(), "recordContext cannot be null");
+                    final K key,
+                    final V value,
+                    final ProcessorRecordContext recordContext) {
+        requireNonNull(value, "value cannot be null");
+        requireNonNull(recordContext, "recordContext cannot be null");
 
-        cleanPut(time, key, contextualRecord);
-        dirtyKeys.add(key);
+        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
+        final byte[] serializedValue = valueSerde.serializer().serialize(changelogTopic, value);
+
+        cleanPut(time, serializedKey, new ContextualRecord(serializedValue, recordContext));
+        dirtyKeys.add(serializedKey);
         updateBufferMetrics();
     }
 

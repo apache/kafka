@@ -28,6 +28,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.junit.Assert._
 import org.junit.Test
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 

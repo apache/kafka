@@ -33,9 +33,9 @@ class OffsetValidationTest(VerifiableConsumerTest):
             self.TOPIC : { 'partitions': self.NUM_PARTITIONS, 'replication-factor': 2 }
         })
 
-    def rolling_bounce_consumers(self, consumer, num_bounces=5, clean_shutdown=True):
+    def rolling_bounce_consumers(self, consumer, keep_alive=0, num_bounces=5, clean_shutdown=True):
         for _ in range(num_bounces):
-            for node in consumer.nodes:
+            for node in consumer.nodes[keep_alive:]:
                 consumer.stop_node(node, clean_shutdown)
 
                 wait_until(lambda: len(consumer.dead_nodes()) == 1,
@@ -47,15 +47,15 @@ class OffsetValidationTest(VerifiableConsumerTest):
                 self.await_all_members(consumer)
                 self.await_consumed_messages(consumer)
 
-    def bounce_all_consumers(self, consumer, num_bounces=5, clean_shutdown=True):
+    def bounce_all_consumers(self, consumer, keep_alive=0, num_bounces=5, clean_shutdown=True):
         for _ in range(num_bounces):
-            for node in consumer.nodes:
+            for node in consumer.nodes[keep_alive:]:
                 consumer.stop_node(node, clean_shutdown)
 
-            wait_until(lambda: len(consumer.dead_nodes()) == self.num_consumers, timeout_sec=10,
+            wait_until(lambda: len(consumer.dead_nodes()) == self.num_consumers - keep_alive, timeout_sec=10,
                        err_msg="Timed out waiting for the consumers to shutdown")
             
-            for node in consumer.nodes:
+            for node in consumer.nodes[keep_alive:]:
                 consumer.start_node(node)
 
             self.await_all_members(consumer)
@@ -145,7 +145,69 @@ class OffsetValidationTest(VerifiableConsumerTest):
             self.bounce_all_consumers(consumer, clean_shutdown=clean_shutdown)
         else:
             self.rolling_bounce_consumers(consumer, clean_shutdown=clean_shutdown)
-                
+
+        consumer.stop_all()
+        if clean_shutdown:
+            # if the total records consumed matches the current position, we haven't seen any duplicates
+            # this can only be guaranteed with a clean shutdown
+            assert consumer.current_position(partition) == consumer.total_consumed(), \
+                "Total consumed records %d did not match consumed position %d" % \
+                (consumer.total_consumed(), consumer.current_position(partition))
+        else:
+            # we may have duplicates in a hard failure
+            assert consumer.current_position(partition) <= consumer.total_consumed(), \
+                "Current position %d greater than the total number of consumed records %d" % \
+                (consumer.current_position(partition), consumer.total_consumed())
+
+    @cluster(num_nodes=7)
+    @matrix(clean_shutdown=[True], static_membership=[True, False], bounce_mode=["all", "rolling"], num_bounces=[5])
+    def test_static_consumer_bounce(self, clean_shutdown, static_membership, bounce_mode, num_bounces):
+        """
+        Verify correct static consumer behavior when the consumers in the group are restarted. In order to make
+        sure the behavior of static members are different from dynamic ones, we take both static and dynamic
+        membership into this test suite.
+
+        Setup: single Kafka cluster with one producer and a set of consumers in one group.
+
+        - Start a producer which continues producing new messages throughout the test.
+        - Start up the consumers as static/dynamic members and wait until they've joined the group.
+        - In a loop, restart each consumer except the first member (note: may not be the leader), and expect no rebalance triggered
+          during this process if the group is in static membership.
+        """
+        partition = TopicPartition(self.TOPIC, 0)
+
+        producer = self.setup_producer(self.TOPIC)
+
+        producer.start()
+        self.await_produced_messages(producer)
+
+        self.session_timeout_sec = 60
+        consumer = self.setup_consumer(self.TOPIC, static_membership=static_membership)
+
+        consumer.start()
+        self.await_all_members(consumer)
+
+        num_revokes_before_bounce = consumer.num_revokes_for_alive()
+
+        num_keep_alive = 1
+
+        if bounce_mode == "all":
+            self.bounce_all_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
+        else:
+            self.rolling_bounce_consumers(consumer, keep_alive=num_keep_alive, num_bounces=num_bounces)
+
+        num_revokes_after_bounce = consumer.num_revokes_for_alive() - num_revokes_before_bounce
+
+        check_condition = num_revokes_after_bounce != 0
+        # under static membership, the live consumer shall not revoke any current running partitions,
+        # since there is no global rebalance being triggered.
+        if static_membership:
+            check_condition = num_revokes_after_bounce == 0
+
+        assert check_condition, \
+            "Total revoked count %d does not match the expectation of having 0 revokes as %d" % \
+            (num_revokes_after_bounce, check_condition)
+
         consumer.stop_all()
         if clean_shutdown:
             # if the total records consumed matches the current position, we haven't seen any duplicates
