@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
@@ -46,8 +47,12 @@ public class TimestampedKeyValueStoreBuilder<K, V>
 
     @Override
     public TimestampedKeyValueStore<K, V> build() {
+        KeyValueStore<Bytes, byte[]> store = storeSupplier.get();
+        if (!(store instanceof TimestampedBytesStore) && store.persistent()) {
+            store = new KeyValueToTimestampedKeyValueByteStoreAdapter(store);
+        }
         return new MeteredTimestampedKeyValueStore<>(
-            maybeWrapCaching(maybeWrapLogging(storeSupplier.get())),
+            maybeWrapCaching(maybeWrapLogging(store)),
             storeSupplier.metricsScope(),
             time,
             keySerde,

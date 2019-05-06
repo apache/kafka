@@ -17,7 +17,6 @@ import java.time
 import java.util.concurrent._
 import java.util.{Collection, Collections, Properties}
 
-import util.control.Breaks._
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
@@ -299,12 +298,8 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val topic = "group-max-size-test"
     val maxGroupSize = 2
     val consumerCount = maxGroupSize + 1
-    var recordsProduced = maxGroupSize * 100
     val partitionCount = consumerCount * 2
-    if (recordsProduced % partitionCount != 0) {
-      // ensure even record distribution per partition
-      recordsProduced += partitionCount - recordsProduced % partitionCount
-    }
+
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
@@ -315,41 +310,23 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
     // roll all brokers with a lesser max group size to make sure coordinator has the new config
     val newConfigs = generateKafkaConfigs(maxGroupSize.toString)
-    var kickedOutConsumerIdx: Option[Int] = None
-    // restart brokers until the group moves to a Coordinator with the new config
-    breakable { for (broker <- servers.indices) {
-      killBroker(broker)
-      consumerPollers.indices.foreach(idx => {
-        consumerPollers(idx).thrownException match {
-          case Some(thrownException) =>
-            if (!thrownException.isInstanceOf[GroupMaxSizeReachedException]) {
-              throw thrownException
-            }
-            if (kickedOutConsumerIdx.isDefined) {
-              fail(s"Received more than one ${classOf[GroupMaxSizeReachedException]}")
-            }
-            kickedOutConsumerIdx = Some(idx)
-          case None =>
-        }
-      })
-
-      if (kickedOutConsumerIdx.isDefined)
-        break
-
-      val config = newConfigs(broker)
-      servers(broker) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
+    for (serverIdx <- servers.indices) {
+      killBroker(serverIdx)
+      val config = newConfigs(serverIdx)
+      servers(serverIdx) = TestUtils.createServer(config, time = brokerTime(config.brokerId))
       restartDeadBrokers()
-    }}
-    if (kickedOutConsumerIdx.isEmpty)
-      fail(s"Should have received an ${classOf[GroupMaxSizeReachedException]} during the cluster roll")
-    restartDeadBrokers()
+    }
 
-    // assert that the group has gone through a rebalance and shed off one consumer
-    consumerPollers.remove(kickedOutConsumerIdx.get).shutdown()
-    sendRecords(createProducer(), recordsProduced, topic, numPartitions = Some(partitionCount))
-    TestUtils.waitUntilTrue(() => {
-      consumerPollers.forall(p => p.receivedMessages >= recordsProduced / consumerCount)
-    }, "The remaining consumers in the group could not fetch the expected records", 10000L)
+    def raisedExceptions: Seq[Throwable] = {
+      consumerPollers.flatten(_.thrownException)
+    }
+
+    // we are waiting for the group to rebalance and one member to get kicked
+    TestUtils.waitUntilTrue(() => raisedExceptions.nonEmpty,
+      msg = "The remaining consumers in the group could not fetch the expected records", 10000L)
+
+    assertEquals(1, raisedExceptions.size)
+    assertTrue(raisedExceptions.head.isInstanceOf[GroupMaxSizeReachedException])
   }
 
   /**
@@ -527,7 +504,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }
   }
 
-  private def createTopicPartitions(topic: String, numPartitions: Int = 1, replicationFactor: Int = 1,
+  private def createTopicPartitions(topic: String, numPartitions: Int, replicationFactor: Int,
                                     topicConfig: Properties = new Properties): Set[TopicPartition] = {
     createTopic(topic, numPartitions = numPartitions, replicationFactor = replicationFactor, topicConfig = topicConfig)
     Range(0, numPartitions).map(part => new TopicPartition(topic, part)).toSet

@@ -178,7 +178,7 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
-    public void shouldNotExceptionIfFetchReturnsNull() {
+    public void shouldNotThrowNullPointerExceptionIfFetchReturnsNull() {
         expect(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).andReturn(null);
         replay(innerStoreMock);
 

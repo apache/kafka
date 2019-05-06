@@ -22,6 +22,7 @@ import java.util.concurrent.locks.ReentrantLock
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, immutable, mutable}
@@ -128,7 +129,12 @@ private object GroupMetadata {
     group.protocol = Option(protocol)
     group.leaderId = Option(leaderId)
     group.currentStateTimestamp = currentStateTimestamp
-    members.foreach(group.add(_, null))
+    members.foreach(member => {
+      group.add(member, null)
+      if (member.isStaticMember) {
+        group.addStaticMember(member.groupInstanceId, member.memberId)
+      }
+    })
     group
   }
 }
@@ -184,6 +190,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private var protocol: Option[String] = None
 
   private val members = new mutable.HashMap[String, MemberMetadata]
+  // Static membership mapping [key: group.instance.id, value: member.id]
+  private val staticMembers = new mutable.HashMap[String, String]
   private val pendingMembers = new mutable.HashSet[String]
   private var numMembersAwaitingJoin = 0
   private val supportedProtocols = new mutable.HashMap[String, Integer]().withDefaultValue(0)
@@ -236,11 +244,55 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       leaderId = members.keys.headOption
   }
 
+  /**
+    * [For static members only]: Replace the old member id with the new one,
+    * keep everything else unchanged and return the updated member.
+    */
+  def replaceGroupInstance(oldMemberId: String,
+                           newMemberId: String,
+                           groupInstanceId: Option[String]): MemberMetadata = {
+    if(groupInstanceId.isEmpty) {
+      throw new IllegalArgumentException(s"unexpected null group.instance.id in replaceGroupInstance")
+    }
+    val oldMember = members.remove(oldMemberId)
+      .getOrElse(throw new IllegalArgumentException(s"Cannot replace non-existing member id $oldMemberId"))
+
+    oldMember.memberId = newMemberId
+    members.put(newMemberId, oldMember)
+
+    if (isLeader(oldMemberId))
+      leaderId = Some(newMemberId)
+    addStaticMember(groupInstanceId, newMemberId)
+    oldMember
+  }
+
   def isPendingMember(memberId: String): Boolean = pendingMembers.contains(memberId) && !has(memberId)
 
   def addPendingMember(memberId: String) = pendingMembers.add(memberId)
 
   def removePendingMember(memberId: String) = pendingMembers.remove(memberId)
+
+  def hasStaticMember(groupInstanceId: Option[String]) = groupInstanceId.isDefined && staticMembers.contains(groupInstanceId.get)
+
+  def getStaticMemberId(groupInstanceId: Option[String]) = {
+    if(groupInstanceId.isEmpty) {
+      throw new IllegalArgumentException(s"unexpected null group.instance.id in getStaticMemberId")
+    }
+    staticMembers(groupInstanceId.get)
+  }
+
+  def addStaticMember(groupInstanceId: Option[String], newMemberId: String) = {
+    if(groupInstanceId.isEmpty) {
+      throw new IllegalArgumentException(s"unexpected null group.instance.id in addStaticMember")
+    }
+    staticMembers.put(groupInstanceId.get, newMemberId)
+  }
+
+  def removeStaticMember(groupInstanceId: Option[String]) = {
+    if (groupInstanceId.isDefined) {
+      staticMembers.remove(groupInstanceId.get)
+    }
+  }
 
   def currentState = state
 
@@ -249,6 +301,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   def hasAllMembersJoined = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
 
   def allMembers = members.keySet
+
+  def allStaticMembers = staticMembers.keySet
 
   def numPending = pendingMembers.size
 
@@ -337,10 +391,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     receivedTransactionalOffsetCommits = false
   }
 
-  def currentMemberMetadata: Map[String, Array[Byte]] = {
+  def currentMemberMetadata: List[JoinGroupResponseMember] = {
     if (is(Dead) || is(PreparingRebalance))
       throw new IllegalStateException("Cannot obtain member metadata for group in state %s".format(state))
-    members.map{ case (memberId, memberMetadata) => (memberId, memberMetadata.metadata(protocol.get))}.toMap
+    members.map{ case (memberId, memberMetadata) => new JoinGroupResponseMember()
+        .setMemberId(memberId)
+        .setGroupInstanceId(memberMetadata.groupInstanceId.orNull)
+        .setMetadata(memberMetadata.metadata(protocol.get))
+    }.toList
   }
 
   def summary: GroupSummary = {

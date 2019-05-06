@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional, Properties}
 
 import kafka.admin.{AdminUtils, RackAwareMode}
-import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0}
+import kafka.api.{ApiVersion, KAFKA_0_11_0_IV0, KAFKA_2_3_IV0}
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.controller.KafkaController
@@ -48,7 +48,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultSet}
-import org.apache.kafka.common.message.{CreateTopicsResponseData, DeleteTopicsResponseData, DescribeGroupsResponseData, ElectPreferredLeadersResponseData, InitProducerIdResponseData, JoinGroupResponseData, LeaveGroupResponseData, SaslAuthenticateResponseData, SaslHandshakeResponseData}
+import org.apache.kafka.common.message._
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultSet}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
@@ -299,25 +299,33 @@ class KafkaApis(val requestChannel: RequestChannel,
     val offsetCommitRequest = request.body[OffsetCommitRequest]
 
     // reject the request if not authorized to the group
-    if (!authorize(request.session, Read, Resource(Group, offsetCommitRequest.groupId, LITERAL))) {
+    if (!authorize(request.session, Read, Resource(Group, offsetCommitRequest.data().groupId, LITERAL))) {
       val error = Errors.GROUP_AUTHORIZATION_FAILED
-      val results = offsetCommitRequest.offsetData.keySet.asScala.map { topicPartition =>
-        (topicPartition, error)
-      }.toMap
-      sendResponseMaybeThrottle(request, requestThrottleMs => new OffsetCommitResponse(requestThrottleMs, results.asJava))
+      val responseTopicList = OffsetCommitRequest.getErrorResponseTopics(
+        offsetCommitRequest.data().topics(),
+        error)
+
+      sendResponseMaybeThrottle(request, requestThrottleMs => new OffsetCommitResponse(
+        new OffsetCommitResponseData()
+            .setTopics(responseTopicList)
+            .setThrottleTimeMs(requestThrottleMs)
+      ))
     } else {
 
       val unauthorizedTopicErrors = mutable.Map[TopicPartition, Errors]()
       val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
-      val authorizedTopicRequestInfoBldr = immutable.Map.newBuilder[TopicPartition, OffsetCommitRequest.PartitionData]
+      val authorizedTopicRequestInfoBldr = immutable.Map.newBuilder[TopicPartition, OffsetCommitRequestData.OffsetCommitRequestPartition]
 
-      for ((topicPartition, partitionData) <- offsetCommitRequest.offsetData.asScala) {
-        if (!authorize(request.session, Read, Resource(Topic, topicPartition.topic, LITERAL)))
-          unauthorizedTopicErrors += (topicPartition -> Errors.TOPIC_AUTHORIZATION_FAILED)
-        else if (!metadataCache.contains(topicPartition))
-          nonExistingTopicErrors += (topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION)
-        else
-          authorizedTopicRequestInfoBldr += (topicPartition -> partitionData)
+      for (topicData <- offsetCommitRequest.data().topics().asScala) {
+        for (partitionData <- topicData.partitions().asScala) {
+          val topicPartition = new TopicPartition(topicData.name(), partitionData.partitionIndex())
+          if (!authorize(request.session, Read, Resource(Topic, topicData.name(), LITERAL)))
+            unauthorizedTopicErrors += (topicPartition -> Errors.TOPIC_AUTHORIZATION_FAILED)
+          else if (!metadataCache.contains(topicPartition))
+            nonExistingTopicErrors += (topicPartition -> Errors.UNKNOWN_TOPIC_OR_PARTITION)
+          else
+            authorizedTopicRequestInfoBldr += (topicPartition -> partitionData)
+        }
       }
 
       val authorizedTopicRequestInfo = authorizedTopicRequestInfoBldr.result()
@@ -343,10 +351,14 @@ class KafkaApis(val requestChannel: RequestChannel,
         val responseInfo = authorizedTopicRequestInfo.map {
           case (topicPartition, partitionData) =>
             try {
-              if (partitionData.metadata != null && partitionData.metadata.length > config.offsetMetadataMaxSize)
+              if (partitionData.committedMetadata() != null
+                && partitionData.committedMetadata().length > config.offsetMetadataMaxSize)
                 (topicPartition, Errors.OFFSET_METADATA_TOO_LARGE)
               else {
-                zkClient.setOrCreateConsumerOffset(offsetCommitRequest.groupId, topicPartition, partitionData.offset)
+                zkClient.setOrCreateConsumerOffset(
+                  offsetCommitRequest.data().groupId(),
+                  topicPartition,
+                  partitionData.committedOffset())
                 (topicPartition, Errors.NONE)
               }
             } catch {
@@ -365,16 +377,20 @@ class KafkaApis(val requestChannel: RequestChannel,
         //   - For v5 and beyond there is no per partition expiration timestamp, so this field is no longer in effect
         val currentTimestamp = time.milliseconds
         val partitionData = authorizedTopicRequestInfo.mapValues { partitionData =>
-          val metadata = if (partitionData.metadata == null) OffsetAndMetadata.NoMetadata else partitionData.metadata
+          val metadata = if (partitionData.committedMetadata() == null)
+            OffsetAndMetadata.NoMetadata
+          else
+            partitionData.committedMetadata()
+
           new OffsetAndMetadata(
-            offset = partitionData.offset,
-            leaderEpoch = partitionData.leaderEpoch,
+            offset = partitionData.committedOffset(),
+            leaderEpoch = Optional.ofNullable[Integer](partitionData.committedLeaderEpoch),
             metadata = metadata,
-            commitTimestamp = partitionData.timestamp match {
+            commitTimestamp = partitionData.commitTimestamp() match {
               case OffsetCommitRequest.DEFAULT_TIMESTAMP => currentTimestamp
               case customTimestamp => customTimestamp
             },
-            expireTimestamp = offsetCommitRequest.retentionTime match {
+            expireTimestamp = offsetCommitRequest.data().retentionTimeMs() match {
               case OffsetCommitRequest.DEFAULT_RETENTION_TIME => None
               case retentionTime => Some(currentTimestamp + retentionTime)
             }
@@ -383,9 +399,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         // call coordinator to handle commit offset
         groupCoordinator.handleCommitOffsets(
-          offsetCommitRequest.groupId,
-          offsetCommitRequest.memberId,
-          offsetCommitRequest.generationId,
+          offsetCommitRequest.data().groupId(),
+          offsetCommitRequest.data().memberId(),
+          offsetCommitRequest.data().generationId(),
           partitionData,
           sendResponseCallback)
       }
@@ -1291,12 +1307,6 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // the callback for sending a join-group response
     def sendResponseCallback(joinResult: JoinGroupResult) {
-      val members = joinResult.members map { case (memberId, metadataArray) =>
-        new JoinGroupResponseData.JoinGroupResponseMember()
-          .setMemberId(memberId)
-          .setMetadata(metadataArray)
-      }
-
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
         val responseBody = new JoinGroupResponse(
           new JoinGroupResponseData()
@@ -1306,7 +1316,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setProtocolName(joinResult.subProtocol)
             .setLeader(joinResult.leaderId)
             .setMemberId(joinResult.memberId)
-            .setMembers(members.toSeq.asJava)
+            .setMembers(joinResult.members.asJava)
         )
 
         trace("Sending join group response %s for correlation id %d to client %s."
@@ -1330,8 +1340,17 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       )
     } else {
+      val encodedGroupInstanceId = joinGroupRequest.data().groupInstanceId
+      val groupInstanceId =
+        if (encodedGroupInstanceId == null ||
+        config.interBrokerProtocolVersion < KAFKA_2_3_IV0)
+          None
+        else
+          Some(encodedGroupInstanceId)
+
       // Only return MEMBER_ID_REQUIRED error if joinGroupRequest version is >= 4
-      val requireKnownMemberId = joinGroupRequest.version >= 4
+      // and groupInstanceId is configured to unknown.
+      val requireKnownMemberId = joinGroupRequest.version >= 4 && groupInstanceId.isEmpty
 
       // let the coordinator handle join-group
       val protocols = joinGroupRequest.data().protocols().asScala.map(protocol =>
@@ -1339,6 +1358,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       groupCoordinator.handleJoinGroup(
         joinGroupRequest.data().groupId,
         joinGroupRequest.data().memberId,
+        groupInstanceId,
         requireKnownMemberId,
         request.header.clientId,
         request.session.clientAddress.toString,

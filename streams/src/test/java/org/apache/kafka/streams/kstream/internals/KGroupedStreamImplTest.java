@@ -18,13 +18,13 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
-import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KGroupedStream;
@@ -85,7 +85,7 @@ public class KGroupedStreamImplTest {
         groupedStream.reduce(null);
     }
 
-    @Test(expected = InvalidTopicException.class)
+    @Test(expected = TopologyException.class)
     public void shouldNotHaveInvalidStoreNameOnReduce() {
         groupedStream.reduce(MockReducer.STRING_ADDER, Materialized.as(INVALID_STORE_NAME));
     }
@@ -102,7 +102,7 @@ public class KGroupedStreamImplTest {
         groupedStream.windowedBy((Windows) null);
     }
 
-    @Test(expected = InvalidTopicException.class)
+    @Test(expected = TopologyException.class)
     public void shouldNotHaveInvalidStoreNameWithWindowedReduce() {
         groupedStream
             .windowedBy(TimeWindows.of(ofMillis(10)))
@@ -119,7 +119,7 @@ public class KGroupedStreamImplTest {
         groupedStream.aggregate(MockInitializer.STRING_INIT, null, Materialized.as("store"));
     }
 
-    @Test(expected = InvalidTopicException.class)
+    @Test(expected = TopologyException.class)
     public void shouldNotHaveInvalidStoreNameOnAggregate() {
         groupedStream.aggregate(
             MockInitializer.STRING_INIT,
@@ -146,7 +146,7 @@ public class KGroupedStreamImplTest {
         groupedStream.windowedBy((Windows) null);
     }
 
-    @Test(expected = InvalidTopicException.class)
+    @Test(expected = TopologyException.class)
     public void shouldNotHaveInvalidStoreNameOnWindowedAggregate() {
         groupedStream
             .windowedBy(TimeWindows.of(ofMillis(10)))
@@ -284,7 +284,7 @@ public class KGroupedStreamImplTest {
         groupedStream.windowedBy((SessionWindows) null);
     }
 
-    @Test(expected = InvalidTopicException.class)
+    @Test(expected = TopologyException.class)
     public void shouldNotAcceptInvalidStoreNameWhenReducingSessionWindows() {
         groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
@@ -349,7 +349,7 @@ public class KGroupedStreamImplTest {
                 Materialized.with(Serdes.String(), Serdes.String()));
     }
 
-    @Test(expected = InvalidTopicException.class)
+    @Test(expected = TopologyException.class)
     public void shouldNotAcceptInvalidStoreNameWhenAggregatingSessionWindows() {
         groupedStream
             .windowedBy(SessionWindows.with(ofMillis(10)))

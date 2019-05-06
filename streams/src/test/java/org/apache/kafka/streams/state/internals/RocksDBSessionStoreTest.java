@@ -129,6 +129,39 @@ public class RocksDBSessionStoreTest {
     }
 
     @Test
+    public void shouldFetchAllSessionsWithinKeyRange() {
+        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+            KeyValue.pair(new Windowed<>("aa", new SessionWindow(10, 10)), 2L),
+            KeyValue.pair(new Windowed<>("aaa", new SessionWindow(100, 100)), 3L),
+            KeyValue.pair(new Windowed<>("b", new SessionWindow(1000, 1000)), 4L),
+            KeyValue.pair(new Windowed<>("bb", new SessionWindow(1500, 2000)), 5L));
+
+        for (final KeyValue<Windowed<String>, Long> kv : expected) {
+            sessionStore.put(kv.key, kv.value);
+        }
+
+        // add some that shouldn't appear in the results
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L);
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("aa", "bb")) {
+            assertEquals(expected, toList(values));
+        }
+    }
+
+    @Test
+    public void shouldFetchExactSession() {
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 4)), 1L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 3)), 2L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 4)), 3L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(1, 4)), 4L);
+        sessionStore.put(new Windowed<>("aaa", new SessionWindow(0, 4)), 5L);
+
+        final long result = sessionStore.fetchSession("aa", 0, 4);
+        assertEquals(3L, result);
+    }
+
+    @Test
     public void shouldFindValuesWithinMergingSessionWindowRange() {
         final String key = "a";
         sessionStore.put(new Windowed<>(key, new SessionWindow(0L, 0L)), 1L);
@@ -158,6 +191,24 @@ public class RocksDBSessionStoreTest {
 
         try (final KeyValueIterator<Windowed<String>, Long> results =
                  sessionStore.findSessions("a", 1500L, 2500L)) {
+            assertTrue(results.hasNext());
+        }
+    }
+
+    @Test
+    public void shouldRemoveOnNullAggValue() {
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 1000)), 1L);
+        sessionStore.put(new Windowed<>("a", new SessionWindow(1500, 2500)), 2L);
+
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 1000)), null);
+
+        try (final KeyValueIterator<Windowed<String>, Long> results =
+            sessionStore.findSessions("a", 0L, 1000L)) {
+            assertFalse(results.hasNext());
+        }
+
+        try (final KeyValueIterator<Windowed<String>, Long> results =
+            sessionStore.findSessions("a", 1500L, 2500L)) {
             assertTrue(results.hasNext());
         }
     }
@@ -290,7 +341,7 @@ public class RocksDBSessionStoreTest {
         final String keyFrom = Serdes.String().deserializer().deserialize("", Serdes.Integer().serializer().serialize("", -1));
         final String keyTo = Serdes.String().deserializer().deserialize("", Serdes.Integer().serializer().serialize("", 1));
 
-        final KeyValueIterator iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L);
+        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L);
         assertFalse(iterator.hasNext());
 
         final List<String> messages = appender.getMessages();

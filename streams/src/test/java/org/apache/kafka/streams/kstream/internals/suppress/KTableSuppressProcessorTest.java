@@ -56,7 +56,6 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
-@SuppressWarnings("PointlessArithmeticExpression")
 public class KTableSuppressProcessorTest {
     private static final long ARBITRARY_LONG = 5L;
 
@@ -73,16 +72,12 @@ public class KTableSuppressProcessorTest {
 
             final String storeName = "test-store";
 
-            final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName)
+            final StateStore buffer = new InMemoryTimeOrderedKeyValueBuffer.Builder<>(storeName, keySerde, FullChangeSerde.castOrWrap(valueSerde))
                 .withLoggingDisabled()
                 .build();
+
             final KTableSuppressProcessor<K, V> processor =
-                new KTableSuppressProcessor<>(
-                    (SuppressedInternal<K>) suppressed,
-                    storeName,
-                    keySerde,
-                    new FullChangeSerde<>(valueSerde)
-                );
+                new KTableSuppressProcessor<>((SuppressedInternal<K>) suppressed, storeName);
 
             final MockInternalProcessorContext context = new MockInternalProcessorContext();
             context.setCurrentNode(new ProcessorNode("testNode"));
@@ -209,7 +204,6 @@ public class KTableSuppressProcessorTest {
         // note the record is in the past, but the window end is in the future, so we still have to buffer,
         // even though the grace period is 0.
         final long timestamp = 5L;
-        final long streamTime = 99L;
         final long windowEnd = 100L;
         context.setRecordMetadata("", 0, 0L, null, timestamp);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, windowEnd));
@@ -447,8 +441,8 @@ public class KTableSuppressProcessorTest {
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private <K extends Windowed> SuppressedInternal<K> finalResults(final Duration grace) {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private static <K extends Windowed> SuppressedInternal<K> finalResults(final Duration grace) {
         return ((FinalResultsSuppressionBuilder) untilWindowCloses(unbounded())).buildFinalResultsSuppression(grace);
     }
 
@@ -472,7 +466,7 @@ public class KTableSuppressProcessorTest {
         };
     }
 
-    private <K> Serde<Windowed<K>> timeWindowedSerdeFrom(final Class<K> rawType, final long windowSize) {
+    private static <K> Serde<Windowed<K>> timeWindowedSerdeFrom(final Class<K> rawType, final long windowSize) {
         final Serde<K> kSerde = Serdes.serdeFrom(rawType);
         return new Serdes.WrapperSerde<>(
             new TimeWindowedSerializer<>(kSerde.serializer()),

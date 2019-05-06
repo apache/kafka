@@ -726,7 +726,8 @@ public class KafkaStreams implements AutoCloseable {
                                              streamsMetadataState,
                                              cacheSizePerThread,
                                              stateDirectory,
-                                             delegatingStateRestoreListener);
+                                             delegatingStateRestoreListener,
+                                             i + 1);
             threadState.put(threads[i].getId(), threads[i].state());
             storeProviders.add(new StreamThreadStateStoreProvider(threads[i]));
         }

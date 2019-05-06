@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.ClientUtils;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
@@ -49,6 +50,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.network.ChannelBuilder;
 import org.apache.kafka.common.network.Selector;
 import org.apache.kafka.common.requests.IsolationLevel;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -69,6 +71,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -565,6 +568,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     private final Logger log;
     private final String clientId;
     private String groupId;
+    private Optional<String> groupInstanceId;
     private final ConsumerCoordinator coordinator;
     private final Deserializer<K> keyDeserializer;
     private final Deserializer<V> valueDeserializer;
@@ -669,6 +673,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 clientId = "consumer-" + CONSUMER_CLIENT_ID_SEQUENCE.getAndIncrement();
             this.clientId = clientId;
             this.groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
+
+            String groupInstanceId = config.getString(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+            if (groupInstanceId != null) {
+                JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
+                this.groupInstanceId = Optional.of(groupInstanceId);
+            } else {
+                this.groupInstanceId = Optional.empty();
+            }
+
             LogContext logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId + "] ");
             this.log = logContext.logger(getClass());
             boolean enableAutoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
@@ -762,6 +775,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                 new ConsumerCoordinator(logContext,
                         this.client,
                         groupId,
+                        this.groupInstanceId,
                         maxPollIntervalMs,
                         sessionTimeoutMs,
                         new Heartbeat(time, sessionTimeoutMs, heartbeatIntervalMs, maxPollIntervalMs, retryBackoffMs),
@@ -797,7 +811,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     isolationLevel);
 
             config.logUnused();
-            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics);
+            AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka consumer initialized");
         } catch (Throwable t) {
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
@@ -1508,7 +1522,20 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      */
     @Override
     public void seek(TopicPartition partition, long offset) {
-        seek(partition, new OffsetAndMetadata(offset, null));
+        if (offset < 0)
+            throw new IllegalArgumentException("seek offset must not be a negative number");
+
+        acquireAndEnsureOpen();
+        try {
+            log.info("Seeking to offset {} for partition {}", offset, partition);
+            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                    offset,
+                    Optional.empty(), // This will ensure we skip validation
+                    this.metadata.leaderAndEpoch(partition));
+            this.subscriptions.seek(partition, newPosition);
+        } finally {
+            release();
+        }
     }
 
     /**
@@ -1535,8 +1562,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } else {
                 log.info("Seeking to offset {} for partition {}", offset, partition);
             }
+            Metadata.LeaderAndEpoch currentLeaderAndEpoch = this.metadata.leaderAndEpoch(partition);
+            SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                    offsetAndMetadata.offset(),
+                    offsetAndMetadata.leaderEpoch(),
+                    currentLeaderAndEpoch);
             this.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
-            this.subscriptions.seek(partition, offset);
+            this.subscriptions.seekAndValidate(partition, newPosition);
         } finally {
             release();
         }
@@ -1658,9 +1690,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             Timer timer = time.timer(timeout);
             do {
-                Long offset = this.subscriptions.position(partition);
-                if (offset != null)
-                    return offset;
+                SubscriptionState.FetchPosition position = this.subscriptions.validPosition(partition);
+                if (position != null)
+                    return position.offset;
 
                 updateFetchPositions(timer);
                 client.poll(timer);
@@ -2169,12 +2201,12 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             firstException.compareAndSet(null, t);
             log.error("Failed to close coordinator", t);
         }
-        ClientUtils.closeQuietly(fetcher, "fetcher", firstException);
-        ClientUtils.closeQuietly(interceptors, "consumer interceptors", firstException);
-        ClientUtils.closeQuietly(metrics, "consumer metrics", firstException);
-        ClientUtils.closeQuietly(client, "consumer network client", firstException);
-        ClientUtils.closeQuietly(keyDeserializer, "consumer key deserializer", firstException);
-        ClientUtils.closeQuietly(valueDeserializer, "consumer value deserializer", firstException);
+        Utils.closeQuietly(fetcher, "fetcher", firstException);
+        Utils.closeQuietly(interceptors, "consumer interceptors", firstException);
+        Utils.closeQuietly(metrics, "consumer metrics", firstException);
+        Utils.closeQuietly(client, "consumer network client", firstException);
+        Utils.closeQuietly(keyDeserializer, "consumer key deserializer", firstException);
+        Utils.closeQuietly(valueDeserializer, "consumer value deserializer", firstException);
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         log.debug("Kafka consumer has been closed");
         Throwable exception = firstException.get();
@@ -2196,6 +2228,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @return true iff the operation completed without timing out
      */
     private boolean updateFetchPositions(final Timer timer) {
+        // If any partitions have been truncated due to a leader change, we need to validate the offsets
+        fetcher.validateOffsetsIfNeeded();
+
         cachedSubscriptionHashAllFetchPositions = subscriptions.hasAllFetchPositions();
         if (cachedSubscriptionHashAllFetchPositions) return true;
 

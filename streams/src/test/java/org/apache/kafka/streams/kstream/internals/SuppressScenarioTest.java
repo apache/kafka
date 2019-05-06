@@ -47,7 +47,6 @@ import org.apache.kafka.streams.test.OutputVerifier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;
@@ -72,9 +71,9 @@ public class SuppressScenarioTest {
     private static final Serde<String> STRING_SERDE = Serdes.String();
     private static final LongDeserializer LONG_DESERIALIZER = new LongDeserializer();
     private final Properties config = Utils.mkProperties(Utils.mkMap(
-            Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase(Locale.getDefault())),
-            Utils.mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
-            Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
+        Utils.mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, getClass().getSimpleName().toLowerCase(Locale.getDefault())),
+        Utils.mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath()),
+        Utils.mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "bogus")
     ));
 
     @Test
@@ -304,7 +303,7 @@ public class SuppressScenarioTest {
             .count();
         valueCounts
             // this is a bit brittle, but I happen to know that the entries are a little over 100 bytes in size.
-            .suppress(untilTimeLimit(Duration.ofMillis(Long.MAX_VALUE), maxBytes(200L).emitEarlyWhenFull()))
+            .suppress(untilTimeLimit(ofMillis(Long.MAX_VALUE), maxBytes(200L).emitEarlyWhenFull()))
             .toStream()
             .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
         valueCounts
@@ -352,7 +351,6 @@ public class SuppressScenarioTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldSupportFinalResultsForTimeWindows() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -403,7 +401,6 @@ public class SuppressScenarioTest {
         }
     }
 
-    @SuppressWarnings("deprecation")
     @Test
     public void shouldSupportFinalResultsForTimeWindowsWithLargeJump() {
         final StreamsBuilder builder = new StreamsBuilder();
@@ -465,7 +462,7 @@ public class SuppressScenarioTest {
         final KTable<Windowed<String>, Long> valueCounts = builder
             .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
             .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
-            .windowedBy(SessionWindows.with(ofMillis(5L)).grace(ofMillis(5L)))
+            .windowedBy(SessionWindows.with(ofMillis(5L)).grace(ofMillis(0L)))
             .count(Materialized.<String, Long, SessionStore<Bytes, byte[]>>as("counts").withCachingDisabled());
         valueCounts
             .suppress(untilWindowCloses(unbounded()))
@@ -482,34 +479,38 @@ public class SuppressScenarioTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             // first window
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", 5L));
+            // arbitrarily disordered records are admitted, because the *window* is not closed until stream-time > window-end + grace
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 1L));
-            // new window
-            driver.pipeInput(recordFactory.create("input", "k1", "v1", 7L));
+            // any record in the same partition advances stream time (note the key is different)
+            driver.pipeInput(recordFactory.create("input", "k2", "v1", 6L));
             // late event for first window - this should get dropped from all streams, since the first window is now closed.
-            driver.pipeInput(recordFactory.create("input", "k1", "v1", 1L));
+            driver.pipeInput(recordFactory.create("input", "k1", "v1", 5L));
             // just pushing stream time forward to flush the other events through.
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 30L));
             verify(
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
                     new KeyValueTimestamp<>("[k1@0/0]", 1L, 0L),
-                    new KeyValueTimestamp<>("[k1@0/0]", null, 1L),
-                    new KeyValueTimestamp<>("[k1@0/1]", 2L, 1L),
-                    new KeyValueTimestamp<>("[k1@7/7]", 1L, 7L),
+                    new KeyValueTimestamp<>("[k1@0/0]", null, 5L),
+                    new KeyValueTimestamp<>("[k1@0/5]", 2L, 5L),
+                    new KeyValueTimestamp<>("[k1@0/5]", null, 1L),
+                    new KeyValueTimestamp<>("[k1@0/5]", 3L, 1L),
+                    new KeyValueTimestamp<>("[k2@6/6]", 1L, 6L),
                     new KeyValueTimestamp<>("[k1@30/30]", 1L, 30L)
                 )
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
-                    new KeyValueTimestamp<>("[k1@0/1]", 2L, 1L),
-                    new KeyValueTimestamp<>("[k1@7/7]", 1L, 7L)
+                    new KeyValueTimestamp<>("[k1@0/5]", 3L, 1L),
+                    new KeyValueTimestamp<>("[k2@6/6]", 1L, 6L)
                 )
             );
         }
     }
 
-    private <K, V> void verify(final List<ProducerRecord<K, V>> results, final List<KeyValueTimestamp<K, V>> expectedResults) {
+    private static <K, V> void verify(final List<ProducerRecord<K, V>> results, final List<KeyValueTimestamp<K, V>> expectedResults) {
         if (results.size() != expectedResults.size()) {
             throw new AssertionError(printRecords(results) + " != " + expectedResults);
         }
@@ -524,7 +525,7 @@ public class SuppressScenarioTest {
         }
     }
 
-    private <K, V> List<ProducerRecord<K, V>> drainProducerRecords(final TopologyTestDriver driver, final String topic, final Deserializer<K> keyDeserializer, final Deserializer<V> valueDeserializer) {
+    private static <K, V> List<ProducerRecord<K, V>> drainProducerRecords(final TopologyTestDriver driver, final String topic, final Deserializer<K> keyDeserializer, final Deserializer<V> valueDeserializer) {
         final List<ProducerRecord<K, V>> result = new LinkedList<>();
         for (ProducerRecord<K, V> next = driver.readOutput(topic, keyDeserializer, valueDeserializer);
              next != null;
@@ -534,11 +535,11 @@ public class SuppressScenarioTest {
         return new ArrayList<>(result);
     }
 
-    private <K, V> String printRecords(final List<ProducerRecord<K, V>> result) {
+    private static <K, V> String printRecords(final List<ProducerRecord<K, V>> result) {
         final StringBuilder resultStr = new StringBuilder();
         resultStr.append("[\n");
         for (final ProducerRecord<?, ?> record : result) {
-            resultStr.append("  ").append(record.toString()).append("\n");
+            resultStr.append("  ").append(record).append("\n");
         }
         resultStr.append("]");
         return resultStr.toString();

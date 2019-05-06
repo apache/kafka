@@ -58,12 +58,20 @@ public interface PartitionAssignor {
      */
     Map<String, Assignment> assign(Cluster metadata, Map<String, Subscription> subscriptions);
 
-
     /**
      * Callback which is invoked when a group member receives its assignment from the leader.
      * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, Map)}
      */
     void onAssignment(Assignment assignment);
+
+    /**
+     * Callback which is invoked when a group member receives its assignment from the leader.
+     * @param assignment The local member's assignment as provided by the leader in {@link #assign(Cluster, Map)}
+     * @param generation The consumer group generation associated with this partition assignment (optional)
+     */
+    default void onAssignment(Assignment assignment, int generation) {
+        onAssignment(assignment);
+    }
 
 
     /**

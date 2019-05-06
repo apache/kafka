@@ -598,7 +598,7 @@ public class CachingWindowStoreTest {
         final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
         final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
 
-        final KeyValueIterator iterator = cachingStore.fetch(keyFrom, keyTo, 0L, 10L);
+        final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.fetch(keyFrom, keyTo, 0L, 10L);
         assertFalse(iterator.hasNext());
 
         final List<String> messages = appender.getMessages();

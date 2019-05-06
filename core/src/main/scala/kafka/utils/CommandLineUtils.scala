@@ -33,7 +33,7 @@ object CommandLineUtils extends Logging {
     * @return true on matching the help check condition
     */
   def isPrintHelpNeeded(commandOpts: CommandDefaultOptions): Boolean = {
-    return commandOpts.args.length == 0 || commandOpts.options.has(commandOpts.helpOpt)
+    commandOpts.args.length == 0 || commandOpts.options.has(commandOpts.helpOpt)
   }
 
   /**
