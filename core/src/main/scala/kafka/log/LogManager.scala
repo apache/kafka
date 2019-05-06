@@ -518,7 +518,7 @@ class LogManager(logDirs: Seq[File],
       dirLocks.foreach(_.destroy())
     }
 
-    _remoteLogManager.foreach(_.shutdown())
+    _remoteLogManager.foreach(_.close())
 
     info("Shutdown complete.")
   }

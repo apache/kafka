@@ -1032,7 +1032,7 @@ class ReplicaManager(val config: KafkaConfig,
         case e: OffsetOutOfRangeException =>
           // Incase of offset out of range errors, check for remote log manager to fetch from remote storage
           // todo check if it is from a follower then do not return the data as the data may have already been copied
-          logManager.remoteLogManager.map(rlm => rlm.read(fetchMaxBytes, hardMaxBytesLimit, readPartitionInfo))
+          logManager.remoteLogManager.map(rlm => rlm.read(fetchMaxBytes, hardMaxBytesLimit, tp, fetchInfo))
             .getOrElse(createLogReadResult(e))
         case e: Throwable =>
           brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()

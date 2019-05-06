@@ -16,7 +16,7 @@
  */
 package kafka.log.remote
 
-import java.io.{File, IOException}
+import java.io.{Closeable, File, IOException}
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
 
@@ -30,10 +30,10 @@ import org.apache.kafka.common.utils.Utils
  * Each remote log entry is represented with [[RemoteLogIndexEntry]]
  *
  * todo-satish: currently it is using a channel to store the entries. We may go with memory mapped file later to
- * read/write the entries.
+ * read/write the entries. Need to add methods to fetch remote log offset for a given offset/timestamp.
  *
  */
-class RemoteLogIndex(val startOffset: Long, @volatile var file: File) extends Logging {
+class RemoteLogIndex(val startOffset: Long, @volatile var file: File) extends Logging with Closeable {
 
   @volatile private var maybeChannel: Option[FileChannel] = None
   private var lastOffset: Option[Long] = None

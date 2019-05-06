@@ -16,31 +16,35 @@
  */
 package kafka.log.remote
 
-import java.io.File
-import java.nio.file.Files
+import java.io.{Closeable, File}
 import java.util
-import java.util.concurrent.{BlockingQueue, Executors, LinkedBlockingDeque}
+import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, Executors, LinkedBlockingDeque}
 
-import kafka.log.{LogManager, LogSegment}
+import kafka.log.{LogManager, LogSegment, OffsetIndex, TimeIndex}
 import kafka.server.LogReadResult
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Configurable, TopicPartition}
 
 import scala.collection.Set
 
-class RemoteLogManager(logManager: LogManager) extends Configurable {
+class RemoteLogManager(logManager: LogManager) extends Configurable with Closeable {
   var remoteStorageManager: RemoteStorageManager = _
 
   val watchedSegments: BlockingQueue[LogSegment] = new LinkedBlockingDeque[LogSegment]()
 
+  val remoteLogIndexes: util.Map[Long, RemoteLogIndex] = new ConcurrentHashMap[Long, RemoteLogIndex]()
+  val remoteOffsetIndexes: util.Map[Long, OffsetIndex] = new ConcurrentHashMap[Long, OffsetIndex]()
+  val remoteTimeIndexes: util.Map[Long, TimeIndex] = new ConcurrentHashMap[Long, TimeIndex]()
+
   //todo configurable no of tasks/threads
-  val threadPool = Executors.newSingleThreadExecutor()
-  threadPool.submit(new Runnable() {
+  val executorService = Executors.newSingleThreadExecutor()
+  executorService.submit(new Runnable() {
     override def run(): Unit = {
       while (true) {
-        val segment = watchedSegments.take()
-
         try {
+          val segment = watchedSegments.take()
+
           //todo-satish Not all LogSegments on different replicas are same. So, we need to avoid duplicating log-segments in remote
           // tier with similar offset ranges.
           val tuple = remoteStorageManager.copyLogSegment(segment)
@@ -50,16 +54,41 @@ class RemoteLogManager(logManager: LogManager) extends Configurable {
           val entries = tuple._2
           val file = segment.log.file()
           val prefix = file.getName.substring(0, file.getName.indexOf("."))
-          val remoteLogIndex = new RemoteLogIndex(prefix.toLong, Files.createFile(new File(file.getParentFile, prefix).toPath).toFile)
-          entries.foreach(entry => remoteLogIndex.append(entry))
-          remoteLogIndex.flush()
-          remoteLogIndex.close()
+          buildIndexes(entries, file, prefix)
         } catch {
+          case _: InterruptedException => return
           case _: Throwable => //todo-satish log the message here for failed log copying and add them again in pending segments.
         }
       }
     }
   })
+
+  private def buildIndexes(entries: Seq[RemoteLogIndexEntry], parentDir: File, prefix: String) = {
+    val startOffset = prefix.toLong
+    val remoteLogIndex = new RemoteLogIndex(startOffset, new File(parentDir, prefix + ".remoteLogIndex"))
+    val remoteTimeIndex = new TimeIndex(new File(parentDir, prefix + ".remoteTimeIndex"), startOffset)
+    val remoteOffsetIndex = new OffsetIndex(new File(parentDir, prefix + ".remoteOffsetIndex"), startOffset)
+    var position: Integer = 0
+    var minOffset: Long = 0
+    var minTimeStamp: Long = 0
+
+    entries.foreach(entry => {
+      if (entry.firstOffset < minOffset) minOffset = entry.firstOffset
+      if (entry.firstTimeStamp < minTimeStamp) minTimeStamp = entry.firstTimeStamp
+      remoteLogIndex.append(entry)
+      //todo compute position
+      remoteOffsetIndex.append(entry.firstOffset, position)
+      remoteTimeIndex.maybeAppend(entry.firstTimeStamp, entry.firstOffset)
+    })
+
+    remoteLogIndex.flush()
+    remoteOffsetIndex.flush()
+    remoteTimeIndex.flush()
+
+    remoteLogIndexes.put(minOffset, remoteLogIndex)
+    remoteOffsetIndexes.put(minOffset, remoteOffsetIndex)
+    remoteTimeIndexes.put(minOffset, remoteTimeIndex)
+  }
 
   /**
    * Configure this class with the given key-value pairs
@@ -110,19 +139,24 @@ class RemoteLogManager(logManager: LogManager) extends Configurable {
    *
    * @param fetchMaxByes
    * @param hardMaxBytesLimit
-   * @param readPartitionInfo
+   * @param tp
+   * @param fetchInfo
    * @return
    */
-  def read(fetchMaxByes: Int, hardMaxBytesLimit: Boolean, readPartitionInfo: Seq[(TopicPartition, PartitionData)]): LogReadResult = {
-
+  def read(fetchMaxByes: Int, hardMaxBytesLimit: Boolean, tp: TopicPartition, fetchInfo: PartitionData): LogReadResult = {
+    //todo get the nearest offset from indexes.
     null
   }
 
   /**
    * Stops all the threads and closes the instance.
    */
-  def shutdown(): Unit = {
-    remoteStorageManager.shutdown()
+  def close() = {
+    Utils.closeQuietly(remoteStorageManager, "RemoteLogStorageManager")
+    remoteLogIndexes.values().forEach(x => Utils.closeQuietly(x, "RemoteLogIndex"))
+    remoteOffsetIndexes.values().forEach(x => Utils.closeQuietly(x, "RemoteOffsetIndex"))
+    remoteTimeIndexes.values().forEach(x => Utils.closeQuietly(x, "RemoteTimeIndex"))
+    executorService.shutdownNow()
   }
 
 }

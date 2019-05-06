@@ -20,7 +20,7 @@ import kafka.log.{LogReadInfo, LogSegment}
 import org.apache.kafka.common.{Configurable, TopicPartition}
 
 // all these APIs are still experimental, in poc mode.
-trait RemoteStorageManager extends Configurable {
+trait RemoteStorageManager extends Configurable with AutoCloseable {
 
   /**
    * Copies LogSegment provided by [[RemoteLogManager]]
@@ -76,5 +76,5 @@ trait RemoteStorageManager extends Configurable {
   /**
    * stops all the threads and closes the instance.
    */
-  def shutdown(): Unit
+  def close(): Unit
 }
