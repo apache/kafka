@@ -19,11 +19,13 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
 import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
@@ -40,6 +42,7 @@ import org.junit.Test;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Properties;
 
 import static java.time.Duration.ZERO;
 import static java.time.Duration.ofMillis;
@@ -440,6 +443,24 @@ public class KTableSuppressProcessorTest {
             assertThat(e.getMessage(), containsString("buffer exceeded its max capacity"));
         }
     }
+
+    @Test
+    public void groupByAfterSuppresShouldRuns() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final Properties properties = new Properties();
+
+        builder.<String, String>stream("topic")
+                .groupByKey()
+                .windowedBy(TimeWindows.of(Duration.ofSeconds(30)))
+                .count()
+                .suppress(Suppressed.untilTimeLimit(Duration.ofHours(1), Suppressed.BufferConfig.unbounded()))
+                .groupBy((k, v) -> KeyValue.pair(k, v))
+                .count()
+                .toStream();
+
+        builder.build(properties);
+    }
+
 
     @SuppressWarnings({"unchecked", "rawtypes"})
     private static <K extends Windowed> SuppressedInternal<K> finalResults(final Duration grace) {
