@@ -51,8 +51,8 @@ public class WordCountDemoTest {
         //Create Actual Stream Processing pipeline
         WordCountDemo.createWordCountStream(builder);
         testDriver = new TopologyTestDriver(builder.build(), WordCountDemo.getStreamsConfig());
-        inputTopic = new TestInputTopic<String, String>(testDriver, WordCountDemo.INPUT_TOPIC, new Serdes.StringSerde(), new Serdes.StringSerde());
-        outputTopic = new TestOutputTopic<String, Long>(testDriver, WordCountDemo.OUTPUT_TOPIC, new Serdes.StringSerde(), new Serdes.LongSerde());
+        inputTopic = new TestInputTopic<>(testDriver, WordCountDemo.INPUT_TOPIC, new Serdes.StringSerde(), new Serdes.StringSerde());
+        outputTopic = new TestOutputTopic<>(testDriver, WordCountDemo.OUTPUT_TOPIC, new Serdes.StringSerde(), new Serdes.LongSerde());
     }
 
     @After

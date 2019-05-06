@@ -62,7 +62,7 @@ public final class WordCountDemo {
         return props;
     }
 
-    static void createWordCountStream(StreamsBuilder builder) {
+    static void createWordCountStream(final StreamsBuilder builder) {
         final KStream<String, String> source = builder.stream(INPUT_TOPIC);
 
         final KTable<String, Long> counts = source
