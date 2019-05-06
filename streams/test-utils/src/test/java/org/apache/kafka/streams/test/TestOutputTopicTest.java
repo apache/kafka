@@ -23,6 +23,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
@@ -36,7 +37,11 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
@@ -56,16 +61,20 @@ public class TestOutputTopicTest {
     private final StringDeserializer stringDeserializer = new StringDeserializer();
     private final StringSerializer stringSerializer = new StringSerializer();
 
+    private final Properties config = mkProperties(mkMap(
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "TestOutputTopicTest"),
+            mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234")
+    ));
+
     @Before
     public void setup() {
         final StreamsBuilder builder = new StreamsBuilder();
-        TestStream app = new TestStream();
         //Create Actual Stream Processing pipeline
         builder.stream(INPUT_TOPIC).to(OUTPUT_TOPIC);
         final KStream<Long, String> source = builder.stream(INPUT_TOPIC_MAP, Consumed.with(longSerde, stringSerde));
         KStream<String, Long> mapped = source.map((key, value) -> new KeyValue<>(value, key));
         mapped.to(OUTPUT_TOPIC_MAP, Produced.with(stringSerde, longSerde));
-        testDriver = new TopologyTestDriver(builder.build(), app.config);
+        testDriver = new TopologyTestDriver(builder.build(), config);
     }
 
     @After
