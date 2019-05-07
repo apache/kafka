@@ -1354,9 +1354,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       // and groupInstanceId is configured to unknown.
       val requireKnownMemberId = joinGroupRequest.version >= 4 && groupInstanceId.isEmpty
 
+      // With the result of 'protocols' now being a set instead of a list, the implicit conversion
+      // by map first into a set and then into a list needs to be skipped by using breakOut and
+      // by transforming the set of metadata to a list of tuples directly. Otherwise the ordering
+      // of protocols that defines preference is discarded during the conversion.
+      val protocols: List[(String, Array[Byte])] = joinGroupRequest.data().protocols().asScala
+        .map(protocol => (protocol.name, protocol.metadata))(breakOut)
       // let the coordinator handle join-group
-      val protocols = joinGroupRequest.data().protocols().asScala.map(protocol =>
-        (protocol.name, protocol.metadata)).toList
       groupCoordinator.handleJoinGroup(
         joinGroupRequest.data().groupId,
         joinGroupRequest.data().memberId,
