@@ -29,7 +29,6 @@ import org.junit.Test;
 import java.util.Arrays;
 
 import static java.time.Duration.ofMillis;
-import static org.apache.kafka.test.StreamsTestUtils.valuesToSet;
 import static org.junit.Assert.assertEquals;
 
 public class RocksDBSessionStoreTest extends SessionBytesStoreTest {

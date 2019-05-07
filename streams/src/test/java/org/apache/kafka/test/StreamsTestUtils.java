@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.test;
 
-import java.util.HashSet;
-import java.util.Set;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.serialization.Serde;
@@ -92,24 +90,6 @@ public final class StreamsTestUtils {
 
     public static <K, V> List<V> valuesToList(final Iterator<KeyValue<K, V>> iterator) {
         final List<V> results = new ArrayList<>();
-
-        while (iterator.hasNext()) {
-            results.add(iterator.next().value);
-        }
-        return results;
-    }
-
-    public static <K, V> Set<KeyValue<K, V>> toSet(final Iterator<KeyValue<K, V>> iterator) {
-        final Set<KeyValue<K, V>> results = new HashSet<>();
-
-        while (iterator.hasNext()) {
-            results.add(iterator.next());
-        }
-        return results;
-    }
-
-    public static <K, V> Set<V> valuesToSet(final Iterator<KeyValue<K, V>> iterator) {
-        final Set<V> results = new HashSet<>();
 
         while (iterator.hasNext()) {
             results.add(iterator.next().value);

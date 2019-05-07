@@ -34,6 +34,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -62,7 +63,6 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.test.InternalMockProcessorContext;
-import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.After;
@@ -293,7 +293,7 @@ public abstract class WindowBytesStoreTest {
 
         assertEquals(
             new HashSet<>(asList(zero, one, two, four, five)),
-            StreamsTestUtils.toSet(windowStore.all())
+            toSet(windowStore.all())
         );
     }
 
@@ -311,18 +311,15 @@ public abstract class WindowBytesStoreTest {
 
         assertEquals(
             new HashSet<>(asList(one, two, four)),
-            StreamsTestUtils.toSet(
-                windowStore.fetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 4)))
+            toSet(windowStore.fetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 4)))
         );
         assertEquals(
             new HashSet<>(asList(zero, one, two)),
-            StreamsTestUtils.toSet(
-                windowStore.fetchAll(ofEpochMilli(startTime + 0), ofEpochMilli(startTime + 3)))
+            toSet(windowStore.fetchAll(ofEpochMilli(startTime + 0), ofEpochMilli(startTime + 3)))
         );
         assertEquals(
             new HashSet<>(asList(one, two, four, five)),
-            StreamsTestUtils.toSet(
-                windowStore.fetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 5)))
+            toSet(windowStore.fetchAll(ofEpochMilli(startTime + 1), ofEpochMilli(startTime + 5)))
         );
     }
 
@@ -340,7 +337,7 @@ public abstract class WindowBytesStoreTest {
 
         assertEquals(
             new HashSet<>(asList(zero, one)),
-            StreamsTestUtils.toSet(windowStore.fetch(
+            toSet(windowStore.fetch(
                 0,
                 1,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
@@ -348,7 +345,7 @@ public abstract class WindowBytesStoreTest {
         );
         assertEquals(
             new HashSet<>(Collections.singletonList(one)),
-            StreamsTestUtils.toSet(windowStore.fetch(
+            toSet(windowStore.fetch(
                 1,
                 1,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
@@ -356,7 +353,7 @@ public abstract class WindowBytesStoreTest {
         );
         assertEquals(
             new HashSet<>(asList(one, two)),
-            StreamsTestUtils.toSet(windowStore.fetch(
+            toSet(windowStore.fetch(
                 1,
                 3,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
@@ -364,7 +361,7 @@ public abstract class WindowBytesStoreTest {
         );
         assertEquals(
             new HashSet<>(asList(zero, one, two)),
-            StreamsTestUtils.toSet(windowStore.fetch(
+            toSet(windowStore.fetch(
                 0,
                 5,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
@@ -372,7 +369,7 @@ public abstract class WindowBytesStoreTest {
         );
         assertEquals(
             new HashSet<>(asList(zero, one, two, four, five)),
-            StreamsTestUtils.toSet(windowStore.fetch(
+            toSet(windowStore.fetch(
                 0,
                 5,
                 ofEpochMilli(startTime + 0L - WINDOW_SIZE),
@@ -380,7 +377,7 @@ public abstract class WindowBytesStoreTest {
         );
         assertEquals(
             new HashSet<>(asList(two, four, five)),
-            StreamsTestUtils.toSet(windowStore.fetch(
+            toSet(windowStore.fetch(
                 0,
                 5,
                 ofEpochMilli(startTime + 2L),
@@ -388,7 +385,7 @@ public abstract class WindowBytesStoreTest {
         );
         assertEquals(
             new HashSet<>(Collections.emptyList()),
-            StreamsTestUtils.toSet(windowStore.fetch(
+            toSet(windowStore.fetch(
                 4,
                 5,
                 ofEpochMilli(startTime + 2L),
@@ -396,7 +393,7 @@ public abstract class WindowBytesStoreTest {
         );
         assertEquals(
             new HashSet<>(Collections.emptyList()),
-            StreamsTestUtils.toSet(windowStore.fetch(
+            toSet(windowStore.fetch(
                 0,
                 3,
                 ofEpochMilli(startTime + 3L),
@@ -759,14 +756,14 @@ public abstract class WindowBytesStoreTest {
         assertThat(toSet(windowStore.fetch("a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE))), equalTo(expected));
 
         Set<KeyValue<Windowed<String>, String>> set =
-            StreamsTestUtils.toSet(windowStore.fetch("a", "a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+            toSet(windowStore.fetch("a", "a", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
         assertThat(set, equalTo(new HashSet<>(asList(
             windowedPair("a", "0001", 0, windowSize),
             windowedPair("a", "0003", 1, windowSize),
             windowedPair("a", "0005", 0x7a00000000000000L - 1, windowSize)
         ))));
 
-        set = StreamsTestUtils.toSet(windowStore.fetch("aa", "aa", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
+        set = toSet(windowStore.fetch("aa", "aa", ofEpochMilli(0), ofEpochMilli(Long.MAX_VALUE)));
         assertThat(set, equalTo(new HashSet<>(asList(
             windowedPair("aa", "0002", 0, windowSize),
             windowedPair("aa", "0004", 1, windowSize)
@@ -1060,6 +1057,15 @@ public abstract class WindowBytesStoreTest {
             set.add(iterator.next().value);
         }
         return set;
+    }
+
+    protected static <K, V> Set<KeyValue<K, V>> toSet(final Iterator<KeyValue<K, V>> iterator) {
+        final Set<KeyValue<K, V>> results = new HashSet<>();
+
+        while (iterator.hasNext()) {
+            results.add(iterator.next());
+        }
+        return results;
     }
 
     private Map<Integer, Set<String>> entriesByKey(final List<KeyValue<byte[], byte[]>> changeLog,
