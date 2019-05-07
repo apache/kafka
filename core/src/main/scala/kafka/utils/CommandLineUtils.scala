@@ -19,6 +19,7 @@
 import java.util.Properties
 
 import joptsimple.{OptionParser, OptionSet, OptionSpec}
+import org.apache.kafka.common.utils.AppInfoParser
 
 import scala.collection.Set
 
@@ -36,9 +37,18 @@ object CommandLineUtils extends Logging {
     commandOpts.args.length == 0 || commandOpts.options.has(commandOpts.helpOpt)
   }
 
+  def isPrintVersionNeeded(commandOpts: CommandDefaultOptions): Boolean = {
+    commandOpts.options.has(commandOpts.versionOpt)
+  }
+
   /**
     * Check and print help message if there is no options or `--help` option
-    * from command line
+    * from command line, if `--version` is specified on the command line
+    * print version information and exit.
+    * NOTE: The function name is not strictly speaking correct anymore
+    * as it also checks whether the version needs to be printed, but
+    * refactoring this would have meant changing all command line tools
+    * and unnecessarily increased the blast radius of this change.
     *
     * @param commandOpts Acceptable options for a command
     * @param message     Message to display on successful check
@@ -46,6 +56,8 @@ object CommandLineUtils extends Logging {
   def printHelpAndExitIfNeeded(commandOpts: CommandDefaultOptions, message: String) = {
     if (isPrintHelpNeeded(commandOpts))
       printUsageAndDie(commandOpts.parser, message)
+    if (isPrintVersionNeeded(commandOpts))
+      printVersionAndDie()
   }
 
   /**
@@ -89,6 +101,11 @@ object CommandLineUtils extends Logging {
     System.err.println(message)
     parser.printHelpOn(System.err)
     Exit.exit(1, Some(message))
+  }
+
+  def printVersionAndDie(): Nothing = {
+    System.out.println(VersionInfo.getVersionString)
+    Exit.exit(0)
   }
 
   /**
