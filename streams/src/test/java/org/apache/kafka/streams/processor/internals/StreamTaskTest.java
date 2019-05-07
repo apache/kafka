@@ -617,6 +617,10 @@ public class StreamTaskTest {
 
         task.commit();
         assertFalse(task.commitNeeded());
+
+        // confirm that timestamp was correctly committed
+        assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata())
+                   == task.getPartitionTime(partition1));
     }
 
     @Test

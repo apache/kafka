@@ -51,6 +51,7 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -345,6 +346,29 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @SuppressWarnings("unchecked")
     public boolean process() {
+        // if condition put here in case of restarts and rebalances to check for correct timestamp
+        if (partitionGroup.getPartitionTimestamp(recordInfo.partition()) == -1) {
+            final String commitMetadata;
+            if (!eosEnabled) {
+                final OffsetAndMetadata metadata = consumer.committed(recordInfo.partition());
+                if (metadata == null) {
+                    commitMetadata = null;
+                } else {
+                    commitMetadata = metadata.metadata();
+                }
+            } else {
+                // this else branch is questionable
+                consumer.seekToEnd(Collections.singleton(recordInfo.partition()));
+                consumer.poll(0);
+                //...
+                commitMetadata = null;
+            }
+            if (commitMetadata != null) {
+                partitionGroup.setPartitionTimestamp(recordInfo.partition(),
+                                                     Long.parseLong(commitMetadata));
+            }
+        }
+
         // get the next record to process
         final StampedRecord record = partitionGroup.nextRecord(recordInfo);
 
@@ -444,6 +468,14 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         processorContext.setCurrentNode(currNode);
     }
 
+    public long getStreamTime() {
+        return partitionGroup.timestamp();
+    }
+
+    public long getPartitionTime(final TopicPartition partition) {
+        return partitionGroup.getPartitionTimestamp(partition);
+    }
+
     /**
      * <pre>
      * - flush state and producer
@@ -478,7 +510,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         for (final Map.Entry<TopicPartition, Long> entry : consumedOffsets.entrySet()) {
             final TopicPartition partition = entry.getKey();
             final long offset = entry.getValue() + 1;
-            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset));
+            consumedOffsetsAndMetadata.put(partition, new OffsetAndMetadata(offset,
+                                                                            ((Long) getPartitionTime(partition)).toString()));
             stateMgr.putOffsetLimit(partition, offset);
         }
 

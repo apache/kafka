@@ -786,10 +786,6 @@ public class StreamThread extends Thread {
         }
     }
 
-    public boolean isConnected() {
-        return consumer.isConnected();
-    }
-
     private void setRebalanceException(final Throwable rebalanceException) {
         this.rebalanceException = rebalanceException;
     }

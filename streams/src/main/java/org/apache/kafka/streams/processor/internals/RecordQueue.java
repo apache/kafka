@@ -69,6 +69,10 @@ public class RecordQueue {
         this.log = logContext.logger(RecordQueue.class);
     }
 
+    public void setPartitionTime(final long partitionTime) {
+        this.partitionTime = partitionTime;
+    }
+
     /**
      * Returns the corresponding source node in the topology
      *
