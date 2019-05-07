@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Connect;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerInfo;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
@@ -83,8 +82,7 @@ public class ConnectStandalone {
             log.debug("Kafka cluster ID: {}", kafkaClusterId);
 
             RestServer rest = new RestServer(config);
-            HerderProvider provider = new HerderProvider();
-            rest.start(provider, plugins);
+            rest.initializeServer();
 
             URI advertisedUrl = rest.advertisedUrl();
             String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
@@ -97,8 +95,6 @@ public class ConnectStandalone {
 
             try {
                 connect.start();
-                // herder has initialized now, and ready to be used by the RestServer.
-                provider.setHerder(herder);
                 for (final String connectorPropsFile : Arrays.copyOfRange(args, 1, args.length)) {
                     Map<String, String> connectorProps = Utils.propsToStringMap(Utils.loadProps(connectorPropsFile));
                     FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>(new Callback<Herder.Created<ConnectorInfo>>() {
