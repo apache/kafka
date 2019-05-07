@@ -18,7 +18,6 @@ package org.apache.kafka.connect.runtime.health;
 
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.HerderProvider;
 import org.apache.kafka.connect.util.Callback;
 import org.easymock.Capture;
 import org.easymock.EasyMock;
@@ -42,15 +41,13 @@ public class ConnectClusterStateImplTest {
   
     @Mock
     protected Herder herder;
-    protected HerderProvider herderProvider;
     protected ConnectClusterStateImpl connectClusterState;
     protected Collection<String> expectedConnectors;
     protected long herderRequestTimeoutMs = TimeUnit.SECONDS.toMillis(10);
     
     @Before
     public void setUp() {
-        herderProvider = new HerderProvider(herder);
-        connectClusterState = new ConnectClusterStateImpl(herderRequestTimeoutMs, herderProvider);
+        connectClusterState = new ConnectClusterStateImpl(herderRequestTimeoutMs, herder);
         expectedConnectors = Arrays.asList("sink1", "source1", "source2");
     }
     

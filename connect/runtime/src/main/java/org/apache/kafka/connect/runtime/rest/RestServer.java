@@ -21,10 +21,9 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.rest.ConnectRestExtension;
 import org.apache.kafka.connect.rest.ConnectRestExtensionContext;
-import org.apache.kafka.connect.runtime.HerderProvider;
+import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
-import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorPluginsResource;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
@@ -34,8 +33,8 @@ import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.server.handler.DefaultHandler;
-import org.eclipse.jetty.server.handler.HandlerCollection;
 import org.eclipse.jetty.server.handler.RequestLogHandler;
 import org.eclipse.jetty.server.handler.StatisticsHandler;
 import org.eclipse.jetty.servlet.FilterHolder;
@@ -74,6 +73,7 @@ public class RestServer {
     private static final String PROTOCOL_HTTPS = "https";
 
     private final WorkerConfig config;
+    private ContextHandlerCollection handlers;
     private Server jettyServer;
 
     private List<ConnectRestExtension> connectRestExtensions = Collections.emptyList();
@@ -87,6 +87,7 @@ public class RestServer {
         List<String> listeners = parseListeners();
 
         jettyServer = new Server();
+        handlers = new ContextHandlerCollection();
 
         createConnectors(listeners);
     }
@@ -159,21 +160,40 @@ public class RestServer {
         return connector;
     }
 
+    public void initializeServer() {
+        log.info("Initializing REST server");
+
+        /* Needed for graceful shutdown as per `setStopTimeout` documentation */
+        StatisticsHandler statsHandler = new StatisticsHandler();
+        statsHandler.setHandler(handlers);
+        jettyServer.setHandler(statsHandler);
+        jettyServer.setStopTimeout(GRACEFUL_SHUTDOWN_TIMEOUT_MS);
+        jettyServer.setStopAtShutdown(true);
+
+        try {
+            jettyServer.start();
+        } catch (Exception e) {
+            throw new ConnectException("Unable to initialize REST server", e);
+        }
+
+        log.info("REST server listening at " + jettyServer.getURI() + ", advertising URL " + advertisedUrl());
+    }
+
     @SuppressWarnings("deprecation")
-    public void start(HerderProvider herderProvider, Plugins plugins) {
-        log.info("Starting REST server");
+    public void initializeResources(Herder herder) {
+        log.info("Initializing REST resources");
 
         ResourceConfig resourceConfig = new ResourceConfig();
         resourceConfig.register(new JacksonJsonProvider());
 
-        resourceConfig.register(new RootResource(herderProvider));
-        resourceConfig.register(new ConnectorsResource(herderProvider, config));
-        resourceConfig.register(new ConnectorPluginsResource(herderProvider));
+        resourceConfig.register(new RootResource(herder));
+        resourceConfig.register(new ConnectorsResource(herder, config));
+        resourceConfig.register(new ConnectorPluginsResource(herder));
 
         resourceConfig.register(ConnectExceptionMapper.class);
         resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
 
-        registerRestExtensions(herderProvider, plugins, resourceConfig);
+        registerRestExtensions(herder, resourceConfig);
 
         ServletContainer servletContainer = new ServletContainer(resourceConfig);
         ServletHolder servletHolder = new ServletHolder(servletContainer);
@@ -201,23 +221,14 @@ public class RestServer {
         requestLog.setLogLatency(true);
         requestLogHandler.setRequestLog(requestLog);
 
-        HandlerCollection handlers = new HandlerCollection();
         handlers.setHandlers(new Handler[]{context, new DefaultHandler(), requestLogHandler});
-
-        /* Needed for graceful shutdown as per `setStopTimeout` documentation */
-        StatisticsHandler statsHandler = new StatisticsHandler();
-        statsHandler.setHandler(handlers);
-        jettyServer.setHandler(statsHandler);
-        jettyServer.setStopTimeout(GRACEFUL_SHUTDOWN_TIMEOUT_MS);
-        jettyServer.setStopAtShutdown(true);
-
         try {
-            jettyServer.start();
+            context.start();
         } catch (Exception e) {
-            throw new ConnectException("Unable to start REST server", e);
+            throw new ConnectException("Unable to initialize REST resources", e);
         }
 
-        log.info("REST server listening at " + jettyServer.getURI() + ", advertising URL " + advertisedUrl());
+        log.info("REST resources initialized; server is started and ready to handle requests");
     }
 
     public URI serverUrl() {
@@ -238,9 +249,8 @@ public class RestServer {
             jettyServer.stop();
             jettyServer.join();
         } catch (Exception e) {
-            throw new ConnectException("Unable to stop REST server", e);
-        } finally {
             jettyServer.destroy();
+            throw new ConnectException("Unable to stop REST server", e);
         }
 
         log.info("REST server stopped");
@@ -248,7 +258,8 @@ public class RestServer {
 
     /**
      * Get the URL to advertise to other workers and clients. This uses the default connector from the embedded Jetty
-     * server, unless overrides for advertised hostname and/or port are provided via configs.
+     * server, unless overrides for advertised hostname and/or port are provided via configs. {@link #initializeServer()}
+     * must be invoked successfully before calling this method.
      */
     public URI advertisedUrl() {
         UriBuilder builder = UriBuilder.fromUri(jettyServer.getURI());
@@ -304,8 +315,8 @@ public class RestServer {
         return null;
     }
 
-    void registerRestExtensions(HerderProvider provider, Plugins plugins, ResourceConfig resourceConfig) {
-        connectRestExtensions = plugins.newPlugins(
+    void registerRestExtensions(Herder herder, ResourceConfig resourceConfig) {
+        connectRestExtensions = herder.plugins().newPlugins(
             config.getList(WorkerConfig.REST_EXTENSION_CLASSES_CONFIG),
             config, ConnectRestExtension.class);
 
@@ -320,7 +331,7 @@ public class RestServer {
         ConnectRestExtensionContext connectRestExtensionContext =
             new ConnectRestExtensionContextImpl(
                 new ConnectRestConfigurable(resourceConfig),
-                new ConnectClusterStateImpl(herderRequestTimeoutMs, provider)
+                new ConnectClusterStateImpl(herderRequestTimeoutMs, herder)
             );
         for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
             connectRestExtension.register(connectRestExtensionContext);

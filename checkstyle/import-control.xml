@@ -382,6 +382,7 @@
       <allow pkg="org.apache.kafka.connect.util.clusters" />
       <allow pkg="org.apache.kafka.connect" />
       <allow pkg="org.apache.kafka.tools" />
+      <allow pkg="javax.ws.rs" />
     </subpackage>
 
     <subpackage name="json">
