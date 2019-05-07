@@ -99,12 +99,18 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
 
     public List<SourceAndTarget> enabledClusterPairs() {
+        return clusterPairs().stream()
+            .filter(this::enabled)
+            .collect(Collectors.toList());
+    }
+
+    public List<SourceAndTarget> clusterPairs() {
         List<SourceAndTarget> pairs = new ArrayList<>();
         List<String> clusters = clusters();
         for (String source : clusters) {
             for (String target : clusters) {
                 SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
-                if (!source.equals(target) && enabled(sourceAndTarget)) {
+                if (!source.equals(target)) {
                     pairs.add(sourceAndTarget);
                 }
             }
@@ -198,6 +204,10 @@ public class MirrorMakerConfig extends AbstractConfig {
         // override with connector-level properties
         props.putAll(toStrings(originalsWithPrefix(sourceAndTarget.source() + "->"
             + sourceAndTarget.target() + ".")));
+
+        if (!enabled(sourceAndTarget)) {
+            props.put(ENABLED_CONFIG, "false");
+        }
 
         return props;
     }

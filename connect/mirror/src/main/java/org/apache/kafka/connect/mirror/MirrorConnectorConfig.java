@@ -43,70 +43,70 @@ public class MirrorConnectorConfig extends AbstractConfig {
     protected static final String EMIT_CHECKPOINTS = "emit.checkpoints";
     protected static final String BOOTSTRAP_SERVERS = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
     
+    public static final String ENABLED = "enabled";
+    private static final String ENABLED_DOC = "Whether to replicate source->target.";
     public static final String SOURCE_CLUSTER_ALIAS = "source.cluster.alias";
-    private static final String SOURCE_CLUSTER_ALIAS_DOC = "source.cluster.alias";
+    private static final String SOURCE_CLUSTER_ALIAS_DOC = "Alias of source cluster";
     public static final String TARGET_CLUSTER_ALIAS = "target.cluster.alias";
-    private static final String TARGET_CLUSTER_ALIAS_DOC = "target.cluster.alias";
+    private static final String TARGET_CLUSTER_ALIAS_DOC = "Alias of target cluster";
     public static final String REPLICATION_POLICY_CLASS = MirrorClientConfig.REPLICATION_POLICY_CLASS;
     public static final Class REPLICATION_POLICY_CLASS_DEFAULT = DefaultReplicationPolicy.class;
-    private static final String REPLICATION_POLICY_CLASS_DOC = "replication.policy.class";
+    private static final String REPLICATION_POLICY_CLASS_DOC = "Controls how remote topics are defined.";
     public static final String REPLICATION_POLICY_SEPARATOR = MirrorClientConfig.REPLICATION_POLICY_SEPARATOR;
-    private static final String REPLICATION_POLICY_SEPARATOR_DOC = "replication.policy.separator";
+    private static final String REPLICATION_POLICY_SEPARATOR_DOC = "Separator used in remote topic naming convention.";
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
         MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
     public static final String REPLICATION_FACTOR = "replication.factor";
-    private static final String REPLICATION_FACTOR_DOC = "replication.factor";
+    private static final String REPLICATION_FACTOR_DOC = "Replication factor for newly created remote topics.";
     public static final int REPLICATION_FACTOR_DEFAULT = 1;
 
     protected static final String TASK_TOPIC_PARTITIONS = "task.assigned.partitions";
-    protected static final String TASK_TOPIC_PARTITIONS_DOC = "task.assigned.partitions";
     protected static final String TASK_CONSUMER_GROUPS = "task.assigned.groups";
-    protected static final String TASK_CONSUMER_GROUPS_DOC = "task.assigned.groups";
 
     public static final String CONSUMER_POLL_TIMEOUT_MILLIS = "consumer.poll.timeout.ms";
-    private static final String CONSUMER_POLL_TIMEOUT_MILLIS_DOC = CONSUMER_POLL_TIMEOUT_MILLIS;
+    private static final String CONSUMER_POLL_TIMEOUT_MILLIS_DOC = "Timeout when polling source cluster.";
     public static final long CONSUMER_POLL_TIMEOUT_MILLIS_DEFAULT = 1000L;
 
     public static final String REFRESH_TOPICS_ENABLED = REFRESH_TOPICS + ENABLED_SUFFIX;
-    private static final String REFRESH_TOPICS_ENABLED_DOC = REFRESH_TOPICS + ENABLED_SUFFIX;
+    private static final String REFRESH_TOPICS_ENABLED_DOC = "Whether to periodically check for new topics and partitions.";
     public static final boolean REFRESH_TOPICS_ENABLED_DEFAULT = true;
     public static final String REFRESH_TOPICS_INTERVAL_SECONDS = REFRESH_TOPICS + INTERVAL_SECONDS_SUFFIX;
-    private static final String REFRESH_TOPICS_INTERVAL_SECONDS_DOC = REFRESH_TOPICS + INTERVAL_SECONDS_SUFFIX;
+    private static final String REFRESH_TOPICS_INTERVAL_SECONDS_DOC = "Frequency of topic refresh.";
     public static final long REFRESH_TOPICS_INTERVAL_SECONDS_DEFAULT = 5 * 60;
 
     public static final String REFRESH_GROUPS_ENABLED = REFRESH_GROUPS + ENABLED_SUFFIX;
-    private static final String REFRESH_GROUPS_ENABLED_DOC = REFRESH_GROUPS + ENABLED_SUFFIX;
+    private static final String REFRESH_GROUPS_ENABLED_DOC = "Whether to periodically check for new consumer groups.";
     public static final boolean REFRESH_GROUPS_ENABLED_DEFAULT = true;
     public static final String REFRESH_GROUPS_INTERVAL_SECONDS = REFRESH_GROUPS + INTERVAL_SECONDS_SUFFIX;
-    private static final String REFRESH_GROUPS_INTERVAL_SECONDS_DOC = REFRESH_GROUPS + INTERVAL_SECONDS_SUFFIX;
+    private static final String REFRESH_GROUPS_INTERVAL_SECONDS_DOC = "Frequency of group refresh.";
     public static final long REFRESH_GROUPS_INTERVAL_SECONDS_DEFAULT = 5 * 60;
 
     public static final String SYNC_TOPIC_CONFIGS_ENABLED = SYNC_TOPIC_CONFIGS + ENABLED_SUFFIX;
-    private static final String SYNC_TOPIC_CONFIGS_ENABLED_DOC = SYNC_TOPIC_CONFIGS + ENABLED_SUFFIX;
+    private static final String SYNC_TOPIC_CONFIGS_ENABLED_DOC = "Whether to periodically configure remote topics to match their corresponding upstream topics.";
     public static final boolean SYNC_TOPIC_CONFIGS_ENABLED_DEFAULT = true;
     public static final String SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS = SYNC_TOPIC_CONFIGS + INTERVAL_SECONDS_SUFFIX;
-    private static final String SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DOC = SYNC_TOPIC_CONFIGS + INTERVAL_SECONDS_SUFFIX;
+    private static final String SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DOC = "Frequency of topic config sync."; 
     public static final long SYNC_TOPIC_CONFIGS_INTERVAL_SECONDS_DEFAULT = 10 * 60;
 
     public static final String SYNC_TOPIC_ACLS_ENABLED = SYNC_TOPIC_ACLS + ENABLED_SUFFIX;
-    private static final String SYNC_TOPIC_ACLS_ENABLED_DOC = SYNC_TOPIC_ACLS + ENABLED_SUFFIX;
+    private static final String SYNC_TOPIC_ACLS_ENABLED_DOC = "Whether to periodically configure remote topic ACLs to match their corresponding upstream topics.";
     public static final boolean SYNC_TOPIC_ACLS_ENABLED_DEFAULT = true;
     public static final String SYNC_TOPIC_ACLS_INTERVAL_SECONDS = SYNC_TOPIC_ACLS + INTERVAL_SECONDS_SUFFIX;
-    private static final String SYNC_TOPIC_ACLS_INTERVAL_SECONDS_DOC = SYNC_TOPIC_ACLS + INTERVAL_SECONDS_SUFFIX;
+    private static final String SYNC_TOPIC_ACLS_INTERVAL_SECONDS_DOC = "Frequency of topic ACL sync.";
     public static final long SYNC_TOPIC_ACLS_INTERVAL_SECONDS_DEFAULT = 10 * 60;
 
     public static final String EMIT_HEARTBEATS_ENABLED = EMIT_HEARTBEATS + ENABLED_SUFFIX;
-    private static final String EMIT_HEARTBEATS_ENABLED_DOC = EMIT_HEARTBEATS + ENABLED_SUFFIX;
+    private static final String EMIT_HEARTBEATS_ENABLED_DOC = "Whether to emit heartbeats to target cluster.";
     public static final boolean EMIT_HEARTBEATS_ENABLED_DEFAULT = true;
     public static final String EMIT_HEARTBEATS_INTERVAL_SECONDS = EMIT_HEARTBEATS + INTERVAL_SECONDS_SUFFIX;
-    private static final String EMIT_HEARTBEATS_INTERVAL_SECONDS_DOC = EMIT_HEARTBEATS + INTERVAL_SECONDS_SUFFIX;
+    private static final String EMIT_HEARTBEATS_INTERVAL_SECONDS_DOC = "Frequency of heartbeats.";
     public static final long EMIT_HEARTBEATS_INTERVAL_SECONDS_DEFAULT = 1;
 
     public static final String EMIT_CHECKPOINTS_ENABLED = EMIT_CHECKPOINTS + ENABLED_SUFFIX;
-    private static final String EMIT_CHECKPOINTS_ENABLED_DOC = EMIT_CHECKPOINTS + ENABLED_SUFFIX;
+    private static final String EMIT_CHECKPOINTS_ENABLED_DOC = "Whether to replicate consumer offsets to target cluster.";
     public static final boolean EMIT_CHECKPOINTS_ENABLED_DEFAULT = true;
     public static final String EMIT_CHECKPOINTS_INTERVAL_SECONDS = EMIT_CHECKPOINTS + INTERVAL_SECONDS_SUFFIX;
-    private static final String EMIT_CHECKPOINTS_INTERVAL_SECONDS_DOC = EMIT_CHECKPOINTS + INTERVAL_SECONDS_SUFFIX;
+    private static final String EMIT_CHECKPOINTS_INTERVAL_SECONDS_DOC = "Frequency of checkpoints.";
     public static final long EMIT_CHECKPOINTS_INTERVAL_SECONDS_DEFAULT = 5;
 
     public static final String TOPIC_FILTER_CLASS = "topic.filter.class";
@@ -138,6 +138,10 @@ public class MirrorConnectorConfig extends AbstractConfig {
 
     String connectorName() {
         return getString(ConnectorConfig.NAME_CONFIG);
+    }
+
+    boolean enabled() {
+        return getBoolean(MirrorMakerConfig.ENABLED_CONFIG);
     }
 
     Duration consumerPollTimeout() {
@@ -304,6 +308,12 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     protected static final ConfigDef CONNECTOR_CONFIG_DEF = ConnectorConfig.configDef()
+        .define(
+            ENABLED,
+            ConfigDef.Type.BOOLEAN,
+            true,
+            ConfigDef.Importance.LOW,
+            ENABLED_DOC)
         .define(
             TOPIC_FILTER_CLASS,
             ConfigDef.Type.CLASS,

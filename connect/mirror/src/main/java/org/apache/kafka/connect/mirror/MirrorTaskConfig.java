@@ -28,6 +28,9 @@ import java.util.stream.Collectors;
 
 public class MirrorTaskConfig extends MirrorConnectorConfig {
 
+    private static final String TASK_TOPIC_PARTITIONS_DOC = "Topic-partitions assigned to this task to replicate.";
+    private static final String TASK_CONSUMER_GROUPS_DOC = "Consumer groups assigned to this task to replicate.";
+
     public MirrorTaskConfig(Map<String, String> props) {
         super(TASK_CONFIG_DEF, props);
     }

@@ -70,6 +70,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private int replicationFactor;
     private AdminClient sourceAdminClient;
     private AdminClient targetAdminClient;
+    private boolean enabled;
 
     public MirrorSourceConnector() {
         // nop
@@ -86,6 +87,9 @@ public class MirrorSourceConnector extends SourceConnector {
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorConnectorConfig(props);
+        if (!config.enabled()) {
+            return;
+        }
         connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
         topicFilter = config.topicFilter();
@@ -107,6 +111,9 @@ public class MirrorSourceConnector extends SourceConnector {
 
     @Override
     public void stop() {
+        if (!config.enabled()) {
+            return;
+        }
         scheduler.shutdown();
         synchronized (sourceAdminClient) {
             sourceAdminClient.close();
@@ -124,7 +131,7 @@ public class MirrorSourceConnector extends SourceConnector {
     // divide topic-partitions among tasks
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-        if (knownTopicPartitions.isEmpty()) {
+        if (!config.enabled() || knownTopicPartitions.isEmpty()) {
             return Collections.emptyList();
         }
         int numTasks = Math.min(maxTasks, knownTopicPartitions.size());

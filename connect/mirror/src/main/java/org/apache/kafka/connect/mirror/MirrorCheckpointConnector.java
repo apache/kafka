@@ -51,6 +51,9 @@ public class MirrorCheckpointConnector extends SourceConnector {
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorConnectorConfig(props);
+        if (!config.enabled()) {
+            return;
+        }
         connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
         groupFilter = config.groupFilter();
@@ -65,6 +68,9 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     @Override
     public void stop() {
+        if (!config.enabled()) {
+            return;
+        }
         scheduler.shutdown();
         synchronized (sourceAdminClient) {
             sourceAdminClient.close();
@@ -79,7 +85,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     // divide consumer groups among tasks
     @Override
     public List<Map<String, String>> taskConfigs(int maxTasks) {
-        if (knownConsumerGroups.isEmpty()) {
+        if (!config.enabled() || knownConsumerGroups.isEmpty()) {
             return Collections.emptyList();
         }
         int numTasks = Math.min(maxTasks, knownConsumerGroups.size());

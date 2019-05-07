@@ -56,8 +56,8 @@ public class MirrorMaker {
 
     private static final List<Class> CONNECTOR_CLASSES = Arrays.asList(
         MirrorSourceConnector.class,
-        MirrorCheckpointConnector.class,
-        MirrorHeartbeatConnector.class);
+        MirrorHeartbeatConnector.class,
+        MirrorCheckpointConnector.class);
  
     private final Map<SourceAndTarget, Herder> herders = new HashMap<>();
     private CountDownLatch startLatch;
@@ -73,7 +73,7 @@ public class MirrorMaker {
         this.time = time;
         this.advertisedBaseUrl = "TODO";
         this.config = config;
-        config.enabledClusterPairs().forEach(x -> addHerder(x));
+        config.clusterPairs().forEach(x -> addHerder(x));
         shutdownHook = new ShutdownHook();
     }
 
@@ -100,8 +100,8 @@ public class MirrorMaker {
                 startLatch.countDown();
             }
         }
-        log.info("Starting connectors...");
-        config.enabledClusterPairs().forEach(x -> startConnectors(x));
+        log.info("Configuring connectors...");
+        config.clusterPairs().forEach(x -> configureConnectors(x));
         log.info("Kafka MirrorMaker started");
     }
 
@@ -142,7 +142,7 @@ public class MirrorMaker {
         CONNECTOR_CLASSES.forEach(x -> herder.resumeConnector(x.getSimpleName()));
     }
 
-    private void startConnector(SourceAndTarget sourceAndTarget, Class connectorClass) {
+    private void configureConnector(SourceAndTarget sourceAndTarget, Class connectorClass) {
         checkHerder(sourceAndTarget);
         Map<String, String> connectorProps = config.connectorBaseConfig(sourceAndTarget, connectorClass);
         herders.get(sourceAndTarget)
@@ -162,8 +162,8 @@ public class MirrorMaker {
         }
     }
 
-    private void startConnectors(SourceAndTarget sourceAndTarget) {
-        CONNECTOR_CLASSES.forEach(x -> startConnector(sourceAndTarget, x));
+    private void configureConnectors(SourceAndTarget sourceAndTarget) {
+        CONNECTOR_CLASSES.forEach(x -> configureConnector(sourceAndTarget, x));
     }
 
     private void addHerder(SourceAndTarget sourceAndTarget) {
