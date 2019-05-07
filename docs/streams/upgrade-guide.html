@@ -241,6 +241,17 @@
         details, see <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-312%3A+Add+Overloaded+StreamsBuilder+Build+Method+to+Accept+java.util.Properties">KIP-312</a>
     </p>
 
+    <p>
+        We are introducing static membership towards KStream users. This feature reduces unnecessary rebalances during normal application upgrades or rolling bounces.
+        If you want to use static membership, first thing is to upgrade both broker cluster and stream apps to 2.3.0. This involves a necessity to change <code>inter.broker.protocol.version</code>
+        to 2.3 as well. Then you need to set the config <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> to a universally unique value for each stream instance.
+        If your broker is on older version, but you choose to set <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> on the client side, stream app will crash.
+        If you accidentally configure duplicate ids for different stream instances, a fencing mechanism will inform your duplicate client to shutdown by
+        triggering a <code>org.apache.kafka.common.errors.FencedInstanceIdException</code>.
+        For more details, see
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-345%3A+Introduce+static+membership+protocol+to+reduce+consumer+rebalances">KIP-345</a>
+    </p>
+
     <h3><a id="streams_api_changes_200" href="#streams_api_changes_200">Streams API changes in 2.0.0</a></h3>
     <p>
         In 2.0.0 we have added a few new APIs on the <code>ReadOnlyWindowStore</code> interface (for details please read <a href="#streams_api_changes_200">Streams API changes</a> below).
