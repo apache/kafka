@@ -68,6 +68,10 @@ public class MirrorClient implements AutoCloseable {
         adminClient.close();
     }
 
+    public ReplicationPolicy replicationPolicy() {
+        return replicationPolicy;
+    }
+
     public int replicationHops(String upstreamClusterAlias) throws InterruptedException {
         return heartbeatTopics().stream()
             .map(x -> countHopsForTopic(x, upstreamClusterAlias))
@@ -98,15 +102,6 @@ public class MirrorClient implements AutoCloseable {
             .collect(Collectors.toSet());
     }
 
-    /** Finds clusters replicating directly to this one based on incoming heartbeats. */
-    public Set<String> sourceClusters() throws InterruptedException {
-        return listTopics().stream()
-            .filter(this::isHeartbeatTopic)
-            .map(replicationPolicy::topicSource)
-            .filter(x -> x != null)
-            .collect(Collectors.toSet());
-    }
-
     public Set<String> remoteTopics() throws InterruptedException {
         return listTopics().stream()
             .filter(this::isRemoteTopic)
@@ -117,20 +112,6 @@ public class MirrorClient implements AutoCloseable {
         return listTopics().stream()
             .filter(this::isRemoteTopic)
             .filter(x -> source.equals(replicationPolicy.topicSource(x)))
-            .distinct()
-            .collect(Collectors.toSet());
-    }
-
-    public Set<String> upstreamTopics() throws InterruptedException {
-        return remoteTopics().stream()
-            .map(x -> replicationPolicy.upstreamTopic(x))
-            .distinct()
-            .collect(Collectors.toSet());
-    }
-
-    public Set<String> upstreamTopics(String source) throws InterruptedException {
-        return remoteTopics(source).stream()
-            .map(x -> replicationPolicy.upstreamTopic(x))
             .distinct()
             .collect(Collectors.toSet());
     }

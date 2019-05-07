@@ -118,21 +118,6 @@ public class MirrorClientTest {
     }
 
     @Test
-    public void sourceClustersTest() throws InterruptedException {
-        MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "heartbeats",
-            "source1.heartbeats", "source1.source2.heartbeats", "source3.source4.source5.heartbeats"));
-        Set<String> sources = client.sourceClusters();
-        assertTrue(sources.contains("source1"));
-        assertFalse(sources.contains("source2"));
-        assertTrue(sources.contains("source3"));
-        assertFalse(sources.contains("source4"));
-        assertFalse(sources.contains("source5"));
-        assertFalse(sources.contains("sourceX"));
-        assertFalse(sources.contains(""));
-        assertFalse(sources.contains(null));
-    }
-
-    @Test
     public void upstreamClustersTest() throws InterruptedException {
         MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "heartbeats",
             "source1.heartbeats", "source1.source2.heartbeats", "source3.source4.source5.heartbeats"));
@@ -158,18 +143,5 @@ public class MirrorClientTest {
         assertTrue(remoteTopics.contains("source1.topic4"));
         assertTrue(remoteTopics.contains("source1.source2.topic5"));
         assertTrue(remoteTopics.contains("source3.source4.source5.topic6"));
-    }
- 
-    @Test
-    public void upstreamTopicsTest() throws InterruptedException {
-        MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "topic3",
-            "source1.topic4", "source1.source2.topic5", "source3.source4.source5.topic6"));
-        Set<String> upstreamTopics = client.upstreamTopics("source1");
-        assertFalse(upstreamTopics.contains("topic1"));
-        assertFalse(upstreamTopics.contains("topic2"));
-        assertFalse(upstreamTopics.contains("topic3"));
-        assertTrue(upstreamTopics.contains("topic4"));
-        assertTrue(upstreamTopics.contains("source2.topic5"));
-        assertFalse(upstreamTopics.contains("source4.source5.topic6"));
     }
 }
