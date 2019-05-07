@@ -86,17 +86,17 @@ class DelayedOperationTest {
     purgatory.tryCompleteElseWatch(r2, Array("test1", "test2"))
     purgatory.tryCompleteElseWatch(r3, Array("test1", "test2", "test3"))
 
-    assertEquals("Purgatory should have 3 total delayed operations", 3, purgatory.delayed)
+    assertEquals("Purgatory should have 3 total delayed operations", 3, purgatory.numDelayed)
     assertEquals("Purgatory should have 6 watched elements", 6, purgatory.watched)
 
     // complete the operations, it should immediately be purged from the delayed operation
     r2.completable = true
     r2.tryComplete()
-    assertEquals("Purgatory should have 2 total delayed operations instead of " + purgatory.delayed, 2, purgatory.delayed)
+    assertEquals("Purgatory should have 2 total delayed operations instead of " + purgatory.numDelayed, 2, purgatory.numDelayed)
 
     r3.completable = true
     r3.tryComplete()
-    assertEquals("Purgatory should have 1 total delayed operations instead of " + purgatory.delayed, 1, purgatory.delayed)
+    assertEquals("Purgatory should have 1 total delayed operations instead of " + purgatory.numDelayed, 1, purgatory.numDelayed)
 
     // checking a watch should purge the watch list
     purgatory.checkAndComplete("test1")
@@ -117,7 +117,7 @@ class DelayedOperationTest {
 
     val cancelledOperations = purgatory.cancelForKey("key")
     assertEquals(2, cancelledOperations.size)
-    assertEquals(1, purgatory.delayed)
+    assertEquals(1, purgatory.numDelayed)
     assertEquals(1, purgatory.watched)
   }
 

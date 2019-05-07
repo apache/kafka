@@ -88,12 +88,13 @@ class DelayedProduce(delayMs: Long,
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
         val (hasEnough, error) = replicaManager.getPartition(topicPartition) match {
-          case Some(partition) =>
-            if (partition eq ReplicaManager.OfflinePartition)
-              (false, Errors.KAFKA_STORAGE_ERROR)
-            else
-              partition.checkEnoughReplicasReachOffset(status.requiredOffset)
-          case None =>
+          case OnlinePartition(partition) =>
+            partition.checkEnoughReplicasReachOffset(status.requiredOffset)
+
+          case OfflinePartition =>
+            (false, Errors.KAFKA_STORAGE_ERROR)
+
+          case NonExistentPartition =>
             // Case A
             (false, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         }

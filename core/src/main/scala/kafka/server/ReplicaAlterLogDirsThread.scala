@@ -101,8 +101,8 @@ class ReplicaAlterLogDirsThread(name: String,
   override def processPartitionData(topicPartition: TopicPartition,
                                     fetchOffset: Long,
                                     partitionData: PartitionData[Records]): Option[LogAppendInfo] = {
-    val futureReplica = replicaMgr.futureLocalReplicaOrException(topicPartition)
-    val partition = replicaMgr.getPartition(topicPartition).get
+    val partition = replicaMgr.nonOfflinePartition(topicPartition).get
+    val futureReplica = partition.futureLocalReplicaOrException
     val records = toMemoryRecords(partitionData.records)
 
     if (fetchOffset != futureReplica.logEndOffset)
