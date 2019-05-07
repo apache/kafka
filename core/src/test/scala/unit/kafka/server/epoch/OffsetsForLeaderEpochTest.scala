@@ -57,7 +57,7 @@ class OffsetsForLeaderEpochTest {
     val replicaManager = new ReplicaManager(config, metrics, time, null, null, logManager, new AtomicBoolean(false),
       QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
       new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size))
-    val partition = replicaManager.getOrCreatePartition(tp)
+    val partition = replicaManager.createPartition(tp)
     val leaderReplica = new Replica(config.brokerId, partition.topicPartition, time, 0, Some(mockLog))
     partition.addReplicaIfNotExists(leaderReplica)
     partition.leaderReplicaIdOpt = Some(config.brokerId)
@@ -79,7 +79,7 @@ class OffsetsForLeaderEpochTest {
     val replicaManager = new ReplicaManager(config, metrics, time, null, null, logManager, new AtomicBoolean(false),
       QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
       new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size))
-    replicaManager.getOrCreatePartition(tp)
+    replicaManager.createPartition(tp)
 
     //Given
     val epochRequested: Integer = 5
