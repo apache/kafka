@@ -184,7 +184,7 @@ public class TestInputTopic<K, V> {
     @SuppressWarnings("WeakerAccess")
     protected TestInputTopic(final TopologyTestDriver driver,
                              final String topicName,
-                             ConsumerRecordFactory<K, V> factory) {
+                             final ConsumerRecordFactory<K, V> factory) {
         Objects.requireNonNull(driver, "TopologyTestDriver cannot be null");
         Objects.requireNonNull(topicName, "topicName cannot be null");
         Objects.requireNonNull(factory, "ConsumerRecordFactory cannot be null");
@@ -199,7 +199,7 @@ public class TestInputTopic<K, V> {
      * @param value the record value
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public void pipeInput(V value) {
+    public void pipeInput(final V value) {
         driver.pipeInput(factory.create(value));
     }
 
@@ -210,7 +210,7 @@ public class TestInputTopic<K, V> {
      * @param value the record value
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public void pipeInput(K key, V value) {
+    public void pipeInput(final K key, final V value) {
         driver.pipeInput(factory.create(key, value));
     }
 
@@ -282,7 +282,7 @@ public class TestInputTopic<K, V> {
      * @param keyValues the list of KeyValue records
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public void pipeKeyValueList(List<KeyValue<K, V>> keyValues) {
+    public void pipeKeyValueList(final List<KeyValue<K, V>> keyValues) {
         driver.pipeInput(factory.create(keyValues));
     }
 
@@ -293,7 +293,7 @@ public class TestInputTopic<K, V> {
      * @param values the list of KeyValue records
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public void pipeValueList(List<V> values) {
+    public void pipeValueList(final List<V> values) {
         final List<KeyValue<K, V>> keyValues = values.stream().map(v -> new KeyValue<K, V>(null, v)).collect(Collectors.toList());
         pipeKeyValueList(keyValues);
     }
@@ -307,7 +307,7 @@ public class TestInputTopic<K, V> {
      * @param advanceMs      the time difference between two consecutive generated records
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public void pipeKeyValueList(List<KeyValue<K, V>> keyValues,
+    public void pipeKeyValueList(final List<KeyValue<K, V>> keyValues,
                                  final long startTimestamp,
                                  final long advanceMs) {
         driver.pipeInput(factory.create(keyValues, startTimestamp, advanceMs));
@@ -322,7 +322,7 @@ public class TestInputTopic<K, V> {
      * @param advanceMs      the time difference between two consecutive generated records
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public void pipeValueList(List<V> values,
+    public void pipeValueList(final List<V> values,
                               final long startTimestamp,
                               final long advanceMs) {
         final List<KeyValue<K, V>> keyValues = values.stream().map(v -> new KeyValue<K, V>(null, v)).collect(Collectors.toList());

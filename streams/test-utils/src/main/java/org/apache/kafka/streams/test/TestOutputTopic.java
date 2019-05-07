@@ -111,7 +111,7 @@ public class TestOutputTopic<K, V> {
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public V readValue() {
-        ProducerRecord<K, V> record = readRecord();
+        final ProducerRecord<K, V> record = readRecord();
         if (record == null) return null;
         return record.value();
     }
@@ -123,7 +123,7 @@ public class TestOutputTopic<K, V> {
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public KeyValue<K, V> readKeyValue() {
-        ProducerRecord<K, V> record = readRecord();
+        final ProducerRecord<K, V> record = readRecord();
         if (record == null) return null;
         return new KeyValue<>(record.key(), record.value());
     }
