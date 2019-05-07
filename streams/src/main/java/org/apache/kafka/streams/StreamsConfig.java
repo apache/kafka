@@ -509,11 +509,6 @@ public class StreamsConfig extends AbstractConfig {
                     "",
                     Importance.MEDIUM,
                     CLIENT_ID_DOC)
-            .define(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG,
-                    Type.STRING,
-                    null,
-                    Importance.MEDIUM,
-                    ConsumerConfig.GROUP_INSTANCE_ID_CONFIG)
             .define(DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
                     Type.CLASS,
                     LogAndFailExceptionHandler.class.getName(),

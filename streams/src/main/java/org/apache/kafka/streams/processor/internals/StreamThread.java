@@ -671,10 +671,10 @@ public class StreamThread extends Thread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        final String streamGroupInstanceId = config.getString(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        final String groupInstanceId = (String) consumerConfigs.get(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
         // Suffix each thread consumer with thread.id to enforce uniqueness of group.instance.id.
-        if (streamGroupInstanceId != null) {
-            consumerConfigs.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, streamGroupInstanceId + "-" + threadIdx);
+        if (groupInstanceId != null) {
+            consumerConfigs.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId + "-" + threadIdx);
         }
 
         final Consumer<byte[], byte[]> consumer = clientSupplier.getConsumer(consumerConfigs);
