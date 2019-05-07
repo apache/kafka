@@ -33,6 +33,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, 
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DescribeGroupsRequestData
 import org.apache.kafka.common.message.ElectLeadersRequestData
+import org.apache.kafka.common.message.FindCoordinatorRequestData
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData
 import org.apache.kafka.common.message.InitProducerIdRequestData
 import org.apache.kafka.common.message.JoinGroupRequestData
