@@ -316,7 +316,7 @@ public class RequestResponseTest {
         checkResponse(createDeleteAclsResponse(), ApiKeys.DELETE_ACLS.latestVersion(), true);
         checkRequest(createAlterConfigsRequest(), true);
         checkErrorResponse(createAlterConfigsRequest(), new UnknownServerException(), true);
-        checkResponse(createAlterConfigsResponse(), 0, true);
+        checkResponse(createAlterConfigsResponse(), 0, false);
         checkRequest(createDescribeConfigsRequest(0), true);
         checkRequest(createDescribeConfigsRequestWithConfigEntries(0), true);
         checkErrorResponse(createDescribeConfigsRequest(0), new UnknownServerException(), true);
