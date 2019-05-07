@@ -189,7 +189,7 @@ public class EmbeddedConnectCluster {
         }
     }
 
-    private String endpointForResource(String resource) {
+    public String endpointForResource(String resource) {
         String url = String.valueOf(connectCluster[0].restUrl());
         return url + resource;
     }
