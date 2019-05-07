@@ -132,6 +132,29 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   }
 
   @Test
+  def testDescribeExistingGroupsRegex() {
+    TestUtils.createOffsetsTopic(zkClient, servers)
+
+    for (describeType <- describeTypes) {
+
+      for (prefix <- List("group1", "group2", "group3")) {
+        val group = prefix + describeType.mkString("")
+        addConsumerGroupExecutor(numConsumers = 1, group = group)
+      }
+
+      // select 2 groups, having "group1" and "group2" prefixes + describe type
+      val regex   = """group[1-2]""" + describeType.mkString("")
+      val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--regex", regex) ++ describeType
+      val service = getConsumerGroupService(cgcArgs)
+
+      TestUtils.waitUntilTrue(() => {
+        val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroups())
+        output.trim.split("\n").length == 5 && error.isEmpty
+      }, s"Expected a data row and no error in describe results with describe type ${describeType.mkString(" ")}.", maxRetries = 3)
+    }
+  }
+
+  @Test
   def testDescribeExistingGroups() {
     TestUtils.createOffsetsTopic(zkClient, servers)
 
