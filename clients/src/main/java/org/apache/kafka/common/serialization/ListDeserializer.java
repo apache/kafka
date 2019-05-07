@@ -20,18 +20,15 @@ import java.io.ByteArrayInputStream;
 import java.io.DataInputStream;
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 
 public class ListDeserializer<T> implements Deserializer<List<T>> {
 
     private final Deserializer<T> deserializer;
-    private final Comparator<T> comparator;
 
-    public ListDeserializer(Deserializer<T> deserializer, Comparator<T> comparator) {
+    public ListDeserializer(Deserializer<T> deserializer) {
         this.deserializer = deserializer;
-        this.comparator = comparator;
     }
 
     @Override
@@ -45,12 +42,7 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
             return null;
         }
         try (final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data))) {
-            List<T> deserializedList = new ArrayList<T>() {
-                @Override
-                public void sort(Comparator<? super T> c) {
-                    super.sort(comparator);
-                }
-            };
+            List<T> deserializedList = new ArrayList<>();
             final int size = dis.readInt();
             for (int i = 0; i < size; i++) {
                 byte[] payload = new byte[dis.readInt()];
