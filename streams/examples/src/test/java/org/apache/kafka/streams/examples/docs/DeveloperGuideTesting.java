@@ -66,7 +66,7 @@ public class DeveloperGuideTesting {
 
     @Before
     public void setup() {
-        Topology topology = new Topology();
+        final Topology topology = new Topology();
         topology.addSource("sourceProcessor", "input-topic");
         topology.addProcessor("aggregator", new CustomMaxAggregatorSupplier(), "sourceProcessor");
         topology.addStateStore(
@@ -78,7 +78,7 @@ public class DeveloperGuideTesting {
         topology.addSink("sinkProcessor", "result-topic", "aggregator");
 
         // setup test driver
-        Properties props = new Properties();
+        final Properties props = new Properties();
         props.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "maxAggregation");
         props.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
         props.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
@@ -171,7 +171,7 @@ public class DeveloperGuideTesting {
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(ProcessorContext context) {
+        public void init(final ProcessorContext context) {
             this.context = context;
             context.schedule(Duration.ofSeconds(60), PunctuationType.WALL_CLOCK_TIME, time -> flushStore());
             context.schedule(Duration.ofSeconds(10), PunctuationType.STREAM_TIME, time -> flushStore());
@@ -179,17 +179,17 @@ public class DeveloperGuideTesting {
         }
 
         @Override
-        public void process(String key, Long value) {
-            Long oldValue = store.get(key);
+        public void process(final String key, final Long value) {
+            final Long oldValue = store.get(key);
             if (oldValue == null || value > oldValue) {
                 store.put(key, value);
             }
         }
 
         private void flushStore() {
-            KeyValueIterator<String, Long> it = store.all();
+            final KeyValueIterator<String, Long> it = store.all();
             while (it.hasNext()) {
-                KeyValue<String, Long> next = it.next();
+                final KeyValue<String, Long> next = it.next();
                 context.forward(next.key, next.value);
             }
         }
