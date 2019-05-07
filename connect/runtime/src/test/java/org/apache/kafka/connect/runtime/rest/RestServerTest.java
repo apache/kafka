@@ -262,7 +262,7 @@ public class RestServerTest {
         workerProps.put("offset.storage.file.filename", "/tmp");
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
 
-
+        EasyMock.expect(herder.kafkaClusterId()).andReturn(null);
         EasyMock.expect(herder.plugins()).andStubReturn(plugins);
         EasyMock.expect(plugins.newPlugins(Collections.emptyList(),
             workerConfig,
