@@ -55,7 +55,7 @@ import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativ
  * This class manages the coordination process with the Kafka group coordinator on the broker for managing assignments
  * to workers.
  */
-public final class WorkerCoordinator extends AbstractCoordinator implements Closeable {
+public class WorkerCoordinator extends AbstractCoordinator implements Closeable {
     // Currently doesn't support multiple task assignment strategies, so we just fill in a default value
     public static final String DEFAULT_SUBPROTOCOL = "default";
 
