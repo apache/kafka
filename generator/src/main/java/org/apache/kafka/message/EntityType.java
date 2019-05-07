@@ -24,23 +24,23 @@ public enum EntityType {
     UNKNOWN(null),
 
     @JsonProperty("transactionalId")
-    TRANSACTIONAL_ID("string"),
+    TRANSACTIONAL_ID(FieldType.StringFieldType.INSTANCE),
 
     @JsonProperty("producerId")
-    PRODUCER_ID("int64"),
+    PRODUCER_ID(FieldType.Int64FieldType.INSTANCE),
 
     @JsonProperty("groupId")
-    GROUP_ID("string"),
+    GROUP_ID(FieldType.StringFieldType.INSTANCE),
 
     @JsonProperty("topicName")
-    TOPIC_NAME("string"),
+    TOPIC_NAME(FieldType.StringFieldType.INSTANCE),
 
     @JsonProperty("brokerId")
-    BROKER_ID("int32");
+    BROKER_ID(FieldType.Int32FieldType.INSTANCE);
 
-    private final String baseType;
+    private final FieldType baseType;
 
-    EntityType(String baseType) {
+    EntityType(FieldType baseType) {
         this.baseType = baseType;
     }
 
@@ -52,7 +52,7 @@ public enum EntityType {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
             verifyTypeMatches(fieldName, arrayType.elementType());
         } else {
-            if (!type.toString().equals(baseType)) {
+            if (!type.toString().equals(baseType.toString())) {
                 throw new RuntimeException("Field " + fieldName + " has entity type " +
                     name() + ", but field type " + type.toString() + ", which does " +
                     "not match.");
