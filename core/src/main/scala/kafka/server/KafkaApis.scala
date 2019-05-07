@@ -21,10 +21,11 @@ import java.nio.ByteBuffer
 import java.lang.{Long => JLong, Short => JShort}
 import java.util.{Collections, Properties}
 import java.util
+import java.util.concurrent.TimeUnit
 
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ControlledShutdownRequest, ControlledShutdownResponse}
-import kafka.cluster.Partition
+import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.common._
 import kafka.controller.KafkaController
@@ -34,17 +35,17 @@ import kafka.network._
 import kafka.network.RequestChannel.{Response, Session}
 import kafka.security.auth
 import kafka.security.auth.{Authorizer, ClusterAction, Create, Delete, Describe, Group, Operation, Read, Resource, Write}
-import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils}
+import kafka.utils.{Logging, Scheduler, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, NotLeaderForPartitionException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
 import org.apache.kafka.common.record.{MemoryRecords, Record}
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.GetStartOffsetResponse.StartOffsetResponse
+import org.apache.kafka.common.requests.{GetStartOffsetRequest, GetStartOffsetResponse, SaslHandshakeResponse, _}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.common.requests.SaslHandshakeResponse
+import org.apache.kafka.common.{NewOffsetMetaData, Node, TopicPartition}
 
 import scala.collection._
 import scala.collection.JavaConverters._
@@ -65,9 +66,77 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val authorizer: Option[Authorizer],
                 val quotas: QuotaManagers,
                 val clusterId: String,
-                time: Time) extends Logging {
+                time: Time,
+                scheduler: Scheduler) extends Logging {
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
+  scheduler.schedule("send-offset-metadata", sendNewOffsetMetaData, period = config.sentOffsetMetaDataIntervalMs, unit = TimeUnit.MILLISECONDS)
+  scheduler.schedule("update-leader-offset", updateLeaderOffsetMetaData, period = config.updateLeaderOffsetIntervalMs, unit = TimeUnit.MILLISECONDS)
+
+  private def sendNewOffsetMetaData(): Unit = {
+    debug("sendNewOffsetMetaData config.smartExtendEnable=" + config.smartExtendEnable)
+    if (config.smartExtendEnable) {
+      var smartExtendManager: SmartExtendManager = null
+      try {
+        val partitionsToMakeFollower: Set[Partition] = replicaManager.getFollowerPartitions()
+
+        smartExtendManager = new SmartExtendManager(config)
+        val brokerPartitionMap: mutable.Map[BrokerEndPoint, mutable.Set[Partition]] = mutable.Map.empty
+        partitionsToMakeFollower.map { partition =>
+          val remoteEndPoint: BrokerEndPoint = metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get.getBrokerEndPoint(config.interBrokerListenerName)
+          if (brokerPartitionMap.get(remoteEndPoint).isEmpty) {
+            val partitionSet: mutable.Set[Partition] = mutable.Set.empty
+            partitionSet.add(partition)
+            brokerPartitionMap.put(remoteEndPoint, partitionSet)
+          } else {
+            val partitionSet: mutable.Set[Partition] = brokerPartitionMap.get(remoteEndPoint).get
+            partitionSet.add(partition)
+            brokerPartitionMap.put(remoteEndPoint, partitionSet)
+          }
+        }
+
+        val ResponseOffsetMap: mutable.Map[TopicPartition, GetStartOffsetResponse.StartOffsetResponse] = mutable.Map.empty
+        if (brokerPartitionMap.nonEmpty) {
+          brokerPartitionMap.map { brokerInfo =>
+            val ResponseOffsetBroker = smartExtendManager.sendRequest(brokerInfo._1, brokerInfo._2).asScala
+            ResponseOffsetBroker.map { offsetInfo =>
+              ResponseOffsetMap.put(offsetInfo._1, offsetInfo._2)
+            }
+          }
+          debug("sendNewOffsetMetaData ResponseOffsetMap=" + ResponseOffsetMap)
+        } else {
+          debug("sendNewOffsetMetaData brokerPartitionMap is empty")
+        }
+
+      } catch {
+        case e: Exception => error("sendNewOffsetMetaData Exception, sending message to broker. " + e.getMessage)
+      } finally {
+        if (smartExtendManager != null) {
+          debug("sendNewOffsetMetaData brokerPartitionMap close...")
+          smartExtendManager.close
+        }
+      }
+    }
+  }
+
+  def updateLeaderOffsetMetaData(): Unit = {
+    val partitionsToMakeLeaders: Set[Partition] = replicaManager.getLeaderPartitions().toSet
+
+    val metaData = new mutable.HashMap[TopicPartition, NewOffsetMetaData]
+    partitionsToMakeLeaders.map { partition =>
+      val lso: Long = partition.leaderReplicaIfLocal.get.logStartOffset
+      val leo: Long = partition.leaderReplicaIfLocal.get.logEndOffset.messageOffset
+      val lst: Long = partition.logManager.getLog(partition.topicPartition).get.segments.firstEntry().getValue.log.creationTime()
+      val let: Long = partition.logManager.getLog(partition.topicPartition).get.segments.lastEntry().getValue.log.file.lastModified()
+      metaData.put(partition.topicPartition, new NewOffsetMetaData(partition.leaderReplicaIdOpt.get, leo, lst, let, lso))
+    }
+    if (metaData.nonEmpty) {
+      debug("updateLeaderOffsetMetaData updateNewOffsetMetaData broker=" + brokerId + " metaData=" + metaData)
+      replicaManager.updateNewOffsetMetaData(brokerId, metaData)
+    } else {
+      warn("updateLeaderOffsetMetaData updateNewOffsetMetaData broker=" + brokerId + " metaData is empty.")
+    }
+  }
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
@@ -98,6 +167,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
+        case ApiKeys.GET_START_OFFSET => handleGetStartOffsetRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -1258,6 +1328,82 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       }
     }
+  }
+
+  private def expriedOffset(topicPartition: TopicPartition, timestamp: Long, followerLeo: Long): Boolean = {
+    try {
+      val timestampOffset = fetchOffsetForTimestamp(replicaManager.logManager, topicPartition, timestamp)
+      if (followerLeo < timestampOffset.get.offset) {
+        warn(topicPartition + " offset expried, follower need trunc log, follower offset=" + followerLeo + " timestampOffset=" + timestampOffset.get + " timestamp=" + timestamp)
+        true
+      } else {
+        false
+      }
+    } catch {
+      case e: Throwable =>
+        error("expriedOffset error, due to", e)
+        false
+    }
+  }
+
+  def handleGetStartOffsetRequest(request: RequestChannel.Request) {
+    val startOffsetRequest = request.body.asInstanceOf[GetStartOffsetRequest]
+
+    // 1. update follower status
+    debug("handleGetStartOffsetRequest updateNewOffsetMetaData from broker=" + startOffsetRequest.getBrokerId() +
+      " metadata=" + startOffsetRequest.partitionRecordsOrFail())
+    val partitionRecordsMap = new mutable.HashMap[TopicPartition, NewOffsetMetaData]
+    startOffsetRequest.partitionRecordsOrFail.asScala.map { partition =>
+      partitionRecordsMap.put(partition._1, partition._2)
+
+    }
+    replicaManager.updateNewOffsetMetaData(startOffsetRequest.getBrokerId(), partitionRecordsMap)
+
+    // 2. check leader offsetMap is init?
+    val metaData: mutable.HashMap[TopicPartition, NewOffsetMetaData] = new mutable.HashMap[TopicPartition, NewOffsetMetaData]()
+    startOffsetRequest.partitionRecordsOrFail.asScala.map { case (topicPartition, offsetMetaData) =>
+      if (replicaManager.newOffsetMetaDataContains(brokerId)) {
+        if (!replicaManager.getNewOffsetMetaData(brokerId).contains(topicPartition)) {
+          val leo: Long = replicaManager.getPartition(topicPartition).get.leaderReplicaIfLocal.get.logEndOffset.messageOffset
+          val lso: Long = replicaManager.getPartition(topicPartition).get.leaderReplicaIfLocal.get.logStartOffset
+          val lst: Long = replicaManager.getPartition(topicPartition).get.logManager.getLog(topicPartition).get.segments.firstEntry().getValue.log.creationTime()
+          val let: Long = replicaManager.getPartition(topicPartition).get.logManager.getLog(topicPartition).get.segments.lastEntry().getValue.log.file.lastModified()
+          metaData.put(topicPartition, new NewOffsetMetaData(replicaManager.getPartition(topicPartition).get.leaderReplicaIdOpt.get, leo, lst, let, lso))
+        }
+      } else {
+        debug("handleGetStartOffsetRequest initialize leader broker=" + brokerId)
+        val leo: Long = replicaManager.getPartition(topicPartition).get.leaderReplicaIfLocal.get.logEndOffset.messageOffset
+        val lso: Long = replicaManager.getPartition(topicPartition).get.leaderReplicaIfLocal.get.logStartOffset
+        val lst: Long = replicaManager.getPartition(topicPartition).get.logManager.getLog(topicPartition).get.segments.firstEntry().getValue.log.creationTime()
+        val let: Long = replicaManager.getPartition(topicPartition).get.logManager.getLog(topicPartition).get.segments.lastEntry().getValue.log.file.lastModified()
+        metaData.put(topicPartition, new NewOffsetMetaData(replicaManager.getPartition(topicPartition).get.leaderReplicaIdOpt.get, leo, lst, let, lso))
+      }
+    }
+    if (metaData.nonEmpty) {
+      warn("handleGetStartOffsetRequest leader map uninitialize,updateNewOffsetMetaData broker=" + brokerId + " metaData=" + metaData)
+      replicaManager.updateNewOffsetMetaData(brokerId, metaData)
+    }
+
+    // 3. return 'offset' respone for follower
+    val responses: Map[TopicPartition, StartOffsetResponse] =
+      startOffsetRequest.partitionRecordsOrFail.asScala.map { case (topicPartition, offsetMetaData) =>
+        var baseOffset: Long = 0
+        var errorCode: Errors = Errors.NONE
+        val timestamp = Time.SYSTEM.milliseconds() - config.replicaExpriedMaxMs
+        if ((replicaManager.getNewOffsetMetaData(brokerId).get(topicPartition).get.leo - offsetMetaData.leo) > config.replicaLstTimeMaxMs
+          && expriedOffset(topicPartition, timestamp, offsetMetaData.leo)) {
+          baseOffset = replicaManager.getPartition(topicPartition).get.leaderReplicaIfLocal.get.highWatermark.messageOffset
+          errorCode = Errors.OFFSET_HW
+        } else {
+          baseOffset = offsetMetaData.leo
+          errorCode = Errors.OFFSET_LEO
+        }
+        (new TopicPartition(topicPartition.topic(), topicPartition.partition()), new StartOffsetResponse(errorCode, baseOffset))
+      }.toMap
+
+    debug("handleGetStartOffsetRequest return responses=" + responses)
+    val responseBody = new GetStartOffsetResponse(responses.asJava)
+    requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {

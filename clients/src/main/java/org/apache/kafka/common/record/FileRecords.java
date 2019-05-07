@@ -79,6 +79,17 @@ public class FileRecords extends AbstractRecords implements Closeable {
         shallowEntries = shallowEntriesFrom(start);
     }
 
+    public long creationTime() {
+        java.nio.file.attribute.BasicFileAttributes attributes = null;
+        try {
+            attributes = java.nio.file.Files.readAttributes(file.toPath(),
+                    java.nio.file.attribute.BasicFileAttributes.class);
+        } catch (IOException exception) {
+            return -1;
+        }
+        return attributes.creationTime().to(java.util.concurrent.TimeUnit.MILLISECONDS);
+    }
+
     @Override
     public int sizeInBytes() {
         return size.get();
