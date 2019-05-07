@@ -34,9 +34,18 @@ object Kafka extends Logging {
     val overrideOpt = optionParser.accepts("override", "Optional property that should override values set in server.properties file")
       .withRequiredArg()
       .ofType(classOf[String])
+    // This is just to make the parameter show up in the help output, we are not actually using this due the
+    // fact that this class ignores the first parameter which is interpreted as positional and mandatory
+    // but would not be mandatory if --version is specified
+    // This is a bit of an ugly crutch till we get a chance to rework the entire command line parsing
+    val versionOpt = optionParser.accepts("version", "Print version information and exit.")
 
-    if (args.length == 0) {
+    if (args.length == 0 || args.contains("--help")) {
       CommandLineUtils.printUsageAndDie(optionParser, "USAGE: java [options] %s server.properties [--override property=value]*".format(classOf[KafkaServer].getSimpleName()))
+    }
+
+    if (args.contains("--version")) {
+      CommandLineUtils.printVersionAndDie()
     }
 
     val props = Utils.loadProps(args(0))
