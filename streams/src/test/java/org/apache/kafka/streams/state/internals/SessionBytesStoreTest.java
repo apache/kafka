@@ -108,7 +108,7 @@ public abstract class SessionBytesStoreTest {
     }
 
     @Before
-    public void SetUp() {
+    public void setUp() {
         sessionStore = buildSessionStore(RETENTION_PERIOD, Serdes.String(), Serdes.Long());
 
         final RecordCollector recordCollector = createRecordCollector(sessionStore.name());
