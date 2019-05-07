@@ -21,10 +21,11 @@ import java.nio.ByteBuffer
 import java.lang.{Long => JLong, Short => JShort}
 import java.util.{Collections, Properties}
 import java.util
+import java.util.concurrent.TimeUnit
 
 import kafka.admin.{AdminUtils, RackAwareMode}
 import kafka.api.{ControlledShutdownRequest, ControlledShutdownResponse}
-import kafka.cluster.Partition
+import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.common._
 import kafka.controller.KafkaController
@@ -34,7 +35,7 @@ import kafka.network._
 import kafka.network.RequestChannel.{Response, Session}
 import kafka.security.auth
 import kafka.security.auth.{Authorizer, ClusterAction, Create, Delete, Describe, Group, Operation, Read, Resource, Write}
-import kafka.utils.{Logging, ZKGroupTopicDirs, ZkUtils}
+import kafka.utils.{Logging, Scheduler, ZKGroupTopicDirs, ZkUtils}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, NotLeaderForPartitionException, TopicExistsException, UnknownTopicOrPartitionException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -65,9 +66,77 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val authorizer: Option[Authorizer],
                 val quotas: QuotaManagers,
                 val clusterId: String,
-                time: Time) extends Logging {
+                time: Time,
+                scheduler: Scheduler) extends Logging {
 
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
+  scheduler.schedule("send-offset-metadata", sendNewOffsetMetaData, period = config.sentOffsetMetaDataIntervalMs, unit = TimeUnit.MILLISECONDS)
+  scheduler.schedule("update-leader-offset", updateLeaderOffsetMetaData, period = config.updateLeaderOffsetIntervalMs, unit = TimeUnit.MILLISECONDS)
+
+  private def sendNewOffsetMetaData(): Unit = {
+    debug("sendNewOffsetMetaData config.smartExtendEnable=" + config.smartExtendEnable)
+    if (config.smartExtendEnable) {
+      var smartExtendManager: SmartExtendManager = null
+      try {
+        val partitionsToMakeFollower: Set[Partition] = replicaManager.getFollowerPartitions()
+
+        smartExtendManager = new SmartExtendManager(config)
+        val brokerPartitionMap: mutable.Map[BrokerEndPoint, mutable.Set[Partition]] = mutable.Map.empty
+        partitionsToMakeFollower.map { partition =>
+          val remoteEndPoint: BrokerEndPoint = metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get.getBrokerEndPoint(config.interBrokerListenerName)
+          if (brokerPartitionMap.get(remoteEndPoint).isEmpty) {
+            val partitionSet: mutable.Set[Partition] = mutable.Set.empty
+            partitionSet.add(partition)
+            brokerPartitionMap.put(remoteEndPoint, partitionSet)
+          } else {
+            val partitionSet: mutable.Set[Partition] = brokerPartitionMap.get(remoteEndPoint).get
+            partitionSet.add(partition)
+            brokerPartitionMap.put(remoteEndPoint, partitionSet)
+          }
+        }
+
+        val ResponseOffsetMap: mutable.Map[TopicPartition, GetStartOffsetResponse.StartOffsetResponse] = mutable.Map.empty
+        if (brokerPartitionMap.nonEmpty) {
+          brokerPartitionMap.map { brokerInfo =>
+            val ResponseOffsetBroker = smartExtendManager.sendRequest(brokerInfo._1, brokerInfo._2).asScala
+            ResponseOffsetBroker.map { offsetInfo =>
+              ResponseOffsetMap.put(offsetInfo._1, offsetInfo._2)
+            }
+          }
+          debug("sendNewOffsetMetaData ResponseOffsetMap=" + ResponseOffsetMap)
+        } else {
+          debug("sendNewOffsetMetaData brokerPartitionMap is empty")
+        }
+
+      } catch {
+        case e: Exception => error("sendNewOffsetMetaData Exception, sending message to broker. " + e.getMessage)
+      } finally {
+        if (smartExtendManager != null) {
+          debug("sendNewOffsetMetaData brokerPartitionMap close...")
+          smartExtendManager.close
+        }
+      }
+    }
+  }
+
+  def updateLeaderOffsetMetaData(): Unit = {
+    val partitionsToMakeLeaders: Set[Partition] = replicaManager.getLeaderPartitions().toSet
+
+    val metaData = new mutable.HashMap[TopicPartition, NewOffsetMetaData]
+    partitionsToMakeLeaders.map { partition =>
+      val lso: Long = partition.leaderReplicaIfLocal.get.logStartOffset
+      val leo: Long = partition.leaderReplicaIfLocal.get.logEndOffset.messageOffset
+      val lst: Long = partition.logManager.getLog(partition.topicPartition).get.segments.firstEntry().getValue.log.creationTime()
+      val let: Long = partition.logManager.getLog(partition.topicPartition).get.segments.lastEntry().getValue.log.file.lastModified()
+      metaData.put(partition.topicPartition, new NewOffsetMetaData(partition.leaderReplicaIdOpt.get, leo, lst, let, lso))
+    }
+    if (metaData.nonEmpty) {
+      debug("updateLeaderOffsetMetaData updateNewOffsetMetaData broker=" + brokerId + " metaData=" + metaData)
+      replicaManager.updateNewOffsetMetaData(brokerId, metaData)
+    } else {
+      warn("updateLeaderOffsetMetaData updateNewOffsetMetaData broker=" + brokerId + " metaData is empty.")
+    }
+  }
 
   /**
    * Top-level method that handles all requests and multiplexes to the right api
