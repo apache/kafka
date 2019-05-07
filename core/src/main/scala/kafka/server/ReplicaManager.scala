@@ -184,6 +184,20 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  def getOffsetMetaDataForPartition(brokerId: Int, topicPartition: TopicPartition): NewOffsetMetaData = {
+    offsetMapLock synchronized {
+      if (newOffsetMetaDataMap.nonEmpty && newOffsetMetaDataMap.contains(brokerId)) {
+        if (newOffsetMetaDataMap(brokerId).contains(topicPartition)) {
+          return newOffsetMetaDataMap(brokerId).get(topicPartition).get
+        } else {
+          return new NewOffsetMetaData(brokerId, -1, -1, -1, -1)
+        }
+      } else {
+        return new NewOffsetMetaData(brokerId, -1, -1, -1, -1)
+      }
+    }
+  }
+
   def getNewOffsetMetaData(brokerId: Int): mutable.Map[TopicPartition, NewOffsetMetaData] = {
     return offsetMapLock synchronized { newOffsetMetaDataMap(brokerId) }
   }
@@ -1079,7 +1093,9 @@ class ReplicaManager(val config: KafkaConfig,
     readResults.foreach { case (topicPartition, readResult) =>
       getPartition(topicPartition) match {
         case Some(partition) =>
-          partition.updateReplicaLogReadResult(replicaId, readResult)
+          val leaderOffsetMetaData: NewOffsetMetaData = getOffsetMetaDataForPartition(partition.leaderReplicaIdOpt.get, topicPartition)
+          val followerOffsetMetaData: NewOffsetMetaData = getOffsetMetaDataForPartition(replicaId, topicPartition)
+          partition.updateReplicaLogReadResult(replicaId, readResult, leaderOffsetMetaData, followerOffsetMetaData)
 
           // for producer requests with ack > 1, we need to check
           // if they can be unblocked after some follower's log end offsets have moved

@@ -24,7 +24,7 @@ import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
 import kafka.coordinator.OffsetConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
-import kafka.server.KafkaConfig._
+import kafka.server.KafkaConfig.{ReplicaIsrEntryISRMaxLagDoc, ReplicaIsrLstEntryTimeMaxMsDoc, _}
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.ConfigDef.ValidList
@@ -217,6 +217,8 @@ object KafkaConfig {
   val BootstarpServersProp = "bootstrap.servers"
   val getStartOffsetretriesProp = "getstartoffset.max.retries.num"
   val updateLeaderOffsetIntervalMsProp = "leader.update.offset.check.interval.ms"
+  val ReplicaIsrLstEntryTimeMaxMsProp = "replica.entry.isr.lst.lag.ms"
+  val ReplicaIsrEntryISRMaxLagProp= "replica.entry.isr.lso.lag"
 
 
   /** ********* Zookeeper Configuration ***********/
@@ -391,7 +393,8 @@ object KafkaConfig {
   val BootstarpServersDoc = "Bootstarp Server string for smart extend cluster"
   val getStartOffsetretriesDoc = "get start offset max retries"
   val updateLeaderOffsetIntervalMsDoc = "leader update offset interval"
-
+  val ReplicaIsrLstEntryTimeMaxMsDoc = "Is entry ISR(lst)?"
+  val ReplicaIsrEntryISRMaxLagDoc = "Is entry ISR(lso)"
 
   /** ********* Zookeeper Configuration ***********/
   val ZkConnectDoc = "Zookeeper host string"
@@ -642,7 +645,8 @@ object KafkaConfig {
       .define(BootstarpServersProp, STRING, HIGH, BootstarpServersDoc)
       .define(getStartOffsetretriesProp, INT, Defaults.getStartOffsetMaxRetries, HIGH, getStartOffsetretriesDoc)
       .define(updateLeaderOffsetIntervalMsProp, LONG, Defaults.updateLeaderOffsetIntervalMs, HIGH, updateLeaderOffsetIntervalMsDoc)
-
+      .define(ReplicaIsrLstEntryTimeMaxMsProp, LONG, HIGH, ReplicaIsrLstEntryTimeMaxMsDoc)
+      .define(ReplicaIsrEntryISRMaxLagProp, LONG, HIGH, ReplicaIsrEntryISRMaxLagDoc)
 
 
       /** ********* Zookeeper Configuration ***********/
@@ -854,6 +858,8 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends Abstra
   val bootstarpServers : String = getString(KafkaConfig.BootstarpServersProp)
   val getStartOffsetRetries: Int = getInt(KafkaConfig.getStartOffsetretriesProp)
   val updateLeaderOffsetIntervalMs: Long = getLong(KafkaConfig.updateLeaderOffsetIntervalMsProp)
+  val replicaIsrLstEntryTimeMaxMs: Long = getLong(KafkaConfig.ReplicaIsrLstEntryTimeMaxMsProp)
+  val ReplicaIsrEntryISRMaxLag: Long = getLong(KafkaConfig.ReplicaIsrEntryISRMaxLagProp)
 
 
   /** ********* Zookeeper Configuration ***********/
