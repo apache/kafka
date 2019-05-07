@@ -48,7 +48,7 @@ class Partition(val topic: String,
   val topicPartition = new TopicPartition(topic, partitionId)
 
   private val localBrokerId = replicaManager.config.brokerId
-  private val logManager = replicaManager.logManager
+  val logManager = replicaManager.logManager
   private val zkUtils = replicaManager.zkUtils
   private val assignedReplicaMap = new Pool[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner

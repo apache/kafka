@@ -24,6 +24,7 @@ import kafka.cluster.EndPoint
 import kafka.consumer.ConsumerConfig
 import kafka.coordinator.OffsetConfig
 import kafka.message.{BrokerCompressionCodec, CompressionCodec, Message, MessageSet}
+import kafka.server.KafkaConfig.ReplicaLstTimeMaxMsPropDoc
 import kafka.utils.CoreUtils
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.ConfigDef.ValidList
@@ -203,6 +204,10 @@ object KafkaConfig {
   def main(args: Array[String]) {
     System.out.println(configDef.toHtmlTable)
   }
+  /** ********* SmartExtendManager Configuration ***********/
+  val ReplicaExpriedMaxMsProp = "replica.trunclog.expried.ms"
+  val ReplicaLstTimeMaxMsProp = "replica.trunclog.lag"
+
 
   /** ********* Zookeeper Configuration ***********/
   val ZkConnectProp = "zookeeper.connect"
@@ -369,6 +374,9 @@ object KafkaConfig {
   val SaslKerberosPrincipalToLocalRulesProp = SaslConfigs.SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES
 
   /* Documentation */
+  /** ********* SmartExtendManager Configuration ***********/
+  val ReplicaLstTimeMaxMsPropDoc = "return HW or LEO?"
+
   /** ********* Zookeeper Configuration ***********/
   val ZkConnectDoc = "Zookeeper host string"
   val ZkSessionTimeoutMsDoc = "Zookeeper session timeout"
@@ -610,6 +618,10 @@ object KafkaConfig {
     import ConfigDef.ValidString._
 
     new ConfigDef()
+      /** ********* SmartExtendManager Configuration ***********/
+      .define(ReplicaExpriedMaxMsProp, LONG, HIGH, ReplicaLstTimeMaxMsPropDoc)
+      .define(ReplicaLstTimeMaxMsProp, LONG, HIGH, ReplicaLstTimeMaxMsPropDoc)
+
 
       /** ********* Zookeeper Configuration ***********/
       .define(ZkConnectProp, STRING, HIGH, ZkConnectDoc)
@@ -811,6 +823,11 @@ object KafkaConfig {
 class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean) extends AbstractConfig(KafkaConfig.configDef, props, doLog) {
 
   def this(props: java.util.Map[_, _]) = this(props, true)
+
+  /** ********* SmartExtendManager Configuration ***********/
+  val replicaExpriedMaxMs: Long = getLong(KafkaConfig.ReplicaExpriedMaxMsProp)
+  val replicaLstTimeMaxMs: Long = getLong(KafkaConfig.ReplicaLstTimeMaxMsProp)
+
 
   /** ********* Zookeeper Configuration ***********/
   val zkConnect: String = getString(KafkaConfig.ZkConnectProp)

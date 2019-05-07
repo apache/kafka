@@ -40,11 +40,11 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors, Protocol}
 import org.apache.kafka.common.record.{MemoryRecords, Record}
-import org.apache.kafka.common.requests._
+import org.apache.kafka.common.requests.GetStartOffsetResponse.StartOffsetResponse
+import org.apache.kafka.common.requests.{GetStartOffsetRequest, GetStartOffsetResponse, SaslHandshakeResponse, _}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.common.requests.SaslHandshakeResponse
+import org.apache.kafka.common.{NewOffsetMetaData, Node, TopicPartition}
 
 import scala.collection._
 import scala.collection.JavaConverters._
@@ -98,6 +98,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.API_VERSIONS => handleApiVersionsRequest(request)
         case ApiKeys.CREATE_TOPICS => handleCreateTopicsRequest(request)
         case ApiKeys.DELETE_TOPICS => handleDeleteTopicsRequest(request)
+        case ApiKeys.GET_START_OFFSET => handleGetStartOffsetRequest(request)
         case requestId => throw new KafkaException("Unknown api code " + requestId)
       }
     } catch {
@@ -1258,6 +1259,82 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       }
     }
+  }
+
+  private def expriedOffset(topicPartition: TopicPartition, timestamp: Long, followerLeo: Long): Boolean = {
+    try {
+      val timestampOffset = fetchOffsetForTimestamp(replicaManager.logManager, topicPartition, timestamp)
+      if (followerLeo < timestampOffset.get.offset) {
+        warn(topicPartition + " offset expried, follower need trunc log, follower offset=" + followerLeo + " timestampOffset=" + timestampOffset.get + " timestamp=" + timestamp)
+        true
+      } else {
+        false
+      }
+    } catch {
+      case e: Throwable =>
+        error("expriedOffset error, due to", e)
+        false
+    }
+  }
+
+  def handleGetStartOffsetRequest(request: RequestChannel.Request) {
+    val startOffsetRequest = request.body.asInstanceOf[GetStartOffsetRequest]
+
+    // 1. update follower status
+    debug("handleGetStartOffsetRequest updateNewOffsetMetaData from broker=" + startOffsetRequest.getBrokerId() +
+      " metadata=" + startOffsetRequest.partitionRecordsOrFail())
+    val partitionRecordsMap = new mutable.HashMap[TopicPartition, NewOffsetMetaData]
+    startOffsetRequest.partitionRecordsOrFail.asScala.map { partition =>
+      partitionRecordsMap.put(partition._1, partition._2)
+
+    }
+    replicaManager.updateNewOffsetMetaData(startOffsetRequest.getBrokerId(), partitionRecordsMap)
+
+    // 2. check leader offsetMap is init?
+    val metaData: mutable.HashMap[TopicPartition, NewOffsetMetaData] = new mutable.HashMap[TopicPartition, NewOffsetMetaData]()
+    startOffsetRequest.partitionRecordsOrFail.asScala.map { case (topicPartition, offsetMetaData) =>
+      if (replicaManager.newOffsetMetaDataContains(brokerId)) {
+        if (!replicaManager.getNewOffsetMetaData(brokerId).contains(topicPartition)) {
+          val leo: Long = replicaManager.getPartition(topicPartition).get.leaderReplicaIfLocal.get.logEndOffset.messageOffset
+          val lso: Long = replicaManager.getPartition(topicPartition).get.leaderReplicaIfLocal.get.logStartOffset
+          val lst: Long = replicaManager.getPartition(topicPartition).get.logManager.getLog(topicPartition).get.segments.firstEntry().getValue.log.creationTime()
+          val let: Long = replicaManager.getPartition(topicPartition).get.logManager.getLog(topicPartition).get.segments.lastEntry().getValue.log.file.lastModified()
+          metaData.put(topicPartition, new NewOffsetMetaData(replicaManager.getPartition(topicPartition).get.leaderReplicaIdOpt.get, leo, lst, let, lso))
+        }
+      } else {
+        debug("handleGetStartOffsetRequest initialize leader broker=" + brokerId)
+        val leo: Long = replicaManager.getPartition(topicPartition).get.leaderReplicaIfLocal.get.logEndOffset.messageOffset
+        val lso: Long = replicaManager.getPartition(topicPartition).get.leaderReplicaIfLocal.get.logStartOffset
+        val lst: Long = replicaManager.getPartition(topicPartition).get.logManager.getLog(topicPartition).get.segments.firstEntry().getValue.log.creationTime()
+        val let: Long = replicaManager.getPartition(topicPartition).get.logManager.getLog(topicPartition).get.segments.lastEntry().getValue.log.file.lastModified()
+        metaData.put(topicPartition, new NewOffsetMetaData(replicaManager.getPartition(topicPartition).get.leaderReplicaIdOpt.get, leo, lst, let, lso))
+      }
+    }
+    if (metaData.nonEmpty) {
+      warn("handleGetStartOffsetRequest leader map uninitialize,updateNewOffsetMetaData broker=" + brokerId + " metaData=" + metaData)
+      replicaManager.updateNewOffsetMetaData(brokerId, metaData)
+    }
+
+    // 3. return 'offset' respone for follower
+    val responses: Map[TopicPartition, StartOffsetResponse] =
+      startOffsetRequest.partitionRecordsOrFail.asScala.map { case (topicPartition, offsetMetaData) =>
+        var baseOffset: Long = 0
+        var errorCode: Errors = Errors.NONE
+        val timestamp = Time.SYSTEM.milliseconds() - config.replicaExpriedMaxMs
+        if ((replicaManager.getNewOffsetMetaData(brokerId).get(topicPartition).get.leo - offsetMetaData.leo) > config.replicaLstTimeMaxMs
+          && expriedOffset(topicPartition, timestamp, offsetMetaData.leo)) {
+          baseOffset = replicaManager.getPartition(topicPartition).get.leaderReplicaIfLocal.get.highWatermark.messageOffset
+          errorCode = Errors.OFFSET_HW
+        } else {
+          baseOffset = offsetMetaData.leo
+          errorCode = Errors.OFFSET_LEO
+        }
+        (new TopicPartition(topicPartition.topic(), topicPartition.partition()), new StartOffsetResponse(errorCode, baseOffset))
+      }.toMap
+
+    debug("handleGetStartOffsetRequest return responses=" + responses)
+    val responseBody = new GetStartOffsetResponse(responses.asJava)
+    requestChannel.sendResponse(new RequestChannel.Response(request, responseBody))
   }
 
   def authorizeClusterAction(request: RequestChannel.Request): Unit = {

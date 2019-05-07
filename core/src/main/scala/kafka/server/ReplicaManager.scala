@@ -30,7 +30,7 @@ import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.utils._
 import org.apache.kafka.common.errors.{ControllerMovedException, CorruptRecordException, InvalidTimestampException, InvalidTopicException, NotLeaderForPartitionException, OffsetOutOfRangeException, RecordBatchTooLargeException, RecordTooLargeException, ReplicaNotAvailableException, UnknownTopicOrPartitionException}
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{NewOffsetMetaData, TopicPartition}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
@@ -125,6 +125,9 @@ class ReplicaManager(val config: KafkaConfig,
   private val isrChangeSet: mutable.Set[TopicPartition] = new mutable.HashSet[TopicPartition]()
   private val lastIsrChangeMs = new AtomicLong(System.currentTimeMillis())
   private val lastIsrPropagationMs = new AtomicLong(System.currentTimeMillis())
+  var newOffsetMetaDataMap : mutable.Map[Int, mutable.Map[TopicPartition, NewOffsetMetaData]] = new mutable.HashMap[Int, mutable.Map[TopicPartition, NewOffsetMetaData]]()
+
+  private val offsetMapLock = new Object
 
   val delayedProducePurgatory = DelayedOperationPurgatory[DelayedProduce](
     purgatoryName = "Produce", localBrokerId, config.producerPurgatoryPurgeIntervalRequests)
@@ -153,6 +156,32 @@ class ReplicaManager(val config: KafkaConfig,
   )
   val isrExpandRate = newMeter("IsrExpandsPerSec",  "expands", TimeUnit.SECONDS)
   val isrShrinkRate = newMeter("IsrShrinksPerSec",  "shrinks", TimeUnit.SECONDS)
+
+  def updateNewOffsetMetaData(brokerId: Int, metaData: mutable.HashMap[TopicPartition, NewOffsetMetaData]): Unit = {
+    offsetMapLock synchronized {
+      if (newOffsetMetaDataMap.contains(brokerId)) {
+        metaData.map { metaInfo =>
+          newOffsetMetaDataMap(brokerId).put(metaInfo._1, metaInfo._2)
+        }
+      } else {
+        newOffsetMetaDataMap.put(brokerId, metaData)
+      }
+    }
+  }
+
+  def getNewOffsetMetaData(brokerId: Int): mutable.Map[TopicPartition, NewOffsetMetaData] = {
+    return offsetMapLock synchronized { newOffsetMetaDataMap(brokerId) }
+  }
+
+  def newOffsetMetaDataContains(brokerId: Int): Boolean = {
+    return offsetMapLock synchronized {
+      if (newOffsetMetaDataMap.contains(brokerId)) {
+        return true
+      } else {
+        return false
+      }
+    }
+  }
 
   def underReplicatedPartitionCount(): Int = {
       getLeaderPartitions().count(_.isUnderReplicated)
