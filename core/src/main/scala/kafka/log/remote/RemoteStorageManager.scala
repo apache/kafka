@@ -71,7 +71,7 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * @param offset
    * @return
    */
-  def read(remoteLocation: RDI, maxBytes: Int, offset: Int): LogReadInfo
+  def read(remoteLocation: RDI, maxBytes: Int, offset: Long): LogReadInfo
 
   /**
    * stops all the threads and closes the instance.

@@ -18,7 +18,7 @@ package kafka.log.remote
 
 import java.io.{Closeable, File}
 import java.util
-import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, Executors, LinkedBlockingDeque}
+import java.util.concurrent._
 
 import kafka.log.{LogManager, LogSegment, OffsetIndex, TimeIndex}
 import kafka.server.LogReadResult
@@ -33,9 +33,9 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
 
   val watchedSegments: BlockingQueue[LogSegment] = new LinkedBlockingDeque[LogSegment]()
 
-  val remoteLogIndexes: util.Map[Long, RemoteLogIndex] = new ConcurrentHashMap[Long, RemoteLogIndex]()
-  val remoteOffsetIndexes: util.Map[Long, OffsetIndex] = new ConcurrentHashMap[Long, OffsetIndex]()
-  val remoteTimeIndexes: util.Map[Long, TimeIndex] = new ConcurrentHashMap[Long, TimeIndex]()
+  val remoteLogIndexes: ConcurrentNavigableMap[Long, RemoteLogIndex] = new ConcurrentSkipListMap[Long, RemoteLogIndex]()
+  val remoteOffsetIndexes: ConcurrentNavigableMap[Long, OffsetIndex] = new ConcurrentSkipListMap[Long, OffsetIndex]()
+  val remoteTimeIndexes: ConcurrentNavigableMap[Long, TimeIndex] = new ConcurrentSkipListMap[Long, TimeIndex]()
 
   //todo configurable no of tasks/threads
   val executorService = Executors.newSingleThreadExecutor()
@@ -48,7 +48,7 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
           //todo-satish Not all LogSegments on different replicas are same. So, we need to avoid duplicating log-segments in remote
           // tier with similar offset ranges.
           val tuple = remoteStorageManager.copyLogSegment(segment)
-          //todo-satish need to explore whether the above should return RDI as each RemoteLogIndexEntry has RDI. That entry
+          //todo-satish need to explore whether the above should return RDI as each RemoteLogIndexEntry has RDI. That
           // can be optimized not to have RDI value for each entry.
           val rdi = tuple._1
           val entries = tuple._2
@@ -76,9 +76,9 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
       if (entry.firstOffset < minOffset) minOffset = entry.firstOffset
       if (entry.firstTimeStamp < minTimeStamp) minTimeStamp = entry.firstTimeStamp
       remoteLogIndex.append(entry)
-      //todo compute position
+      position += 16 + entry.length
       remoteOffsetIndex.append(entry.firstOffset, position)
-      remoteTimeIndex.maybeAppend(entry.firstTimeStamp, entry.firstOffset)
+      remoteTimeIndex.maybeAppend(entry.firstTimeStamp, position.toLong)
     })
 
     remoteLogIndex.flush()
@@ -87,7 +87,7 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
 
     remoteLogIndexes.put(minOffset, remoteLogIndex)
     remoteOffsetIndexes.put(minOffset, remoteOffsetIndex)
-    remoteTimeIndexes.put(minOffset, remoteTimeIndex)
+    remoteTimeIndexes.put(minTimeStamp, remoteTimeIndex)
   }
 
   /**
@@ -112,8 +112,10 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
     topicPartitions.foreach(tp => logManager.getLog(tp)
       .foreach(log => {
         log.logSegments.foreach(x => {
-          if (x != log.activeSegment) dirs.add(x)
+          dirs.add(x)
         })
+        // remove the last segment which is active
+        if (dirs.size() > 0) dirs.remove(dirs.size() - 1)
       }))
 
     watchedSegments.addAll(dirs)
@@ -145,6 +147,10 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
    */
   def read(fetchMaxByes: Int, hardMaxBytesLimit: Boolean, tp: TopicPartition, fetchInfo: PartitionData): LogReadResult = {
     //todo get the nearest offset from indexes.
+    val offsetPosition = remoteOffsetIndexes.floorEntry(fetchInfo.fetchOffset).getValue.lookup(fetchInfo.fetchOffset)
+    // todo get rdi from RemoteLogIndex
+    val rdi:RDI = null
+    remoteStorageManager.read(rdi, fetchInfo.maxBytes, fetchInfo.fetchOffset)
     null
   }
 
