@@ -125,6 +125,56 @@ public class AbstractHerderTest {
     @MockStrict private StatusBackingStore statusStore;
 
     @Test
+    public void testConnectors() {
+        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
+            .withConstructor(
+                Worker.class,
+                String.class,
+                String.class,
+                StatusBackingStore.class,
+                ConfigBackingStore.class
+            )
+            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
+            .addMockedMethod("generation")
+            .createMock();
+
+        EasyMock.expect(herder.generation()).andStubReturn(generation);
+        EasyMock.expect(herder.config(connector)).andReturn(null);
+        EasyMock.expect(configStore.snapshot()).andReturn(SNAPSHOT);
+        replayAll();
+        assertEquals(Collections.singleton(CONN1), new HashSet<>(herder.connectors()));
+        PowerMock.verifyAll();
+    }
+
+    @Test
+    public void testConnectorStatus() {
+        ConnectorTaskId taskId = new ConnectorTaskId(connector, 0);
+        AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
+            .withConstructor(
+                Worker.class,
+                String.class,
+                String.class,
+                StatusBackingStore.class,
+                ConfigBackingStore.class
+            )
+            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
+            .addMockedMethod("generation")
+            .createMock();
+
+        EasyMock.expect(herder.generation()).andStubReturn(generation);
+        EasyMock.expect(herder.config(connector)).andReturn(null);
+        EasyMock.expect(statusStore.get(connector))
+            .andReturn(new ConnectorStatus(connector, AbstractStatus.State.RUNNING, workerId, generation));
+        EasyMock.expect(statusStore.getAll(connector))
+            .andReturn(Collections.singletonList(
+                new TaskStatus(taskId, AbstractStatus.State.UNASSIGNED, workerId, generation)));
+
+        replayAll();
+        ConnectorStateInfo csi = herder.connectorStatus(connector);
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void connectorStatus() {
         ConnectorTaskId taskId = new ConnectorTaskId(connector, 0);
 
