@@ -70,13 +70,8 @@ public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
     }
 
     @Override
-    void setClassLoggerToDebug(final boolean wrapperClass) {
-        if (wrapperClass) {
-            LogCaptureAppender.setClassLoggerToDebug(AbstractRocksDBSegmentedBytesStore.class);
-
-        } else {
-            LogCaptureAppender.setClassLoggerToDebug(RocksDBWindowStore.class);
-        }
+    void setClassLoggerToDebug() {
+        LogCaptureAppender.setClassLoggerToDebug(AbstractRocksDBSegmentedBytesStore.class);
     }
 
     @Test

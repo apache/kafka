@@ -62,7 +62,7 @@ public class InMemoryWindowStoreTest extends WindowBytesStoreTest {
     }
 
     @Override
-    void setClassLoggerToDebug(final boolean wrapperClass) {
+    void setClassLoggerToDebug() {
         LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
     }
 

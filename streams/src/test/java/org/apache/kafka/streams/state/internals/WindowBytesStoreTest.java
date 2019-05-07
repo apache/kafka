@@ -95,7 +95,7 @@ public abstract class WindowBytesStoreTest {
 
     abstract String getMetricsScope();
 
-    abstract void setClassLoggerToDebug(final boolean wrapperClass);
+    abstract void setClassLoggerToDebug();
 
     private RecordCollectorImpl createRecordCollector(final String name) {
         return new RecordCollectorImpl(name,
@@ -862,7 +862,7 @@ public abstract class WindowBytesStoreTest {
 
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
-        setClassLoggerToDebug(false);
+        setClassLoggerToDebug();
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
         final KeyValueIterator iterator = windowStore.fetch(-1, 1, 0L, 10L);
@@ -877,7 +877,7 @@ public abstract class WindowBytesStoreTest {
 
     @Test
     public void shouldLogAndMeasureExpiredRecords() {
-        setClassLoggerToDebug(true);
+        setClassLoggerToDebug();
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
         // Advance stream time by inserting record with large enough timestamp that records with timestamp 0 are expired
