@@ -529,9 +529,9 @@
     The <code>log.cleanup.policy</code> property is a broker configuration setting defined 
     in the broker's <code>server.properties</code> file; it affects all of the topics 
     in the cluster that do not have a configuration override in place as documented 
-    in <a href="/documentation.html#brokerconfigs"></a>
+    <a href="/documentation.html#brokerconfigs">here</a>.
     
-    log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
+    The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
     <pre class="brush: text;">  log.cleaner.min.compaction.lag.ms</pre>
 
     This can be used to prevent messages newer than a minimum message age from being subject to compaction. If not set, all log segments are eligible for compaction except for the last segment, i.e. the one currently
