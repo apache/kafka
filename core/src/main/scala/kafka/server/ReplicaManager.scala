@@ -820,18 +820,19 @@ class ReplicaManager(val config: KafkaConfig,
           .format(localBrokerId, controllerId, epoch, correlationId, partition.topicPartition))
       }
 
-      // Init partition newOffsetMetaDataMap for Leader
-      val metaData = new mutable.HashMap[TopicPartition, NewOffsetMetaData]
-      partitionsToMakeLeaders.map{ partition =>
-        val lso: Long = partition.leaderReplicaIfLocal.get.logStartOffset
-        val leo: Long = partition.leaderReplicaIfLocal.get.logEndOffset.messageOffset
-        val lst: Long = partition.logManager.getLog(partition.topicPartition).get.segments.firstEntry().getValue.log.creationTime()
-        val let: Long = partition.logManager.getLog(partition.topicPartition).get.segments.lastEntry().getValue.log.file.lastModified()
-        metaData.put(partition.topicPartition, new NewOffsetMetaData(partition.leaderReplicaIdOpt.get, leo, lst, let, lso))
+      if (config.smartExtendEnable) {
+        // Init partition newOffsetMetaDataMap for Leader
+        val metaData = new mutable.HashMap[TopicPartition, NewOffsetMetaData]
+        partitionsToMakeLeaders.map { partition =>
+          val lso: Long = partition.leaderReplicaIfLocal.get.logStartOffset
+          val leo: Long = partition.leaderReplicaIfLocal.get.logEndOffset.messageOffset
+          val lst: Long = partition.logManager.getLog(partition.topicPartition).get.segments.firstEntry().getValue.log.creationTime()
+          val let: Long = partition.logManager.getLog(partition.topicPartition).get.segments.lastEntry().getValue.log.file.lastModified()
+          metaData.put(partition.topicPartition, new NewOffsetMetaData(partition.leaderReplicaIdOpt.get, leo, lst, let, lso))
+        }
+        info("makeLeaders updateNewOffsetMetaData broker=" + localBrokerId + " metaData=" + metaData)
+        updateNewOffsetMetaData(localBrokerId, metaData)
       }
-
-      info("makeLeaders updateNewOffsetMetaData broker=" + localBrokerId + " metaData=" + metaData)
-      updateNewOffsetMetaData(localBrokerId, metaData)
     } catch {
       case e: Throwable =>
         partitionState.keys.foreach { partition =>
