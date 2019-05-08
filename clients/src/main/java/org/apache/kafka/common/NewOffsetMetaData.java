@@ -1,3 +1,9 @@
+/**
+ * leo: logEndOffset
+ * lso: logStartOffset
+ * lst: logStartTime
+ * let: logEndTime
+ */
 package org.apache.kafka.common;
 
 public class NewOffsetMetaData {
