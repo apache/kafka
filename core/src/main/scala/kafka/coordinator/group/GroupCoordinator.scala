@@ -919,17 +919,7 @@ class GroupCoordinator(val brokerId: Int,
 
   def onCompleteJoin(group: GroupMetadata) {
     group.inLock {
-      val leaderId = group.leaderOrNull
-      if (leaderId != null) {
-        val leader = group.get(group.leaderOrNull)
-        if (!leader.isAwaitingJoin) {
-          removeHeartbeatForLeavingMember(group, leader)
-          group.remove(leaderId)
-          group.removeStaticMember(leader.groupInstanceId)
-          info(s"Group leader [member.id: $leaderId, group.instance.id: ${leader.groupInstanceId}] " +
-            s"failed to join before rebalance timeout. New leader ${group.leaderOrNull} was elected.")
-        }
-      }
+      group.maybeElectNewLeader()
 
       if (!group.is(Dead)) {
         group.initNextGeneration()

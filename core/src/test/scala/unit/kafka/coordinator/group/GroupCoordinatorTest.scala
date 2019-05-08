@@ -522,19 +522,21 @@ class GroupCoordinatorTest extends JUnitSuite {
 
   @Test
   def staticMemberRejoinWithFollowerIdAndChangeOfProtocol() {
-    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId, sessionTimeout = DefaultSessionTimeout * 2)
 
     // A static follower rejoin with changed protocol will trigger rebalance.
     EasyMock.reset(replicaManager)
     val newProtocols = List(("roundrobin", metadata))
-    // Timeout old leader in the meantime.
+    // Old leader hasn't joined in the meantime, triggering a re-election.
     val joinGroupResult = staticJoinGroup(groupId, rebalanceResult.followerId, followerInstanceId, protocolType, newProtocols, clockAdvance = DefaultSessionTimeout + 1)
 
-    assertFalse(getGroup(groupId).hasStaticMember(leaderInstanceId))
+    assertEquals(rebalanceResult.followerId, joinGroupResult.memberId)
+    assertTrue(getGroup(groupId).hasStaticMember(leaderInstanceId))
+    assertTrue(getGroup(groupId).isLeader(rebalanceResult.followerId))
     checkJoinGroupResult(joinGroupResult,
       Errors.NONE,
       rebalanceResult.generation + 1, // The group has promoted to the new generation, and leader has changed because old one times out.
-      Set(followerInstanceId),
+      Set(leaderInstanceId, followerInstanceId),
       groupId,
       CompletingRebalance,
       rebalanceResult.followerId,
@@ -791,7 +793,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     checkJoinGroupResult(newLeaderResult,
       Errors.NONE,
       initialRebalanceResult.generation + 1,
-      Set(followerInstanceId, newMemberInstanceId),
+      Set(leaderInstanceId, followerInstanceId, newMemberInstanceId),
       groupId,
       CompletingRebalance)
 
@@ -1106,40 +1108,59 @@ class GroupCoordinatorTest extends JUnitSuite {
 
     // now have a new member join to trigger a rebalance
     EasyMock.reset(replicaManager)
+    val otherMemberSessionTimeout = DefaultSessionTimeout
     val otherJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
 
     // send a couple heartbeats to keep the member alive while the rebalance finishes
-    timer.advanceClock(500)
-    EasyMock.reset(replicaManager)
-    var heartbeatResult = heartbeat(groupId, firstMemberId, firstGenerationId)
-    assertEquals(Errors.REBALANCE_IN_PROGRESS, heartbeatResult)
-
-    timer.advanceClock(500)
-    EasyMock.reset(replicaManager)
-    heartbeatResult = heartbeat(groupId, firstMemberId, firstGenerationId)
-    assertEquals(Errors.REBALANCE_IN_PROGRESS, heartbeatResult)
+    var expectedResultList = List(Errors.REBALANCE_IN_PROGRESS, Errors.REBALANCE_IN_PROGRESS)
+    for (expectedResult <- expectedResultList) {
+      timer.advanceClock(otherMemberSessionTimeout)
+      EasyMock.reset(replicaManager)
+      val heartbeatResult = heartbeat(groupId, firstMemberId, firstGenerationId)
+      assertEquals(expectedResult, heartbeatResult)
+    }
 
     // now timeout the rebalance
-    timer.advanceClock(500)
-    val otherJoinResult = await(otherJoinFuture, DefaultSessionTimeout+100)
+    timer.advanceClock(otherMemberSessionTimeout)
+    val otherJoinResult = await(otherJoinFuture, otherMemberSessionTimeout+100)
     val otherMemberId = otherJoinResult.memberId
     val otherGenerationId = otherJoinResult.generationId
     EasyMock.reset(replicaManager)
     val syncResult = syncGroupLeader(groupId, otherGenerationId, otherMemberId, Map(otherMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncResult._2)
 
-    // the unjoined member should be kicked out from the group
+    // the unjoined member should be remained in the group before session timeout.
     assertEquals(Errors.NONE, otherJoinResult.error)
     EasyMock.reset(replicaManager)
-    heartbeatResult = heartbeat(groupId, firstMemberId, firstGenerationId)
-    assertEquals(Errors.UNKNOWN_MEMBER_ID, heartbeatResult)
+    var heartbeatResult = heartbeat(groupId, firstMemberId, firstGenerationId)
+    assertEquals(Errors.ILLEGAL_GENERATION, heartbeatResult)
+
+    expectedResultList = List(Errors.NONE, Errors.NONE, Errors.REBALANCE_IN_PROGRESS)
+
+    // now session timeout the unjoined member. Still keeping the new member.
+    for (expectedResult <- expectedResultList) {
+      timer.advanceClock(otherMemberSessionTimeout)
+      EasyMock.reset(replicaManager)
+      heartbeatResult = heartbeat(groupId, otherMemberId, otherGenerationId)
+      assertEquals(expectedResult, heartbeatResult)
+    }
+
+    EasyMock.reset(replicaManager)
+    val otherRejoinGroupFuture = sendJoinGroup(groupId, otherMemberId, protocolType, protocols)
+    val otherReJoinResult = await(otherRejoinGroupFuture, otherMemberSessionTimeout+100)
+    assertEquals(Errors.NONE, otherReJoinResult.error)
+
+    EasyMock.reset(replicaManager)
+    val otherRejoinGenerationId = otherReJoinResult.generationId
+    val reSyncResult = syncGroupLeader(groupId, otherRejoinGenerationId, otherMemberId, Map(otherMemberId -> Array[Byte]()))
+    assertEquals(Errors.NONE, reSyncResult._2)
 
     // the joined member should get heart beat response with no error. Let the new member keep heartbeating for a while
     // to verify that no new rebalance is triggered unexpectedly
     for ( _ <-  1 to 20) {
       timer.advanceClock(500)
       EasyMock.reset(replicaManager)
-      heartbeatResult = heartbeat(groupId, otherMemberId, otherGenerationId)
+      heartbeatResult = heartbeat(groupId, otherMemberId, otherRejoinGenerationId)
       assertEquals(Errors.NONE, heartbeatResult)
     }
   }

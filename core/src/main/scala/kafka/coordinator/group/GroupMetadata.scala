@@ -244,6 +244,25 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       leaderId = members.keys.headOption
   }
 
+  def maybeElectNewLeader() {
+    leaderId match {
+      case Some(currentLeaderId) =>
+        val oldLeader = get(currentLeaderId)
+        if (!oldLeader.isAwaitingJoin) {
+          members.find(_._2.isAwaitingJoin) match {
+            case Some(anyJoinedMember) => {
+              leaderId = Option(anyJoinedMember._1)
+              info(s"Group leader [member.id: ${oldLeader.memberId}, " +
+                s"group.instance.id: ${oldLeader.groupInstanceId}] failed to join " +
+                s"before rebalance timeout, while new leader $leaderId was elected.")
+            }
+            case _ =>
+          }
+        }
+      case _ =>
+    }
+  }
+
   /**
     * [For static members only]: Replace the old member id with the new one,
     * keep everything else unchanged and return the updated member.
