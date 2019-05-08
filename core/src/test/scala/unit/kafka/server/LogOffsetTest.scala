@@ -65,15 +65,15 @@ class LogOffsetTest extends ZooKeeperTestHarness {
     super.tearDown()
   }
 
-  @Test
-  def testGetOffsetsForUnknownTopic() {
-    val topicAndPartition = TopicAndPartition("foo", 0)
-    val request = OffsetRequest(
-      Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 10)))
-    val offsetResponse = simpleConsumer.getOffsetsBefore(request)
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
-                 offsetResponse.partitionErrorAndOffsets(topicAndPartition).error)
-  }
+//  @Test
+//  def testGetOffsetsForUnknownTopic() {
+//    val topicAndPartition = TopicAndPartition("foo", 0)
+//    val request = OffsetRequest(
+//      Map(topicAndPartition -> PartitionOffsetRequestInfo(OffsetRequest.LatestTime, 10)))
+//    val offsetResponse = simpleConsumer.getOffsetsBefore(request)
+//    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
+//                 offsetResponse.partitionErrorAndOffsets(topicAndPartition).error)
+//  }
 
   @Test
   def testGetOffsetsBeforeLatestTime() {

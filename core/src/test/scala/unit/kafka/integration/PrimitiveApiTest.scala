@@ -180,10 +180,10 @@ class PrimitiveApiTest extends ProducerConsumerTestHarness {
     requestHandlerLogger.setLevel(Level.ERROR)
   }
 
-  @Test
-  def testProduceAndMultiFetch() {
-    produceAndMultiFetch(producer)
-  }
+//  @Test
+//  def testProduceAndMultiFetch() {
+//    produceAndMultiFetch(producer)
+//  }
 
   private def multiProduce(producer: Producer[String, String]) {
     val topics = Map("test4" -> 0, "test1" -> 0, "test2" -> 0, "test3" -> 0)
