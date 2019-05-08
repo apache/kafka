@@ -1,11 +1,5 @@
 package org.apache.kafka.common;
 
-/**
- * leo: logEndOffset
- * lso: logStartOffset
- * lst: logStartTime
- * let: logEndTime
- */
 public class NewOffsetMetaData {
     public final long leo;
     public final int brokerid;
