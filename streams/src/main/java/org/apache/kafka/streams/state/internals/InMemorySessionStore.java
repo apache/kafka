@@ -23,6 +23,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentNavigableMap;
@@ -134,6 +135,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     public byte[] fetchSession(final Bytes key, final long startTime, final long endTime) {
         removeExpiredSegments();
 
+        Objects.requireNonNull(key, "key cannot be null");
+
         // Only need to search if the record hasn't expired yet
         if (endTime > observedStreamTime - retentionPeriod) {
             final ConcurrentNavigableMap<Bytes, ConcurrentNavigableMap<Long, byte[]>> keyMap = endTimeMap.get(endTime);
@@ -152,6 +155,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
     public KeyValueIterator<Windowed<Bytes>, byte[]> findSessions(final Bytes key,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
+        Objects.requireNonNull(key, "key cannot be null");
+
         removeExpiredSegments();
 
         return registerNewIterator(key,
@@ -166,6 +171,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                                                                   final Bytes keyTo,
                                                                   final long earliestSessionEndTime,
                                                                   final long latestSessionStartTime) {
+        Objects.requireNonNull(keyFrom, "from key cannot be null");
+        Objects.requireNonNull(keyTo, "to key cannot be null");
+
         removeExpiredSegments();
 
         if (keyFrom.compareTo(keyTo) > 0) {
@@ -183,6 +191,9 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes key) {
+
+        Objects.requireNonNull(key, "key cannot be null");
+
         removeExpiredSegments();
 
         return registerNewIterator(key, key, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
@@ -190,7 +201,12 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes from, final Bytes to) {
+
+        Objects.requireNonNull(from, "from key cannot be null");
+        Objects.requireNonNull(to, "to key cannot be null");
+
         removeExpiredSegments();
+
 
         return registerNewIterator(from, to, Long.MAX_VALUE, endTimeMap.entrySet().iterator());
     }
@@ -212,6 +228,13 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
     @Override
     public void close() {
+        if (openIterators.size() != 0) {
+            LOG.warn("Closing {} open iterators for store {}", openIterators.size(), name);
+            for (final InMemorySessionStoreIterator it : openIterators) {
+                it.close();
+            }
+        }
+
         endTimeMap.clear();
         openIterators.clear();
         open = false;
@@ -303,6 +326,8 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
 
         @Override
         public void close() {
+            next = null;
+            recordIterator = null;
             callback.deregisterIterator(this);
         }
 

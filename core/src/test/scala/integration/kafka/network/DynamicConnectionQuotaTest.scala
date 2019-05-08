@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
 
@@ -70,7 +71,6 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
   @Test
   def testDynamicConnectionQuota() {
-    val initialConnectionCount = connectionCount
     val maxConnectionsPerIP = 5
 
     def connectAndVerify() {
@@ -98,7 +98,6 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
 
   @Test
   def testDynamicListenerConnectionQuota(): Unit = {
-    val socketServer = servers.head.socketServer
     val initialConnectionCount = connectionCount
 
     def connectAndVerify() {

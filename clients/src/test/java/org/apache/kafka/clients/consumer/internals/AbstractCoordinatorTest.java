@@ -768,7 +768,7 @@ public class AbstractCoordinatorTest {
     }
 
     private FindCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
-        return new FindCoordinatorResponse(error, node);
+        return FindCoordinatorResponse.prepareResponse(error, node);
     }
 
     private HeartbeatResponse heartbeatResponse(Errors error) {
@@ -809,7 +809,7 @@ public class AbstractCoordinatorTest {
                                 int retryBackoffMs,
                                 Optional<String> groupInstanceId) {
             super(new LogContext(), client, GROUP_ID, groupInstanceId, rebalanceTimeoutMs,
-                    SESSION_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS, metrics, METRIC_GROUP_PREFIX, time, retryBackoffMs, !groupInstanceId.isPresent());
+                    SESSION_TIMEOUT_MS, HEARTBEAT_INTERVAL_MS, metrics, METRIC_GROUP_PREFIX, time, retryBackoffMs);
         }
 
         @Override

@@ -24,7 +24,7 @@ import org.apache.kafka.common.serialization.Deserializer
 import org.hamcrest.CoreMatchers
 import org.hamcrest.MatcherAssert._
 import org.junit.Test
-import org.scalatest.mockito.MockitoSugar
+import org.mockito.Mockito._
 
 class CustomDeserializer extends Deserializer[String] {
 
@@ -34,14 +34,15 @@ class CustomDeserializer extends Deserializer[String] {
   }
 }
 
-class CustomDeserializerTest extends MockitoSugar {
+class CustomDeserializerTest {
 
   @Test
   def checkDeserializerTopicIsNotNull(): Unit = {
     val formatter = new DefaultMessageFormatter()
     formatter.keyDeserializer = Some(new CustomDeserializer)
 
-    formatter.writeTo(new ConsumerRecord("topic_test", 1, 1l, "key".getBytes, "value".getBytes), mock[PrintStream])
+    formatter.writeTo(new ConsumerRecord("topic_test", 1, 1l, "key".getBytes, "value".getBytes),
+      mock(classOf[PrintStream]))
 
     formatter.close()
   }

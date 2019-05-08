@@ -17,13 +17,13 @@ import java.time
 import java.util.concurrent._
 import java.util.{Collection, Collections, Properties}
 
-import util.control.Breaks._
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, Logging, ShutdownableThread, TestUtils}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException
+import org.apache.kafka.common.message.FindCoordinatorRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
 import org.junit.Assert._
@@ -255,7 +255,10 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   }
 
   private def findCoordinator(group: String): Int = {
-    val request = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, group).build()
+    val request = new FindCoordinatorRequest.Builder(
+        new FindCoordinatorRequestData()
+          .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
+          .setKey(group)).build()
     var nodeId = -1
     TestUtils.waitUntilTrue(() => {
       val resp = connectAndSend(request, ApiKeys.FIND_COORDINATOR)
@@ -505,7 +508,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }
   }
 
-  private def createTopicPartitions(topic: String, numPartitions: Int = 1, replicationFactor: Int = 1,
+  private def createTopicPartitions(topic: String, numPartitions: Int, replicationFactor: Int,
                                     topicConfig: Properties = new Properties): Set[TopicPartition] = {
     createTopic(topic, numPartitions = numPartitions, replicationFactor = replicationFactor, topicConfig = topicConfig)
     Range(0, numPartitions).map(part => new TopicPartition(topic, part)).toSet

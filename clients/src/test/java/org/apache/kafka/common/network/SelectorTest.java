@@ -813,7 +813,7 @@ public class SelectorTest {
         verifySelectorEmpty(this.selector);
     }
 
-    private void verifySelectorEmpty(Selector selector) throws Exception {
+    public void verifySelectorEmpty(Selector selector) throws Exception {
         for (KafkaChannel channel : selector.channels()) {
             selector.close(channel.id());
             assertNull(channel.selectionKey().attachment());

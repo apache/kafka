@@ -18,7 +18,6 @@
 package kafka.api
 
 import org.junit._
-import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
 
 import scala.util.Random
@@ -31,7 +30,7 @@ object ApiUtilsTest {
   val rnd: Random = new Random()
 }
 
-class ApiUtilsTest extends JUnitSuite {
+class ApiUtilsTest {
 
   @Test
   def testShortStringNonASCII() {

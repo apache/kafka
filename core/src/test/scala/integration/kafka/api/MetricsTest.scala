@@ -28,6 +28,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 

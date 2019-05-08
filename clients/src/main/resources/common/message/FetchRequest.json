@@ -62,7 +62,7 @@
       "about": "The fetch session ID." },
     { "name": "Topics", "type": "[]FetchableTopic", "versions": "0+",
       "about": "The topics to fetch.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The name of the topic to fetch." },
       { "name": "FetchPartitions", "type": "[]FetchPartition", "versions": "0+",
         "about": "The partitions to fetch.", "fields": [
@@ -80,7 +80,7 @@
     ]},
     { "name": "Forgotten", "type": "[]ForgottenTopic", "versions": "7+", "ignorable": false,
       "about": "In an incremental fetch request, the partitions to remove.", "fields": [
-      { "name": "Name", "type": "string", "versions": "7+",
+      { "name": "Name", "type": "string", "versions": "7+", "entityType": "topicName",
         "about": "The partition name." },
       { "name": "ForgottenPartitionIndexes", "type": "[]int32", "versions": "7+",
         "about": "The partitions indexes to forget." }

@@ -26,7 +26,7 @@
       "about": "The error code, or 0 if there was no error." },
     { "name": "Partitions", "type": "[]LeaderAndIsrResponsePartition", "versions": "0+",
       "about": "Each partition.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+",
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "PartitionIndex", "type": "int32", "versions": "0+",
         "about": "The partition index." },

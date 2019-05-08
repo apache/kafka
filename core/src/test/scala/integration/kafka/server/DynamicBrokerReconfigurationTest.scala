@@ -59,6 +59,7 @@ import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializ
 import org.apache.kafka.test.TestSslUtils
 import org.junit.Assert._
 import org.junit.{After, Before, Ignore, Test}
+import org.scalatest.Assertions.intercept
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
