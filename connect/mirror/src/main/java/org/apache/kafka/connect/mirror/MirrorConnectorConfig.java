@@ -213,7 +213,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
 
     String offsetSyncTopic() {
         // ".internal" suffix ensures this doesn't get replicated
-        return targetClusterAlias() + ".offset-syncs.internal";
+        return "mm2-offset-syncs." + targetClusterAlias() + ".internal";
     }
 
     String heartbeatsTopic() {
