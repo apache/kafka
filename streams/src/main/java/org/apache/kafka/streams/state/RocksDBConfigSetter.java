@@ -39,16 +39,17 @@ public interface RocksDBConfigSetter {
     void setConfig(final String storeName, final Options options, final Map<String, Object> configs);
 
     /**
-     * This method will be called when the store is closed and should be used to close any user-constructed objects
-     * that inherit from RocksObject. Any such object created with new in setConfig should have close called on it
-     * here to avoid leaking off-heap memory.
-     * Objects to be closed can be saved by the user or retrieved back from options using its getter methods.
+     * This method should close any user-constructed objects that inherit from {@code org.rocksdb.RocksObject}
      *
-     * Example objects needing to be closed include Filter and Cache
+     * Any such object created with @{code new} in {@link #setConfig} should have {@code close} called on it here to
+     * avoid leaking off-heap memory. Objects to be closed can be saved by the user or retrieved back from
+     * {@code options} using its getter methods.
+     *
+     * Example objects needing to be closed include {@code org.rocksdb.Filter} and {@code org.rocksdb.Cache}
      *
      * @param storeName     the name of the store being configured
      * @param options       the Rocks DB options
-\    */
+     */
     default void close(final String storeName, final Options options) {
         // nothing to close
     }
