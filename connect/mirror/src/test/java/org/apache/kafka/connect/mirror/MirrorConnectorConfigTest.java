@@ -35,6 +35,8 @@ public class MirrorConnectorConfigTest {
         Map<String, String> props = new HashMap<>();
         props.put("name", "ConnectorName");
         props.put("connector.class", "ConnectorClass");
+        props.put("source.cluster.alias", "source1");
+        props.put("target.cluster.alias", "target2");
         for (int i = 0; i < keyValues.length; i += 2) {
             props.put(keyValues[i], keyValues[i + 1]);
         }

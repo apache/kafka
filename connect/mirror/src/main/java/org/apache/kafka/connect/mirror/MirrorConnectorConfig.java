@@ -48,7 +48,8 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String SOURCE_CLUSTER_ALIAS = "source.cluster.alias";
     private static final String SOURCE_CLUSTER_ALIAS_DOC = "Alias of source cluster";
     public static final String TARGET_CLUSTER_ALIAS = "target.cluster.alias";
-    private static final String TARGET_CLUSTER_ALIAS_DOC = "Alias of target cluster";
+    public static final String TARGET_CLUSTER_ALIAS_DEFAULT = "target";
+    private static final String TARGET_CLUSTER_ALIAS_DOC = "Alias of target cluster. Used in metrics reporting.";
     public static final String REPLICATION_POLICY_CLASS = MirrorClientConfig.REPLICATION_POLICY_CLASS;
     public static final Class REPLICATION_POLICY_CLASS_DEFAULT = DefaultReplicationPolicy.class;
     private static final String REPLICATION_POLICY_CLASS_DOC = "Controls how remote topics are defined.";
@@ -335,13 +336,12 @@ public class MirrorConnectorConfig extends AbstractConfig {
         .define(
             SOURCE_CLUSTER_ALIAS,
             ConfigDef.Type.STRING,
-            null,
             ConfigDef.Importance.HIGH,
             SOURCE_CLUSTER_ALIAS_DOC)
         .define(
             TARGET_CLUSTER_ALIAS,
             ConfigDef.Type.STRING,
-            null,
+            TARGET_CLUSTER_ALIAS_DEFAULT,
             ConfigDef.Importance.HIGH,
             TARGET_CLUSTER_ALIAS_DOC)
         .define(
