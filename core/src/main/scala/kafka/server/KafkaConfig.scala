@@ -43,7 +43,7 @@ object Defaults {
   val sentOffsetMetaDataIntervalMs = 30 * 1000L
   val getStartOffsetMaxRetries = 10
   val updateLeaderOffsetIntervalMs = 30 * 1000L
-  val SmartExtendEnableValue = true
+  val SmartExtendEnableValue = false
 
   /** ********* Zookeeper Configuration ***********/
   val ZkSessionTimeoutMs = 6000
@@ -643,7 +643,7 @@ object KafkaConfig {
       .define(ReplicaLstTimeMaxMsProp, LONG, 5000 * 10000, HIGH, ReplicaLstTimeMaxMsPropDoc)
       .define(sentOffsetMetaDataIntervalMsProp, LONG, Defaults.sentOffsetMetaDataIntervalMs, HIGH, sentOffsetMetaDataIntervalMsDoc)
       .define(SmartExtendEnableProp, BOOLEAN, Defaults.SmartExtendEnableValue, HIGH, SmartExtendEnableDoc)
-      .define(BootstarpServersProp, STRING, "127.0.0.1:9092", HIGH, BootstarpServersDoc)
+      .define(BootstarpServersProp, STRING, "", HIGH, BootstarpServersDoc)
       .define(getStartOffsetretriesProp, INT, Defaults.getStartOffsetMaxRetries, HIGH, getStartOffsetretriesDoc)
       .define(updateLeaderOffsetIntervalMsProp, LONG, Defaults.updateLeaderOffsetIntervalMs, HIGH, updateLeaderOffsetIntervalMsDoc)
       .define(ReplicaIsrLstEntryTimeMaxMsProp, LONG, 6 * 60 * 60 * 1000, HIGH, ReplicaIsrLstEntryTimeMaxMsDoc)
