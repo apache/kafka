@@ -191,7 +191,6 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
                 throw new IllegalStateException();
             }
 
-            // ImplicitLinkedHashCollection.this.remove(lastReturned);
             if (lastReturned == cur) {
                 cursor--;
                 cur = indexToElement(head, elements, lastReturned.prev());
