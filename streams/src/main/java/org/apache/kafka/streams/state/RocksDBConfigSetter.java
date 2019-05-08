@@ -37,4 +37,19 @@ public interface RocksDBConfigSetter {
      * @param configs       the configuration supplied to {@link org.apache.kafka.streams.StreamsConfig}
      */
     void setConfig(final String storeName, final Options options, final Map<String, Object> configs);
+
+    /**
+     * This method will be called when the store is closed and should be used to close any user-constructed objects
+     * that inherit from RocksObject. Any such object created with new in setConfig should have close called on it
+     * here to avoid leaking off-heap memory.
+     * Objects to be closed can be saved by the user or retrieved back from options using its getter methods.
+     *
+     * Example objects needing to be closed include Filter and Cache
+     *
+     * @param storeName     the name of the store being configured
+     * @param options       the Rocks DB options
+\    */
+    default void close(final String storeName, final Options options) {
+        // nothing to close
+    }
 }
