@@ -639,15 +639,15 @@ object KafkaConfig {
 
     new ConfigDef()
       /** ********* SmartExtendManager Configuration ***********/
-      .define(ReplicaExpriedMaxMsProp, LONG, HIGH, ReplicaLstTimeMaxMsPropDoc)
-      .define(ReplicaLstTimeMaxMsProp, LONG, HIGH, ReplicaLstTimeMaxMsPropDoc)
+      .define(ReplicaExpriedMaxMsProp, LONG, 3 * 60 * 60 * 1000, HIGH, ReplicaLstTimeMaxMsPropDoc)
+      .define(ReplicaLstTimeMaxMsProp, LONG, 5000 * 10000, HIGH, ReplicaLstTimeMaxMsPropDoc)
       .define(sentOffsetMetaDataIntervalMsProp, LONG, Defaults.sentOffsetMetaDataIntervalMs, HIGH, sentOffsetMetaDataIntervalMsDoc)
       .define(SmartExtendEnableProp, BOOLEAN, Defaults.SmartExtendEnableValue, HIGH, SmartExtendEnableDoc)
-      .define(BootstarpServersProp, STRING, HIGH, BootstarpServersDoc)
+      .define(BootstarpServersProp, STRING, null, HIGH, BootstarpServersDoc)
       .define(getStartOffsetretriesProp, INT, Defaults.getStartOffsetMaxRetries, HIGH, getStartOffsetretriesDoc)
       .define(updateLeaderOffsetIntervalMsProp, LONG, Defaults.updateLeaderOffsetIntervalMs, HIGH, updateLeaderOffsetIntervalMsDoc)
-      .define(ReplicaIsrLstEntryTimeMaxMsProp, LONG, HIGH, ReplicaIsrLstEntryTimeMaxMsDoc)
-      .define(ReplicaIsrEntryISRMaxLagProp, LONG, HIGH, ReplicaIsrEntryISRMaxLagDoc)
+      .define(ReplicaIsrLstEntryTimeMaxMsProp, LONG, 6 * 60 * 60 * 1000, HIGH, ReplicaIsrLstEntryTimeMaxMsDoc)
+      .define(ReplicaIsrEntryISRMaxLagProp, LONG, 1000 * 10000, HIGH, ReplicaIsrEntryISRMaxLagDoc)
 
 
       /** ********* Zookeeper Configuration ***********/
