@@ -568,53 +568,17 @@ public class NetworkClientTest {
     }
 
     // ManualMetadataUpdater with ability to keep track of failures
-    private static class TestMetadataUpdater implements MetadataUpdater {
-        private final ManualMetadataUpdater updater;
-        private KafkaException failure;
+    private static class TestMetadataUpdater extends ManualMetadataUpdater {
+        KafkaException failure;
 
         public TestMetadataUpdater(List<Node> nodes) {
-            updater = new ManualMetadataUpdater(nodes);
-        }
-
-        @Override
-        public List<Node> fetchNodes() {
-            return updater.fetchNodes();
-        }
-
-        @Override
-        public boolean isUpdateDue(long now) {
-            return updater.isUpdateDue(now);
-        }
-
-        @Override
-        public long maybeUpdate(long now) {
-            return updater.maybeUpdate(now);
-        }
-
-        @Override
-        public void handleDisconnection(String destination) {
-            updater.handleDisconnection(destination);
+            super(nodes);
         }
 
         @Override
         public void handleFatalException(KafkaException exception) {
             failure = exception;
-            updater.handleFatalException(exception);
-        }
-
-        @Override
-        public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse metadataResponse) {
-            updater.handleCompletedMetadataResponse(requestHeader, now, metadataResponse);
-        }
-
-        @Override
-        public void requestUpdate() {
-            updater.requestUpdate();
-        }
-
-        @Override
-        public void close() {
-            updater.close();
+            super.handleFatalException(exception);
         }
 
         public KafkaException getAndClearFailure() {
