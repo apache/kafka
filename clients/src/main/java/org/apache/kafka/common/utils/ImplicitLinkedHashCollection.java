@@ -591,10 +591,28 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         return elements.length;
     }
 
+    /**
+     * Returns a {@link List} view of the elements contained in the collection, ordered by order of insertion into
+     * the collection. The list is backed by the collection, so changes to the collection are reflected in the list,
+     * and vice-versa. The list supports element removal, which removes the corresponding element from the collection,
+     * but does not support the {@code add} or {@code set} operations.
+     *
+     * The list is implemented as a circular linked list, so all index-based operations, such as {@code List.get},
+     * run in O(n) time.
+     *
+     * @return a list view of the elements contained in this collection
+     */
     public List<E> valuesList() {
         return new ImplicitLinkedHashCollectionListView();
     }
 
+    /**
+     * Returns a {@link Set} view of the elements contained in the collection. The set is backed by the collection, so
+     * changes to the collection are reflected in the set, and vice versa. The set supports element removal and
+     * addition, which removes or adds to the collection, respectively.
+     *
+     * @return a set view of the elements contained in this collection
+     */
     public Set<E> valuesSet() {
         return new ImplicitLinkedHashCollectionSetView();
     }

@@ -177,6 +177,97 @@ public class ImplicitLinkedHashCollectionTest {
     }
 
     @Test
+    public void testSetViewGet() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        coll.add(new TestElement(1));
+        coll.add(new TestElement(2));
+        coll.add(new TestElement(3));
+
+        Set<TestElement> set = coll.valuesSet();
+        assertTrue(set.contains(new TestElement(1)));
+        assertTrue(set.contains(new TestElement(2)));
+        assertTrue(set.contains(new TestElement(3)));
+        assertEquals(3, set.size());
+    }
+
+    @Test
+    public void testSetViewModification() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        coll.add(new TestElement(1));
+        coll.add(new TestElement(2));
+        coll.add(new TestElement(3));
+
+        // Removal from set is reflected in collection
+        Set<TestElement> set = coll.valuesSet();
+        set.remove(new TestElement(1));
+        assertFalse(coll.contains(new TestElement(1)));
+        assertEquals(2, coll.size());
+
+        // Addition to set is reflected in collection
+        set.add(new TestElement(4));
+        assertTrue(coll.contains(new TestElement(4)));
+        assertEquals(3, coll.size());
+
+        // Removal from collection is reflected in set
+        coll.remove(new TestElement(2));
+        assertFalse(set.contains(new TestElement(2)));
+        assertEquals(2, set.size());
+
+        // Addition to collection is reflected in set
+        coll.add(new TestElement(5));
+        assertTrue(set.contains(new TestElement(5)));
+        assertEquals(3, set.size());
+
+        // Ordering in the collection is maintained
+        int val = 3;
+        for (TestElement e : coll) {
+            assertEquals(val, e.val);
+            ++val;
+        }
+    }
+
+    @Test
+    public void testListViewGet() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        coll.add(new TestElement(1));
+        coll.add(new TestElement(2));
+        coll.add(new TestElement(3));
+
+        List<TestElement> list = coll.valuesList();
+        assertEquals(1, list.get(0).val);
+        assertEquals(2, list.get(1).val);
+        assertEquals(3, list.get(2).val);
+        assertEquals(3, list.size());
+    }
+
+    @Test
+    public void testListViewModification() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        coll.add(new TestElement(1));
+        coll.add(new TestElement(2));
+        coll.add(new TestElement(3));
+
+        // Removal from list is reflected in collection
+        List<TestElement> list = coll.valuesList();
+        list.remove(1);
+        assertTrue(coll.contains(new TestElement(1)));
+        assertFalse(coll.contains(new TestElement(2)));
+        assertTrue(coll.contains(new TestElement(3)));
+        assertEquals(2, coll.size());
+
+        // Removal from collection is reflected in list
+        coll.remove(new TestElement(1));
+        assertEquals(3, list.get(0).val);
+        assertEquals(1, list.size());
+
+        // Addition to collection is reflected in list
+        coll.add(new TestElement(4));
+        assertEquals(3, list.get(0).val);
+        assertEquals(4, list.get(1).val);
+        assertEquals(2, list.size());
+    }
+
+    @Test
     public void testEmptyListIterator() {
         ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
         ListIterator iter = coll.valuesList().listIterator();
