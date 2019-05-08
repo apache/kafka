@@ -588,7 +588,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         trace(s"Sending fetch response to client $clientId of " +
           s"${convertedPartitionData.map { case (_, v) => v.records.sizeInBytes }.sum} bytes")
         val fetchResponse = if (delayTimeMs > 0) new FetchResponse(versionId, fetchedPartitionData, delayTimeMs) else response
-        fetchResponse.responseData().forEach((tp, data) => error("tp=" + tp.toString + " errcode=" + data.errorCode))
         requestChannel.sendResponse(new RequestChannel.Response(request, fetchResponse))
       }
 
@@ -649,7 +648,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         handleOffsetRequestV1(request)
 
     val response = new ListOffsetResponse(mergedResponseMap.asJava, version)
-    response.responseData().forEach((tp, data) => error("tp=" + tp.toString) + " errocode=" + data.errorCode)
     requestChannel.sendResponse(new RequestChannel.Response(request, response))
   }
 
@@ -1041,7 +1039,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
     trace(s"Sending offset fetch response $offsetFetchResponse for correlation id ${header.correlationId} to client ${header.clientId}.")
-    error(" erroCode=" + offsetFetchResponse.error())
     requestChannel.sendResponse(new Response(request, offsetFetchResponse))
   }
 
