@@ -363,7 +363,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     // Member id must have formatted with valid delimiter as [prefix]-[suffix] to
     // be validated.
     if (delimiterIdx == -1) {
-      info(s"given member.id $memberId was ill-formatted without delimiter '-'.")
+      error(s"given member.id $memberId was ill-formatted without delimiter '-'.")
       true
     } else {
       val memberIdPrefix = Some(memberId.substring(0, delimiterIdx))

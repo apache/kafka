@@ -2076,7 +2076,7 @@ public class ConsumerCoordinatorTest {
         coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE));
     }
 
-    @Test
+    @Test(expected = FencedInstanceIdException.class)
     public void testCommitOffsetRequestAsyncWithFencedInstanceIdException() {
         subscriptions.assignFromUser(singleton(t1p));
 
@@ -2085,11 +2085,8 @@ public class ConsumerCoordinatorTest {
 
         prepareOffsetCommitRequest(singletonMap(t1p, 100L), Errors.FENCED_INSTANCE_ID);
 
-        AtomicBoolean matchingException = new AtomicBoolean(false);
-        coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), callback(
-                Errors.FENCED_INSTANCE_ID.message(), matchingException));
+        coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), new MockCommitCallback());
         coordinator.invokeCompletedOffsetCommitCallbacks();
-        assertTrue(matchingException.get());
     }
 
     private ConsumerCoordinator prepareCoordinatorForCloseTest(final boolean useGroupManagement,

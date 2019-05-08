@@ -134,7 +134,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     private RequestFuture<Void> findCoordinatorFuture = null;
 
-    protected final String fencedInstanceErrorMessage = "Received fatal exception: duplicate group.instance.id {} detected in {}";
+    protected final String fencedInstanceErrorMessage = "Received fatal exception: group.instance.id {} get fenced in {}";
 
     /**
      * Initialize the coordination manager.
