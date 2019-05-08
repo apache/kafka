@@ -19,6 +19,8 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.connect.source.SourceRecord;
 
 import org.junit.Test;
@@ -33,9 +35,11 @@ public class MirrorSourceTaskTest {
     public void testSerde() {
         byte[] key = new byte[]{'a', 'b', 'c', 'd', 'e'};
         byte[] value = new byte[]{'f', 'g', 'h', 'i', 'j', 'k'};
-        TimestampType timestampType = TimestampType.CREATE_TIME;
+        Headers headers = new RecordHeaders();
+        headers.add("header1", new byte[]{'l', 'm', 'n', 'o'});
+        headers.add("header2", new byte[]{'p', 'q', 'r', 's', 't'});
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("topic1", 2, 3L, 4L,
-            TimestampType.CREATE_TIME, 0, 5, 6, key, value);
+            TimestampType.CREATE_TIME, 0L, 5, 6, key, value, headers);
         MirrorSourceTask mirrorSourceTask = new MirrorSourceTask("cluster7",
             new DefaultReplicationPolicy(), 50);
         SourceRecord sourceRecord = mirrorSourceTask.convertRecord(consumerRecord);
@@ -46,6 +50,8 @@ public class MirrorSourceTaskTest {
         assertEquals(4L, sourceRecord.timestamp().longValue());
         assertEquals(key, sourceRecord.key());
         assertEquals(value, sourceRecord.value());
+        assertEquals(headers.lastHeader("header1").value(), sourceRecord.headers().lastWithName("header1").value());
+        assertEquals(headers.lastHeader("header2").value(), sourceRecord.headers().lastWithName("header2").value());
     }
 
     @Test

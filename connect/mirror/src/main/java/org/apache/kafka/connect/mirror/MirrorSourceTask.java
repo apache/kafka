@@ -19,6 +19,8 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceRecord;
+import org.apache.kafka.connect.header.Headers;
+import org.apache.kafka.connect.header.ConnectHeaders;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -26,6 +28,7 @@ import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -200,13 +203,22 @@ public class MirrorSourceTask extends SourceTask {
     // visible for testing 
     SourceRecord convertRecord(ConsumerRecord<byte[], byte[]> record) {
         String targetTopic = formatRemoteTopic(record.topic());
+        Headers headers = convertHeaders(record);
         return new SourceRecord(
                 MirrorUtils.wrapPartition(new TopicPartition(record.topic(), record.partition()), sourceClusterAlias),
                 MirrorUtils.wrapOffset(record.offset()),
                 targetTopic, record.partition(),
                 Schema.OPTIONAL_BYTES_SCHEMA, record.key(),
                 Schema.BYTES_SCHEMA, record.value(),
-                record.timestamp(), null);
+                record.timestamp(), headers);
+    }
+
+    private Headers convertHeaders(ConsumerRecord<byte[], byte[]> record) {
+        ConnectHeaders headers = new ConnectHeaders();
+        for (Header header : record.headers()) {
+            headers.addBytes(header.key(), header.value());
+        }
+        return headers;
     }
 
     private String formatRemoteTopic(String topic) {
