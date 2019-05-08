@@ -32,7 +32,7 @@ import org.slf4j.LoggerFactory;
  */
 public interface RocksDBConfigSetter {
 
-    static final Logger LOG = LoggerFactory.getLogger(RocksDBConfigSetter.class);
+    Logger LOG = LoggerFactory.getLogger(RocksDBConfigSetter.class);
 
     /**
      * Set the rocks db options for the provided storeName.
