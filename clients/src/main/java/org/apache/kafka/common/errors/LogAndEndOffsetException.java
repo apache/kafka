@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.common.errors;
 
-public class GetStartOffsetRequestException extends ApiException {
+public class LogAndEndOffsetException extends ApiException {
     private static final long serialVersionUID = 1L;
 
-    public GetStartOffsetRequestException(String message) {
+    public LogAndEndOffsetException(String message) {
         super(message);
     }
 
-    public GetStartOffsetRequestException(String message, Throwable cause) {
+    public LogAndEndOffsetException(String message, Throwable cause) {
         super(message, cause);
     }
 }
