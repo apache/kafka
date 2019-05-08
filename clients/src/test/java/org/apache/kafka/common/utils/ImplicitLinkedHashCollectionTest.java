@@ -187,20 +187,43 @@ public class ImplicitLinkedHashCollectionTest {
     }
 
     @Test
-    public void testListIterator() {
+    public void testListIteratorCreation() {
         ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
         coll.add(new TestElement(1));
         coll.add(new TestElement(2));
         coll.add(new TestElement(3));
 
+        // Iterator created at the start of the list should have a next but no prev
         ListIterator<TestElement> iter = coll.valuesList().listIterator();
-        try {
-            iter.remove();
-            fail("Calling remove without calling next() or previous() should raise an exception");
-        } catch (IllegalStateException e) {
-            // expected
-        }
+        assertTrue(iter.hasNext());
+        assertFalse(iter.hasPrevious());
+        assertEquals(0, iter.nextIndex());
+        assertEquals(-1, iter.previousIndex());
 
+        // Iterator created in the middle of the list should have both a next and a prev
+        iter = coll.valuesList().listIterator(2);
+        assertTrue(iter.hasNext());
+        assertTrue(iter.hasPrevious());
+        assertEquals(2, iter.nextIndex());
+        assertEquals(1, iter.previousIndex());
+
+        // Iterator created at the end of the list should have a prev but no next
+        iter = coll.valuesList().listIterator(3);
+        assertFalse(iter.hasNext());
+        assertTrue(iter.hasPrevious());
+        assertEquals(3, iter.nextIndex());
+        assertEquals(2, iter.previousIndex());
+    }
+
+    @Test
+    public void testListIteratorTraversal() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        coll.add(new TestElement(1));
+        coll.add(new TestElement(2));
+        coll.add(new TestElement(3));
+        ListIterator<TestElement> iter = coll.valuesList().listIterator();
+
+        // Step the iterator forward to the end of the list
         assertTrue(iter.hasNext());
         assertFalse(iter.hasPrevious());
         assertEquals(0, iter.nextIndex());
@@ -218,35 +241,113 @@ public class ImplicitLinkedHashCollectionTest {
         assertEquals(2, iter.nextIndex());
         assertEquals(1, iter.previousIndex());
 
-        iter.remove();
-        assertTrue(iter.hasNext());
-        assertTrue(iter.hasPrevious());
-        assertEquals(1, iter.nextIndex());
-        assertEquals(0, iter.previousIndex());
-
         assertEquals(3, iter.next().val);
         assertFalse(iter.hasNext());
+        assertTrue(iter.hasPrevious());
+        assertEquals(3, iter.nextIndex());
+        assertEquals(2, iter.previousIndex());
+
+        // Step back to the middle of the list
+        assertEquals(3, iter.previous().val);
+        assertTrue(iter.hasNext());
         assertTrue(iter.hasPrevious());
         assertEquals(2, iter.nextIndex());
         assertEquals(1, iter.previousIndex());
 
-        assertEquals(3, iter.previous().val);
+        assertEquals(2, iter.previous().val);
         assertTrue(iter.hasNext());
         assertTrue(iter.hasPrevious());
         assertEquals(1, iter.nextIndex());
         assertEquals(0, iter.previousIndex());
 
-        iter.remove();
-        assertFalse(iter.hasNext());
+        // Step forward one and then back one, return value should remain the same
+        assertEquals(2, iter.next().val);
+        assertTrue(iter.hasNext());
+        assertTrue(iter.hasPrevious());
+        assertEquals(2, iter.nextIndex());
+        assertEquals(1, iter.previousIndex());
+
+        assertEquals(2, iter.previous().val);
+        assertTrue(iter.hasNext());
         assertTrue(iter.hasPrevious());
         assertEquals(1, iter.nextIndex());
         assertEquals(0, iter.previousIndex());
 
+        // Step back to the front of the list
         assertEquals(1, iter.previous().val);
         assertTrue(iter.hasNext());
         assertFalse(iter.hasPrevious());
         assertEquals(0, iter.nextIndex());
         assertEquals(-1, iter.previousIndex());
+    }
+
+    @Test
+    public void testListIteratorRemove() {
+        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
+        coll.add(new TestElement(1));
+        coll.add(new TestElement(2));
+        coll.add(new TestElement(3));
+        coll.add(new TestElement(4));
+        coll.add(new TestElement(5));
+
+        ListIterator<TestElement> iter = coll.valuesList().listIterator();
+        try {
+            iter.remove();
+            fail("Calling remove() without calling next() or previous() should raise an exception");
+        } catch (IllegalStateException e) {
+            // expected
+        }
+
+        // Remove after next()
+        iter.next();
+        iter.next();
+        iter.next();
+        iter.remove();
+        assertTrue(iter.hasNext());
+        assertTrue(iter.hasPrevious());
+        assertEquals(2, iter.nextIndex());
+        assertEquals(1, iter.previousIndex());
+
+        try {
+            iter.remove();
+            fail("Calling remove() twice without calling next() or previous() in between should raise an exception");
+        } catch (IllegalStateException e) {
+            // expected
+        }
+
+        // Remove after previous()
+        assertEquals(2, iter.previous().val);
+        iter.remove();
+        assertTrue(iter.hasNext());
+        assertTrue(iter.hasPrevious());
+        assertEquals(1, iter.nextIndex());
+        assertEquals(0, iter.previousIndex());
+
+        // Remove the first element of the list
+        assertEquals(1, iter.previous().val);
+        iter.remove();
+        assertTrue(iter.hasNext());
+        assertFalse(iter.hasPrevious());
+        assertEquals(0, iter.nextIndex());
+        assertEquals(-1, iter.previousIndex());
+
+        // Remove the last element of the list
+        assertEquals(4, iter.next().val);
+        assertEquals(5, iter.next().val);
+        iter.remove();
+        assertFalse(iter.hasNext());
+        assertTrue(iter.hasPrevious());
+        assertEquals(1, iter.nextIndex());
+        assertEquals(0, iter.previousIndex());
+
+        // Remove the final remaining element of the list
+        assertEquals(4, iter.previous().val);
+        iter.remove();
+        assertFalse(iter.hasNext());
+        assertFalse(iter.hasPrevious());
+        assertEquals(0, iter.nextIndex());
+        assertEquals(-1, iter.previousIndex());
+
     }
 
     @Test

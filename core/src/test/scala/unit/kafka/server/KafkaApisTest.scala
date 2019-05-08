@@ -520,6 +520,7 @@ class KafkaApisTest {
     EasyMock.expect(groupCoordinator.handleJoinGroup(
       anyString,
       anyString,
+      anyObject(classOf[Option[String]]),
       anyBoolean,
       anyString,
       anyString,

@@ -136,7 +136,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         private int cursor = 0;
         private Element cur = head;
 
-        private Element next = indexToElement(head, elements, head.next());
+        // private Element next = indexToElement(head, elements, head.next());
         private Element lastReturned;
 
         @Override
@@ -151,11 +151,10 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
 
         @Override
         public E next() {
-            if (next == head) {
+            if (cursor == size) {
                 throw new NoSuchElementException();
             }
-            cur = next;
-            next = indexToElement(head, elements, cur.next());
+            cur = indexToElement(head, elements, cur.next());
             ++cursor;
             @SuppressWarnings("unchecked")
             E returnValue = (E) cur;
@@ -165,15 +164,14 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
 
         @Override
         public E previous() {
-            if (cur == head) {
+            if (cursor == 0) {
                 throw new NoSuchElementException();
             }
-            next = cur;
+            @SuppressWarnings("unchecked")
+            E returnValue = (E) cur;
+            lastReturned = returnValue;
             cur = indexToElement(head, elements, cur.prev());
             --cursor;
-            @SuppressWarnings("unchecked")
-            E returnValue = (E) next;
-            lastReturned = returnValue;
             return returnValue;
         }
 
@@ -193,18 +191,14 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
                 throw new IllegalStateException();
             }
 
-            int prev = lastReturned.prev();
-            ImplicitLinkedHashCollection.this.remove(lastReturned);
+            // ImplicitLinkedHashCollection.this.remove(lastReturned);
             if (lastReturned == cur) {
                 cursor--;
-                cur = indexToElement(head, elements, prev);
-            } else {
-                next = indexToElement(head, elements, prev);
+                cur = indexToElement(head, elements, lastReturned.prev());
             }
+            ImplicitLinkedHashCollection.this.remove(lastReturned);
 
-            if (prev == HEAD_INDEX) {
-                lastReturned = null;
-            }
+            lastReturned = null;
         }
 
         @Override
