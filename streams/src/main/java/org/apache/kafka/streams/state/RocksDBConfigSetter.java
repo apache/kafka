@@ -45,7 +45,7 @@ public interface RocksDBConfigSetter {
      * avoid leaking off-heap memory. Objects to be closed can be saved by the user or retrieved back from
      * {@code options} using its getter methods.
      *
-     * Example objects needing to be closed include {@code org.rocksdb.Filter} and {@code org.rocksdb.Cache}
+     * Example objects needing to be closed include {@code org.rocksdb.Filter} and {@code org.rocksdb.Cache}.
      *
      * @param storeName     the name of the store being configured
      * @param options       the Rocks DB options
