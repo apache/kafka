@@ -429,7 +429,7 @@ public interface KStream<K, V> {
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      * <p>
-     * This is equivalent to calling {@link #to(String) #to(someTopicName)} and
+     * This is similar to calling {@link #to(String) #to(someTopicName)} and
      * {@link StreamsBuilder#stream(String) StreamsBuilder#stream(someTopicName)}.
      * Note that {@code through()} uses a hard coded {@link org.apache.kafka.streams.processor.FailOnInvalidTimestamp
      * timestamp extractor} and does not allow to customize it, to ensure correct timestamp propagation.
@@ -446,7 +446,7 @@ public interface KStream<K, V> {
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      * <p>
-     * This is equivalent to calling {@link #to(String, Produced) to(someTopic, Produced.with(keySerde, valueSerde)}
+     * This is similar to calling {@link #to(String, Produced) to(someTopic, Produced.with(keySerde, valueSerde)}
      * and {@link StreamsBuilder#stream(String, Consumed) StreamsBuilder#stream(someTopicName, Consumed.with(keySerde, valueSerde))}.
      * Note that {@code through()} uses a hard coded {@link org.apache.kafka.streams.processor.FailOnInvalidTimestamp
      * timestamp extractor} and does not allow to customize it, to ensure correct timestamp propagation.
