@@ -661,6 +661,16 @@ class KafkaConfigTest {
         case KafkaConfig.SaslKerberosTicketRenewJitterProp =>
         case KafkaConfig.SaslKerberosMinTimeBeforeReloginProp =>
         case KafkaConfig.SaslKerberosPrincipalToLocalRulesProp => // ignore string
+
+        case KafkaConfig.ReplicaExpriedMaxMsProp => // ignore string
+        case KafkaConfig.ReplicaLstTimeMaxMsProp => // ignore string
+        case KafkaConfig.sentOffsetMetaDataIntervalMsProp => // ignore string
+        case KafkaConfig.SmartExtendEnableProp => // ignore string
+        case KafkaConfig.BootstarpServersProp => // ignore string
+        case KafkaConfig.getStartOffsetretriesProp => // ignore string
+        case KafkaConfig.updateLeaderOffsetIntervalMsProp => // ignore string
+        case KafkaConfig.ReplicaIsrLstEntryTimeMaxMsProp => // ignore string
+        case KafkaConfig.ReplicaIsrEntryISRMaxLagProp => // ignore string
         case _ => assertPropertyInvalid(getBaseProperties(), name, "not_a_number", "-1")
       }
     })

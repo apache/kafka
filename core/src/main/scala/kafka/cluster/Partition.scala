@@ -96,7 +96,7 @@ class Partition(val topic: String,
     tags
   )
 
-  private def isLeaderReplicaLocal: Boolean = leaderReplicaIfLocal.isDefined
+  def isLeaderReplicaLocal: Boolean = leaderReplicaIfLocal.isDefined
 
   def isUnderReplicated: Boolean =
     isLeaderReplicaLocal && inSyncReplicas.size < assignedReplicas.size

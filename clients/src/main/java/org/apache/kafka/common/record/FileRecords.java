@@ -46,7 +46,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     // mutable state
     private final AtomicInteger size;
     private final FileChannel channel;
-    private volatile File file;
+    volatile File file;
 
     /**
      * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.

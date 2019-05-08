@@ -121,6 +121,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return CreateTopicsRequest.parse(buffer, versionId);
             case DELETE_TOPICS:
                 return DeleteTopicsRequest.parse(buffer, versionId);
+            case GET_START_OFFSET:
+                return GetStartOffsetRequest.parse(buffer, versionId);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `getRequest`, the " +
                         "code should be updated to do so.", apiKey));

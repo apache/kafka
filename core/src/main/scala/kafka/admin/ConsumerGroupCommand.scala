@@ -17,29 +17,29 @@
 
 package kafka.admin
 
+import java.util
 import java.util.Properties
 
 import joptsimple.{OptionParser, OptionSpec}
-
 import kafka.api.{OffsetFetchRequest, OffsetFetchResponse, OffsetRequest, PartitionOffsetRequestInfo}
 import kafka.client.ClientUtils
 import kafka.common.{TopicAndPartition, _}
 import kafka.consumer.SimpleConsumer
 import kafka.utils._
-
 import org.I0Itec.zkclient.exception.ZkNoNodeException
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
-import org.apache.kafka.common.Node
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{NewOffsetMetaData, Node, TopicPartition}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{Errors, SecurityProtocol}
+import org.apache.kafka.common.requests.GetStartOffsetResponse
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.utils.Utils
 
 import scala.collection.JavaConverters._
 import scala.collection.{Set, mutable}
+
 
 object ConsumerGroupCommand extends Logging {
 
@@ -393,6 +393,11 @@ object ConsumerGroupCommand extends Logging {
 
     def listGroups(): List[String] = {
       adminClient.listAllConsumerGroupsFlattened().map(_.groupId)
+    }
+
+    def getStartOffset(broker: Node, partitionOffsetMetaDatas: util.LinkedHashMap[TopicPartition, NewOffsetMetaData]):
+    Map[TopicPartition, GetStartOffsetResponse.StartOffsetResponse] = {
+      adminClient.getStartOffset(broker, partitionOffsetMetaDatas)
     }
 
     protected def collectGroupAssignment(group: String): (Option[String], Option[Seq[PartitionAssignmentState]]) = {
