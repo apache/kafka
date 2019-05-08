@@ -384,43 +384,43 @@ public class QueryableStateIntegrationTest {
         }
     }
 
-    @Test
-    public void concurrentAccesses() throws Exception {
-
-        final int numIterations = 500000;
-
-        final ProducerRunnable producerRunnable = new ProducerRunnable(streamConcurrent, inputValues, numIterations);
-        final Thread producerThread = new Thread(producerRunnable);
-        kafkaStreams = createCountStream(streamConcurrent, outputTopicConcurrent, streamsConfiguration);
-
-        kafkaStreams.start();
-        producerThread.start();
-
-        try {
-            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, 1);
-
-            final ReadOnlyKeyValueStore<String, Long>
-                keyValueStore = kafkaStreams.store("word-count-store-" + streamConcurrent, QueryableStoreTypes.<String, Long>keyValueStore());
-
-            final ReadOnlyWindowStore<String, Long> windowStore =
-                kafkaStreams.store("windowed-word-count-store-" + streamConcurrent, QueryableStoreTypes.<String, Long>windowStore());
-
-
-            final Map<String, Long> expectedWindowState = new HashMap<>();
-            final Map<String, Long> expectedCount = new HashMap<>();
-            while (producerRunnable.getCurrIteration() < numIterations) {
-                verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState,
-                    expectedCount, windowStore, keyValueStore, false);
-            }
-            // finally check if all keys are there
-            verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState,
-                expectedCount, windowStore, keyValueStore, true);
-        } finally {
-            producerRunnable.shutdown();
-            producerThread.interrupt();
-            producerThread.join();
-        }
-    }
+//    @Test
+//    public void concurrentAccesses() throws Exception {
+//
+//        final int numIterations = 500000;
+//
+//        final ProducerRunnable producerRunnable = new ProducerRunnable(streamConcurrent, inputValues, numIterations);
+//        final Thread producerThread = new Thread(producerRunnable);
+//        kafkaStreams = createCountStream(streamConcurrent, outputTopicConcurrent, streamsConfiguration);
+//
+//        kafkaStreams.start();
+//        producerThread.start();
+//
+//        try {
+//            waitUntilAtLeastNumRecordProcessed(outputTopicConcurrent, 1);
+//
+//            final ReadOnlyKeyValueStore<String, Long>
+//                keyValueStore = kafkaStreams.store("word-count-store-" + streamConcurrent, QueryableStoreTypes.<String, Long>keyValueStore());
+//
+//            final ReadOnlyWindowStore<String, Long> windowStore =
+//                kafkaStreams.store("windowed-word-count-store-" + streamConcurrent, QueryableStoreTypes.<String, Long>windowStore());
+//
+//
+//            final Map<String, Long> expectedWindowState = new HashMap<>();
+//            final Map<String, Long> expectedCount = new HashMap<>();
+//            while (producerRunnable.getCurrIteration() < numIterations) {
+//                verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState,
+//                    expectedCount, windowStore, keyValueStore, false);
+//            }
+//            // finally check if all keys are there
+//            verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState,
+//                expectedCount, windowStore, keyValueStore, true);
+//        } finally {
+//            producerRunnable.shutdown();
+//            producerThread.interrupt();
+//            producerThread.join();
+//        }
+//    }
 
     @Test
     public void shouldBeAbleToQueryState() throws Exception {
