@@ -19,7 +19,6 @@ package org.apache.kafka.connect.mirror;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.Exit;
-//import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.Worker;
@@ -39,6 +38,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
 import java.util.HashMap;
@@ -53,6 +53,8 @@ import java.util.Collections;
  */
 public class MirrorMaker {
     private static final Logger log = LoggerFactory.getLogger(MirrorMaker.class);
+
+    private static final long SHUTDOWN_TIMEOUT_SECONDS = 60L;
 
     private static final List<Class> CONNECTOR_CLASSES = Arrays.asList(
         MirrorSourceConnector.class,
@@ -116,7 +118,7 @@ public class MirrorMaker {
                     stopLatch.countDown();
                 }
             }
-            log.info("Kafka MirrorMaker stopped");
+            log.info("Kafka MirrorMaker stopped.");
         }
     }
 
@@ -124,7 +126,7 @@ public class MirrorMaker {
         try {
             stopLatch.await();
         } catch (InterruptedException e) {
-            log.error("Interrupted waiting for Kafka Connect to shutdown");
+            log.error("Interrupted waiting for MirrorMaker to shutdown");
         }
     }
 
@@ -196,10 +198,13 @@ public class MirrorMaker {
         @Override
         public void run() {
             try {
-                startLatch.await();
+                if (!startLatch.await(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
+                    log.error("Timed out in shutdown hook waiting for MirrorMaker startup to finish. Unable to shutdown cleanly.");
+                    return;
+                }
                 MirrorMaker.this.stop();
             } catch (InterruptedException e) {
-                log.error("Interrupted in shutdown hook while waiting for Kafka Connect startup to finish");
+                log.error("Interrupted in shutdown hook while waiting for MirrorMaker startup to finish. Unable to shutdown cleanly.");
             }
         }
     }
