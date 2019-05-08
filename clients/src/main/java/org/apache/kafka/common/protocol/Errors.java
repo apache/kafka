@@ -254,12 +254,10 @@ public enum Errors {
         Class<?> clazz = t.getClass();
         while (clazz != null) {
             Errors error = classToError.get(clazz);
-            log.error("exceptionName=" + t.getClass().getName() + " errcode=" + error.code);
             if (error != null)
                 return error;
             clazz = clazz.getSuperclass();
         }
-        log.error("UNKNOW..XXXXXCHENLIN");
         return UNKNOWN;
     }
 
