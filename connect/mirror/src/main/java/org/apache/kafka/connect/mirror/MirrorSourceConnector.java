@@ -275,6 +275,8 @@ public class MirrorSourceConnector extends SourceConnector {
         }
     }
 
+    @SuppressWarnings("deprecation")
+    // use deprecated alterConfigs API for broker compatibility back to 0.11.0
     private void updateTopicConfigs(Map<String, Config> topicConfigs)
             throws InterruptedException, ExecutionException {
         Map<ConfigResource, Config> configs = topicConfigs.entrySet().stream()

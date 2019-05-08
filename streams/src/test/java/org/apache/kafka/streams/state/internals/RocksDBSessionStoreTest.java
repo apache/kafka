@@ -23,8 +23,10 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
+import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
 import org.apache.kafka.test.TestUtils;
@@ -36,9 +38,11 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
+import static java.time.Duration.ofMillis;
 import static org.apache.kafka.test.StreamsTestUtils.toList;
 import static org.apache.kafka.test.StreamsTestUtils.valuesToList;
 import static org.hamcrest.CoreMatchers.equalTo;
+import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -51,19 +55,12 @@ public class RocksDBSessionStoreTest {
 
     @Before
     public void before() {
-        final SessionKeySchema schema = new SessionKeySchema();
-
-        final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(
-            "session-store",
-            "metrics-scope",
-            10_000L,
-            60_000L,
-            schema);
-
-        sessionStore = new RocksDBSessionStore<>(
-            bytesStore,
+        sessionStore = Stores.sessionStoreBuilder(
+            Stores.persistentSessionStore(
+                "session-store",
+                ofMillis(10_000L)),
             Serdes.String(),
-            Serdes.Long());
+            Serdes.Long()).build();
 
         context = new InternalMockProcessorContext(
             TestUtils.tempDirectory(),
@@ -74,6 +71,7 @@ public class RocksDBSessionStoreTest {
                 new LogContext("testCache "),
                 0,
                 new MockStreamsMetrics(new Metrics())));
+
         sessionStore.init(context, sessionStore);
     }
 
@@ -131,6 +129,39 @@ public class RocksDBSessionStoreTest {
     }
 
     @Test
+    public void shouldFetchAllSessionsWithinKeyRange() {
+        final List<KeyValue<Windowed<String>, Long>> expected = Arrays.asList(
+            KeyValue.pair(new Windowed<>("aa", new SessionWindow(10, 10)), 2L),
+            KeyValue.pair(new Windowed<>("aaa", new SessionWindow(100, 100)), 3L),
+            KeyValue.pair(new Windowed<>("b", new SessionWindow(1000, 1000)), 4L),
+            KeyValue.pair(new Windowed<>("bb", new SessionWindow(1500, 2000)), 5L));
+
+        for (final KeyValue<Windowed<String>, Long> kv : expected) {
+            sessionStore.put(kv.key, kv.value);
+        }
+
+        // add some that shouldn't appear in the results
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 0)), 1L);
+        sessionStore.put(new Windowed<>("bbb", new SessionWindow(2500, 3000)), 6L);
+
+        try (final KeyValueIterator<Windowed<String>, Long> values = sessionStore.fetch("aa", "bb")) {
+            assertEquals(expected, toList(values));
+        }
+    }
+
+    @Test
+    public void shouldFetchExactSession() {
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 4)), 1L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 3)), 2L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(0, 4)), 3L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(1, 4)), 4L);
+        sessionStore.put(new Windowed<>("aaa", new SessionWindow(0, 4)), 5L);
+
+        final long result = sessionStore.fetchSession("aa", 0, 4);
+        assertEquals(3L, result);
+    }
+
+    @Test
     public void shouldFindValuesWithinMergingSessionWindowRange() {
         final String key = "a";
         sessionStore.put(new Windowed<>(key, new SessionWindow(0L, 0L)), 1L);
@@ -165,6 +196,24 @@ public class RocksDBSessionStoreTest {
     }
 
     @Test
+    public void shouldRemoveOnNullAggValue() {
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 1000)), 1L);
+        sessionStore.put(new Windowed<>("a", new SessionWindow(1500, 2500)), 2L);
+
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 1000)), null);
+
+        try (final KeyValueIterator<Windowed<String>, Long> results =
+            sessionStore.findSessions("a", 0L, 1000L)) {
+            assertFalse(results.hasNext());
+        }
+
+        try (final KeyValueIterator<Windowed<String>, Long> results =
+            sessionStore.findSessions("a", 1500L, 2500L)) {
+            assertTrue(results.hasNext());
+        }
+    }
+
+    @Test
     public void shouldFindSessionsToMerge() {
         final Windowed<String> session1 = new Windowed<>("a", new SessionWindow(0, 100));
         final Windowed<String> session2 = new Windowed<>("a", new SessionWindow(101, 200));
@@ -188,17 +237,12 @@ public class RocksDBSessionStoreTest {
 
     @Test
     public void shouldFetchExactKeys() {
-        final RocksDBSegmentedBytesStore bytesStore = new RocksDBSegmentedBytesStore(
-            "session-store",
-            "metrics-scope",
-            0x7a00000000000000L,
-            0x7a00000000000000L,
-            new SessionKeySchema());
-
-        sessionStore = new RocksDBSessionStore<>(
-            bytesStore,
+        sessionStore = Stores.sessionStoreBuilder(
+            Stores.persistentSessionStore(
+                "session-store",
+                ofMillis(0x7a00000000000000L)),
             Serdes.String(),
-            Serdes.Long());
+            Serdes.Long()).build();
 
         sessionStore.init(context, sessionStore);
 
@@ -231,6 +275,22 @@ public class RocksDBSessionStoreTest {
         ) {
             assertThat(valuesToList(iterator), equalTo(Collections.singletonList(2L)));
         }
+    }
+
+    @Test
+    public void shouldReturnSameResultsForSingleKeyFindSessionsAndEqualKeyRangeFindSessions() {
+        sessionStore.put(new Windowed<>("a", new SessionWindow(0, 1)), 0L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(2, 3)), 1L);
+        sessionStore.put(new Windowed<>("aa", new SessionWindow(4, 5)), 2L);
+        sessionStore.put(new Windowed<>("aaa", new SessionWindow(6, 7)), 3L);
+
+        final KeyValueIterator<Windowed<String>, Long> singleKeyIterator = sessionStore.findSessions("aa", 0L, 10L);
+        final KeyValueIterator<Windowed<String>, Long> keyRangeIterator = sessionStore.findSessions("aa", "aa", 0L, 10L);
+
+        assertEquals(singleKeyIterator.next(), keyRangeIterator.next());
+        assertEquals(singleKeyIterator.next(), keyRangeIterator.next());
+        assertFalse(singleKeyIterator.hasNext());
+        assertFalse(keyRangeIterator.hasNext());
     }
 
     @Test(expected = NullPointerException.class)
@@ -272,6 +332,21 @@ public class RocksDBSessionStoreTest {
     public void shouldThrowNullPointerExceptionOnPutNullKey() {
         sessionStore.put(null, 1L);
     }
-    
 
+    @Test
+    public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
+        LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        final String keyFrom = Serdes.String().deserializer().deserialize("", Serdes.Integer().serializer().serialize("", -1));
+        final String keyTo = Serdes.String().deserializer().deserialize("", Serdes.Integer().serializer().serialize("", 1));
+
+        final KeyValueIterator<Windowed<String>, Long> iterator = sessionStore.findSessions(keyFrom, keyTo, 0L, 10L);
+        assertFalse(iterator.hasNext());
+
+        final List<String> messages = appender.getMessages();
+        assertThat(messages, hasItem("Returning empty iterator for fetch with invalid key range: from > to. "
+            + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. "
+            + "Note that the built-in numerical serdes do not follow this for negative numbers"));
+    }
 }

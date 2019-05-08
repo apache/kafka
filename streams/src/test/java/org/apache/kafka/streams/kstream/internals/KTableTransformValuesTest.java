@@ -76,7 +76,7 @@ public class KTableTransformValuesTest {
     private static final Consumed<String, String> CONSUMED = Consumed.with(Serdes.String(), Serdes.String());
 
     private final ConsumerRecordFactory<String, String> recordFactory =
-        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer());
+        new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
 
     private TopologyTestDriver driver;
     private MockProcessorSupplier<String, String> capture;
@@ -325,11 +325,11 @@ public class KTableTransformValuesTest {
 
         driver = new TopologyTestDriver(builder.build(), props());
 
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "D", (String) null, 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "D", (String) null));
 
-        assertThat(output(), hasItems("A:A->a!", "B:B->b!", "D:D->null!"));
+        assertThat(output(), hasItems("A:A->a! (ts: 0)", "B:B->b! (ts: 0)", "D:D->null! (ts: 0)"));
         assertNull("Store should not be materialized", driver.getKeyValueStore(QUERYABLE_NAME));
     }
 
@@ -349,11 +349,11 @@ public class KTableTransformValuesTest {
 
         driver = new TopologyTestDriver(builder.build(), props());
 
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "C", (String) null, 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "B", "b"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "C", (String) null));
 
-        assertThat(output(), hasItems("A:A->a!", "B:B->b!", "C:C->null!"));
+        assertThat(output(), hasItems("A:A->a! (ts: 0)", "B:B->b! (ts: 0)", "C:C->null! (ts: 0)"));
 
         final KeyValueStore<String, String> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
         assertThat(keyValueStore.get("A"), is("A->a!"));
@@ -378,11 +378,11 @@ public class KTableTransformValuesTest {
 
         driver = new TopologyTestDriver(builder.build(), props());
 
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "ignore", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "ignored", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "ignored", 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "ignore"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "ignored"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "ignored"));
 
-        assertThat(output(), hasItems("A:1", "A:0", "A:2", "A:0", "A:3"));
+        assertThat(output(), hasItems("A:1 (ts: 0)", "A:0 (ts: 0)", "A:2 (ts: 0)", "A:0 (ts: 0)", "A:3 (ts: 0)"));
 
         final KeyValueStore<String, Integer> keyValueStore = driver.getKeyValueStore(QUERYABLE_NAME);
         assertThat(keyValueStore.get("A"), is(3));
@@ -401,11 +401,11 @@ public class KTableTransformValuesTest {
 
         driver = new TopologyTestDriver(builder.build(), props());
 
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aa", 0L));
-        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aaa", 0L));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "a"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aa"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC, "A", "aaa"));
 
-        assertThat(output(), hasItems("A:1", "A:0", "A:2", "A:0", "A:3"));
+        assertThat(output(), hasItems("A:1 (ts: 0)", "A:0 (ts: 0)", "A:2 (ts: 0)", "A:0 (ts: 0)", "A:3 (ts: 0)"));
     }
 
     private ArrayList<String> output() {
@@ -480,8 +480,7 @@ public class KTableTransformValuesTest {
         }
 
         @Override
-        public void close() {
-        }
+        public void close() {}
     }
 
     private static class NullSupplier implements ValueTransformerWithKeySupplier<String, String, String> {
@@ -502,8 +501,7 @@ public class KTableTransformValuesTest {
         private int counter;
 
         @Override
-        public void init(final ProcessorContext context) {
-        }
+        public void init(final ProcessorContext context) {}
 
         @Override
         public Integer transform(final String readOnlyKey, final String value) {
@@ -511,8 +509,7 @@ public class KTableTransformValuesTest {
         }
 
         @Override
-        public void close() {
-        }
+        public void close() {}
     }
 
     private static class StatelessTransformerSupplier implements ValueTransformerWithKeySupplier<String, String, Integer> {
@@ -524,8 +521,7 @@ public class KTableTransformValuesTest {
 
     private static class StatelessTransformer implements ValueTransformerWithKey<String, String, Integer> {
         @Override
-        public void init(final ProcessorContext context) {
-        }
+        public void init(final ProcessorContext context) {}
 
         @Override
         public Integer transform(final String readOnlyKey, final String value) {
@@ -533,7 +529,6 @@ public class KTableTransformValuesTest {
         }
 
         @Override
-        public void close() {
-        }
+        public void close() {}
     }
 }

@@ -22,11 +22,10 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
 
 import scala.collection.Map
 
-class OffsetCheckpointFileTest extends JUnitSuite with Logging {
+class OffsetCheckpointFileTest extends Logging {
 
   @Test
   def shouldPersistAndOverwriteAndReloadFile(): Unit = {

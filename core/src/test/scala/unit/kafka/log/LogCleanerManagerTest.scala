@@ -27,14 +27,14 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
-import org.scalatest.junit.JUnitSuite
+import org.scalatest.Assertions.intercept
 
 import scala.collection.mutable
 
 /**
   * Unit tests for the log cleaning logic
   */
-class LogCleanerManagerTest extends JUnitSuite with Logging {
+class LogCleanerManagerTest extends Logging {
 
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)

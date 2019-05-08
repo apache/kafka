@@ -27,7 +27,8 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   this.logIdent = "[" + name + "]: "
   private val shutdownInitiated = new CountDownLatch(1)
   private val shutdownComplete = new CountDownLatch(1)
-
+  @volatile private var isStarted: Boolean = false
+  
   def shutdown(): Unit = {
     initiateShutdown()
     awaitShutdown()
@@ -54,8 +55,13 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
    * After calling initiateShutdown(), use this API to wait until the shutdown is complete
    */
   def awaitShutdown(): Unit = {
-    shutdownComplete.await()
-    info("Shutdown completed")
+    if (shutdownInitiated.getCount != 0)
+      throw new IllegalStateException("initiateShutdown() was not called before awaitShutdown()")
+    else {
+      if (isStarted)
+        shutdownComplete.await()
+      info("Shutdown completed")
+    }
   }
 
   /**
@@ -76,6 +82,7 @@ abstract class ShutdownableThread(val name: String, val isInterruptible: Boolean
   def doWork(): Unit
 
   override def run(): Unit = {
+    isStarted = true
     info("Starting")
     try {
       while (isRunning)

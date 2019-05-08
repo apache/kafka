@@ -175,8 +175,8 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partitionT1p0.truncateTo(capture(truncateCaptureT1p0), anyBoolean())).anyTimes()
     expect(partitionT1p1.truncateTo(capture(truncateCaptureT1p1), anyBoolean())).anyTimes()
 
-    expect(futureReplicaT1p0.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
-    expect(futureReplicaT1p1.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
+    expect(futureReplicaT1p0.logEndOffset).andReturn(futureReplicaLEO).anyTimes()
+    expect(futureReplicaT1p1.logEndOffset).andReturn(futureReplicaLEO).anyTimes()
 
     expect(futureReplicaT1p0.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
     expect(futureReplicaT1p0.endOffsetForEpoch(leaderEpoch)).andReturn(
@@ -246,7 +246,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(replicaManager.futureLocalReplicaOrException(t1p0)).andStubReturn(futureReplica)
 
     expect(partition.truncateTo(capture(truncateToCapture), EasyMock.eq(true))).anyTimes()
-    expect(futureReplica.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
+    expect(futureReplica.logEndOffset).andReturn(futureReplicaLEO).anyTimes()
     expect(futureReplica.latestEpoch).andReturn(Some(leaderEpoch)).once()
     expect(futureReplica.latestEpoch).andReturn(Some(leaderEpoch - 2)).once()
 
@@ -315,7 +315,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partition.truncateTo(capture(truncated), isFuture = EasyMock.eq(true))).anyTimes()
     expect(replicaManager.futureLocalReplicaOrException(t1p0)).andStubReturn(futureReplica)
 
-    expect(futureReplica.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
+    expect(futureReplica.logEndOffset).andReturn(futureReplicaLEO).anyTimes()
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
 
     // pretend this is a completely new future replica, with no leader epochs recorded
@@ -372,7 +372,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(futureReplica.latestEpoch).andStubReturn(Some(futureReplicaLeaderEpoch))
     expect(futureReplica.endOffsetForEpoch(futureReplicaLeaderEpoch)).andReturn(
       Some(OffsetAndEpoch(futureReplicaLEO, futureReplicaLeaderEpoch)))
-    expect(futureReplica.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
+    expect(futureReplica.logEndOffset).andReturn(futureReplicaLEO).anyTimes()
     expect(replicaManager.localReplica(t1p0)).andReturn(Some(replica)).anyTimes()
     expect(replicaManager.futureLocalReplica(t1p0)).andReturn(Some(futureReplica)).anyTimes()
     expect(replicaManager.futureLocalReplicaOrException(t1p0)).andReturn(futureReplica).anyTimes()
@@ -453,7 +453,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     expect(replicaManager.futureLocalReplicaOrException(t1p0)).andStubReturn(futureReplica)
     expect(futureReplica.latestEpoch).andStubReturn(Some(leaderEpoch))
-    expect(futureReplica.logEndOffset).andReturn(new LogOffsetMetadata(futureReplicaLEO)).anyTimes()
+    expect(futureReplica.logEndOffset).andReturn(futureReplicaLEO).anyTimes()
     expect(futureReplica.endOffsetForEpoch(leaderEpoch)).andReturn(
       Some(OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
@@ -526,8 +526,8 @@ class ReplicaAlterLogDirsThreadTest {
     assertEquals(0, request.minBytes)
     val fetchInfos = request.fetchData.asScala.toSeq
     assertEquals(1, fetchInfos.length)
-    assertEquals("Expected fetch request for largest partition", t1p1, fetchInfos.head._1)
-    assertEquals(160, fetchInfos.head._2.fetchOffset)
+    assertEquals("Expected fetch request for first partition", t1p0, fetchInfos.head._1)
+    assertEquals(150, fetchInfos.head._2.fetchOffset)
   }
 
   @Test

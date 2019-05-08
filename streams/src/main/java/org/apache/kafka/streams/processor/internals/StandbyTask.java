@@ -19,6 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.TaskId;
@@ -37,6 +38,7 @@ import java.util.Map;
 public class StandbyTask extends AbstractTask {
 
     private Map<TopicPartition, Long> checkpointedOffsets = new HashMap<>();
+    private final Sensor closeTaskSensor;
 
     /**
      * Create {@link StandbyTask} with its assigned partitions
@@ -59,6 +61,7 @@ public class StandbyTask extends AbstractTask {
                 final StateDirectory stateDirectory) {
         super(id, partitions, topology, consumer, changelogReader, true, stateDirectory, config);
 
+        closeTaskSensor = metrics.threadLevelSensor("task-closed", Sensor.RecordingLevel.INFO);
         processorContext = new StandbyContextImpl(id, config, stateMgr, metrics);
     }
 
@@ -127,25 +130,22 @@ public class StandbyTask extends AbstractTask {
      * - {@link #commit()}
      * - close state
      * <pre>
-     * @param clean ignored by {@code StandbyTask} as it can always try to close cleanly
-     *              (ie, commit, flush, and write checkpoint file)
      * @param isZombie ignored by {@code StandbyTask} as it can never be a zombie
      */
     @Override
     public void close(final boolean clean,
                       final boolean isZombie) {
+        closeTaskSensor.record();
         if (!taskInitialized) {
             return;
         }
         log.debug("Closing");
-        boolean committedSuccessfully = false;
         try {
             if (clean) {
                 commit();
-                committedSuccessfully = true;
             }
         } finally {
-            closeStateManager(committedSuccessfully);
+            closeStateManager(true);
         }
 
         taskClosed = true;

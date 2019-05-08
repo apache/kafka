@@ -102,6 +102,7 @@
       <allow pkg="org.apache.kafka.common.protocol" />
       <allow pkg="org.apache.kafka.common.errors" />
       <subpackage name="authenticator">
+        <allow pkg="org.apache.kafka.common.message" />
         <allow pkg="org.apache.kafka.common.protocol.types" />
         <allow pkg="org.apache.kafka.common.requests" />
         <allow pkg="org.apache.kafka.clients" />
@@ -392,6 +393,8 @@
     <subpackage name="integration">
       <allow pkg="org.apache.kafka.connect.util.clusters" />
       <allow pkg="org.apache.kafka.connect" />
+      <allow pkg="org.apache.kafka.tools" />
+      <allow pkg="javax.ws.rs" />
     </subpackage>
 
     <subpackage name="json">

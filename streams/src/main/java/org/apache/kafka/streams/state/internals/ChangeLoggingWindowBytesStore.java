@@ -31,12 +31,15 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
  * Simple wrapper around a {@link WindowStore} to support writing
  * updates to a changelog
  */
-class ChangeLoggingWindowBytesStore extends WrappedStateStore<WindowStore<Bytes, byte[]>> implements WindowStore<Bytes, byte[]> {
+class ChangeLoggingWindowBytesStore
+    extends WrappedStateStore<WindowStore<Bytes, byte[]>, byte[], byte[]>
+    implements WindowStore<Bytes, byte[]> {
 
     private final boolean retainDuplicates;
-    private StoreChangeLogger<Bytes, byte[]> changeLogger;
     private ProcessorContext context;
     private int seqnum = 0;
+
+    StoreChangeLogger<Bytes, byte[]> changeLogger;
 
     ChangeLoggingWindowBytesStore(final WindowStore<Bytes, byte[]> bytesStore,
                                   final boolean retainDuplicates) {
@@ -45,19 +48,37 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore<WindowStore<Bytes,
     }
 
     @Override
-    public byte[] fetch(final Bytes key, final long timestamp) {
+    public void init(final ProcessorContext context,
+                     final StateStore root) {
+        this.context = context;
+        super.init(context, root);
+        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name());
+        changeLogger = new StoreChangeLogger<>(
+            name(),
+            context,
+            new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
+    }
+
+    @Override
+    public byte[] fetch(final Bytes key,
+                        final long timestamp) {
         return wrapped().fetch(key, timestamp);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
-    public WindowStoreIterator<byte[]> fetch(final Bytes key, final long from, final long to) {
+    public WindowStoreIterator<byte[]> fetch(final Bytes key,
+                                             final long from,
+                                             final long to) {
         return wrapped().fetch(key, from, to);
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetch(...) is removed
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom, final Bytes keyTo, final long from, final long to) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetch(final Bytes keyFrom,
+                                                           final Bytes keyTo,
+                                                           final long from,
+                                                           final long to) {
         return wrapped().fetch(keyFrom, keyTo, from, to);
     }
 
@@ -66,9 +87,10 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore<WindowStore<Bytes,
         return wrapped().all();
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
     @Override
-    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom, final long timeTo) {
+    public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
+                                                              final long timeTo) {
         return wrapped().fetchAll(timeFrom, timeTo);
     }
 
@@ -82,20 +104,16 @@ class ChangeLoggingWindowBytesStore extends WrappedStateStore<WindowStore<Bytes,
     }
 
     @Override
-    public void put(final Bytes key, final byte[] value, final long windowStartTimestamp) {
+    public void put(final Bytes key,
+                    final byte[] value,
+                    final long windowStartTimestamp) {
         wrapped().put(key, value, windowStartTimestamp);
-        changeLogger.logChange(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
+        log(WindowKeySchema.toStoreKeyBinary(key, windowStartTimestamp, maybeUpdateSeqnumForDups()), value);
     }
 
-    @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        this.context = context;
-        super.init(context, root);
-        final String topic = ProcessorStateManager.storeChangelogTopic(context.applicationId(), name());
-        changeLogger = new StoreChangeLogger<>(
-            name(),
-            context,
-            new StateSerdes<>(topic, Serdes.Bytes(), Serdes.ByteArray()));
+    void log(final Bytes key,
+             final byte[] value) {
+        changeLogger.logChange(key, value);
     }
 
     private int maybeUpdateSeqnumForDups() {

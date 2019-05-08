@@ -416,9 +416,8 @@ public final class MessageDataGenerator {
             buffer.printf("int arrayLength = readable.readInt();%n");
             buffer.printf("if (arrayLength < 0) {%n");
             buffer.incrementIndent();
-            buffer.printf("this.%s.clear(%s);%n",
-                field.camelCaseName(),
-                hasKeys ? "0" : "");
+            buffer.printf("this.%s = null;%n",
+                field.camelCaseName());
             buffer.decrementIndent();
             buffer.printf("} else {%n");
             buffer.incrementIndent();
@@ -1069,8 +1068,14 @@ public final class MessageDataGenerator {
                 prefix, field.camelCaseName(), field.camelCaseName());
         } else if (field.type().isArray()) {
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
-            buffer.printf("+ \"%s%s=\" + MessageUtil.deepToString(%s.iterator())%n",
-                prefix, field.camelCaseName(), field.camelCaseName());
+            if (field.nullableVersions().empty()) {
+                buffer.printf("+ \"%s%s=\" + MessageUtil.deepToString(%s.iterator())%n",
+                    prefix, field.camelCaseName(), field.camelCaseName());
+            } else {
+                buffer.printf("+ \"%s%s=\" + ((%s == null) ? \"null\" : " +
+                    "MessageUtil.deepToString(%s.iterator()))%n",
+                    prefix, field.camelCaseName(), field.camelCaseName(), field.camelCaseName());
+            }
         } else {
             throw new RuntimeException("Unsupported field type " + field.type());
         }
@@ -1198,7 +1203,16 @@ public final class MessageDataGenerator {
                 return field.defaultString() + "L";
             }
         } else if (field.type() instanceof FieldType.StringFieldType) {
-            return "\"" + field.defaultString() + "\"";
+            if (field.defaultString().equals("null")) {
+                if (!(field.nullableVersions().contains(field.versions()))) {
+                    throw new RuntimeException("null cannot be the default for field " +
+                        field.name() + ", because not all versions of this field are " +
+                        "nullable.");
+                }
+                return "null";
+            } else {
+                return "\"" + field.defaultString() + "\"";
+            }
         } else if (field.type().isBytes()) {
             if (!field.defaultString().isEmpty()) {
                 throw new RuntimeException("Invalid default for bytes field " +

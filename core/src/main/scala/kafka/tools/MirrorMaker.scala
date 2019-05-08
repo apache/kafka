@@ -20,7 +20,7 @@ package kafka.tools
 import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
 import java.util.{Collections, Properties}
 
@@ -324,7 +324,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
         // uncommitted record since last poll. Using one second as poll's timeout ensures that
         // offsetCommitIntervalMs, of value greater than 1 second, does not see delays in offset
         // commit.
-        recordIter = consumer.poll(Duration.ofSeconds(1)).iterator
+        recordIter = consumer.poll(Duration.ofSeconds(1L)).iterator
         if (!recordIter.hasNext)
           throw new NoRecordsException
       }
@@ -387,7 +387,7 @@ object MirrorMaker extends Logging with KafkaMetricsGroup {
     }
 
     def close(timeout: Long) {
-      this.producer.close(timeout, TimeUnit.MILLISECONDS)
+      this.producer.close(Duration.ofMillis(timeout))
     }
   }
 

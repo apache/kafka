@@ -27,6 +27,7 @@ import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
 import org.junit.rules.TestName
 import org.junit.{After, Before, Rule, Test}
+import org.scalatest.Assertions.intercept
 
 import scala.util.Random
 
@@ -568,5 +569,27 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
 
     assertFalse(TestUtils.grabConsoleOutput(topicService.deleteTopic(escapedCommandOpts)).contains(topic2))
     assertTrue(TestUtils.grabConsoleOutput(topicService.deleteTopic(unescapedCommandOpts)).contains(topic2))
+  }
+
+  @Test
+  def testAlterInternalTopicPartitionCount(): Unit = {
+    val brokers = List(0)
+    TestUtils.createBrokersInZk(zkClient, brokers)
+    
+    // create internal topics
+    adminZkClient.createTopic(Topic.GROUP_METADATA_TOPIC_NAME, 1, 1)
+    adminZkClient.createTopic(Topic.TRANSACTION_STATE_TOPIC_NAME, 1, 1)
+
+    def expectAlterInternalTopicPartitionCountFailed(topic: String): Unit = {
+      try {
+        topicService.alterTopic(new TopicCommandOptions(
+          Array("--topic", topic, "--partitions", "2")))
+        fail("Should have thrown an IllegalArgumentException")
+      } catch {
+        case _: IllegalArgumentException => // expected
+      }
+    }
+    expectAlterInternalTopicPartitionCountFailed(Topic.GROUP_METADATA_TOPIC_NAME)
+    expectAlterInternalTopicPartitionCountFailed(Topic.TRANSACTION_STATE_TOPIC_NAME)
   }
 }

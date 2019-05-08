@@ -99,11 +99,11 @@ public class TaskManager {
             throw new IllegalStateException(logPrefix + "consumer has not been initialized while adding stream tasks. This should not happen.");
         }
 
-        changelogReader.reset();
         // do this first as we may have suspended standby tasks that
         // will become active or vice versa
         standby.closeNonAssignedSuspendedTasks(assignedStandbyTasks);
         active.closeNonAssignedSuspendedTasks(assignedActiveTasks);
+
         addStreamTasks(assignment);
         addStandbyTasks();
         // Pause all the partitions until the underlying state store is ready for all the active tasks.
@@ -240,7 +240,14 @@ public class TaskManager {
         final AtomicReference<RuntimeException> firstException = new AtomicReference<>(null);
 
         firstException.compareAndSet(null, active.suspend());
+        // close all restoring tasks as well and then reset changelog reader;
+        // for those restoring and still assigned tasks, they will be re-created
+        // in addStreamTasks.
+        firstException.compareAndSet(null, active.closeAllRestoringTasks());
+        changelogReader.reset();
+
         firstException.compareAndSet(null, standby.suspend());
+
         // remove the changelog partitions from restore consumer
         restoreConsumer.unsubscribe();
 
@@ -368,7 +375,7 @@ public class TaskManager {
     }
 
     public void setAssignmentMetadata(final Map<TaskId, Set<TopicPartition>> activeTasks,
-                               final Map<TaskId, Set<TopicPartition>> standbyTasks) {
+                                      final Map<TaskId, Set<TopicPartition>> standbyTasks) {
         this.assignedActiveTasks = activeTasks;
         this.assignedStandbyTasks = standbyTasks;
     }

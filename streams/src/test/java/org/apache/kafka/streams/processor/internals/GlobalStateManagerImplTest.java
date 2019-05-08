@@ -32,6 +32,7 @@ import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
@@ -91,6 +92,17 @@ public class GlobalStateManagerImplTest {
     private ProcessorTopology topology;
     private InternalMockProcessorContext processorContext;
 
+    static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
+                                              final Map<String, String> storeToChangelogTopic) {
+        return new ProcessorTopology(Collections.emptyList(),
+                                     Collections.emptyMap(),
+                                     Collections.emptyMap(),
+                                     Collections.emptyList(),
+                                     stateStores,
+                                     storeToChangelogTopic,
+                                     Collections.emptySet());
+    }
+
     @Before
     public void before() {
         final Map<String, String> storeToTopic = new HashMap<>();
@@ -105,7 +117,7 @@ public class GlobalStateManagerImplTest {
         store3 = new NoOpReadOnlyStore<>(storeName3);
         store4 = new NoOpReadOnlyStore<>(storeName4);
 
-        topology = ProcessorTopology.withGlobalStores(asList(store1, store2, store3, store4), storeToTopic);
+        topology = withGlobalStores(asList(store1, store2, store3, store4), storeToTopic);
 
         streamsConfig = new StreamsConfig(new Properties() {
             {
@@ -239,7 +251,7 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
         stateManager.register(
-            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>>(store1) {
+            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>, Object, Object>(store1) {
             },
             stateRestoreCallback
         );
@@ -267,7 +279,7 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
         stateManager.register(
-            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>>(store2) {
+            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>, Object, Object>(store2) {
             },
             stateRestoreCallback
         );
@@ -371,20 +383,9 @@ public class GlobalStateManagerImplTest {
         initializeConsumer(1, 0, t2);
         stateManager.register(store2, stateRestoreCallback);
 
-        stateManager.close(Collections.emptyMap());
+        stateManager.close(true);
         assertFalse(store1.isOpen());
         assertFalse(store2.isOpen());
-    }
-
-    @Test
-    public void shouldWriteCheckpointsOnClose() throws IOException {
-        stateManager.initialize();
-        initializeConsumer(1, 0, t1);
-        stateManager.register(store1, stateRestoreCallback);
-        final Map<TopicPartition, Long> expected = Collections.singletonMap(t1, 25L);
-        stateManager.close(expected);
-        final Map<TopicPartition, Long> result = readOffsetsCheckpoint();
-        assertEquals(expected, result);
     }
 
     @Test(expected = ProcessorStateException.class)
@@ -398,7 +399,7 @@ public class GlobalStateManagerImplTest {
             }
         }, stateRestoreCallback);
 
-        stateManager.close(Collections.emptyMap());
+        stateManager.close(true);
     }
 
     @Test
@@ -415,7 +416,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldUnlockGlobalStateDirectoryOnClose() throws IOException {
         stateManager.initialize();
-        stateManager.close(Collections.emptyMap());
+        stateManager.close(true);
         final StateDirectory stateDir = new StateDirectory(streamsConfig, new MockTime(), true);
         try {
             // should be able to get the lock now as it should've been released in close
@@ -438,9 +439,9 @@ public class GlobalStateManagerImplTest {
                 super.close();
             }
         }, stateRestoreCallback);
-        stateManager.close(Collections.emptyMap());
+        stateManager.close(true);
 
-        stateManager.close(Collections.emptyMap());
+        stateManager.close(true);
     }
 
     @Test
@@ -460,7 +461,7 @@ public class GlobalStateManagerImplTest {
         stateManager.register(store2, stateRestoreCallback);
 
         try {
-            stateManager.close(Collections.emptyMap());
+            stateManager.close(true);
         } catch (final ProcessorStateException e) {
             // expected
         }
@@ -539,7 +540,8 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         initializeConsumer(10, 0, t1);
         stateManager.register(store1, stateRestoreCallback);
-        stateManager.close(Collections.emptyMap());
+        stateManager.checkpoint(Collections.emptyMap());
+        stateManager.close(true);
 
         final Map<TopicPartition, Long> checkpointMap = stateManager.checkpointed();
         assertThat(checkpointMap, equalTo(Collections.singletonMap(t1, 10L)));
@@ -551,7 +553,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         initializeConsumer(10, 0, t3);
         stateManager.register(store3, stateRestoreCallback);
-        stateManager.close(Collections.emptyMap());
+        stateManager.close(true);
 
         assertThat(readOffsetsCheckpoint(), equalTo(Collections.emptyMap()));
     }

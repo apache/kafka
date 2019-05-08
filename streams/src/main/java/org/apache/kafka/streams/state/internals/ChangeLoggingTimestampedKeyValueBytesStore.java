@@ -16,21 +16,25 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.state.KeyValueStore;
 
-import static org.apache.kafka.clients.consumer.ConsumerRecord.NO_TIMESTAMP;
+import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.rawValue;
+import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.timestamp;
 
-class StoreProxyUtils {
+public class ChangeLoggingTimestampedKeyValueBytesStore extends ChangeLoggingKeyValueBytesStore {
 
-    static byte[] getValueWithUnknownTimestamp(final byte[] rawValue) {
-        if (rawValue == null) {
-            return null;
-        }
-        return ByteBuffer
-            .allocate(8 + rawValue.length)
-            .putLong(NO_TIMESTAMP)
-            .put(rawValue)
-            .array();
+    ChangeLoggingTimestampedKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
+        super(inner);
     }
 
+    @Override
+    void log(final Bytes key,
+             final byte[] valueAndTimestamp) {
+        if (valueAndTimestamp != null) {
+            changeLogger.logChange(key, rawValue(valueAndTimestamp), timestamp(valueAndTimestamp));
+        } else {
+            changeLogger.logChange(key, null);
+        }
+    }
 }

@@ -32,7 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.junit.Assert._
 import org.junit.{After, Test}
-import org.scalatest.junit.JUnitSuite
+import org.scalatest.Assertions.{assertThrows, fail, intercept}
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -40,7 +40,7 @@ import scala.collection._
 /**
  * Unit tests for the log cleaning logic
  */
-class LogCleanerTest extends JUnitSuite {
+class LogCleanerTest {
 
   val tmpdir = TestUtils.tempDir()
   val dir = TestUtils.randomPartitionLogDir(tmpdir)

@@ -125,6 +125,7 @@ object ReplicaManager {
   val OfflinePartition: Partition = new Partition(new TopicPartition("", -1),
     isOffline = true,
     replicaLagTimeMaxMs = 0L,
+    interBrokerProtocolVersion = ApiVersion.latestVersion,
     localBrokerId = -1,
     time = null,
     replicaManager = null,
@@ -238,6 +239,12 @@ class ReplicaManager(val config: KafkaConfig,
     "UnderMinIsrPartitionCount",
     new Gauge[Int] {
       def value = leaderPartitionsIterator.count(_.isUnderMinIsr)
+    }
+  )
+  val atMinIsrPartitionCount = newGauge(
+    "AtMinIsrPartitionCount",
+    new Gauge[Int] {
+      def value = leaderPartitionsIterator.count(_.isAtMinIsr)
     }
   )
 
@@ -669,7 +676,7 @@ class ReplicaManager(val config: KafkaConfig,
     localReplica(topicPartition) match {
       case Some(replica) =>
         if (isFuture)
-          replica.logEndOffset.messageOffset - logEndOffset
+          replica.logEndOffset - logEndOffset
         else
           math.max(replica.highWatermark.messageOffset - logEndOffset, 0)
       case None =>
@@ -1006,7 +1013,7 @@ class ReplicaManager(val config: KafkaConfig,
     val isReplicaInSync = nonOfflinePartition(topicPartition).exists { partition =>
       partition.getReplica(replicaId).exists(partition.inSyncReplicas.contains)
     }
-    quota.isThrottled(topicPartition) && quota.isQuotaExceeded && !isReplicaInSync
+    !isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
   def getLogConfig(topicPartition: TopicPartition): Option[LogConfig] = localReplica(topicPartition).flatMap(_.log.map(_.config))
@@ -1404,7 +1411,7 @@ class ReplicaManager(val config: KafkaConfig,
     nonOfflinePartitionsIterator.filter(_.leaderReplicaIfLocal.isDefined)
 
   def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =
-    nonOfflinePartition(topicPartition).flatMap(_.leaderReplicaIfLocal.map(_.logEndOffset.messageOffset))
+    nonOfflinePartition(topicPartition).flatMap(_.leaderReplicaIfLocal.map(_.logEndOffset))
 
   // Flushes the highwatermark value for all partitions to the highwatermark file
   def checkpointHighWatermarks() {
@@ -1481,6 +1488,7 @@ class ReplicaManager(val config: KafkaConfig,
     removeMetric("OfflineReplicaCount")
     removeMetric("UnderReplicatedPartitions")
     removeMetric("UnderMinIsrPartitionCount")
+    removeMetric("AtMinIsrPartitionCount")
   }
 
   // High watermark do not need to be checkpointed only when under unit tests

@@ -26,8 +26,8 @@ import java.security.cert.X509Certificate
 import java.time.Duration
 import java.util.{Collections, Properties}
 import java.util.concurrent.{Callable, ExecutionException, Executors, TimeUnit}
-import javax.net.ssl.X509TrustManager
 
+import javax.net.ssl.X509TrustManager
 import kafka.api._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.log._
@@ -38,7 +38,8 @@ import Implicits._
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.clients.admin.{AdminClient, AlterConfigsResult, Config, ConfigEntry}
+import org.apache.kafka.clients.admin.AlterConfigOp.OpType
+import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaFuture, TopicPartition}
@@ -53,9 +54,11 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
+import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, mutable}
@@ -70,6 +73,10 @@ object TestUtils extends Logging {
 
   /* 0 gives a random port; you can then retrieve the assigned port from the Socket object. */
   val RandomPort = 0
+
+  /* Incorrect broker port which can used by kafka clients in tests. This port should not be used
+   by any other service and hence we use a reserved port. */
+  val IncorrectBrokerPort = 225
 
   /** Port to use for unit tests that mock/don't require a real ZK server. */
   val MockZkPort = 1
@@ -297,7 +304,17 @@ object TestUtils extends Logging {
                   topicConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] = {
     val adminZkClient = new AdminZkClient(zkClient)
     // create topic
-    adminZkClient.createTopic(topic, numPartitions, replicationFactor, topicConfig)
+    TestUtils.waitUntilTrue( () => {
+      var hasSessionExpirationException = false
+      try {
+        adminZkClient.createTopic(topic, numPartitions, replicationFactor, topicConfig)
+      } catch {
+        case _: SessionExpiredException => hasSessionExpirationException = true
+        case e: Throwable => throw e // let other exceptions propagate
+      }
+      !hasSessionExpirationException},
+      s"Can't create topic $topic")
+
     // wait until the update metadata request for new topic reaches all servers
     (0 until numPartitions).map { i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
@@ -329,7 +346,17 @@ object TestUtils extends Logging {
                   topicConfig: Properties): scala.collection.immutable.Map[Int, Int] = {
     val adminZkClient = new AdminZkClient(zkClient)
     // create topic
-    adminZkClient.createTopicWithAssignment(topic, topicConfig, partitionReplicaAssignment)
+    TestUtils.waitUntilTrue( () => {
+      var hasSessionExpirationException = false
+      try {
+        adminZkClient.createTopicWithAssignment(topic, topicConfig, partitionReplicaAssignment)
+      } catch {
+        case _: SessionExpiredException => hasSessionExpirationException = true
+        case e: Throwable => throw e // let other exceptions propagate
+      }
+      !hasSessionExpirationException},
+      s"Can't create topic $topic")
+
     // wait until the update metadata request for new topic reaches all servers
     partitionReplicaAssignment.keySet.map { i =>
       TestUtils.waitUntilMetadataIsPropagated(servers, topic, i)
@@ -349,11 +376,6 @@ object TestUtils extends Logging {
       servers,
       server.groupCoordinator.offsetsTopicConfigs)
   }
-
-  /**
-   * Fail a test case explicitly. Return Nothing so that we are not constrained by the return type.
-   */
-  def fail(msg: String): Nothing = throw new AssertionError(msg)
 
   /**
    * Wrap a single record log buffer.
@@ -1029,9 +1051,9 @@ object TestUtils extends Logging {
     val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))
     // wait until admin path for delete topic is deleted, signaling completion of topic deletion
     TestUtils.waitUntilTrue(() => !zkClient.isTopicMarkedForDeletion(topic),
-      "Admin path /admin/delete_topic/%s path not deleted even after a replica is restarted".format(topic))
+      "Admin path /admin/delete_topics/%s path not deleted even after a replica is restarted".format(topic))
     TestUtils.waitUntilTrue(() => !zkClient.topicExists(topic),
-      "Topic path /brokers/topics/%s not deleted after /admin/delete_topic/%s path is deleted".format(topic, topic))
+      "Topic path /brokers/topics/%s not deleted after /admin/delete_topics/%s path is deleted".format(topic, topic))
     // ensure that the topic-partition has been deleted from all brokers' replica managers
     TestUtils.waitUntilTrue(() =>
       servers.forall(server => topicPartitions.forall(tp => server.replicaManager.getPartition(tp).isEmpty)),
@@ -1284,7 +1306,8 @@ object TestUtils extends Logging {
   def createTransactionalProducer(transactionalId: String,
                                   servers: Seq[KafkaServer],
                                   batchSize: Int = 16384,
-                                  transactionTimeoutMs: Long = 60000) = {
+                                  transactionTimeoutMs: Long = 60000,
+                                  maxBlockMs: Long = 60000) = {
     val props = new Properties()
     props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.getBrokerListStrFromServers(servers))
     props.put(ProducerConfig.ACKS_CONFIG, "all")
@@ -1292,6 +1315,7 @@ object TestUtils extends Logging {
     props.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId)
     props.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "true")
     props.put(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG, transactionTimeoutMs.toString)
+    props.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, maxBlockMs.toString)
     new KafkaProducer[Array[Byte], Array[Byte]](props, new ByteArraySerializer, new ByteArraySerializer)
   }
 
@@ -1383,6 +1407,20 @@ object TestUtils extends Logging {
     adminClient.alterConfigs(configs)
   }
 
+  def incrementalAlterConfigs(servers: Seq[KafkaServer], adminClient: AdminClient, props: Properties,
+                   perBrokerConfig: Boolean, opType: OpType = OpType.SET): AlterConfigsResult  = {
+    val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new ConfigEntry(k, v), opType) }.toList.asJavaCollection
+    val configs = if (perBrokerConfig) {
+      servers.map { server =>
+        val resource = new ConfigResource(ConfigResource.Type.BROKER, server.config.brokerId.toString)
+        (resource, configEntries)
+      }.toMap.asJava
+    } else {
+      Map(new ConfigResource(ConfigResource.Type.BROKER, "") -> configEntries).asJava
+    }
+    adminClient.incrementalAlterConfigs(configs)
+  }
+
   def alterTopicConfigs(adminClient: AdminClient, topic: String, topicConfigs: Properties): AlterConfigsResult = {
     val configEntries = topicConfigs.asScala.map { case (k, v) => new ConfigEntry(k, v) }.toList.asJava
     val newConfig = new Config(configEntries)
@@ -1424,15 +1462,18 @@ object TestUtils extends Logging {
     (out.toString, err.toString)
   }
 
-  def assertFutureExceptionTypeEquals(future: KafkaFuture[_], clazz: Class[_ <: Throwable]): Unit = {
+  def assertFutureExceptionTypeEquals(future: KafkaFuture[_], clazz: Class[_ <: Throwable],
+                                      expectedErrorMessage: Option[String] = None): Unit = {
     try {
       future.get()
       fail("Expected CompletableFuture.get to return an exception")
     } catch {
       case e: ExecutionException =>
-        val cause = e.getCause()
+        val cause = e.getCause
         assertTrue("Expected an exception of type " + clazz.getName + "; got type " +
-            cause.getClass().getName, clazz.isInstance(cause))
+            cause.getClass.getName, clazz.isInstance(cause))
+        expectedErrorMessage.foreach(message => assertTrue(s"Received error message : ${cause.getMessage}" +
+          s" does not contain expected error message : $message", cause.getMessage.contains(message)))
     }
   }
 
