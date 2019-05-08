@@ -200,11 +200,11 @@ public class MirrorMaker {
             try {
                 if (!startLatch.await(SHUTDOWN_TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
                     log.error("Timed out in shutdown hook waiting for MirrorMaker startup to finish. Unable to shutdown cleanly.");
-                    return;
                 }
-                MirrorMaker.this.stop();
             } catch (InterruptedException e) {
                 log.error("Interrupted in shutdown hook while waiting for MirrorMaker startup to finish. Unable to shutdown cleanly.");
+            } finally {
+                MirrorMaker.this.stop();
             }
         }
     }
