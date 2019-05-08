@@ -24,7 +24,7 @@
   // with assigned id.
   "validVersions": "0-5",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "0+",
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group identifier." },
     { "name": "SessionTimeoutMs", "type": "int32", "versions": "0+",
       "about": "The coordinator considers the consumer dead if it receives no heartbeat after this timeout in milliseconds." },

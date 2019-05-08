@@ -23,7 +23,7 @@ import org.apache.kafka.connect.health.ConnectorHealth;
 import org.apache.kafka.connect.health.ConnectorState;
 import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.health.TaskState;
-import org.apache.kafka.connect.runtime.HerderProvider;
+import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.util.FutureCallback;
 
@@ -38,17 +38,17 @@ import java.util.concurrent.TimeoutException;
 public class ConnectClusterStateImpl implements ConnectClusterState {
     
     private final long herderRequestTimeoutMs;
-    private final HerderProvider herderProvider;
+    private final Herder herder;
 
-    public ConnectClusterStateImpl(long connectorsTimeoutMs, HerderProvider herderProvider) {
+    public ConnectClusterStateImpl(long connectorsTimeoutMs, Herder herder) {
         this.herderRequestTimeoutMs = connectorsTimeoutMs;
-        this.herderProvider = herderProvider;
+        this.herder = herder;
     }
 
     @Override
     public Collection<String> connectors() {
         FutureCallback<Collection<String>> connectorsCallback = new FutureCallback<>();
-        herderProvider.get().connectors(connectorsCallback);
+        herder.connectors(connectorsCallback);
         try {
             return connectorsCallback.get(herderRequestTimeoutMs, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
@@ -59,7 +59,7 @@ public class ConnectClusterStateImpl implements ConnectClusterState {
     @Override
     public ConnectorHealth connectorHealth(String connName) {
 
-        ConnectorStateInfo state = herderProvider.get().connectorStatus(connName);
+        ConnectorStateInfo state = herder.connectorStatus(connName);
         ConnectorState connectorState = new ConnectorState(
             state.connector().state(),
             state.connector().workerId(),

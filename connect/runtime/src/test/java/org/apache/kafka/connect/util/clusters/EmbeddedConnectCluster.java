@@ -333,7 +333,7 @@ public class EmbeddedConnectCluster {
         }
     }
 
-    private String endpointForResource(String resource) throws IOException {
+    public String endpointForResource(String resource) throws IOException {
         String url = connectCluster.stream()
                 .map(WorkerHandle::url)
                 .filter(Objects::nonNull)

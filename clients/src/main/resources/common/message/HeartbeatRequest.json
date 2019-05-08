@@ -20,7 +20,7 @@
   // Version 1 and version 2 are the same as version 0.
   "validVersions": "0-2",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "0+",
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group id." },
     { "name": "Generationid", "type": "int32", "versions": "0+",
       "about": "The generation of the group." },

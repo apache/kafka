@@ -281,30 +281,45 @@ public class NetworkClientTest {
             client.poll(1, time.milliseconds());
         selector.clear();
 
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-            Collections.emptyMap());
-        TestCallbackHandler handler = new TestCallbackHandler();
-        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
-                defaultRequestTimeoutMs, handler);
-        client.send(request, time.milliseconds());
+        int correlationId = sendEmptyProduceRequest();
         client.poll(1, time.milliseconds());
-        ResponseHeader respHeader = new ResponseHeader(request.correlationId());
-        Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
-        resp.set("responses", new Object[0]);
-        resp.set(CommonFields.THROTTLE_TIME_MS, 100);
-        Struct responseHeaderStruct = respHeader.toStruct();
-        int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
-        ByteBuffer buffer = ByteBuffer.allocate(size);
-        responseHeaderStruct.writeTo(buffer);
-        resp.writeTo(buffer);
-        buffer.flip();
-        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+
+        sendThrottledProduceResponse(correlationId, 100);
         client.poll(1, time.milliseconds());
 
         // Since client-side throttling is disabled, the connection is ready even though the response indicated a
         // throttle delay.
         assertTrue(client.ready(node, time.milliseconds()));
         assertEquals(0, client.throttleDelayMs(node, time.milliseconds()));
+    }
+
+    private int sendEmptyProduceRequest() {
+        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
+                Collections.emptyMap());
+        TestCallbackHandler handler = new TestCallbackHandler();
+        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
+                defaultRequestTimeoutMs, handler);
+        client.send(request, time.milliseconds());
+        return request.correlationId();
+    }
+
+
+    private void sendResponse(int correlationId, Struct response) {
+        ResponseHeader respHeader = new ResponseHeader(correlationId);
+        Struct responseHeaderStruct = respHeader.toStruct();
+        int size = responseHeaderStruct.sizeOf() + response.sizeOf();
+        ByteBuffer buffer = ByteBuffer.allocate(size);
+        responseHeaderStruct.writeTo(buffer);
+        response.writeTo(buffer);
+        buffer.flip();
+        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+    }
+
+    private void sendThrottledProduceResponse(int correlationId, int throttleMs) {
+        Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
+        resp.set("responses", new Object[0]);
+        resp.set(CommonFields.THROTTLE_TIME_MS, throttleMs);
+        sendResponse(correlationId, resp);
     }
 
     @Test
@@ -328,6 +343,23 @@ public class NetworkClientTest {
         assertFalse("After we forced the disconnection the client is no longer ready.", client.ready(node, time.milliseconds()));
         leastNode = client.leastLoadedNode(time.milliseconds());
         assertNull("There should be NO leastloadednode", leastNode);
+    }
+
+    @Test
+    public void testLeastLoadedNodeConsidersThrottledConnections() {
+        client.ready(node, time.milliseconds());
+        awaitReady(client, node);
+        client.poll(1, time.milliseconds());
+        assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
+
+        int correlationId = sendEmptyProduceRequest();
+        client.poll(1, time.milliseconds());
+
+        sendThrottledProduceResponse(correlationId, 100);
+        client.poll(1, time.milliseconds());
+
+        // leastloadednode should return null since the node is throttled
+        assertNull(client.leastLoadedNode(time.milliseconds()));
     }
 
     @Test
