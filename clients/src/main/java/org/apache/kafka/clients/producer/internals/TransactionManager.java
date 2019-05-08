@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.DefaultRecordBatch;
@@ -38,6 +39,7 @@ import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
@@ -866,7 +868,10 @@ public class TransactionManager {
                 throw new IllegalStateException("Invalid coordinator type: " + type);
         }
 
-        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(type, coordinatorKey);
+        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(
+                new FindCoordinatorRequestData()
+                    .setKeyType(type.id())
+                    .setKey(coordinatorKey));
         enqueueRequest(new FindCoordinatorHandler(builder));
     }
 
@@ -1193,10 +1198,11 @@ public class TransactionManager {
         public void handleResponse(AbstractResponse response) {
             FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) response;
             Errors error = findCoordinatorResponse.error();
+            CoordinatorType coordinatorType = CoordinatorType.forId(builder.data().keyType());
 
             if (error == Errors.NONE) {
                 Node node = findCoordinatorResponse.node();
-                switch (builder.coordinatorType()) {
+                switch (coordinatorType) {
                     case GROUP:
                         consumerGroupCoordinator = node;
                         break;
@@ -1209,11 +1215,11 @@ public class TransactionManager {
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
             } else if (findCoordinatorResponse.error() == Errors.GROUP_AUTHORIZATION_FAILED) {
-                abortableError(new GroupAuthorizationException(builder.coordinatorKey()));
+                abortableError(new GroupAuthorizationException(builder.data().key()));
             } else {
                 fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to" +
-                        "unexpected error: %s", builder.coordinatorType(), builder.coordinatorKey(),
-                        findCoordinatorResponse.error().message())));
+                        "unexpected error: %s", coordinatorType, builder.data().key(),
+                        findCoordinatorResponse.data().errorMessage())));
             }
         }
     }

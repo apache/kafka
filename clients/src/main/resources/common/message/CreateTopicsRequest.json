@@ -22,7 +22,7 @@
   "fields": [
     { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",
       "about": "The topics to create.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
+      { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
       { "name": "NumPartitions", "type": "int32", "versions": "0+",
         "about": "The number of partitions to create in the topic, or -1 if we are specifying a manual partition assignment." },
@@ -32,7 +32,7 @@
         "about": "The manual partition assignment, or the empty array if we are using automatic assignment.", "fields": [
         { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,
           "about": "The partition index." },
-        { "name": "BrokerIds", "type": "[]int32", "versions": "0+",
+        { "name": "BrokerIds", "type": "[]int32", "versions": "0+", "entityType": "brokerId",
           "about": "The brokers to place the partition on." }
       ]},
       { "name": "Configs", "type": "[]CreateableTopicConfig", "versions": "0+",

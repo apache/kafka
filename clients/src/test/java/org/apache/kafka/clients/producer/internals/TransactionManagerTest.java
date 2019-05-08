@@ -687,8 +687,8 @@ public class TransactionManagerTest {
         transactionManager.initializeTransactions();
         client.prepareUnsupportedVersionResponse(body -> {
             FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
-            assertEquals(findCoordinatorRequest.coordinatorType(), CoordinatorType.TRANSACTION);
-            assertEquals(findCoordinatorRequest.coordinatorKey(), transactionalId);
+            assertEquals(CoordinatorType.forId(findCoordinatorRequest.data().keyType()), CoordinatorType.TRANSACTION);
+            assertEquals(findCoordinatorRequest.data().key(), transactionalId);
             return true;
         });
 
@@ -2381,10 +2381,10 @@ public class TransactionManagerTest {
                                                 final String coordinatorKey) {
         client.prepareResponse(body -> {
             FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
-            assertEquals(findCoordinatorRequest.coordinatorType(), coordinatorType);
-            assertEquals(findCoordinatorRequest.coordinatorKey(), coordinatorKey);
+            assertEquals(CoordinatorType.forId(findCoordinatorRequest.data().keyType()), coordinatorType);
+            assertEquals(findCoordinatorRequest.data().key(), coordinatorKey);
             return true;
-        }, new FindCoordinatorResponse(error, brokerNode), shouldDisconnect);
+        }, FindCoordinatorResponse.prepareResponse(error, brokerNode), shouldDisconnect);
     }
 
     private void prepareInitPidResponse(Errors error, boolean shouldDisconnect, long producerId, short producerEpoch) {

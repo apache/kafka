@@ -302,7 +302,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createFindCoordinatorRequest = {
-    new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, group).build()
+    new FindCoordinatorRequest.Builder(
+        new FindCoordinatorRequestData()
+          .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
+          .setKey(group)).build()
   }
 
   private def createUpdateMetadataRequest = {

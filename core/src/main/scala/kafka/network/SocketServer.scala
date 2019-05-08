@@ -1228,6 +1228,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time) extends Logging {
 
   class ListenerConnectionQuota(lock: Object, listener: ListenerName) extends ListenerReconfigurable {
     @volatile private var _maxConnections = Int.MaxValue
+
     def maxConnections: Int = _maxConnections
 
     override def listenerName(): ListenerName = listener

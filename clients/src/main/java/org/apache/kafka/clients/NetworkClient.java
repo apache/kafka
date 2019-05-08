@@ -635,7 +635,8 @@ public class NetworkClient implements KafkaClient {
      * Choose the node with the fewest outstanding requests which is at least eligible for connection. This method will
      * prefer a node with an existing connection, but will potentially choose a node for which we don't yet have a
      * connection if all existing connections are in use. This method will never choose a node for which there is no
-     * existing connection and from which we have disconnected within the reconnect backoff period.
+     * existing connection and from which we have disconnected within the reconnect backoff period, or an active
+     * connection which is being throttled.
      *
      * @return The node with the fewest in-flight requests.
      */
@@ -651,18 +652,22 @@ public class NetworkClient implements KafkaClient {
         for (int i = 0; i < nodes.size(); i++) {
             int idx = (offset + i) % nodes.size();
             Node node = nodes.get(idx);
-            int currInflight = this.inFlightRequests.count(node.idString());
-            if (currInflight == 0 && canSendRequest(node.idString(), now)) {
-                // if we find an established connection with no in-flight requests we can stop right away
-                log.trace("Found least loaded node {} connected with no in-flight requests", node);
-                return node;
-            } else if (!this.connectionStates.isBlackedOut(node.idString(), now) && currInflight < inflight) {
-                // otherwise if this is the best we have found so far, record that
-                inflight = currInflight;
+            if (canSendRequest(node.idString(), now)) {
+                int currInflight = this.inFlightRequests.count(node.idString());
+                if (currInflight == 0) {
+                    // if we find an established connection with no in-flight requests we can stop right away
+                    log.trace("Found least loaded node {} connected with no in-flight requests", node);
+                    return node;
+                } else if (currInflight < inflight) {
+                    // otherwise if this is the best we have found so far, record that
+                    inflight = currInflight;
+                    found = node;
+                }
+            } else if (canConnect(node, now) && inflight == Integer.MAX_VALUE) {
                 found = node;
-            } else if (log.isTraceEnabled()) {
-                log.trace("Removing node {} from least loaded node selection: is-blacked-out: {}, in-flight-requests: {}",
-                        node, this.connectionStates.isBlackedOut(node.idString(), now), currInflight);
+            } else {
+                log.trace("Removing node {} from least loaded node selection since it is neither ready " +
+                        "for sending or connecting", node);
             }
         }
 
