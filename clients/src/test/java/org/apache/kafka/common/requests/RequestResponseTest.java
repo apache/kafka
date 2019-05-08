@@ -316,17 +316,17 @@ public class RequestResponseTest {
         checkRequest(createDeleteAclsRequest(), true);
         checkErrorResponse(createDeleteAclsRequest(), new SecurityDisabledException("Security is not enabled."), true);
         checkResponse(createDeleteAclsResponse(), ApiKeys.DELETE_ACLS.latestVersion(), true);
-        checkRequest(createAlterConfigsRequest(), true);
+        checkRequest(createAlterConfigsRequest(), false);
         checkErrorResponse(createAlterConfigsRequest(), new UnknownServerException(), true);
         checkResponse(createAlterConfigsResponse(), 0, false);
         checkRequest(createDescribeConfigsRequest(0), true);
-        checkRequest(createDescribeConfigsRequestWithConfigEntries(0), true);
+        checkRequest(createDescribeConfigsRequestWithConfigEntries(0), false);
         checkErrorResponse(createDescribeConfigsRequest(0), new UnknownServerException(), true);
-        checkResponse(createDescribeConfigsResponse(), 0, true);
+        checkResponse(createDescribeConfigsResponse(), 0, false);
         checkRequest(createDescribeConfigsRequest(1), true);
-        checkRequest(createDescribeConfigsRequestWithConfigEntries(1), true);
+        checkRequest(createDescribeConfigsRequestWithConfigEntries(1), false);
         checkErrorResponse(createDescribeConfigsRequest(1), new UnknownServerException(), true);
-        checkResponse(createDescribeConfigsResponse(), 1, true);
+        checkResponse(createDescribeConfigsResponse(), 1, false);
         checkDescribeConfigsResponseVersions();
         checkRequest(createCreatePartitionsRequest(), true);
         checkRequest(createCreatePartitionsRequestWithAssignments(), false);
@@ -1373,7 +1373,7 @@ public class RequestResponseTest {
         Map<ConfigResource, Collection<String>> resources = new HashMap<>();
         resources.put(new ConfigResource(ConfigResource.Type.BROKER, "0"), asList("foo", "bar"));
         resources.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic"), null);
-        resources.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic a"), Collections.<String>emptyList());
+        resources.put(new ConfigResource(ConfigResource.Type.TOPIC, "topic a"), Collections.emptyList());
         return new DescribeConfigsRequest.Builder(resources).build((short) version);
     }
 
