@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.requests;
-
-import org.apache.kafka.common.errors.ApiException;
+package org.apache.kafka.common.errors;
 
 public class HwException extends ApiException {
     private static final long serialVersionUID = 1L;

@@ -67,7 +67,7 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.LogAndEndOffsetException;
-import org.apache.kafka.common.requests.HwException;
+import org.apache.kafka.common.errors.HwException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
