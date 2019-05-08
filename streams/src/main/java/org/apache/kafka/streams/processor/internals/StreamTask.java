@@ -346,7 +346,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     @SuppressWarnings("unchecked")
     public boolean process() {
         // if condition put here in case of restarts and rebalances to check for correct timestamp
-        if (recordInfo.queue() != null && partitionGroup.getPartitionTimestamp(recordInfo.partition()) == -1) {
+        if (recordInfo.queue() != null && 
+            partitionGroup.getPartitionTimestamp(recordInfo.partition()) == RecordQueue.UNKNOWN) {
             final String commitMetadata;
             if (!eosEnabled) {
                 final OffsetAndMetadata metadata = consumer.committed(recordInfo.partition());
