@@ -96,7 +96,7 @@ public class AbstractCoordinatorTest {
         LogContext logContext = new LogContext();
         this.mockTime = new MockTime();
         ConsumerMetadata metadata = new ConsumerMetadata(retryBackoffMs, 60 * 60 * 1000L,
-                false, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST),
+                false, false, new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST),
                 logContext, new ClusterResourceListeners());
 
         this.mockClient = new MockClient(mockTime, metadata);

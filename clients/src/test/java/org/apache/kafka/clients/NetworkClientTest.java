@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.CommonFields;
@@ -58,25 +60,26 @@ public class NetworkClientTest {
     protected final long reconnectBackoffMsTest = 10 * 1000;
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
 
+    private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
     private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
     private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
-        return new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)), "mock", Integer.MAX_VALUE,
+        return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
-        return new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)),
+        return new NetworkClient(selector, metadataUpdater,
                 "mock-static", Integer.MAX_VALUE, 0, 0, 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
-        return new NetworkClient(selector, new ManualMetadataUpdater(Collections.singletonList(node)), "mock", Integer.MAX_VALUE,
+        return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
                 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
@@ -138,6 +141,16 @@ public class NetworkClientTest {
         assertFalse(client.hasInFlightRequests(node.idString()));
         assertFalse(client.hasInFlightRequests());
         assertFalse("Connection should not be ready after close", client.isReady(node, 0));
+    }
+
+    @Test
+    public void testUnsupportedVersionDuringInternalMetadataRequest() {
+        List<String> topics = Arrays.asList("topic_1");
+
+        // disabling auto topic creation for versions less than 4 is not supported
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(topics, false, (short) 3);
+        client.sendInternalMetadataRequest(builder, node.idString(), time.milliseconds());
+        assertEquals(UnsupportedVersionException.class, metadataUpdater.getAndClearFailure().getClass());
     }
 
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
@@ -581,6 +594,27 @@ public class NetworkClientTest {
         public void onComplete(ClientResponse response) {
             this.executed = true;
             this.response = response;
+        }
+    }
+
+    // ManualMetadataUpdater with ability to keep track of failures
+    private static class TestMetadataUpdater extends ManualMetadataUpdater {
+        KafkaException failure;
+
+        public TestMetadataUpdater(List<Node> nodes) {
+            super(nodes);
+        }
+
+        @Override
+        public void handleFatalException(KafkaException exception) {
+            failure = exception;
+            super.handleFatalException(exception);
+        }
+
+        public KafkaException getAndClearFailure() {
+            KafkaException failure = this.failure;
+            this.failure = null;
+            return failure;
         }
     }
 }

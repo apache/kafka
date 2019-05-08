@@ -17,6 +17,7 @@
 package org.apache.kafka.clients;
 
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -433,8 +434,8 @@ public class NetworkClient implements KafkaClient {
         doSend(request, false, now);
     }
 
-    private void sendInternalMetadataRequest(MetadataRequest.Builder builder,
-                                             String nodeConnectionId, long now) {
+    // package-private for testing
+    void sendInternalMetadataRequest(MetadataRequest.Builder builder, String nodeConnectionId, long now) {
         ClientRequest clientRequest = newClientRequest(nodeConnectionId, builder, now, true);
         doSend(clientRequest, true, now);
     }
@@ -480,6 +481,9 @@ public class NetworkClient implements KafkaClient {
                     clientRequest.callback(), clientRequest.destination(), now, now,
                     false, unsupportedVersionException, null, null);
             abortedSends.add(clientResponse);
+
+            if (isInternalRequest && clientRequest.apiKey() == ApiKeys.METADATA)
+                metadataUpdater.handleFatalException(unsupportedVersionException);
         }
     }
 
@@ -715,7 +719,7 @@ public class NetworkClient implements KafkaClient {
             case AUTHENTICATION_FAILED:
                 AuthenticationException exception = disconnectState.exception();
                 connectionStates.authenticationFailed(nodeId, now, exception);
-                metadataUpdater.handleAuthenticationFailure(exception);
+                metadataUpdater.handleFatalException(exception);
                 log.error("Connection to node {} ({}) failed authentication due to: {}", nodeId,
                     disconnectState.remoteAddress(), exception.getMessage());
                 break;
@@ -1005,9 +1009,9 @@ public class NetworkClient implements KafkaClient {
         }
 
         @Override
-        public void handleAuthenticationFailure(AuthenticationException exception) {
+        public void handleFatalException(KafkaException fatalException) {
             if (metadata.updateRequested())
-                metadata.failedUpdate(time.milliseconds(), exception);
+                metadata.failedUpdate(time.milliseconds(), fatalException);
             inProgressRequestVersion = null;
         }
 
