@@ -288,6 +288,59 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         };
     }
 
+    /**
+     * It call simplifiedreadFrom() at class DefaultRecord.
+     * @return
+     */
+    private Iterator<Record> simplifiedIterator() {
+        if (count() == 0)
+            return Collections.emptyIterator();
+        try (CloseableIterator<Record> iterator = simplifiedCompressedIterator(BufferSupplier.NO_CACHING)) {
+            List<Record> records = new ArrayList<>(count());
+            while (iterator.hasNext())
+                records.add(iterator.next());
+            return records.iterator();
+        }
+    }
+
+    private CloseableIterator<Record> simplifiedCompressedIterator(BufferSupplier bufferSupplier) {
+        final ByteBuffer buffer = this.buffer.duplicate();
+        buffer.position(RECORDS_OFFSET);
+        final DataInputStream inputStream = new DataInputStream(compressionType().wrapForInput(buffer, magic(),
+                bufferSupplier));
+
+        return new RecordIterator() {
+
+            @Override
+            protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
+                try {
+                    return DefaultRecord.simplifiedreadFrom(inputStream, baseOffset, firstTimestamp, baseSequence, logAppendTime);
+                } catch (EOFException e) {
+                    throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
+                } catch (IOException e) {
+                    throw new KafkaException("Failed to decompress record stream", e);
+                }
+            }
+
+            @Override
+            protected boolean ensureNoneRemaining() {
+                try {
+                    return inputStream.read() == -1;
+                } catch (IOException e) {
+                    throw new KafkaException("Error checking for remaining bytes after reading batch", e);
+                }
+            }
+
+            @Override
+            public void close() {
+                try {
+                    inputStream.close();
+                } catch (IOException e) {
+                    throw new KafkaException("Failed to close record stream", e);
+                }
+            }
+        };
+    }
     private CloseableIterator<Record> uncompressedIterator() {
         final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
@@ -316,6 +369,10 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         if (!isCompressed())
             return uncompressedIterator();
+
+        if (isSimplified()) {
+            return simplifiedIterator();
+        }
 
         // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
         // so we decompress the full record set here. Use cases which call for a lower memory footprint

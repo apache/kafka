@@ -35,29 +35,29 @@ import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 
 /**
  * This class implements the inner record format for magic 2 and above. The schema is as follows:
- *
- *
+ * <p>
+ * <p>
  * Record =>
- *   Length => Varint
- *   Attributes => Int8
- *   TimestampDelta => Varlong
- *   OffsetDelta => Varint
- *   Key => Bytes
- *   Value => Bytes
- *   Headers => [HeaderKey HeaderValue]
- *     HeaderKey => String
- *     HeaderValue => Bytes
- *
+ * Length => Varint
+ * Attributes => Int8
+ * TimestampDelta => Varlong
+ * OffsetDelta => Varint
+ * Key => Bytes
+ * Value => Bytes
+ * Headers => [HeaderKey HeaderValue]
+ * HeaderKey => String
+ * HeaderValue => Bytes
+ * <p>
  * Note that in this schema, the Bytes and String types use a variable length integer to represent
  * the length of the field. The array type used for the headers also uses a Varint for the number of
  * headers.
- *
+ * <p>
  * The current record attributes are depicted below:
- *
- *  ----------------
- *  | Unused (0-7) |
- *  ----------------
- *
+ * <p>
+ * ----------------
+ * | Unused (0-7) |
+ * ----------------
+ * <p>
  * The offset and timestamp deltas compute the difference relative to the base offset and
  * base timestamp of the batch that this record is contained in.
  */
@@ -132,7 +132,8 @@ public class DefaultRecord implements Record {
     }
 
     @Override
-    public void ensureValid() {}
+    public void ensureValid() {
+    }
 
     @Override
     public int keySize() {
@@ -364,6 +365,71 @@ public class DefaultRecord implements Record {
                         " bytes in record payload, but instead read " + (buffer.position() - recordStart));
 
             return new DefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, key, value, headers);
+        } catch (BufferUnderflowException | IllegalArgumentException e) {
+            throw new InvalidRecordException("Found invalid record structure", e);
+        }
+    }
+
+    /**
+     * Reading data from DataInput whithout create a new ByteBuffer.
+     *
+     * @param input
+     * @param baseOffset
+     * @param baseTimestamp
+     * @param baseSequence
+     * @param logAppendTime
+     * @return
+     * @throws IOException
+     */
+    public static SimplifiedDefaultRecord simplifiedreadFrom(DataInput input,
+                                                             long baseOffset,
+                                                             long baseTimestamp,
+                                                             int baseSequence,
+                                                             Long logAppendTime) throws IOException {
+        int sizeOfBodyInBytes = ByteUtils.readVarint(input);
+        int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
+        return simplifiedreadFrom(input, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
+                baseSequence, logAppendTime);
+    }
+
+    private static SimplifiedDefaultRecord simplifiedreadFrom(DataInput input,
+                                                              int sizeInBytes,
+                                                              int sizeOfBodyInBytes,
+                                                              long baseOffset,
+                                                              long baseTimestamp,
+                                                              int baseSequence,
+                                                              Long logAppendTime) throws IOException {
+        try {
+            byte attributes = input.readByte();
+            int skipBytes = 1;
+            long timestampDelta = ByteUtils.readVarlong(input);
+            long timestamp = baseTimestamp + timestampDelta;
+            if (logAppendTime != null)
+                timestamp = logAppendTime;
+            skipBytes += ByteUtils.sizeOfVarlong(timestampDelta);
+
+            int offsetDelta = ByteUtils.readVarint(input);
+            long offset = baseOffset + offsetDelta;
+            int sequence = baseSequence >= 0 ?
+                    DefaultRecordBatch.incrementSequence(baseSequence, offsetDelta) :
+                    RecordBatch.NO_SEQUENCE;
+            skipBytes += ByteUtils.sizeOfVarlong(offsetDelta);
+
+            int keySize = ByteUtils.readVarint(input);
+            boolean hasKey = false;
+            if (keySize >= 0) {
+                hasKey = true;
+            }
+            skipBytes += ByteUtils.sizeOfVarlong(keySize);
+
+            skipBytes = sizeOfBodyInBytes - skipBytes;
+            if (skipBytes > 0) {
+                int currentSkipBytes = input.skipBytes(skipBytes);
+                if (currentSkipBytes != skipBytes)
+                    throw new InvalidRecordException("Found invalid record structure , skipBytes expected is " + skipBytes + ", actually is " + currentSkipBytes);
+            }
+
+            return new SimplifiedDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, hasKey);
         } catch (BufferUnderflowException | IllegalArgumentException e) {
             throw new InvalidRecordException("Found invalid record structure", e);
         }
