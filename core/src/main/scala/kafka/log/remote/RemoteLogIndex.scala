@@ -17,9 +17,12 @@
 package kafka.log.remote
 
 import java.io.{Closeable, File, IOException}
+import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
+import java.util.concurrent.locks.ReentrantLock
 
+import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Utils
 
@@ -38,20 +41,79 @@ class RemoteLogIndex(val startOffset: Long, @volatile var file: File) extends Lo
   @volatile private var maybeChannel: Option[FileChannel] = None
   private var lastOffset: Option[Long] = None
 
+  protected val lock = new ReentrantLock
+
   if (file.exists)
     openChannel()
 
+  def append(entries: Seq[RemoteLogIndexEntry]): Unit = {
+    entries.foreach(entry => append(entry))
+    flush()
+  }
+
   def append(entry: RemoteLogIndexEntry): Unit = {
-    lastOffset.foreach { offset =>
-      if (offset >= entry.lastOffset)
-        throw new IllegalArgumentException(s"The last offset of appended log entry must increase sequentially, but " +
-          s"${entry.lastOffset} is not greater than current last offset $offset of index ${file.getAbsolutePath}")
+    inLock(lock) {
+      lastOffset.foreach { offset =>
+        if (offset >= entry.lastOffset)
+          throw new IllegalArgumentException(s"The last offset of appended log entry must increase sequentially, but " +
+            s"${entry.lastOffset} is not greater than current last offset $offset of index ${file.getAbsolutePath}")
+      }
+      lastOffset = Some(entry.lastOffset)
+      Utils.writeFully(channel(), entry.asBuffer)
     }
-    lastOffset = Some(entry.lastOffset)
-    Utils.writeFully(channel(), entry.asBuffer.duplicate())
   }
 
   def flush(): Unit = maybeChannel.foreach(_.force(true))
+
+  private def parseEntry(ch: FileChannel, position: Long): RemoteLogIndexEntry = {
+    val magicBuffer = ByteBuffer.allocate(2)
+    val readCt = ch.read(magicBuffer, position)
+    if (readCt > 0) {
+      magicBuffer.flip()
+      val magic = magicBuffer.getShort
+      magic match {
+        case 0 =>
+          val valBuffer = ByteBuffer.allocate(4)
+          val nextPos = position + 2
+          ch.read(valBuffer, nextPos)
+          valBuffer.flip()
+          val length = valBuffer.getInt
+
+          val valueBuffer = ByteBuffer.allocate(length)
+          ch.read(valueBuffer, nextPos + 4)
+          valueBuffer.flip()
+
+          val crc = valueBuffer.getInt
+          val firstOffset = valueBuffer.getLong
+          val lastOffset = valueBuffer.getLong
+          val firstTimestamp = valueBuffer.getLong
+          val lastTimestamp = valueBuffer.getLong
+          val dataLength = valueBuffer.getInt
+          val rdiLength = valueBuffer.getShort
+          val rdiBuffer = ByteBuffer.allocate(rdiLength)
+          valueBuffer.get(rdiBuffer.array())
+          RemoteLogIndexEntry(magic, crc, firstOffset, lastOffset, firstTimestamp, lastTimestamp, dataLength,
+            rdiLength, rdiBuffer.array())
+        case _ =>
+          throw new RuntimeException("magic version " + magic + " is not supported")
+      }
+    } else {
+      println("Reached limit of the file")
+      null
+    }
+  }
+
+  def entry(position: Long): Option[RemoteLogIndexEntry] = {
+    inLock(lock) {
+        Option(parseEntry(channel(), position))
+    }
+  }
+
+  def position(): Long = {
+    inLock(lock) {
+      channel().position()
+    }
+  }
 
   /**
    * Delete this index.

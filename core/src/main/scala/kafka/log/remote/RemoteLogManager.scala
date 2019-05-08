@@ -76,7 +76,7 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
       if (entry.firstOffset < minOffset) minOffset = entry.firstOffset
       if (entry.firstTimeStamp < minTimeStamp) minTimeStamp = entry.firstTimeStamp
       remoteLogIndex.append(entry)
-      position += 16 + entry.length
+      position += 16 + entry.entryLength
       remoteOffsetIndex.append(entry.firstOffset, position)
       remoteTimeIndex.maybeAppend(entry.firstTimeStamp, position.toLong)
     })
@@ -149,7 +149,7 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
     //todo get the nearest offset from indexes.
     val offsetPosition = remoteOffsetIndexes.floorEntry(fetchInfo.fetchOffset).getValue.lookup(fetchInfo.fetchOffset)
     // todo get rdi from RemoteLogIndex
-    val rdi:RDI = null
+    val rdi: RDI = null
     remoteStorageManager.read(rdi, fetchInfo.maxBytes, fetchInfo.fetchOffset)
     null
   }
