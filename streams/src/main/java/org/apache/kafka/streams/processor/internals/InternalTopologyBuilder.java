@@ -1490,10 +1490,9 @@ public class InternalTopologyBuilder {
             final Source source = (Source) o;
             // omit successor to avoid infinite loops
             return name.equals(source.name)
-                && (topics == null && source.topics == null
-                    || topics != null && topics.equals(source.topics))
-                && (topicPattern == null && source.topicPattern == null
-                    || topicPattern != null && topicPattern.pattern().equals(source.topicPattern.pattern()));
+                && Objects.equals(topics, source.topics)
+                && (topicPattern == null ? source.topicPattern == null :
+                    topicPattern.pattern().equals(source.topicPattern.pattern()));
         }
 
         @Override

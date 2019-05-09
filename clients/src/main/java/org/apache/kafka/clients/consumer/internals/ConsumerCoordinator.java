@@ -171,10 +171,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected JoinGroupRequestData.JoinGroupRequestProtocolSet metadata() {
+    protected JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
         log.debug("Joining group with current subscription: {}", subscriptions.subscription());
         this.joinedSubscription = subscriptions.subscription();
-        JoinGroupRequestData.JoinGroupRequestProtocolSet protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolSet();
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
 
         for (PartitionAssignor assignor : assignors) {
             Subscription subscription = assignor.subscription(joinedSubscription);

@@ -818,8 +818,8 @@ public class AbstractCoordinatorTest {
         }
 
         @Override
-        protected JoinGroupRequestData.JoinGroupRequestProtocolSet metadata() {
-            return new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+        protected JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
+            return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
                     Collections.singleton(new JoinGroupRequestData.JoinGroupRequestProtocol()
                             .setName("dummy-subprotocol")
                             .setMetadata(EMPTY_DATA.array())).iterator()

@@ -942,7 +942,7 @@ public class KafkaAdminClientTest {
                 Collections.emptySet(),
                 Collections.emptySet(), nodes.get(0));
 
-        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster, AdminClientConfig.RETRIES_CONFIG, "2")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
             // Empty metadata response should be retried
@@ -972,8 +972,8 @@ public class KafkaAdminClientTest {
             // handle retriable errors
             env.kafkaClient().prepareResponseFrom(
                     new ListGroupsResponse(
-                            Errors.COORDINATOR_NOT_AVAILABLE,
-                            Collections.emptyList()
+                        Errors.COORDINATOR_NOT_AVAILABLE,
+                        Collections.emptyList()
                     ),
                     node1);
             env.kafkaClient().prepareResponseFrom(
@@ -1076,9 +1076,37 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            //Retriable FindCoordinatorResponse errors should be retried
+            env.kafkaClient().prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+            env.kafkaClient().prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
+
+            env.kafkaClient().prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, env.cluster().controller()));
 
             DescribeGroupsResponseData data = new DescribeGroupsResponseData();
+
+            //Retriable  errors should be retried
+            data.groups().add(DescribeGroupsResponse.groupMetadata(
+                "group-0",
+                Errors.COORDINATOR_LOAD_IN_PROGRESS,
+                "",
+                "",
+                "",
+                Collections.emptyList(),
+                Collections.emptySet()));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+
+            data = new DescribeGroupsResponseData();
+            data.groups().add(DescribeGroupsResponse.groupMetadata(
+                "group-0",
+                Errors.COORDINATOR_NOT_AVAILABLE,
+                "",
+                "",
+                "",
+                Collections.emptyList(),
+                Collections.emptySet()));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+
+            data = new DescribeGroupsResponseData();
             TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
             TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
             TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
@@ -1143,7 +1171,14 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            //Retriable FindCoordinatorResponse errors should be retried
+            env.kafkaClient().prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+
+            env.kafkaClient().prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, env.cluster().controller()));
+
+            //Retriable  errors should be retried
+            env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.COORDINATOR_NOT_AVAILABLE, Collections.emptyMap()));
+            env.kafkaClient().prepareResponse(new OffsetFetchResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS, Collections.emptyMap()));
 
             TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
             TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
@@ -1192,9 +1227,9 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            final Map<String, Errors> response = new HashMap<>();
-            response.put("group-0", Errors.NONE);
-            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(response));
+            final Map<String, Errors> validResponse = new HashMap<>();
+            validResponse.put("group-0", Errors.NONE);
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(validResponse));
 
             final DeleteConsumerGroupsResult result = env.adminClient().deleteConsumerGroups(groupIds);
 
@@ -1207,6 +1242,23 @@ public class KafkaAdminClientTest {
             final DeleteConsumerGroupsResult errorResult = env.adminClient().deleteConsumerGroups(groupIds);
             TestUtils.assertFutureError(errorResult.deletedGroups().get("group-0"), GroupAuthorizationException.class);
 
+            //Retriable  errors should be retried
+            env.kafkaClient().prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, env.cluster().controller()));
+
+            final Map<String, Errors> errorResponse1 = new HashMap<>();
+            errorResponse1.put("group-0", Errors.COORDINATOR_NOT_AVAILABLE);
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(errorResponse1));
+
+            final Map<String, Errors> errorResponse2 = new HashMap<>();
+            errorResponse2.put("group-0", Errors.COORDINATOR_LOAD_IN_PROGRESS);
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(errorResponse2));
+
+            env.kafkaClient().prepareResponse(new DeleteGroupsResponse(validResponse));
+
+            final DeleteConsumerGroupsResult errorResult1 = env.adminClient().deleteConsumerGroups(groupIds);
+
+            final KafkaFuture<Void> errorResults = errorResult1.deletedGroups().get("group-0");
+            assertNull(errorResults.get());
         }
     }
 
