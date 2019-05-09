@@ -2644,7 +2644,6 @@ public class KafkaAdminClient extends AdminClient {
         if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
             throw error.exception();
         } else if (error != Errors.NONE) {
-            // TODO: KAFKA-6789, we can retry based on the error code. hanlde NOT_COORDINATOR error
             return future.completeExceptionally(error.exception());
         }
         return false;

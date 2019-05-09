@@ -1243,7 +1243,7 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureError(errorResult.deletedGroups().get("group-0"), GroupAuthorizationException.class);
 
             //Retriable  errors should be retried
-            env.kafkaClient().prepareResponse(new FindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, env.cluster().controller()));
 
             final Map<String, Errors> errorResponse1 = new HashMap<>();
             errorResponse1.put("group-0", Errors.COORDINATOR_NOT_AVAILABLE);
