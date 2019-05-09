@@ -368,8 +368,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     } else {
       val memberIdPrefix = Some(memberId.substring(0, delimiterIdx))
       val isKnownStaticMember = hasStaticMember(memberIdPrefix)
+      val hasValidTimestamp = isValidTimestamp(memberId.substring(delimiterIdx + 1))
 
-      if (isKnownStaticMember) {
+      if (isKnownStaticMember && hasValidTimestamp) {
         val storedMemberId = getStaticMemberId(memberIdPrefix)
         if (memberId != storedMemberId) {
           logFencingInstanceIdError(memberId, memberIdPrefix, storedMemberId)
@@ -380,6 +381,15 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       } else {
         true
       }
+    }
+  }
+
+  def isValidTimestamp(str: String): Boolean = {
+    try {
+      val longValue = str.toLong
+      longValue.toString == str
+    } catch {
+      case _: NumberFormatException => false
     }
   }
 
