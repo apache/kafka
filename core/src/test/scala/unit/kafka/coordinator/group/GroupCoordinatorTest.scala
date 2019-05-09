@@ -735,7 +735,35 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   @Test
-  def staticMemberFollowerFailToRejoinBeforeRebalanceTimeout() {
+  def testDynamicMemberFailToRejoinBeforeRebalanceTimeout() {
+    val longSessionTimeout = DefaultSessionTimeout * 3
+    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId, sessionTimeout = longSessionTimeout)
+
+    EasyMock.reset(replicaManager)
+
+    val dynamicJoinFuture = sendJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocolSuperset, sessionTimeout = longSessionTimeout)
+    timer.advanceClock(DefaultRebalanceTimeout + 1)
+
+    val dynamicJoinResult = await(dynamicJoinFuture, 100)
+    // The new dynamic member has been elected as leader
+    assertEquals(dynamicJoinResult.leaderId, dynamicJoinResult.memberId)
+    assertEquals(Errors.NONE, dynamicJoinResult.error)
+    assertEquals(3, dynamicJoinResult.members.size)
+    assertGroupState(groupState = CompletingRebalance)
+
+    // Send a special leave group request from static follower
+    EasyMock.reset(replicaManager)
+    val followerLeaveGroupResult = leaveGroup(groupId, rebalanceResult.followerId)
+    assertEquals(Errors.NONE, followerLeaveGroupResult)
+    EasyMock.reset(replicaManager)
+    sendJoinGroup(groupId, memberId, protocolType, protocols, groupInstanceId)
+    timer.advanceClock(DefaultRebalanceTimeout + 1)
+    // Only rejoined leader is maintained
+    assertEquals(Set(rebalanceResult.leaderId), getGroup(groupId).allMembers)
+  }
+
+  @Test
+  def testStaticMemberFollowerFailToRejoinBeforeRebalanceTimeout() {
     // Increase session timeout so that the follower won't be evicted when rebalance timeout is reached.
     val initialRebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId, sessionTimeout = DefaultRebalanceTimeout * 2)
 
@@ -770,7 +798,7 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   @Test
-  def staticMemberLeaderFailToRejoinBeforeRebalanceTimeout() {
+  def testStaticMemberLeaderFailToRejoinBeforeRebalanceTimeout() {
     // Increase session timeout so that the leader won't be evicted when rebalance timeout is reached.
     val initialRebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId, sessionTimeout = DefaultRebalanceTimeout * 2)
 
@@ -1095,7 +1123,7 @@ class GroupCoordinatorTest extends JUnitSuite {
   @Test
   def testRebalanceCompletesBeforeMemberJoins() {
     // create a group with a single member
-    val firstJoinResult = dynamicJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols,
+    val firstJoinResult = staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, leaderInstanceId, protocolType, protocols,
       rebalanceTimeout = 1200, sessionTimeout = 1000)
     val firstMemberId = firstJoinResult.memberId
     val firstGenerationId = firstJoinResult.generationId
@@ -1129,7 +1157,7 @@ class GroupCoordinatorTest extends JUnitSuite {
     val syncResult = syncGroupLeader(groupId, otherGenerationId, otherMemberId, Map(otherMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncResult._2)
 
-    // the unjoined member should be remained in the group before session timeout.
+    // the unjoined static member should be remained in the group before session timeout.
     assertEquals(Errors.NONE, otherJoinResult.error)
     EasyMock.reset(replicaManager)
     var heartbeatResult = heartbeat(groupId, firstMemberId, firstGenerationId)

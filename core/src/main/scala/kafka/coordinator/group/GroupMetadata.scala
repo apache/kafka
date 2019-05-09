@@ -190,6 +190,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private var protocol: Option[String] = None
 
   private val members = new mutable.HashMap[String, MemberMetadata]
+  // Visible for testing
+  val dummyMember = new MemberMetadata("", "", None, "", "", 0, 0, "", List.empty)
   // Static membership mapping [key: group.instance.id, value: member.id]
   private val staticMembers = new mutable.HashMap[String, String]
   private val pendingMembers = new mutable.HashSet[String]
@@ -244,7 +246,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       leaderId = members.keys.headOption
   }
 
-  def maybeElectNewLeader() {
+  def maybeElectNewJoinedLeader(): Option[MemberMetadata] = {
     leaderId match {
       case Some(currentLeaderId) =>
         val oldLeader = get(currentLeaderId)
@@ -255,11 +257,14 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
               info(s"Group leader [member.id: ${oldLeader.memberId}, " +
                 s"group.instance.id: ${oldLeader.groupInstanceId}] failed to join " +
                 s"before rebalance timeout, while new leader $leaderId was elected.")
+              Some(anyJoinedMember._2)
             }
-            case _ =>
+            case _ => Some(oldLeader)
           }
+        } else {
+          Some(oldLeader)
         }
-      case _ =>
+      case _ => Some(dummyMember)
     }
   }
 
@@ -314,6 +319,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def currentState = state
+
+  def notYetRejoinedMembers = members.values.filter(!_.isAwaitingJoin).toList
 
   def hasAllMembersJoined = members.size == numMembersAwaitingJoin && pendingMembers.isEmpty
 
