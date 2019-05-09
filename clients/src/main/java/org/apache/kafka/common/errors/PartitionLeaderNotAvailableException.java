@@ -14,23 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.errors;
 
-package org.apache.kafka.common;
+public class PartitionLeaderNotAvailableException extends InvalidMetadataException {
 
-import org.apache.kafka.common.annotation.InterfaceStability;
+    public PartitionLeaderNotAvailableException(String message) {
+        super(message);
+    }
 
-/**
- * Options for {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOptions)}.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
- */
-@InterfaceStability.Evolving
-public enum ElectionType {
-    PREFERRED((byte) 0), UNCLEAN((byte) 1);
-
-    public final byte value;
-
-    ElectionType(byte value) {
-        this.value = value;
+    public PartitionLeaderNotAvailableException(String message, Throwable cause) {
+        super(message, cause);
     }
 }

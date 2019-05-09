@@ -1629,10 +1629,16 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           val electionErrors = onReplicaElection(electablePartitions, electionType, electionTrigger)
           val successfulPartitions = electablePartitions -- electionErrors.keySet
           val results = electionErrors.map { case (partition, ex) =>
-            val apiError = if (ex.isInstanceOf[StateChangeFailedException])
-              new ApiError(Errors.PREFERRED_LEADER_NOT_AVAILABLE, ex.getMessage)
-            else
+            val apiError = if (ex.isInstanceOf[StateChangeFailedException]) {
+              val error = if (electionType == ElectionType.PREFERRED) {
+                Errors.PREFERRED_LEADER_NOT_AVAILABLE
+              } else {
+                Errors.PARTITION_LEADER_NOT_AVAILABLE
+              }
+              new ApiError(error, ex.getMessage)
+            } else {
               ApiError.fromThrowable(ex)
+            }
             partition -> apiError
           } ++
             alreadyPreferred.map(_ -> ApiError.NONE) ++

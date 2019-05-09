@@ -46,7 +46,7 @@ final object LeaderElectionCommand extends Logging {
     val commandOptions = new LeaderElectionCommandOptions(args)
     CommandLineUtils.printHelpAndExitIfNeeded(
       commandOptions,
-      "This tool attempts to elect a new leader for a set of topic partitions. The type of elections supported are preferred replicas and unclean replica."
+      "This tool attempts to elect a new leader from a set of topic partitions. The type of elections supported are preferred replicas and unclean replicas."
     )
 
     val electionType = commandOptions.options.valueOf(commandOptions.electionType)
@@ -141,7 +141,7 @@ final object LeaderElectionCommand extends Logging {
 
     if (!succeeded.isEmpty) {
       val partitions = succeeded.map(_._1).mkString(", ")
-      println(s"Successfully completed preferred replica election for partitions $partitions")
+      println(s"Successfully completed leader election ($electionType) for partitions $partitions")
     }
 
     if (!failed.isEmpty) {
@@ -151,7 +151,7 @@ final object LeaderElectionCommand extends Logging {
           identity,
           _ => new AdminCommandFailedException("Exceptional future with no exception")
         )
-        println(s"Error completing leader election for partition: $topicPartition: $exception")
+        println(s"Error completing leader election ($electionType) for partition: $topicPartition: $exception")
         rootException.addSuppressed(exception)
       }
       throw rootException
@@ -220,7 +220,7 @@ private final class LeaderElectionCommandOptions(args: Array[String]) extends Co
   val electionType = parser
     .accepts(
       "election-type",
-      "Type of election to attempt. Possible values are \"preferred\" for preferred election or \"unclean\" for unclean election. REQUIRED.")
+      "Type of election to attempt. Possible values are \"preferred\" for preferred leader election or \"unclean\" for unclean leader election. REQUIRED.")
     .withRequiredArg
     .required
     .describedAs("election type")

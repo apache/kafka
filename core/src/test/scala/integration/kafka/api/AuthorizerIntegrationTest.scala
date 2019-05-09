@@ -459,7 +459,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def addOffsetsToTxnRequest = new AddOffsetsToTxnRequest.Builder(transactionalId, 1, 1, group).build()
 
-  private def electPreferredLeadersRequest = new ElectLeadersRequest.Builder(
+  private def electLeadersRequest = new ElectLeadersRequest.Builder(
     ElectionType.PREFERRED,
     Collections.singleton(tp),
     10000
@@ -499,7 +499,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.ADD_OFFSETS_TO_TXN -> addOffsetsToTxnRequest,
       // Check StopReplica last since some APIs depend on replica availability
       ApiKeys.STOP_REPLICA -> stopReplicaRequest,
-      ApiKeys.ELECT_LEADERS -> electPreferredLeadersRequest,
+      ApiKeys.ELECT_LEADERS -> electLeadersRequest,
       ApiKeys.INCREMENTAL_ALTER_CONFIGS -> incrementalAlterConfigsRequest
     )
 
@@ -547,7 +547,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       ApiKeys.CREATE_PARTITIONS -> createPartitionsRequest,
       ApiKeys.DELETE_GROUPS -> deleteGroupsRequest,
       ApiKeys.OFFSET_FOR_LEADER_EPOCH -> offsetsForLeaderEpochRequest,
-      ApiKeys.ELECT_LEADERS -> electPreferredLeadersRequest
+      ApiKeys.ELECT_LEADERS -> electLeadersRequest
     )
 
     for ((key, request) <- requestKeyToRequest) {

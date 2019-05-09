@@ -148,7 +148,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedProducePurgatory: DelayedOperationPurgatory[DelayedProduce],
                      val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
-                     val delayedElectPreferredLeaderPurgatory: DelayedOperationPurgatory[DelayedElectPreferredLeader],
+                     val delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
                      threadNamePrefix: Option[String]) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
@@ -174,8 +174,8 @@ class ReplicaManager(val config: KafkaConfig,
       DelayedOperationPurgatory[DelayedDeleteRecords](
         purgatoryName = "DeleteRecords", brokerId = config.brokerId,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
-      DelayedOperationPurgatory[DelayedElectPreferredLeader](
-        purgatoryName = "ElectPreferredLeader", brokerId = config.brokerId),
+      DelayedOperationPurgatory[DelayedElectLeader](
+        purgatoryName = "ElectLeader", brokerId = config.brokerId),
       threadNamePrefix)
   }
 
@@ -329,11 +329,11 @@ class ReplicaManager(val config: KafkaConfig,
     debug("Request key %s unblocked %d DeleteRecordsRequest.".format(key.keyLabel, completed))
   }
 
-  def hasDelayedElectionOperations = delayedElectPreferredLeaderPurgatory.delayed != 0
+  def hasDelayedElectionOperations = delayedElectLeaderPurgatory.delayed != 0
 
   def tryCompleteElection(key: DelayedOperationKey): Unit = {
-    val completed = delayedElectPreferredLeaderPurgatory.checkAndComplete(key)
-    debug("Request key %s unblocked %d ElectPreferredLeader.".format(key.keyLabel, completed))
+    val completed = delayedElectLeaderPurgatory.checkAndComplete(key)
+    debug("Request key %s unblocked %d ElectLeader.".format(key.keyLabel, completed))
   }
 
   def startup() {
@@ -1503,7 +1503,7 @@ class ReplicaManager(val config: KafkaConfig,
     delayedFetchPurgatory.shutdown()
     delayedProducePurgatory.shutdown()
     delayedDeleteRecordsPurgatory.shutdown()
-    delayedElectPreferredLeaderPurgatory.shutdown()
+    delayedElectLeaderPurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
     info("Shut down completely")
@@ -1550,11 +1550,11 @@ class ReplicaManager(val config: KafkaConfig,
     def electionCallback(expectedLeaders: Map[TopicPartition, Int],
                          results: Map[TopicPartition, ApiError]): Unit = {
       if (expectedLeaders.nonEmpty) {
-        val watchKeys = expectedLeaders.map{
+        val watchKeys: Seq[TopicPartitionOperationKey] = expectedLeaders.map{
           case (tp, leader) => new TopicPartitionOperationKey(tp.topic, tp.partition)
-        }.toSeq
-        delayedElectPreferredLeaderPurgatory.tryCompleteElseWatch(
-          new DelayedElectPreferredLeader(deadline - time.milliseconds(), expectedLeaders, results,
+        }(breakOut)
+        delayedElectLeaderPurgatory.tryCompleteElseWatch(
+          new DelayedElectLeader(deadline - time.milliseconds(), expectedLeaders, results,
             this, responseCallback),
           watchKeys)
       } else {

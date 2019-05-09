@@ -59,7 +59,7 @@ final public class ElectLeadersResult {
                     result.completeExceptionally(throwable);
                 } else if (!topicPartitions.containsKey(partition)) {
                     result.completeExceptionally(new UnknownTopicOrPartitionException(
-                            "Preferred leader election for partition \"" + partition +
+                            "Leader election for partition \"" + partition +
                                     "\" was not attempted"));
                 } else if (partitions == null && topicPartitions.isEmpty()) {
                     // If partitions is null, we requested information about all partitions.  In
