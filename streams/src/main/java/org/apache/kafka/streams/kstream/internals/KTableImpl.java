@@ -402,18 +402,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
 
         final ProcessorSupplier<K, Change<V>> suppressionSupplier =
-            () -> new KTableSuppressProcessor<>(
-                suppressedInternal,
-                storeName,
-                keySerde,
-                valSerde == null ? null : new FullChangeSerde<>(valSerde)
-            );
+            () -> new KTableSuppressProcessor<>(suppressedInternal, storeName);
 
 
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
-            new InMemoryTimeOrderedKeyValueBuffer.Builder(storeName)
+            new InMemoryTimeOrderedKeyValueBuffer.Builder<>(storeName, keySerde, FullChangeSerde.castOrWrap(valSerde))
         );
 
         builder.addGraphNode(streamsGraphNode, node);

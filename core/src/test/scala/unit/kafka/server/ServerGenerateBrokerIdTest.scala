@@ -23,6 +23,7 @@ import kafka.utils.TestUtils
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import java.io.File
+import org.scalatest.Assertions.intercept
 
 import org.apache.zookeeper.KeeperException.NodeExistsException
 

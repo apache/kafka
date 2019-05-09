@@ -69,23 +69,10 @@ public class MeteredSessionStore<K, V>
     public void init(final ProcessorContext context,
                      final StateStore root) {
         //noinspection unchecked
-        final Serde<K> usedKeySerde;
-        final Serde<V> usedValueSerde;
-        final Map<String, Object> conf = context.appConfigs();
-        if (keySerde == null) {
-            usedKeySerde = (Serde<K>) context.keySerde();
-        } else {
-            usedKeySerde = keySerde;
-            usedKeySerde.configure(conf, true);
-        }
-        if (valueSerde == null) {
-            usedValueSerde = (Serde<V>) context.valueSerde();
-        } else {
-            usedValueSerde = valueSerde;
-            usedValueSerde.configure(conf, false);
-        }
         serdes = new StateSerdes<>(
-            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()), usedKeySerde, usedValueSerde);
+            ProcessorStateManager.storeChangelogTopic(context.applicationId(), name()),
+            keySerde == null ? (Serde<K>) context.keySerde() : keySerde,
+            valueSerde == null ? (Serde<V>) context.valueSerde() : valueSerde);
         metrics = (StreamsMetricsImpl) context.metrics();
 
         taskName = context.taskId().toString();

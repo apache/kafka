@@ -52,12 +52,15 @@ import org.apache.kafka.common.message.ElectPreferredLeadersRequestData.TopicPar
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
 import org.apache.kafka.common.message.SaslAuthenticateResponseData;
 import org.apache.kafka.common.message.SaslHandshakeRequestData;
@@ -82,6 +85,7 @@ import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse;
 import org.apache.kafka.common.requests.CreatePartitionsRequest.PartitionDetails;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclDeletionResult;
 import org.apache.kafka.common.requests.DeleteAclsResponse.AclFilterResponse;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
@@ -443,7 +447,10 @@ public class RequestResponseTest {
 
     @Test(expected = UnsupportedVersionException.class)
     public void cannotUseFindCoordinatorV0ToFindTransactionCoordinator() {
-        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.TRANSACTION, "foobar");
+        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(
+                new FindCoordinatorRequestData()
+                    .setKeyType(CoordinatorType.TRANSACTION.id)
+                    .setKey("foobar"));
         builder.build((short) 0);
     }
 
@@ -695,12 +702,16 @@ public class RequestResponseTest {
     }
 
     private FindCoordinatorRequest createFindCoordinatorRequest(int version) {
-        return new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, "test-group")
+        return new FindCoordinatorRequest.Builder(
+                new FindCoordinatorRequestData()
+                    .setKeyType(CoordinatorType.GROUP.id())
+                    .setKey("test-group"))
                 .build((short) version);
     }
 
     private FindCoordinatorResponse createFindCoordinatorResponse() {
-        return new FindCoordinatorResponse(Errors.NONE, new Node(10, "host1", 2014));
+        Node node = new Node(10, "host1", 2014);
+        return FindCoordinatorResponse.prepareResponse(Errors.NONE, node);
     }
 
     private FetchRequest createFetchRequest(int version, FetchMetadata metadata, List<TopicPartition> toForget) {
@@ -938,21 +949,41 @@ public class RequestResponseTest {
 
     @SuppressWarnings("deprecation")
     private OffsetCommitRequest createOffsetCommitRequest(int version) {
-        Map<TopicPartition, OffsetCommitRequest.PartitionData> commitData = new HashMap<>();
-        commitData.put(new TopicPartition("test", 0), new OffsetCommitRequest.PartitionData(100,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH, ""));
-        commitData.put(new TopicPartition("test", 1), new OffsetCommitRequest.PartitionData(200,
-                RecordBatch.NO_PARTITION_LEADER_EPOCH, null));
-        return new OffsetCommitRequest.Builder("group1", commitData)
-                .setGenerationId(100)
+        return new OffsetCommitRequest.Builder(new OffsetCommitRequestData()
+                .setGroupId("group1")
                 .setMemberId("consumer1")
-                .build((short) version);
+                .setGenerationId(100)
+                .setTopics(Collections.singletonList(
+                        new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                                .setName("test")
+                                .setPartitions(Arrays.asList(
+                                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                                .setPartitionIndex(0)
+                                                .setCommittedOffset(100)
+                                                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                                .setCommittedMetadata(""),
+                                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                                .setPartitionIndex(1)
+                                                .setCommittedOffset(200)
+                                                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                                                .setCommittedMetadata(null)
+                                ))
+                ))
+        ).build((short) version);
     }
 
     private OffsetCommitResponse createOffsetCommitResponse() {
-        Map<TopicPartition, Errors> responseData = new HashMap<>();
-        responseData.put(new TopicPartition("test", 0), Errors.NONE);
-        return new OffsetCommitResponse(responseData);
+        return new OffsetCommitResponse(new OffsetCommitResponseData()
+                .setTopics(Collections.singletonList(
+                        new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                                .setName("test")
+                                .setPartitions(Collections.singletonList(
+                                        new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                                                .setPartitionIndex(0)
+                                                .setErrorCode(Errors.NONE.code())
+                                ))
+                ))
+        );
     }
 
     private OffsetFetchRequest createOffsetFetchRequest(int version) {

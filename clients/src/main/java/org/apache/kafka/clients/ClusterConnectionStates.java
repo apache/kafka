@@ -72,11 +72,9 @@ final class ClusterConnectionStates {
      */
     public boolean isBlackedOut(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
-        if (state == null)
-            return false;
-        else
-            return state.state.isDisconnected() &&
-                   now - state.lastConnectAttemptMs < state.reconnectBackoffMs;
+        return state != null
+                && state.state.isDisconnected()
+                && now - state.lastConnectAttemptMs < state.reconnectBackoffMs;
     }
 
     /**
@@ -89,8 +87,8 @@ final class ClusterConnectionStates {
     public long connectionDelay(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
         if (state == null) return 0;
-        long timeWaited = now - state.lastConnectAttemptMs;
         if (state.state.isDisconnected()) {
+            long timeWaited = now - state.lastConnectAttemptMs;
             return Math.max(state.reconnectBackoffMs - timeWaited, 0);
         } else {
             // When connecting or connected, we should be able to delay indefinitely since other events (connection or
