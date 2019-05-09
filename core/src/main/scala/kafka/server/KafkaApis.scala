@@ -648,6 +648,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         handleOffsetRequestV1(request)
 
     val response = new ListOffsetResponse(mergedResponseMap.asJava, version)
+    error("response.responseData=" + response.responseData())
     requestChannel.sendResponse(new RequestChannel.Response(request, response))
   }
 
