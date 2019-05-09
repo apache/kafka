@@ -677,52 +677,54 @@ public class KafkaAdminClientTest {
         TopicPartition topic1 = new TopicPartition("topic", 0);
         TopicPartition topic2 = new TopicPartition("topic", 2);
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            for (ElectionType electionType : ElectionType.values()) {
+                env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            // Test a call where one partition has an error.
-            ApiError value = ApiError.fromThrowable(new ClusterAuthorizationException(null));
-            ElectLeadersResponseData responseData = new ElectLeadersResponseData();
-            ReplicaElectionResult r = new ReplicaElectionResult().setTopic(topic1.topic());
-            r.partitionResult().add(new PartitionResult()
-                    .setPartitionId(topic1.partition())
-                    .setErrorCode(ApiError.NONE.error().code())
-                    .setErrorMessage(ApiError.NONE.message()));
-            r.partitionResult().add(new PartitionResult()
-                    .setPartitionId(topic2.partition())
-                    .setErrorCode(value.error().code())
-                    .setErrorMessage(value.message()));
-            responseData.replicaElectionResults().add(r);
-            env.kafkaClient().prepareResponse(new ElectLeadersResponse(responseData));
-            ElectLeadersResult results = env.adminClient().electLeaders(
-                    ElectionType.PREFERRED,
-                    new HashSet<>(asList(topic1, topic2)));
-            results.partitionResult(topic1).get();
-            TestUtils.assertFutureError(results.partitionResult(topic2), ClusterAuthorizationException.class);
-            TestUtils.assertFutureError(results.all(), ClusterAuthorizationException.class);
+                // Test a call where one partition has an error.
+                ApiError value = ApiError.fromThrowable(new ClusterAuthorizationException(null));
+                ElectLeadersResponseData responseData = new ElectLeadersResponseData();
+                ReplicaElectionResult r = new ReplicaElectionResult().setTopic(topic1.topic());
+                r.partitionResult().add(new PartitionResult()
+                        .setPartitionId(topic1.partition())
+                        .setErrorCode(ApiError.NONE.error().code())
+                        .setErrorMessage(ApiError.NONE.message()));
+                r.partitionResult().add(new PartitionResult()
+                        .setPartitionId(topic2.partition())
+                        .setErrorCode(value.error().code())
+                        .setErrorMessage(value.message()));
+                responseData.replicaElectionResults().add(r);
+                env.kafkaClient().prepareResponse(new ElectLeadersResponse(responseData));
+                ElectLeadersResult results = env.adminClient().electLeaders(
+                        electionType,
+                        new HashSet<>(asList(topic1, topic2)));
+                results.partitionResult(topic1).get();
+                TestUtils.assertFutureError(results.partitionResult(topic2), ClusterAuthorizationException.class);
+                TestUtils.assertFutureError(results.all(), ClusterAuthorizationException.class);
 
-            // Test a call where there are no errors.
-            r.partitionResult().clear();
-            r.partitionResult().add(new PartitionResult()
-                    .setPartitionId(topic1.partition())
-                    .setErrorCode(ApiError.NONE.error().code())
-                    .setErrorMessage(ApiError.NONE.message()));
-            r.partitionResult().add(new PartitionResult()
-                    .setPartitionId(topic2.partition())
-                    .setErrorCode(ApiError.NONE.error().code())
-                    .setErrorMessage(ApiError.NONE.message()));
-            env.kafkaClient().prepareResponse(new ElectLeadersResponse(responseData));
+                // Test a call where there are no errors.
+                r.partitionResult().clear();
+                r.partitionResult().add(new PartitionResult()
+                        .setPartitionId(topic1.partition())
+                        .setErrorCode(ApiError.NONE.error().code())
+                        .setErrorMessage(ApiError.NONE.message()));
+                r.partitionResult().add(new PartitionResult()
+                        .setPartitionId(topic2.partition())
+                        .setErrorCode(ApiError.NONE.error().code())
+                        .setErrorMessage(ApiError.NONE.message()));
+                env.kafkaClient().prepareResponse(new ElectLeadersResponse(responseData));
 
-            results = env.adminClient().electLeaders(ElectionType.PREFERRED, new HashSet<>(asList(topic1, topic2)));
-            results.partitionResult(topic1).get();
-            results.partitionResult(topic2).get();
+                results = env.adminClient().electLeaders(electionType, new HashSet<>(asList(topic1, topic2)));
+                results.partitionResult(topic1).get();
+                results.partitionResult(topic2).get();
 
-            // Now try a timeout
-            results = env.adminClient().electLeaders(
-                    ElectionType.PREFERRED,
-                    new HashSet<>(asList(topic1, topic2)),
-                    new ElectLeadersOptions().timeoutMs(100));
-            TestUtils.assertFutureError(results.partitionResult(topic1), TimeoutException.class);
-            TestUtils.assertFutureError(results.partitionResult(topic2), TimeoutException.class);
+                // Now try a timeout
+                results = env.adminClient().electLeaders(
+                        electionType,
+                        new HashSet<>(asList(topic1, topic2)),
+                        new ElectLeadersOptions().timeoutMs(100));
+                TestUtils.assertFutureError(results.partitionResult(topic1), TimeoutException.class);
+                TestUtils.assertFutureError(results.partitionResult(topic2), TimeoutException.class);
+            }
         }
     }
 
