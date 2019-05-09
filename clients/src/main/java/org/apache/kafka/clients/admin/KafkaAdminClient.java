@@ -2407,7 +2407,7 @@ public class KafkaAdminClient extends AdminClient {
                 void handleResponse(AbstractResponse abstractResponse) {
                     final FindCoordinatorResponse fcResponse = (FindCoordinatorResponse) abstractResponse;
 
-                    if (handleFindCoordinatorError(fcResponse, futures.get(groupId)))
+                    if (handleGroupRequestError(fcResponse.error(), futures.get(groupId)))
                         return;
 
                     final long nowDescribeConsumerGroups = time.milliseconds();
@@ -2425,39 +2425,36 @@ public class KafkaAdminClient extends AdminClient {
                             KafkaFutureImpl<ConsumerGroupDescription> future = futures.get(groupId);
                             final DescribeGroupsResponse.GroupMetadata groupMetadata = response.groups().get(groupId);
 
-                            final Errors groupError = groupMetadata.error();
-                            if (groupError != Errors.NONE) {
-                                // TODO: KAFKA-6789, we can retry based on the error code
-                                future.completeExceptionally(groupError.exception());
-                            } else {
-                                final String protocolType = groupMetadata.protocolType();
-                                if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
-                                    final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
-                                    final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
+                            if (handleGroupRequestError(groupMetadata.error(), future))
+                                return;
 
-                                    for (DescribeGroupsResponse.GroupMember groupMember : members) {
-                                        Set<TopicPartition> partitions = Collections.emptySet();
-                                        if (groupMember.memberAssignment().remaining() > 0) {
-                                            final PartitionAssignor.Assignment assignment = ConsumerProtocol.
-                                                deserializeAssignment(groupMember.memberAssignment().duplicate());
-                                            partitions = new HashSet<>(assignment.partitions());
-                                        }
-                                        final MemberDescription memberDescription =
-                                            new MemberDescription(groupMember.memberId(),
-                                                groupMember.clientId(),
-                                                groupMember.clientHost(),
-                                                new MemberAssignment(partitions));
-                                        memberDescriptions.add(memberDescription);
+                            final String protocolType = groupMetadata.protocolType();
+                            if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
+                                final List<DescribeGroupsResponse.GroupMember> members = groupMetadata.members();
+                                final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
+
+                                for (DescribeGroupsResponse.GroupMember groupMember : members) {
+                                    Set<TopicPartition> partitions = Collections.emptySet();
+                                    if (groupMember.memberAssignment().remaining() > 0) {
+                                        final PartitionAssignor.Assignment assignment = ConsumerProtocol.
+                                            deserializeAssignment(groupMember.memberAssignment().duplicate());
+                                        partitions = new HashSet<>(assignment.partitions());
                                     }
-                                    final ConsumerGroupDescription consumerGroupDescription =
-                                            new ConsumerGroupDescription(groupId,
-                                                protocolType.isEmpty(),
-                                                memberDescriptions,
-                                                groupMetadata.protocol(),
-                                                ConsumerGroupState.parse(groupMetadata.state()),
-                                                fcResponse.node());
-                                    future.complete(consumerGroupDescription);
+                                    final MemberDescription memberDescription =
+                                        new MemberDescription(groupMember.memberId(),
+                                            groupMember.clientId(),
+                                            groupMember.clientHost(),
+                                            new MemberAssignment(partitions));
+                                    memberDescriptions.add(memberDescription);
                                 }
+                                final ConsumerGroupDescription consumerGroupDescription =
+                                        new ConsumerGroupDescription(groupId,
+                                            protocolType.isEmpty(),
+                                            memberDescriptions,
+                                            groupMetadata.protocol(),
+                                            ConsumerGroupState.parse(groupMetadata.state()),
+                                            fcResponse.node());
+                                future.complete(consumerGroupDescription);
                             }
                         }
 
@@ -2480,11 +2477,11 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeConsumerGroupsResult(new HashMap<>(futures));
     }
 
-    private boolean handleFindCoordinatorError(FindCoordinatorResponse response, KafkaFutureImpl<?> future) {
-        Errors error = response.error();
-        if (error.exception() instanceof RetriableException) {
+
+    private boolean handleGroupRequestError(Errors error, KafkaFutureImpl<?> future) {
+        if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
             throw error.exception();
-        } else if (response.hasError()) {
+        } else if (error != Errors.NONE) {
             future.completeExceptionally(error.exception());
             return true;
         }
@@ -2632,7 +2629,7 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
-                if (handleFindCoordinatorError(response, groupOffsetListingFuture))
+                if (handleGroupRequestError(response.error(), groupOffsetListingFuture))
                     return;
 
                 final long nowListConsumerGroupOffsets = time.milliseconds();
@@ -2650,26 +2647,25 @@ public class KafkaAdminClient extends AdminClient {
                         final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
                         final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
 
-                        if (response.hasError()) {
-                            groupOffsetListingFuture.completeExceptionally(response.error().exception());
-                        } else {
-                            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
-                                    response.responseData().entrySet()) {
-                                final TopicPartition topicPartition = entry.getKey();
-                                OffsetFetchResponse.PartitionData partitionData = entry.getValue();
-                                final Errors error = partitionData.error;
+                        if (handleGroupRequestError(response.error(), groupOffsetListingFuture))
+                            return;
 
-                                if (error == Errors.NONE) {
-                                    final Long offset = partitionData.offset;
-                                    final String metadata = partitionData.metadata;
-                                    final Optional<Integer> leaderEpoch = partitionData.leaderEpoch;
-                                    groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
-                                } else {
-                                    log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
-                                }
+                        for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
+                            response.responseData().entrySet()) {
+                            final TopicPartition topicPartition = entry.getKey();
+                            OffsetFetchResponse.PartitionData partitionData = entry.getValue();
+                            final Errors error = partitionData.error;
+
+                            if (error == Errors.NONE) {
+                                final Long offset = partitionData.offset;
+                                final String metadata = partitionData.metadata;
+                                final Optional<Integer> leaderEpoch = partitionData.leaderEpoch;
+                                groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
+                            } else {
+                                log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
                             }
-                            groupOffsetListingFuture.complete(groupOffsetsListing);
                         }
+                        groupOffsetListingFuture.complete(groupOffsetsListing);
                     }
 
                     @Override
@@ -2723,7 +2719,7 @@ public class KafkaAdminClient extends AdminClient {
                 void handleResponse(AbstractResponse abstractResponse) {
                     final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
-                    if (handleFindCoordinatorError(response, futures.get(groupId)))
+                    if (handleGroupRequestError(response.error(), futures.get(groupId)))
                         return;
 
                     final long nowDeleteConsumerGroups = time.milliseconds();
@@ -2744,11 +2740,10 @@ public class KafkaAdminClient extends AdminClient {
                             KafkaFutureImpl<Void> future = futures.get(groupId);
                             final Errors groupError = response.get(groupId);
 
-                            if (groupError != Errors.NONE) {
-                                future.completeExceptionally(groupError.exception());
-                            } else {
-                                future.complete(null);
-                            }
+                            if (handleGroupRequestError(groupError, future))
+                                return;
+
+                            future.complete(null);
                         }
 
                         @Override
