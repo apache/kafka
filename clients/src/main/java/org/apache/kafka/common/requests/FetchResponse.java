@@ -37,6 +37,7 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Queue;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
@@ -223,8 +224,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
         @Override
         public int hashCode() {
-            int result = (int) (producerId ^ (producerId >>> 32));
-            result = 31 * result + (int) (firstOffset ^ (firstOffset >>> 32));
+            int result = Long.hashCode(producerId);
+            result = 31 * result + Long.hashCode(firstOffset);
             return result;
         }
 
@@ -269,16 +270,16 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     highWatermark == that.highWatermark &&
                     lastStableOffset == that.lastStableOffset &&
                     logStartOffset == that.logStartOffset &&
-                    (abortedTransactions == null ? that.abortedTransactions == null : abortedTransactions.equals(that.abortedTransactions)) &&
-                    (records == null ? that.records == null : records.equals(that.records));
+                    Objects.equals(abortedTransactions, that.abortedTransactions) &&
+                    Objects.equals(records, that.records);
         }
 
         @Override
         public int hashCode() {
             int result = error != null ? error.hashCode() : 0;
-            result = 31 * result + (int) (highWatermark ^ (highWatermark >>> 32));
-            result = 31 * result + (int) (lastStableOffset ^ (lastStableOffset >>> 32));
-            result = 31 * result + (int) (logStartOffset ^ (logStartOffset >>> 32));
+            result = 31 * result + Long.hashCode(highWatermark);
+            result = 31 * result + Long.hashCode(lastStableOffset);
+            result = 31 * result + Long.hashCode(logStartOffset);
             result = 31 * result + (abortedTransactions != null ? abortedTransactions.hashCode() : 0);
             result = 31 * result + (records != null ? records.hashCode() : 0);
             return result;

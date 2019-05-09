@@ -58,10 +58,15 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
+
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.equalTo;
 
 /**
  * Utility functions to make integration testing more convenient.
@@ -69,7 +74,6 @@ import java.util.stream.Collectors;
 public class IntegrationTestUtils {
 
     public static final long DEFAULT_TIMEOUT = 60 * 1000L;
-    public static final String INTERNAL_LEAVE_GROUP_ON_CLOSE = "internal.leave.group.on.close";
 
     /*
      * Records state transition for StreamThread
@@ -117,10 +121,14 @@ public class IntegrationTestUtils {
     }
 
     public static void cleanStateBeforeTest(final EmbeddedKafkaCluster cluster, final String... topics) {
+        cleanStateBeforeTest(cluster, 1, topics);
+    }
+
+    public static void cleanStateBeforeTest(final EmbeddedKafkaCluster cluster, final int partitionCount, final String... topics) {
         try {
             cluster.deleteAllTopicsAndWait(DEFAULT_TIMEOUT);
             for (final String topic : topics) {
-                cluster.createTopic(topic, 1, 1);
+                cluster.createTopic(topic, partitionCount, 1);
             }
         } catch (final InterruptedException e) {
             throw new RuntimeException(e);
@@ -147,7 +155,7 @@ public class IntegrationTestUtils {
     public static <K, V> void produceKeyValuesSynchronously(
         final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Time time)
         throws ExecutionException, InterruptedException {
-        IntegrationTestUtils.produceKeyValuesSynchronously(topic, records, producerConfig, time, false);
+        produceKeyValuesSynchronously(topic, records, producerConfig, time, false);
     }
 
     /**
@@ -162,7 +170,7 @@ public class IntegrationTestUtils {
     public static <K, V> void produceKeyValuesSynchronously(
         final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Headers headers, final Time time)
         throws ExecutionException, InterruptedException {
-        IntegrationTestUtils.produceKeyValuesSynchronously(topic, records, producerConfig, headers, time, false);
+        produceKeyValuesSynchronously(topic, records, producerConfig, headers, time, false);
     }
 
     /**
@@ -177,7 +185,7 @@ public class IntegrationTestUtils {
     public static <K, V> void produceKeyValuesSynchronously(
         final String topic, final Collection<KeyValue<K, V>> records, final Properties producerConfig, final Time time, final boolean enableTransactions)
         throws ExecutionException, InterruptedException {
-        IntegrationTestUtils.produceKeyValuesSynchronously(topic, records, producerConfig, null, time, enableTransactions);
+        produceKeyValuesSynchronously(topic, records, producerConfig, null, time, enableTransactions);
     }
 
     /**
@@ -221,7 +229,7 @@ public class IntegrationTestUtils {
                                                                          final Properties producerConfig,
                                                                          final Long timestamp)
         throws ExecutionException, InterruptedException {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, timestamp, false);
+        produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, timestamp, false);
     }
 
     /**
@@ -239,7 +247,7 @@ public class IntegrationTestUtils {
                                                                          final Long timestamp,
                                                                          final boolean enableTransactions)
         throws ExecutionException, InterruptedException {
-        IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, null, timestamp, enableTransactions);
+        produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, null, timestamp, enableTransactions);
     }
 
     /**
@@ -277,20 +285,19 @@ public class IntegrationTestUtils {
     }
 
     public static <V, K> void produceSynchronously(final Properties producerConfig,
-                                                    final boolean eos,
-                                                    final String topic,
-                                                    final List<KeyValueTimestamp<K, V>> toProduce) {
+                                                   final boolean eos,
+                                                   final String topic,
+                                                   final Optional<Integer> partition,
+                                                   final List<KeyValueTimestamp<K, V>> toProduce) {
         try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
-            // TODO: test EOS
-            //noinspection ConstantConditions
-            if (false) {
+            if (eos) {
                 producer.initTransactions();
                 producer.beginTransaction();
             }
             final LinkedList<Future<RecordMetadata>> futures = new LinkedList<>();
             for (final KeyValueTimestamp<K, V> record : toProduce) {
                 final Future<RecordMetadata> f = producer.send(
-                    new ProducerRecord<>(topic, null, record.timestamp(), record.key(), record.value(), null)
+                    new ProducerRecord<>(topic, partition.orElse(null), record.timestamp(), record.key(), record.value(), null)
                 );
                 futures.add(f);
             }
@@ -351,7 +358,7 @@ public class IntegrationTestUtils {
                                                       final Properties producerConfig,
                                                       final Time time)
         throws ExecutionException, InterruptedException {
-        IntegrationTestUtils.produceValuesSynchronously(topic, records, producerConfig, time, false);
+        produceValuesSynchronously(topic, records, producerConfig, time, false);
     }
 
     /**
@@ -677,7 +684,7 @@ public class IntegrationTestUtils {
 
         final List<ConsumerRecord<String, Long>> results;
         try {
-            results = IntegrationTestUtils.waitUntilMinRecordsReceived(consumerConfig, topic, expected.size());
+            results = waitUntilMinRecordsReceived(consumerConfig, topic, expected.size());
         } catch (final InterruptedException e) {
             throw new RuntimeException(e);
         }
@@ -694,6 +701,28 @@ public class IntegrationTestUtils {
                 throw new AssertionError(printRecords(results) + " != " + expected, e);
             }
         }
+    }
+
+    public static void verifyKeyValueTimestamps(final Properties consumerConfig,
+                                                final String topic,
+                                                final Set<KeyValueTimestamp<String, Long>> expected) {
+        final List<ConsumerRecord<String, Long>> results;
+        try {
+            results = waitUntilMinRecordsReceived(consumerConfig, topic, expected.size());
+        } catch (final InterruptedException e) {
+            throw new RuntimeException(e);
+        }
+
+        if (results.size() != expected.size()) {
+            throw new AssertionError(printRecords(results) + " != " + expected);
+        }
+
+        final Set<KeyValueTimestamp<String, Long>> actual =
+            results.stream()
+                   .map(result -> new KeyValueTimestamp<>(result.key(), result.value(), result.timestamp()))
+                   .collect(Collectors.toSet());
+
+        assertThat(actual, equalTo(expected));
     }
 
     private static <K, V> void compareKeyValueTimestamp(final ConsumerRecord<K, V> record,

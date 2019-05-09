@@ -62,7 +62,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
                  client_id="console-consumer", print_key=False, jmx_object_names=None, jmx_attributes=None,
                  enable_systest_events=False, stop_timeout_sec=35, print_timestamp=False,
                  isolation_level="read_uncommitted", jaas_override_variables=None,
-                 kafka_opts_override="", client_prop_file_override=""):
+                 kafka_opts_override="", client_prop_file_override="", consumer_properties={}):
         """
         Args:
             context:                    standard context
@@ -120,6 +120,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
         self.jaas_override_variables = jaas_override_variables or {}
         self.kafka_opts_override = kafka_opts_override
         self.client_prop_file_override = client_prop_file_override
+        self.consumer_properties = consumer_properties
 
 
     def prop_file(self, node):
@@ -204,6 +205,10 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             # check the assertion here as well, in case node.version has been modified
             assert node.version >= V_0_10_0_0
             cmd += " --enable-systest-events"
+
+        if self.consumer_properties is not None:
+            for k, v in self.consumer_properties.items():
+                cmd += "--consumer_properties %s=%s" % (k, v)
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
         return cmd

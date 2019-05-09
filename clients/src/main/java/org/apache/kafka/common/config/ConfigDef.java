@@ -1078,6 +1078,10 @@ public class ConfigDef {
         public boolean hasDefault() {
             return !NO_DEFAULT_VALUE.equals(this.defaultValue);
         }
+
+        public Type type() {
+            return type;
+        }
     }
 
     protected List<String> headers() {
@@ -1314,7 +1318,16 @@ public class ConfigDef {
      */
     private static Validator embeddedValidator(final String keyPrefix, final Validator base) {
         if (base == null) return null;
-        return (name, value) -> base.ensureValid(name.substring(keyPrefix.length()), value);
+        return new Validator() {
+            public void ensureValid(String name, Object value) {
+                base.ensureValid(name.substring(keyPrefix.length()), value);
+            }
+
+            @Override
+            public String toString() {
+                return base.toString();
+            }
+        };
     }
 
     /**

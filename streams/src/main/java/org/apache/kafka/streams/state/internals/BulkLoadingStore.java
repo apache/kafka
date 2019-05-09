@@ -16,21 +16,13 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import java.nio.ByteBuffer;
+import org.apache.kafka.streams.KeyValue;
+import org.rocksdb.RocksDBException;
+import org.rocksdb.WriteBatch;
 
-import static org.apache.kafka.clients.consumer.ConsumerRecord.NO_TIMESTAMP;
-
-class StoreProxyUtils {
-
-    static byte[] getValueWithUnknownTimestamp(final byte[] rawValue) {
-        if (rawValue == null) {
-            return null;
-        }
-        return ByteBuffer
-            .allocate(8 + rawValue.length)
-            .putLong(NO_TIMESTAMP)
-            .put(rawValue)
-            .array();
-    }
-
+public interface BulkLoadingStore {
+    void toggleDbForBulkLoading(final boolean prepareForBulkload);
+    void addToBatch(final KeyValue<byte[], byte[]> record,
+                    final WriteBatch batch) throws RocksDBException;
+    void write(final WriteBatch batch) throws RocksDBException;
 }
