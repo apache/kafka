@@ -135,9 +135,14 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     private class ImplicitLinkedHashCollectionIterator implements ListIterator<E> {
         private int cursor = 0;
         private Element cur = head;
+        private int lastReturnedSlot = INVALID_INDEX;
 
-        // private Element next = indexToElement(head, elements, head.next());
-        private Element lastReturned;
+        ImplicitLinkedHashCollectionIterator(int index) {
+            for (int i = 0; i < index; ++i) {
+                cur = indexToElement(head, elements, cur.next());
+                cursor++;
+            }
+        }
 
         @Override
         public boolean hasNext() {
@@ -154,11 +159,11 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
             if (cursor == size) {
                 throw new NoSuchElementException();
             }
+            lastReturnedSlot = cur.next();
             cur = indexToElement(head, elements, cur.next());
             ++cursor;
             @SuppressWarnings("unchecked")
             E returnValue = (E) cur;
-            lastReturned = returnValue;
             return returnValue;
         }
 
@@ -169,8 +174,8 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
             }
             @SuppressWarnings("unchecked")
             E returnValue = (E) cur;
-            lastReturned = returnValue;
             cur = indexToElement(head, elements, cur.prev());
+            lastReturnedSlot = cur.next();
             --cursor;
             return returnValue;
         }
@@ -187,17 +192,17 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
 
         @Override
         public void remove() {
-            if (lastReturned == null) {
+            if (lastReturnedSlot == INVALID_INDEX) {
                 throw new IllegalStateException();
             }
 
-            if (lastReturned == cur) {
+            if (cur == indexToElement(head, elements, lastReturnedSlot)) {
                 cursor--;
-                cur = indexToElement(head, elements, lastReturned.prev());
+                cur = indexToElement(head, elements, cur.prev());
             }
-            ImplicitLinkedHashCollection.this.remove(lastReturned);
+            ImplicitLinkedHashCollection.this.removeElementAtSlot(lastReturnedSlot);
 
-            lastReturned = null;
+            lastReturnedSlot = INVALID_INDEX;
         }
 
         @Override
@@ -219,11 +224,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
                 throw new IndexOutOfBoundsException();
             }
 
-            ListIterator<E> iter = ImplicitLinkedHashCollection.this.listIterator();
-            for (int i = 0; i < index; ++i) {
-                iter.next();
-            }
-            return iter;
+            return ImplicitLinkedHashCollection.this.listIterator(index);
         }
 
         @Override
@@ -280,11 +281,11 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      */
     @Override
     final public Iterator<E> iterator() {
-        return listIterator();
+        return listIterator(0);
     }
 
-    private ListIterator<E> listIterator() {
-        return new ImplicitLinkedHashCollectionIterator();
+    private ListIterator<E> listIterator(int index) {
+        return new ImplicitLinkedHashCollectionIterator(index);
     }
 
     final int slot(Element[] curElements, Object e) {
@@ -567,6 +568,25 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
         }
     }
 
+    /**
+     * Compares the specified object with this collection for equality. Two
+     * {@code ImplicitLinkedHashCollection} objects are equal if they contain the
+     * same elements (as determined by the element's {@code equals} method), and
+     * those elements were inserted in the same order. Because
+     * {@code ImplicitLinkedHashCollectionListIterator} iterates over the elements
+     * in insertion order, it is sufficient to call {@code valuesList.equals}.
+     *
+     * Note that {@link ImplicitLinkedHashMultiCollection} does not override
+     * {@code equals} and uses this method as well. This means that two
+     * {@code ImplicitLinkedHashMultiCollection} objects will be considered equal even
+     * if they each contain two elements A and B such that A.equals(B) but A != B and
+     * A and B have switched insertion positions between the two collections. This
+     * is an acceptable definition of equality, because the collections are still
+     * equal in terms of the order and value of each element.
+     *
+     * @param o object to be compared for equality with this collection
+     * @return true is the specified object is equal to this collection
+     */
     @Override
     public boolean equals(Object o) {
         if (o == this)
@@ -574,12 +594,19 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
 
         if (!(o instanceof ImplicitLinkedHashCollection))
             return false;
-        ImplicitLinkedHashCollection<?> ilhs = (ImplicitLinkedHashCollection<?>) o;
 
-        // List equality implies Set equality, so compare the List views to determine equality
+        ImplicitLinkedHashCollection<?> ilhs = (ImplicitLinkedHashCollection<?>) o;
         return this.valuesList().equals(ilhs.valuesList());
     }
 
+    /**
+     * Returns the hash code value for this collection. Because
+     * {@code ImplicitLinkedHashCollection.equals} compares the {@code valuesList}
+     * of two {@code ImplicitLinkedHashCollection} objects to determine equality,
+     * this method uses the @{code valuesList} to compute the has code value as well.
+     *
+     * @return the hash code value for this collection
+     */
     @Override
     public int hashCode() {
         return this.valuesList().hashCode();
@@ -591,13 +618,15 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     }
 
     /**
-     * Returns a {@link List} view of the elements contained in the collection, ordered by order of insertion into
-     * the collection. The list is backed by the collection, so changes to the collection are reflected in the list,
-     * and vice-versa. The list supports element removal, which removes the corresponding element from the collection,
-     * but does not support the {@code add} or {@code set} operations.
+     * Returns a {@link List} view of the elements contained in the collection,
+     * ordered by order of insertion into the collection. The list is backed by the
+     * collection, so changes to the collection are reflected in the list and
+     * vice-versa. The list supports element removal, which removes the corresponding
+     * element from the collection, but does not support the {@code add} or
+     * {@code set} operations.
      *
-     * The list is implemented as a circular linked list, so all index-based operations, such as {@code List.get},
-     * run in O(n) time.
+     * The list is implemented as a circular linked list, so all index-based
+     * operations, such as {@code List.get}, run in O(n) time.
      *
      * @return a list view of the elements contained in this collection
      */
@@ -606,9 +635,10 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
     }
 
     /**
-     * Returns a {@link Set} view of the elements contained in the collection. The set is backed by the collection, so
-     * changes to the collection are reflected in the set, and vice versa. The set supports element removal and
-     * addition, which removes or adds to the collection, respectively.
+     * Returns a {@link Set} view of the elements contained in the collection. The
+     * set is backed by the collection, so changes to the collection are reflected in
+     * the set, and vice versa. The set supports element removal and addition, which
+     * removes from or adds to the collection, respectively.
      *
      * @return a set view of the elements contained in this collection
      */

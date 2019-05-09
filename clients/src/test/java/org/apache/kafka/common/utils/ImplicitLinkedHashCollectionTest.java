@@ -30,6 +30,7 @@ import java.util.ListIterator;
 import java.util.Random;
 import java.util.Set;
 
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertEquals;
@@ -491,36 +492,25 @@ public class ImplicitLinkedHashCollectionTest {
     }
 
     @Test
-    public void testValuesList() {
-        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
-        coll.add(new TestElement(1));
-        coll.add(new TestElement(2));
-        coll.add(new TestElement(3));
+    public void testEquals() {
+        ImplicitLinkedHashCollection<TestElement> coll1 = new ImplicitLinkedHashCollection<>();
+        coll1.add(new TestElement(1));
+        coll1.add(new TestElement(2));
+        coll1.add(new TestElement(3));
 
-        List<TestElement> list = coll.valuesList();
-        Iterator<TestElement> iter = list.iterator();
-        assertEquals(1, iter.next().val);
-        assertEquals(2, iter.next().val);
-        assertEquals(3, iter.next().val);
-    }
+        ImplicitLinkedHashCollection<TestElement> coll2 = new ImplicitLinkedHashCollection<>();
+        coll2.add(new TestElement(1));
+        coll2.add(new TestElement(2));
+        coll2.add(new TestElement(3));
 
-    @Test
-    public void testValuesSet() {
-        ImplicitLinkedHashCollection<TestElement> coll = new ImplicitLinkedHashCollection<>();
-        coll.add(new TestElement(1));
-        coll.add(new TestElement(2));
-        coll.add(new TestElement(3));
+        ImplicitLinkedHashCollection<TestElement> coll3 = new ImplicitLinkedHashCollection<>();
+        coll3.add(new TestElement(1));
+        coll3.add(new TestElement(3));
+        coll3.add(new TestElement(2));
 
-        Set<TestElement> set = coll.valuesSet();
-        assertTrue(set.contains(new TestElement(1)));
-        assertTrue(set.contains(new TestElement(2)));
-        assertTrue(set.contains(new TestElement(3)));
-
-        set.add(new TestElement(4));
-        assertTrue(set.contains(new TestElement(4)));
-
-        set.remove(new TestElement(2));
-        assertFalse(set.contains(new TestElement(2)));
+        assertEquals(coll1, coll2);
+        assertNotEquals(coll1, coll3);
+        assertNotEquals(coll2, coll3);
     }
 
     private void addRandomElement(Random random, LinkedHashSet<Integer> existing,
