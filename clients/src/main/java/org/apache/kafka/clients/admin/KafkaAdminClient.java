@@ -2644,7 +2644,8 @@ public class KafkaAdminClient extends AdminClient {
         if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
             throw error.exception();
         } else if (error != Errors.NONE) {
-            return future.completeExceptionally(error.exception());
+            future.completeExceptionally(error.exception());
+            return true;
         }
         return false;
     }
