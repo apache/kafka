@@ -133,7 +133,29 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                 }
             }
 
-            if (mergedWindow.end() > closeTime) {
+            if (mergedWindow.end() < closeTime) {
+                LOG.debug(
+                    "Skipping record for expired window. " +
+                        "key=[{}] " +
+                        "topic=[{}] " +
+                        "partition=[{}] " +
+                        "offset=[{}] " +
+                        "timestamp=[{}] " +
+                        "window=[{},{}] " +
+                        "expiration=[{}] " +
+                        "streamTime=[{}]",
+                    key,
+                    context().topic(),
+                    context().partition(),
+                    context().offset(),
+                    context().timestamp(),
+                    mergedWindow.start(),
+                    mergedWindow.end(),
+                    closeTime,
+                    observedStreamTime
+                );
+                lateRecordDropSensor.record();
+            } else {
                 if (!mergedWindow.equals(newSessionWindow)) {
                     for (final KeyValue<Windowed<K>, Agg> session : merged) {
                         store.remove(session.key);
@@ -145,12 +167,6 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                 final Windowed<K> sessionKey = new Windowed<>(key, mergedWindow);
                 store.put(sessionKey, agg);
                 tupleForwarder.maybeForward(sessionKey, agg, null);
-            } else {
-                LOG.debug(
-                    "Skipping record for expired window. key=[{}] topic=[{}] partition=[{}] offset=[{}] timestamp=[{}] window=[{},{}) expiration=[{}]",
-                    key, context().topic(), context().partition(), context().offset(), context().timestamp(), mergedWindow.start(), mergedWindow.end(), closeTime
-                );
-                lateRecordDropSensor.record();
             }
         }
     }

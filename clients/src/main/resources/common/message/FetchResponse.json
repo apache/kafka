@@ -48,7 +48,7 @@
       "about": "The fetch session ID, or 0 if this is not part of a fetch session." },
     { "name": "Topics", "type": "[]FetchableTopicResponse", "versions": "0+",
       "about": "The response topics.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]FetchablePartitionResponse", "versions": "0+",
         "about": "The topic partitions.", "fields": [
@@ -64,7 +64,7 @@
           "about": "The current log start offset." },
         { "name": "Aborted", "type": "[]AbortedTransaction", "versions": "4+", "nullableVersions": "4+", "ignorable": false,
           "about": "The aborted transactions.",  "fields": [
-          { "name": "ProducerId", "type": "int64", "versions": "4+",
+          { "name": "ProducerId", "type": "int64", "versions": "4+", "entityType": "producerId",
             "about": "The producer id associated with the aborted transaction." },
           { "name": "FirstOffset", "type": "int64", "versions": "4+",
             "about": "The first offset in the aborted transaction." }

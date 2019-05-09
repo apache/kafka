@@ -22,6 +22,7 @@ import org.apache.kafka.common.security.auth._
 import org.junit.{Before, Test}
 import org.junit.Assert._
 import org.apache.kafka.common.errors.TopicAuthorizationException
+import org.scalatest.Assertions.intercept
 
 // This test case uses a separate listener for client and inter-broker communication, from
 // which we derive corresponding principals

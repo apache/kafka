@@ -459,7 +459,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
     TestUtils.produceMessages(servers, records, acks = 1)
   }
 
-  private def produceConsumeAndShutdown(topic: String, group: String = group, totalMessages: Int, numConsumers: Int = 1) {
+  private def produceConsumeAndShutdown(topic: String, group: String, totalMessages: Int, numConsumers: Int = 1) {
     produceMessages(topic, totalMessages)
     val executor = addConsumerGroupExecutor(numConsumers = numConsumers, topic = topic, group = group)
     awaitConsumerProgress(topic, group, totalMessages)

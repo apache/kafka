@@ -26,7 +26,7 @@
         "about": "The absolute directory path." },
       { "name": "Topics", "type": "[]AlterReplicaLogDirTopic", "versions": "0+",
         "about": "The topics to add to the directory.",  "fields": [
-        { "name": "Name", "type": "string", "versions": "0+", "mapKey": true,
+        { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
           "about": "The topic name." },
         { "name": "Partitions", "type": "[]int32", "versions": "0+",
           "about": "The partition indexes." }

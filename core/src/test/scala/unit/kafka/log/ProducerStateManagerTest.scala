@@ -33,9 +33,9 @@ import org.apache.kafka.common.utils.{MockTime, Utils}
 import org.easymock.EasyMock
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
-import org.scalatest.junit.JUnitSuite
+import org.scalatest.Assertions.{assertThrows, fail}
 
-class ProducerStateManagerTest extends JUnitSuite {
+class ProducerStateManagerTest {
   var logDir: File = null
   var stateManager: ProducerStateManager = null
   val partition = new TopicPartition("test", 0)

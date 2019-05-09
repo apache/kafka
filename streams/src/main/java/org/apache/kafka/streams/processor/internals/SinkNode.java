@@ -44,14 +44,6 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         this.partitioner = partitioner;
     }
 
-    public Serializer getKeySerializer() {
-        return keySerializer;
-    }
-
-    public Serializer getValueSerializer() {
-        return valSerializer;
-    }
-
     /**
      * @throws UnsupportedOperationException if this method adds a child to a sink node
      */

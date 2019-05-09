@@ -27,6 +27,7 @@ import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch.{NO_PRODUCER_EPOCH, NO_PRODUCER_ID}
 import org.apache.kafka.common.requests._
@@ -101,6 +102,7 @@ class GroupCoordinator(val brokerId: Int,
 
   def handleJoinGroup(groupId: String,
                       memberId: String,
+                      groupInstanceId: Option[String],
                       requireKnownMemberId: Boolean,
                       clientId: String,
                       clientHost: String,
@@ -126,22 +128,22 @@ class GroupCoordinator(val brokerId: Int,
           // exist we should reject the request.
           if (isUnknownMember) {
             val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
-            doUnknownJoinGroup(group, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+            doUnknownJoinGroup(group, groupInstanceId, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
           } else {
             responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
           }
-
         case Some(group) =>
           group.inLock {
             if ((groupIsOverCapacity(group)
                   && group.has(memberId) && !group.get(memberId).isAwaitingJoin) // oversized group, need to shed members that haven't joined yet
                 || (isUnknownMember && group.size >= groupConfig.groupMaxSize)) {
               group.remove(memberId)
+              group.removeStaticMember(groupInstanceId)
               responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.GROUP_MAX_SIZE_REACHED))
             } else if (isUnknownMember) {
-              doUnknownJoinGroup(group, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+              doUnknownJoinGroup(group, groupInstanceId, requireKnownMemberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
             } else {
-              doJoinGroup(group, memberId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
+              doJoinGroup(group, memberId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs, protocolType, protocols, responseCallback)
             }
 
             // attempt to complete JoinGroup
@@ -149,11 +151,12 @@ class GroupCoordinator(val brokerId: Int,
               joinPurgatory.checkAndComplete(GroupKey(group.groupId))
             }
           }
+        }
       }
     }
-  }
 
   private def doUnknownJoinGroup(group: GroupMetadata,
+                                 groupInstanceId: Option[String],
                                  requireKnownMemberId: Boolean,
                                  clientId: String,
                                  clientHost: String,
@@ -174,15 +177,44 @@ class GroupCoordinator(val brokerId: Int,
       } else {
         val newMemberId = clientId + "-" + group.generateMemberIdSuffix
 
-        if (requireKnownMemberId) {
-          // If member id required, register the member in the pending member list
-          // and send back a response to call for another join group request with allocated member id.
-          group.addPendingMember(newMemberId)
-          addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
-          responseCallback(joinError(newMemberId, Errors.MEMBER_ID_REQUIRED))
+        if (group.hasStaticMember(groupInstanceId)) {
+          val oldMemberId = group.getStaticMemberId(groupInstanceId)
+
+          if (group.is(Stable)) {
+            info(s"Static member $groupInstanceId with unknown member id rejoins, assigning new member id $newMemberId, while" +
+              s"old member $oldMemberId will be removed. No rebalance will be triggered.")
+
+            val oldMember = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
+
+            // Heartbeat of old member id will expire without affection since the group no longer contains that member id.
+            // New heartbeat shall be scheduled with new member id.
+            completeAndScheduleNextHeartbeatExpiration(group, oldMember)
+
+            responseCallback(JoinGroupResult(
+              members = if (group.isLeader(newMemberId)) {
+                group.currentMemberMetadata
+              } else {
+                List.empty
+              },
+              memberId = newMemberId,
+              generationId = group.generationId,
+              subProtocol = group.protocolOrNull,
+              leaderId = group.leaderOrNull,
+              error = Errors.NONE))
+          } else {
+            val knownStaticMember = group.get(oldMemberId)
+            updateMemberAndRebalance(group, knownStaticMember, protocols, responseCallback)
+          }
+        } else if (requireKnownMemberId) {
+            // If member id required (dynamic membership), register the member in the pending member list
+            // and send back a response to call for another join group request with allocated member id.
+            group.addPendingMember(newMemberId)
+            addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
+            responseCallback(joinError(newMemberId, Errors.MEMBER_ID_REQUIRED))
         } else {
-          addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, newMemberId, clientId, clientHost, protocolType,
-            protocols, group, responseCallback)
+          addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, newMemberId, groupInstanceId,
+            clientId, clientHost, protocolType, protocols, group, responseCallback)
+
         }
       }
     }
@@ -190,6 +222,7 @@ class GroupCoordinator(val brokerId: Int,
   
   private def doJoinGroup(group: GroupMetadata,
                           memberId: String,
+                          groupInstanceId: Option[String],
                           clientId: String,
                           clientHost: String,
                           rebalanceTimeoutMs: Int,
@@ -207,65 +240,79 @@ class GroupCoordinator(val brokerId: Int,
       } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
         responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else if (group.isPendingMember(memberId)) {
-        // A rejoining pending member will be accepted.
-        addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, clientId, clientHost, protocolType,
-          protocols, group, responseCallback)
-      } else if (!group.has(memberId)) {
-        // if the member trying to register with a un-recognized id, send the response to let
-        // it reset its member id and retry.
-        responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
+        // A rejoining pending member will be accepted. Note that pending member will never be a static member.
+        if (groupInstanceId.isDefined) {
+          throw new IllegalStateException(s"the static member $groupInstanceId was unexpectedly to be assigned " +
+            s"into pending member bucket with member id $memberId")
+        } else {
+          addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, memberId, groupInstanceId,
+            clientId, clientHost, protocolType, protocols, group, responseCallback)
+        }
       } else {
-        group.currentState match {
-          case PreparingRebalance =>
-            val member = group.get(memberId)
-            updateMemberAndRebalance(group, member, protocols, responseCallback)
+        val isKnownGroupInstanceId = group.hasStaticMember(groupInstanceId)
+        val groupInstanceIdNotFound = groupInstanceId.isDefined && !isKnownGroupInstanceId
 
-          case CompletingRebalance =>
-            val member = group.get(memberId)
-            if (member.matches(protocols)) {
-              // member is joining with the same metadata (which could be because it failed to
-              // receive the initial JoinGroup response), so just return current group information
-              // for the current generation.
-              responseCallback(JoinGroupResult(
-                members = if (group.isLeader(memberId)) {
-                  group.currentMemberMetadata
-                } else {
-                  Map.empty
-                },
-                memberId = memberId,
-                generationId = group.generationId,
-                subProtocol = group.protocolOrNull,
-                leaderId = group.leaderOrNull,
-                error = Errors.NONE))
-            } else {
-              // member has changed metadata, so force a rebalance
+        if (isKnownGroupInstanceId && group.getStaticMemberId(groupInstanceId) != memberId) {
+          // given member id doesn't match with the groupInstanceId. Inform duplicate instance to shut down immediately.
+          responseCallback(joinError(memberId, Errors.FENCED_INSTANCE_ID))
+        } else if (!group.has(memberId) || groupInstanceIdNotFound) {
+            // If the dynamic member trying to register with an unrecognized id, or
+            // the static member joins with unknown group instance id, send the response to let
+            // it reset its member id and retry.
+          responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
+        } else {
+          val member = group.get(memberId)
+
+          group.currentState match {
+            case PreparingRebalance =>
               updateMemberAndRebalance(group, member, protocols, responseCallback)
-            }
 
-          case Stable =>
-            val member = group.get(memberId)
-            if (group.isLeader(memberId) || !member.matches(protocols)) {
-              // force a rebalance if a member has changed metadata or if the leader sends JoinGroup.
-              // The latter allows the leader to trigger rebalances for changes affecting assignment
-              // which do not affect the member metadata (such as topic metadata changes for the consumer)
-              updateMemberAndRebalance(group, member, protocols, responseCallback)
-            } else {
-              // for followers with no actual change to their metadata, just return group information
-              // for the current generation which will allow them to issue SyncGroup
-              responseCallback(JoinGroupResult(
-                members = Map.empty,
-                memberId = memberId,
-                generationId = group.generationId,
-                subProtocol = group.protocolOrNull,
-                leaderId = group.leaderOrNull,
-                error = Errors.NONE))
-            }
+            case CompletingRebalance =>
+              if (member.matches(protocols)) {
+                // member is joining with the same metadata (which could be because it failed to
+                // receive the initial JoinGroup response), so just return current group information
+                // for the current generation.
+                responseCallback(JoinGroupResult(
+                  members = if (group.isLeader(memberId)) {
+                    group.currentMemberMetadata
+                  } else {
+                    List.empty
+                  },
+                  memberId = memberId,
+                  generationId = group.generationId,
+                  subProtocol = group.protocolOrNull,
+                  leaderId = group.leaderOrNull,
+                  error = Errors.NONE))
+              } else {
+                // member has changed metadata, so force a rebalance
+                updateMemberAndRebalance(group, member, protocols, responseCallback)
+              }
 
-          case Empty | Dead =>
-            // Group reaches unexpected state. Let the joining member reset their generation and rejoin.
-            warn(s"Attempt to add rejoining member $memberId of group ${group.groupId} in " +
-              s"unexpected group state ${group.currentState}")
-            responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
+            case Stable =>
+              val member = group.get(memberId)
+              if (group.isLeader(memberId) || !member.matches(protocols)) {
+                // force a rebalance if a member has changed metadata or if the leader sends JoinGroup.
+                // The latter allows the leader to trigger rebalances for changes affecting assignment
+                // which do not affect the member metadata (such as topic metadata changes for the consumer)
+                updateMemberAndRebalance(group, member, protocols, responseCallback)
+              } else {
+                // for followers with no actual change to their metadata, just return group information
+                // for the current generation which will allow them to issue SyncGroup
+                responseCallback(JoinGroupResult(
+                  members = List.empty,
+                  memberId = memberId,
+                  generationId = group.generationId,
+                  subProtocol = group.protocolOrNull,
+                  leaderId = group.leaderOrNull,
+                  error = Errors.NONE))
+              }
+
+            case Empty | Dead =>
+              // Group reaches unexpected state. Let the joining member reset their generation and rejoin.
+              warn(s"Attempt to add rejoining member $memberId of group ${group.groupId} in " +
+                s"unexpected group state ${group.currentState}")
+              responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
+          }
         }
       }
     }
@@ -715,7 +762,7 @@ class GroupCoordinator(val brokerId: Int,
 
   private def joinError(memberId: String, error: Errors): JoinGroupResult = {
     JoinGroupResult(
-      members = Map.empty,
+      members = List.empty,
       memberId = memberId,
       generationId = GroupCoordinator.NoGeneration,
       subProtocol = GroupCoordinator.NoProtocol,
@@ -761,13 +808,15 @@ class GroupCoordinator(val brokerId: Int,
   private def addMemberAndRebalance(rebalanceTimeoutMs: Int,
                                     sessionTimeoutMs: Int,
                                     memberId: String,
+                                    groupInstanceId: Option[String],
                                     clientId: String,
                                     clientHost: String,
                                     protocolType: String,
                                     protocols: List[(String, Array[Byte])],
                                     group: GroupMetadata,
                                     callback: JoinCallback) {
-    val member = new MemberMetadata(memberId, group.groupId, clientId, clientHost, rebalanceTimeoutMs,
+    val member = new MemberMetadata(memberId, group.groupId, groupInstanceId,
+      clientId, clientHost, rebalanceTimeoutMs,
       sessionTimeoutMs, protocolType, protocols)
 
     member.isNew = true
@@ -786,8 +835,11 @@ class GroupCoordinator(val brokerId: Int,
     // for new members. If the new member is still there, we expect it to retry.
     completeAndScheduleNextExpiration(group, member, NewMemberJoinTimeoutMs)
 
-    group.removePendingMember(memberId)
-    maybePrepareRebalance(group, s"Adding new member $memberId")
+    if (member.isStaticMember)
+      group.addStaticMember(groupInstanceId, memberId)
+    else
+      group.removePendingMember(memberId)
+    maybePrepareRebalance(group, s"Adding new member $memberId with group instanceid $groupInstanceId")
   }
 
   private def updateMemberAndRebalance(group: GroupMetadata,
@@ -836,6 +888,7 @@ class GroupCoordinator(val brokerId: Int,
     group.maybeInvokeJoinCallback(member, joinError(NoMemberId, Errors.UNKNOWN_MEMBER_ID))
 
     group.remove(member.memberId)
+    group.removeStaticMember(member.groupInstanceId)
 
     group.currentState match {
       case Dead | Empty =>
@@ -870,6 +923,7 @@ class GroupCoordinator(val brokerId: Int,
       group.notYetRejoinedMembers.foreach { failedMember =>
         removeHeartbeatForLeavingMember(group, failedMember)
         group.remove(failedMember.memberId)
+        group.removeStaticMember(failedMember.groupInstanceId)
         // TODO: cut the socket connection to the client
       }
 
@@ -898,7 +952,7 @@ class GroupCoordinator(val brokerId: Int,
               members = if (group.isLeader(member.memberId)) {
                 group.currentMemberMetadata
               } else {
-                Map.empty
+                List.empty
               },
               memberId = member.memberId,
               generationId = group.generationId,
@@ -1023,7 +1077,7 @@ case class GroupConfig(groupMinSessionTimeoutMs: Int,
                        groupMaxSize: Int,
                        groupInitialRebalanceDelayMs: Int)
 
-case class JoinGroupResult(members: Map[String, Array[Byte]],
+case class JoinGroupResult(members: List[JoinGroupResponseMember],
                            memberId: String,
                            generationId: Int,
                            subProtocol: String,

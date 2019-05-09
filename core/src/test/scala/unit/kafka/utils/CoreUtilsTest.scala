@@ -24,7 +24,6 @@ import java.util.concurrent.locks.ReentrantLock
 import java.nio.ByteBuffer
 import java.util.regex.Pattern
 
-import org.scalatest.junit.JUnitSuite
 import org.junit.Assert._
 import kafka.utils.CoreUtils.inLock
 import org.apache.kafka.common.KafkaException
@@ -37,7 +36,7 @@ import scala.collection.mutable
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, ExecutionContext, Future}
 
-class CoreUtilsTest extends JUnitSuite with Logging {
+class CoreUtilsTest extends Logging {
 
   val clusterIdPattern = Pattern.compile("[a-zA-Z0-9_\\-]+")
 
