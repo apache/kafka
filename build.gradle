@@ -136,6 +136,9 @@ ext {
 
 apply from: file('wrapper.gradle')
 
+// The RAT check examines the license headers of files.  Because we have some
+// Confluent header files now, this check currently fails.  For now, we have
+// disabled the check. We would like to have a more permanent solution.
 if (false) {
   apply from: file('gradle/rat.gradle')
   rat {
