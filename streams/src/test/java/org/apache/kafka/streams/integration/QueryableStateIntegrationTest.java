@@ -414,7 +414,7 @@ public class QueryableStateIntegrationTest {
             }
             // finally check if all keys are there
             verifyGreaterOrEqual(inputValuesKeys.toArray(new String[inputValuesKeys.size()]), expectedWindowState,
-                expectedCount, windowStore, keyValueStore, true);
+                expectedCount, windowStore, keyValueStore,  true);
         } finally {
             producerRunnable.shutdown();
             producerThread.interrupt();
