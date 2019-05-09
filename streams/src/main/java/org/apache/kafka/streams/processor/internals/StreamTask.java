@@ -50,7 +50,9 @@ import org.apache.kafka.streams.state.internals.ThreadCache;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
+import java.time.Duration;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -348,21 +350,11 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // if condition put here in case of restarts and rebalances to check for correct timestamp
         if (recordInfo.queue() != null && 
             partitionGroup.getPartitionTimestamp(recordInfo.partition()) == RecordQueue.UNKNOWN) {
-            final String commitMetadata;
-            if (!eosEnabled) {
-                final OffsetAndMetadata metadata = consumer.committed(recordInfo.partition());
-                if (metadata == null) {
-                    commitMetadata = null;
-                } else {
-                    commitMetadata = metadata.metadata();
-                }
-            } else {
-                // unknown exactly how to retrieve the timestamp here
-                commitMetadata = null;
-            }
-            if (commitMetadata != null) {
+            final OffsetAndMetadata metadata = consumer.committed(recordInfo.partition());
+            if (metadata != null) {
+                final String commitMetadata = metadata.metadata();
                 partitionGroup.setPartitionTimestamp(recordInfo.partition(),
-                                                     Long.parseLong(commitMetadata));
+                        Long.parseLong(commitMetadata));
             }
         }
 
