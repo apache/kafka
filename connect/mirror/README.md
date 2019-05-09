@@ -46,8 +46,8 @@ configuration file as follows:
 
     # mm2.properties
     clusters = us-west, us-east
-    us-west.brokers.list = host1:9092
-    us-east.brokers.list = host2:9092
+    us-west.bootstrap.servers = host1:9092
+    us-east.bootstrap.servers = host2:9092
 
 You can list any number of clusters this way.
 
@@ -132,7 +132,7 @@ MM2 employs a naming convention to ensure that records from different
 clusters are not written to the same partition. By default, replicated
 topics are renamed based on "source cluster aliases":
 
-    topic-1 -> source.topic-1
+    topic-1 --> source.topic-1
 
 This can be customized by overriding the `replication.policy.separator`
 property (default is a period). If you need more control over how
@@ -144,9 +144,10 @@ and override `replication.policy.class` (default is
 
 MM2 is built on the Connect framework and inherits all of Connect's metrics, e.g.
 `source-record-poll-rate`. In addition, MM2 produces its own metrics under the
-`kafka.connect.mirror` metric group. Each metric is tagged as follows:
+`kafka.connect.mirror` metric group. Metrics are tagged with the following properties:
 
     - *target*: alias of target cluster
+    - *source*: alias of source cluster
     - *topic*:  remote topic on target cluster 
     - *partition*: partition being replicated
 
@@ -160,7 +161,7 @@ like:
 
 The following metrics are emitted:
 
-    # MBean: kafka.connect.mirror:type=record-metrics,source=([-.w]+),target=([-.w]+)
+    # MBean: kafka.connect.mirror:type=MirrorSourceConnector,target=([-.w]+),topic=([-.w]+),partition=([0-9]+)
 
     record-count            # number of records replicated source -> target
     record-age-ms           # age of records when they are replicated
@@ -172,6 +173,14 @@ The following metrics are emitted:
     replication-latency-ms-max
     replication-latency-ms-avg
     byte-rate               # average number of bytes/sec in replicated records
+
+
+    # MBean: kafka.connect.mirror:type=MirrorCheckpointConnector,source=([-.w]+),target=([-.w]+)
+
+    checkpoint-latency-ms   # time it takes to replicate consumer offsets
+    checkpoint-latency-ms-min
+    checkpoint-latency-ms-max
+    checkpoint-latency-ms-avg
 
 These metrics do not discern between created-at and log-append timestamps.
 
