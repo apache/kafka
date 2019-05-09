@@ -194,6 +194,16 @@ public class TestInputTopic<K, V> {
     }
 
     /**
+     * Advances the internally tracked time.
+     *
+     * @param advanceMs the amount of time to advance
+     */
+    @SuppressWarnings({"WeakerAccess", "unused"})
+    public void advanceTimeMs(final long advanceMs) {
+        factory.advanceTimeMs(advanceMs);
+    }
+
+    /**
      * Send an input message with the given value on the topic and then commit the messages.
      *
      * @param value the record value

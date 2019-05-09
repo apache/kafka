@@ -181,13 +181,17 @@ public class TestInputTopicTest {
 
     @Test
     public void testStartTimestampMs() {
-        long baseTime = 3;
+        final long baseTime = 3;
+        final long advance = 2;
         final TestInputTopic<Long, String> inputTopic = new TestInputTopic<>(testDriver, INPUT_TOPIC, longSerde, stringSerde, baseTime);
         final TestOutputTopic<Long, String> outputTopic = new TestOutputTopic<>(testDriver, OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello");
         OutputVerifier.compareKeyValueTimestamp(outputTopic.readRecord(), 1L, "Hello", baseTime);
-        inputTopic.pipeInput(2L, "Kafka", ++baseTime);
-        OutputVerifier.compareKeyValueTimestamp(outputTopic.readRecord(), 2L, "Kafka", baseTime);
+        inputTopic.pipeInput(2L, "World");
+        OutputVerifier.compareKeyValueTimestamp(outputTopic.readRecord(), 2L, "World", baseTime);
+        inputTopic.advanceTimeMs(advance);
+        inputTopic.pipeInput(3L, "Kafka");
+        OutputVerifier.compareKeyValueTimestamp(outputTopic.readRecord(), 3L, "Kafka", baseTime+advance);
     }
 
 
