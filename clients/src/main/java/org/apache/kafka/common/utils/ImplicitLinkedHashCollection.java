@@ -17,9 +17,14 @@
 
 package org.apache.kafka.common.utils;
 
+import java.util.AbstractCollection;
+import java.util.AbstractSequentialList;
 import java.util.AbstractSet;
 import java.util.Iterator;
+import java.util.List;
+import java.util.ListIterator;
 import java.util.NoSuchElementException;
+import java.util.Set;
 
 /**
  * A memory-efficient hash set which tracks the order of insertion of elements.
@@ -40,7 +45,7 @@ import java.util.NoSuchElementException;
  *
  * This set does not allow null elements.  It does not have internal synchronization.
  */
-public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> extends AbstractSet<E> {
+public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection.Element> extends AbstractCollection<E> {
     public interface Element {
         int prev();
         void setPrev(int prev);
@@ -127,35 +132,137 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
         element.setPrev(INVALID_INDEX);
     }
 
-    private class ImplicitLinkedHashSetIterator implements Iterator<E> {
+    private class ImplicitLinkedHashCollectionIterator implements ListIterator<E> {
+        private int cursor = 0;
         private Element cur = head;
+        private int lastReturnedSlot = INVALID_INDEX;
 
-        private Element next = indexToElement(head, elements, head.next());
+        ImplicitLinkedHashCollectionIterator(int index) {
+            for (int i = 0; i < index; ++i) {
+                cur = indexToElement(head, elements, cur.next());
+                cursor++;
+            }
+        }
 
         @Override
         public boolean hasNext() {
-            return next != head;
+            return cursor != size;
+        }
+
+        @Override
+        public boolean hasPrevious() {
+            return cursor != 0;
         }
 
         @Override
         public E next() {
-            if (next == head) {
+            if (cursor == size) {
                 throw new NoSuchElementException();
             }
-            cur = next;
-            next = indexToElement(head, elements, cur.next());
+            lastReturnedSlot = cur.next();
+            cur = indexToElement(head, elements, cur.next());
+            ++cursor;
             @SuppressWarnings("unchecked")
             E returnValue = (E) cur;
             return returnValue;
         }
 
         @Override
+        public E previous() {
+            if (cursor == 0) {
+                throw new NoSuchElementException();
+            }
+            @SuppressWarnings("unchecked")
+            E returnValue = (E) cur;
+            cur = indexToElement(head, elements, cur.prev());
+            lastReturnedSlot = cur.next();
+            --cursor;
+            return returnValue;
+        }
+
+        @Override
+        public int nextIndex() {
+            return cursor;
+        }
+
+        @Override
+        public int previousIndex() {
+            return cursor - 1;
+        }
+
+        @Override
         public void remove() {
-            if (cur == head) {
+            if (lastReturnedSlot == INVALID_INDEX) {
                 throw new IllegalStateException();
             }
-            ImplicitLinkedHashSet.this.remove(cur);
-            cur = head;
+
+            if (cur == indexToElement(head, elements, lastReturnedSlot)) {
+                cursor--;
+                cur = indexToElement(head, elements, cur.prev());
+            }
+            ImplicitLinkedHashCollection.this.removeElementAtSlot(lastReturnedSlot);
+
+            lastReturnedSlot = INVALID_INDEX;
+        }
+
+        @Override
+        public void set(E e) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void add(E e) {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    private class ImplicitLinkedHashCollectionListView extends AbstractSequentialList<E> {
+
+        @Override
+        public ListIterator<E> listIterator(int index) {
+            if (index < 0 || index > size) {
+                throw new IndexOutOfBoundsException();
+            }
+
+            return ImplicitLinkedHashCollection.this.listIterator(index);
+        }
+
+        @Override
+        public int size() {
+            return size;
+        }
+    }
+
+    private class ImplicitLinkedHashCollectionSetView extends AbstractSet<E> {
+
+        @Override
+        public Iterator<E> iterator() {
+            return ImplicitLinkedHashCollection.this.iterator();
+        }
+
+        @Override
+        public int size() {
+            return size;
+        }
+
+        @Override
+        public boolean add(E newElement) {
+            return ImplicitLinkedHashCollection.this.add(newElement);
+        }
+
+        @Override
+        public boolean remove(Object key) {
+            return ImplicitLinkedHashCollection.this.remove(key);
+        }
+
+        @Override
+        public boolean contains(Object key) {
+            return ImplicitLinkedHashCollection.this.contains(key);
+        }
+
+        @Override
+        public void clear() {
+            ImplicitLinkedHashCollection.this.clear();
         }
     }
 
@@ -174,7 +281,11 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
      */
     @Override
     final public Iterator<E> iterator() {
-        return new ImplicitLinkedHashSetIterator();
+        return listIterator(0);
+    }
+
+    private ListIterator<E> listIterator(int index) {
+        return new ImplicitLinkedHashCollectionIterator(index);
     }
 
     final int slot(Element[] curElements, Object e) {
@@ -402,30 +513,30 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
     }
 
     /**
-     * Create a new ImplicitLinkedHashSet.
+     * Create a new ImplicitLinkedHashCollection.
      */
-    public ImplicitLinkedHashSet() {
+    public ImplicitLinkedHashCollection() {
         this(0);
     }
 
     /**
-     * Create a new ImplicitLinkedHashSet.
+     * Create a new ImplicitLinkedHashCollection.
      *
      * @param expectedNumElements   The number of elements we expect to have in this set.
      *                              This is used to optimize by setting the capacity ahead
      *                              of time rather than growing incrementally.
      */
-    public ImplicitLinkedHashSet(int expectedNumElements) {
+    public ImplicitLinkedHashCollection(int expectedNumElements) {
         clear(expectedNumElements);
     }
 
     /**
-     * Create a new ImplicitLinkedHashSet.
+     * Create a new ImplicitLinkedHashCollection.
      *
      * @param iter                  We will add all the elements accessible through this iterator
      *                              to the set.
      */
-    public ImplicitLinkedHashSet(Iterator<E> iter) {
+    public ImplicitLinkedHashCollection(Iterator<E> iter) {
         clear(0);
         while (iter.hasNext()) {
             mustAdd(iter.next());
@@ -457,8 +568,81 @@ public class ImplicitLinkedHashSet<E extends ImplicitLinkedHashSet.Element> exte
         }
     }
 
+    /**
+     * Compares the specified object with this collection for equality. Two
+     * {@code ImplicitLinkedHashCollection} objects are equal if they contain the
+     * same elements (as determined by the element's {@code equals} method), and
+     * those elements were inserted in the same order. Because
+     * {@code ImplicitLinkedHashCollectionListIterator} iterates over the elements
+     * in insertion order, it is sufficient to call {@code valuesList.equals}.
+     *
+     * Note that {@link ImplicitLinkedHashMultiCollection} does not override
+     * {@code equals} and uses this method as well. This means that two
+     * {@code ImplicitLinkedHashMultiCollection} objects will be considered equal even
+     * if they each contain two elements A and B such that A.equals(B) but A != B and
+     * A and B have switched insertion positions between the two collections. This
+     * is an acceptable definition of equality, because the collections are still
+     * equal in terms of the order and value of each element.
+     *
+     * @param o object to be compared for equality with this collection
+     * @return true is the specified object is equal to this collection
+     */
+    @Override
+    public boolean equals(Object o) {
+        if (o == this)
+            return true;
+
+        if (!(o instanceof ImplicitLinkedHashCollection))
+            return false;
+
+        ImplicitLinkedHashCollection<?> ilhs = (ImplicitLinkedHashCollection<?>) o;
+        return this.valuesList().equals(ilhs.valuesList());
+    }
+
+    /**
+     * Returns the hash code value for this collection. Because
+     * {@code ImplicitLinkedHashCollection.equals} compares the {@code valuesList}
+     * of two {@code ImplicitLinkedHashCollection} objects to determine equality,
+     * this method uses the @{code valuesList} to compute the has code value as well.
+     *
+     * @return the hash code value for this collection
+     */
+    @Override
+    public int hashCode() {
+        return this.valuesList().hashCode();
+    }
+
     // Visible for testing
     final int numSlots() {
         return elements.length;
+    }
+
+    /**
+     * Returns a {@link List} view of the elements contained in the collection,
+     * ordered by order of insertion into the collection. The list is backed by the
+     * collection, so changes to the collection are reflected in the list and
+     * vice-versa. The list supports element removal, which removes the corresponding
+     * element from the collection, but does not support the {@code add} or
+     * {@code set} operations.
+     *
+     * The list is implemented as a circular linked list, so all index-based
+     * operations, such as {@code List.get}, run in O(n) time.
+     *
+     * @return a list view of the elements contained in this collection
+     */
+    public List<E> valuesList() {
+        return new ImplicitLinkedHashCollectionListView();
+    }
+
+    /**
+     * Returns a {@link Set} view of the elements contained in the collection. The
+     * set is backed by the collection, so changes to the collection are reflected in
+     * the set, and vice versa. The set supports element removal and addition, which
+     * removes from or adds to the collection, respectively.
+     *
+     * @return a set view of the elements contained in this collection
+     */
+    public Set<E> valuesSet() {
+        return new ImplicitLinkedHashCollectionSetView();
     }
 }

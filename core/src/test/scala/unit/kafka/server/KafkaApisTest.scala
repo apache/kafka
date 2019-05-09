@@ -48,6 +48,8 @@ import org.apache.kafka.common.requests.{FetchMetadata => JFetchMetadata, _}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.easymock.{Capture, EasyMock, IAnswer}
 import EasyMock._
+import org.apache.kafka.common.message.JoinGroupRequestData
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.junit.Assert.{assertEquals, assertNull, assertTrue}
 import org.junit.{After, Test}
@@ -506,6 +508,41 @@ class KafkaApisTest {
     assertEquals(timestamp,
       partitionData.records.asInstanceOf[MemoryRecords].batches.iterator.next.maxTimestamp)
     assertNull(partitionData.abortedTransactions)
+  }
+
+  @Test
+  def testJoinGroupProtocolsOrder: Unit = {
+    val protocols = List(
+      new JoinGroupRequestProtocol().setName("first").setMetadata("first".getBytes()),
+      new JoinGroupRequestProtocol().setName("second").setMetadata("second".getBytes())
+    )
+
+    EasyMock.expect(groupCoordinator.handleJoinGroup(
+      anyString,
+      anyString,
+      anyObject(classOf[Option[String]]),
+      anyBoolean,
+      anyString,
+      anyString,
+      anyInt,
+      anyInt,
+      anyString,
+      EasyMock.eq(protocols.map(protocol => (protocol.name, protocol.metadata))),
+      anyObject()
+    ))
+
+    createKafkaApis().handleJoinGroupRequest(
+      buildRequest(
+        new JoinGroupRequest.Builder(
+          new JoinGroupRequestData()
+            .setGroupId("test")
+            .setMemberId("test")
+            .setProtocolType("consumer")
+            .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(protocols.iterator.asJava))
+        )
+      )._2)
+
+    EasyMock.replay(groupCoordinator)
   }
 
   /**

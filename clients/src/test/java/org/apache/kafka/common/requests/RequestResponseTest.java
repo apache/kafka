@@ -35,7 +35,7 @@ import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ControlledShutdownRequestData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData;
 import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartition;
-import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionSet;
+import org.apache.kafka.common.message.ControlledShutdownResponseData.RemainingPartitionCollection;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableReplicaAssignment;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
@@ -67,7 +67,6 @@ import org.apache.kafka.common.message.SaslHandshakeRequestData;
 import org.apache.kafka.common.message.SaslHandshakeResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigSet;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResult;
@@ -781,7 +780,7 @@ public class RequestResponseTest {
     }
 
     private JoinGroupRequest createJoinGroupRequest(int version) {
-        JoinGroupRequestData.JoinGroupRequestProtocolSet protocols = new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
                 Collections.singleton(
                 new JoinGroupRequestData.JoinGroupRequestProtocol()
                         .setName("consumer-range")
@@ -1053,7 +1052,7 @@ public class RequestResponseTest {
         RemainingPartition p2 = new RemainingPartition()
                 .setTopicName("test1")
                 .setPartitionIndex(10);
-        RemainingPartitionSet pSet = new RemainingPartitionSet();
+        RemainingPartitionCollection pSet = new RemainingPartitionCollection();
         pSet.add(p1);
         pSet.add(p2);
         ControlledShutdownResponseData data = new ControlledShutdownResponseData()
@@ -1522,7 +1521,7 @@ public class RequestResponseTest {
                 .setName("retention.ms")
                 .setConfigOperation((byte) 0)
                 .setValue("100");
-        AlterableConfigSet alterableConfigs = new AlterableConfigSet();
+        IncrementalAlterConfigsRequestData.AlterableConfigCollection alterableConfigs = new IncrementalAlterConfigsRequestData.AlterableConfigCollection();
         alterableConfigs.add(alterableConfig);
 
         data.resources().add(new AlterConfigsResource()

@@ -61,7 +61,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicSet;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
@@ -71,7 +71,7 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigSet;
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigCollection;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -1280,7 +1280,7 @@ public class KafkaAdminClient extends AdminClient {
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(newTopics.size());
-        final CreatableTopicSet topics = new CreatableTopicSet();
+        final CreatableTopicCollection topics = new CreatableTopicCollection();
         for (NewTopic newTopic : newTopics) {
             if (topicNameIsUnrepresentable(newTopic.name())) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
@@ -2025,7 +2025,7 @@ public class KafkaAdminClient extends AdminClient {
         IncrementalAlterConfigsRequestData requestData = new IncrementalAlterConfigsRequestData();
         requestData.setValidateOnly(validateOnly);
         for (ConfigResource resource : resources) {
-            AlterableConfigSet alterableConfigSet = new AlterableConfigSet();
+            AlterableConfigCollection alterableConfigSet = new AlterableConfigCollection();
             for (AlterConfigOp configEntry : configs.get(resource))
                 alterableConfigSet.add(new AlterableConfig().
                         setName(configEntry.configEntry().name()).
