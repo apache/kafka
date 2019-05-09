@@ -18,13 +18,14 @@
 package org.apache.kafka.connect.health;
 
 /**
- * Provides immutable connect cluster information, such as the ID of the backing Kafka cluster. The
+ * Provides immutable Connect cluster information, such as the ID of the backing Kafka cluster. The
  * Connect framework provides the implementation for this interface.
  */
 public interface ConnectClusterDetails {
 
     /**
      * Get the cluster ID of the Kafka cluster backing this Connect cluster.
+     * 
      * @return the cluster ID of the Kafka cluster backing this Connect cluster
      **/
     String kafkaClusterId();

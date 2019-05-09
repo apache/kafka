@@ -46,9 +46,11 @@ public class ConnectClusterStateImplTest {
     protected Herder herder;
     protected ConnectClusterStateImpl connectClusterState;
     protected long herderRequestTimeoutMs = TimeUnit.SECONDS.toMillis(10);
+    protected Collection<String> expectedConnectors;
     
     @Before
     public void setUp() {
+        expectedConnectors = Arrays.asList("sink1", "source1", "source2");
         connectClusterState = new ConnectClusterStateImpl(
             herderRequestTimeoutMs,
             new ConnectClusterDetailsImpl(KAFKA_CLUSTER_ID),
@@ -58,7 +60,6 @@ public class ConnectClusterStateImplTest {
     
     @Test
     public void connectors() {
-        final Collection<String> expectedConnectors = Arrays.asList("sink1", "source1", "source2");
         Capture<Callback<Collection<String>>> callback = EasyMock.newCapture();
         herder.connectors(EasyMock.capture(callback));
         EasyMock.expectLastCall().andAnswer(new IAnswer<Void>() {
