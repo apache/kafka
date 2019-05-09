@@ -927,53 +927,52 @@ class GroupCoordinator(val brokerId: Int,
         // TODO: cut the socket connection to the client
       }
 
-      group.maybeElectNewJoinedLeader() match {
-        // If all static members are not rejoining, we will postpone the completion
+      val joinedLeader = group.maybeElectNewJoinedLeader()
+      if (joinedLeader.isEmpty && group.allMembers.nonEmpty) {
+        // If all members are not rejoining, we will postpone the completion
         // of rebalance preparing stage, and send out another dummy delayed operation
         // until session timeout removes all the non-responsive members.
-        case None => joinPurgatory.tryCompleteElseWatch(
+        joinPurgatory.tryCompleteElseWatch(
           new DelayedJoin(this, group, group.rebalanceTimeoutMs),
           Seq(group.allMembers.headOption)
         )
-        case Some(_) =>
-          if (!group.is(Dead)) {
-            group.initNextGeneration()
-            if (group.is(Empty)) {
-              info(s"Group ${group.groupId} with generation ${group.generationId} is now empty " +
-                s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)})")
+      } else if (!group.is(Dead)) {
+        group.initNextGeneration()
+        if (group.is(Empty)) {
+          info(s"Group ${group.groupId} with generation ${group.generationId} is now empty " +
+            s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)})")
 
-              groupManager.storeGroup(group, Map.empty, error => {
-                if (error != Errors.NONE) {
-                  // we failed to write the empty group metadata. If the broker fails before another rebalance,
-                  // the previous generation written to the log will become active again (and most likely timeout).
-                  // This should be safe since there are no active members in an empty generation, so we just warn.
-                  warn(s"Failed to write empty metadata for group ${group.groupId}: ${error.message}")
-                }
-              })
-            } else {
-              info(s"Stabilized group ${group.groupId} generation ${group.generationId} " +
-                s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)})")
-
-              // trigger the awaiting join group response callback for all the members after rebalancing
-              for (member <- group.allMemberMetadata) {
-                val joinResult = JoinGroupResult(
-                  members = if (group.isLeader(member.memberId)) {
-                    group.currentMemberMetadata
-                  } else {
-                    List.empty
-                  },
-                  memberId = member.memberId,
-                  generationId = group.generationId,
-                  subProtocol = group.protocolOrNull,
-                  leaderId = group.leaderOrNull,
-                  error = Errors.NONE)
-
-                group.maybeInvokeJoinCallback(member, joinResult)
-                completeAndScheduleNextHeartbeatExpiration(group, member)
-                member.isNew = false
-              }
+          groupManager.storeGroup(group, Map.empty, error => {
+            if (error != Errors.NONE) {
+              // we failed to write the empty group metadata. If the broker fails before another rebalance,
+              // the previous generation written to the log will become active again (and most likely timeout).
+              // This should be safe since there are no active members in an empty generation, so we just warn.
+              warn(s"Failed to write empty metadata for group ${group.groupId}: ${error.message}")
             }
+          })
+        } else {
+          info(s"Stabilized group ${group.groupId} generation ${group.generationId} " +
+            s"(${Topic.GROUP_METADATA_TOPIC_NAME}-${partitionFor(group.groupId)})")
+
+          // trigger the awaiting join group response callback for all the members after rebalancing
+          for (member <- group.allMemberMetadata) {
+            val joinResult = JoinGroupResult(
+              members = if (group.isLeader(member.memberId)) {
+                group.currentMemberMetadata
+              } else {
+                List.empty
+              },
+              memberId = member.memberId,
+              generationId = group.generationId,
+              subProtocol = group.protocolOrNull,
+              leaderId = group.leaderOrNull,
+              error = Errors.NONE)
+
+            group.maybeInvokeJoinCallback(member, joinResult)
+            completeAndScheduleNextHeartbeatExpiration(group, member)
+            member.isNew = false
           }
+        }
       }
     }
   }

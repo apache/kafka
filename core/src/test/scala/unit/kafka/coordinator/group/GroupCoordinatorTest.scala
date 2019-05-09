@@ -755,8 +755,6 @@ class GroupCoordinatorTest extends JUnitSuite {
     EasyMock.reset(replicaManager)
     val followerLeaveGroupResult = leaveGroup(groupId, rebalanceResult.followerId)
     assertEquals(Errors.NONE, followerLeaveGroupResult)
-    EasyMock.reset(replicaManager)
-    sendJoinGroup(groupId, memberId, protocolType, protocols, groupInstanceId)
     timer.advanceClock(DefaultRebalanceTimeout + 1)
     // Only rejoined leader is maintained
     assertEquals(Set(rebalanceResult.leaderId), getGroup(groupId).allMembers)

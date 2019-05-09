@@ -190,8 +190,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private var protocol: Option[String] = None
 
   private val members = new mutable.HashMap[String, MemberMetadata]
-  // Visible for testing
-  val dummyMember = new MemberMetadata("", "", None, "", "", 0, 0, "", List.empty)
   // Static membership mapping [key: group.instance.id, value: member.id]
   private val staticMembers = new mutable.HashMap[String, String]
   private val pendingMembers = new mutable.HashSet[String]
@@ -264,7 +262,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         } else {
           Some(oldLeader)
         }
-      case _ => Some(dummyMember)
+      case _ => None
     }
   }
 
