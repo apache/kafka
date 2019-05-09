@@ -92,6 +92,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyList;
@@ -126,6 +127,7 @@ public class Fetcher<K, V> implements Closeable {
     private final long requestTimeoutMs;
     private final int maxPollRecords;
     private final boolean checkCrcs;
+    private final Supplier<String> clientRackSupplier;
     private final ConsumerMetadata metadata;
     private final FetchManagerMetrics sensors;
     private final SubscriptionState subscriptions;
@@ -149,6 +151,7 @@ public class Fetcher<K, V> implements Closeable {
                    int fetchSize,
                    int maxPollRecords,
                    boolean checkCrcs,
+                   Supplier<String> clientRackSupplier,
                    Deserializer<K> keyDeserializer,
                    Deserializer<V> valueDeserializer,
                    ConsumerMetadata metadata,
@@ -171,6 +174,7 @@ public class Fetcher<K, V> implements Closeable {
         this.fetchSize = fetchSize;
         this.maxPollRecords = maxPollRecords;
         this.checkCrcs = checkCrcs;
+        this.clientRackSupplier = clientRackSupplier;
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
         this.completedFetches = new ConcurrentLinkedQueue<>();
@@ -224,7 +228,8 @@ public class Fetcher<K, V> implements Closeable {
                     .setMaxBytes(this.maxBytes)
                     .metadata(data.metadata())
                     .toForget(data.toForget())
-                    .rackId("my-rack-id"); // TODO actually set this
+                    .rackId(clientRackSupplier.get());
+
             if (log.isDebugEnabled()) {
                 log.debug("Sending {} {} to broker {}", isolationLevel, data.toString(), fetchTarget);
             }

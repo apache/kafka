@@ -37,7 +37,6 @@ public interface ReplicaSelector extends Configurable, Closeable {
     Optional<ReplicaInfo> select(TopicPartition topicPartition,
                                  ClientMetadata clientMetadata,
                                  Set<ReplicaInfo> replicaInfos);
-
     @Override
     default void close() throws IOException {
 
@@ -48,6 +47,9 @@ public interface ReplicaSelector extends Configurable, Closeable {
 
     }
 
+    static Optional<ReplicaInfo> selectLeader(Set<ReplicaInfo> replicaInfos) {
+        return replicaInfos.stream().filter(ReplicaInfo::isLeader).findFirst();
+    }
 
     class ClientMetadata {
 

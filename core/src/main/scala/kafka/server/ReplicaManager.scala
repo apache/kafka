@@ -109,7 +109,8 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               logStartOffset: Long,
                               records: Records,
                               lastStableOffset: Option[Long],
-                              abortedTransactions: Option[List[AbortedTransaction]])
+                              abortedTransactions: Option[List[AbortedTransaction]],
+                              preferredReadReplica: Option[Int])
 
 object LogReadResult {
   val UnknownLogReadResult = LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
@@ -215,7 +216,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  private var replicaSelector: ReplicaSelector = null
+  private var replicaSelector: ReplicaSelector = createReplicaSelector()
 
 
   val leaderCount = newGauge(
@@ -355,11 +356,6 @@ class ReplicaManager(val config: KafkaConfig,
     val haltBrokerOnFailure = config.interBrokerProtocolVersion < KAFKA_1_0_IV0
     logDirFailureHandler = new LogDirFailureHandler("LogDirFailureHandler", haltBrokerOnFailure)
     logDirFailureHandler.start()
-
-    replicaSelector = Option(config.replicaSelectorClassName).filter(_.nonEmpty).map { replicaSelectorClassName =>
-      CoreUtils.createObject[ReplicaSelector](replicaSelectorClassName)
-    }.getOrElse(new LeaderReplicaSelector())
-    replicaSelector.configure(config.originals())
   }
 
   def stopReplica(topicPartition: TopicPartition, deletePartition: Boolean)  = {
@@ -880,8 +876,9 @@ class ReplicaManager(val config: KafkaConfig,
     //                        4) some error happens while reading data
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
+
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-          result.lastStableOffset, result.info.abortedTransactions)
+          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica)
       }
       responseCallback(fetchPartitionData)
     } else {
@@ -946,28 +943,7 @@ class ReplicaManager(val config: KafkaConfig,
           minOneMessage = minOneMessage)
 
         // If we are the leader, determine the preferred read-replica
-        val preferredReadReplica: Option[Int] =
-          if (partition.leaderReplicaIfLocal.isDefined) {
-            if (clientMetadata.equals(ClientMetadata.NO_METADATA)) {
-              partition.leaderReplicaIdOpt
-            } else {
-              val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
-              val replicaInfos: Set[ReplicaSelector.ReplicaInfo] = partition.allReplicas.map(
-                replica => new ReplicaSelector.ReplicaInfo() {
-                  override def isLeader: Boolean = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId))
-
-                  override def getEndpoint: Node = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode())
-
-                  override def logOffset(): Long = replica.logEndOffset
-
-                  override def lastCaughtUpTimeMs(): Long = replica.lastCaughtUpTimeMs
-                })
-              Option.apply(replicaSelector.select(tp, clientMetadata, replicaInfos.asJava).orElse(null))
-                .map(_.getEndpoint.id())
-            }
-          } else {
-            Option.empty
-          }
+        val preferredReadReplica = findPreferredReadReplica(tp, clientMetadata)
 
         val fetchDataInfo = if (shouldLeaderThrottle(quota, tp, replicaId)) {
           // If the partition is being throttled, simply return an empty set.
@@ -1042,6 +1018,33 @@ class ReplicaManager(val config: KafkaConfig,
       result += (tp -> readResult)
     }
     result
+  }
+
+  def findPreferredReadReplica(tp: TopicPartition, clientMetadata: ClientMetadata): Option[Int] = {
+    val partition = getPartitionOrException(tp, expectLeader = false)
+
+    if (partition.leaderReplicaIfLocal.isDefined) {
+      if (clientMetadata.equals(ClientMetadata.NO_METADATA)) {
+        partition.leaderReplicaIdOpt
+      } else {
+        val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
+        val replicaInfos: Set[ReplicaSelector.ReplicaInfo] = partition.allReplicas.map(
+          replica => new ReplicaSelector.ReplicaInfo() {
+            override def isLeader: Boolean = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId))
+
+            override def getEndpoint: Node = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode())
+
+            override def logOffset(): Long = replica.logEndOffset
+
+            override def lastCaughtUpTimeMs(): Long = replica.lastCaughtUpTimeMs
+          })
+        Option.apply(replicaSelector.select(tp, clientMetadata, replicaInfos.asJava).orElse(null))
+          .filter(!_.getEndpoint.isEmpty)
+          .map(_.getEndpoint.id())
+      }
+    } else {
+      Option.empty
+    }
   }
 
   /**
@@ -1556,6 +1559,14 @@ class ReplicaManager(val config: KafkaConfig,
 
   protected def createReplicaAlterLogDirsManager(quotaManager: ReplicationQuotaManager, brokerTopicStats: BrokerTopicStats) = {
     new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats)
+  }
+
+  protected def createReplicaSelector(): ReplicaSelector = {
+    replicaSelector = Option(config.replicaSelectorClassName).filter(_.nonEmpty).map { replicaSelectorClassName =>
+      CoreUtils.createObject[ReplicaSelector](replicaSelectorClassName)
+    }.getOrElse(new LeaderReplicaSelector())
+    replicaSelector.configure(config.originals())
+    replicaSelector
   }
 
   def lastOffsetForLeaderEpoch(requestedEpochInfo: Map[TopicPartition, OffsetsForLeaderEpochRequest.PartitionData]): Map[TopicPartition, EpochEndOffset] = {

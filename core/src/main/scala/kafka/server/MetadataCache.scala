@@ -202,12 +202,13 @@ class MetadataCache(brokerId: Int) extends Logging {
       val replicaIds = partitionInfo.basePartitionState.replicas
       JavaConverters.asScalaBuffer(replicaIds)
         .map(replicaId => replicaId.intValue() -> {
-          snapshot.aliveNodes.get(replicaId.longValue()) match {
-            case Some(nodeMap) =>
-              nodeMap.getOrElse(listenerName, Node.noNode)
+          snapshot.aliveBrokers.get(replicaId.longValue()) match {
+            case Some(broker) =>
+              broker.getNode(listenerName).getOrElse(Node.noNode())
             case None =>
-              Node.noNode
+              Node.noNode()
           }}).toMap
+        .filter(pair => !pair._2.equals(Node.noNode()))
     }).getOrElse(Map.empty[Int, Node])
   }
 

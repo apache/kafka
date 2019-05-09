@@ -26,6 +26,6 @@ public class LeaderReplicaSelector implements ReplicaSelector {
     public Optional<ReplicaInfo> select(TopicPartition topicPartition,
                                         ClientMetadata clientMetadata,
                                         Set<ReplicaInfo> replicaInfos) {
-        return replicaInfos.stream().filter(ReplicaInfo::isLeader).findFirst();
+        return ReplicaSelector.selectLeader(replicaInfos);
     }
 }

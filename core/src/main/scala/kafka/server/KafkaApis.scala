@@ -630,7 +630,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
                 // client.
                 new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-                  partitionData.lastStableOffset, partitionData.logStartOffset, partitionData.abortedTransactions,
+                  partitionData.lastStableOffset, partitionData.logStartOffset,
+                  partitionData.preferredReadReplica.orElse(null), partitionData.abortedTransactions,
                   new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
               } catch {
                 case e: UnsupportedCompressionTypeException =>
@@ -639,7 +640,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               }
             }
           case None => new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-            partitionData.lastStableOffset, partitionData.logStartOffset, partitionData.abortedTransactions,
+            partitionData.lastStableOffset, partitionData.logStartOffset,
+            partitionData.preferredReadReplica.orElse(null), partitionData.abortedTransactions,
             unconvertedRecords)
         }
       }
@@ -651,8 +653,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       responsePartitionData.foreach { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
-          data.logStartOffset, abortedTransactions, data.records))
+        if (data.preferredReadReplica.isDefined) {
+          partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
+            data.logStartOffset, data.preferredReadReplica.get, abortedTransactions, data.records))
+        } else {
+          partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
+            data.logStartOffset, abortedTransactions, data.records))
+        }
+
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
 

@@ -471,7 +471,7 @@ class KafkaApisTest {
         val records = MemoryRecords.withRecords(CompressionType.NONE,
           new SimpleRecord(timestamp, "foo".getBytes(StandardCharsets.UTF_8)))
         callback(Seq(tp -> new FetchPartitionData(Errors.NONE, hw, 0, records,
-          None, None)))
+          None, None, Option.empty)))
       }
     })
 
