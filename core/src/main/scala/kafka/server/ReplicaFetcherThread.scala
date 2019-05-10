@@ -34,12 +34,13 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, Time}
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, mutable}
+import scala.collection.{Map, Set, mutable}
 
 class ReplicaFetcherThread(name: String,
                            fetcherId: Int,
                            sourceBroker: BrokerEndPoint,
                            brokerConfig: KafkaConfig,
+                           markPartitionsFailed: Set[TopicPartition] => Unit,
                            replicaMgr: ReplicaManager,
                            metrics: Metrics,
                            time: Time,
@@ -48,6 +49,7 @@ class ReplicaFetcherThread(name: String,
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
                                 sourceBroker = sourceBroker,
+                                markPartitionsFailed: Set[TopicPartition] => Unit,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false) {
 

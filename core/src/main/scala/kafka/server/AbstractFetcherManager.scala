@@ -34,6 +34,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, T]
   private val lock = new Object
   private var numFetchersPerBroker = numFetchers
+  private val failedPartitions = new mutable.HashSet[TopicPartition]
   this.logIdent = "[" + name + "] "
 
   newGauge(
@@ -118,7 +119,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   }
 
   // to be defined in subclass to create a specific fetcher
-  def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): T
+  def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint, markPartitionsFailed: Set[TopicPartition] => Unit): T
 
   def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]) {
     lock synchronized {
@@ -127,7 +128,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
       }
 
       def addAndStartFetcherThread(brokerAndFetcherId: BrokerAndFetcherId, brokerIdAndFetcherId: BrokerIdAndFetcherId): AbstractFetcherThread = {
-        val fetcherThread = createFetcherThread(brokerAndFetcherId.fetcherId, brokerAndFetcherId.broker)
+        val fetcherThread = createFetcherThread(brokerAndFetcherId.fetcherId, brokerAndFetcherId.broker, markPartitionsFailed)
         fetcherThreadMap.put(brokerIdAndFetcherId, fetcherThread)
         fetcherThread.start()
         fetcherThread
@@ -160,9 +161,21 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     lock synchronized {
       for (fetcher <- fetcherThreadMap.values)
         fetcher.removePartitions(partitions)
+      failedPartitions --=  partitions
     }
     info(s"Removed fetcher for partitions $partitions")
   }
+
+  def markPartitionsFailed(partitions: Set[TopicPartition]): Unit = {
+    lock synchronized {
+      for (fetcher <- fetcherThreadMap.values)
+        fetcher.removePartitions(partitions)
+      failedPartitions ++= partitions
+      shutdownIdleFetcherThreads()
+    }
+    info(s"Partitions $partitions marked as failed")
+  }
+
 
   def shutdownIdleFetcherThreads() {
     lock synchronized {

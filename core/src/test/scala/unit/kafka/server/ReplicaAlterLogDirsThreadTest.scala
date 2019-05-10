@@ -33,7 +33,7 @@ import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, Seq}
+import scala.collection.{Map, Seq, Set}
 
 class ReplicaAlterLogDirsThreadTest {
 
@@ -42,6 +42,10 @@ class ReplicaAlterLogDirsThreadTest {
 
   private def offsetAndEpoch(fetchOffset: Long, leaderEpoch: Int = 1): OffsetAndEpoch = {
     OffsetAndEpoch(offset = fetchOffset, leaderEpoch = leaderEpoch)
+  }
+
+  private def markPartitionsFailed(partitions : Set[TopicPartition]): Unit = {
+
   }
 
   @Test
@@ -78,6 +82,7 @@ class ReplicaAlterLogDirsThreadTest {
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
+      markPartitionsFailed: Set[TopicPartition] => Unit,
       replicaMgr = replicaManager,
       quota = null,
       brokerTopicStats = null)
@@ -123,6 +128,7 @@ class ReplicaAlterLogDirsThreadTest {
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
+      markPartitionsFailed: Set[TopicPartition] => Unit,
       replicaMgr = replicaManager,
       quota = null,
       brokerTopicStats = null)
@@ -204,6 +210,7 @@ class ReplicaAlterLogDirsThreadTest {
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
+      markPartitionsFailed: Set[TopicPartition] => Unit,
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
@@ -275,6 +282,7 @@ class ReplicaAlterLogDirsThreadTest {
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
+      markPartitionsFailed: Set[TopicPartition] => Unit,
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
@@ -330,6 +338,7 @@ class ReplicaAlterLogDirsThreadTest {
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
+      markPartitionsFailed: Set[TopicPartition] => Unit,
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
@@ -408,6 +417,7 @@ class ReplicaAlterLogDirsThreadTest {
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
+      markPartitionsFailed: Set[TopicPartition] => Unit,
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
@@ -467,6 +477,7 @@ class ReplicaAlterLogDirsThreadTest {
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
+      markPartitionsFailed: Set[TopicPartition] => Unit,
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
@@ -507,6 +518,7 @@ class ReplicaAlterLogDirsThreadTest {
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
+      markPartitionsFailed: Set[TopicPartition] => Unit,
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)
@@ -556,6 +568,7 @@ class ReplicaAlterLogDirsThreadTest {
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
+      markPartitionsFailed: Set[TopicPartition] => Unit,
       replicaMgr = replicaManager,
       quota = quotaManager,
       brokerTopicStats = null)

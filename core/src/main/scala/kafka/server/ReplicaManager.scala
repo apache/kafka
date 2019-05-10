@@ -1094,7 +1094,8 @@ class ReplicaManager(val config: KafkaConfig,
             responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
           }
         }
-
+        // val failedPartitions = Set.empty[TopicPartition]
+        // AbstractFetcherThread.failedPartitions
         val partitionsTobeLeader = partitionState.filter { case (_, stateInfo) =>
           stateInfo.basePartitionState.leader == localBrokerId
         }

@@ -45,7 +45,7 @@ import org.junit.Assert._
 import org.junit.{After, Before, Test}
 
 import scala.collection.JavaConverters._
-import scala.collection.Map
+import scala.collection.{Map, Set}
 
 class ReplicaManagerTest {
 
@@ -674,9 +674,9 @@ class ReplicaManagerTest {
                                                      quotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
         new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager) {
 
-          override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
+          override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint, markPartitionsFailed: Set[TopicPartition] => Unit): ReplicaFetcherThread = {
             new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", fetcherId,
-              sourceBroker, config, replicaManager, metrics, time, quota.follower, Some(blockingSend)) {
+              sourceBroker, config, markPartitionsFailed, replicaManager, metrics, time, quota.follower, Some(blockingSend)) {
 
               override def doWork() = {
                 // In case the thread starts before the partition is added by AbstractFetcherManager,

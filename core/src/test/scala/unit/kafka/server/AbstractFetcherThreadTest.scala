@@ -27,6 +27,7 @@ import kafka.log.LogAppendInfo
 import kafka.message.NoCompressionCodec
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.TestUtils
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{FencedLeaderEpochException, UnknownLeaderEpochException}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -577,6 +578,7 @@ class AbstractFetcherThreadTest {
           buffer.putInt(30, buffer.getInt(30) ^ 93242)
           fetchedOnce = true
         }
+
         fetchedData
       }
     }
@@ -705,12 +707,16 @@ class AbstractFetcherThreadTest {
   @Test
   def testTruncationThrowsExceptionIfLeaderReturnsPartitionsNotRequestedInFetchEpochs(): Unit = {
     val partition = new TopicPartition("topic", 0)
+
     val fetcher = new MockFetcherThread {
       override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
         val unrequestedTp = new TopicPartition("topic2", 0)
         super.fetchEpochEndOffsets(partitions) + (unrequestedTp -> new EpochEndOffset(0, 0))
       }
+
     }
+
+
 
     fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
     fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 0)))
@@ -721,6 +727,63 @@ class AbstractFetcherThreadTest {
       fetcher.doWork()
     }
   }
+
+  val failedPartitions = new mutable.HashSet[TopicPartition]
+
+  def markPartitionsFailed(partitions : Set[TopicPartition]): Unit = {
+    failedPartitions ++= partitions
+  }
+
+  @Test
+  def testReplicaFetcherThreadHandlingPartitionFailure(): Unit = {
+
+    val partition1 = new TopicPartition("topic1", 0)
+    val partition2 = new TopicPartition("topic2", 0)
+    val fetcher = new MockFetcherThread {
+
+      override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
+        if (topicPartition == partition1) {
+          removePartitions(Set(topicPartition))
+          throw new KafkaException()
+        } else {
+          super.processPartitionData(topicPartition, fetchOffset, partitionData)
+        }
+      }
+
+    }
+
+    fetcher.setReplicaState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 0)))
+    fetcher.setLeaderState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
+
+    fetcher.setReplicaState(partition2, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition2 -> offsetAndEpoch(0L, leaderEpoch = 0)))
+    fetcher.setLeaderState(partition2, MockFetcherThread.PartitionState(leaderEpoch = 0))
+
+    // processing data fails for partition1
+    fetcher.doWork()
+
+    // partition1 marked as failed
+    assertTrue(failedPartitions.contains(partition1))
+    assertTrue(fetcher.fetchState(partition1).isEmpty)
+
+    // fetcher continues with rest of the partitions
+    assertEquals(Some(Fetching), fetcher.fetchState(partition2).map(_.state))
+    assertFalse(failedPartitions.contains(partition2))
+
+    // simulate a leader epoch
+    fetcher.removePartitions(Set(partition1))
+    failedPartitions -= partition1
+    fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 1)))
+
+    fetcher.doWork()
+
+    // partition1 added back
+    assertTrue(fetcher.fetchState(partition1).nonEmpty)
+    assertFalse(failedPartitions.contains(partition1))
+
+  }
+
 
   object MockFetcherThread {
     class PartitionState(var log: mutable.Buffer[RecordBatch],
@@ -745,7 +808,9 @@ class AbstractFetcherThreadTest {
   class MockFetcherThread(val replicaId: Int = 0, val leaderId: Int = 1)
     extends AbstractFetcherThread("mock-fetcher",
       clientId = "mock-fetcher",
-      sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt())) {
+      sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt()),
+      markPartitionsFailed: Set[TopicPartition] => Unit,
+    ) {
 
     import MockFetcherThread.PartitionState
 

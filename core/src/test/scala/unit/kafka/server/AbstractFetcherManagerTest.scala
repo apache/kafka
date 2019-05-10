@@ -22,13 +22,15 @@ import org.easymock.EasyMock
 import org.junit.Test
 import org.junit.Assert._
 
+import scala.collection.Set
+
 class AbstractFetcherManagerTest {
 
   @Test
   def testAddAndRemovePartition(): Unit = {
     val fetcher: AbstractFetcherThread = EasyMock.mock(classOf[AbstractFetcherThread])
     val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 2) {
-      override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
+      override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint, markPartitionsFailed: Set[TopicPartition] => Unit): AbstractFetcherThread = {
         fetcher
       }
     }

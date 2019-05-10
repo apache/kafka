@@ -39,7 +39,7 @@ import java.util.function.Consumer
 
 import com.yammer.metrics.core.Gauge
 import kafka.log.LogAppendInfo
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, Records}
 import org.apache.kafka.common.requests._
@@ -52,6 +52,7 @@ import scala.math._
 abstract class AbstractFetcherThread(name: String,
                                      clientId: String,
                                      val sourceBroker: BrokerEndPoint,
+                                     markPartitionsFailed: Set[TopicPartition] => Unit,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
@@ -66,6 +67,8 @@ abstract class AbstractFetcherThread(name: String,
   private val metricId = ClientIdAndBroker(clientId, sourceBroker.host, sourceBroker.port)
   val fetcherStats = new FetcherStats(metricId)
   val fetcherLagStats = new FetcherLagStats(metricId)
+
+//  val failedPartitions = new mutable.HashSet[TopicPartition]
 
   /* callbacks to be defined in subclass */
 
@@ -274,6 +277,7 @@ abstract class AbstractFetcherThread(name: String,
   private def processFetchRequest(fetchStates: Map[TopicPartition, PartitionFetchState],
                                   fetchRequest: FetchRequest.Builder): Unit = {
     val partitionsWithError = mutable.Set[TopicPartition]()
+
     var responseData: Seq[(TopicPartition, FetchData)] = Seq.empty
 
     try {
@@ -339,8 +343,9 @@ abstract class AbstractFetcherThread(name: String,
                       error(s"Error while processing data for partition $topicPartition", e)
                       partitionsWithError += topicPartition
                     case e: Throwable =>
-                      throw new KafkaException(s"Error processing data for partition $topicPartition " +
-                        s"offset ${currentFetchState.fetchOffset}", e)
+                      // drop this partition from the fetcher thread and store in a set for failed partitions
+                      error(s"Error while processing data for partition $topicPartition", e)
+                      markPartitionsFailed(Set(topicPartition))
                   }
                 case Errors.OFFSET_OUT_OF_RANGE =>
                   if (!handleOutOfRangeError(topicPartition, currentFetchState))
@@ -601,6 +606,7 @@ abstract class AbstractFetcherThread(name: String,
       }
       partitionMapCond.signalAll()
     } finally partitionMapLock.unlock()
+
   }
 
   def removePartitions(topicPartitions: Set[TopicPartition]) {
