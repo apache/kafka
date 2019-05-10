@@ -36,9 +36,10 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
     info("Initializing replica state")
     initializeReplicaState()
     info("Triggering online replica state changes")
-    handleStateChanges(controllerContext.allLiveReplicas().toSeq, OnlineReplica)
+    val (onlineReplicas, offlineReplicas) = controllerContext.liveOrOfflineReplicas
+    handleStateChanges(onlineReplicas.toSeq, OnlineReplica)
     info("Triggering offline replica state changes")
-    handleStateChanges(controllerContext.allOfflineReplicas().toSeq, OfflineReplica)
+    handleStateChanges(offlineReplicas.toSeq, OfflineReplica)
     debug(s"Started replica state machine with initial state -> ${controllerContext.replicaStates}")
   }
 
@@ -233,6 +234,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
         replicasWithoutLeadershipInfo.foreach { replica =>
           val currentState = controllerContext.replicaState(replica)
           logSuccessfulTransition(replicaId, replica.topicPartition, currentState, OfflineReplica)
+          controllerBrokerRequestBatch.addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(replica.topicPartition))
           controllerContext.putReplicaState(replica, OfflineReplica)
         }
       case ReplicaDeletionStarted =>

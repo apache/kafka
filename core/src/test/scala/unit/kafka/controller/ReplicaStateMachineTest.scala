@@ -81,6 +81,20 @@ class ReplicaStateMachineTest {
   }
 
   @Test
+  def testStartupWithReplicaWithoutLeader(): Unit = {
+    val shutdownBrokerId = 100
+    val offlineReplica = PartitionAndReplica(partition, shutdownBrokerId)
+    val endpoint1 = new EndPoint("localhost", 9997, new ListenerName("blah"),
+      SecurityProtocol.PLAINTEXT)
+    val liveBrokerEpochs = Map(Broker(brokerId, Seq(endpoint1), rack = None) -> 1L)
+    controllerContext.setLiveBrokerAndEpochs(liveBrokerEpochs)
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(shutdownBrokerId))
+    assertEquals(None, controllerContext.replicaStates.get(offlineReplica))
+    replicaStateMachine.startup()
+    assertEquals(OfflineReplica, replicaState(offlineReplica))
+  }
+
+  @Test
   def testNonexistentReplicaToNewReplicaTransition(): Unit = {
     replicaStateMachine.handleStateChanges(replicas, NewReplica)
     assertEquals(NewReplica, replicaState(replica))
@@ -131,10 +145,16 @@ class ReplicaStateMachineTest {
 
   @Test
   def testNewReplicaToOfflineReplicaTransition(): Unit = {
+    val endpoint1 = new EndPoint("localhost", 9997, new ListenerName("blah"),
+      SecurityProtocol.PLAINTEXT)
+    val liveBrokerEpochs = Map(Broker(brokerId, Seq(endpoint1), rack = None) -> 1L)
+    controllerContext.setLiveBrokerAndEpochs(liveBrokerEpochs)
     controllerContext.putReplicaState(replica, NewReplica)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockControllerBrokerRequestBatch.addStopReplicaRequestForBrokers(EasyMock.eq(Seq(brokerId)), EasyMock.eq(partition), EasyMock.eq(false)))
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
+    EasyMock.expect(mockControllerBrokerRequestBatch.addUpdateMetadataRequestForBrokers(EasyMock.eq(Seq(brokerId)),  EasyMock.eq(Set(partition))))
+
     EasyMock.replay(mockControllerBrokerRequestBatch)
     replicaStateMachine.handleStateChanges(replicas, OfflineReplica)
     EasyMock.verify(mockControllerBrokerRequestBatch)

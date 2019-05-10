@@ -157,17 +157,6 @@ class ControllerContext {
     }
   }
 
-  def allOfflineReplicas(): Set[PartitionAndReplica] = {
-    partitionAssignments.flatMap {
-      case (topic, topicReplicaAssignment) => topicReplicaAssignment.flatMap {
-        case (partition, replicas) => replicas.collect {
-          case replicaId if !isReplicaOnline(replicaId, new TopicPartition(topic, partition)) =>
-              PartitionAndReplica(new TopicPartition(topic, partition), replicaId)
-        }
-      }
-    }.toSet
-  }
-
   def replicasForTopic(topic: String): Set[PartitionAndReplica] = {
     partitionAssignments.getOrElse(topic, mutable.Map.empty).flatMap {
       case (partition, replicas) => replicas.map(r => PartitionAndReplica(new TopicPartition(topic, partition), r))
@@ -184,6 +173,28 @@ class ControllerContext {
     replicasOnBrokers(liveBrokerIds).filter { partitionAndReplica =>
       isReplicaOnline(partitionAndReplica.replica, partitionAndReplica.topicPartition)
     }
+  }
+
+  /**
+    * Get all online and offline replicas.
+    *
+    * @return a tuple consisting of first the online replicas and followed by the offline replicas
+    */
+  def liveOrOfflineReplicas: (Set[PartitionAndReplica], Set[PartitionAndReplica]) = {
+    val onlineReplicas = mutable.Set.empty[PartitionAndReplica]
+    val offlineReplicas = mutable.Set.empty[PartitionAndReplica]
+    for ((topic, partitionReplicas) <- partitionAssignments;
+         (partitionId, replicas) <- partitionReplicas) {
+      val partition = new TopicPartition(topic, partitionId)
+      for (replica <- replicas) {
+        val partitionAndReplica = PartitionAndReplica(partition, replica)
+        if (isReplicaOnline(replica, partition))
+          onlineReplicas.add(partitionAndReplica)
+        else
+          offlineReplicas.add(partitionAndReplica)
+      }
+    }
+    (onlineReplicas, offlineReplicas)
   }
 
   def replicasForPartition(partitions: collection.Set[TopicPartition]): collection.Set[PartitionAndReplica] = {
