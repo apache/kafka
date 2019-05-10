@@ -123,8 +123,9 @@ public class MirrorClient implements AutoCloseable {
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerConfig,
             new ByteArrayDeserializer(), new ByteArrayDeserializer());
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        String checkpointTopic = replicationPolicy.formatRemoteTopic(remoteClusterAlias,
-            MirrorClientConfig.CHECKPOINTS_TOPIC);
+        // checkpoint topics are not "remote topics", as they are not replicated. So we don't need
+        // to use ReplicationPolicy to create the checkpoint topic here.
+        String checkpointTopic = remoteClusterAlias + MirrorClientConfig.CHECKPOINTS_TOPIC_SUFFIX;
         List<TopicPartition> checkpointAssignment =
             Collections.singletonList(new TopicPartition(checkpointTopic, 0));
         consumer.assign(checkpointAssignment);
@@ -169,13 +170,13 @@ public class MirrorClient implements AutoCloseable {
     }
 
     boolean isHeartbeatTopic(String topic) {
+        // heartbeats are replicated, so we must use ReplicationPolicy here
         return MirrorClientConfig.HEARTBEATS_TOPIC.equals(replicationPolicy.originalTopic(topic));
     }
 
     boolean isCheckpointTopic(String topic) {
-        // checkpoint topics must have a source
-        return replicationPolicy.topicSource(topic) != null 
-            && MirrorClientConfig.CHECKPOINTS_TOPIC.equals(replicationPolicy.originalTopic(topic));
+        // checkpoints are not replicated, so we don't need to use ReplicationPolicy here
+        return topic.endsWith(MirrorClientConfig.CHECKPOINTS_TOPIC_SUFFIX);
     }
 
     boolean isRemoteTopic(String topic) {

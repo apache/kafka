@@ -36,7 +36,7 @@ public class MirrorClientConfig extends AbstractConfig {
     public static final String CONSUMER_CLIENT_PREFIX = "consumer.";
     public static final String PRODUCER_CLIENT_PREFIX = "producer.";
 
-    static final String CHECKPOINTS_TOPIC = "checkpoints-internal"; // internal so not replicated
+    static final String CHECKPOINTS_TOPIC_SUFFIX = ".checkpoints.internal"; // internal so not replicated
     static final String HEARTBEATS_TOPIC = "heartbeats";
  
     MirrorClientConfig(Map<?, ?> props) {

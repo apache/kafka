@@ -226,7 +226,9 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     String checkpointsTopic() {
-        return replicationPolicy().formatRemoteTopic(sourceClusterAlias(), MirrorClientConfig.CHECKPOINTS_TOPIC);
+        // Checkpoint topics are not "remote topics", as they are not replicated, so we don't
+        // need to use ReplicationPolicy here.
+        return sourceClusterAlias() + MirrorClientConfig.CHECKPOINTS_TOPIC_SUFFIX;
     }
 
     long maxOffsetLag() {

@@ -66,13 +66,12 @@ public class MirrorClientTest {
     @Test
     public void testIsCheckpointTopic() throws InterruptedException, TimeoutException, ExecutionException {
         MirrorClient client = new FakeMirrorClient();
-        assertTrue(client.isCheckpointTopic("source1.checkpoints-internal"));
-        assertTrue(client.isCheckpointTopic("source2.source1.checkpoints-internal"));
+        assertTrue(client.isCheckpointTopic("source1.checkpoints.internal"));
+        assertFalse(client.isCheckpointTopic("checkpoints.internal"));
         assertFalse(client.isCheckpointTopic("checkpoints-internal"));
-        assertFalse(client.isCheckpointTopic("checkpoints-internal!"));
-        assertFalse(client.isCheckpointTopic("!checkpoints-internal"));
+        assertFalse(client.isCheckpointTopic("checkpoints.internal!"));
+        assertFalse(client.isCheckpointTopic("!checkpoints.internal"));
         assertFalse(client.isCheckpointTopic("source1checkpointsinternal"));
-        assertFalse(client.isCheckpointTopic("source1.checkpoints.internal"));
     }
 
     @Test
@@ -100,11 +99,11 @@ public class MirrorClientTest {
 
     @Test
     public void checkpointsTopicsTest() throws InterruptedException, TimeoutException, ExecutionException {
-        MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "checkpoints-internal",
-            "source1.checkpoints-internal", "source2.source1.checkpoints-internal", "source3.checkpoints-internal"));
+        MirrorClient client = new FakeMirrorClient(Arrays.asList("topic1", "topic2", "checkpoints.internal",
+            "source1.checkpoints.internal", "source2.source1.checkpoints.internal", "source3.checkpoints.internal"));
         Set<String> checkpointTopics = client.checkpointTopics();
-        assertEquals(new HashSet<>(Arrays.asList("source1.checkpoints-internal",
-            "source2.source1.checkpoints-internal", "source3.checkpoints-internal")), checkpointTopics);
+        assertEquals(new HashSet<>(Arrays.asList("source1.checkpoints.internal",
+            "source2.source1.checkpoints.internal", "source3.checkpoints.internal")), checkpointTopics);
     }
 
     @Test
