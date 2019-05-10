@@ -87,18 +87,21 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             final ValueAndTimestamp<T> oldAggAndTimestamp = store.get(key);
             T oldAgg = getValueOrNull(oldAggAndTimestamp);
 
+            final T newAgg;
+            final long newTimestamp;
+
             if (oldAgg == null) {
                 oldAgg = initializer.apply();
+                newTimestamp = context().timestamp();
+            } else {
+                oldAgg = oldAggAndTimestamp.value();
+                newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
             }
 
-            T newAgg = oldAgg;
+            newAgg = aggregator.apply(key, value, oldAgg);
 
-            // try to add the new value
-            newAgg = aggregator.apply(key, value, newAgg);
-
-            // update the store with the new value
-            store.put(key, ValueAndTimestamp.make(newAgg, context().timestamp()));
-            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null);
+            store.put(key, ValueAndTimestamp.make(newAgg, newTimestamp));
+            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null, newTimestamp);
         }
     }
 
@@ -128,8 +131,8 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         }
 
         @Override
-        public T get(final K key) {
-            return getValueOrNull(store.get(key));
+        public ValueAndTimestamp<T> get(final K key) {
+            return store.get(key);
         }
 
         @Override

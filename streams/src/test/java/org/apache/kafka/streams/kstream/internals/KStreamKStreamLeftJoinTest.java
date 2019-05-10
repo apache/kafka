@@ -201,7 +201,7 @@ public class KStreamKStreamLeftJoinTest {
         for (int i = 0; i < expectedKeys.length; i++) {
             driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "b" + expectedKeys[i], time + i));
         }
-        processor.checkAndClearProcessResult();
+        processor.checkAndClearProcessResult(new String[0]);
 
         // push four items with larger timestamp to the primary stream; this should produce four full-join items
         // w1 = { 0:A0 (ts: 0), 1:A1 (ts: 0) }

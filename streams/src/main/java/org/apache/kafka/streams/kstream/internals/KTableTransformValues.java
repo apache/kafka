@@ -125,6 +125,7 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
     private class KTableTransformValuesGetter implements KTableValueGetter<K, V1> {
         private final KTableValueGetter<K, V> parentGetter;
         private final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer;
+        private ProcessorContext context;
 
         KTableTransformValuesGetter(final KTableValueGetter<K, V> parentGetter,
                                     final ValueTransformerWithKey<? super K, ? super V, ? extends V1> valueTransformer) {
@@ -134,13 +135,17 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
 
         @Override
         public void init(final ProcessorContext context) {
+            this.context = context;
             parentGetter.init(context);
             valueTransformer.init(new ForwardingDisabledProcessorContext(context));
         }
 
         @Override
-        public V1 get(final K key) {
-            return valueTransformer.transform(key, parentGetter.get(key));
+        public ValueAndTimestamp<V1> get(final K key) {
+            final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);
+            return ValueAndTimestamp.make(
+                valueTransformer.transform(key, getValueOrNull(valueAndTimestamp)),
+                valueAndTimestamp == null ? context.timestamp() : valueAndTimestamp.timestamp());
         }
 
         @Override

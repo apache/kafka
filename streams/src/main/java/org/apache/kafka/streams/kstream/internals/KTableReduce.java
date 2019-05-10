@@ -80,10 +80,19 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
             final ValueAndTimestamp<V> oldAggAndTimestamp = store.get(key);
             final V oldAgg = getValueOrNull(oldAggAndTimestamp);
             final V intermediateAgg;
+            long newTimestamp = context().timestamp();
 
             // first try to remove the old value
             if (value.oldValue != null && oldAgg != null) {
                 intermediateAgg = removeReducer.apply(oldAgg, value.oldValue);
+                // TODO: not sure if this make sense
+                // technically, if we remove a value from an aggregation,
+                // it's timestamp should not contribute the result timestamp anymore
+                // -> because we compute the result timestamp as max(...),
+                // we would need to keep all ts that contributed to the current result ts,
+                // and pick the largest of the remaining ones
+                // however, storing the complete history is not feasible... :(
+                newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
             } else {
                 intermediateAgg = oldAgg;
             }
@@ -95,14 +104,15 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
                     newAgg = value.newValue;
                 } else {
                     newAgg = addReducer.apply(intermediateAgg, value.newValue);
+                    newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
                 }
             } else {
                 newAgg = intermediateAgg;
             }
 
             // update the store with the new value
-            store.put(key, ValueAndTimestamp.make(newAgg, context().timestamp()));
-            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null);
+            store.put(key, ValueAndTimestamp.make(newAgg, newTimestamp));
+            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null, newTimestamp);
         }
     }
 

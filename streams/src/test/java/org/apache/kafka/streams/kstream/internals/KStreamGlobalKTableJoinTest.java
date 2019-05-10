@@ -83,7 +83,7 @@ public class KStreamGlobalKTableJoinTest {
 
     private void pushToStream(final int messageCount, final String valuePrefix, final boolean includeForeignKey) {
         final ConsumerRecordFactory<Integer, String> recordFactory =
-            new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
+            new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L, 1L);
         for (int i = 0; i < messageCount; i++) {
             String value = valuePrefix + expectedKeys[i];
             if (includeForeignKey) {
@@ -123,7 +123,7 @@ public class KStreamGlobalKTableJoinTest {
         // push two items to the primary stream. the globalTable is empty
 
         pushToStream(2, "X", true);
-        processor.checkAndClearProcessResult();
+        processor.checkAndClearProcessResult(new String[0]);
     }
 
     @Test
@@ -132,32 +132,32 @@ public class KStreamGlobalKTableJoinTest {
         // push two items to the primary stream. the globalTable is empty
 
         pushToStream(2, "X", true);
-        processor.checkAndClearProcessResult();
+        processor.checkAndClearProcessResult(new String[0]);
 
         // push two items to the globalTable. this should not produce any item.
 
         pushToGlobalTable(2, "Y");
-        processor.checkAndClearProcessResult();
+        processor.checkAndClearProcessResult(new String[0]);
 
         // push all four items to the primary stream. this should produce two items.
 
         pushToStream(4, "X", true);
-        processor.checkAndClearProcessResult("0:X0,FKey0+Y0 (ts: 0)", "1:X1,FKey1+Y1 (ts: 0)");
+        processor.checkAndClearProcessResult("0:X0,FKey0+Y0 (ts: 0)", "1:X1,FKey1+Y1 (ts: 1)");
 
         // push all items to the globalTable. this should not produce any item
 
         pushToGlobalTable(4, "YY");
-        processor.checkAndClearProcessResult();
+        processor.checkAndClearProcessResult(new String[0]);
 
         // push all four items to the primary stream. this should produce four items.
 
         pushToStream(4, "X", true);
-        processor.checkAndClearProcessResult("0:X0,FKey0+YY0 (ts: 0)", "1:X1,FKey1+YY1 (ts: 0)", "2:X2,FKey2+YY2 (ts: 0)", "3:X3,FKey3+YY3 (ts: 0)");
+        processor.checkAndClearProcessResult("0:X0,FKey0+YY0 (ts: 0)", "1:X1,FKey1+YY1 (ts: 1)", "2:X2,FKey2+YY2 (ts: 2)", "3:X3,FKey3+YY3 (ts: 3)");
 
         // push all items to the globalTable. this should not produce any item
 
         pushToGlobalTable(4, "YYY");
-        processor.checkAndClearProcessResult();
+        processor.checkAndClearProcessResult(new String[0]);
     }
 
     @Test
@@ -166,12 +166,12 @@ public class KStreamGlobalKTableJoinTest {
         // push two items to the globalTable. this should not produce any item.
 
         pushToGlobalTable(2, "Y");
-        processor.checkAndClearProcessResult();
+        processor.checkAndClearProcessResult(new String[0]);
 
         // push all four items to the primary stream. this should produce two items.
 
         pushToStream(4, "X", true);
-        processor.checkAndClearProcessResult("0:X0,FKey0+Y0 (ts: 0)", "1:X1,FKey1+Y1 (ts: 0)");
+        processor.checkAndClearProcessResult("0:X0,FKey0+Y0 (ts: 0)", "1:X1,FKey1+Y1 (ts: 1)");
 
     }
 
@@ -181,22 +181,22 @@ public class KStreamGlobalKTableJoinTest {
         // push all four items to the globalTable. this should not produce any item.
 
         pushToGlobalTable(4, "Y");
-        processor.checkAndClearProcessResult();
+        processor.checkAndClearProcessResult(new String[0]);
 
         // push all four items to the primary stream. this should produce four items.
 
         pushToStream(4, "X", true);
-        processor.checkAndClearProcessResult("0:X0,FKey0+Y0 (ts: 0)", "1:X1,FKey1+Y1 (ts: 0)", "2:X2,FKey2+Y2 (ts: 0)", "3:X3,FKey3+Y3 (ts: 0)");
+        processor.checkAndClearProcessResult("0:X0,FKey0+Y0 (ts: 0)", "1:X1,FKey1+Y1 (ts: 1)", "2:X2,FKey2+Y2 (ts: 2)", "3:X3,FKey3+Y3 (ts: 3)");
 
         // push two items with null to the globalTable as deletes. this should not produce any item.
 
         pushNullValueToGlobalTable(2);
-        processor.checkAndClearProcessResult();
+        processor.checkAndClearProcessResult(new String[0]);
 
         // push all four items to the primary stream. this should produce two items.
 
         pushToStream(4, "XX", true);
-        processor.checkAndClearProcessResult("2:XX2,FKey2+Y2 (ts: 0)", "3:XX3,FKey3+Y3 (ts: 0)");
+        processor.checkAndClearProcessResult("2:XX2,FKey2+Y2 (ts: 2)", "3:XX3,FKey3+Y3 (ts: 3)");
     }
 
     @Test
@@ -205,13 +205,13 @@ public class KStreamGlobalKTableJoinTest {
         // push all items to the globalTable. this should not produce any item
 
         pushToGlobalTable(4, "Y");
-        processor.checkAndClearProcessResult();
+        processor.checkAndClearProcessResult(new String[0]);
 
         // push all four items to the primary stream with no foreign key, resulting in null keyMapper values.
         // this should not produce any item.
 
         pushToStream(4, "XXX", false);
-        processor.checkAndClearProcessResult();
+        processor.checkAndClearProcessResult(new String[0]);
     }
 
 }

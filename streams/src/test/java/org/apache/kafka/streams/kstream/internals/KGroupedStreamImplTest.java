@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -50,7 +51,6 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -412,11 +412,20 @@ public class KGroupedStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
 
-            final KeyValueStore<String, Long> count = driver.getKeyValueStore("count");
+            {
+                final KeyValueStore<String, Long> count = driver.getKeyValueStore("count");
 
-            assertThat(count.get("1"), equalTo(3L));
-            assertThat(count.get("2"), equalTo(1L));
-            assertThat(count.get("3"), equalTo(2L));
+                assertThat(count.get("1"), equalTo(3L));
+                assertThat(count.get("2"), equalTo(1L));
+                assertThat(count.get("3"), equalTo(2L));
+            }
+            {
+                final KeyValueStore<String, ValueAndTimestamp<Long>> count = driver.getTimestampedKeyValueStore("count");
+
+                assertThat(count.get("1"), equalTo(ValueAndTimestamp.make(3L, 10L)));
+                assertThat(count.get("2"), equalTo(ValueAndTimestamp.make(1L, 1L)));
+                assertThat(count.get("3"), equalTo(ValueAndTimestamp.make(2L, 9L)));
+            }
         }
     }
 
@@ -448,11 +457,20 @@ public class KGroupedStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
 
-            final KeyValueStore<String, String> reduced = driver.getKeyValueStore("reduce");
+            {
+                final KeyValueStore<String, String> reduced = driver.getKeyValueStore("reduce");
 
-            assertThat(reduced.get("1"), equalTo("A+C+D"));
-            assertThat(reduced.get("2"), equalTo("B"));
-            assertThat(reduced.get("3"), equalTo("E+F"));
+                assertThat(reduced.get("1"), equalTo("A+C+D"));
+                assertThat(reduced.get("2"), equalTo("B"));
+                assertThat(reduced.get("3"), equalTo("E+F"));
+            }
+            {
+                final KeyValueStore<String, ValueAndTimestamp<String>> reduced = driver.getTimestampedKeyValueStore("reduce");
+
+                assertThat(reduced.get("1"), equalTo(ValueAndTimestamp.make("A+C+D", 10L)));
+                assertThat(reduced.get("2"), equalTo(ValueAndTimestamp.make("B", 1L)));
+                assertThat(reduced.get("3"), equalTo(ValueAndTimestamp.make("E+F", 9L)));
+            }
         }
     }
 
@@ -491,84 +509,110 @@ public class KGroupedStreamImplTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
 
-            final KeyValueStore<String, String> aggregate = driver.getKeyValueStore("aggregate");
+            {
+                final KeyValueStore<String, String> aggregate = driver.getKeyValueStore("aggregate");
 
-            assertThat(aggregate.get("1"), equalTo("0+A+C+D"));
-            assertThat(aggregate.get("2"), equalTo("0+B"));
-            assertThat(aggregate.get("3"), equalTo("0+E+F"));
+                assertThat(aggregate.get("1"), equalTo("0+A+C+D"));
+                assertThat(aggregate.get("2"), equalTo("0+B"));
+                assertThat(aggregate.get("3"), equalTo("0+E+F"));
+            }
+            {
+                final KeyValueStore<String, ValueAndTimestamp<String>> aggregate = driver.getTimestampedKeyValueStore("aggregate");
+
+                assertThat(aggregate.get("1"), equalTo(ValueAndTimestamp.make("0+A+C+D", 10L)));
+                assertThat(aggregate.get("2"), equalTo(ValueAndTimestamp.make("0+B", 1L)));
+                assertThat(aggregate.get("3"), equalTo(ValueAndTimestamp.make("0+E+F", 9L)));
+            }
         }
     }
 
     @SuppressWarnings("unchecked")
     @Test
     public void shouldAggregateWithDefaultSerdes() {
-        final Map<String, String> results = new HashMap<>();
+        final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
         groupedStream
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER)
             .toStream()
-            .foreach(results::put);
+            .process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
 
-            assertThat(results.get("1"), equalTo("0+A+C+D"));
-            assertThat(results.get("2"), equalTo("0+B"));
-            assertThat(results.get("3"), equalTo("0+E+F"));
+            assertThat(
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey.get("1"),
+                equalTo(ValueAndTimestamp.make("0+A+C+D", 10L)));
+            assertThat(
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey.get("2"),
+                equalTo(ValueAndTimestamp.make("0+B", 1L)));
+            assertThat(
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey.get("3"),
+                equalTo(ValueAndTimestamp.make("0+E+F", 9L)));
         }
     }
 
     private void processData(final TopologyTestDriver driver) {
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "A"));
-        driver.pipeInput(recordFactory.create(TOPIC, "2", "B"));
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "C"));
-        driver.pipeInput(recordFactory.create(TOPIC, "1", "D"));
-        driver.pipeInput(recordFactory.create(TOPIC, "3", "E"));
-        driver.pipeInput(recordFactory.create(TOPIC, "3", "F"));
+        driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 5L));
+        driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 1L));
+        driver.pipeInput(recordFactory.create(TOPIC, "1", "C", 3L));
+        driver.pipeInput(recordFactory.create(TOPIC, "1", "D", 10L));
+        driver.pipeInput(recordFactory.create(TOPIC, "3", "E", 8L));
+        driver.pipeInput(recordFactory.create(TOPIC, "3", "F", 9L));
         driver.pipeInput(recordFactory.create(TOPIC, "3", (String) null));
     }
 
-    private void doCountWindowed(final List<KeyValue<Windowed<String>, Long>> results) {
+    private void doCountWindowed(final  MockProcessorSupplier<Windowed<String>, Long> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "3", "C", 0));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 500));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 500));
-            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 500));
-            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 500));
+            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 0L));
+            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 499L));
+            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 100L));
+            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 0L));
+            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 100L));
+            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 200L));
+            driver.pipeInput(recordFactory.create(TOPIC, "3", "C", 1L));
+            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 500L));
+            driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 500L));
+            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 500L));
+            driver.pipeInput(recordFactory.create(TOPIC, "2", "B", 500L));
+            driver.pipeInput(recordFactory.create(TOPIC, "3", "B", 100L));
         }
-        assertThat(results, equalTo(Arrays.asList(
-                KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), 1L),
-                KeyValue.pair(new Windowed<>("2", new TimeWindow(0, 500)), 1L),
-                KeyValue.pair(new Windowed<>("3", new TimeWindow(0, 500)), 1L),
-                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 1L),
-                KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), 2L),
-                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 1L),
-                KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), 2L)
+        assertThat(supplier.theCapturedProcessor().processedWithTimestamps, equalTo(Arrays.asList(
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 1L, 0L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 2L, 499L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(0L, 500L)), 3L, 499L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 1L, 0L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 2L, 100L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(0L, 500L)), 3L, 200L),
+            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)), 1L, 1L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)), 1L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("1", new TimeWindow(500L, 1000L)), 2L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)), 1L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("2", new TimeWindow(500L, 1000L)), 2L, 500L),
+            new KeyValueTimestamp<>(new Windowed<>("3", new TimeWindow(0L, 500L)), 2L, 100L)
         )));
     }
 
     @Test
     public void shouldCountWindowed() {
-        final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
+        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         groupedStream
             .windowedBy(TimeWindows.of(ofMillis(500L)))
             .count(Materialized.as("aggregate-by-key-windowed"))
             .toStream()
-            .foreach((key, value) -> results.add(KeyValue.pair(key, value)));
+            .process(supplier);
 
-        doCountWindowed(results);
+        doCountWindowed(supplier);
     }
 
     @Test
     public void shouldCountWindowedWithInternalStoreName() {
-        final List<KeyValue<Windowed<String>, Long>> results = new ArrayList<>();
+        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
+        final List<KeyValue<Windowed<String>, KeyValue<Long, Long>>> results = new ArrayList<>();
         groupedStream
             .windowedBy(TimeWindows.of(ofMillis(500L)))
             .count()
             .toStream()
-            .foreach((key, value) -> results.add(KeyValue.pair(key, value)));
+            .process(supplier);
 
-        doCountWindowed(results);
+        doCountWindowed(supplier);
     }
 }

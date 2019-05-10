@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 /**
@@ -48,6 +49,15 @@ class TimestampedTupleForwarder<K, V> {
                              final V oldValue) {
         if (!cachingEnabled) {
             context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null));
+        }
+    }
+
+    public void maybeForward(final K key,
+                             final V newValue,
+                             final V oldValue,
+                             final long timestamp) {
+        if (!cachingEnabled) {
+            context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null), To.all().withTimestamp(timestamp));
         }
     }
 }

@@ -85,33 +85,41 @@ public class KTableAggregateTest {
 
         driver.setUp(builder, stateDir, Serdes.String(), Serdes.String());
 
+        driver.setTime(10L);
         driver.process(topic1, "A", "1");
         driver.flushState();
+        driver.setTime(15L);
         driver.process(topic1, "B", "2");
         driver.flushState();
+        driver.setTime(20L);
         driver.process(topic1, "A", "3");
         driver.flushState();
+        driver.setTime(18L);
         driver.process(topic1, "B", "4");
         driver.flushState();
+        driver.setTime(5L);
         driver.process(topic1, "C", "5");
         driver.flushState();
+        driver.setTime(25L);
         driver.process(topic1, "D", "6");
         driver.flushState();
+        driver.setTime(15L);
         driver.process(topic1, "B", "7");
         driver.flushState();
+        driver.setTime(10L);
         driver.process(topic1, "C", "8");
         driver.flushState();
 
         assertEquals(
             asList(
-                "A:0+1 (ts: 0)",
-                "B:0+2 (ts: 0)",
-                "A:0+1-1+3 (ts: 0)",
-                "B:0+2-2+4 (ts: 0)",
-                "C:0+5 (ts: 0)",
-                "D:0+6 (ts: 0)",
-                "B:0+2-2+4-4+7 (ts: 0)",
-                "C:0+5-5+8 (ts: 0)"),
+                "A:0+1 (ts: 10)",
+                "B:0+2 (ts: 15)",
+                "A:0+1-1+3 (ts: 20)",
+                "B:0+2-2+4 (ts: 18)",
+                "C:0+5 (ts: 5)",
+                "D:0+6 (ts: 25)",
+                "B:0+2-2+4-4+7 (ts: 18)",
+                "C:0+5-5+8 (ts: 10)"),
             supplier.theCapturedProcessor().processed);
     }
 
@@ -136,12 +144,15 @@ public class KTableAggregateTest {
 
         driver.setUp(builder, stateDir);
 
+        driver.setTime(10L);
         driver.process(topic1, "A", "1");
+        driver.setTime(20L);
         driver.process(topic1, "A", "3");
+        driver.setTime(15L);
         driver.process(topic1, "A", "4");
         driver.flushState();
 
-        assertEquals(Collections.singletonList("A:0+4 (ts: 0)"), supplier.theCapturedProcessor().processed);
+        assertEquals(Collections.singletonList("A:0+4 (ts: 15)"), supplier.theCapturedProcessor().processed);
     }
 
     @Test
@@ -174,33 +185,41 @@ public class KTableAggregateTest {
 
         driver.setUp(builder, stateDir);
 
+        driver.setTime(10L);
         driver.process(topic1, "A", "1");
         driver.flushState();
+        driver.setTime(15L);
         driver.process(topic1, "A", null);
         driver.flushState();
+        driver.setTime(12L);
         driver.process(topic1, "A", "1");
         driver.flushState();
+        driver.setTime(20L);
         driver.process(topic1, "B", "2");
         driver.flushState();
+        driver.setTime(25L);
         driver.process(topic1, "null", "3");
         driver.flushState();
+        driver.setTime(23L);
         driver.process(topic1, "B", "4");
         driver.flushState();
+        driver.setTime(24L);
         driver.process(topic1, "NULL", "5");
         driver.flushState();
+        driver.setTime(22L);
         driver.process(topic1, "B", "7");
         driver.flushState();
 
         assertEquals(
             asList(
-                "1:0+1 (ts: 0)",
-                "1:0+1-1 (ts: 0)",
-                "1:0+1-1+1 (ts: 0)",
-                "2:0+2 (ts: 0)",
+                "1:0+1 (ts: 10)",
+                "1:0+1-1 (ts: 15)",
+                "1:0+1-1+1 (ts: 15)",
+                "2:0+2 (ts: 20)",
                   //noop
-                "2:0+2-2 (ts: 0)", "4:0+4 (ts: 0)",
+                "2:0+2-2 (ts: 23)", "4:0+4 (ts: 23)",
                   //noop
-                "4:0+4-4 (ts: 0)", "7:0+7 (ts: 0)"),
+                "4:0+4-4 (ts: 23)", "7:0+7 (ts: 22)"),
             supplier.theCapturedProcessor().processed);
     }
 
@@ -209,25 +228,30 @@ public class KTableAggregateTest {
                                  final MockProcessorSupplier<String, Object> supplier) {
         driver.setUp(builder, stateDir);
 
+        driver.setTime(10L);
         driver.process(input, "A", "green");
         driver.flushState();
+        driver.setTime(9L);
         driver.process(input, "B", "green");
         driver.flushState();
+        driver.setTime(12L);
         driver.process(input, "A", "blue");
         driver.flushState();
+        driver.setTime(15L);
         driver.process(input, "C", "yellow");
         driver.flushState();
+        driver.setTime(11L);
         driver.process(input, "D", "green");
         driver.flushState();
         driver.flushState();
 
         assertEquals(
             asList(
-                "green:1 (ts: 0)",
-                "green:2 (ts: 0)",
-                "green:1 (ts: 0)", "blue:1 (ts: 0)",
-                "yellow:1 (ts: 0)",
-                "green:2 (ts: 0)"),
+                "green:1 (ts: 10)",
+                "green:2 (ts: 10)",
+                "green:1 (ts: 12)", "blue:1 (ts: 12)",
+                "yellow:1 (ts: 15)",
+                "green:2 (ts: 12)"),
             supplier.theCapturedProcessor().processed);
     }
 
@@ -278,18 +302,23 @@ public class KTableAggregateTest {
 
         final MockProcessor<String, Long> proc = supplier.theCapturedProcessor();
 
+        driver.setTime(10L);
         driver.process(input, "A", "green");
+        driver.setTime(8L);
         driver.process(input, "B", "green");
+        driver.setTime(9L);
         driver.process(input, "A", "blue");
+        driver.setTime(10L);
         driver.process(input, "C", "yellow");
+        driver.setTime(15L);
         driver.process(input, "D", "green");
         driver.flushState();
 
         assertEquals(
             asList(
-                "blue:1 (ts: 0)",
-                "yellow:1 (ts: 0)",
-                "green:2 (ts: 0)"),
+                "blue:1 (ts: 9)",
+                "yellow:1 (ts: 10)",
+                "green:2 (ts: 15)"),
             proc.processed);
     }
 
@@ -319,21 +348,25 @@ public class KTableAggregateTest {
 
         final MockProcessor<String, String> proc = supplier.theCapturedProcessor();
 
+        driver.setTime(10L);
         driver.process(input, "11", "A");
         driver.flushState();
+        driver.setTime(8L);
         driver.process(input, "12", "B");
         driver.flushState();
+        driver.setTime(12L);
         driver.process(input, "11", null);
         driver.flushState();
+        driver.setTime(6L);
         driver.process(input, "12", "C");
         driver.flushState();
 
         assertEquals(
             asList(
-                "1:1 (ts: 0)",
-                "1:12 (ts: 0)",
-                "1:2 (ts: 0)",
-                "1:2 (ts: 0)"),
+                "1:1 (ts: 10)",
+                "1:12 (ts: 10)",
+                "1:2 (ts: 12)",
+                "1:2 (ts: 12)"),
             proc.processed);
     }
 

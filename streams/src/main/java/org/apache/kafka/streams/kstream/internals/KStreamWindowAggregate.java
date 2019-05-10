@@ -122,15 +122,25 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                     final ValueAndTimestamp<Agg> oldAggAndTimestamp = windowStore.fetch(key, windowStart);
                     Agg oldAgg = getValueOrNull(oldAggAndTimestamp);
 
+                    final Agg newAgg;
+                    final long newTimestamp;
+
                     if (oldAgg == null) {
                         oldAgg = initializer.apply();
+                        newTimestamp = context().timestamp();
+                    } else {
+                        newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
                     }
 
-                    final Agg newAgg = aggregator.apply(key, value, oldAgg);
+                    newAgg = aggregator.apply(key, value, oldAgg);
 
                     // update the store with the new value
-                    windowStore.put(key, ValueAndTimestamp.make(newAgg, context().timestamp()), windowStart);
-                    tupleForwarder.maybeForward(new Windowed<>(key, entry.getValue()), newAgg, sendOldValues ? oldAgg : null);
+                    windowStore.put(key, ValueAndTimestamp.make(newAgg, newTimestamp), windowStart);
+                    tupleForwarder.maybeForward(
+                        new Windowed<>(key, entry.getValue()),
+                        newAgg,
+                        sendOldValues ? oldAgg : null,
+                        newTimestamp);
                 } else {
                     log.debug(
                         "Skipping record for expired window. " +
@@ -184,10 +194,10 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
 
         @SuppressWarnings("unchecked")
         @Override
-        public Agg get(final Windowed<K> windowedKey) {
+        public ValueAndTimestamp<Agg> get(final Windowed<K> windowedKey) {
             final K key = windowedKey.key();
             final W window = (W) windowedKey.window();
-            return getValueOrNull(windowStore.fetch(key, window.start()));
+            return windowStore.fetch(key, window.start());
         }
 
         @Override

@@ -392,14 +392,14 @@ public class SuppressScenarioTest {
                     new KeyValueTimestamp<>("[k1@0/2]", 2L, 1L),
                     new KeyValueTimestamp<>("[k1@2/4]", 1L, 2L),
                     new KeyValueTimestamp<>("[k1@0/2]", 3L, 1L),
-                    new KeyValueTimestamp<>("[k1@0/2]", 4L, 0L),
+                    new KeyValueTimestamp<>("[k1@0/2]", 4L, 1L),
                     new KeyValueTimestamp<>("[k1@4/6]", 1L, 5L)
                 )
             );
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
-                    new KeyValueTimestamp<>("[k1@0/2]", 4L, 0L),
+                    new KeyValueTimestamp<>("[k1@0/2]", 4L, 1L),
                     new KeyValueTimestamp<>("[k1@2/4]", 1L, 2L)
                 )
             );
@@ -444,9 +444,9 @@ public class SuppressScenarioTest {
                     new KeyValueTimestamp<>("[k1@0/2]", 1L, 0L),
                     new KeyValueTimestamp<>("[k1@0/2]", 2L, 1L),
                     new KeyValueTimestamp<>("[k1@2/4]", 1L, 2L),
-                    new KeyValueTimestamp<>("[k1@0/2]", 3L, 0L),
+                    new KeyValueTimestamp<>("[k1@0/2]", 3L, 1L),
                     new KeyValueTimestamp<>("[k1@2/4]", 2L, 3L),
-                    new KeyValueTimestamp<>("[k1@0/2]", 4L, 0L),
+                    new KeyValueTimestamp<>("[k1@0/2]", 4L, 1L),
                     new KeyValueTimestamp<>("[k1@4/6]", 1L, 4L),
                     new KeyValueTimestamp<>("[k1@30/32]", 1L, 30L)
                 )
@@ -454,7 +454,7 @@ public class SuppressScenarioTest {
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
-                    new KeyValueTimestamp<>("[k1@0/2]", 4L, 0L),
+                    new KeyValueTimestamp<>("[k1@0/2]", 4L, 1L),
                     new KeyValueTimestamp<>("[k1@2/4]", 2L, 3L),
                     new KeyValueTimestamp<>("[k1@4/6]", 1L, 4L)
                 )
