@@ -302,8 +302,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
     }
 
 
-    private Map<String, String> constructTags(final String scopeName, final String entityName,
-                                              final String... tags) {
+    private Map<String, String> constructTags(final String scopeName, final String entityName, final String... tags) {
         final String[] updatedTags = Arrays.copyOf(tags, tags.length + 2);
         updatedTags[tags.length] = scopeName + "-id";
         updatedTags[tags.length + 1] = entityName;
@@ -459,7 +458,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                   tags,
                                   operation,
                                   "The total number of " + operation,
-                                  "The average per-second number of" + operation);
+                                  "The average per-second number of " + operation);
     }
 
     /**
