@@ -827,11 +827,6 @@ class Partition(val topicPartition: TopicPartition,
         FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY)
     }
 
-    val curTime: Long = System.currentTimeMillis
-    val allInSyncReplicas: Seq[Replica] = assignedReplicas.filter{replica =>
-      curTime - replica.lastCaughtUpTimeMs <= replicaLagTimeMaxMs || inSyncReplicas.contains(replica)
-    }.toSeq.sortBy(_.logEndOffsetMetadata)(new LogOffsetMetadata.OffsetOrdering)
-
     LogReadInfo(
       fetchedData = fetchedData,
       highWatermark = initialHighWatermark,
