@@ -624,6 +624,30 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldUpdateTimestampAfterRestart() {
+        task = createStatelessTask(createConfig(false));
+        task.initializeStateStores();
+        task.initializeTopology();
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 1000)));
+
+        task.process();
+        // time stamp will be committed here
+        task.commit();
+        assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata()) == 1000);
+        // reset times here to artificially represent a restart
+        task.resetTimes();
+        assertTrue(task.getPartitionTime(partition1) == RecordQueue.UNKNOWN);
+
+        task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 999)));
+        assertTrue(task.getNextPartition() == partition1);
+
+        // time stamp would be updated here
+        task.process();
+        assertTrue(task.getPartitionTime(partition1) == 1000);
+    }
+
+    @Test
     public void shouldRespectCommitRequested() {
         task = createStatelessTask(createConfig(false));
         task.initializeStateStores();

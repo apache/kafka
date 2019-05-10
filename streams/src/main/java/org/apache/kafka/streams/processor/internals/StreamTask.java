@@ -345,17 +345,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      */
     @SuppressWarnings("unchecked")
     public boolean process() {
-        // if condition put here in case of restarts and rebalances to check for correct timestamp
-        if (recordInfo.queue() != null && 
-            partitionGroup.getPartitionTimestamp(recordInfo.partition()) == RecordQueue.UNKNOWN) {
-            final OffsetAndMetadata metadata = consumer.committed(recordInfo.partition());
-            if (metadata != null) {
-                final String commitMetadata = metadata.metadata();
-                partitionGroup.setPartitionTimestamp(recordInfo.partition(),
-                        Long.parseLong(commitMetadata));
-            }
-        }
-
         // get the next record to process
         final StampedRecord record = partitionGroup.nextRecord(recordInfo);
 
@@ -455,12 +444,23 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         processorContext.setCurrentNode(currNode);
     }
 
+    // used for testing
     public long getStreamTime() {
         return partitionGroup.timestamp();
     }
 
+    // used for testing
     public long getPartitionTime(final TopicPartition partition) {
         return partitionGroup.getPartitionTimestamp(partition);
+    }
+
+    // used for testing
+    public void resetTimes() {
+        partitionGroup.clear();
+    }
+
+    public TopicPartition getNextPartition() {
+        return partitionGroup.getNextTopicPartition();
     }
 
     /**
@@ -759,6 +759,16 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @param records   the records
      */
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
+        // if condition put here in case of restarts and rebalances to check for correct timestamp
+        if (recordInfo.queue() != null && getPartitionTime(partition) == RecordQueue.UNKNOWN) {
+            final OffsetAndMetadata metadata = consumer.committed(recordInfo.partition());
+            if (metadata != null) {
+                final String commitMetadata = metadata.metadata();
+                partitionGroup.setPartitionTimestamp(recordInfo.partition(),
+                        Long.parseLong(commitMetadata));
+            }
+        }
+
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
         if (log.isTraceEnabled()) {
