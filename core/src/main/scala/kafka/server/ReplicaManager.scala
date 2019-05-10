@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.Gauge
+import kafka.api.Request.{DebuggingConsumerId, FutureLocalReplicaId, OrdinaryConsumerId}
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition, Replica}
 import kafka.controller.{KafkaController, StateChangeLogger}
@@ -834,7 +835,21 @@ class ReplicaManager(val config: KafkaConfig,
                     isolationLevel: IsolationLevel,
                     clientMetadata: ClientMetadata) {
     val isFromFollower = Request.isValidBrokerId(replicaId)
-    val fetchOnlyFromLeader = replicaId != Request.DebuggingConsumerId && replicaId != Request.FutureLocalReplicaId
+
+    val fetchOnlyFromLeader = {
+      if (!clientMetadata.rackId.isEmpty) {
+        // If the client has sent a rack ID, we allow fetch from followers
+        false
+      } else {
+        // Otherwise, check the replica ID
+        replicaId match {
+          case DebuggingConsumerId => false
+          case FutureLocalReplicaId => false
+          case OrdinaryConsumerId => true
+          case _ => true
+        }
+      }
+    }
 
     val fetchIsolation = if (isFromFollower || replicaId == Request.FutureLocalReplicaId)
       FetchLogEnd
@@ -942,8 +957,9 @@ class ReplicaManager(val config: KafkaConfig,
           fetchOnlyFromLeader = fetchOnlyFromLeader,
           minOneMessage = minOneMessage)
 
+
         // If we are the leader, determine the preferred read-replica
-        val preferredReadReplica = findPreferredReadReplica(tp, clientMetadata)
+        val preferredReadReplica = findPreferredReadReplica(tp, clientMetadata, replicaId)
 
         val fetchDataInfo = if (shouldLeaderThrottle(quota, tp, replicaId)) {
           // If the partition is being throttled, simply return an empty set.
@@ -1020,11 +1036,15 @@ class ReplicaManager(val config: KafkaConfig,
     result
   }
 
-  def findPreferredReadReplica(tp: TopicPartition, clientMetadata: ClientMetadata): Option[Int] = {
+  def findPreferredReadReplica(tp: TopicPartition, clientMetadata: ClientMetadata, replicaId: Int): Option[Int] = {
     val partition = getPartitionOrException(tp, expectLeader = false)
 
     if (partition.leaderReplicaIfLocal.isDefined) {
-      if (clientMetadata.equals(ClientMetadata.NO_METADATA)) {
+      if (Request.isValidBrokerId(replicaId)) {
+        // Don't look up preferred for follower fetches via normal replication
+        Option.empty
+      } else if (clientMetadata.equals(ClientMetadata.NO_METADATA)) {
+        // Return the leader if no metadata given
         partition.leaderReplicaIdOpt
       } else {
         val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))

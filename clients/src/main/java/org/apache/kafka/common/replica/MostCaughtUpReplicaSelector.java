@@ -27,6 +27,8 @@ public class MostCaughtUpReplicaSelector implements ReplicaSelector {
     public Optional<ReplicaInfo> select(TopicPartition topicPartition,
                                         ClientMetadata clientMetadata,
                                         Set<ReplicaInfo> replicaInfos) {
-        return replicaInfos.stream().max(Comparator.comparing(ReplicaInfo::logOffset));
+        return replicaInfos.stream()
+            .max(Comparator.comparing(ReplicaInfo::logOffset)
+                .thenComparing(replicaInfo -> replicaInfo.isLeader() ? 1 : 0));
     }
 }

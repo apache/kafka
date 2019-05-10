@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.utils.{CoreUtils, MockScheduler, MockTime, TestUtils}
 import TestUtils.createBroker
+import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.timer.MockTimer
@@ -611,7 +612,7 @@ class ReplicaManagerTest {
     val metadata: ClientMetadata = new ClientMetadata("rack-a", "client-id",
       InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
-    val preferredReadReplica: Option[Int] = replicaManager.findPreferredReadReplica(tp0, metadata)
+    val preferredReadReplica: Option[Int] = replicaManager.findPreferredReadReplica(tp0, metadata, Request.OrdinaryConsumerId)
     assertTrue(preferredReadReplica.isDefined)
     assertEquals(preferredReadReplica, partition.leaderReplicaIdOpt)
   }
