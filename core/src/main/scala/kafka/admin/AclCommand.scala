@@ -583,7 +583,7 @@ object AclCommand extends Logging {
       if (options.has(commandConfigOpt) && !options.has(bootstrapServerOpt))
         CommandLineUtils.printUsageAndDie(parser, "The --command-config option can only be used with --bootstrap-server option")
 
-      if (options.has(authorizerPropertiesOpt) && options.has(bootstrapServerOpt))
+      if (options.has(authorizerPropertiesOpt) && options.has(authorizerOpt))
         CommandLineUtils.printUsageAndDie(parser, "The --authorizer-properties option can only be used with --authorizer option")
 
       val actions = Seq(addOpt, removeOpt, listOpt).count(options.has)
