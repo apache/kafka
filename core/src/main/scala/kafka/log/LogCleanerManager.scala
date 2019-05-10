@@ -490,6 +490,7 @@ private[log] object LogCleanerManager extends Logging {
   def getMaxCompactionDelay(log: Log, firstDirtyOffset: Long, now: Long) : Long = {
 
     val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset)
+
     val firstBatchTimestamps = log.getFirstBatchTimestampForSegments(dirtyNonActiveSegments).filter(_ > 0)
 
     val earliestDirtySegmentTimestamp = {

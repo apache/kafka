@@ -95,7 +95,8 @@ class LogSegment private[log] (val log: FileRecords,
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0
 
-  /* The timestamp we used for time based log rolling */
+  // The timestamp we used for time based log rolling and for ensuring max compaction delay
+  // volatile for LogCleaner to see the update
   @volatile private var rollingBasedTimestamp: Option[Long] = None
 
   /* The maximum timestamp we see so far */

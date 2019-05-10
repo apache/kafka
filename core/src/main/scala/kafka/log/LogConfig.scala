@@ -310,7 +310,7 @@ object LogConfig {
 
   private[kafka] def configKeys: Map[String, ConfigKey] = configDef.configKeys.asScala
 
-  def crossValidateCheck(props: java.util.Map[_, _]): Unit = {
+  def validateValues(props: java.util.Map[_, _]): Unit = {
     val minCompactionLag =  props.get(MinCompactionLagMsProp).asInstanceOf[Long]
     val maxCompactionLag =  props.get(MaxCompactionLagMsProp).asInstanceOf[Long]
     if (minCompactionLag > maxCompactionLag) {
