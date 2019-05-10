@@ -445,11 +445,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     // used for testing
-    public long getStreamTime() {
-        return partitionGroup.timestamp();
-    }
-
-    // used for testing
     public long getPartitionTime(final TopicPartition partition) {
         return partitionGroup.getPartitionTimestamp(partition);
     }
@@ -457,10 +452,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // used for testing
     public void resetTimes() {
         partitionGroup.clear();
-    }
-
-    public TopicPartition getNextPartition() {
-        return partitionGroup.getNextTopicPartition();
     }
 
     /**

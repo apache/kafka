@@ -639,11 +639,8 @@ public class StreamTaskTest {
         task.resetTimes();
         assertTrue(task.getPartitionTime(partition1) == RecordQueue.UNKNOWN);
 
+        // timestamp would be updated here
         task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 999)));
-        assertTrue(task.getNextPartition() == partition1);
-
-        // time stamp would be updated here
-        task.process();
         assertTrue(task.getPartitionTime(partition1) == 1000);
     }
 
