@@ -248,7 +248,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
                 return self._rest(path, body, node, method)
             except ConnectRestError as e:
                 exception_to_throw = e
-                if e.status != 409 or e.status != 404:
+                if e.status != 409 and e.status != 404:
                     break
                 time.sleep(retry_backoff)
         raise exception_to_throw
