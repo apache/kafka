@@ -45,6 +45,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.metrics.CumulativeCount;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;
@@ -58,9 +59,6 @@ import java.util.concurrent.TimeUnit;
 import static java.lang.String.format;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordLatenessSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.closeTaskSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.commitOverTasksSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.skipRecordSensor;
 
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
@@ -99,7 +97,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             final String group = "stream-task-metrics";
 
             // first add the global operation metrics if not yet, with the global tags only
-            final Sensor parent = commitOverTasksSensor(metrics);
+            final Sensor parent = ThreadMetrics.commitOverTasksSensor(metrics);
 
             // add the operation metrics with additional tags
             final Map<String, String> tagMap = metrics.tagMap("task-id", taskName);
@@ -176,7 +174,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         this.producer = producerSupplier.get();
         this.taskMetrics = new TaskMetrics(id, streamsMetrics);
 
-        closeTaskSensor = closeTaskSensor(streamsMetrics);
+        closeTaskSensor = ThreadMetrics.closeTaskSensor(streamsMetrics);
 
         final ProductionExceptionHandler productionExceptionHandler = config.defaultProductionExceptionHandler();
 
@@ -185,7 +183,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 id.toString(),
                 logContext,
                 productionExceptionHandler,
-                skipRecordSensor(streamsMetrics));
+                ThreadMetrics.skipRecordSensor(streamsMetrics));
         } else {
             this.recordCollector = recordCollector;
         }

@@ -43,6 +43,7 @@ import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.TaskMetadata;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.slf4j.Logger;
 
@@ -61,14 +62,6 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.util.Collections.singleton;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.closeTaskSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.commitOverTasksSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.commitSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.createTaskSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.pollSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.processSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.punctuateSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.skipRecordSensor;
 
 public class StreamThread extends Thread {
 
@@ -428,7 +421,7 @@ public class StreamThread extends Thread {
             this.clientSupplier = clientSupplier;
             this.threadProducer = threadProducer;
             this.threadClientId = threadClientId;
-            createTaskSensor = createTaskSensor(streamsMetrics);
+            createTaskSensor = ThreadMetrics.createTaskSensor(streamsMetrics);
         }
 
         @Override
@@ -493,7 +486,7 @@ public class StreamThread extends Thread {
                 storeChangelogReader,
                 time,
                 log);
-            createTaskSensor = createTaskSensor(streamsMetrics);
+            createTaskSensor = ThreadMetrics.createTaskSensor(streamsMetrics);
         }
 
         @Override
@@ -676,14 +669,20 @@ public class StreamThread extends Thread {
         this.standbyRecords = new HashMap<>();
 
         this.streamsMetrics = streamsMetrics;
-        createTaskSensor(streamsMetrics);
-        closeTaskSensor(streamsMetrics);
-        this.commitSensor = commitSensor(streamsMetrics);
-        this.pollSensor = pollSensor(streamsMetrics);
-        this.processSensor = processSensor(streamsMetrics);
-        this.punctuateSensor = punctuateSensor(streamsMetrics);
-        skipRecordSensor(streamsMetrics);
-        commitOverTasksSensor(streamsMetrics);
+        this.commitSensor = ThreadMetrics.commitSensor(streamsMetrics);
+        this.pollSensor = ThreadMetrics.pollSensor(streamsMetrics);
+        this.processSensor = ThreadMetrics.processSensor(streamsMetrics);
+        this.punctuateSensor = ThreadMetrics.punctuateSensor(streamsMetrics);
+
+        // The following sensors are created here but their references are not stored in this object, since within
+        // this object they are not recorded. The sensors are created here so that the stream threads starts with all
+        // its metrics initialised. Otherwise, those sensors would have been created during processing, which could
+        // lead to missing metrics. For instance, if no task were created, the metrics for created and closed
+        // tasks would never be added to the metrics.
+        ThreadMetrics.createTaskSensor(streamsMetrics);
+        ThreadMetrics.closeTaskSensor(streamsMetrics);
+        ThreadMetrics.skipRecordSensor(streamsMetrics);
+        ThreadMetrics.commitOverTasksSensor(streamsMetrics);
 
         this.time = time;
         this.builder = builder;

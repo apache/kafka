@@ -33,6 +33,7 @@ import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 
 import java.io.File;
@@ -42,8 +43,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.skipRecordSensor;
 
 /**
  * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their {@link Processor},
@@ -218,7 +217,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
         final String threadName = "mock-processor-context-virtual-thread";
         this.metrics = new StreamsMetricsImpl(new Metrics(metricConfig), threadName);
-        skipRecordSensor(metrics);
+        ThreadMetrics.skipRecordSensor(metrics);
     }
 
     @Override

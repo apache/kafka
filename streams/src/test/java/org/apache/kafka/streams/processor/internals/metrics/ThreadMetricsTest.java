@@ -29,14 +29,6 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ALL_TASKS;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_ID_TAG;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.closeTaskSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.commitOverTasksSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.commitSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.createTaskSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.pollSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.processSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.punctuateSensor;
-import static org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics.skipRecordSensor;
 import static org.easymock.EasyMock.expect;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -73,7 +65,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = createTaskSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.createTaskSensor(streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -95,7 +87,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = closeTaskSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.closeTaskSensor(streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -120,7 +112,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = commitSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.commitSensor(streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -145,7 +137,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = pollSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.pollSensor(streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -170,7 +162,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = processSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.processSensor(streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -195,7 +187,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = punctuateSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.punctuateSensor(streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -217,7 +209,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = skipRecordSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.skipRecordSensor(streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
@@ -242,7 +234,7 @@ public class ThreadMetricsTest {
         replayAll();
         replay(StreamsMetricsImpl.class);
 
-        final Sensor sensor = commitOverTasksSensor(streamsMetrics);
+        final Sensor sensor = ThreadMetrics.commitOverTasksSensor(streamsMetrics);
 
         verifyAll();
         verify(StreamsMetricsImpl.class);
