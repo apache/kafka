@@ -24,6 +24,8 @@ import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.MockClusterResourceListener;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -635,6 +637,35 @@ public class MetadataTest {
         Cluster fromMetadataEmpty = MetadataCache.empty().cluster();
         Cluster fromClusterEmpty = Cluster.empty();
         assertEquals(fromMetadataEmpty, fromClusterEmpty);
+    }
+
+    @Test
+    public void testRequestVersion() {
+        Time time = new MockTime();
+
+        metadata.requestUpdate();
+        Metadata.MetadataRequestAndVersion versionAndBuilder = metadata.newMetadataRequestAndVersion();
+        metadata.update(versionAndBuilder.requestVersion,
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), time.milliseconds());
+        assertFalse(metadata.updateRequested());
+
+        // bump the request version for new topics added to the metadata
+        metadata.requestUpdateForNewTopics();
+
+        // simulating a bump while a metadata request is in flight
+        versionAndBuilder = metadata.newMetadataRequestAndVersion();
+        metadata.requestUpdateForNewTopics();
+        metadata.update(versionAndBuilder.requestVersion,
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), time.milliseconds());
+
+        // metadata update is still needed
+        assertTrue(metadata.updateRequested());
+
+        // the next update will resolve it
+        versionAndBuilder = metadata.newMetadataRequestAndVersion();
+        metadata.update(versionAndBuilder.requestVersion,
+                TestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)), time.milliseconds());
+        assertFalse(metadata.updateRequested());
     }
 
     private void clearBackgroundError() {

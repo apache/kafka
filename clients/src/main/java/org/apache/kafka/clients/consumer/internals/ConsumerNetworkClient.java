@@ -162,8 +162,8 @@ public class ConsumerNetworkClient implements Closeable {
             AuthenticationException ex = this.metadata.getAndClearAuthenticationException();
             if (ex != null)
                 throw ex;
-        } while (this.metadata.version() == version && timer.notExpired());
-        return this.metadata.version() > version;
+        } while (this.metadata.updateVersion() == version && timer.notExpired());
+        return this.metadata.updateVersion() > version;
     }
 
     /**
