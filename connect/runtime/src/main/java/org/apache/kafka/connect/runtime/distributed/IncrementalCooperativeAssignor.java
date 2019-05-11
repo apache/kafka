@@ -57,6 +57,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private final Time time;
     private final int maxDelay;
     private ConnectorsAndTasks previousAssignment;
+    private ConnectorsAndTasks previousRevocation;
     private boolean canRevoke;
     private long scheduledRebalance;
     private Set<String> candidateWorkersForReassignment;
@@ -67,6 +68,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         this.time = time;
         this.maxDelay = maxDelay;
         this.previousAssignment = ConnectorsAndTasks.EMPTY;
+        this.previousRevocation = ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>());
         this.canRevoke = true;
         this.scheduledRebalance = 0;
         this.candidateWorkersForReassignment = new LinkedHashSet<>();
@@ -137,8 +139,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
      * @return
      */
     protected Map<String, ByteBuffer> performTaskAssignment(String leaderId, long maxOffset,
-                                                          Map<String, ExtendedWorkerState> memberConfigs,
-                                                          WorkerCoordinator coordinator) {
+                                                            Map<String, ExtendedWorkerState> memberConfigs,
+                                                            WorkerCoordinator coordinator) {
         // Base set: The previous assignment of connectors-and-tasks is a standalone snapshot that
         // can be used to calculate derived sets
         log.debug("Previous assignments: {}", previousAssignment);
@@ -158,6 +160,16 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // used to calculate derived sets
         ConnectorsAndTasks activeAssignments = assignment(memberConfigs);
         log.debug("Active assignments: {}", activeAssignments);
+
+        if (!previousRevocation.isEmpty()) {
+            if (previousRevocation.connectors().stream().anyMatch(c -> activeAssignments.connectors().contains(c))
+                    || previousRevocation.tasks().stream().anyMatch(t -> activeAssignments.tasks().contains(t))) {
+                previousAssignment = activeAssignments;
+                canRevoke = true;
+            }
+            previousRevocation.connectors().clear();
+            previousRevocation.tasks().clear();
+        }
 
         // Derived set: The set of deleted connectors-and-tasks is a derived set from the set
         // difference of previous - configured
@@ -288,6 +300,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         for (ConnectorsAndTasks revoked : toRevoke.values()) {
             previousAssignment.connectors().removeAll(revoked.connectors());
             previousAssignment.tasks().removeAll(revoked.tasks());
+            previousRevocation.connectors().addAll(revoked.connectors());
+            previousRevocation.tasks().addAll(revoked.tasks());
         }
 
         // Depends on the previous assignment's collections being sets at the moment.
