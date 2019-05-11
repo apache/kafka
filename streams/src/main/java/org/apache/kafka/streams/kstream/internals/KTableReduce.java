@@ -80,7 +80,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
                 intermediateAgg = oldAgg;
             }
 
-            // than try to add the new value
+            // then try to add the new value
             final V newAgg;
             if (value.newValue != null) {
                 if (intermediateAgg == null) {
