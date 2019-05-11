@@ -92,7 +92,7 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
             tupleForwarder = new TimestampedTupleForwarder<>(
                 windowStore,
                 context,
-                new TimestampedForwardingCacheFlushListener<>(context),
+                new TimestampedCacheFlushListener<>(context),
                 sendOldValues);
         }
 

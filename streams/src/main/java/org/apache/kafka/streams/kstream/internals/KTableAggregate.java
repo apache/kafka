@@ -25,6 +25,8 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+
 public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T> {
 
     private final String storeName;
@@ -66,7 +68,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store,
                 context,
-                new TimestampedForwardingCacheFlushListener<>(context),
+                new TimestampedCacheFlushListener<>(context),
                 sendOldValues);
         }
 
@@ -81,13 +83,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             }
 
             final ValueAndTimestamp<T> oldAggAndTimestamp = store.get(key);
-            final T oldAgg;
-            if (oldAggAndTimestamp == null) {
-                oldAgg = initializer.apply();
-            } else {
-                oldAgg = oldAggAndTimestamp.value();
-            }
-
+            final T oldAgg = getValueOrNull(oldAggAndTimestamp);
             final T intermediateAgg;
 
             // first try to remove the old value

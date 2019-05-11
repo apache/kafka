@@ -68,7 +68,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store,
                 context,
-                new TimestampedForwardingCacheFlushListener<>(context),
+                new TimestampedCacheFlushListener<>(context),
                 sendOldValues);
         }
 

@@ -25,11 +25,11 @@ import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-class TimestampedForwardingCacheFlushListener<K, V> implements CacheFlushListener<K, ValueAndTimestamp<V>> {
+class TimestampedCacheFlushListener<K, V> implements CacheFlushListener<K, ValueAndTimestamp<V>> {
     private final InternalProcessorContext context;
     private final ProcessorNode myNode;
 
-    TimestampedForwardingCacheFlushListener(final ProcessorContext context) {
+    TimestampedCacheFlushListener(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
         myNode = this.context.currentNode();
     }
@@ -45,7 +45,7 @@ class TimestampedForwardingCacheFlushListener<K, V> implements CacheFlushListene
             context.forward(
                 key,
                 new Change<>(getValueOrNull(newValue), getValueOrNull(oldValue)),
-                To.all().withTimestamp(timestamp));
+                To.all().withTimestamp(newValue != null ? newValue.timestamp() : timestamp));
         } finally {
             context.setCurrentNode(prev);
         }

@@ -107,7 +107,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
                     context,
-                    new TimestampedForwardingCacheFlushListener<>(context),
+                    new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
             }
         }

@@ -37,7 +37,7 @@ public class TimestampedKeyValueStoreMaterializer<K, V> {
         KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final String name = materialized.storeName();
-            supplier = Stores.persistentKeyValueStore(name);
+            supplier = Stores.persistentTimestampedKeyValueStore(name);
         }
         final StoreBuilder<TimestampedKeyValueStore<K, V>> builder = Stores.timestampedKeyValueStoreBuilder(
             supplier,

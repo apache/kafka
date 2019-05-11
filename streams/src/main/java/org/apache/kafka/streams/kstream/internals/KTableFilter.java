@@ -75,7 +75,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
                     context,
-                    new TimestampedForwardingCacheFlushListener<>(context),
+                    new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
             }
         }

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.junit.Test;
 
@@ -27,7 +28,7 @@ import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 
-public class TupleForwarderTest {
+public class TimestampedTupleForwarderTest {
 
     @Test
     public void shouldSetFlushListenerOnWrappedStateStore() {
@@ -36,13 +37,13 @@ public class TupleForwarderTest {
     }
 
     private void setFlushListener(final boolean sendOldValues) {
-        final WrappedStateStore<StateStore, Object, Object> store = mock(WrappedStateStore.class);
-        final ForwardingCacheFlushListener<Object, Object> flushListener = mock(ForwardingCacheFlushListener.class);
+        final WrappedStateStore<StateStore, Object, ValueAndTimestamp<Object>> store = mock(WrappedStateStore.class);
+        final TimestampedCacheFlushListener<Object, Object> flushListener = mock(TimestampedCacheFlushListener.class);
 
         expect(store.setFlushListener(flushListener, sendOldValues)).andReturn(false);
         replay(store);
 
-        new TupleForwarder<>(store, null, flushListener, sendOldValues);
+        new TimestampedTupleForwarder<>(store, null, flushListener, sendOldValues);
 
         verify(store);
     }
@@ -66,7 +67,7 @@ public class TupleForwarderTest {
         expectLastCall();
         replay(store, context);
 
-        new TupleForwarder<>(store, context, null, sendOldValues)
+        new TimestampedTupleForwarder<>(store, context, null, sendOldValues)
             .maybeForward("key", "newValue", "oldValue");
 
         verify(store, context);
@@ -80,10 +81,9 @@ public class TupleForwarderTest {
         expect(store.setFlushListener(null, false)).andReturn(true);
         replay(store, context);
 
-        new TupleForwarder<>(store, context, null, false)
+        new TimestampedTupleForwarder<>(store, context, null, false)
             .maybeForward("key", "newValue", "oldValue");
 
         verify(store, context);
     }
-
 }

@@ -29,23 +29,25 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
  * @param <V> the type of the value
  */
 class TimestampedTupleForwarder<K, V> {
-    private final boolean cachingEnabled;
     private final ProcessorContext context;
+    private final boolean sendOldValues;
+    private final boolean cachingEnabled;
 
     @SuppressWarnings("unchecked")
     TimestampedTupleForwarder(final StateStore store,
                               final ProcessorContext context,
-                              final TimestampedForwardingCacheFlushListener<K, V> flushListener,
+                              final TimestampedCacheFlushListener<K, V> flushListener,
                               final boolean sendOldValues) {
-        cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
         this.context = context;
+        this.sendOldValues = sendOldValues;
+        cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
     }
 
     public void maybeForward(final K key,
                              final V newValue,
                              final V oldValue) {
         if (!cachingEnabled) {
-            context.forward(key, new Change<>(newValue, oldValue));
+            context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null));
         }
     }
 }

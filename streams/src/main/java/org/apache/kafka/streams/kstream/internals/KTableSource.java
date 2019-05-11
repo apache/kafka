@@ -83,7 +83,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
                     context,
-                    new TimestampedForwardingCacheFlushListener<>(context),
+                    new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
             }
         }

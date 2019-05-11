@@ -95,7 +95,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
                     context,
-                    new TimestampedForwardingCacheFlushListener<K, V1>(context),
+                    new TimestampedCacheFlushListener<K, V1>(context),
                     sendOldValues);
             }
         }
