@@ -71,4 +71,19 @@ public enum ConnectProtocolCompatibility {
      * @return the protocol name
      */
     public abstract String protocol();
+
+    /**
+     * Return the enum that corresponds to the name that is given as an argument;
+     * if the no mapping is found {@code IllegalArgumentException} is thrown.
+     *
+     * @param protocolName the name of the protocol compatibility mode
+     * @return the enum that corresponds to the protocol compatibility mode
+     */
+    public static ConnectProtocolCompatibility protocol(String protocolName) {
+        return Arrays.stream(ConnectProtocolCompatibility.values())
+                .filter(mode -> mode.protocol().equalsIgnoreCase(protocolName))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Not found Connect protocol compatibility mode for protocol: " + protocolName));
+    }
 }

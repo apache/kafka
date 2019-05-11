@@ -42,13 +42,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolSet;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
+import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolSet;
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
-import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.CONNECT_PROTOCOL_V1;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedWorkerState;
 
 /**
@@ -69,7 +67,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     private LeaderState leaderState;
 
     private boolean rejoinRequested;
-    private volatile short currentConnectProtocol;
+    private volatile ConnectProtocolCompatibility currentConnectProtocol;
     private final ConnectAssignor eagerAssignor;
     private final ConnectAssignor incrementalAssignor;
 
@@ -112,9 +110,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         this.protocolCompatibility = protocolCompatibility;
         this.incrementalAssignor = new IncrementalCooperativeAssignor(logContext, time, maxDelay);
         this.eagerAssignor = new EagerAssignor(logContext);
-        this.currentConnectProtocol = protocolCompatibility == COMPATIBLE
-                                      ? CONNECT_PROTOCOL_V1
-                                      : CONNECT_PROTOCOL_V0;
+        this.currentConnectProtocol = protocolCompatibility;
     }
 
     @Override
@@ -196,13 +192,13 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     @Override
     protected void onJoinComplete(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
         ConnectAssignment newAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(memberAssignment);
-        currentConnectProtocol = newAssignment.version();
+        currentConnectProtocol = ConnectProtocolCompatibility.protocol(protocol);
         // At this point we always consider ourselves to be a member of the cluster, even if there was an assignment
         // error (the leader couldn't make the assignment) or we are behind the config and cannot yet work on our assigned
         // tasks. It's the responsibility of the code driving this process to decide how to react (e.g. trying to get
         // up to date, try to rejoin again, leaving the group and backing off, etc.).
         rejoinRequested = false;
-        if (currentConnectProtocol > CONNECT_PROTOCOL_V0) {
+        if (currentConnectProtocol != EAGER) {
             if (!newAssignment.revokedConnectors().isEmpty() || !newAssignment.revokedTasks().isEmpty()) {
                 listener.onRevoked(newAssignment.leader(), newAssignment.revokedConnectors(), newAssignment.revokedTasks());
             }
@@ -223,7 +219,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     @Override
     protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<JoinGroupResponseMember> allMemberMetadata) {
-        return currentConnectProtocol == CONNECT_PROTOCOL_V0
+        return ConnectProtocolCompatibility.protocol(protocol) == EAGER
                ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
                : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
     }
@@ -232,7 +228,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     protected void onJoinPrepare(int generation, String memberId) {
         log.info("Rebalance started");
         leaderState(null);
-        if (currentConnectProtocol == CONNECT_PROTOCOL_V0) {
+        if (currentConnectProtocol == EAGER) {
             log.debug("Revoking previous assignment {}", assignmentSnapshot);
             if (assignmentSnapshot != null && !assignmentSnapshot.failed())
                 listener.onRevoked(assignmentSnapshot.leader(), assignmentSnapshot.connectors(), assignmentSnapshot.tasks());
@@ -321,7 +317,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
      * @return the current connect protocol version
      */
     public short currentProtocolVersion() {
-        return currentConnectProtocol;
+        return currentConnectProtocol == EAGER ? (short) 0 : (short) 1;
     }
 
     private class WorkerCoordinatorMetrics {
