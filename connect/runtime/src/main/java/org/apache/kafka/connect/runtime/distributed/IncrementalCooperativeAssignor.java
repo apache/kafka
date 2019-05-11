@@ -205,29 +205,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 completeWorkerAssignment.stream().collect(Collectors.toMap(WorkerLoad::worker, WorkerLoad::tasks));
         log.debug("Calculated task assignments: {}", taskAssignments);
 
-        // Connector to worker reverse lookup map
-        Map<String, String> connectorOwners = WorkerCoordinator.invertAssignment(connectorAssignments);
-        // Task to worker reverse lookup map
-        Map<ConnectorTaskId, String> taskOwners = WorkerCoordinator.invertAssignment(taskAssignments);
-
         // A collection of the current assignment excluding the connectors-and-tasks to be deleted
         List<WorkerLoad> currentWorkerAssignment = workerAssignment(memberConfigs, deleted);
 
-        Map<String, ConnectorsAndTasks> toRevoke = new HashMap<>();
-
-        // Add the connectors that have been deleted to the revoked set
-        deleted.connectors().forEach(c ->
-                toRevoke.computeIfAbsent(
-                    connectorOwners.get(c),
-                    v -> ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>()))
-                    .connectors().add(c));
-
-        // Add the tasks that have been deleted to the revoked set
-        deleted.tasks().forEach(t ->
-                toRevoke.computeIfAbsent(
-                    taskOwners.get(t),
-                    v -> ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>()))
-                    .tasks().add(t));
+        Map<String, ConnectorsAndTasks> toRevoke = computeDeleted(deleted, connectorAssignments, taskAssignments);
         log.debug("Connectors and tasks to delete assignments: {}", toRevoke);
 
         // Recompute the complete assignment excluding the deleted connectors-and-tasks
@@ -254,13 +235,13 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             log.debug("Connectors and tasks to revoke assignments: {}", toRevoke);
 
             toExplicitlyRevoke.forEach(
-                    (worker, assignment) -> {
-                        ConnectorsAndTasks existing = toRevoke.computeIfAbsent(
-                                worker,
-                                v -> ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>()));
-                        existing.connectors().addAll(assignment.connectors());
-                        existing.tasks().addAll(assignment.tasks());
-                    }
+                (worker, assignment) -> {
+                    ConnectorsAndTasks existing = toRevoke.computeIfAbsent(
+                        worker,
+                        v -> ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>()));
+                    existing.connectors().addAll(assignment.connectors());
+                    existing.tasks().addAll(assignment.tasks());
+                }
             );
             canRevoke = toExplicitlyRevoke.size() == 0;
         }
@@ -293,9 +274,44 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                                 memberConfigs.get(leaderId).url(), maxOffset, incrementalConnectorAssignments,
                                 incrementalTaskAssignments, toRevoke, delay);
 
-        previousAssignment = ConnectorsAndTasks.embed(
+        previousAssignment = computePreviousAssignment(toRevoke, connectorAssignments, taskAssignments, lostAssignments);
+
+        log.debug("Actual assignments: {}", assignments);
+        return serializeAssignments(assignments);
+    }
+
+    private Map<String, ConnectorsAndTasks> computeDeleted(ConnectorsAndTasks deleted,
+                                                           Map<String, Collection<String>> connectorAssignments,
+                                                           Map<String, Collection<ConnectorTaskId>> taskAssignments) {
+        // Connector to worker reverse lookup map
+        Map<String, String> connectorOwners = WorkerCoordinator.invertAssignment(connectorAssignments);
+        // Task to worker reverse lookup map
+        Map<ConnectorTaskId, String> taskOwners = WorkerCoordinator.invertAssignment(taskAssignments);
+
+        Map<String, ConnectorsAndTasks> toRevoke = new HashMap<>();
+        // Add the connectors that have been deleted to the revoked set
+        deleted.connectors().forEach(c ->
+                toRevoke.computeIfAbsent(
+                    connectorOwners.get(c),
+                    v -> ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>()))
+                    .connectors().add(c));
+        // Add the tasks that have been deleted to the revoked set
+        deleted.tasks().forEach(t ->
+                toRevoke.computeIfAbsent(
+                    taskOwners.get(t),
+                    v -> ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>()))
+                    .tasks().add(t));
+        log.debug("Connectors and tasks to delete assignments: {}", toRevoke);
+        return toRevoke;
+    }
+
+    private ConnectorsAndTasks computePreviousAssignment(Map<String, ConnectorsAndTasks> toRevoke,
+                                                         Map<String, Collection<String>> connectorAssignments,
+                                                         Map<String, Collection<ConnectorTaskId>> taskAssignments,
+                                                         ConnectorsAndTasks lostAssignments) {
+        ConnectorsAndTasks previousAssignment = ConnectorsAndTasks.embed(
                 connectorAssignments.values().stream().flatMap(Collection::stream).collect(Collectors.toSet()),
-                taskAssignments.values().stream().flatMap(Collection::stream).collect(Collectors.toSet()));
+                taskAssignments.values() .stream() .flatMap(Collection::stream).collect(Collectors.toSet()));
 
         for (ConnectorsAndTasks revoked : toRevoke.values()) {
             previousAssignment.connectors().removeAll(revoked.connectors());
@@ -309,8 +325,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         previousAssignment.connectors().addAll(lostAssignments.connectors());
         previousAssignment.tasks().addAll(lostAssignments.tasks());
 
-        log.debug("Actual assignments: {}", assignments);
-        return serializeAssignments(assignments);
+        return previousAssignment;
     }
 
     private void handleLostAssignments(ConnectorsAndTasks lostAssignments,
