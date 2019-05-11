@@ -16,6 +16,7 @@
 import os.path
 import signal
 import streams_property
+import consumer_property
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
@@ -530,6 +531,25 @@ class StreamsNamedRepartitionTopicService(StreamsTestBaseService):
         properties['input.topic'] = self.INPUT_TOPIC
         properties['aggregation.topic'] = self.AGGREGATION_TOPIC
         properties['add.operations'] = self.ADD_ADDITIONAL_OPS
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
+
+class StreamsStaticMembershipService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, group_instance_id):
+        super(StreamsStaticMembershipService, self).__init__(test_context,
+                                                             kafka,
+                                                             "org.apache.kafka.streams.tests.StreamsStaticMembershipTest",
+                                                             "")
+        self.INPUT_TOPIC = None
+        self.GROUP_INSTANCE_ID = group_instance_id
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      consumer_property.GROUP_INSTANCE_ID: self.GROUP_INSTANCE_ID,
+                      consumer_property.SESSION_TIMEOUT_MS: 60000}
+
+        properties['input.topic'] = self.INPUT_TOPIC
 
         cfg = KafkaConfig(**properties)
         return cfg.render()

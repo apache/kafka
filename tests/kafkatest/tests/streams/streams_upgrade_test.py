@@ -60,7 +60,7 @@ which are outlined here:
    
 4. Then update all relevant versions in the tests/docker/Dockerfile
 
-5. Add a new "upgrade-system-tests-XXXX module under streams.  You can probably just copy the 
+5. Add a new upgrade-system-tests-XXXX module under streams.  You can probably just copy the 
    latest system test module from the last release.  Just make sure to update the systout print
    statement in StreamsUpgradeTest to the version for the release.  After you add the new module
    you'll need to update settings.gradle file to include the name of the module you just created
