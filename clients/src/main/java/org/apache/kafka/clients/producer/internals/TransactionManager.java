@@ -24,6 +24,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
@@ -835,8 +836,16 @@ public class TransactionManager {
     }
 
     private void maybeFailWithError() {
-        if (hasError())
-            throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
+        if (hasError()) {
+            // for ProducerFencedException, do not wrap it as a KafkaException
+            // but create a new instance without the call trace since it was not thrown because of the current call
+            if (lastError instanceof ProducerFencedException) {
+                throw new ProducerFencedException("The producer has been rejected from the broker because " +
+                    "it tried to use an old epoch with the transactionalId");
+            } else {
+                throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
+            }
+        }
     }
 
     private boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {

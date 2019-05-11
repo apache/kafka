@@ -27,6 +27,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
@@ -1356,8 +1357,8 @@ public class TransactionManagerTest {
         assertTrue(secondResponseFuture.isDone());
     }
 
-    @Test(expected = ExecutionException.class)
-    public void testProducerFencedException() throws InterruptedException, ExecutionException {
+    @Test
+    public void testProducerFencedException() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -1378,7 +1379,44 @@ public class TransactionManagerTest {
 
         assertTrue(responseFuture.isDone());
         assertTrue(transactionManager.hasError());
-        responseFuture.get();
+
+        try {
+            // make sure the produce was expired.
+            responseFuture.get();
+            fail("Expected to get a ExecutionException from the response");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof ProducerFencedException);
+        }
+
+        // make sure the produce was expired.
+        try {
+            transactionManager.beginTransaction();
+            fail("Expected to get a ExecutionException from the beginTransaction call");
+        } catch (RuntimeException e) {
+            assertTrue(e instanceof ProducerFencedException);
+        }
+
+        // make sure the exception was thrown directly from the follow-up calls.
+        try {
+            transactionManager.beginCommit();
+            fail("Expected to get a ProducerFencedException from the beginCommit call");
+        } catch (RuntimeException e) {
+            assertTrue(e instanceof ProducerFencedException);
+        }
+
+        try {
+            transactionManager.beginAbort();
+            fail("Expected to get a ProducerFencedException from the beginAbort call");
+        } catch (RuntimeException e) {
+            assertTrue(e instanceof ProducerFencedException);
+        }
+
+        try {
+            transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), "dummyId");
+            fail("Expected to get a ProducerFencedException from the sendOffsetsToTransaction call");
+        } catch (RuntimeException e) {
+            assertTrue(e instanceof ProducerFencedException);
+        }
     }
 
     @Test
