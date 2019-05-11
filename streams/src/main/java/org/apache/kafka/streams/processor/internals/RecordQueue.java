@@ -46,7 +46,7 @@ public class RecordQueue {
     private final RecordDeserializer recordDeserializer;
     private final ArrayDeque<ConsumerRecord<byte[], byte[]>> fifoQueue;
 
-    private long partitionTime = UNKNOWN;
+    private long headTimestamp = UNKNOWN;
     private StampedRecord headRecord = null;
 
     RecordQueue(final TopicPartition partition,
@@ -142,7 +142,7 @@ public class RecordQueue {
      * @return timestamp
      */
     public long timestamp() {
-        return partitionTime;
+        return headTimestamp;
     }
 
     /**
@@ -151,7 +151,7 @@ public class RecordQueue {
     public void clear() {
         fifoQueue.clear();
         headRecord = null;
-        partitionTime = UNKNOWN;
+        headTimestamp = UNKNOWN;
     }
 
     private void maybeUpdateTimestamp() {
@@ -166,7 +166,7 @@ public class RecordQueue {
 
             final long timestamp;
             try {
-                timestamp = timestampExtractor.extract(deserialized, partitionTime);
+                timestamp = timestampExtractor.extract(deserialized, headTimestamp);
             } catch (final StreamsException internalFatalExtractorException) {
                 throw internalFatalExtractorException;
             } catch (final Exception fatalUserException) {
@@ -188,10 +188,7 @@ public class RecordQueue {
 
             headRecord = new StampedRecord(deserialized, timestamp);
 
-            // update the partition timestamp if the current head record's timestamp has exceed its value
-            if (timestamp > partitionTime) {
-                partitionTime = timestamp;
-            }
+            headTimestamp = timestamp;
         }
     }
 }
