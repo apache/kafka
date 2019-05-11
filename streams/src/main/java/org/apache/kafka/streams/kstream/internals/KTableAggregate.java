@@ -75,22 +75,29 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
                 throw new StreamsException("Record key for KTable aggregate operator with state " + storeName + " should not be null.");
             }
 
-            T oldAgg = store.get(key);
-
-            if (oldAgg == null) {
-                oldAgg = initializer.apply();
-            }
-
-            T newAgg = oldAgg;
+            final T oldAgg = store.get(key);
+            final T intermediateAgg;
 
             // first try to remove the old value
-            if (value.oldValue != null) {
-                newAgg = remove.apply(key, value.oldValue, newAgg);
+            if (value.oldValue != null && oldAgg != null) {
+                intermediateAgg = remove.apply(key, value.oldValue, oldAgg);
+            } else {
+                intermediateAgg = oldAgg;
             }
 
             // then try to add the new value
+            final T newAgg;
             if (value.newValue != null) {
-                newAgg = add.apply(key, value.newValue, newAgg);
+                final T initializedAgg;
+                if (intermediateAgg == null) {
+                    initializedAgg = initializer.apply();
+                } else {
+                    initializedAgg = intermediateAgg;
+                }
+
+                newAgg = add.apply(key, value.newValue, initializedAgg);
+            } else {
+                newAgg = intermediateAgg;
             }
 
             // update the store with the new value

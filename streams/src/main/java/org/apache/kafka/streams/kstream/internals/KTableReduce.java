@@ -71,20 +71,25 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
             }
 
             final V oldAgg = store.get(key);
-            V newAgg = oldAgg;
+            final V intermediateAgg;
 
-            // first try to add the new value
-            if (value.newValue != null) {
-                if (newAgg == null) {
-                    newAgg = value.newValue;
-                } else {
-                    newAgg = addReducer.apply(newAgg, value.newValue);
-                }
+            // first try to remove the old value
+            if (value.oldValue != null && oldAgg != null) {
+                intermediateAgg = removeReducer.apply(oldAgg, value.oldValue);
+            } else {
+                intermediateAgg = oldAgg;
             }
 
-            // then try to remove the old value
-            if (value.oldValue != null) {
-                newAgg = removeReducer.apply(newAgg, value.oldValue);
+            // then try to add the new value
+            final V newAgg;
+            if (value.newValue != null) {
+                if (intermediateAgg == null) {
+                    newAgg = value.newValue;
+                } else {
+                    newAgg = addReducer.apply(intermediateAgg, value.newValue);
+                }
+            } else {
+                newAgg = intermediateAgg;
             }
 
             // update the store with the new value
