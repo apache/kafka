@@ -274,8 +274,8 @@ public class AbstractCoordinatorTest {
         try {
             coordinator.ensureActiveGroup();
             fail("Failed to catch expected FencedInstanceIdException");
-        } catch (FencedInstanceIdException e) {
-            assertEquals(Errors.FENCED_INSTANCE_ID.message(), e.getMessage());
+        } catch (RuntimeException e) {
+            assertTrue("Sync group request was fenced due to duplicate instance id", e instanceof FencedInstanceIdException);
         }
     }
 

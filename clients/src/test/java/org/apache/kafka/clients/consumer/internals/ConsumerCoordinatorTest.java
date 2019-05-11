@@ -2303,16 +2303,6 @@ public class ConsumerCoordinatorTest {
         };
     }
 
-    private OffsetCommitCallback callback(final String expectedMessage, final AtomicBoolean success) {
-        return new OffsetCommitCallback() {
-            @Override
-            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                if (exception != null && expectedMessage.equals(exception.getMessage()))
-                    success.set(true);
-            }
-        };
-    }
-
     private void joinAsFollowerAndReceiveAssignment(String consumerId,
                                                     ConsumerCoordinator coordinator,
                                                     List<TopicPartition> assignment) {
