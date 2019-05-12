@@ -39,7 +39,7 @@ public class SessionTupleForwarderTest {
 
     private void setFlushListener(final boolean sendOldValues) {
         final WrappedStateStore<StateStore, Windowed<Object>, Object> store = mock(WrappedStateStore.class);
-        final ForwardingCacheFlushListener<Windowed<Object>, Object> flushListener = mock(ForwardingCacheFlushListener.class);
+        final SessionCacheFlushListener<Object, Object> flushListener = mock(SessionCacheFlushListener.class);
 
         expect(store.setFlushListener(flushListener, sendOldValues)).andReturn(false);
         replay(store);
