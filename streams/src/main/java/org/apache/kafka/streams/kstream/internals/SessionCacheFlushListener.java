@@ -16,30 +16,31 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
-class ForwardingCacheFlushListener<K, V> implements CacheFlushListener<K, V> {
+class SessionCacheFlushListener<K, V> implements CacheFlushListener<Windowed<K>, V> {
     private final InternalProcessorContext context;
     private final ProcessorNode myNode;
 
-    ForwardingCacheFlushListener(final ProcessorContext context) {
+    SessionCacheFlushListener(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
         myNode = this.context.currentNode();
     }
 
     @Override
-    public void apply(final K key,
+    public void apply(final Windowed<K> key,
                       final V newValue,
                       final V oldValue,
                       final long timestamp) {
         final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            context.forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(timestamp));
+            context.forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(key.window().end()));
         } finally {
             context.setCurrentNode(prev);
         }

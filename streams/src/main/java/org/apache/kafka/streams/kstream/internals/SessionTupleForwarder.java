@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.state.internals.CacheFlushListener;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 /**
@@ -25,29 +28,29 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
  * Forwarding by this class only occurs when caching is not enabled. If caching is enabled,
  * forwarding occurs in the flush listener when the cached store flushes.
  *
- * @param <K> the type of the key
- * @param <V> the type of the value
+ * @param <K>
+ * @param <V>
  */
-class TupleForwarder<K, V> {
+class SessionTupleForwarder<K, V> {
     private final ProcessorContext context;
     private final boolean sendOldValues;
     private final boolean cachingEnabled;
 
     @SuppressWarnings("unchecked")
-    TupleForwarder(final StateStore store,
-                   final ProcessorContext context,
-                   final ForwardingCacheFlushListener<K, V> flushListener,
-                   final boolean sendOldValues) {
+    SessionTupleForwarder(final StateStore store,
+                          final ProcessorContext context,
+                          final CacheFlushListener<Windowed<K>, V> flushListener,
+                          final boolean sendOldValues) {
         this.context = context;
         this.sendOldValues = sendOldValues;
         cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
     }
 
-    public void maybeForward(final K key,
+    public void maybeForward(final Windowed<K> key,
                              final V newValue,
                              final V oldValue) {
         if (!cachingEnabled) {
-            context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null));
+            context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null), To.all().withTimestamp(key.window().end()));
         }
     }
 }
