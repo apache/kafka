@@ -20,11 +20,11 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 
 class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
-
     private final KTableImpl<K, ?, V> parent;
     private final ValueMapperWithKey<? super K, ? super V, ? extends V1> mapper;
     private final String queryableName;
@@ -81,17 +81,22 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         return newValue;
     }
 
+
     private class KTableMapValuesProcessor extends AbstractProcessor<K, Change<V>> {
-        private KeyValueStore<K, V1> store;
-        private TupleForwarder<K, V1> tupleForwarder;
+        private TimestampedKeyValueStore<K, V1> store;
+        private TimestampedTupleForwarder<K, V1> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
-                store = (KeyValueStore<K, V1>) context.getStateStore(queryableName);
-                tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<K, V1>(context), sendOldValues);
+                store = (TimestampedKeyValueStore<K, V1>) context.getStateStore(queryableName);
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                    store,
+                    context,
+                    new TimestampedCacheFlushListener<K, V1>(context),
+                    sendOldValues);
             }
         }
 
@@ -101,7 +106,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
             final V1 oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
             if (queryableName != null) {
-                store.put(key, newValue);
+                store.put(key, ValueAndTimestamp.make(newValue, context().timestamp()));
                 tupleForwarder.maybeForward(key, newValue, oldValue);
             } else {
                 context().forward(key, new Change<>(newValue, oldValue));
@@ -109,8 +114,8 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         }
     }
 
-    private class KTableMapValuesValueGetter implements KTableValueGetter<K, V1> {
 
+    private class KTableMapValuesValueGetter implements KTableValueGetter<K, V1> {
         private final KTableValueGetter<K, V> parentGetter;
 
         KTableMapValuesValueGetter(final KTableValueGetter<K, V> parentGetter) {
@@ -126,7 +131,6 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         public V1 get(final K key) {
             return computeValue(key, parentGetter.get(key));
         }
-
 
         @Override
         public void close() {
