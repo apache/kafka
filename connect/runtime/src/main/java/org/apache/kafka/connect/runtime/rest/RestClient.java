@@ -60,7 +60,7 @@ public class RestClient {
         HttpClient client;
 
         if (url.startsWith("https://")) {
-            client = new HttpClient(SSLUtils.createSslContextFactory(config, true));
+            client = new HttpClient(SSLUtils.createClientSideSslContextFactory(config));
         } else {
             client = new HttpClient();
         }

@@ -148,7 +148,7 @@ public class RestServer {
         ServerConnector connector;
 
         if (PROTOCOL_HTTPS.equals(protocol)) {
-            SslContextFactory ssl = SSLUtils.createSslContextFactory(config);
+            SslContextFactory ssl = SSLUtils.createServerSideSslContextFactory(config);
             connector = new ServerConnector(jettyServer, ssl);
             connector.setName(String.format("%s_%s%d", PROTOCOL_HTTPS, hostname, port));
         } else {
