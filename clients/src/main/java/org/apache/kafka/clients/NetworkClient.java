@@ -1009,6 +1009,9 @@ public class NetworkClient implements KafkaClient {
 
         @Override
         public void handleCompletedMetadataResponse(RequestHeader requestHeader, long now, MetadataResponse response) {
+            int requestVersion = inProgressRequestVersion;
+            inProgressRequestVersion = null;
+
             // If any partition has leader with missing listeners, log a few for diagnosing broker configuration
             // issues. This could be a transient issue if listeners were added dynamically to brokers.
             List<TopicPartition> missingListenerPartitions = response.topicMetadata().stream().flatMap(topicMetadata ->
@@ -1033,10 +1036,8 @@ public class NetworkClient implements KafkaClient {
                 log.trace("Ignoring empty metadata response with correlation id {}.", requestHeader.correlationId());
                 this.metadata.failedUpdate(now, null);
             } else {
-                this.metadata.update(inProgressRequestVersion, response, now);
+                this.metadata.update(requestVersion, response, now);
             }
-
-            inProgressRequestVersion = null;
         }
 
         @Override
