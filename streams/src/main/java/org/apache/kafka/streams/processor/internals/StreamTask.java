@@ -752,11 +752,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         // if condition put here in case of restarts and rebalances to check for correct timestamp
         if (recordInfo.queue() != null && getPartitionTime(partition) == RecordQueue.UNKNOWN) {
-            final OffsetAndMetadata metadata = consumer.committed(recordInfo.partition());
+            final OffsetAndMetadata metadata = consumer.committed(partition);
             if (metadata != null) {
                 final String commitMetadata = metadata.metadata();
-                partitionGroup.setPartitionTimestamp(recordInfo.partition(),
-                        Long.parseLong(commitMetadata));
+                partitionGroup.setPartitionTimestamp(partition, Long.parseLong(commitMetadata));
             }
         }
 
