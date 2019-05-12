@@ -265,4 +265,14 @@ public interface PartitionAssignor {
         }
     }
 
+    class MemberInfo {
+        public final String memberId;
+        public final Optional<String> groupInstanceId;
+
+        public MemberInfo(String memberId,
+                          Optional<String> groupInstanceId) {
+            this.memberId = memberId;
+            this.groupInstanceId = groupInstanceId;
+        }
+    }
 }

@@ -39,11 +39,11 @@ public abstract class AbstractPartitionAssignor implements PartitionAssignor {
      * Perform the group assignment given the partition counts and member subscriptions
      * @param partitionsPerTopic The number of partitions for each subscribed topic. Topics not in metadata will be excluded
      *                           from this map.
-     * @param subscriptions Map from the memberId to their respective topic subscription
+     * @param subscriptions Map from the member info to their respective topic subscription
      * @return Map from each member to the list of partitions assigned to them.
      */
     public abstract Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
-                                                             Map<String, Subscription> subscriptions);
+                                                             Map<MemberInfo, Subscription> subscriptions);
 
     @Override
     public Subscription subscription(Set<String> topics) {
