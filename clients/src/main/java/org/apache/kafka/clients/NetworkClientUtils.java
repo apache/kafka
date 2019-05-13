@@ -20,7 +20,6 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.utils.Time;
-
 import java.io.IOException;
 import java.util.List;
 
@@ -71,6 +70,34 @@ public final class NetworkClientUtils {
                 throw new IOException("Connection to " + node + " failed.");
             }
             long pollTimeout = expiryTime - attemptStartTime;
+            client.poll(pollTimeout, attemptStartTime);
+            if (client.authenticationException(node) != null)
+                throw client.authenticationException(node);
+            attemptStartTime = time.milliseconds();
+        }
+        return client.isReady(node, attemptStartTime);
+    }
+
+    public static boolean awaitReady(KafkaClient client, Node node, Time time, long timeoutMs, Boolean fastTimeout) throws IOException {
+        if (timeoutMs < 0) {
+            throw new IllegalArgumentException("Timeout needs to be greater than 0");
+        }
+        long startTime = time.milliseconds();
+        long expiryTime = startTime + timeoutMs;
+
+        if (isReady(client, node, startTime) ||  client.ready(node, startTime))
+            return true;
+
+        long attemptStartTime = time.milliseconds();
+        while (!client.isReady(node, attemptStartTime) && attemptStartTime < expiryTime) {
+            if (client.connectionFailed(node)) {
+                throw new IOException("Connection to " + node + " failed.");
+            }
+            long pollTimeout = expiryTime - attemptStartTime;
+            if (fastTimeout.booleanValue()) {
+                pollTimeout = 1;
+                expiryTime = 0;
+            }
             client.poll(pollTimeout, attemptStartTime);
             if (client.authenticationException(node) != null)
                 throw client.authenticationException(node);
