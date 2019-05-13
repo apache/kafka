@@ -323,14 +323,12 @@ public class AbstractConfigTest {
 
     @SuppressWarnings("unchecked")
     public Map<String, ?> convertPropertiesToMap(Map<?, ?> props) {
-        Map<String, ?> map = new HashMap<String, String>();
         for (Map.Entry<?, ?> entry : props.entrySet()) {
             if (!(entry.getKey() instanceof String))
                 throw new ConfigException(entry.getKey().toString(), entry.getValue(),
                     "Key must be a string.");
         }
-        map = (Map<String, ?>) props;
-        return map;
+        return (Map<String, ?>) props;
     }
 
     @Test
