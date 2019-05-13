@@ -42,6 +42,7 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
@@ -416,9 +417,9 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.memberId().equals(consumerId) &&
-                        sync.generationId() == 1 &&
-                        sync.groupAssignment().containsKey(consumerId);
+                return sync.data().memberId().equals(consumerId) &&
+                        sync.data().generationId() == 1 &&
+                        sync.groupAssignments().containsKey(consumerId);
             }
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
@@ -452,9 +453,9 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.memberId().equals(consumerId) &&
-                        sync.generationId() == 1 &&
-                        sync.groupAssignment().containsKey(consumerId);
+                return sync.data().memberId().equals(consumerId) &&
+                        sync.data().generationId() == 1 &&
+                        sync.groupAssignments().containsKey(consumerId);
             }
         }, syncGroupResponse(Arrays.asList(t2p), Errors.NONE));
 
@@ -466,9 +467,9 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.memberId().equals(consumerId) &&
-                        sync.generationId() == 1 &&
-                        sync.groupAssignment().containsKey(consumerId);
+                return sync.data().memberId().equals(consumerId) &&
+                        sync.data().generationId() == 1 &&
+                        sync.groupAssignments().containsKey(consumerId);
             }
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
 
@@ -508,9 +509,9 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.memberId().equals(consumerId) &&
-                        sync.generationId() == 1 &&
-                        sync.groupAssignment().containsKey(consumerId);
+                return sync.data().memberId().equals(consumerId) &&
+                        sync.data().generationId() == 1 &&
+                        sync.groupAssignments().containsKey(consumerId);
             }
         }, syncGroupResponse(singletonList(t2p), Errors.NONE));
         assertThrows(IllegalStateException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
@@ -538,9 +539,9 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.memberId().equals(consumerId) &&
-                        sync.generationId() == 1 &&
-                        sync.groupAssignment().containsKey(consumerId);
+                return sync.data().memberId().equals(consumerId) &&
+                        sync.data().generationId() == 1 &&
+                        sync.groupAssignments().containsKey(consumerId);
             }
         }, syncGroupResponse(Arrays.asList(t1p, t2p), Errors.NONE));
         // expect client to force updating the metadata, if yes gives it both topics
@@ -648,9 +649,9 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.memberId().equals(consumerId) &&
-                    sync.generationId() == 1 &&
-                    sync.groupAssignment().isEmpty();
+                return sync.data().memberId().equals(consumerId) &&
+                    sync.data().generationId() == 1 &&
+                    sync.groupAssignments().isEmpty();
             }
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
 
@@ -722,9 +723,9 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.memberId().equals(consumerId) &&
-                        sync.generationId() == 1 &&
-                        sync.groupAssignment().isEmpty();
+                return sync.data().memberId().equals(consumerId) &&
+                        sync.data().generationId() == 1 &&
+                        sync.groupAssignments().isEmpty();
             }
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
 
@@ -787,9 +788,9 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.memberId().equals(consumerId) &&
-                        sync.generationId() == 1 &&
-                        sync.groupAssignment().isEmpty();
+                return sync.data().memberId().equals(consumerId) &&
+                        sync.data().generationId() == 1 &&
+                        sync.groupAssignments().isEmpty();
             }
         }, syncGroupResponse(Arrays.asList(t1p, t2p), Errors.NONE));
         // expect client to force updating the metadata, if yes gives it both topics
@@ -1038,9 +1039,9 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                if (sync.memberId().equals(consumerId) &&
-                        sync.generationId() == 1 &&
-                        sync.groupAssignment().containsKey(consumerId)) {
+                if (sync.data().memberId().equals(consumerId) &&
+                        sync.data().generationId() == 1 &&
+                        sync.groupAssignments().containsKey(consumerId)) {
                     // trigger the metadata update including both topics after the sync group request has been sent
                     Map<String, Integer> topicPartitionCounts = new HashMap<>();
                     topicPartitionCounts.put(topic1, 1);
@@ -2228,7 +2229,11 @@ public class ConsumerCoordinatorTest {
 
     private SyncGroupResponse syncGroupResponse(List<TopicPartition> partitions, Errors error) {
         ByteBuffer buf = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(partitions));
-        return new SyncGroupResponse(error, buf);
+        return new SyncGroupResponse(
+                new SyncGroupResponseData()
+                        .setErrorCode(error.code())
+                        .setAssignment(buf.array())
+        );
     }
 
     private OffsetCommitResponse offsetCommitResponse(Map<TopicPartition, Errors> responseData) {
