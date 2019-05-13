@@ -37,6 +37,8 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
@@ -90,7 +92,7 @@ public class KTableTransformValuesTest {
     @Mock(MockType.NICE)
     private KTableValueGetter<String, String> parentGetter;
     @Mock(MockType.NICE)
-    private KeyValueStore<String, String> stateStore;
+    private TimestampedKeyValueStore<String, String> stateStore;
     @Mock(MockType.NICE)
     private ValueTransformerWithKeySupplier<String, String, String> mockSupplier;
     @Mock(MockType.NICE)
@@ -220,7 +222,7 @@ public class KTableTransformValuesTest {
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), QUERYABLE_NAME);
 
         expect(context.getStateStore(QUERYABLE_NAME)).andReturn(stateStore);
-        expect(stateStore.get("Key")).andReturn("something");
+        expect(stateStore.get("Key")).andReturn(ValueAndTimestamp.make("something", 0L));
         replay(context, stateStore);
 
         final KTableValueGetter<String, String> getter = transformValues.view().get();

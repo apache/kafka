@@ -127,7 +127,7 @@ Next, configure parameters in `Vagrantfile.local`. A few are *required*:
 
 Now start things up, but specify the aws provider:
 
-    $ vagrant/vagrant-up.sh
+    $ vagrant/vagrant-up.sh --aws
 
 Your instances should get tagged with a name including your hostname to make
 them identifiable and make it easier to track instances in the AWS management

@@ -38,9 +38,11 @@ import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
@@ -153,23 +155,31 @@ public class KGroupedStreamImplTest {
             .aggregate(MockInitializer.STRING_INIT, MockAggregator.TOSTRING_ADDER, Materialized.as(INVALID_STORE_NAME));
     }
 
-    private void doAggregateSessionWindows(final Map<Windowed<String>, Integer> results) {
+    private void doAggregateSessionWindows(final MockProcessorSupplier<Windowed<String>, Integer> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 10));
             driver.pipeInput(recordFactory.create(TOPIC, "2", "2", 15));
             driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 30));
             driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 70));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 90));
             driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 100));
+            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 90));
         }
-        assertEquals(Integer.valueOf(2), results.get(new Windowed<>("1", new SessionWindow(10, 30))));
-        assertEquals(Integer.valueOf(1), results.get(new Windowed<>("2", new SessionWindow(15, 15))));
-        assertEquals(Integer.valueOf(3), results.get(new Windowed<>("1", new SessionWindow(70, 100))));
+        final Map<Windowed<String>, ValueAndTimestamp<Integer>> result
+            = supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+        assertEquals(
+            ValueAndTimestamp.make(2, 30L),
+            result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
+        assertEquals(
+            ValueAndTimestamp.make(1, 15L),
+            result.get(new Windowed<>("2", new SessionWindow(15L, 15L))));
+        assertEquals(
+            ValueAndTimestamp.make(3, 100L),
+            result.get(new Windowed<>("1", new SessionWindow(70L, 100L))));
     }
 
     @Test
     public void shouldAggregateSessionWindows() {
-        final Map<Windowed<String>, Integer> results = new HashMap<>();
+        final MockProcessorSupplier<Windowed<String>, Integer> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, Integer> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .aggregate(
@@ -179,15 +189,15 @@ public class KGroupedStreamImplTest {
                 Materialized
                     .<String, Integer, SessionStore<Bytes, byte[]>>as("session-store").
                     withValueSerde(Serdes.Integer()));
-        table.toStream().foreach(results::put);
+        table.toStream().process(supplier);
 
-        doAggregateSessionWindows(results);
+        doAggregateSessionWindows(supplier);
         assertEquals(table.queryableStoreName(), "session-store");
     }
 
     @Test
     public void shouldAggregateSessionWindowsWithInternalStoreName() {
-        final Map<Windowed<String>, Integer> results = new HashMap<>();
+        final MockProcessorSupplier<Windowed<String>, Integer> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, Integer> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .aggregate(
@@ -195,80 +205,97 @@ public class KGroupedStreamImplTest {
                 (aggKey, value, aggregate) -> aggregate + 1,
                 (aggKey, aggOne, aggTwo) -> aggOne + aggTwo,
                 Materialized.with(null, Serdes.Integer()));
-        table.toStream().foreach(results::put);
+        table.toStream().process(supplier);
 
-        doAggregateSessionWindows(results);
+        doAggregateSessionWindows(supplier);
     }
 
-    private void doCountSessionWindows(final Map<Windowed<String>, Long> results) {
+    private void doCountSessionWindows(final MockProcessorSupplier<Windowed<String>, Long> supplier) {
+
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 10));
             driver.pipeInput(recordFactory.create(TOPIC, "2", "2", 15));
             driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 30));
             driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 70));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 90));
             driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 100));
+            driver.pipeInput(recordFactory.create(TOPIC, "1", "1", 90));
         }
-        assertEquals(Long.valueOf(2), results.get(new Windowed<>("1", new SessionWindow(10, 30))));
-        assertEquals(Long.valueOf(1), results.get(new Windowed<>("2", new SessionWindow(15, 15))));
-        assertEquals(Long.valueOf(3), results.get(new Windowed<>("1", new SessionWindow(70, 100))));
+        final Map<Windowed<String>, ValueAndTimestamp<Long>> result =
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+        assertEquals(
+            ValueAndTimestamp.make(2L, 30L),
+            result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
+        assertEquals(
+            ValueAndTimestamp.make(1L, 15L),
+            result.get(new Windowed<>("2", new SessionWindow(15L, 15L))));
+        assertEquals(
+            ValueAndTimestamp.make(3L, 100L),
+            result.get(new Windowed<>("1", new SessionWindow(70L, 100L))));
     }
 
     @Test
     public void shouldCountSessionWindows() {
-        final Map<Windowed<String>, Long> results = new HashMap<>();
+        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, Long> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .count(Materialized.as("session-store"));
-        table.toStream().foreach(results::put);
-        doCountSessionWindows(results);
+        table.toStream().process(supplier);
+        doCountSessionWindows(supplier);
         assertEquals(table.queryableStoreName(), "session-store");
     }
 
     @Test
     public void shouldCountSessionWindowsWithInternalStoreName() {
-        final Map<Windowed<String>, Long> results = new HashMap<>();
+        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, Long> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .count();
-        table.toStream().foreach(results::put);
-        doCountSessionWindows(results);
+        table.toStream().process(supplier);
+        doCountSessionWindows(supplier);
         assertNull(table.queryableStoreName());
     }
 
-    private void doReduceSessionWindows(final Map<Windowed<String>, String> results) {
+    private void doReduceSessionWindows(final MockProcessorSupplier<Windowed<String>, String> supplier) {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 10));
             driver.pipeInput(recordFactory.create(TOPIC, "2", "Z", 15));
             driver.pipeInput(recordFactory.create(TOPIC, "1", "B", 30));
             driver.pipeInput(recordFactory.create(TOPIC, "1", "A", 70));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "B", 90));
-            driver.pipeInput(recordFactory.create(TOPIC, "1", "C", 100));
+            driver.pipeInput(recordFactory.create(TOPIC, "1", "B", 100));
+            driver.pipeInput(recordFactory.create(TOPIC, "1", "C", 90));
         }
-        assertEquals("A:B", results.get(new Windowed<>("1", new SessionWindow(10, 30))));
-        assertEquals("Z", results.get(new Windowed<>("2", new SessionWindow(15, 15))));
-        assertEquals("A:B:C", results.get(new Windowed<>("1", new SessionWindow(70, 100))));
+        final Map<Windowed<String>, ValueAndTimestamp<String>> result =
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+        assertEquals(
+            ValueAndTimestamp.make("A:B", 30L),
+            result.get(new Windowed<>("1", new SessionWindow(10L, 30L))));
+        assertEquals(
+            ValueAndTimestamp.make("Z", 15L),
+            result.get(new Windowed<>("2", new SessionWindow(15L, 15L))));
+        assertEquals(
+            ValueAndTimestamp.make("A:B:C", 100L),
+            result.get(new Windowed<>("1", new SessionWindow(70L, 100L))));
     }
 
     @Test
     public void shouldReduceSessionWindows() {
-        final Map<Windowed<String>, String> results = new HashMap<>();
+        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, String> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .reduce((value1, value2) -> value1 + ":" + value2, Materialized.as("session-store"));
-        table.toStream().foreach(results::put);
-        doReduceSessionWindows(results);
+        table.toStream().process(supplier);
+        doReduceSessionWindows(supplier);
         assertEquals(table.queryableStoreName(), "session-store");
     }
 
     @Test
     public void shouldReduceSessionWindowsWithInternalStoreName() {
-        final Map<Windowed<String>, String> results = new HashMap<>();
+        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         final KTable<Windowed<String>, String> table = groupedStream
             .windowedBy(SessionWindows.with(ofMillis(30)))
             .reduce((value1, value2) -> value1 + ":" + value2);
-        table.toStream().foreach(results::put);
-        doReduceSessionWindows(results);
+        table.toStream().process(supplier);
+        doReduceSessionWindows(supplier);
         assertNull(table.queryableStoreName());
     }
 
