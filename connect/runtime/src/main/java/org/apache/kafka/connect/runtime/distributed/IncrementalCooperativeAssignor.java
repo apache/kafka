@@ -228,6 +228,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         // account the deleted ones.
         // TODO: From the activeAssignments we only use their size of connectors-and-tasks;
         // consider optimizing out the computation of this set
+        log.debug("Can revoke in this assignment? {} (delay: {})", canRevoke, delay);
         if (canRevoke) {
             Map<String, ConnectorsAndTasks> toExplicitlyRevoke =
                     performTaskRevocation(activeAssignments, currentWorkerAssignment);
@@ -244,6 +245,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 }
             );
             canRevoke = toExplicitlyRevoke.size() == 0;
+        } else {
+            canRevoke = delay == 0;
         }
 
         assignConnectors(completeWorkerAssignment, newSubmissions.connectors());
