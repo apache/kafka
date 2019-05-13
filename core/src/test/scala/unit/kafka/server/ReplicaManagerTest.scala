@@ -624,10 +624,8 @@ class ReplicaManagerTest {
     val topicPartition = 0
     val followerBrokerId = 0
     val leaderBrokerId = 1
-    val controllerId = 0
     val leaderEpoch = 1
     val leaderEpochIncrement = 2
-    val aliveBrokerIds = Seq[Integer] (followerBrokerId, leaderBrokerId)
     val countDownLatch = new CountDownLatch(1)
 
     val props = new Properties()
@@ -642,10 +640,8 @@ class ReplicaManagerTest {
     val topicPartition = 0
     val followerBrokerId = 0
     val leaderBrokerId = 1
-    val controllerId = 0
     val leaderEpoch = 1
     val leaderEpochIncrement = 2
-    val aliveBrokerIds = Seq[Integer] (followerBrokerId, leaderBrokerId)
     val countDownLatch = new CountDownLatch(1)
 
     val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(
@@ -668,7 +664,7 @@ class ReplicaManagerTest {
                                                  extraProps: Properties = new Properties()) : (ReplicaManager, LogManager) = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
-    props.putAll(extraProps)
+    extraProps.forEach((k, v) => props.put(k, v))
     val config = KafkaConfig.fromProps(props)
 
     // Setup mock local log to have leader epoch of 3 and offset of 10
