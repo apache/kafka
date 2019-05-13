@@ -135,9 +135,6 @@ public class StreamsConfig extends AbstractConfig {
 
     private static final ConfigDef CONFIG;
 
-    // Flag to enable/disable auto resolution of indirect variables in AbstractConfig
-    private static final boolean ENABLE_INDIRECT_RESOLUTION = false;
-
     private final boolean eosEnabled;
     private final static long DEFAULT_COMMIT_INTERVAL_MS = 30000L;
     private final static long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;

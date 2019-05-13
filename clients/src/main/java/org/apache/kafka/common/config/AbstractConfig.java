@@ -57,23 +57,44 @@ public class AbstractConfig {
 
     /**
      * Construct a configuration with a ConfigDef, the configuration properties, optional {ConfigProviders}.
-     * @param definition the definition of the configurations
-     * @param originals the name-value pairs of the configuration
-     * @param configProviders the map of properties of config providers which will be instantiated by the constructor to resolve any variables in {@code originals}
+     *
+     * The originals is a name-value pair of config provider configs as well as configuration properties. The value of the configuration can be a variable as
+     * defined below or the actual value. This constructor will first instantiate the ConfigProviders using the config provider configs, then it will find all
+     * the variables in the values of the originals configurations, attempt to resolve the variables using the named ConfigProviders, and then parse and validate
+     * the configurations.
+     *
+     * ConfigProviders can be passed either as configs in the originals map or in the separate configProviderProps map. If config providers are passed in the
+     * configProviderProps any providers in originals map will be ignored. If ConfigProvider is not provided, the constructor will skip the variable substitution
+     * step and will simply validate and parse the supplied configuration.
+     *
+     * The config "config.providers" is reserved to list the ConfigProviders, "config.providers.<providerName>.class" is reserved to specify the class
+     * to be used to instantiate the providers and  "config.providers.<providerName>.<variableName>" to specify any additional configs required by providers where
+     * <providerName> is the name of the new config provider and <variableName> are the variables required by the config provider.
+     *
+     * Variables have the form "${providerName:[path:]key}", where "providerName" is the name of a ConfigProvider, "path" is an optional string, and "key" is
+     * a required string. This variable is resolved by passing the "key" and optional "path" to a ConfigProvider with the specified name, and the result from
+     * the ConfigProvider is then used in place of the variable. Variables that cannot be resolved by the AbstractConfig constructor will be left unchanged in
+     * the configuration.
+     *
+     *
+     * @param definition the definition of the configurations; may not be null
+     * @param originals the name-value pairs of the configuration; may not be null
+     * @param configProviderProps the map of properties of config providers which will be instantiated by the constructor to resolve any variables in {@code originals};
+     *        may be null or empty
      * @param doLog whether the configurations should be logged
      */
     @SuppressWarnings("unchecked")
-    public AbstractConfig(ConfigDef definition, Map<?, ?> originals,  Map<?, ?> configProviders, boolean doLog) {
+    public AbstractConfig(ConfigDef definition, Map<?, ?> originals,  Map<String, ?> configProviderProps, boolean doLog) {
         /* check that all the keys are really strings */
-        Map<String, String> indirectConfigMap = new HashMap<String, String>();
+        Map<String, String> originalsAsStrings = new HashMap<String, String>();
         for (Map.Entry<?, ?> entry : originals.entrySet()) {
             if (!(entry.getKey() instanceof String))
                 throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
             if (entry.getValue() instanceof String)
-                indirectConfigMap.put((String) entry.getKey(), (String) entry.getValue());
+                originalsAsStrings.put((String) entry.getKey(), (String) entry.getValue());
         }
 
-        this.originals = resolveConfigVariables(indirectConfigMap, configProviders, (Map<String, Object>) originals);
+        this.originals = resolveConfigVariables(originalsAsStrings, configProviderProps, (Map<String, Object>) originals);
 
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
@@ -87,10 +108,23 @@ public class AbstractConfig {
             logAll();
     }
 
+    /**
+     * Construct a configuration with a ConfigDef, the configuration properties, optional {ConfigProviders}.
+     *
+     * @param definition the definition of the configurations; may not be null
+     * @param originals of config provider configs as well as configuration properties; may not be null
+     */
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
         this(definition, originals, Collections.emptyMap(), false);
     }
 
+    /**
+     * Construct a configuration with a ConfigDef, the configuration properties, optional {ConfigProviders}.
+     *
+     * @param definition the definition of the configurations; may not be null
+     * @param originals of config provider configs as well as configuration properties; may not be null
+     * @param doLog whether the configurations should be logged
+     */
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
         this(definition, originals, Collections.emptyMap(), doLog);
 
@@ -394,44 +428,41 @@ public class AbstractConfig {
      * Instantiates given list of config providers and fetches the actual values of config variables from the config providers.
      * returns a map of config key and resolved values.
      * @param indirectVariables The map of config variables
-     * @param configProviders The map of config provider configs
-     * @param original The map of raw configs.
+     * @param configProviderProps The map of config provider configs
+     * @param originals The map of raw configs.
      * @return map of resolved config variable.
      */
     @SuppressWarnings("unchecked")
-    private  Map<String, ?> resolveConfigVariables(Map<String, String> indirectVariables, Map<?, ?> configProviders, Map<String, Object> original) {
-        Map<String, ConfigProvider> providers;
+    private  Map<String, ?> resolveConfigVariables(Map<String, String> indirectVariables, Map<String, ?> configProviderProps, Map<String, Object> originals) {
+        Map<String, String> providerConfig;
 
-        if (configProviders == null || configProviders.isEmpty()) {
-            providers = instantiateConfigProvider(indirectVariables, original);
+        if (configProviderProps == null || configProviderProps.isEmpty()) {
+            providerConfig = indirectVariables;
         } else {
-
-            for (Map.Entry<?, ?> entry : configProviders.entrySet()) {
-                if (!(entry.getKey() instanceof String))
-                    configProviders.remove(entry.getKey());
-            }
-            providers = instantiateConfigProvider((Map<String, String>) configProviders, original);
+            providerConfig = (Map<String, String>) configProviderProps;
         }
+        Map<String, ConfigProvider> providers = instantiateConfigProviders(providerConfig, originals);
+
         if (!providers.isEmpty()) {
             ConfigTransformer configTransformer = new ConfigTransformer(providers);
             ConfigTransformerResult result = configTransformer.transform(indirectVariables);
-            original.putAll(result.data());
+            originals.putAll(result.data());
         }
 
-        return original;
+        return originals;
     }
 
-    private Map<String, Object> getClassConfigProperties(String prefix, Map<String, ?> originals) {
+    private Map<String, Object> configProviderProperties(String configProviderPrefix, Map<String, ?> originals) {
         Map<String, Object> result = new HashMap<>();
         for (Map.Entry<String, ?> entry : originals.entrySet()) {
-            if (entry.getKey().startsWith(prefix) && entry.getKey().length() > prefix.length()) {
-                result.put(entry.getKey().substring(prefix.length()), entry.getValue());
+            if (entry.getKey().startsWith(configProviderPrefix) && entry.getKey().length() > configProviderPrefix.length()) {
+                result.put(entry.getKey().substring(configProviderPrefix.length()), entry.getValue());
             }
         }
         return result;
     }
 
-    private Map<String, ConfigProvider> instantiateConfigProvider(Map<String, String> indirectConfigs, Map<String, Object> originals) {
+    private Map<String, ConfigProvider> instantiateConfigProviders(Map<String, String> indirectConfigs, Map<String, Object> originals) {
         final String configProviders = indirectConfigs.get(CONFIG_PROVIDERS_CONFIG);
 
         if (configProviders == null || configProviders.isEmpty())
@@ -450,7 +481,7 @@ public class AbstractConfig {
         for (Map.Entry<String, String> entry : providerMap.entrySet()) {
             try {
                 String prefix = CONFIG_PROVIDERS_CONFIG + "." + entry.getKey() + ".";
-                Map<String, ?> configProperties = getClassConfigProperties(prefix, originals);
+                Map<String, ?> configProperties = configProviderProperties(prefix, originals);
                 ConfigProvider provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
                 provider.configure(configProperties);
                 configProviderInstances.put(entry.getKey(), provider);
