@@ -106,12 +106,11 @@ public class StoreUpgradeIntegrationTest {
     private void shouldMigrateKeyValueStoreToTimestampedKeyValueStoreUsingPapi(final boolean persistentStore) throws Exception {
         final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
 
-        streamsBuilderForOldStore.addStateStore(Stores.keyValueStoreBuilder(
-            persistentStore ? Stores.persistentKeyValueStore(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
-            Serdes.Integer(),
-            Serdes.Long()
-        ));
-        streamsBuilderForOldStore
+        streamsBuilderForOldStore.addStateStore(
+            Stores.keyValueStoreBuilder(
+                persistentStore ? Stores.persistentKeyValueStore(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
+                Serdes.Integer(),
+                Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
             .process(KeyValueProcessor::new, STORE_NAME);
 
@@ -122,15 +121,18 @@ public class StoreUpgradeIntegrationTest {
         processKeyValueAndVerifyPlainCount(1, singletonList(KeyValue.pair(1, 1L)));
 
         processKeyValueAndVerifyPlainCount(1, singletonList(KeyValue.pair(1, 2L)));
+        final long lastUpdateKeyOne = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         processKeyValueAndVerifyPlainCount(2, asList(
             KeyValue.pair(1, 2L),
             KeyValue.pair(2, 1L)));
+        final long lastUpdateKeyTwo = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         processKeyValueAndVerifyPlainCount(3, asList(
             KeyValue.pair(1, 2L),
             KeyValue.pair(2, 1L),
             KeyValue.pair(3, 1L)));
+        final long lastUpdateKeyThree = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         processKeyValueAndVerifyPlainCount(4, asList(
             KeyValue.pair(1, 2L),
@@ -149,62 +151,63 @@ public class StoreUpgradeIntegrationTest {
             KeyValue.pair(2, 1L),
             KeyValue.pair(3, 1L),
             KeyValue.pair(4, 3L)));
+        final long lastUpdateKeyFour = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         kafkaStreams.close();
         kafkaStreams = null;
 
 
 
-        final StreamsBuilder newStoreBuilder = new StreamsBuilder();
+        final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
-        newStoreBuilder.addStateStore(Stores.timestampedKeyValueStoreBuilder(
-            persistentStore ? Stores.persistentTimestampedKeyValueStore(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
-            Serdes.Integer(),
-            Serdes.Long()
-        ));
-        newStoreBuilder
+        streamsBuilderForNewStore.addStateStore(
+            Stores.timestampedKeyValueStoreBuilder(
+                persistentStore ? Stores.persistentTimestampedKeyValueStore(STORE_NAME) : Stores.inMemoryKeyValueStore(STORE_NAME),
+                Serdes.Integer(),
+                Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
             .process(TimestampedKeyValueProcessor::new, STORE_NAME);
 
-        kafkaStreams = new KafkaStreams(newStoreBuilder.build(), props);
+        kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
         kafkaStreams.start();
 
-        verifyCountWithSurrogateTimestamp(1, 2L);
-        verifyCountWithSurrogateTimestamp(2, 1L);
-        verifyCountWithSurrogateTimestamp(3, 1L);
-        verifyCountWithSurrogateTimestamp(4, 3L);
+        verifyCountWithTimestamp(1, 2L, lastUpdateKeyOne);
+        verifyCountWithTimestamp(2, 1L, lastUpdateKeyTwo);
+        verifyCountWithTimestamp(3, 1L, lastUpdateKeyThree);
+        verifyCountWithTimestamp(4, 3L, lastUpdateKeyFour);
 
-        processKeyValueAndVerifyCountWithTimestamp(1, 42L, asList(
-            KeyValue.pair(1, ValueAndTimestamp.make(3L, 42L)),
-            KeyValue.pair(2, ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(3, ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(4, ValueAndTimestamp.make(3L, -1L))));
+        final long currentTime = CLUSTER.time.milliseconds();
+        processKeyValueAndVerifyCountWithTimestamp(1, currentTime + 42L, asList(
+            KeyValue.pair(1, ValueAndTimestamp.make(3L, currentTime + 42L)),
+            KeyValue.pair(2, ValueAndTimestamp.make(1L, lastUpdateKeyTwo)),
+            KeyValue.pair(3, ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
+            KeyValue.pair(4, ValueAndTimestamp.make(3L, lastUpdateKeyFour))));
 
-        processKeyValueAndVerifyCountWithTimestamp(2, 45L, asList(
-            KeyValue.pair(1, ValueAndTimestamp.make(3L, 42L)),
-            KeyValue.pair(2, ValueAndTimestamp.make(2L, 45L)),
-            KeyValue.pair(3, ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(4, ValueAndTimestamp.make(3L, -1L))));
+        processKeyValueAndVerifyCountWithTimestamp(2, currentTime + 45L, asList(
+            KeyValue.pair(1, ValueAndTimestamp.make(3L, currentTime + 42L)),
+            KeyValue.pair(2, ValueAndTimestamp.make(2L, currentTime + 45L)),
+            KeyValue.pair(3, ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
+            KeyValue.pair(4, ValueAndTimestamp.make(3L, lastUpdateKeyFour))));
 
         // can process "out of order" record for different key
-        processKeyValueAndVerifyCountWithTimestamp(4, 21L, asList(
-            KeyValue.pair(1, ValueAndTimestamp.make(3L, 42L)),
-            KeyValue.pair(2, ValueAndTimestamp.make(2L, 45L)),
-            KeyValue.pair(3, ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(4, ValueAndTimestamp.make(4L, 21L))));
+        processKeyValueAndVerifyCountWithTimestamp(4, currentTime + 21L, asList(
+            KeyValue.pair(1, ValueAndTimestamp.make(3L, currentTime + 42L)),
+            KeyValue.pair(2, ValueAndTimestamp.make(2L, currentTime + 45L)),
+            KeyValue.pair(3, ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
+            KeyValue.pair(4, ValueAndTimestamp.make(4L, currentTime + 21L))));
 
-        processKeyValueAndVerifyCountWithTimestamp(4, 42L, asList(
-            KeyValue.pair(1, ValueAndTimestamp.make(3L, 42L)),
-            KeyValue.pair(2, ValueAndTimestamp.make(2L, 45L)),
-            KeyValue.pair(3, ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(4, ValueAndTimestamp.make(5L, 42L))));
+        processKeyValueAndVerifyCountWithTimestamp(4, currentTime + 42L, asList(
+            KeyValue.pair(1, ValueAndTimestamp.make(3L, currentTime + 42L)),
+            KeyValue.pair(2, ValueAndTimestamp.make(2L, currentTime + 45L)),
+            KeyValue.pair(3, ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
+            KeyValue.pair(4, ValueAndTimestamp.make(5L, currentTime + 42L))));
 
         // out of order (same key) record should not reduce result timestamp
-        processKeyValueAndVerifyCountWithTimestamp(4, 10L, asList(
-            KeyValue.pair(1, ValueAndTimestamp.make(3L, 42L)),
-            KeyValue.pair(2, ValueAndTimestamp.make(2L, 45L)),
-            KeyValue.pair(3, ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(4, ValueAndTimestamp.make(6L, 42L))));
+        processKeyValueAndVerifyCountWithTimestamp(4, currentTime + 10L, asList(
+            KeyValue.pair(1, ValueAndTimestamp.make(3L, currentTime + 42L)),
+            KeyValue.pair(2, ValueAndTimestamp.make(2L, currentTime + 45L)),
+            KeyValue.pair(3, ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
+            KeyValue.pair(4, ValueAndTimestamp.make(6L, currentTime + 42L))));
 
         kafkaStreams.close();
     }
@@ -213,12 +216,11 @@ public class StoreUpgradeIntegrationTest {
     public void shouldProxyKeyValueStoreToTimestampedKeyValueStoreUsingPapi() throws Exception {
         final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
 
-        streamsBuilderForOldStore.addStateStore(Stores.keyValueStoreBuilder(
-            Stores.persistentKeyValueStore(STORE_NAME),
-            Serdes.Integer(),
-            Serdes.Long()
-        ));
-        streamsBuilderForOldStore
+        streamsBuilderForOldStore.addStateStore(
+            Stores.keyValueStoreBuilder(
+                Stores.persistentKeyValueStore(STORE_NAME),
+                Serdes.Integer(),
+                Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
             .process(KeyValueProcessor::new, STORE_NAME);
 
@@ -262,18 +264,17 @@ public class StoreUpgradeIntegrationTest {
 
 
 
-        final StreamsBuilder newStoreBuilder = new StreamsBuilder();
+        final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
-        newStoreBuilder.addStateStore(Stores.timestampedKeyValueStoreBuilder(
-            Stores.persistentKeyValueStore(STORE_NAME),
-            Serdes.Integer(),
-            Serdes.Long()
-        ));
-        newStoreBuilder
+        streamsBuilderForNewStore.addStateStore(
+            Stores.timestampedKeyValueStoreBuilder(
+                Stores.persistentKeyValueStore(STORE_NAME),
+                Serdes.Integer(),
+                Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
             .process(TimestampedKeyValueProcessor::new, STORE_NAME);
 
-        kafkaStreams = new KafkaStreams(newStoreBuilder.build(), props);
+        kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
         kafkaStreams.start();
 
         verifyCountWithSurrogateTimestamp(1, 2L);
@@ -339,6 +340,23 @@ public class StoreUpgradeIntegrationTest {
                     }
                     return storeContent.equals(expectedStoreContent);
                 }
+            } catch (final Exception swallow) {
+                swallow.printStackTrace();
+                System.err.println(swallow.getMessage());
+                return false;
+            }
+        }, "Could not get expected result in time.");
+    }
+
+    private <K> void verifyCountWithTimestamp(final K key,
+                                              final long value,
+                                              final long timestamp) throws Exception {
+        TestUtils.waitForCondition(() -> {
+            try {
+                final ReadOnlyKeyValueStore<K, ValueAndTimestamp<Long>> store =
+                    kafkaStreams.store(STORE_NAME, QueryableStoreTypes.timestampedKeyValueStore());
+                final ValueAndTimestamp<Long> count = store.get(key);
+                return count.value() == value && count.timestamp() == timestamp;
             } catch (final Exception swallow) {
                 swallow.printStackTrace();
                 System.err.println(swallow.getMessage());
@@ -429,38 +447,83 @@ public class StoreUpgradeIntegrationTest {
 
     @Test
     public void shouldMigrateInMemoryWindowStoreToTimestampedWindowStoreUsingPapi() throws Exception {
-        shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(false);
-    }
-
-    @Test
-    public void shouldMigratePeristentWindowStoreToTimestampedWindowStoreUsingPapi() throws Exception {
-        shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(true);
-    }
-
-    private void shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(final boolean persistentStore) throws Exception {
         final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
-
-        streamsBuilderForOldStore.addStateStore(Stores.windowStoreBuilder(
-            persistentStore ?
-                Stores.persistentWindowStore(
-                    STORE_NAME,
-                    Duration.ofMillis(1000L),
-                    Duration.ofMillis(1000L),
-                    false) :
-                Stores.inMemoryWindowStore(
-                    STORE_NAME,
-                    Duration.ofMillis(1000L),
-                    Duration.ofMillis(1000L),
-                    false),
-            Serdes.Integer(),
-            Serdes.Long()
-        ));
         streamsBuilderForOldStore
+            .addStateStore(
+                Stores.windowStoreBuilder(
+                    Stores.inMemoryWindowStore(
+                        STORE_NAME,
+                        Duration.ofMillis(1000L),
+                        Duration.ofMillis(1000L),
+                        false),
+                Serdes.Integer(),
+                Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
             .process(WindowedProcessor::new, STORE_NAME);
 
+        final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
+        streamsBuilderForNewStore
+            .addStateStore(
+                Stores.timestampedWindowStoreBuilder(
+                    Stores.inMemoryWindowStore(
+                        STORE_NAME,
+                        Duration.ofMillis(1000L),
+                        Duration.ofMillis(1000L),
+                        false),
+            Serdes.Integer(),
+            Serdes.Long()))
+            .<Integer, Integer>stream(inputStream)
+            .process(TimestampedWindowedProcessor::new, STORE_NAME);
+
+
+        shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(
+            new KafkaStreams(streamsBuilderForOldStore.build(), props()),
+            new KafkaStreams(streamsBuilderForNewStore.build(), props()),
+            false);
+    }
+
+    @Test
+    public void shouldMigratePersistentWindowStoreToTimestampedWindowStoreUsingPapi() throws Exception {
+        final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
+
+        streamsBuilderForOldStore
+            .addStateStore(
+                Stores.windowStoreBuilder(
+                    Stores.persistentWindowStore(
+                        STORE_NAME,
+                        Duration.ofMillis(1000L),
+                        Duration.ofMillis(1000L),
+                        false),
+                    Serdes.Integer(),
+                    Serdes.Long()))
+            .<Integer, Integer>stream(inputStream)
+            .process(WindowedProcessor::new, STORE_NAME);
+
+        final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
+        streamsBuilderForNewStore
+            .addStateStore(
+                Stores.timestampedWindowStoreBuilder(
+                    Stores.persistentTimestampedWindowStore(
+                        STORE_NAME,
+                        Duration.ofMillis(1000L),
+                        Duration.ofMillis(1000L),
+                        false),
+                    Serdes.Integer(),
+                    Serdes.Long()))
+            .<Integer, Integer>stream(inputStream)
+            .process(TimestampedWindowedProcessor::new, STORE_NAME);
+
         final Properties props = props();
-        kafkaStreams = new KafkaStreams(streamsBuilderForOldStore.build(), props);
+        shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(
+            new KafkaStreams(streamsBuilderForOldStore.build(), props),
+            new KafkaStreams(streamsBuilderForNewStore.build(), props),
+            true);
+    }
+
+    private void shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(final KafkaStreams kafkaStreamsOld,
+                                                                           final KafkaStreams kafkaStreamsNew,
+                                                                           final boolean persistentStore) throws Exception {
+        kafkaStreams = kafkaStreamsOld;
         kafkaStreams.start();
 
         processWindowedKeyValueAndVerifyPlainCount(1, singletonList(
@@ -468,15 +531,18 @@ public class StoreUpgradeIntegrationTest {
 
         processWindowedKeyValueAndVerifyPlainCount(1, singletonList(
             KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L)));
+        final long lastUpdateKeyOne = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         processWindowedKeyValueAndVerifyPlainCount(2, asList(
             KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
             KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L)));
+        final long lastUpdateKeyTwo = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         processWindowedKeyValueAndVerifyPlainCount(3, asList(
             KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
             KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L),
             KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L)));
+        final long lastUpdateKeyThree = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         processWindowedKeyValueAndVerifyPlainCount(4, asList(
             KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L),
@@ -495,76 +561,97 @@ public class StoreUpgradeIntegrationTest {
             KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L),
             KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L),
             KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), 3L)));
+        final long lastUpdateKeyFour = persistentStore ? -1L : CLUSTER.time.milliseconds() - 1L;
 
         kafkaStreams.close();
         kafkaStreams = null;
 
 
-
-        final StreamsBuilder newStoreBuilder = new StreamsBuilder();
-
-        newStoreBuilder.addStateStore(Stores.timestampedWindowStoreBuilder(
-            persistentStore ?
-                Stores.persistentTimestampedWindowStore(
-                    STORE_NAME,
-                    Duration.ofMillis(1000L),
-                    Duration.ofMillis(1000L),
-                    false) :
-                Stores.inMemoryWindowStore(
-                    STORE_NAME,
-                    Duration.ofMillis(1000L),
-                    Duration.ofMillis(1000L),
-                    false),
-            Serdes.Integer(),
-            Serdes.Long()
-        ));
-        newStoreBuilder
-            .<Integer, Integer>stream(inputStream)
-            .process(TimestampedWindowedProcessor::new, STORE_NAME);
-
-        kafkaStreams = new KafkaStreams(newStoreBuilder.build(), props);
+        kafkaStreams = kafkaStreamsNew;
         kafkaStreams.start();
 
-        verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L);
-        verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L);
-        verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L);
-        verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(4, new TimeWindow(0L, 1000L)), 3L);
+        verifyWindowedCountWithTimestamp(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L, lastUpdateKeyOne);
+        verifyWindowedCountWithTimestamp(new Windowed<>(2, new TimeWindow(0L, 1000L)), 1L, lastUpdateKeyTwo);
+        verifyWindowedCountWithTimestamp(new Windowed<>(3, new TimeWindow(0L, 1000L)), 1L, lastUpdateKeyThree);
+        verifyWindowedCountWithTimestamp(new Windowed<>(4, new TimeWindow(0L, 1000L)), 3L, lastUpdateKeyFour);
 
-        processKeyValueAndVerifyWindowedCountWithTimestamp(1, 42L, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, 42L)),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, -1L))));
+        final long currentTime = CLUSTER.time.milliseconds();
+        processKeyValueAndVerifyWindowedCountWithTimestamp(1, currentTime + 42L, asList(
+            KeyValue.pair(
+                new Windowed<>(1, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(3L, currentTime + 42L)),
+            KeyValue.pair(
+                new Windowed<>(2, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(1L, lastUpdateKeyTwo)),
+            KeyValue.pair(
+                new Windowed<>(3, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
+            KeyValue.pair(
+                new Windowed<>(4, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(3L, lastUpdateKeyFour))));
 
-        processKeyValueAndVerifyWindowedCountWithTimestamp(2, 45L, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, 42L)),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(2L, 45L)),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, -1L))));
+        processKeyValueAndVerifyWindowedCountWithTimestamp(2, currentTime + 45L, asList(
+            KeyValue.pair(
+                new Windowed<>(1, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(3L, currentTime + 42L)),
+            KeyValue.pair(
+                new Windowed<>(2, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(2L, currentTime + 45L)),
+            KeyValue.pair(
+                new Windowed<>(3, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
+            KeyValue.pair(
+                new Windowed<>(4, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(3L, lastUpdateKeyFour))));
 
         // can process "out of order" record for different key
-        processKeyValueAndVerifyWindowedCountWithTimestamp(4, 21L, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, 42L)),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(2L, 45L)),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(4L, 21L))));
+        processKeyValueAndVerifyWindowedCountWithTimestamp(4, currentTime + 21L, asList(
+            KeyValue.pair(
+                new Windowed<>(1, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(3L, currentTime + 42L)),
+            KeyValue.pair(
+                new Windowed<>(2, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(2L, currentTime + 45L)),
+            KeyValue.pair(
+                new Windowed<>(3, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
+            KeyValue.pair(
+                new Windowed<>(4, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(4L, currentTime + 21L))));
 
-        processKeyValueAndVerifyWindowedCountWithTimestamp(4, 42L, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, 42L)),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(2L, 45L)),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(5L, 42L))));
+        processKeyValueAndVerifyWindowedCountWithTimestamp(4, currentTime + 42L, asList(
+            KeyValue.pair(
+                new Windowed<>(1, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(3L, currentTime + 42L)),
+            KeyValue.pair(
+                new Windowed<>(2, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(2L, currentTime + 45L)),
+            KeyValue.pair(
+                new Windowed<>(3, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
+            KeyValue.pair(
+                new Windowed<>(4, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(5L, currentTime + 42L))));
 
         // out of order (same key) record should not reduce result timestamp
-        processKeyValueAndVerifyWindowedCountWithTimestamp(4, 10L, asList(
-            KeyValue.pair(new Windowed<>(1, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(3L, 42L)),
-            KeyValue.pair(new Windowed<>(2, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(2L, 45L)),
-            KeyValue.pair(new Windowed<>(3, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(1L, -1L)),
-            KeyValue.pair(new Windowed<>(4, new TimeWindow(0L, 1000L)), ValueAndTimestamp.make(6L, 42L))));
+        processKeyValueAndVerifyWindowedCountWithTimestamp(4, currentTime + 10L, asList(
+            KeyValue.pair(
+                new Windowed<>(1, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(3L, currentTime + 42L)),
+            KeyValue.pair(
+                new Windowed<>(2, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(2L, currentTime + 45L)),
+            KeyValue.pair(
+                new Windowed<>(3, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(1L, lastUpdateKeyThree)),
+            KeyValue.pair(
+                new Windowed<>(4, new TimeWindow(0L, 1000L)),
+                ValueAndTimestamp.make(6L, currentTime + 42L))));
 
         // test new segment
-        processKeyValueAndVerifyWindowedCountWithTimestamp(10, 100001L, singletonList(
-            KeyValue.pair(new Windowed<>(10, new TimeWindow(100000L, 101000L)), ValueAndTimestamp.make(1L, 100001L))));
+        processKeyValueAndVerifyWindowedCountWithTimestamp(10, currentTime + 100001L, singletonList(
+            KeyValue.pair(
+                new Windowed<>(10, new TimeWindow(100000L, 101000L)), ValueAndTimestamp.make(1L, currentTime + 100001L))));
 
 
         kafkaStreams.close();
@@ -574,16 +661,15 @@ public class StoreUpgradeIntegrationTest {
     public void shouldProxyWindowStoreToTimestampedWindowStoreUsingPapi() throws Exception {
         final StreamsBuilder streamsBuilderForOldStore = new StreamsBuilder();
 
-        streamsBuilderForOldStore.addStateStore(Stores.windowStoreBuilder(
-            Stores.persistentWindowStore(
-                STORE_NAME,
-                Duration.ofMillis(1000L),
-                Duration.ofMillis(1000L),
-                false),
-            Serdes.Integer(),
-            Serdes.Long()
-        ));
-        streamsBuilderForOldStore
+        streamsBuilderForOldStore.addStateStore(
+            Stores.windowStoreBuilder(
+                Stores.persistentWindowStore(
+                    STORE_NAME,
+                    Duration.ofMillis(1000L),
+                    Duration.ofMillis(1000L),
+                    false),
+                Serdes.Integer(),
+                Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
             .process(WindowedProcessor::new, STORE_NAME);
 
@@ -629,22 +715,21 @@ public class StoreUpgradeIntegrationTest {
 
 
 
-        final StreamsBuilder newStoreBuilder = new StreamsBuilder();
+        final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
 
-        newStoreBuilder.addStateStore(Stores.timestampedWindowStoreBuilder(
-            Stores.persistentWindowStore(
-                STORE_NAME,
-                Duration.ofMillis(1000L),
-                Duration.ofMillis(1000L),
-                false),
-            Serdes.Integer(),
-            Serdes.Long()
-        ));
-        newStoreBuilder
+        streamsBuilderForNewStore.addStateStore(
+            Stores.timestampedWindowStoreBuilder(
+                Stores.persistentWindowStore(
+                    STORE_NAME,
+                    Duration.ofMillis(1000L),
+                    Duration.ofMillis(1000L),
+                    false),
+                Serdes.Integer(),
+                Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
             .process(TimestampedWindowedProcessor::new, STORE_NAME);
 
-        kafkaStreams = new KafkaStreams(newStoreBuilder.build(), props);
+        kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
         kafkaStreams.start();
 
         verifyWindowedCountWithSurrogateTimestamp(new Windowed<>(1, new TimeWindow(0L, 1000L)), 2L);
@@ -737,7 +822,23 @@ public class StoreUpgradeIntegrationTest {
                 return false;
             }
         }, "Could not get expected result in time.");
+    }
 
+    private <K> void verifyWindowedCountWithTimestamp(final Windowed<K> key,
+                                                      final long value,
+                                                      final long timestamp) throws Exception {
+        TestUtils.waitForCondition(() -> {
+            try {
+                final ReadOnlyWindowStore<K, ValueAndTimestamp<Long>> store =
+                    kafkaStreams.store(STORE_NAME, QueryableStoreTypes.timestampedWindowStore());
+                final ValueAndTimestamp<Long> count = store.fetch(key.key(), key.window().start());
+                return count.value() == value && count.timestamp() == timestamp;
+            } catch (final Exception swallow) {
+                swallow.printStackTrace();
+                System.err.println(swallow.getMessage());
+                return false;
+            }
+        }, "Could not get expected result in time.");
     }
 
     private <K, V> void processKeyValueAndVerifyWindowedCountWithTimestamp(final K key,
