@@ -67,6 +67,15 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   Map("clientId" -> clientId)
   )
 
+  newGauge(
+    "FailedPartitionsCount", {
+      new Gauge[Long] {
+        def value = failedPartitions.size
+      }
+    },
+    Map("clientId" -> clientId)
+  )
+
   def resizeThreadPool(newSize: Int): Unit = {
     def migratePartitions(newSize: Int): Unit = {
       fetcherThreadMap.foreach { case (id, thread) =>
