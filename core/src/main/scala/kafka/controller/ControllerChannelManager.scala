@@ -76,7 +76,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
 
   def shutdown() = {
     brokerLock synchronized {
-      brokerStateInfo.values.foreach(removeExistingBroker)
+      brokerStateInfo.values.toList.foreach(removeExistingBroker)
     }
   }
 

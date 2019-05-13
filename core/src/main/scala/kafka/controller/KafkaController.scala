@@ -32,8 +32,8 @@ import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChange
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.{BrokerNotAvailableException, ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, ApiError, LeaderAndIsrResponse, StopReplicaResponse}
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.{AbstractControlRequest, AbstractResponse, ApiError, LeaderAndIsrResponse}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
@@ -999,6 +999,7 @@ class KafkaController(val config: KafkaConfig,
   private def processAutoPreferredReplicaLeaderElection(): Unit = {
     if (!isActive) return
     try {
+      info("Processing automatic preferred replica leader election")
       checkAndTriggerAutoLeaderRebalance()
     } finally {
       scheduleAutoLeaderRebalanceTask(delay = config.leaderImbalanceCheckIntervalSeconds, unit = TimeUnit.SECONDS)
@@ -1007,7 +1008,7 @@ class KafkaController(val config: KafkaConfig,
 
   private def processUncleanLeaderElectionEnable(): Unit = {
     if (!isActive) return
-    info(s"Unclean leader election has been enabled by default")
+    info("Unclean leader election has been enabled by default")
     partitionStateMachine.triggerOnlinePartitionStateChange()
   }
 
