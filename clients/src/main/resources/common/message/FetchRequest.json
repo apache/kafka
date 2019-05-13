@@ -60,7 +60,6 @@
       "about": "The fetch session ID." },
     { "name": "Epoch", "type": "int32", "versions": "7+", "default": "-1", "ignorable": false,
       "about": "The fetch session ID." },
-    { "name": "RackId", "type":  "string", "versions": "11+", "default": "", "about": "Rack ID of the consumer making this request"},
     { "name": "Topics", "type": "[]FetchableTopic", "versions": "0+",
       "about": "The topics to fetch.", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
@@ -85,6 +84,8 @@
         "about": "The partition name." },
       { "name": "ForgottenPartitionIndexes", "type": "[]int32", "versions": "7+",
         "about": "The partitions indexes to forget." }
-    ]}
+    ]},
+    { "name": "RackId", "type":  "string", "versions": "11+", "default": "", "ignorable": true,
+      "about": "Rack ID of the consumer making this request"}
   ]
 }

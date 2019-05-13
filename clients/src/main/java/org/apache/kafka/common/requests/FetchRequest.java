@@ -203,9 +203,9 @@ public class FetchRequest extends AbstractRequest {
             ISOLATION_LEVEL,
             SESSION_ID,
             SESSION_EPOCH,
-            RACK_ID,
             FETCH_REQUEST_TOPIC_V9,
-            FORGOTTEN_TOPIC_DATA_V7);
+            FORGOTTEN_TOPIC_DATA_V7,
+            RACK_ID);
 
     public static Schema[] schemaVersions() {
         return new Schema[]{FETCH_REQUEST_V0, FETCH_REQUEST_V1, FETCH_REQUEST_V2, FETCH_REQUEST_V3, FETCH_REQUEST_V4,
@@ -426,8 +426,6 @@ public class FetchRequest extends AbstractRequest {
         metadata = new FetchMetadata(struct.getOrElse(SESSION_ID, INVALID_SESSION_ID),
             struct.getOrElse(SESSION_EPOCH, FINAL_EPOCH));
 
-        rackId = struct.getOrElse(RACK_ID, "");
-
         fetchData = new LinkedHashMap<>();
         for (Object topicResponseObj : struct.get(TOPICS)) {
             Struct topicResponse = (Struct) topicResponseObj;
@@ -445,6 +443,7 @@ public class FetchRequest extends AbstractRequest {
                 fetchData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
+        rackId = struct.getOrElse(RACK_ID, "");
     }
 
     @Override
@@ -523,7 +522,6 @@ public class FetchRequest extends AbstractRequest {
         struct.setIfExists(ISOLATION_LEVEL, isolationLevel.id());
         struct.setIfExists(SESSION_ID, metadata.sessionId());
         struct.setIfExists(SESSION_EPOCH, metadata.epoch());
-        struct.setIfExists(RACK_ID, rackId);
 
         List<Struct> topicArray = new ArrayList<>();
         for (TopicAndPartitionData<PartitionData> topicEntry : topicsData) {
@@ -559,6 +557,7 @@ public class FetchRequest extends AbstractRequest {
             }
             struct.set(FORGOTTEN_TOPICS, toForgetStructs.toArray());
         }
+        struct.setIfExists(RACK_ID, rackId);
         return struct;
     }
 }
