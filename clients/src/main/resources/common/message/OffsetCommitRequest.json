@@ -28,7 +28,7 @@
   // Version 6 adds the leader epoch for fencing.
   "validVersions": "0-6",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "0+",
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The unique group identifier." },
     { "name": "GenerationId", "type": "int32", "versions": "1+", "default": "-1", "ignorable": true,
       "about": "The generation of the group." },
@@ -38,7 +38,7 @@
       "about": "The time period in ms to retain the offset." },
     { "name": "Topics", "type": "[]OffsetCommitRequestTopic", "versions": "0+",
       "about": "The topics to commit offsets for.",  "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]OffsetCommitRequestPartition", "versions": "0+",
         "about": "Each partition to commit offsets for.", "fields": [

@@ -20,26 +20,32 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
-class ForwardingCacheFlushListener<K, V> implements CacheFlushListener<K, V> {
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+
+class TimestampedCacheFlushListener<K, V> implements CacheFlushListener<K, ValueAndTimestamp<V>> {
     private final InternalProcessorContext context;
     private final ProcessorNode myNode;
 
-    ForwardingCacheFlushListener(final ProcessorContext context) {
+    TimestampedCacheFlushListener(final ProcessorContext context) {
         this.context = (InternalProcessorContext) context;
         myNode = this.context.currentNode();
     }
 
     @Override
     public void apply(final K key,
-                      final V newValue,
-                      final V oldValue,
+                      final ValueAndTimestamp<V> newValue,
+                      final ValueAndTimestamp<V> oldValue,
                       final long timestamp) {
         final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
-            context.forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(timestamp));
+            context.forward(
+                key,
+                new Change<>(getValueOrNull(newValue), getValueOrNull(oldValue)),
+                To.all().withTimestamp(newValue != null ? newValue.timestamp() : timestamp));
         } finally {
             context.setCurrentNode(prev);
         }

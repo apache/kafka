@@ -28,7 +28,7 @@
       "about": "Each described group.", "fields": [
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
         "about": "The describe error, or 0 if there was no error." },
-      { "name": "GroupId", "type": "string", "versions": "0+",
+      { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
         "about": "The group ID string." },
       { "name": "GroupState", "type": "string", "versions": "0+",
         "about": "The group state string, or the empty string." },

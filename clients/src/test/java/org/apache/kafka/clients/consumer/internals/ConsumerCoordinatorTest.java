@@ -139,7 +139,7 @@ public class ConsumerCoordinatorTest {
         LogContext logContext = new LogContext();
         this.subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST);
         this.metadata = new ConsumerMetadata(0, Long.MAX_VALUE, false,
-                subscriptions, logContext, new ClusterResourceListeners());
+                false, subscriptions, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(metadataResponse);
         this.consumerClient = new ConsumerNetworkClient(logContext, client, metadata, time, 100,
@@ -1181,7 +1181,7 @@ public class ConsumerCoordinatorTest {
 
     private void testInternalTopicInclusion(boolean includeInternalTopics) {
         metadata = new ConsumerMetadata(0, Long.MAX_VALUE, includeInternalTopics,
-                subscriptions, new LogContext(), new ClusterResourceListeners());
+                false, subscriptions, new LogContext(), new ClusterResourceListeners());
         client = new MockClient(time, metadata);
         coordinator = buildCoordinator(new Metrics(), assignors, false, Optional.empty());
 
@@ -2178,13 +2178,12 @@ public class ConsumerCoordinatorTest {
                 retryBackoffMs,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-                null,
-                true
+                null
         );
     }
 
     private FindCoordinatorResponse groupCoordinatorResponse(Node node, Errors error) {
-        return new FindCoordinatorResponse(error, node);
+        return FindCoordinatorResponse.prepareResponse(error, node);
     }
 
     private HeartbeatResponse heartbeatResponse(Errors error) {

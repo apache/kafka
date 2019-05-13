@@ -25,28 +25,29 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
  * Forwarding by this class only occurs when caching is not enabled. If caching is enabled,
  * forwarding occurs in the flush listener when the cached store flushes.
  *
- * @param <K>
- * @param <V>
+ * @param <K> the type of the key
+ * @param <V> the type of the value
  */
-class TupleForwarder<K, V> {
-    private final boolean cachingEnabled;
+class TimestampedTupleForwarder<K, V> {
     private final ProcessorContext context;
+    private final boolean sendOldValues;
+    private final boolean cachingEnabled;
 
     @SuppressWarnings("unchecked")
-    TupleForwarder(final StateStore store,
-                   final ProcessorContext context,
-                   final ForwardingCacheFlushListener<K, V> flushListener,
-                   final boolean sendOldValues) {
-        cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
+    TimestampedTupleForwarder(final StateStore store,
+                              final ProcessorContext context,
+                              final TimestampedCacheFlushListener<K, V> flushListener,
+                              final boolean sendOldValues) {
         this.context = context;
+        this.sendOldValues = sendOldValues;
+        cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
     }
 
     public void maybeForward(final K key,
                              final V newValue,
                              final V oldValue) {
-        if (cachingEnabled) {
-            return;
+        if (!cachingEnabled) {
+            context.forward(key, new Change<>(newValue, sendOldValues ? oldValue : null));
         }
-        context.forward(key, new Change<>(newValue, oldValue));
     }
 }

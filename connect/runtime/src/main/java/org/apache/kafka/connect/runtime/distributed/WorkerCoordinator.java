@@ -86,8 +86,7 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
               metrics,
               metricGrpPrefix,
               time,
-              retryBackoffMs,
-                true);
+              retryBackoffMs);
         this.log = logContext.logger(WorkerCoordinator.class);
         this.restUrl = restUrl;
         this.configStorage = configStorage;
@@ -147,11 +146,11 @@ public final class WorkerCoordinator extends AbstractCoordinator implements Clos
     }
 
     @Override
-    public JoinGroupRequestData.JoinGroupRequestProtocolSet metadata() {
+    public JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
         configSnapshot = configStorage.snapshot();
         ConnectProtocol.WorkerState workerState = new ConnectProtocol.WorkerState(restUrl, configSnapshot.offset());
         ByteBuffer metadata = ConnectProtocol.serializeMetadata(workerState);
-        return new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+        return new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
                 Collections.singleton(new JoinGroupRequestData.JoinGroupRequestProtocol()
                         .setName(DEFAULT_SUBPROTOCOL)
                         .setMetadata(metadata.array()))

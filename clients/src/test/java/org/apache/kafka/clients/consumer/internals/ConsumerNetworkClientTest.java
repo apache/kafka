@@ -21,6 +21,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -238,7 +239,7 @@ public class ConsumerNetworkClientTest {
             fail("Expected authentication error thrown");
         } catch (AuthenticationException e) {
             // After the exception is raised, it should have been cleared
-            assertNull(metadata.getAndClearAuthenticationException());
+            assertNull(metadata.getAndClearMetadataException());
         }
     }
 
@@ -256,6 +257,18 @@ public class ConsumerNetworkClientTest {
                 Collections.singletonMap("topic", Errors.TOPIC_AUTHORIZATION_FAILED), Collections.emptyMap());
         metadata.update(metadataResponse, time.milliseconds());
         consumerClient.poll(time.timer(Duration.ZERO));
+    }
+
+    @Test
+    public void testMetadataFailurePropagated() {
+        KafkaException metadataException = new KafkaException();
+        metadata.failedUpdate(time.milliseconds(), metadataException);
+        try {
+            consumerClient.poll(time.timer(Duration.ZERO));
+            fail("Expected poll to throw exception");
+        } catch (Exception e) {
+            assertEquals(metadataException, e);
+        }
     }
 
     @Test

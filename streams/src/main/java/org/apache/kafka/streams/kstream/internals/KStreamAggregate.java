@@ -22,16 +22,18 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, K, V, T> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamAggregate.class);
     private final String storeName;
     private final Initializer<T> initializer;
     private final Aggregator<? super K, ? super V, T> aggregator;
-
 
     private boolean sendOldValues = false;
 
@@ -51,21 +53,24 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         sendOldValues = true;
     }
 
-    private class KStreamAggregateProcessor extends AbstractProcessor<K, V> {
 
-        private KeyValueStore<K, T> store;
+    private class KStreamAggregateProcessor extends AbstractProcessor<K, V> {
+        private TimestampedKeyValueStore<K, T> store;
         private StreamsMetricsImpl metrics;
-        private TupleForwarder<K, T> tupleForwarder;
+        private TimestampedTupleForwarder<K, T> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             metrics = (StreamsMetricsImpl) context.metrics();
-            store = (KeyValueStore<K, T>) context.getStateStore(storeName);
-            tupleForwarder = new TupleForwarder<>(store, context, new ForwardingCacheFlushListener<>(context), sendOldValues);
+            store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
+            tupleForwarder = new TimestampedTupleForwarder<>(
+                store,
+                context,
+                new TimestampedCacheFlushListener<>(context),
+                sendOldValues);
         }
-
 
         @Override
         public void process(final K key, final V value) {
@@ -79,7 +84,8 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
                 return;
             }
 
-            T oldAgg = store.get(key);
+            final ValueAndTimestamp<T> oldAggAndTimestamp = store.get(key);
+            T oldAgg = getValueOrNull(oldAggAndTimestamp);
 
             if (oldAgg == null) {
                 oldAgg = initializer.apply();
@@ -91,14 +97,13 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             newAgg = aggregator.apply(key, value, newAgg);
 
             // update the store with the new value
-            store.put(key, newAgg);
+            store.put(key, ValueAndTimestamp.make(newAgg, context().timestamp()));
             tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null);
         }
     }
 
     @Override
     public KTableValueGetterSupplier<K, T> view() {
-
         return new KTableValueGetterSupplier<K, T>() {
 
             public KTableValueGetter<K, T> get() {
@@ -112,23 +117,22 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
         };
     }
 
-    private class KStreamAggregateValueGetter implements KTableValueGetter<K, T> {
 
-        private KeyValueStore<K, T> store;
+    private class KStreamAggregateValueGetter implements KTableValueGetter<K, T> {
+        private TimestampedKeyValueStore<K, T> store;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
-            store = (KeyValueStore<K, T>) context.getStateStore(storeName);
+            store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
         }
 
         @Override
         public T get(final K key) {
-            return store.get(key);
+            return getValueOrNull(store.get(key));
         }
 
         @Override
-        public void close() {
-        }
+        public void close() {}
     }
 }

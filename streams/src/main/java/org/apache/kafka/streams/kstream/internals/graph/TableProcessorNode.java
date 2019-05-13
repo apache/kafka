@@ -18,26 +18,26 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 import java.util.Arrays;
 
 public class TableProcessorNode<K, V> extends StreamsGraphNode {
 
     private final ProcessorParameters<K, V> processorParameters;
-    private final StoreBuilder<KeyValueStore<K, V>> storeBuilder;
+    private final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder;
     private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V> processorParameters,
-                              final StoreBuilder<KeyValueStore<K, V>> storeBuilder) {
+                              final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder) {
         this(nodeName, processorParameters, storeBuilder, null);
     }
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V> processorParameters,
-                              final StoreBuilder<KeyValueStore<K, V>> storeBuilder,
+                              final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder,
                               final String[] storeNames) {
         super(nodeName);
         this.processorParameters = processorParameters;

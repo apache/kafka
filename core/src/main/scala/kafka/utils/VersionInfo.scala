@@ -22,9 +22,19 @@ import org.apache.kafka.common.utils.AppInfoParser
 object VersionInfo {
 
   def main(args: Array[String]) {
-    val version = AppInfoParser.getVersion
-    val commitId = AppInfoParser.getCommitId
-    System.out.println(s"${version} (Commit:${commitId})")
+    System.out.println(getVersionString)
     System.exit(0)
+  }
+
+  def getVersion: String = {
+    AppInfoParser.getVersion
+  }
+
+  def getCommit: String = {
+    AppInfoParser.getCommitId
+  }
+
+  def getVersionString: String = {
+    s"${getVersion} (Commit:${getCommit})"
   }
 }

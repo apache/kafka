@@ -103,7 +103,8 @@ public class SuppressScenarioTest {
         final Topology topology = builder.build();
 
 
-        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
+        final ConsumerRecordFactory<String, String> recordFactory =
+            new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
@@ -179,7 +180,8 @@ public class SuppressScenarioTest {
             .toStream()
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
-        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
+        final ConsumerRecordFactory<String, String> recordFactory =
+            new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
             driver.pipeInput(recordFactory.create("input", "k1", "v2", 1L));
@@ -248,7 +250,8 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
+        final ConsumerRecordFactory<String, String> recordFactory =
+            new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
             driver.pipeInput(recordFactory.create("input", "k1", "v2", 1L));
@@ -311,7 +314,8 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
+        final ConsumerRecordFactory<String, String> recordFactory =
+            new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
             driver.pipeInput(recordFactory.create("input", "k1", "v2", 1L));
@@ -370,7 +374,8 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
+        final ConsumerRecordFactory<String, String> recordFactory =
+            new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 1L));
@@ -420,7 +425,8 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
+        final ConsumerRecordFactory<String, String> recordFactory =
+            new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 1L));
@@ -475,7 +481,8 @@ public class SuppressScenarioTest {
             .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
         final Topology topology = builder.build();
         System.out.println(topology.describe());
-        final ConsumerRecordFactory<String, String> recordFactory = new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
+        final ConsumerRecordFactory<String, String> recordFactory =
+            new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
             // first window
             driver.pipeInput(recordFactory.create("input", "k1", "v1", 0L));
@@ -492,10 +499,10 @@ public class SuppressScenarioTest {
                 drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
                     new KeyValueTimestamp<>("[k1@0/0]", 1L, 0L),
-                    new KeyValueTimestamp<>("[k1@0/0]", null, 5L),
+                    new KeyValueTimestamp<>("[k1@0/0]", null, 0L),
                     new KeyValueTimestamp<>("[k1@0/5]", 2L, 5L),
-                    new KeyValueTimestamp<>("[k1@0/5]", null, 1L),
-                    new KeyValueTimestamp<>("[k1@0/5]", 3L, 1L),
+                    new KeyValueTimestamp<>("[k1@0/5]", null, 5L),
+                    new KeyValueTimestamp<>("[k1@0/5]", 3L, 5L),
                     new KeyValueTimestamp<>("[k2@6/6]", 1L, 6L),
                     new KeyValueTimestamp<>("[k1@30/30]", 1L, 30L)
                 )
@@ -503,14 +510,15 @@ public class SuppressScenarioTest {
             verify(
                 drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                 asList(
-                    new KeyValueTimestamp<>("[k1@0/5]", 3L, 1L),
+                    new KeyValueTimestamp<>("[k1@0/5]", 3L, 5L),
                     new KeyValueTimestamp<>("[k2@6/6]", 1L, 6L)
                 )
             );
         }
     }
 
-    private static <K, V> void verify(final List<ProducerRecord<K, V>> results, final List<KeyValueTimestamp<K, V>> expectedResults) {
+    private static <K, V> void verify(final List<ProducerRecord<K, V>> results,
+                                      final List<KeyValueTimestamp<K, V>> expectedResults) {
         if (results.size() != expectedResults.size()) {
             throw new AssertionError(printRecords(results) + " != " + expectedResults);
         }
@@ -525,7 +533,10 @@ public class SuppressScenarioTest {
         }
     }
 
-    private static <K, V> List<ProducerRecord<K, V>> drainProducerRecords(final TopologyTestDriver driver, final String topic, final Deserializer<K> keyDeserializer, final Deserializer<V> valueDeserializer) {
+    private static <K, V> List<ProducerRecord<K, V>> drainProducerRecords(final TopologyTestDriver driver,
+                                                                          final String topic,
+                                                                          final Deserializer<K> keyDeserializer,
+                                                                          final Deserializer<V> valueDeserializer) {
         final List<ProducerRecord<K, V>> result = new LinkedList<>();
         for (ProducerRecord<K, V> next = driver.readOutput(topic, keyDeserializer, valueDeserializer);
              next != null;

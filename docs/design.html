@@ -523,16 +523,20 @@
     <h4><a id="design_compactionconfig" href="#design_compactionconfig">Configuring The Log Cleaner</a></h4>
 
     The log cleaner is enabled by default. This will start the pool of cleaner threads.
-    To enable log cleaning on a particular topic you can add the log-specific property
-    <pre class="brush: text;">  log.cleanup.policy=compact</pre>
-    This can be done either at topic creation time or using the alter topic command.
-    <p>
+    To enable log cleaning on a particular topic, add the log-specific property
+    <pre class="brush: text;"> log.cleanup.policy=compact</pre>
+    
+    The <code>log.cleanup.policy</code> property is a broker configuration setting defined 
+    in the broker's <code>server.properties</code> file; it affects all of the topics 
+    in the cluster that do not have a configuration override in place as documented 
+    <a href="/documentation.html#brokerconfigs">here</a>.
+    
     The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
     <pre class="brush: text;">  log.cleaner.min.compaction.lag.ms</pre>
 
     This can be used to prevent messages newer than a minimum message age from being subject to compaction. If not set, all log segments are eligible for compaction except for the last segment, i.e. the one currently
     being written to. The active segment will not be compacted even if all of its messages are older than the minimum compaction time lag.
-    </p>
+    
     <p>
     Further cleaner configurations are described <a href="/documentation.html#brokerconfigs">here</a>.
 

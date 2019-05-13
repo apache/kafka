@@ -79,11 +79,11 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case METADATA:
                 return new MetadataResponse(struct, version);
             case OFFSET_COMMIT:
-                return new OffsetCommitResponse(struct);
+                return new OffsetCommitResponse(struct, version);
             case OFFSET_FETCH:
                 return new OffsetFetchResponse(struct);
             case FIND_COORDINATOR:
-                return new FindCoordinatorResponse(struct);
+                return new FindCoordinatorResponse(struct, version);
             case JOIN_GROUP:
                 return new JoinGroupResponse(struct, version);
             case HEARTBEAT:
