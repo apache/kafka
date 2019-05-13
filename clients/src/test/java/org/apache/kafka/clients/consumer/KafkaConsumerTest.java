@@ -1656,8 +1656,8 @@ public class KafkaConsumerTest {
     }
 
     private ConsumerMetadata createMetadata(SubscriptionState subscription) {
-        return new ConsumerMetadata(0, Long.MAX_VALUE, false, subscription,
-                new LogContext(), new ClusterResourceListeners());
+        return new ConsumerMetadata(0, Long.MAX_VALUE, false, false,
+                                    subscription, new LogContext(), new ClusterResourceListeners());
     }
 
     private Node prepareRebalance(MockClient client, Node node, final Set<String> subscribedTopics, PartitionAssignor assignor, List<TopicPartition> partitions, Node coordinator) {

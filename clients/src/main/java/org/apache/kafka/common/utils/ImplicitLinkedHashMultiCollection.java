@@ -24,7 +24,7 @@ import java.util.List;
 
 /**
  * A memory-efficient hash multiset which tracks the order of insertion of elements.
- * See org.apache.kafka.common.utils.ImplicitLinkedHashSet for implementation details.
+ * See org.apache.kafka.common.utils.ImplicitLinkedHashCollection for implementation details.
  *
  * This class is a multi-set because it allows multiple elements to be inserted that are
  * equal to each other.
@@ -42,17 +42,17 @@ import java.util.List;
  *
  * This multiset does not allow null elements.  It does not have internal synchronization.
  */
-public class ImplicitLinkedHashMultiSet<E extends ImplicitLinkedHashSet.Element>
-        extends ImplicitLinkedHashSet<E> {
-    public ImplicitLinkedHashMultiSet() {
+public class ImplicitLinkedHashMultiCollection<E extends ImplicitLinkedHashCollection.Element>
+        extends ImplicitLinkedHashCollection<E> {
+    public ImplicitLinkedHashMultiCollection() {
         super(0);
     }
 
-    public ImplicitLinkedHashMultiSet(int expectedNumElements) {
+    public ImplicitLinkedHashMultiCollection(int expectedNumElements) {
         super(expectedNumElements);
     }
 
-    public ImplicitLinkedHashMultiSet(Iterator<E> iter) {
+    public ImplicitLinkedHashMultiCollection(Iterator<E> iter) {
         super(iter);
     }
 

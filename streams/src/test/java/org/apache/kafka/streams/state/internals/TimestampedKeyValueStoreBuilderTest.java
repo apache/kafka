@@ -18,11 +18,9 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
@@ -46,14 +44,16 @@ public class TimestampedKeyValueStoreBuilderTest {
     @Mock(type = MockType.NICE)
     private KeyValueBytesStoreSupplier supplier;
     @Mock(type = MockType.NICE)
-    private KeyValueStore<Bytes, byte[]> inner;
+    private RocksDBTimestampedStore inner;
     private TimestampedKeyValueStoreBuilder<String, String> builder;
 
     @Before
     public void setUp() {
         expect(supplier.get()).andReturn(inner);
         expect(supplier.name()).andReturn("name");
-        replay(supplier);
+        expect(inner.persistent()).andReturn(true).anyTimes();
+        replay(supplier, inner);
+
         builder = new TimestampedKeyValueStoreBuilder<>(
             supplier,
             Serdes.String(),

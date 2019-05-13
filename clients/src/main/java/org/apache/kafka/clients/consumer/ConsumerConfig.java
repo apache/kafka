@@ -261,6 +261,14 @@ public class ConsumerConfig extends AbstractConfig {
 
     public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT);
 
+    /** <code>allow.auto.create.topics</code> */
+    public static final String ALLOW_AUTO_CREATE_TOPICS_CONFIG = "allow.auto.create.topics";
+    private static final String ALLOW_AUTO_CREATE_TOPICS_DOC = "Allow automatic topic creation on the broker when" +
+            " subscribing to or assigning a topic. A topic being subscribed to will be automatically created only if the" +
+            " broker allows for it using `auto.create.topics.enable` broker configuration. This configuration must" +
+            " be set to `false` when using brokers older than 0.11.0";
+    public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
+    
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -464,6 +472,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         in(IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT), IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT)),
                                         Importance.MEDIUM,
                                         ISOLATION_LEVEL_DOC)
+                                .define(ALLOW_AUTO_CREATE_TOPICS_CONFIG,
+                                        Type.BOOLEAN,
+                                        DEFAULT_ALLOW_AUTO_CREATE_TOPICS,
+                                        Importance.MEDIUM,
+                                        ALLOW_AUTO_CREATE_TOPICS_DOC)
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
@@ -472,7 +485,6 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
-
     }
 
     @Override

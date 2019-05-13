@@ -113,6 +113,10 @@ public class TopicConfig {
         "higher ratio will mean fewer, more efficient cleanings but will mean more wasted " +
         "space in the log.";
 
+    public static final String MAX_COMPACTION_LAG_MS_CONFIG = "max.compaction.lag.ms";
+    public static final String MAX_COMPACTION_LAG_MS_DOC = "The maximum time a message will remain " +
+        "ineligible for compaction in the log. Only applicable for logs that are being compacted.";
+
     public static final String CLEANUP_POLICY_CONFIG = "cleanup.policy";
     public static final String CLEANUP_POLICY_COMPACT = "compact";
     public static final String CLEANUP_POLICY_DELETE = "delete";

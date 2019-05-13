@@ -188,7 +188,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * on the preference).
      * @return Non-empty map of supported protocols and metadata
      */
-    protected abstract JoinGroupRequestData.JoinGroupRequestProtocolSet metadata();
+    protected abstract JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata();
 
     /**
      * Invoked prior to each group join or rejoin. This is typically used to perform any

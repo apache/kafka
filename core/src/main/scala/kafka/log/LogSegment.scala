@@ -95,8 +95,9 @@ class LogSegment private[log] (val log: FileRecords,
   /* the number of bytes since we last added an entry in the offset index */
   private var bytesSinceLastIndexEntry = 0
 
-  /* The timestamp we used for time based log rolling */
-  private var rollingBasedTimestamp: Option[Long] = None
+  // The timestamp we used for time based log rolling and for ensuring max compaction delay
+  // volatile for LogCleaner to see the update
+  @volatile private var rollingBasedTimestamp: Option[Long] = None
 
   /* The maximum timestamp we see so far */
   @volatile private var _maxTimestampSoFar: Option[Long] = None
@@ -523,6 +524,18 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
+    * If not previously loaded,
+    * load the timestamp of the first message into memory.
+    */
+  private def loadFirstBatchTimestamp(): Unit = {
+    if (rollingBasedTimestamp.isEmpty) {
+      val iter = log.batches.iterator()
+      if (iter.hasNext)
+        rollingBasedTimestamp = Some(iter.next().maxTimestamp)
+    }
+  }
+
+  /**
    * The time this segment has waited to be rolled.
    * If the first message batch has a timestamp we use its timestamp to determine when to roll a segment. A segment
    * is rolled if the difference between the new batch's timestamp and the first batch's timestamp exceeds the
@@ -533,14 +546,21 @@ class LogSegment private[log] (val log: FileRecords,
    */
   def timeWaitedForRoll(now: Long, messageTimestamp: Long) : Long = {
     // Load the timestamp of the first message into memory
-    if (rollingBasedTimestamp.isEmpty) {
-      val iter = log.batches.iterator()
-      if (iter.hasNext)
-        rollingBasedTimestamp = Some(iter.next().maxTimestamp)
-    }
+    loadFirstBatchTimestamp()
     rollingBasedTimestamp match {
       case Some(t) if t >= 0 => messageTimestamp - t
       case _ => now - created
+    }
+  }
+
+  /**
+    * @return the first batch timestamp if the timestamp is available. Otherwise return Long.MaxValue
+    */
+  def getFirstBatchTimestamp() : Long = {
+    loadFirstBatchTimestamp()
+    rollingBasedTimestamp match {
+      case Some(t) if t >= 0 => t
+      case _ => Long.MaxValue
     }
   }
 
