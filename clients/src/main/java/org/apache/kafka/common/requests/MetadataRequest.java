@@ -123,6 +123,8 @@ public class MetadataRequest extends AbstractRequest {
             } else {
                 bld.append(Utils.join(topics, ","));
             }
+            bld.append(", allowAutoCreate=");
+            bld.append(allowAutoTopicCreation);
             bld.append(")");
             return bld.toString();
         }

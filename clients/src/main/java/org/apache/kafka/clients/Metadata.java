@@ -25,6 +25,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
+import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,7 +67,8 @@ public class Metadata implements Closeable {
 
     private final long refreshBackoffMs;
     private final long metadataExpireMs;
-    private int version;
+    private int updateVersion;  // bumped on every metadata response
+    private int requestVersion; // bumped on every new topic addition
     private long lastRefreshMs;
     private long lastSuccessfulRefreshMs;
     private AuthenticationException authenticationException;
@@ -109,7 +111,8 @@ public class Metadata implements Closeable {
         this.topicExpiryEnabled = topicExpiryEnabled;
         this.lastRefreshMs = 0L;
         this.lastSuccessfulRefreshMs = 0L;
-        this.version = 0;
+        this.requestVersion = 0;
+        this.updateVersion = 0;
         this.needUpdate = false;
         this.topics = new HashMap<>();
         this.listeners = new ArrayList<>();
@@ -165,7 +168,7 @@ public class Metadata implements Closeable {
      */
     public synchronized int requestUpdate() {
         this.needUpdate = true;
-        return this.version;
+        return this.updateVersion;
     }
 
     /**
@@ -253,7 +256,7 @@ public class Metadata implements Closeable {
 
         long begin = System.currentTimeMillis();
         long remainingWaitMs = maxWaitMs;
-        while ((this.version <= lastVersion) && !isClosed()) {
+        while ((this.updateVersion <= lastVersion) && !isClosed()) {
             AuthenticationException ex = getAndClearAuthenticationException();
             if (ex != null)
                 throw ex;
@@ -311,8 +314,15 @@ public class Metadata implements Closeable {
         this.needUpdate = true;
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
-        this.version += 1;
+        this.updateVersion += 1;
         this.cache = MetadataCache.bootstrap(addresses);
+    }
+
+    /**
+     * Update metadata assuming the current request version. This is mainly for convenience in testing.
+     */
+    public synchronized void update(MetadataResponse response, long now) {
+        this.update(this.requestVersion, response, now);
     }
 
     /**
@@ -322,15 +332,19 @@ public class Metadata implements Closeable {
      * @param metadataResponse metadata response received from the broker
      * @param now current time in milliseconds
      */
-    public synchronized void update(MetadataResponse metadataResponse, long now) {
+    public synchronized void update(int requestVersion, MetadataResponse metadataResponse, long now) {
         Objects.requireNonNull(metadataResponse, "Metadata response cannot be null");
         if (isClosed())
             throw new IllegalStateException("Update requested after metadata close");
 
-        this.needUpdate = false;
+        if (requestVersion == this.requestVersion)
+            this.needUpdate = false;
+        else
+            requestUpdate();
+
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
-        this.version += 1;
+        this.updateVersion += 1;
 
         if (topicExpiryEnabled) {
             // Handle expiry of topics from the metadata refresh set.
@@ -367,7 +381,7 @@ public class Metadata implements Closeable {
         clusterResourceListeners.onUpdate(clusterForListeners.clusterResource());
 
         notifyAll();
-        log.debug("Updated cluster metadata version {} to {}", this.version, this.cache);
+        log.debug("Updated cluster metadata version {} to {}", this.updateVersion, this.cache);
     }
 
     /**
@@ -450,10 +464,10 @@ public class Metadata implements Closeable {
     }
 
     /**
-     * @return The current metadata version
+     * @return The current metadata update version
      */
-    public synchronized int version() {
-        return this.version;
+    public synchronized int updateVersion() {
+        return this.updateVersion;
     }
 
     /**
@@ -532,10 +546,32 @@ public class Metadata implements Closeable {
         void onMetadataUpdate(Cluster cluster, Set<String> unavailableTopics);
     }
 
-    private synchronized void requestUpdateForNewTopics() {
+    // Visible for testing
+    synchronized void requestUpdateForNewTopics() {
         // Override the timestamp of last refresh to let immediate update.
         this.lastRefreshMs = 0;
+        this.requestVersion++;
         requestUpdate();
+    }
+
+    public synchronized MetadataRequestAndVersion newMetadataRequestAndVersion() {
+        final MetadataRequest.Builder metadataRequestBuilder;
+        if (needMetadataForAllTopics)
+            metadataRequestBuilder = MetadataRequest.Builder.allTopics();
+        else
+            metadataRequestBuilder = new MetadataRequest.Builder(new ArrayList<>(this.topics.keySet()),
+                    allowAutoTopicCreation());
+        return new MetadataRequestAndVersion(metadataRequestBuilder, requestVersion);
+    }
+
+    public static class MetadataRequestAndVersion {
+        public final MetadataRequest.Builder requestBuilder;
+        public final int requestVersion;
+
+        private MetadataRequestAndVersion(MetadataRequest.Builder requestBuilder, int requestVersion) {
+            this.requestBuilder = requestBuilder;
+            this.requestVersion = requestVersion;
+        }
     }
 
 }
