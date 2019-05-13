@@ -55,7 +55,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
-import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolSet;
+import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.Assignment;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.WorkerState;
@@ -219,7 +219,7 @@ public class WorkerCoordinatorIncrementalTest {
 
         PowerMock.replayAll();
 
-        JoinGroupRequestProtocolSet serialized = coordinator.metadata();
+        JoinGroupRequestProtocolCollection serialized = coordinator.metadata();
         assertEquals(expectedMetadataSize, serialized.size());
 
         Iterator<JoinGroupRequestProtocol> protocolIterator = serialized.iterator();
@@ -246,7 +246,7 @@ public class WorkerCoordinatorIncrementalTest {
         ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
         coordinator.onJoinComplete(9, null, null, buf);
 
-        JoinGroupRequestProtocolSet serialized = coordinator.metadata();
+        JoinGroupRequestProtocolCollection serialized = coordinator.metadata();
         assertEquals(expectedMetadataSize, serialized.size());
 
         Iterator<JoinGroupRequestProtocol> protocolIterator = serialized.iterator();
