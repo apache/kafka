@@ -294,6 +294,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         if (scheduledRebalance < Long.MAX_VALUE) {
             nextRequestTimeoutMs = Math.min(nextRequestTimeoutMs, Math.max(scheduledRebalance - now, 0));
+            rebalanceResolved = false;
+            log.debug("Scheduled rebalance at: {} (now: {} nextRequestTimeoutMs: {}) ",
+                    scheduledRebalance, now, nextRequestTimeoutMs);
         }
 
         // Process any configuration updates
@@ -315,6 +318,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     connectorConfigUpdates.clear();
                     connectorTargetStateChanges.clear();
                     needsReconfigRebalance = false;
+                    log.debug("Requesting rebalance due to reconfiguration of tasks (needsReconfigRebalance: {})",
+                            needsReconfigRebalance);
                     return;
                 } else {
                     if (!connectorConfigUpdates.isEmpty()) {
@@ -757,13 +762,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
     /**
      * Handle post-assignment operations, either trying to resolve issues that kept assignment from completing, getting
-     * this node into sync and its work started. Since
+     * this node into sync and its work started.
      *
      * @return false if we couldn't finish
      */
     private boolean handleRebalanceCompleted() {
-        if (this.rebalanceResolved)
+        if (rebalanceResolved) {
+            log.trace("Returning early because rebalance is marked as resolved (rebalanceResolved: true)");
             return true;
+        }
 
         // We need to handle a variety of cases after a rebalance:
         // 1. Assignment failed
@@ -798,6 +805,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
         long now = time.milliseconds();
         if (scheduledRebalance <= now) {
+            log.debug("Requesting rebalance because scheduled rebalance timeout has been reached "
+                    + "(now: {} scheduledRebalance: {}", scheduledRebalance, now);
+
             needsRejoin = true;
             scheduledRebalance = Long.MAX_VALUE;
         }
