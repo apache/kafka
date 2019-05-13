@@ -15,11 +15,11 @@
 
 # This determines the version of kafkatest that can be published to PyPi and installed with pip
 #
-# Note that in development, this version name can't follow Kafka's convention of having a trailing "-SNAPSHOT"
+# Note that in
 # due to python version naming restrictions, which are enforced by python packaging tools
-# (see  https://www.python.org/dev/peps/pep-0440/)
+# (see  https://www.python.org
 #
-# Instead, in development branches, the version should have a suffix of the form ".devN"
+# Instead, in
 #
-# For example, when Kafka is at version 1.0.0-SNAPSHOT, this should be something like "1.0.0.dev0"
-__version__ = '2.2.1-SNAPSHOT'
+# For example, when Kafka is at version 1.0.0-SNAPSHOT, this should be something like "1.0.0
+__version__ = '2.2.1'
