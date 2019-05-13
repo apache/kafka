@@ -65,8 +65,15 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
       Map(tp -> assigment))
     }
     // wait until replica log is created on every broker
-    TestUtils.waitUntilTrue(() => servers.forall(server => partitionsAndAssignments.forall(partitionAndAssignment => server.getLogManager().getLog(partitionAndAssignment._1).isDefined)),
-      "Replicas for topic test not created")
+    TestUtils.waitUntilTrue(
+      () =>
+        servers.forall { server =>
+          partitionsAndAssignments.forall { partitionAndAssignment =>
+            server.getLogManager().getLog(partitionAndAssignment._1).isDefined
+          }
+        },
+      "Replicas for topic test not created"
+    )
   }
 
   /** Bounce the given targetServer and wait for all servers to get metadata for the given partition */

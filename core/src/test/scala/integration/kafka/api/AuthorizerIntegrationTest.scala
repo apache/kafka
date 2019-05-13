@@ -207,7 +207,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       if (resp.logDirInfos.size() > 0) resp.logDirInfos.asScala.head._2.error else Errors.CLUSTER_AUTHORIZATION_FAILED),
     ApiKeys.CREATE_PARTITIONS -> ((resp: CreatePartitionsResponse) => resp.errors.asScala.find(_._1 == topic).get._2.error),
     ApiKeys.ELECT_LEADERS -> ((resp: ElectLeadersResponse) =>
-      ElectLeadersRequest.fromResponseData(resp.data()).get(tp).error()),
+      ElectLeadersResponse.fromResponseData(resp.data()).get(tp).error()),
     ApiKeys.INCREMENTAL_ALTER_CONFIGS -> ((resp: IncrementalAlterConfigsResponse) =>
       IncrementalAlterConfigsResponse.fromResponseData(resp.data()).get(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)).error)
   )

@@ -19,7 +19,6 @@ package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.ElectionType;
@@ -29,7 +28,6 @@ import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.utils.CollectionUtils;
@@ -56,13 +54,16 @@ public class ElectLeadersRequest extends AbstractRequest {
         public String toString() {
             return "ElectLeadersRequest("
                 + "electionType=" + electionType
-                + "topicPartitions=" + ((topicPartitions == null) ? "null" : MessageUtil.deepToString(topicPartitions.iterator()))
+                + ", topicPartitions=" + ((topicPartitions == null) ? "null" : MessageUtil.deepToString(topicPartitions.iterator()))
                 + ", timeoutMs=" + timeoutMs
                 + ")";
         }
 
         private ElectLeadersRequestData toRequestData(short version) {
-            // TODO: What happens if they set Some(Unclean) and version is 0? Throw exception?
+            if (electionType != ElectionType.PREFERRED && version == 0) {
+                throw new IllegalStateException("API Version 0 only supports PREFERRED election type");
+            }
+
             ElectLeadersRequestData data = new ElectLeadersRequestData()
                 .setTimeoutMs(timeoutMs);
 
@@ -73,21 +74,11 @@ public class ElectLeadersRequest extends AbstractRequest {
             } else {
                 data.setTopicPartitions(null);
             }
+
+            data.setElectionType(electionType.value);
+
             return data;
         }
-    }
-
-    // TODO: deal with version information
-    public static Map<TopicPartition, ApiError> fromResponseData(ElectLeadersResponseData data) {
-        Map<TopicPartition, ApiError> map = new HashMap<>();
-        for (ElectLeadersResponseData.ReplicaElectionResult topicResults : data.replicaElectionResults()) {
-            for (ElectLeadersResponseData.PartitionResult partitionResult : topicResults.partitionResult()) {
-                map.put(new TopicPartition(topicResults.topic(), partitionResult.partitionId()),
-                        new ApiError(Errors.forCode(partitionResult.errorCode()),
-                                partitionResult.errorMessage()));
-            }
-        }
-        return map;
     }
 
     private final ElectLeadersRequestData data;

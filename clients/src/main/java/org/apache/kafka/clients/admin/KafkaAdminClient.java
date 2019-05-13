@@ -2948,9 +2948,6 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ElectPreferredLeadersResult electPreferredLeaders(final Collection<TopicPartition> partitions,
                                                              ElectPreferredLeadersOptions options) {
-        final ElectLeadersOptions newOptions = new ElectLeadersOptions();
-        newOptions.timeoutMs(options.timeoutMs());
-
         final Set<TopicPartition> topicPartitions = partitions == null ? null : new HashSet<>(partitions);
 
         final KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture = new KafkaFutureImpl<>();
@@ -2967,9 +2964,8 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 ElectLeadersResponse response = (ElectLeadersResponse) abstractResponse;
-                // TODO: check out the fromResponseData is doing the right thing (tm)
                 electionFuture.complete(
-                        ElectLeadersRequest.fromResponseData(response.data()));
+                        ElectLeadersResponse.fromResponseData(response.data()));
             }
 
             @Override
@@ -2999,9 +2995,8 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 ElectLeadersResponse response = (ElectLeadersResponse) abstractResponse;
-                // TODO: check out the fromResponseData is doing the right thing (tm)
                 electionFuture.complete(
-                        ElectLeadersRequest.fromResponseData(response.data()));
+                        ElectLeadersResponse.fromResponseData(response.data()));
             }
 
             @Override

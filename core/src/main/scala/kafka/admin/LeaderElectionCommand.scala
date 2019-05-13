@@ -36,7 +36,6 @@ import scala.collection.JavaConverters._
 import scala.concurrent.duration._
 import scala.util.Try
 
-// TODO: Test this command. Note: do we have infra for testing command?
 final object LeaderElectionCommand extends Logging {
   def main(args: Array[String]): Unit = {
     run(args, 30000.millisecond)

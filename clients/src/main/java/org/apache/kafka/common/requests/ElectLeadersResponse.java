@@ -17,16 +17,16 @@
 
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.ElectLeadersResponseData;
-import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
-import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Struct;
-
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
+import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
+import org.apache.kafka.common.message.ElectLeadersResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.types.Struct;
 
 public class ElectLeadersResponse extends AbstractResponse {
 
@@ -79,5 +79,17 @@ public class ElectLeadersResponse extends AbstractResponse {
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 3;
+    }
+
+    public static Map<TopicPartition, ApiError> fromResponseData(ElectLeadersResponseData data) {
+        Map<TopicPartition, ApiError> map = new HashMap<>();
+        for (ElectLeadersResponseData.ReplicaElectionResult topicResults : data.replicaElectionResults()) {
+            for (ElectLeadersResponseData.PartitionResult partitionResult : topicResults.partitionResult()) {
+                map.put(new TopicPartition(topicResults.topic(), partitionResult.partitionId()),
+                        new ApiError(Errors.forCode(partitionResult.errorCode()),
+                                partitionResult.errorMessage()));
+            }
+        }
+        return map;
     }
 }
