@@ -79,10 +79,12 @@ public class ConnectProtocol {
      *   Connector          => [String]
      *   Tasks              => [Int32]
      * </pre>
+     *
+     * <p>Assignments for each worker are a set of connectors and tasks. These are categorized by
+     * connector ID. A sentinel task ID (CONNECTOR_TASK) is used to indicate the connector itself
+     * (i.e. that the assignment includes responsibility for running the Connector instance in
+     * addition to any tasks it generates).</p>
      */
-    // Assignments for each worker are a set of connectors and tasks. These are categorized by connector ID. A sentinel
-    // task ID (CONNECTOR_TASK) is used to indicate the connector itself (i.e. that the assignment includes
-    // responsibility for running the Connector instance in addition to any tasks it generates).
     public static final Schema CONNECTOR_ASSIGNMENT_V0 = new Schema(
             new Field(CONNECTOR_KEY_NAME, Type.STRING),
             new Field(TASKS_KEY_NAME, new ArrayOf(Type.INT32)));

@@ -80,15 +80,18 @@ public class IncrementalCooperativeConnectProtocol {
             new Field(ALLOCATION_KEY_NAME, NULLABLE_BYTES, null, true, null));
 
     /**
+     *
      * Connector Assignment V1:
      * <pre>
      *   Connector          => [String]
      *   Tasks              => [Int32]
      * </pre>
+     *
+     * <p>Assignments for each worker are a set of connectors and tasks. These are categorized by
+     * connector ID. A sentinel task ID (CONNECTOR_TASK) is used to indicate the connector itself
+     * (i.e. that the assignment includes responsibility for running the Connector instance in
+     * addition to any tasks it generates).</p>
      */
-    // Assignments for each worker are a set of connectors and tasks. These are categorized by connector ID. A sentinel
-    // task ID (CONNECTOR_TASK) is used to indicate the connector itself (i.e. that the assignment includes
-    // responsibility for running the Connector instance in addition to any tasks it generates).
     public static final Schema CONNECTOR_ASSIGNMENT_V1 = CONNECTOR_ASSIGNMENT_V0;
 
     /**
