@@ -390,8 +390,12 @@ public class AbstractConfigTest {
         props.put("config.providers.file.class",
             "org.apache.kafka.common.config.provider.InvalidConfigProvider");
         props.put("testKey", "${test:/foo/bar/testpath:testKey}");
-        TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
-        assertEquals(config.originals().get("testKey"), "${test:/foo/bar/testpath:testKey}");
+        try {
+            TestIndirectConfigResolution config = new TestIndirectConfigResolution(props);
+            fail("Expected a config exception due to invalid props :" + props);
+        } catch (KafkaException e) {
+            // this is good
+        }
     }
 
     @Test

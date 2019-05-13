@@ -56,24 +56,31 @@ public class AbstractConfig {
     private static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
 
     /**
-     * Construct a configuration with a ConfigDef, the configuration properties, optional {ConfigProviders}.
+     * Construct a configuration with a ConfigDef and the configuration properties, which can include properties
+     * for zero or more {@link ConfigProvider} that will be used to resolve variables in configuration property
+     * values.
      *
-     * The originals is a name-value pair of config provider configs as well as configuration properties. The
+     * The originals is a name-value pair configuration properties and optional config provider configs. The
      * value of the configuration can be a variable as defined below or the actual value. This constructor will
      * first instantiate the ConfigProviders using the config provider configs, then it will find all the
      * variables in the values of the originals configurations, attempt to resolve the variables using the named
      * ConfigProviders, and then parse and validate the configurations.
      *
-     * ConfigProviders can be passed either as configs in the originals map or in the separate configProviderProps
-     * map. If config providers are passed in the configProviderProps any providers in originals map will be
-     * ignored. If ConfigProvider is not provided, the constructor will skip the variable substitution step and
-     * will simply validate and parse the supplied configuration.
+     * ConfigProvider configs can be passed either as configs in the originals map or in the separate
+     * configProviderProps map. If config providers properties are passed in the configProviderProps any config
+     * provider properties in originals map will be ignored. If ConfigProvider properties are not provided, the
+     * constructor will skip the variable substitution step and will simply validate and parse the supplied
+     * configuration.
      *
-     * The config "config.providers" is reserved to list the ConfigProviders, "config.providers.<providerName>.class"
-     * is reserved to specify the class to be used to instantiate the providers and
-     * "config.providers.<providerName>.<variableName>" to specify any additional configs required by providers where
-     * <providerName> is the name of the new config provider and <variableName> are the variables required by the
-     * config provider.
+     * The "{@code config.providers}" configuration property and all configuration properties that begin with the
+     * "{@code config.providers.}" prefix are reserved. The "{@code config.providers}" configuration property
+     * specifies the names of the config providers, and properties that begin with the "{@code config.providers..}"
+     * prefix correspond to the properties for that named provider. For example, the "{@code config.providers..class}"
+     * property specifies the name of the {@link ConfigProvider} implementation class that should be used for
+     * the provider.
+     *
+     * The keys for ConfigProvider configs in both originals and configProviderProps will start with the above
+     * mentioned "{@code config.providers.}" prefix.
      *
      * Variables have the form "${providerName:[path:]key}", where "providerName" is the name of a ConfigProvider,
      * "path" is an optional string, and "key" is a required string. This variable is resolved by passing the "key"
@@ -83,9 +90,9 @@ public class AbstractConfig {
      *
      *
      * @param definition the definition of the configurations; may not be null
-     * @param originals the name-value pairs of the configuration; may not be null
-     * @param configProviderProps the map of properties of config providers which will be instantiated by the constructor to
-     *        resolve any variables in {@code originals}; may be null or empty
+     * @param originals the configuration properties plus any optional config provider properties;
+     * @param configProviderProps the map of properties of config providers which will be instantiated by
+     *        the constructor to resolve any variables in {@code originals}; may be null or empty
      * @param doLog whether the configurations should be logged
      */
     @SuppressWarnings("unchecked")
@@ -114,20 +121,24 @@ public class AbstractConfig {
     }
 
     /**
-     * Construct a configuration with a ConfigDef, the configuration properties, optional {ConfigProviders}.
+     * Construct a configuration with a ConfigDef and the configuration properties,
+     * which can include properties for zero or more {@link ConfigProvider}
+     * that will be used to resolve variables in configuration property values.
      *
      * @param definition the definition of the configurations; may not be null
-     * @param originals of config provider configs as well as configuration properties; may not be null
+     * @param originals the configuration properties plus any optional config provider properties; may not be null
      */
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
         this(definition, originals, Collections.emptyMap(), false);
     }
 
     /**
-     * Construct a configuration with a ConfigDef, the configuration properties, optional {ConfigProviders}.
+     * Construct a configuration with a ConfigDef and the configuration properties,
+     * which can include properties for zero or more {@link ConfigProvider}
+     * that will be used to resolve variables in configuration property values.
      *
      * @param definition the definition of the configurations; may not be null
-     * @param originals of config provider configs as well as configuration properties; may not be null
+     * @param originals the configuration properties plus any optional config provider properties; may not be null
      * @param doLog whether the configurations should be logged
      */
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
@@ -474,8 +485,9 @@ public class AbstractConfig {
     private Map<String, ConfigProvider> instantiateConfigProviders(Map<String, String> indirectConfigs, Map<String, ?> providerConfigProperties) {
         final String configProviders = indirectConfigs.get(CONFIG_PROVIDERS_CONFIG);
 
-        if (configProviders == null || configProviders.isEmpty())
+        if (configProviders == null || configProviders.isEmpty()) {
             return Collections.emptyMap();
+        }
 
         Map<String, String> providerMap = new HashMap<>();
 
@@ -495,7 +507,8 @@ public class AbstractConfig {
                 provider.configure(configProperties);
                 configProviderInstances.put(entry.getKey(), provider);
             } catch (ClassNotFoundException e) {
-                log.warn("Failed to initialize the class:" + entry.getValue());
+                log.error("ClassNotFoundException exception occurred: " + entry.getValue());
+                throw new ConfigException("Invalid config:" + entry.getValue() + " ClassNotFoundException exception occurred", e);
             }
         }
 
