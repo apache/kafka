@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.io.File
-import java.net.InetAddress
 
 import kafka.api._
 import kafka.utils._
@@ -34,7 +33,6 @@ import java.util.concurrent.atomic.AtomicBoolean
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.replica.ReplicaSelector.ClientMetadata
-import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.easymock.EasyMock
 import org.junit.Assert._
 
@@ -202,26 +200,5 @@ class SimpleFetchTest {
 
     assertEquals("Counts should increment after fetch", initialTopicCount+2, brokerTopicStats.topicStats(topic).totalFetchRequestRate.count())
     assertEquals("Counts should increment after fetch", initialAllTopicsCount+2, brokerTopicStats.allTopicsStats.totalFetchRequestRate.count())
-  }
-
-  @Test
-  def testPreferredReadReplica() {
-
-    val metadata: ClientMetadata = new ClientMetadata("rack-a", "client-id",
-      InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
-
-    val results: Seq[(TopicPartition, LogReadResult)] = replicaManager.readFromLocalLog(
-      replicaId = Request.OrdinaryConsumerId,
-      fetchOnlyFromLeader = true,
-      fetchIsolation = FetchHighWatermark,
-      fetchMaxBytes = Int.MaxValue,
-      hardMaxBytesLimit = false,
-      readPartitionInfo = fetchInfo,
-      quota = UnboundedQuota,
-      clientMetadata = metadata)
-
-    val (tp, readResult) = results.head
-    assertTrue(readResult.preferredReadReplica.isDefined)
-    assertEquals(readResult.preferredReadReplica.getOrElse(-1), configs.head.brokerId)
   }
 }

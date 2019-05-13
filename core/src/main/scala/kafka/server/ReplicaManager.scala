@@ -217,8 +217,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  private var replicaSelector: ReplicaSelector = createReplicaSelector()
-
+  val replicaSelector: ReplicaSelector = createReplicaSelector()
 
   val leaderCount = newGauge(
     "LeaderCount",
@@ -1582,11 +1581,11 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   protected def createReplicaSelector(): ReplicaSelector = {
-    replicaSelector = Option(config.replicaSelectorClassName).filter(_.nonEmpty).map { replicaSelectorClassName =>
+    val tmpReplicaSelector: ReplicaSelector = Option(config.replicaSelectorClassName).filter(_.nonEmpty).map { replicaSelectorClassName =>
       CoreUtils.createObject[ReplicaSelector](replicaSelectorClassName)
     }.getOrElse(new LeaderReplicaSelector())
-    replicaSelector.configure(config.originals())
-    replicaSelector
+    tmpReplicaSelector.configure(config.originals())
+    tmpReplicaSelector
   }
 
   def lastOffsetForLeaderEpoch(requestedEpochInfo: Map[TopicPartition, OffsetsForLeaderEpochRequest.PartitionData]): Map[TopicPartition, EpochEndOffset] = {
