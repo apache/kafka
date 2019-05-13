@@ -107,6 +107,15 @@ public class SerializationTest {
     }
 
     @Test
+    public void listSerdeShouldShouldRoundtripInput() {
+        List<Integer> testData = Arrays.asList(1, 2, 3);
+        Serde<List<Integer>> listSerde = Serdes.ListSerde(Serdes.Integer());
+        assertEquals("Should get the original " + List.class +
+                        " after serialization and deserialization", testData,
+                listSerde.deserializer().deserialize(topic, listSerde.serializer().serialize(topic, testData)));
+    }
+
+    @Test(expected = SerializationException.class)
     public void floatDeserializerShouldThrowSerializationExceptionOnZeroBytes() {
         try (Serde<Float> serde = Serdes.Float()) {
             assertThrows(SerializationException.class, () -> serde.deserializer().deserialize(topic, new byte[0]));
