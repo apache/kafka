@@ -26,6 +26,7 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
 
 public class DistributedConfig extends WorkerConfig {
     private static final ConfigDef CONFIG;
@@ -301,6 +302,7 @@ public class DistributedConfig extends WorkerConfig {
                 .define(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG,
                         ConfigDef.Type.INT,
                         SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT,
+                        between(0, Integer.MAX_VALUE),
                         ConfigDef.Importance.LOW,
                         SCHEDULED_REBALANCE_MAX_DELAY_MS_DOC);
     }
