@@ -208,6 +208,54 @@ public class PartitionGroupTest {
 
     }
 
+    @Test
+    public void testChooseNextRecord() {
+        assertEquals(0, group.numBuffered());
+
+        // add three 3 records with timestamp 1, 5, 3 to partition-1
+        final List<ConsumerRecord<byte[], byte[]>> list1 = Arrays.asList(
+            new ConsumerRecord<>("topic", 1, 1L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 5L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 1, 3L, recordKey, recordValue));
+
+        group.addRawRecords(partition1, list1);
+
+        verifyBuffered(3, 3, 0);
+        assertEquals(-1L, group.timestamp());
+        assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
+
+        StampedRecord record;
+        final PartitionGroup.RecordInfo info = new PartitionGroup.RecordInfo();
+
+        // get first two records from partition 1
+        record = group.nextRecord(info);
+        assertEquals(record.timestamp, 1L);
+        record = group.nextRecord(info);
+        assertEquals(record.timestamp, 5L);
+
+        // add three 3 records with timestamp 2, 4, 6 to partition-2
+        final List<ConsumerRecord<byte[], byte[]>> list2 = Arrays.asList(
+            new ConsumerRecord<>("topic", 2, 2L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 2, 4L, recordKey, recordValue),
+            new ConsumerRecord<>("topic", 2, 6L, recordKey, recordValue));
+
+        group.addRawRecords(partition2, list2);
+        // 1:[3]
+        // 2:[2, 4, 6]
+
+        // get one record, next record should be ts=2 from partition 2
+        record = group.nextRecord(info);
+        // 1:[3]
+        // 2:[4, 6]
+        assertEquals(record.timestamp, 2L);
+
+        // get one record, next up should have ts=3 from partition 1 (even though it has larger partition stream time st=5)
+        record = group.nextRecord(info);
+        // 1:[]
+        // 2:[4, 6]
+        assertEquals(record.timestamp, 3L);
+    }
+
     private void verifyTimes(final StampedRecord record, final long recordTime, final long streamTime) {
         assertEquals(recordTime, record.timestamp);
         assertEquals(streamTime, group.timestamp());
