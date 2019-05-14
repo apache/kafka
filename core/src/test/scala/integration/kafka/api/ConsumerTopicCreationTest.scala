@@ -23,15 +23,15 @@ import org.junit.runners.Parameterized.Parameters
 import java.lang.{Boolean => JBoolean}
 import java.time.Duration
 import java.util
+import java.util.Collections
 
 import scala.collection.JavaConverters._
 import kafka.api.IntegrationTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, NewTopic}
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.utils.Utils
 import org.junit.{After, Test}
 
@@ -42,9 +42,8 @@ import org.junit.{After, Test}
 class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean) extends IntegrationTestHarness {
   override protected def brokerCount: Int = 1
 
-  val topic = "topic"
-  val part = 0
-  val tp = new TopicPartition(topic, part)
+  val topic_1 = "topic-1"
+  val topic_2 = "topic-2"
   val producerClientId = "ConsumerTestProducer"
   val consumerClientId = "ConsumerTestConsumer"
   var adminClient: AdminClient = null
@@ -72,12 +71,24 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
   @Test
   def testAutoTopicCreation(): Unit = {
     val consumer = createConsumer()
+    val producer = createProducer()
+    val record = new ProducerRecord(topic_1, 0, s"key".getBytes, s"value".getBytes)
+
     adminClient = AdminClient.create(createConfig())
 
-    consumer.subscribe(util.Arrays.asList(topic))
-    consumer.poll(Duration.ofMillis(100))
+    // create `topic_1` and produce a record to it
+    adminClient.createTopics(Collections.singleton(new NewTopic(topic_1, 1, 1))).all.get
+    producer.send(record).get
 
-    val topicCreated = adminClient.listTopics.names.get.contains(topic)
+    consumer.subscribe(util.Arrays.asList(topic_1, topic_2))
+
+    // Wait until the produced record was consumed. This guarantees that metadata request for `topic_2` was sent to the
+    // broker.
+    TestUtils.waitUntilTrue(() => {
+      consumer.poll(Duration.ofMillis(100)).count > 0
+    }, "Timed out waiting to consume")
+
+    val topicCreated = adminClient.listTopics.names.get.contains(topic_2)
     if (brokerAutoTopicCreationEnable && consumerAllowAutoCreateTopics)
       assert(topicCreated == true)
     else
