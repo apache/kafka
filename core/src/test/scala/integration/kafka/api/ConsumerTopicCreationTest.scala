@@ -73,7 +73,7 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
   def testAutoTopicCreation(): Unit = {
     val consumer = createConsumer()
     val producer = createProducer()
-    val record = new ProducerRecord(topic_1, 0, s"key".getBytes, s"value".getBytes)
+    val record = new ProducerRecord(topic_1, 0, "key".getBytes, "value".getBytes)
 
     adminClient = AdminClient.create(createConfig())
 
@@ -82,7 +82,6 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
     producer.send(record).get
 
     consumer.subscribe(util.Arrays.asList(topic_1, topic_2))
-
 
     // Wait until the produced record was consumed. This guarantees that metadata request for `topic_2` was sent to the
     // broker.
