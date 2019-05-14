@@ -38,7 +38,7 @@ import scala.util.Try
 
 final object LeaderElectionCommand extends Logging {
   def main(args: Array[String]): Unit = {
-    run(args, 30000.millisecond)
+    run(args, 30.second)
   }
 
   def run(args: Array[String], timeout: Duration): Unit = {
@@ -81,7 +81,11 @@ final object LeaderElectionCommand extends Logging {
       JAdminClient.create(props)
     }
 
-    electLeaders(adminClient, electionType, topicPartitions)
+    try {
+      electLeaders(adminClient, electionType, topicPartitions)
+    } finally {
+      adminClient.close()
+    }
   }
 
   private[this] def parseReplicaElectionData(jsonString: String): Set[TopicPartition] = {

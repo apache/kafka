@@ -187,9 +187,11 @@ class ZkPartitionStateMachine(config: KafkaConfig,
    * @param partitions  The partitions for which the state transition is invoked
    * @param targetState The end state that the partition should be moved to
    */
-  private def doHandleStateChanges(partitions: Seq[TopicPartition],
-                                   targetState: PartitionState,
-                                   partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy]): Map[TopicPartition, Throwable] = {
+  private def doHandleStateChanges(
+    partitions: Seq[TopicPartition],
+    targetState: PartitionState,
+    partitionLeaderElectionStrategyOpt: Option[PartitionLeaderElectionStrategy]
+  ): Map[TopicPartition, Throwable] = {
     val stateChangeLog = stateChangeLogger.withControllerEpoch(controllerContext.epoch)
     partitions.foreach(partition => controllerContext.putPartitionStateIfNotExists(partition, NonExistentPartition))
     val (validPartitions, invalidPartitions) = controllerContext.checkValidPartitionStateChange(partitions, targetState)

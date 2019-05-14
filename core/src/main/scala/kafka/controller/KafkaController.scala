@@ -642,9 +642,9 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
   }
 
   sealed trait ElectionTrigger
-  object AutoTriggered extends ElectionTrigger
-  object ZkTriggered extends ElectionTrigger
-  object AdminClientTriggered extends ElectionTrigger
+  final case object AutoTriggered extends ElectionTrigger
+  final case object ZkTriggered extends ElectionTrigger
+  final case object AdminClientTriggered extends ElectionTrigger
 
   /**
     * Attempt to elect a replica as leader for each of the given partitions.
@@ -659,7 +659,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     electionType: ElectionType,
     electionTrigger: ElectionTrigger
   ): Map[TopicPartition, Throwable] = {
-    info(s"Starting replica leader election ($electionType) for partitions ${partitions.mkString(",")}")
+    info(s"Starting replica leader election ($electionType) for partitions ${partitions.mkString(",")} triggerd by $electionTrigger")
     try {
       val strategy = electionType match {
         case ElectionType.PREFERRED => PreferredReplicaPartitionLeaderElectionStrategy
@@ -683,8 +683,9 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
       }
       return results;
     } finally {
-      if (electionTrigger!= AdminClientTriggered)
+      if (electionTrigger != AdminClientTriggered) {
         removePartitionsFromPreferredReplicaElection(partitions, electionTrigger == AutoTriggered)
+      }
     }
   }
 
@@ -1567,12 +1568,12 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  type ElectPreferredLeadersCallback = (Map[TopicPartition, Int], Map[TopicPartition, ApiError])=>Unit
+  type ElectLeadersCallback = (Map[TopicPartition, Int], Map[TopicPartition, ApiError])=>Unit
 
   def electLeaders(
     partitions: Set[TopicPartition],
     electionType: ElectionType,
-    callback: ElectPreferredLeadersCallback = { (_,_) => }
+    callback: ElectLeadersCallback = { (_,_) => }
   ): Unit = {
     eventManager.put(ReplicaLeaderElection(Some(partitions), electionType, AdminClientTriggered, callback))
   }
@@ -1581,7 +1582,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     partitionsFromAdminClientOpt: Option[Set[TopicPartition]],
     electionType: ElectionType,
     electionTrigger: ElectionTrigger = ZkTriggered,
-    callback: ElectPreferredLeadersCallback = (_,_) =>{}
+    callback: ElectLeadersCallback = (_,_) =>{}
   ) extends PreemptableControllerEvent {
     override def state: ControllerState = ControllerState.ManualLeaderBalance
 
@@ -1646,9 +1647,12 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
             invalidPartitions.map ( tp => tp -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, s"The partition does not exist.")
             )
           debug(s"ReplicaLeaderElection waiting: $successfulPartitions, results: $results")
-          callback(successfulPartitions.map(
-              tp => tp->controllerContext.partitionReplicaAssignment(tp).head).toMap,
-            results)
+          callback(
+            successfulPartitions.map { tp =>
+              tp -> controllerContext.partitionReplicaAssignment(tp).head
+            }(breakOut),
+            results
+          )
         }
       }
     }
