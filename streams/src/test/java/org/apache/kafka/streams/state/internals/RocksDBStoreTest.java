@@ -79,7 +79,6 @@ public class RocksDBStoreTest {
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props));
-        filter = new BloomFilter();
     }
 
     RocksDBStore getRocksDBStore() {
@@ -88,7 +87,9 @@ public class RocksDBStoreTest {
 
     @After
     public void tearDown() {
-        filter.close();
+        if (filter != null) {
+            filter.close();
+        }
         rocksDBStore.close();
     }
 
@@ -498,6 +499,7 @@ public class RocksDBStoreTest {
             tableConfig.setBlockCacheSize(50 * 1024 * 1024L);
             tableConfig.setBlockSize(4096L);
             if (enableBloomFilters) {
+                filter = new BloomFilter();
                 tableConfig.setFilter(filter);
                 options.optimizeFiltersForHits();
                 bloomFiltersSet = true;
