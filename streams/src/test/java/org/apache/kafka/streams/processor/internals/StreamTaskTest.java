@@ -642,6 +642,7 @@ public class StreamTaskTest {
         // timestamp would be updated here
         task.addRecords(partition1, singletonList(getConsumerRecord(partition1, 999)));
         assertTrue(task.getPartitionTime(partition1) == 1000);
+        assertTrue(task.getStreamTime() == 1000);
     }
 
     @Test

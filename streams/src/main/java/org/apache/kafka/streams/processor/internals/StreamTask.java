@@ -445,12 +445,17 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     }
 
     // used for testing
-    public long getPartitionTime(final TopicPartition partition) {
+    long getStreamTime() {
+        return partitionGroup.timestamp();
+    } 
+
+    // used for testing
+    long getPartitionTime(final TopicPartition partition) {
         return partitionGroup.getPartitionTimestamp(partition);
     }
 
     // used for testing
-    public void resetTimes() {
+    void resetTimes() {
         partitionGroup.clear();
     }
 
@@ -754,8 +759,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         if (recordInfo.queue() != null && getPartitionTime(partition) == RecordQueue.UNKNOWN) {
             final OffsetAndMetadata metadata = consumer.committed(partition);
             if (metadata != null) {
-                final String commitMetadata = metadata.metadata();
-                partitionGroup.setPartitionTimestamp(partition, Long.parseLong(commitMetadata));
+                final long committedTimestamp = Long.parseLong(metadata.metadata());
+                partitionGroup.setPartitionTimestamp(partition, committedTimestamp);
+                log.info("A committed timestamp was detected: setting the partition time of partition {}"
+                         + " to {} in stream task {}", partition, committedTimestamp, this);
             }
         }
 
