@@ -434,9 +434,9 @@ public class AbstractConfig {
         return objects;
     }
 
-    private Map<String, String> getMapAsString( Map<?, ?>  configMap) {
+    private Map<String, String> getMapAsString(Map<?, ?>  configMap) {
         Map<String, String> configMapAsString = new HashMap<>();
-        for (Map.Entry<?, ?> entry : originals.entrySet()) {
+        for (Map.Entry<?, ?> entry : configMap.entrySet()) {
             if (!(entry.getKey() instanceof String))
                 throw new ConfigException(entry.getKey().toString(), entry.getValue(),
                     "Key must be a string.");
