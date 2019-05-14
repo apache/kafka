@@ -75,7 +75,7 @@ public class IncrementalCooperativeAssignorTest {
     private String leader;
     private String leaderUrl;
     private Time time;
-    private int scheduledRebalanceMaxDelay;
+    private int rebalanceDelay;
     private IncrementalCooperativeAssignor assignor;
     private int rebalanceNum;
     Map<String, ConnectAssignment> assignments;
@@ -89,7 +89,7 @@ public class IncrementalCooperativeAssignorTest {
         configState = clusterConfigState(offset, 2, 4);
         memberConfigs = memberConfigs(leader, offset, 1, 1);
         time = Time.SYSTEM;
-        scheduledRebalanceMaxDelay = DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT;
+        rebalanceDelay = DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT;
         assignments = new HashMap<>();
         initAssignor();
     }
@@ -103,7 +103,7 @@ public class IncrementalCooperativeAssignorTest {
         assignor = Mockito.spy(new IncrementalCooperativeAssignor(
                 new LogContext(),
                 time,
-                scheduledRebalanceMaxDelay));
+                rebalanceDelay));
     }
 
     @Test
@@ -181,11 +181,11 @@ public class IncrementalCooperativeAssignorTest {
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator);
         ++rebalanceNum;
         returnedAssignments = assignmentsCapture.getValue();
-        assertDelay(scheduledRebalanceMaxDelay, returnedAssignments);
+        assertDelay(rebalanceDelay, returnedAssignments);
         expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
         assertAssignment(0, 0, 0, 0, "worker1");
 
-        time.sleep(scheduledRebalanceMaxDelay / 2);
+        time.sleep(rebalanceDelay / 2);
 
         // Third (incidental) assignment with still only one worker in the group. Max delay has not
         // been reached yet
@@ -194,11 +194,11 @@ public class IncrementalCooperativeAssignorTest {
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator);
         ++rebalanceNum;
         returnedAssignments = assignmentsCapture.getValue();
-        assertDelay(scheduledRebalanceMaxDelay / 2, returnedAssignments);
+        assertDelay(rebalanceDelay / 2, returnedAssignments);
         expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
         assertAssignment(0, 0, 0, 0, "worker1");
 
-        time.sleep(scheduledRebalanceMaxDelay / 2 + 1);
+        time.sleep(rebalanceDelay / 2 + 1);
 
         // Fourth assignment after delay expired
         applyAssignments(returnedAssignments);
@@ -241,11 +241,11 @@ public class IncrementalCooperativeAssignorTest {
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator);
         ++rebalanceNum;
         returnedAssignments = assignmentsCapture.getValue();
-        assertDelay(scheduledRebalanceMaxDelay, returnedAssignments);
+        assertDelay(rebalanceDelay, returnedAssignments);
         expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
         assertAssignment(0, 0, 0, 0, "worker1");
 
-        time.sleep(scheduledRebalanceMaxDelay / 2);
+        time.sleep(rebalanceDelay / 2);
 
         // Third (incidental) assignment with still only one worker in the group. Max delay has not
         // been reached yet
@@ -254,11 +254,11 @@ public class IncrementalCooperativeAssignorTest {
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator);
         ++rebalanceNum;
         returnedAssignments = assignmentsCapture.getValue();
-        assertDelay(scheduledRebalanceMaxDelay / 2, returnedAssignments);
+        assertDelay(rebalanceDelay / 2, returnedAssignments);
         expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
         assertAssignment(0, 0, 0, 0, "worker1");
 
-        time.sleep(scheduledRebalanceMaxDelay / 4);
+        time.sleep(rebalanceDelay / 4);
 
         // Fourth assignment with the second worker returning before the delay expires
         // Since the delay is still active, lost assignments are not reassigned yet
@@ -268,11 +268,11 @@ public class IncrementalCooperativeAssignorTest {
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator);
         ++rebalanceNum;
         returnedAssignments = assignmentsCapture.getValue();
-        assertDelay(scheduledRebalanceMaxDelay / 4, returnedAssignments);
+        assertDelay(rebalanceDelay / 4, returnedAssignments);
         expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
         assertAssignment(0, 0, 0, 0, "worker1", "worker2");
 
-        time.sleep(scheduledRebalanceMaxDelay / 4);
+        time.sleep(rebalanceDelay / 4);
 
         // Fifth assignment with the same two workers. The delay has expired, so the lost
         // assignments ought to be assigned to the worker that has appeared as returned.
@@ -437,10 +437,10 @@ public class IncrementalCooperativeAssignorTest {
         ++rebalanceNum;
         returnedAssignments = assignmentsCapture.getValue();
         expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
-        assertDelay(scheduledRebalanceMaxDelay, returnedAssignments);
+        assertDelay(rebalanceDelay, returnedAssignments);
         assertAssignment(0, 0, 0, 0, "worker1", "worker2");
 
-        time.sleep(scheduledRebalanceMaxDelay / 2);
+        time.sleep(rebalanceDelay / 2);
 
         // Third (incidental) assignment with still only one worker in the group. Max delay has not
         // been reached yet
@@ -449,11 +449,11 @@ public class IncrementalCooperativeAssignorTest {
         assignor.performTaskAssignment(leader, offset, memberConfigs, coordinator);
         ++rebalanceNum;
         returnedAssignments = assignmentsCapture.getValue();
-        assertDelay(scheduledRebalanceMaxDelay / 2, returnedAssignments);
+        assertDelay(rebalanceDelay / 2, returnedAssignments);
         expectedMemberConfigs = memberConfigs(leader, offset, returnedAssignments);
         assertAssignment(0, 0, 0, 0, "worker1", "worker2");
 
-        time.sleep(scheduledRebalanceMaxDelay / 2 + 1);
+        time.sleep(rebalanceDelay / 2 + 1);
 
         // Fourth assignment after delay expired. Finally all the new assignments are assigned
         applyAssignments(returnedAssignments);
@@ -756,7 +756,7 @@ public class IncrementalCooperativeAssignorTest {
         assertThat("Wrong number of assigned tasks",
                 expectedMemberConfigs.values().stream().map(v -> v.assignment().tasks().size()).reduce(0, Integer::sum),
                 is(taskNum));
-        assertThat("Wrong number of revoked tasks",
+        assertThat("Wrong number of revoked connectors",
                 expectedMemberConfigs.values().stream().map(v -> v.assignment().revokedConnectors().size()).reduce(0, Integer::sum),
                 is(revokedConnectorNum));
         assertThat("Wrong number of revoked tasks",
