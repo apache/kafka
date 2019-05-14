@@ -98,9 +98,11 @@ public class AbstractConfig {
     @SuppressWarnings("unchecked")
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals,  Map<String, ?> configProviderProps, boolean doLog) {
         /* check that all the keys are really strings */
-        Map<String, String> originalsAsStrings = getMapAsString(originals);
+        for (Map.Entry<?, ?> entry : originals.entrySet())
+            if (!(entry.getKey() instanceof String))
+                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
 
-        this.originals = resolveConfigVariables(originalsAsStrings, configProviderProps, (Map<String, Object>) originals);
+        this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
 
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
@@ -123,7 +125,7 @@ public class AbstractConfig {
      * @param originals the configuration properties plus any optional config provider properties; may not be null
      */
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals) {
-        this(definition, originals, Collections.emptyMap(), false);
+        this(definition, originals, Collections.emptyMap(), true);
     }
 
     /**
@@ -437,9 +439,6 @@ public class AbstractConfig {
     private Map<String, String> getMapAsString(Map<?, ?>  configMap) {
         Map<String, String> configMapAsString = new HashMap<>();
         for (Map.Entry<?, ?> entry : configMap.entrySet()) {
-            if (!(entry.getKey() instanceof String))
-                throw new ConfigException(entry.getKey().toString(), entry.getValue(),
-                    "Key must be a string.");
             if (entry.getValue() instanceof String)
                 configMapAsString.put((String) entry.getKey(), (String) entry.getValue());
         }
@@ -450,15 +449,17 @@ public class AbstractConfig {
     /**
      * Instantiates given list of config providers and fetches the actual values of config variables from the config providers.
      * returns a map of config key and resolved values.
-     * @param indirectVariables The map of config variables
      * @param configProviderProps The map of config provider configs
      * @param originals The map of raw configs.
      * @return map of resolved config variable.
      */
     @SuppressWarnings("unchecked")
-    private  Map<String, ?> resolveConfigVariables(Map<String, String> indirectVariables, Map<String, ?> configProviderProps, Map<String, Object> originals) {
+    private  Map<String, ?> resolveConfigVariables(Map<String, ?> configProviderProps, Map<String, Object> originals) {
         Map<String, String> providerConfigString;
         Map<String, ?> configProperties;
+
+        // As variable configs are strings, parse the originals and obtain the variable configs.
+        Map<String, String> indirectVariables = getMapAsString(originals);
 
         if (configProviderProps == null || configProviderProps.isEmpty()) {
             providerConfigString = indirectVariables;
