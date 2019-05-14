@@ -1058,9 +1058,12 @@ private case class LogToClean(topicPartition: TopicPartition, log: Log, firstDir
 private[log] class CleanedTransactionMetadata {
   private val ongoingCommittedTxns = mutable.Set.empty[Long]
   private val ongoingAbortedTxns = mutable.Map.empty[Long, AbortedTransactionMetadata]
+  // Minheap of aborted transactions sorted by the transaction first offset
   private var abortedTransactions = mutable.PriorityQueue.empty[AbortedTxn](new Ordering[AbortedTxn] {
     override def compare(x: AbortedTxn, y: AbortedTxn): Int = x.firstOffset compare y.firstOffset
   }.reverse)
+
+  // Output cleaned index to write retained aborted transactions
   var cleanedIndex: Option[TransactionIndex] = None
 
   def loadAbortedTransactions(abortedTransactions: List[AbortedTxn]): Unit = {

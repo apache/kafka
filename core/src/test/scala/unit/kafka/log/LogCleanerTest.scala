@@ -1053,10 +1053,6 @@ class LogCleanerTest {
       yield batch.producerId -> batch.lastSequence).toMap
   }
 
-  def batchOffsetsInLog(log: Log): Iterable[Long] = {
-    log.logSegments.flatMap(s => s.log.batches.asScala.map(_.baseOffset))
-  }
-
   /* extract all the offsets from a log */
   def offsetsInLog(log: Log): Iterable[Long] =
     log.logSegments.flatMap(s => s.log.records.asScala.filter(_.hasValue).filter(_.hasKey).map(m => m.offset))
