@@ -615,7 +615,7 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     // Visible for testing
-    public long getNextCommit() {
+    long getNextCommit() {
         return nextCommit;
     }
 
