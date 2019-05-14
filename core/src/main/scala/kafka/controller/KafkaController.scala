@@ -658,7 +658,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     partitions: Set[TopicPartition],
     electionType: ElectionType,
     electionTrigger: ElectionTrigger
-  ): Map[TopicPartition, Throwable] = {
+  ): (Map[TopicPartition, Int], Map[TopicPartition, Throwable]) = {
     info(s"Starting replica leader election ($electionType) for partitions ${partitions.mkString(",")} triggerd by $electionTrigger")
     try {
       val strategy = electionType match {
@@ -666,13 +666,13 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         case ElectionType.UNCLEAN => OfflinePartitionLeaderElectionStrategy(true)
       }
 
-      val results = partitionStateMachine.handleStateChanges(
+      val (success, errors) = partitionStateMachine.handleStateChanges(
         partitions.toSeq,
         OnlinePartition,
         Some(strategy)
       )
       if (electionTrigger != AdminClientTriggered) {
-        results.foreach { case (tp, throwable) =>
+        errors.foreach { case (tp, throwable) =>
           if (throwable.isInstanceOf[ControllerMovedException]) {
             error(s"Error completing replica leader election ($electionType) for partition $tp because controller has moved to another broker.", throwable)
             throw throwable
@@ -681,7 +681,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           }
         }
       }
-      return results;
+
+      (success, errors)
     } finally {
       if (electionTrigger != AdminClientTriggered) {
         removePartitionsFromPreferredReplicaElection(partitions, electionTrigger == AutoTriggered)
@@ -1627,8 +1628,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
             currentLeader != preferredReplica
           }
 
-          val electionErrors = onReplicaElection(electablePartitions, electionType, electionTrigger)
-          val successfulPartitions = electablePartitions -- electionErrors.keySet
+          val (successfulPartitions, electionErrors) = onReplicaElection(electablePartitions, electionType, electionTrigger)
+          // TODO: Confirm that successfulPartitions == electablePartitions -- electionErrors.keySet
           val results = electionErrors.map { case (partition, ex) =>
             val apiError = if (ex.isInstanceOf[StateChangeFailedException]) {
               val error = if (electionType == ElectionType.PREFERRED) {
@@ -1648,9 +1649,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
             )
           debug(s"ReplicaLeaderElection waiting: $successfulPartitions, results: $results")
           callback(
-            successfulPartitions.map { tp =>
-              tp -> controllerContext.partitionReplicaAssignment(tp).head
-            }(breakOut),
+            successfulPartitions,
             results
           )
         }

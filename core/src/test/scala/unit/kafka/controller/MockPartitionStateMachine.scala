@@ -19,16 +19,18 @@ package kafka.controller
 import kafka.common.StateChangeFailedException
 import kafka.controller.Election._
 import org.apache.kafka.common.TopicPartition
-
+import scala.collection.breakOut
 import scala.collection.mutable
 
 class MockPartitionStateMachine(controllerContext: ControllerContext,
                                 uncleanLeaderElectionEnabled: Boolean)
   extends PartitionStateMachine(controllerContext) {
 
-  override def handleStateChanges(partitions: Seq[TopicPartition],
-                                  targetState: PartitionState,
-                                  leaderElectionStrategy: Option[PartitionLeaderElectionStrategy]): Map[TopicPartition, Throwable] = {
+  override def handleStateChanges(
+    partitions: Seq[TopicPartition],
+    targetState: PartitionState,
+    leaderElectionStrategy: Option[PartitionLeaderElectionStrategy]
+  ): (Map[TopicPartition, Int], Map[TopicPartition, Throwable]) = {
     partitions.foreach(partition => controllerContext.putPartitionStateIfNotExists(partition, NonExistentPartition))
     val (validPartitions, invalidPartitions) = controllerContext.checkValidPartitionStateChange(partitions, targetState)
     if (invalidPartitions.nonEmpty) {
@@ -47,23 +49,24 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
         controllerContext.putPartitionState(partition, targetState)
       }
 
-      val failedElections = doLeaderElections(partitionsToElectLeader, leaderElectionStrategy.get)
-      val successfulElections = partitionsToElectLeader.filterNot(failedElections.keySet.contains)
-      successfulElections.foreach { partition =>
+      val (successes, errors) = doLeaderElections(partitionsToElectLeader, leaderElectionStrategy.get)
+      successes.foreach { case (partition, _) =>
         controllerContext.putPartitionState(partition, targetState)
       }
 
-      failedElections
+      (successes, errors)
     } else {
       validPartitions.foreach { partition =>
         controllerContext.putPartitionState(partition, targetState)
       }
-      Map.empty
+      (Map.empty, Map.empty)
     }
   }
 
-  private def doLeaderElections(partitions: Seq[TopicPartition],
-                                leaderElectionStrategy: PartitionLeaderElectionStrategy): Map[TopicPartition, Throwable] = {
+  private def doLeaderElections(
+    partitions: Seq[TopicPartition],
+    leaderElectionStrategy: PartitionLeaderElectionStrategy
+  ): (Map[TopicPartition, Int], Map[TopicPartition, Throwable]) = {
     val failedElections = mutable.Map.empty[TopicPartition, Exception]
     val leaderIsrAndControllerEpochPerPartition = partitions.map { partition =>
       partition -> controllerContext.partitionLeadershipInfo(partition)
@@ -93,18 +96,21 @@ class MockPartitionStateMachine(controllerContext: ControllerContext,
         leaderForControlledShutdown(controllerContext, validPartitionsForElection)
     }
 
-    for (electionResult <- electionResults) {
+    val result: Map[TopicPartition, Int] = electionResults.flatMap { electionResult =>
       val partition = electionResult.topicPartition
       electionResult.leaderAndIsr match {
         case None =>
           val failMsg = s"Failed to elect leader for partition $partition under strategy $leaderElectionStrategy"
           failedElections.put(partition, new StateChangeFailedException(failMsg))
+          None
         case Some(leaderAndIsr) =>
           val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
           controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+          Some(partition -> leaderAndIsr.leader)
       }
-    }
-    failedElections.toMap
+    }(breakOut)
+
+    (result, failedElections.toMap)
   }
 
 }
