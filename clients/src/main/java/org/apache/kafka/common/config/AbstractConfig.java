@@ -98,13 +98,7 @@ public class AbstractConfig {
     @SuppressWarnings("unchecked")
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals,  Map<String, ?> configProviderProps, boolean doLog) {
         /* check that all the keys are really strings */
-        Map<String, String> originalsAsStrings = new HashMap<String, String>();
-        for (Map.Entry<?, ?> entry : originals.entrySet()) {
-            if (!(entry.getKey() instanceof String))
-                throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
-            if (entry.getValue() instanceof String)
-                originalsAsStrings.put((String) entry.getKey(), (String) entry.getValue());
-        }
+        Map<String, String> originalsAsStrings = getMapAsString(originals);
 
         this.originals = resolveConfigVariables(originalsAsStrings, configProviderProps, (Map<String, Object>) originals);
 
@@ -440,6 +434,19 @@ public class AbstractConfig {
         return objects;
     }
 
+    private Map<String, String> getMapAsString( Map<?, ?>  configMap) {
+        Map<String, String> configMapAsString = new HashMap<>();
+        for (Map.Entry<?, ?> entry : originals.entrySet()) {
+            if (!(entry.getKey() instanceof String))
+                throw new ConfigException(entry.getKey().toString(), entry.getValue(),
+                    "Key must be a string.");
+            if (entry.getValue() instanceof String)
+                configMapAsString.put((String) entry.getKey(), (String) entry.getValue());
+        }
+
+        return configMapAsString;
+    }
+
     /**
      * Instantiates given list of config providers and fetches the actual values of config variables from the config providers.
      * returns a map of config key and resolved values.
@@ -457,7 +464,7 @@ public class AbstractConfig {
             providerConfigString = indirectVariables;
             configProperties = originals;
         } else {
-            providerConfigString = (Map<String, String>) configProviderProps;
+            providerConfigString = getMapAsString(configProviderProps);
             configProperties = configProviderProps;
         }
         Map<String, ConfigProvider> providers = instantiateConfigProviders(providerConfigString, configProperties);
