@@ -542,6 +542,8 @@
     <pre class="brush: text;">  log.cleaner.max.compaction.lag.ms</pre>
 
     This can be used to prevent log with low produce rate from remaining ineligible for compaction for an unbound duration. If not set, logs that do not exceed min.cleanable.dirty.ratio are not compacted.
+    The compaction completion time of logs that are delayed more than max compaction lag is still subjected to the availability of log cleaner threads. To track how long a log can be delayed for compaction,
+    We added a metric "max-compaction-delay-secs" that measures the delay between the time when a log is required to be compacted as determined by max compaction lag and the time the delay is calculated.
 
     <p>
     Further cleaner configurations are described <a href="/documentation.html#brokerconfigs">here</a>.
