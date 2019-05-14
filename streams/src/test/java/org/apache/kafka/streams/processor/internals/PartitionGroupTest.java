@@ -209,7 +209,7 @@ public class PartitionGroupTest {
     }
 
     @Test
-    public void testChooseNextRecord() {
+    public void shouldChooseNextRecordBasedOnHeadTimestamp() {
         assertEquals(0, group.numBuffered());
 
         // add three 3 records with timestamp 1, 5, 3 to partition-1
@@ -249,7 +249,7 @@ public class PartitionGroupTest {
         // 2:[4, 6]
         assertEquals(record.timestamp, 2L);
 
-        // get one record, next up should have ts=3 from partition 1 (even though it has larger partition stream time st=5)
+        // get one record, next up should have ts=3 from partition 1 (even though it has seen a larger max timestamp =5)
         record = group.nextRecord(info);
         // 1:[]
         // 2:[4, 6]
