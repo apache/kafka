@@ -17,24 +17,24 @@
 
 package integration.kafka.api
 
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
-import org.junit.runners.Parameterized.Parameters
 import java.lang.{Boolean => JBoolean}
 import java.time.Duration
 import java.util
 import java.util.Collections
 
-import scala.collection.JavaConverters._
 import kafka.api.IntegrationTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, NewTopic}
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.utils.Utils
-import org.junit.{After, Test}
 import org.junit.Assert._
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
+import org.junit.runners.Parameterized.Parameters
+
+import scala.collection.JavaConverters._
 
 /**
  * Tests behavior of specifying auto topic creation configuration for the consumer and broker
@@ -47,7 +47,6 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
   val topic_2 = "topic-2"
   val producerClientId = "ConsumerTestProducer"
   val consumerClientId = "ConsumerTestConsumer"
-  var adminClient: AdminClient = null
 
   // configure server properties
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
@@ -62,20 +61,13 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
   this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
   this.consumerConfig.setProperty(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, consumerAllowAutoCreateTopics.toString)
 
-  @After
-  override def tearDown(): Unit = {
-    if (adminClient != null)
-      Utils.closeQuietly(adminClient, "AdminClient")
-    super.tearDown()
-  }
-
   @Test
   def testAutoTopicCreation(): Unit = {
     val consumer = createConsumer()
     val producer = createProducer()
     val record = new ProducerRecord(topic_1, 0, "key".getBytes, "value".getBytes)
 
-    adminClient = AdminClient.create(createConfig())
+    val adminClient = AdminClient.create(createConfig())
 
     // create `topic_1` and produce a record to it
     adminClient.createTopics(Collections.singleton(new NewTopic(topic_1, 1, 1))).all.get
@@ -95,6 +87,8 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
       assertTrue(topicCreated)
     else
       assertFalse(topicCreated)
+
+    adminClient.close()
   }
 
   def createConfig(): util.Map[String, Object] = {
