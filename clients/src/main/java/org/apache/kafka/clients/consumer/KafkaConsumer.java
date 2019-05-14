@@ -791,24 +791,25 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                         this.interceptors);
             this.fetcher = new Fetcher<>(
-                    logContext,
-                    this.client,
-                    config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
-                    config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG),
-                    config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG),
-                    config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG),
-                    config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG),
-                    config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG),
-                    this.keyDeserializer,
-                    this.valueDeserializer,
-                    this.metadata,
-                    this.subscriptions,
-                    metrics,
-                    metricsRegistry,
-                    this.time,
-                    this.retryBackoffMs,
-                    this.requestTimeoutMs,
-                    isolationLevel);
+                logContext,
+                this.client,
+                config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG),
+                config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG),
+                config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG),
+                config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG),
+                config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG),
+                config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG),
+                () -> config.getString(ConsumerConfig.CLIENT_RACK_CONFIG),
+                this.keyDeserializer,
+                this.valueDeserializer,
+                this.metadata,
+                this.subscriptions,
+                metrics,
+                metricsRegistry,
+                this.time,
+                this.retryBackoffMs,
+                this.requestTimeoutMs,
+                isolationLevel);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());

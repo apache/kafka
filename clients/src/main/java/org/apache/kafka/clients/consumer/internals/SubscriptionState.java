@@ -406,6 +406,10 @@ public class SubscriptionState {
         return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position.offset - topicPartitionState.logStartOffset;
     }
 
+    public Optional<Integer> preferredReadReplica(TopicPartition tp) {
+        return Optional.ofNullable(assignedState(tp).preferredReadReplica);
+    }
+
     public void updateHighWatermark(TopicPartition tp, long highWatermark) {
         assignedState(tp).highWatermark = highWatermark;
     }
@@ -416,6 +420,14 @@ public class SubscriptionState {
 
     public void updateLastStableOffset(TopicPartition tp, long lastStableOffset) {
         assignedState(tp).lastStableOffset = lastStableOffset;
+    }
+
+    public void updatePreferredReadReplica(TopicPartition tp, int preferredReadReplicaId) {
+        assignedState(tp).preferredReadReplica = preferredReadReplicaId;
+    }
+
+    public void clearPreferredReadReplica(TopicPartition tp) {
+        assignedState(tp).preferredReadReplica = null;
     }
 
     public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
@@ -553,7 +565,7 @@ public class SubscriptionState {
         private boolean paused;  // whether this partition has been paused by the user
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
-
+        private Integer preferredReadReplica;
 
         TopicPartitionState() {
             this.paused = false;
@@ -564,6 +576,7 @@ public class SubscriptionState {
             this.lastStableOffset = null;
             this.resetStrategy = null;
             this.nextRetryTimeMs = null;
+            this.preferredReadReplica = null;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {
