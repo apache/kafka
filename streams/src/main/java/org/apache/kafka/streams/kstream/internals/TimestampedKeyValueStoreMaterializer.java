@@ -21,24 +21,25 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
-public class KeyValueStoreMaterializer<K, V> {
+public class TimestampedKeyValueStoreMaterializer<K, V> {
     private final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized;
 
-    public KeyValueStoreMaterializer(final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+    public TimestampedKeyValueStoreMaterializer(final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         this.materialized = materialized;
     }
 
     /**
      * @return  StoreBuilder
      */
-    public StoreBuilder<KeyValueStore<K, V>> materialize() {
+    public StoreBuilder<TimestampedKeyValueStore<K, V>> materialize() {
         KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
         if (supplier == null) {
             final String name = materialized.storeName();
-            supplier = Stores.persistentKeyValueStore(name);
+            supplier = Stores.persistentTimestampedKeyValueStore(name);
         }
-        final StoreBuilder<KeyValueStore<K, V>> builder = Stores.keyValueStoreBuilder(
+        final StoreBuilder<TimestampedKeyValueStore<K, V>> builder = Stores.timestampedKeyValueStoreBuilder(
             supplier,
             materialized.keySerde(),
             materialized.valueSerde());

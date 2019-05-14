@@ -54,7 +54,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
 
             wait_until(lambda: len(consumer.dead_nodes()) == self.num_consumers - keep_alive, timeout_sec=10,
                        err_msg="Timed out waiting for the consumers to shutdown")
-            
+
             for node in consumer.nodes[keep_alive:]:
                 consumer.start_node(node)
 
@@ -90,7 +90,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
           did not cause unexpected group rebalances.
         """
         partition = TopicPartition(self.TOPIC, 0)
-        
+
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC)
 
@@ -105,7 +105,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         #       pausing before the node is restarted to ensure that any ephemeral
         #       nodes have time to expire
         self.rolling_bounce_brokers(consumer, clean_shutdown=True)
-        
+
         unexpected_rebalances = consumer.num_rebalances() - num_rebalances
         assert unexpected_rebalances == 0, \
             "Broker rolling bounce caused %d unexpected group rebalances" % unexpected_rebalances
@@ -131,7 +131,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
         - Verify delivery semantics according to the failure type.
         """
         partition = TopicPartition(self.TOPIC, 0)
-        
+
         producer = self.setup_producer(self.TOPIC)
         consumer = self.setup_consumer(self.TOPIC)
 
@@ -225,7 +225,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(clean_shutdown=[True], enable_autocommit=[True, False])
     def test_consumer_failure(self, clean_shutdown, enable_autocommit):
         partition = TopicPartition(self.TOPIC, 0)
-        
+
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit)
         producer = self.setup_producer(self.TOPIC)
 
@@ -272,7 +272,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @matrix(clean_shutdown=[True, False], enable_autocommit=[True, False])
     def test_broker_failure(self, clean_shutdown, enable_autocommit):
         partition = TopicPartition(self.TOPIC, 0)
-        
+
         consumer = self.setup_consumer(self.TOPIC, enable_autocommit=enable_autocommit)
         producer = self.setup_producer(self.TOPIC)
 
@@ -308,7 +308,7 @@ class OffsetValidationTest(VerifiableConsumerTest):
     @cluster(num_nodes=7)
     def test_group_consumption(self):
         """
-        Verifies correct group rebalance behavior as consumers are started and stopped. 
+        Verifies correct group rebalance behavior as consumers are started and stopped.
         In particular, this test verifies that the partition is readable after every
         expected rebalance.
 
@@ -357,7 +357,8 @@ class AssignmentValidationTest(VerifiableConsumerTest):
 
     @cluster(num_nodes=6)
     @matrix(assignment_strategy=["org.apache.kafka.clients.consumer.RangeAssignor",
-                                 "org.apache.kafka.clients.consumer.RoundRobinAssignor"])
+                                 "org.apache.kafka.clients.consumer.RoundRobinAssignor",
+                                 "org.apache.kafka.clients.consumer.StickyAssignor"])
     def test_valid_assignment(self, assignment_strategy):
         """
         Verify assignment strategy correctness: each partition is assigned to exactly

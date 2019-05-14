@@ -132,6 +132,12 @@ class LogCleaner(initialConfig: CleanerConfig,
            new Gauge[Int] {
              def value: Int = cleaners.map(_.lastStats).map(_.elapsedSecs).max.toInt
            })
+  // a metric to track delay between the time when a log is required to be compacted
+  // as determined by max compaction lag and the time of last cleaner run.
+  newGauge("max-compaction-delay-secs",
+          new Gauge[Int] {
+          def value: Int = Math.max(0, (cleaners.map(_.lastPreCleanStats).map(_.maxCompactionDelayMs).max / 1000).toInt)
+          })
 
   /**
    * Start the background cleaning
@@ -285,6 +291,7 @@ class LogCleaner(initialConfig: CleanerConfig,
                               checkDone = checkDone)
 
     @volatile var lastStats: CleanerStats = new CleanerStats()
+    @volatile var lastPreCleanStats: PreCleanStats = new PreCleanStats()
 
     private def checkDone(topicPartition: TopicPartition) {
       if (!isRunning)
@@ -310,10 +317,12 @@ class LogCleaner(initialConfig: CleanerConfig,
       var currentLog: Option[Log] = None
 
       try {
-        val cleaned = cleanerManager.grabFilthiestCompactedLog(time) match {
+        val preCleanStats = new PreCleanStats()
+        val cleaned = cleanerManager.grabFilthiestCompactedLog(time, preCleanStats) match {
           case None =>
             false
           case Some(cleanable) =>
+            this.lastPreCleanStats = preCleanStats
             // there's a log, clean it
             currentLog = Some(cleanable.log)
             cleanLog(cleanable)
@@ -386,6 +395,9 @@ class LogCleaner(initialConfig: CleanerConfig,
         "\t%.1f%% size reduction (%.1f%% fewer messages)%n".format(100.0 * (1.0 - stats.bytesWritten.toDouble/stats.bytesRead),
                                                                    100.0 * (1.0 - stats.messagesWritten.toDouble/stats.messagesRead))
       info(message)
+      if (lastPreCleanStats.delayedPartitions > 0) {
+        info("\tCleanable partitions: %d, Delayed partitions: %d, max delay: %d".format(lastPreCleanStats.cleanablePartitions, lastPreCleanStats.delayedPartitions, lastPreCleanStats.maxCompactionDelayMs))
+      }
       if (stats.invalidMessagesRead > 0) {
         warn("\tFound %d invalid messages during compaction.".format(stats.invalidMessagesRead))
       }
@@ -540,6 +552,8 @@ private[log] class Cleaner(val id: Int,
       // clean segments into the new destination segment
       val iter = segments.iterator
       var currentSegmentOpt: Option[LogSegment] = Some(iter.next())
+      val lastOffsetOfActiveProducers = log.lastRecordsOfActiveProducers
+
       while (currentSegmentOpt.isDefined) {
         val currentSegment = currentSegmentOpt.get
         val nextSegmentOpt = if (iter.hasNext) Some(iter.next()) else None
@@ -555,7 +569,7 @@ private[log] class Cleaner(val id: Int,
 
         try {
           cleanInto(log.topicPartition, currentSegment.log, cleaned, map, retainDeletes, log.config.maxMessageSize,
-            transactionMetadata, log.activeProducersWithLastSequence, stats)
+            transactionMetadata, lastOffsetOfActiveProducers, stats)
         } catch {
           case e: LogSegmentOffsetOverflowException =>
             // Split the current segment. It's also safest to abort the current cleaning process, so that we retry from
@@ -607,9 +621,9 @@ private[log] class Cleaner(val id: Int,
                              retainDeletes: Boolean,
                              maxLogMessageSize: Int,
                              transactionMetadata: CleanedTransactionMetadata,
-                             activeProducers: Map[Long, Int],
+                             lastRecordsOfActiveProducers: Map[Long, LastRecord],
                              stats: CleanerStats) {
-    val logCleanerFilter = new RecordFilter {
+    val logCleanerFilter: RecordFilter = new RecordFilter {
       var discardBatchRecords: Boolean = _
 
       override def checkBatchRetention(batch: RecordBatch): BatchRetention = {
@@ -617,9 +631,22 @@ private[log] class Cleaner(val id: Int,
         // note that we will never delete a marker until all the records from that transaction are removed.
         discardBatchRecords = shouldDiscardBatch(batch, transactionMetadata, retainTxnMarkers = retainDeletes)
 
-        // check if the batch contains the last sequence number for the producer. if so, we cannot
-        // remove the batch just yet or the producer may see an out of sequence error.
-        if (batch.hasProducerId && activeProducers.get(batch.producerId).contains(batch.lastSequence))
+        def isBatchLastRecordOfProducer: Boolean = {
+          // We retain the batch in order to preserve the state of active producers. There are three cases:
+          // 1) The producer is no longer active, which means we can delete all records for that producer.
+          // 2) The producer is still active and has a last data offset. We retain the batch that contains
+          //    this offset since it also contains the last sequence number for this producer.
+          // 3) The last entry in the log is a transaction marker. We retain this marker since it has the
+          //    last producer epoch, which is needed to ensure fencing.
+          lastRecordsOfActiveProducers.get(batch.producerId).exists { lastRecord =>
+            lastRecord.lastDataOffset match {
+              case Some(offset) => batch.lastOffset == offset
+              case None => batch.isControlBatch && batch.producerEpoch == lastRecord.producerEpoch
+            }
+          }
+        }
+
+        if (batch.hasProducerId && isBatchLastRecordOfProducer)
           BatchRetention.RETAIN_EMPTY
         else if (discardBatchRecords)
           BatchRetention.DELETE
@@ -932,6 +959,25 @@ private[log] class Cleaner(val id: Int,
 }
 
 /**
+  * A simple struct for collecting pre-clean stats
+  */
+private class PreCleanStats() {
+  var maxCompactionDelayMs = 0L
+  var delayedPartitions = 0
+  var cleanablePartitions = 0
+
+  def updateMaxCompactionDelay(delayMs: Long): Unit = {
+    maxCompactionDelayMs = Math.max(maxCompactionDelayMs, delayMs)
+    if (delayMs > 0) {
+      delayedPartitions += 1
+    }
+  }
+  def recordCleanablePartitions(numOfCleanables: Int): Unit = {
+    cleanablePartitions = numOfCleanables
+  }
+}
+
+/**
  * A simple struct for collecting stats about log cleaning
  */
 private class CleanerStats(time: Time = Time.SYSTEM) {
@@ -984,9 +1030,11 @@ private class CleanerStats(time: Time = Time.SYSTEM) {
 }
 
 /**
- * Helper class for a log, its topic/partition, the first cleanable position, and the first uncleanable dirty position
- */
-private case class LogToClean(topicPartition: TopicPartition, log: Log, firstDirtyOffset: Long, uncleanableOffset: Long) extends Ordered[LogToClean] {
+  * Helper class for a log, its topic/partition, the first cleanable position, the first uncleanable dirty position,
+  * and whether it needs compaction immediately.
+  */
+private case class LogToClean(topicPartition: TopicPartition, log: Log, firstDirtyOffset: Long,
+                              uncleanableOffset: Long, needCompactionNow: Boolean = false) extends Ordered[LogToClean] {
   val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size.toLong).sum
   val (firstUncleanableOffset, cleanableBytes) = LogCleaner.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset)
   val totalBytes = cleanBytes + cleanableBytes

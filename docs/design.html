@@ -501,6 +501,7 @@
     <ol>
     <li>Any consumer that stays caught-up to within the head of the log will see every message that is written; these messages will have sequential offsets. The topic's <code>min.compaction.lag.ms</code> can be used to
     guarantee the minimum length of time must pass after a message is written before it could be compacted. I.e. it provides a lower bound on how long each message will remain in the (uncompacted) head.
+    The topic's <code>max.compaction.lag.ms</code> can be used to guarantee the maximum delay between the time a message is written and the time the message becomes eligible for compaction.
     <li>Ordering of messages is always maintained.  Compaction will never re-order messages, just remove some.
     <li>The offset for a message never changes.  It is the permanent identifier for a position in the log.
     <li>Any consumer progressing from the start of the log will see at least the final state of all records in the order they were written.  Additionally, all delete markers for deleted records will be seen, provided
@@ -523,16 +524,27 @@
     <h4><a id="design_compactionconfig" href="#design_compactionconfig">Configuring The Log Cleaner</a></h4>
 
     The log cleaner is enabled by default. This will start the pool of cleaner threads.
-    To enable log cleaning on a particular topic you can add the log-specific property
-    <pre class="brush: text;">  log.cleanup.policy=compact</pre>
-    This can be done either at topic creation time or using the alter topic command.
-    <p>
+    To enable log cleaning on a particular topic, add the log-specific property
+    <pre class="brush: text;"> log.cleanup.policy=compact</pre>
+
+    The <code>log.cleanup.policy</code> property is a broker configuration setting defined
+    in the broker's <code>server.properties</code> file; it affects all of the topics
+    in the cluster that do not have a configuration override in place as documented
+    <a href="/documentation.html#brokerconfigs">here</a>.
+
     The log cleaner can be configured to retain a minimum amount of the uncompacted "head" of the log. This is enabled by setting the compaction time lag.
     <pre class="brush: text;">  log.cleaner.min.compaction.lag.ms</pre>
 
     This can be used to prevent messages newer than a minimum message age from being subject to compaction. If not set, all log segments are eligible for compaction except for the last segment, i.e. the one currently
     being written to. The active segment will not be compacted even if all of its messages are older than the minimum compaction time lag.
-    </p>
+
+    The log cleaner can be configured to ensure a maximum delay after which the uncompacted "head" of the log becomes eligible for log compaction.
+    <pre class="brush: text;">  log.cleaner.max.compaction.lag.ms</pre>
+
+    This can be used to prevent log with low produce rate from remaining ineligible for compaction for an unbounded duration. If not set, logs that do not exceed min.cleanable.dirty.ratio are not compacted.
+    Note that this compaction deadline is not a hard guarantee since it is still subjected to the availability of log cleaner threads and the actual compaction time.
+    You will want to monitor the uncleanable-partitions-count, max-clean-time-secs and max-compaction-delay-secs metrics.
+
     <p>
     Further cleaner configurations are described <a href="/documentation.html#brokerconfigs">here</a>.
 
