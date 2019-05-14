@@ -33,6 +33,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
 
+import scala.collection.JavaConverters.asScalaBufferConverter
 
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through
@@ -200,7 +201,8 @@ class MetadataCache(brokerId: Int) extends Logging {
     val snapshot = metadataSnapshot
     snapshot.partitionStates.get(topic).flatMap(_.get(partitionId)).map(partitionInfo => {
       val replicaIds = partitionInfo.basePartitionState.replicas
-      JavaConverters.asScalaBuffer(replicaIds)
+      replicaIds.asScala
+      //JavaConverters.asScalaBuffer(replicaIds)
         .map(replicaId => replicaId.intValue() -> {
           snapshot.aliveBrokers.get(replicaId.longValue()) match {
             case Some(broker) =>

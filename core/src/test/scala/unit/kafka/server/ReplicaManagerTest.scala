@@ -664,7 +664,7 @@ class ReplicaManagerTest {
                                                  extraProps: Properties = new Properties()) : (ReplicaManager, LogManager) = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
-    extraProps.forEach((k, v) => props.put(k, v))
+    props.asScala ++= extraProps.asScala
     val config = KafkaConfig.fromProps(props)
 
     // Setup mock local log to have leader epoch of 3 and offset of 10
