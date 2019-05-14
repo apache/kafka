@@ -736,7 +736,7 @@ class GroupCoordinatorTest extends JUnitSuite {
 
   @Test
   def testDynamicMemberFailToRejoinBeforeRebalanceTimeout() {
-    val longSessionTimeout = DefaultSessionTimeout * 3
+    val longSessionTimeout = DefaultSessionTimeout * 2
     val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId, sessionTimeout = longSessionTimeout)
 
     EasyMock.reset(replicaManager)
@@ -749,15 +749,27 @@ class GroupCoordinatorTest extends JUnitSuite {
     assertEquals(dynamicJoinResult.leaderId, dynamicJoinResult.memberId)
     assertEquals(Errors.NONE, dynamicJoinResult.error)
     assertEquals(3, dynamicJoinResult.members.size)
+    assertEquals(2, dynamicJoinResult.generationId)
     assertGroupState(groupState = CompletingRebalance)
 
-    // Send a special leave group request from static follower
+    // Send a special leave group request from static follower, moving group towards PreparingRebalance
     EasyMock.reset(replicaManager)
     val followerLeaveGroupResult = leaveGroup(groupId, rebalanceResult.followerId)
     assertEquals(Errors.NONE, followerLeaveGroupResult)
+    assertGroupState(groupState = PreparingRebalance)
+
     timer.advanceClock(DefaultRebalanceTimeout + 1)
-    // Only rejoined leader is maintained
+    // Only static leader is maintained, and group is stuck at PreparingRebalance stage
     assertEquals(Set(rebalanceResult.leaderId), getGroup(groupId).allMembers)
+    assertEquals(2, getGroup(groupId).generationId)
+    assertGroupState(groupState = PreparingRebalance)
+
+    timer.advanceClock(DefaultRebalanceTimeout + 1)
+    // The static leader should already session timeout, moving group towards Empty
+    assertEquals(Set.empty, getGroup(groupId).allMembers)
+    assertEquals(null, getGroup(groupId).leaderOrNull)
+    assertEquals(3, getGroup(groupId).generationId)
+    assertGroupState(groupState = Empty)
   }
 
   @Test

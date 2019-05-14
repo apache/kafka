@@ -920,23 +920,25 @@ class GroupCoordinator(val brokerId: Int,
   def onCompleteJoin(group: GroupMetadata) {
     group.inLock {
       // remove dynamic members who haven't joined the group yet
-      group.notYetRejoinedMembers.filter(!_.isStaticMember) foreach { failedMember =>
+      group.notYetRejoinedMembers.filterNot(_.isStaticMember) foreach { failedMember =>
         removeHeartbeatForLeavingMember(group, failedMember)
         group.remove(failedMember.memberId)
         group.removeStaticMember(failedMember.groupInstanceId)
         // TODO: cut the socket connection to the client
       }
 
-      val joinedLeader = group.maybeElectNewJoinedLeader()
-      if (joinedLeader.isEmpty && group.allMembers.nonEmpty) {
+      if (group.is(Dead)) {
+        info(s"group ${group.groupId} is dead, skipping rebalance stage")
+      } else if (group.maybeElectNewJoinedLeader().isEmpty
+        && group.allMembers.nonEmpty) {
         // If all members are not rejoining, we will postpone the completion
         // of rebalance preparing stage, and send out another dummy delayed operation
         // until session timeout removes all the non-responsive members.
+        error(s"group could not complete rebalance because no members rejoined")
         joinPurgatory.tryCompleteElseWatch(
           new DelayedJoin(this, group, group.rebalanceTimeoutMs),
-          Seq(group.allMembers.headOption)
-        )
-      } else if (!group.is(Dead)) {
+          Seq("dummy-key"))
+      } else {
         group.initNextGeneration()
         if (group.is(Empty)) {
           info(s"Group ${group.groupId} with generation ${group.generationId} is now empty " +
