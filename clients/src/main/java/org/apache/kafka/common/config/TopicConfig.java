@@ -115,9 +115,11 @@ public class TopicConfig {
         "50% of the log has been compacted. This ratio bounds the maximum space wasted in " +
         "the log by duplicates (at 50% at most 50% of the log could be duplicates). A " +
         "higher ratio will mean fewer, more efficient cleanings but will mean more wasted " +
-        "space in the log. If " + MAX_COMPACTION_LAG_MS_CONFIG + " is used, the log compactor considers the " +
-        "log eligible for compaction as soon as " + MAX_COMPACTION_LAG_MS_CONFIG +
-        " is reached regardless of the minimum dirty ratio";
+        "space in the log. If the " + MAX_COMPACTION_LAG_MS_CONFIG + " or the " + MIN_COMPACTION_LAG_MS_CONFIG +
+        " configurations are also specified, then the log compactor considers the log eligible for compaction " +
+        "as soon as either: (i) the dirty ratio threshold has been met and the log has had dirty (uncompacted) " +
+        "records for at least the " + MIN_COMPACTION_LAG_MS_CONFIG + " duration, or (ii) if the log has had " +
+        "dirty (uncompacted) records for at most the " + MAX_COMPACTION_LAG_MS_CONFIG + " period.";
 
     public static final String CLEANUP_POLICY_CONFIG = "cleanup.policy";
     public static final String CLEANUP_POLICY_COMPACT = "compact";

@@ -501,7 +501,7 @@
     <ol>
     <li>Any consumer that stays caught-up to within the head of the log will see every message that is written; these messages will have sequential offsets. The topic's <code>min.compaction.lag.ms</code> can be used to
     guarantee the minimum length of time must pass after a message is written before it could be compacted. I.e. it provides a lower bound on how long each message will remain in the (uncompacted) head.
-    The topic's <code>max.compaction.lag.ms</code> can be used to guarantee the max delay between the time a message is written and the time the message becomes eligible for compaction.
+    The topic's <code>max.compaction.lag.ms</code> can be used to guarantee the maximum delay between the time a message is written and the time the message becomes eligible for compaction.
     <li>Ordering of messages is always maintained.  Compaction will never re-order messages, just remove some.
     <li>The offset for a message never changes.  It is the permanent identifier for a position in the log.
     <li>Any consumer progressing from the start of the log will see at least the final state of all records in the order they were written.  Additionally, all delete markers for deleted records will be seen, provided
@@ -538,7 +538,7 @@
     This can be used to prevent messages newer than a minimum message age from being subject to compaction. If not set, all log segments are eligible for compaction except for the last segment, i.e. the one currently
     being written to. The active segment will not be compacted even if all of its messages are older than the minimum compaction time lag.
 
-    The log cleaner can be configured to ensure a max delay after which the uncompacted "head" of the log becomes eligible for log compaction.
+    The log cleaner can be configured to ensure a maximum delay after which the uncompacted "head" of the log becomes eligible for log compaction.
     <pre class="brush: text;">  log.cleaner.max.compaction.lag.ms</pre>
 
     This can be used to prevent log with low produce rate from remaining ineligible for compaction for an unbounded duration. If not set, logs that do not exceed min.cleanable.dirty.ratio are not compacted.
