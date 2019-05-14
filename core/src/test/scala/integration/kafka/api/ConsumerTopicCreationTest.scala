@@ -25,7 +25,7 @@ import java.util.Collections
 import kafka.api.IntegrationTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, NewTopic}
+import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.junit.Assert._
@@ -33,8 +33,6 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.Parameterized
 import org.junit.runners.Parameterized.Parameters
-
-import scala.collection.JavaConverters._
 
 /**
  * Tests behavior of specifying auto topic creation configuration for the consumer and broker
@@ -65,9 +63,8 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
   def testAutoTopicCreation(): Unit = {
     val consumer = createConsumer()
     val producer = createProducer()
+    val adminClient = createAdminClient()
     val record = new ProducerRecord(topic_1, 0, "key".getBytes, "value".getBytes)
-
-    val adminClient = AdminClient.create(createConfig())
 
     // create `topic_1` and produce a record to it
     adminClient.createTopics(Collections.singleton(new NewTopic(topic_1, 1, 1))).all.get
@@ -87,18 +84,6 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
       assertTrue(topicCreated)
     else
       assertFalse(topicCreated)
-
-    adminClient.close()
-  }
-
-  def createConfig(): util.Map[String, Object] = {
-    val config = new util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
-    val securityProps: util.Map[Object, Object] =
-      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.asScala.foreach { case (key, value) => config.put(key.asInstanceOf[String], value) }
-    config
   }
 }
 
