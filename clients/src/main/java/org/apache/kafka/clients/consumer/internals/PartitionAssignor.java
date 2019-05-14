@@ -265,7 +265,7 @@ public interface PartitionAssignor {
         }
     }
 
-    class MemberInfo {
+    class MemberInfo implements Comparable<MemberInfo> {
         public final String memberId;
         public final Optional<String> groupInstanceId;
 
@@ -274,5 +274,38 @@ public interface PartitionAssignor {
             this.memberId = memberId;
             this.groupInstanceId = groupInstanceId;
         }
+
+        @Override
+        public int compareTo(MemberInfo otherMemberInfo) {
+            if (this.groupInstanceId.isPresent() &&
+                    otherMemberInfo.groupInstanceId.isPresent()) {
+                return this.groupInstanceId.get()
+                        .compareTo(otherMemberInfo.groupInstanceId.get());
+            } else if (this.groupInstanceId.isPresent()) {
+                return -1;
+            } else if (otherMemberInfo.groupInstanceId.isPresent()) {
+                return 1;
+            } else {
+                return this.memberId.compareTo(otherMemberInfo.memberId);
+            }
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            return o instanceof MemberInfo && this.memberId.equals(((MemberInfo) o).memberId);
+        }
+
+        /**
+         * We could just use member.id to be the hashcode, since it's unique
+         * across the group.
+         */
+        @Override
+        public int hashCode() {
+            return memberId.hashCode();
+        }
+    }
+
+    static MemberInfo dynamicMember(String consumerId) {
+        return new PartitionAssignor.MemberInfo(consumerId, Optional.empty());
     }
 }

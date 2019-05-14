@@ -43,8 +43,6 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.function.Function;
-import java.util.stream.Collectors;
 
 /**
  * <p>The sticky assignor serves two purposes. First, it guarantees an assignment that is as balanced as possible, meaning either:
@@ -276,7 +274,8 @@ public class StickyAssignor extends AbstractPartitionAssignor {
         List<TopicPartition> unassignedPartitions = new ArrayList<>(sortedPartitions);
         for (Iterator<Map.Entry<String, List<TopicPartition>>> it = currentAssignment.entrySet().iterator(); it.hasNext();) {
             Map.Entry<String, List<TopicPartition>> entry = it.next();
-            if (!subscriptions.containsKey(entry.getKey())) {
+            MemberInfo memberInfo = new MemberInfo(entry.getKey(), Optional.empty());
+            if (!subscriptions.containsKey(memberInfo)) {
                 // if a consumer that existed before (and had some partition assignments) is now removed, remove it from currentAssignment
                 for (TopicPartition topicPartition: entry.getValue())
                     currentPartitionConsumer.remove(topicPartition);
@@ -289,7 +288,7 @@ public class StickyAssignor extends AbstractPartitionAssignor {
                         // if this topic partition of this consumer no longer exists remove it from currentAssignment of the consumer
                         partitionIter.remove();
                         currentPartitionConsumer.remove(partition);
-                    } else if (!subscriptions.get(entry.getKey()).topics().contains(partition.topic())) {
+                    } else if (!subscriptions.get(memberInfo).topics().contains(partition.topic())) {
                         // if this partition cannot remain assigned to its current consumer because the consumer
                         // is no longer subscribed to its topic remove it from currentAssignment of the consumer
                         partitionIter.remove();
