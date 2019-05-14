@@ -34,6 +34,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.utils.Utils
 import org.junit.{After, Test}
+import org.junit.Assert._
 
 /**
  * Tests behavior of specifying auto topic creation configuration for the consumer and broker
@@ -82,17 +83,19 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
 
     consumer.subscribe(util.Arrays.asList(topic_1, topic_2))
 
+
     // Wait until the produced record was consumed. This guarantees that metadata request for `topic_2` was sent to the
     // broker.
     TestUtils.waitUntilTrue(() => {
       consumer.poll(Duration.ofMillis(100)).count > 0
     }, "Timed out waiting to consume")
 
-    val topicCreated = adminClient.listTopics.names.get.contains(topic_2)
+    // MetadataRequest is guaranteed to create the topic znode if creation was required
+    val topicCreated = zkClient.getAllTopicsInCluster.contains(topic_2)
     if (brokerAutoTopicCreationEnable && consumerAllowAutoCreateTopics)
-      assert(topicCreated == true)
+      assertTrue(topicCreated)
     else
-      assert(topicCreated == false)
+      assertFalse(topicCreated)
   }
 
   def createConfig(): util.Map[String, Object] = {
