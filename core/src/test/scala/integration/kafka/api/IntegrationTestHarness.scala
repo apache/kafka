@@ -27,6 +27,7 @@ import java.util.Properties
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
+import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.junit.{After, Before}
@@ -42,10 +43,12 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   val producerConfig = new Properties
   val consumerConfig = new Properties
+  val adminClientConfig = new Properties
   val serverConfig = new Properties
 
   private val consumers = mutable.Buffer[KafkaConsumer[_, _]]()
   private val producers = mutable.Buffer[KafkaProducer[_, _]]()
+  private val adminClients = mutable.Buffer[AdminClient]()
 
   protected def interBrokerListenerName: ListenerName = listenerName
 
@@ -84,6 +87,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     // Generate client security properties before starting the brokers in case certs are needed
     producerConfig ++= clientSecurityProps("producer")
     consumerConfig ++= clientSecurityProps("consumer")
+    adminClientConfig ++= clientSecurityProps("adminClient")
 
     super.setUp()
 
@@ -97,6 +101,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group")
     consumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     consumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+
+    adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
 
     if (createOffsetsTopic)
       TestUtils.createOffsetsTopic(zkClient, servers)
@@ -131,13 +137,26 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumer
   }
 
+  def createAdminClient(configOverrides: Properties = new Properties): AdminClient = {
+    val props = new Properties
+    props ++= adminClientConfig
+    props ++= configOverrides
+    val adminClient = AdminClient.create(props)
+    adminClients += adminClient
+    adminClient
+  }
+
   @After
   override def tearDown() {
     producers.foreach(_.close(Duration.ZERO))
     consumers.foreach(_.wakeup())
     consumers.foreach(_.close(Duration.ZERO))
+    adminClients.foreach(_.close(Duration.ZERO))
+
     producers.clear()
     consumers.clear()
+    adminClients.clear()
+
     super.tearDown()
   }
 
