@@ -37,7 +37,7 @@ import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
-import scala.util.Try
+import scala.util.{Failure, Success, Try}
 
 class ControllerIntegrationTest extends ZooKeeperTestHarness {
   var servers = Seq.empty[KafkaServer]
@@ -413,7 +413,10 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     assertEquals(2, partitionStateInfo.basePartitionState.isr.size)
     assertEquals(List(0,1), partitionStateInfo.basePartitionState.isr.asScala)
     controller.controlledShutdown(1, servers.find(_.config.brokerId == 1).get.kafkaController.brokerEpoch, controlledShutdownCallback)
-    partitionsRemaining = resultQueue.take().get
+    partitionsRemaining = resultQueue.take() match {
+      case Success(partitions) => partitions
+      case Failure(exception) => fail("Controlled shutdown failed due to error", exception)
+    }
     assertEquals(0, partitionsRemaining.size)
     activeServers = servers.filter(s => s.config.brokerId == 0)
     partitionStateInfo = activeServers.head.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get
@@ -517,7 +520,10 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
     // Let the controller event thread await on a latch until broker bounce finishes.
     // This is used to simulate fast broker bounce
-    controller.eventManager.put(KafkaController.AwaitOnLatch(latch))
+
+    controller.eventManager.put(new MockEvent(ControllerState.TopicChange) {
+      override def process(): Unit = latch.await()
+    })
 
     otherBroker.shutdown()
     otherBroker.startup()
@@ -536,7 +542,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   private def testControllerMove(fun: () => Unit): Unit = {
     val controller = getController().kafkaController
     val appender = LogCaptureAppender.createAndRegister()
-    val previousLevel = LogCaptureAppender.setClassLoggerLevel(controller.eventManager.thread.getClass, Level.INFO)
+    val previousLevel = LogCaptureAppender.setClassLoggerLevel(controller.getClass, Level.INFO)
 
     try {
       TestUtils.waitUntilTrue(() => {
@@ -547,7 +553,10 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
       // Let the controller event thread await on a latch before the pre-defined logic is triggered.
       // This is used to make sure that when the event thread resumes and starts processing events, the controller has already moved.
-      controller.eventManager.put(KafkaController.AwaitOnLatch(latch))
+      controller.eventManager.put(new MockEvent(ControllerState.TopicChange) {
+        override def process(): Unit = latch.await()
+      })
+
       // Execute pre-defined logic. This can be topic creation/deletion, preferred leader election, etc.
       fun()
 
@@ -560,9 +569,11 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       TestUtils.waitUntilTrue(() => !controller.isActive, "Controller fails to resign")
 
       // Expect to capture the ControllerMovedException in the log of ControllerEventThread
+      println(appender.getMessages.find(e => e.getLevel == Level.INFO
+        && e.getThrowableInformation != null))
       val event = appender.getMessages.find(e => e.getLevel == Level.INFO
         && e.getThrowableInformation != null
-        && e.getThrowableInformation.getThrowable.getClass.getName.equals(new ControllerMovedException("").getClass.getName))
+        && e.getThrowableInformation.getThrowable.getClass.getName.equals(classOf[ControllerMovedException].getName))
       assertTrue(event.isDefined)
 
     } finally {

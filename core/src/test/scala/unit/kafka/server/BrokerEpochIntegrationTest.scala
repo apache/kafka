@@ -143,10 +143,10 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
           partitionStates.asJava, nodes.toSet.asJava)
 
         if (isEpochInRequestStale) {
-          sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, ApiKeys.LEADER_AND_ISR, requestBuilder)
+          sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, requestBuilder)
         }
         else {
-          sendAndVerifySuccessfulResponse(controllerChannelManager, ApiKeys.LEADER_AND_ISR, requestBuilder)
+          sendAndVerifySuccessfulResponse(controllerChannelManager, requestBuilder)
           TestUtils.waitUntilLeaderIsKnown(Seq(broker2), tp, 10000)
         }
       }
@@ -172,10 +172,10 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
           partitionStates.asJava, liverBrokers.toSet.asJava)
 
         if (isEpochInRequestStale) {
-          sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, ApiKeys.UPDATE_METADATA, requestBuilder)
+          sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, requestBuilder)
         }
         else {
-          sendAndVerifySuccessfulResponse(controllerChannelManager, ApiKeys.UPDATE_METADATA, requestBuilder)
+          sendAndVerifySuccessfulResponse(controllerChannelManager, requestBuilder)
           TestUtils.waitUntilMetadataIsPropagated(Seq(broker2), tp.topic(), tp.partition(), 10000)
           assertEquals(brokerId2,
             broker2.metadataCache.getPartitionInfo(tp.topic(), tp.partition()).get.basePartitionState.leader)
@@ -190,10 +190,10 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
           true, Set(tp).asJava)
 
         if (isEpochInRequestStale) {
-          sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, ApiKeys.STOP_REPLICA, requestBuilder)
+          sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, requestBuilder)
         }
         else {
-          sendAndVerifySuccessfulResponse(controllerChannelManager, ApiKeys.STOP_REPLICA, requestBuilder)
+          sendAndVerifySuccessfulResponse(controllerChannelManager, requestBuilder)
           assertTrue(broker2.replicaManager.getPartition(tp).isEmpty)
         }
       }
@@ -221,22 +221,23 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
     }, "Broker epoch mismatches")
   }
 
-  private def sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager: ControllerChannelManager, apiKeys: ApiKeys,
-                                               builder: AbstractControlRequest.Builder[_ <: AbstractControlRequest]): Unit = {
+  private def sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager: ControllerChannelManager,
+                                                      builder: AbstractControlRequest.Builder[_ <: AbstractControlRequest]): Unit = {
     var staleBrokerEpochDetected = false
-    controllerChannelManager.sendRequest(brokerId2, apiKeys, builder,
-      response => {staleBrokerEpochDetected = response.errorCounts().containsKey(Errors.STALE_BROKER_EPOCH)})
+    controllerChannelManager.sendRequest(brokerId2, builder, response => {
+      staleBrokerEpochDetected = response.errorCounts().containsKey(Errors.STALE_BROKER_EPOCH)
+    })
     TestUtils.waitUntilTrue(() => staleBrokerEpochDetected, "Broker epoch should be stale")
     assertTrue("Stale broker epoch not detected by the broker", staleBrokerEpochDetected)
   }
 
-  private def sendAndVerifySuccessfulResponse(controllerChannelManager: ControllerChannelManager, apiKeys: ApiKeys,
+  private def sendAndVerifySuccessfulResponse(controllerChannelManager: ControllerChannelManager,
                                               builder: AbstractControlRequest.Builder[_ <: AbstractControlRequest]): Unit = {
     @volatile var succeed = false
-    controllerChannelManager.sendRequest(brokerId2, apiKeys, builder,
-      response => {
+    controllerChannelManager.sendRequest(brokerId2, builder, response => {
         succeed = response.errorCounts().isEmpty ||
-          (response.errorCounts().containsKey(Errors.NONE) && response.errorCounts().size() == 1)})
+          (response.errorCounts().containsKey(Errors.NONE) && response.errorCounts().size() == 1)
+    })
     TestUtils.waitUntilTrue(() => succeed, "Should receive response with no errors")
   }
 }

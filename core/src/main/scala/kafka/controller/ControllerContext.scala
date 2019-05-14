@@ -202,6 +202,10 @@ class ControllerContext {
     }
   }
 
+  def queueTopicDeletion(topics: Set[String]): Unit = {
+    topicsToBeDeleted ++= topics
+  }
+
   def beginTopicDeletion(topics: Set[String]): Unit = {
     topicsWithDeletionStarted ++= topics
   }
