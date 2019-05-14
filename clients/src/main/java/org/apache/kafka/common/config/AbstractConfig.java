@@ -436,7 +436,9 @@ public class AbstractConfig {
         return objects;
     }
 
-    private Map<String, String> getMapAsString(Map<?, ?>  configMap) {
+    private Map<String, String> extractPotentialVariables(Map<?, ?>  configMap) {
+        // Variables are tuples of the form "${providerName:[path:]key}". From the configMap we extract the subset of configs with string
+        // values as potential variables.
         Map<String, String> configMapAsString = new HashMap<>();
         for (Map.Entry<?, ?> entry : configMap.entrySet()) {
             if (entry.getValue() instanceof String)
@@ -458,14 +460,14 @@ public class AbstractConfig {
         Map<String, String> providerConfigString;
         Map<String, ?> configProperties;
 
-        // As variable configs are strings, parse the originals and obtain the variable configs.
-        Map<String, String> indirectVariables = getMapAsString(originals);
+        // As variable configs are strings, parse the originals and obtain the potential variable configs.
+        Map<String, String> indirectVariables = extractPotentialVariables(originals);
 
         if (configProviderProps == null || configProviderProps.isEmpty()) {
             providerConfigString = indirectVariables;
             configProperties = originals;
         } else {
-            providerConfigString = getMapAsString(configProviderProps);
+            providerConfigString = extractPotentialVariables(configProviderProps);
             configProperties = configProviderProps;
         }
         Map<String, ConfigProvider> providers = instantiateConfigProviders(providerConfigString, configProperties);
