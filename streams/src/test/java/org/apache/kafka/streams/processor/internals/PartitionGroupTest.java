@@ -117,7 +117,7 @@ public class PartitionGroupTest {
         record = group.nextRecord(info);
         // 1:[3, 5]
         // 2:[2, 4, 6]
-        // st: 2
+        // st: 1
         assertEquals(partition1, info.partition());
         verifyTimes(record, 1L, 1L);
         verifyBuffered(5, 2, 3);
@@ -127,7 +127,7 @@ public class PartitionGroupTest {
         record = group.nextRecord(info);
         // 1:[3, 5]
         // 2:[4, 6]
-        // st: 3
+        // st: 2
         assertEquals(partition2, info.partition());
         verifyTimes(record, 2L, 2L);
         verifyBuffered(4, 2, 2);
@@ -141,32 +141,32 @@ public class PartitionGroupTest {
         group.addRawRecords(partition1, list3);
         // 1:[3, 5, 2, 4]
         // 2:[4, 6]
-        // st: 3 (non-decreasing, so adding 2 doesn't change it)
+        // st: 2 (just adding records shouldn't change it)
         verifyBuffered(6, 4, 2);
         assertEquals(2L, group.timestamp());
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
-        // get one record, time should not be advanced
+        // get one record, time should be advanced
         record = group.nextRecord(info);
         // 1:[5, 2, 4]
         // 2:[4, 6]
-        // st: 4 as partition st is now {5, 4}
+        // st: 3
         assertEquals(partition1, info.partition());
         verifyTimes(record, 3L, 3L);
         verifyBuffered(5, 3, 2);
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
-        // get one record, time should not be advanced
+        // get one record, time should be advanced
         record = group.nextRecord(info);
         // 1:[5, 2, 4]
         // 2:[6]
-        // st: 5 as partition st is now {5, 6}
+        // st: 4
         assertEquals(partition2, info.partition());
         verifyTimes(record, 4L, 4L);
         verifyBuffered(4, 3, 1);
         assertEquals(0.0, metrics.metric(lastLatenessValue).metricValue());
 
-        // get one more record, now time should be advanced
+        // get one more record, time should be advanced
         record = group.nextRecord(info);
         // 1:[2, 4]
         // 2:[6]
@@ -190,17 +190,17 @@ public class PartitionGroupTest {
         record = group.nextRecord(info);
         // 1:[]
         // 2:[6]
-        // st: 4 (doesn't advance because 1 is empty, so it's still reporting the last-known time of 4)
+        // st: 5
         assertEquals(partition1, info.partition());
         verifyTimes(record, 4L, 5L);
         verifyBuffered(1, 0, 1);
         assertEquals(1.0, metrics.metric(lastLatenessValue).metricValue());
 
-        // get one more record, time should not be advanced
+        // get one more record, time should be advanced
         record = group.nextRecord(info);
         // 1:[]
         // 2:[]
-        // st: 4 (1 and 2 are empty, so they are still reporting the last-known times of 4 and 6.)
+        // st: 6
         assertEquals(partition2, info.partition());
         verifyTimes(record, 6L, 6L);
         verifyBuffered(0, 0, 0);
