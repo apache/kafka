@@ -772,16 +772,8 @@ public class TopologyTestDriverTest {
         topology.addStateStore(
             Stores.windowStoreBuilder(
                 persistent ?
-                    Stores.persistentWindowStore(
-                        windowStoreName,
-                        Duration.ofMillis(1000L),
-                        Duration.ofMillis(100L),
-                        false) :
-                    Stores.inMemoryWindowStore(
-                        windowStoreName,
-                        Duration.ofMillis(1000L),
-                        Duration.ofMillis(100L),
-                        false),
+                    Stores.persistentWindowStore(windowStoreName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false) :
+                    Stores.inMemoryWindowStore(windowStoreName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false),
                 Serdes.ByteArray(),
                 Serdes.ByteArray()
             ),
@@ -789,16 +781,8 @@ public class TopologyTestDriverTest {
         topology.addStateStore(
             Stores.timestampedWindowStoreBuilder(
                 persistent ?
-                    Stores.persistentTimestampedWindowStore(
-                        timestampedWindowStoreName,
-                        Duration.ofMillis(1000L),
-                        Duration.ofMillis(100L),
-                        false) :
-                    Stores.inMemoryWindowStore(
-                        timestampedWindowStoreName,
-                        Duration.ofMillis(1000L),
-                        Duration.ofMillis(100L),
-                        false),
+                    Stores.persistentTimestampedWindowStore(timestampedWindowStoreName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false) :
+                    Stores.inMemoryWindowStore(timestampedWindowStoreName, Duration.ofMillis(1000L), Duration.ofMillis(100L), false),
                 Serdes.ByteArray(),
                 Serdes.ByteArray()
             ),
