@@ -336,10 +336,12 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
             AbstractConfig connectorConfig = new AbstractConfig(new ConfigDef(), connectorProps);
             String connName = connectorProps.get(ConnectorConfig.NAME_CONFIG);
-            ConfigInfos producerConfigInfos = null, consumerConfigInfos = null, adminConfigInfos = null;
+            ConfigInfos producerConfigInfos = null;
+            ConfigInfos consumerConfigInfos = null;
+            ConfigInfos adminConfigInfos = null;
             if (connectorType.equals(org.apache.kafka.connect.health.ConnectorType.SOURCE)) {
                 producerConfigInfos = validateClientOverrides(connName,
-                                                              "producer.",
+                                                              ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
                                                               connectorConfig,
                                                               ProducerConfig.configDef(),
                                                               connector.getClass(),
@@ -349,7 +351,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 return mergeConfigInfos(connType, configInfos, producerConfigInfos);
             } else {
                 consumerConfigInfos = validateClientOverrides(connName,
-                                                              "consumer.",
+                                                              ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
                                                               connectorConfig,
                                                               ProducerConfig.configDef(),
                                                               connector.getClass(),
@@ -360,7 +362,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
                 String topic = connectorProps.get(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG);
                 if (topic != null && !topic.isEmpty()) {
                     adminConfigInfos = validateClientOverrides(connName,
-                                                               "admin.",
+                                                               ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
                                                                connectorConfig,
                                                                ProducerConfig.configDef(),
                                                                connector.getClass(),
@@ -390,8 +392,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigInfos(connType, errorCount, new ArrayList<>(groups), configInfoList);
     }
 
-    // public for testing
-    public static ConfigInfos validateClientOverrides(String connName,
+    private static ConfigInfos validateClientOverrides(String connName,
                                                       String prefix,
                                                       AbstractConfig connectorConfig,
                                                       ConfigDef configDef,
@@ -461,6 +462,10 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         return new ConfigInfos(connType, errorCount, groups, configInfoList);
     }
 
+    private static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
+        return convertConfigKey(configKey, "");
+    }
+
     private static ConfigKeyInfo convertConfigKey(ConfigKey configKey, String prefix) {
         String name = prefix + configKey.name;
         Type type = configKey.type;
@@ -482,10 +487,6 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         String displayName = configKey.displayName;
         List<String> dependents = configKey.dependents;
         return new ConfigKeyInfo(name, typeName, required, defaultValue, importance, documentation, group, orderInGroup, width, displayName, dependents);
-    }
-
-    private static ConfigKeyInfo convertConfigKey(ConfigKey configKey) {
-        return convertConfigKey(configKey, "");
     }
 
     private static ConfigValueInfo convertConfigValue(ConfigValue configValue, Type type) {

@@ -18,10 +18,17 @@
 package org.apache.kafka.connect.connector.policy;
 
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+/**
+ * Disallow any client configuration to be overridden via the connector configs by setting {@code client.config.policy} to {@code None}.
+ * This is the default behavior.
+ */
 public class NoneConnectorClientConfigOverridePolicy implements ConnectorClientConfigOverridePolicy {
+    private static final Logger log = LoggerFactory.getLogger(NoneConnectorClientConfigOverridePolicy.class);
 
     @Override
     public void validate(ConnectorClientConfigRequest connectorClientConfigRequest) throws PolicyViolationException {
@@ -31,12 +38,12 @@ public class NoneConnectorClientConfigOverridePolicy implements ConnectorClientC
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
 
     }
 
     @Override
     public void configure(Map<String, ?> configs) {
-
+        log.info("Setting up None Policy for ConnectorClientConfigOverride. This will disallow any client configuration to be overridden");
     }
 }

@@ -367,8 +367,10 @@ public class AbstractHerderTest {
         config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSourceConnector.class.getName());
         config.put(ConnectorConfig.NAME_CONFIG, "connector-name");
         config.put("required", "value"); // connector required config
-        config.put("producer." + ProducerConfig.ACKS_CONFIG, "none");
-        config.put("producer." + SaslConfigs.SASL_JAAS_CONFIG, "jaas_config");
+        String ackConfigKey = ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + ProducerConfig.ACKS_CONFIG;
+        String saslConfigKey = ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + SaslConfigs.SASL_JAAS_CONFIG;
+        config.put(ackConfigKey, "none");
+        config.put(saslConfigKey, "jaas_config");
 
         ConfigInfos result = herder.validateConnectorConfig(config);
         assertEquals(herder.connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)), ConnectorType.SOURCE);
@@ -386,10 +388,11 @@ public class AbstractHerderTest {
         assertEquals(1, result.errorCount());
         // Base connector config has 13 fields, connector's configs add 2, and 2 producer overrides
         assertEquals(17, result.values().size());
-        assertEquals("producer." + ProducerConfig.ACKS_CONFIG, result.values().get(15).configValue().name());
-        assertFalse(result.values().get(15).configValue().errors().isEmpty());
-        assertEquals("producer." + SaslConfigs.SASL_JAAS_CONFIG, result.values().get(16).configValue().name());
-        assertTrue(result.values().get(16).configValue().errors().isEmpty());
+        assertTrue(result.values().stream().anyMatch(
+            configInfo -> ackConfigKey.equals(configInfo.configValue().name()) && !configInfo.configValue().errors().isEmpty()));
+        assertTrue(result.values().stream().anyMatch(
+            configInfo -> saslConfigKey.equals(configInfo.configValue().name()) && configInfo.configValue().errors().isEmpty()));
+
         verifyAll();
     }
 

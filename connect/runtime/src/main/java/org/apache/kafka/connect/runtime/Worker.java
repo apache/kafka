@@ -553,19 +553,10 @@ public class Worker {
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
 
-        Map<String, Object> producerOverrides = connConfig.originalsWithPrefix("producer.");
-        ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
-            id.connector(),
-            ConnectorType.SOURCE,
-            connectorClass,
-            producerOverrides,
-            ConnectorClientConfigRequest.ClientType.PRODUCER
-        );
-        try {
-            connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
-        } catch (PolicyViolationException e) {
-            throw new ConnectException("Error applying client config overrides", e);
-        }
+        Map<String, Object> producerOverrides =
+            connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
+                                           ConnectorType.SOURCE, ConnectorClientConfigRequest.ClientType.PRODUCER,
+                                           connectorClientConfigOverridePolicy);
         producerProps.putAll(producerOverrides);
 
         return producerProps;
@@ -583,7 +574,7 @@ public class Worker {
         consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, SinkUtils.consumerGroupId(id.connector()));
         consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, "connector-consumer-" + id);
         consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG,
-                          Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
+                  Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         consumerProps.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
         consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
@@ -591,19 +582,10 @@ public class Worker {
 
         consumerProps.putAll(config.originalsWithPrefix("consumer."));
 
-        Map<String, Object> consumerOverrides = connConfig.originalsWithPrefix("consumer.");
-        ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
-            id.connector(),
-            ConnectorType.SINK,
-            connectorClass,
-            consumerOverrides,
-            ConnectorClientConfigRequest.ClientType.CONSUMER
-        );
-        try {
-            connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
-        } catch (PolicyViolationException e) {
-            throw new ConnectException("Error applying client config overrides", e);
-        }
+        Map<String, Object> consumerOverrides =
+            connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
+                                           ConnectorType.SINK, ConnectorClientConfigRequest.ClientType.CONSUMER,
+                                           connectorClientConfigOverridePolicy);
         consumerProps.putAll(consumerOverrides);
 
         return consumerProps;
@@ -619,23 +601,36 @@ public class Worker {
         // User-specified overrides
         adminProps.putAll(config.originalsWithPrefix("admin."));
 
+        Map<String, Object> adminOverrides =
+            connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
+                                           ConnectorType.SINK, ConnectorClientConfigRequest.ClientType.ADMIN,
+                                           connectorClientConfigOverridePolicy);
+        adminProps.putAll(adminOverrides);
 
-        Map<String, Object>  adminOverrides = connConfig.originalsWithPrefix("admin.");
+        return adminProps;
+    }
+
+    private static Map<String, Object> connectorClientConfigOverrides(ConnectorTaskId id,
+                                                                      ConnectorConfig connConfig,
+                                                                      Class<? extends Connector> connectorClass,
+                                                                      String clientConfigPrefix,
+                                                                      ConnectorType connectorType,
+                                                                      ConnectorClientConfigRequest.ClientType clientType,
+                                                                      ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        Map<String, Object> clientOverrides = connConfig.originalsWithPrefix(clientConfigPrefix);
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
             id.connector(),
-            ConnectorType.SINK,
+            connectorType,
             connectorClass,
-            adminOverrides,
-            ConnectorClientConfigRequest.ClientType.ADMIN
+            clientOverrides,
+            clientType
         );
         try {
             connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
         } catch (PolicyViolationException e) {
             throw new ConnectException("Error applying client config overrides", e);
         }
-        adminProps.putAll(adminOverrides);
-
-        return adminProps;
+        return clientOverrides;
     }
 
     ErrorHandlingMetrics errorHandlingMetrics(ConnectorTaskId id) {
@@ -654,8 +649,7 @@ public class Worker {
         if (topic != null && !topic.isEmpty()) {
             Map<String, Object> producerProps = producerConfigs("connector-dlq-producer-" + id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
             Map<String, Object> adminProps = adminConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
-            DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps,
-                                                                                      errorHandlingMetrics);
+            DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
             reporters.add(reporter);
         }
 

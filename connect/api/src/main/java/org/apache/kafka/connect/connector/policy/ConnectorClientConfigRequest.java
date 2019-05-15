@@ -44,27 +44,23 @@ public class ConnectorClientConfigRequest {
     }
 
     /**
-     * <pre>
      * Provides Config with prefix {@code producer.override.} for {@link ConnectorType#SOURCE}.
      * Provides Config with prefix {@code consumer.override.} for {@link ConnectorType#SINK}.
      * Provides Config with prefix {@code producer.override.} for {@link ConnectorType#SINK} for DLQ.
      * Provides Config with prefix {@code admin.override.} for {@link ConnectorType#SINK} for DLQ.
-     * </pre>
      *
      * @return The client properties specified in the Connector Config with prefix {@code producer.override.} ,
-     * {@code consumer.override.} and {@code admin.override.}. The configs returned don't include these prefixes.
+     * {@code consumer.override.} and {@code admin.override.}. The configs don't include the prefixes.
      */
     public Map<String, Object> clientProps() {
         return clientProps;
     }
 
     /**
-     * <pre>
      * {@link ClientType#PRODUCER} for {@link ConnectorType#SOURCE}
      * {@link ClientType#CONSUMER} for {@link ConnectorType#SINK}
      * {@link ClientType#PRODUCER} for DLQ in {@link ConnectorType#SINK}
      * {@link ClientType#ADMIN} for DLQ  Topic Creation in {@link ConnectorType#SINK}
-     * </pre>
      *
      * @return enumeration specifying the client type that is being overriden by the worker; never null.
      */

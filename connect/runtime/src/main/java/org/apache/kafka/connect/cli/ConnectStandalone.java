@@ -89,12 +89,9 @@ public class ConnectStandalone {
             URI advertisedUrl = rest.advertisedUrl();
             String workerId = advertisedUrl.getHost() + ":" + advertisedUrl.getPort();
 
-            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy = null;
-            if (config.getString(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG) != null) {
-                connectorClientConfigOverridePolicy = plugins.newPlugin(
-                    config.getString(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG),
-                    config, ConnectorClientConfigOverridePolicy.class);
-            }
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy = plugins.newPlugin(
+                config.getString(WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG),
+                config, ConnectorClientConfigOverridePolicy.class);
             Worker worker = new Worker(workerId, time, plugins, config, new FileOffsetBackingStore(),
                                        connectorClientConfigOverridePolicy);
 

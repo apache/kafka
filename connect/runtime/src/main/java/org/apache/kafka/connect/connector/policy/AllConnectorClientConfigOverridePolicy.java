@@ -18,10 +18,16 @@
 package org.apache.kafka.connect.connector.policy;
 
 import org.apache.kafka.common.errors.PolicyViolationException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
+/**
+ * Allows all client configurations to be overridden via the connector configs by setting {@code client.config.policy} to {@code All}
+ */
 public class AllConnectorClientConfigOverridePolicy implements ConnectorClientConfigOverridePolicy {
+    private static final Logger log = LoggerFactory.getLogger(AllConnectorClientConfigOverridePolicy.class);
 
     @Override
     public void validate(ConnectorClientConfigRequest connectorClientConfigRequest) throws PolicyViolationException {
@@ -29,12 +35,12 @@ public class AllConnectorClientConfigOverridePolicy implements ConnectorClientCo
     }
 
     @Override
-    public void close() throws Exception {
+    public void close() {
 
     }
 
     @Override
     public void configure(Map<String, ?> configs) {
-
+        log.info("Setting up All Policy for ConnectorClientConfigOverride. This will allow all client configurations to be overridden");
     }
 }
