@@ -293,6 +293,11 @@
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.streams" />
     <allow pkg="org.github.jamm" />
+    <allow pkg="kafka.cluster"/>
+    <allow pkg="kafka.log"/>
+    <allow pkg="kafka.server"/>
+    <allow pkg="kafka.utils"/>
+    <allow pkg="scala"/>
   </subpackage>
 
   <subpackage name="log4jappender">
