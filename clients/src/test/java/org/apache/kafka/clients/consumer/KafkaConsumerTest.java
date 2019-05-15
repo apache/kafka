@@ -1767,7 +1767,7 @@ public class KafkaConsumerTest {
         return new SyncGroupResponse(
                 new SyncGroupResponseData()
                         .setErrorCode(error.code())
-                        .setAssignment(buf.array())
+                        .setAssignment(Utils.toArray(buf))
         );
     }
 
