@@ -36,6 +36,15 @@ import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 public class OffsetsForLeaderEpochRequest extends AbstractRequest {
+    private static final Field.Int32 REPLICA_ID = new Field.Int32("replica_id",
+            "Broker id of the follower. For normal consumers, use -1.");
+
+    /**
+     * Sentinel replica_id value to indicate a regular consumer rather than another broker
+     */
+    public static final int CONSUMER_REPLICA_ID = -1;
+
+
     private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
             "An array of topics to get epochs for");
     private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
@@ -67,9 +76,13 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V2 = new Schema(
             TOPICS_V2);
 
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V3 = new Schema(
+            REPLICA_ID,
+            TOPICS_V2);
+
     public static Schema[] schemaVersions() {
         return new Schema[]{OFFSET_FOR_LEADER_EPOCH_REQUEST_V0, OFFSET_FOR_LEADER_EPOCH_REQUEST_V1,
-            OFFSET_FOR_LEADER_EPOCH_REQUEST_V2};
+            OFFSET_FOR_LEADER_EPOCH_REQUEST_V2, OFFSET_FOR_LEADER_EPOCH_REQUEST_V3};
     }
 
     private Map<TopicPartition, PartitionData> epochsByPartition;
