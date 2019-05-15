@@ -131,7 +131,7 @@ class AbstractFetcherThreadTest {
   @Test
   def testFencedTruncation(): Unit = {
     val partition = new TopicPartition("topic", 0)
-    val fetcher = new MockFetcherThread
+    val fetcher = new MockFetcherThread()
 
     fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
     fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 0)))
@@ -483,6 +483,7 @@ class AbstractFetcherThreadTest {
 
     // After the out of range error, we get a fenced error and remove the partition
     fetcher.doWork()
+
     assertEquals(0, replicaState.logEndOffset)
     assertTrue(fetchedEarliestOffset)
     assertTrue(fetcher.fetchState(partition).isEmpty)
@@ -713,11 +714,7 @@ class AbstractFetcherThreadTest {
         val unrequestedTp = new TopicPartition("topic2", 0)
         super.fetchEpochEndOffsets(partitions) + (unrequestedTp -> new EpochEndOffset(0, 0))
       }
-
     }
-
-
-
     fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
     fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 0)))
     fetcher.setLeaderState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
@@ -728,10 +725,10 @@ class AbstractFetcherThreadTest {
     }
   }
 
-  val failedPartitions = new mutable.HashSet[TopicPartition]
+  val failedPartitions = new FailedPartitions
 
-  def markPartitionsFailed(partitions : Set[TopicPartition]): Unit = {
-    failedPartitions ++= partitions
+  def markPartitionFailed(partition : TopicPartition): Unit = {
+    failedPartitions.add(partition)
   }
 
   @Test
@@ -749,7 +746,6 @@ class AbstractFetcherThreadTest {
           super.processPartitionData(topicPartition, fetchOffset, partitionData)
         }
       }
-
     }
 
     fetcher.setReplicaState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
@@ -764,26 +760,25 @@ class AbstractFetcherThreadTest {
     fetcher.doWork()
 
     // partition1 marked as failed
-    assertTrue(failedPartitions.contains(partition1))
+    assertTrue(failedPartitions.getFailedPartitions.contains(partition1))
     assertTrue(fetcher.fetchState(partition1).isEmpty)
 
     // fetcher continues with rest of the partitions
     assertEquals(Some(Fetching), fetcher.fetchState(partition2).map(_.state))
-    assertFalse(failedPartitions.contains(partition2))
+    assertFalse(failedPartitions.getFailedPartitions.contains(partition2))
 
     // simulate a leader epoch
     fetcher.removePartitions(Set(partition1))
-    failedPartitions -= partition1
+    failedPartitions.remove(Set(partition1))
     fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 1)))
 
     fetcher.doWork()
 
     // partition1 added back
     assertTrue(fetcher.fetchState(partition1).nonEmpty)
-    assertFalse(failedPartitions.contains(partition1))
+    assertFalse(failedPartitions.getFailedPartitions.contains(partition1))
 
   }
-
 
   object MockFetcherThread {
     class PartitionState(var log: mutable.Buffer[RecordBatch],
@@ -809,7 +804,7 @@ class AbstractFetcherThreadTest {
     extends AbstractFetcherThread("mock-fetcher",
       clientId = "mock-fetcher",
       sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt()),
-      markPartitionsFailed: Set[TopicPartition] => Unit) {
+      markPartitionFailed: TopicPartition => Unit) {
 
     import MockFetcherThread.PartitionState
 

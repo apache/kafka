@@ -30,7 +30,7 @@ class AbstractFetcherManagerTest {
   def testAddAndRemovePartition(): Unit = {
     val fetcher: AbstractFetcherThread = EasyMock.mock(classOf[AbstractFetcherThread])
     val fetcherManager = new AbstractFetcherManager[AbstractFetcherThread]("fetcher-manager", "fetcher-manager", 2) {
-      override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint, markPartitionsFailed: Set[TopicPartition] => Unit): AbstractFetcherThread = {
+      override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): AbstractFetcherThread = {
         fetcher
       }
     }

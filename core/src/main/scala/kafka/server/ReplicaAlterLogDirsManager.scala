@@ -18,8 +18,6 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
-import org.apache.kafka.common.TopicPartition
-import scala.collection.Set
 
 class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
                                  replicaManager: ReplicaManager,
@@ -30,9 +28,9 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
     clientId = "ReplicaAlterLogDirs",
     numFetchers = brokerConfig.getNumReplicaAlterLogDirsThreads) {
 
-  override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint, markPartitionsFailed: (Set[TopicPartition]) => Unit): ReplicaAlterLogDirsThread = {
+  override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaAlterLogDirsThread = {
     val threadName = s"ReplicaAlterLogDirsThread-$fetcherId"
-    new ReplicaAlterLogDirsThread(threadName, sourceBroker, brokerConfig, markPartitionsFailed, replicaManager,
+    new ReplicaAlterLogDirsThread(threadName, sourceBroker, brokerConfig, markPartitionFailed, replicaManager,
       quotaManager, brokerTopicStats)
   }
 

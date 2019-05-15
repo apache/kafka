@@ -52,7 +52,7 @@ import scala.math._
 abstract class AbstractFetcherThread(name: String,
                                      clientId: String,
                                      val sourceBroker: BrokerEndPoint,
-                                     markPartitionsFailed: Set[TopicPartition] => Unit,
+                                     markPartitionFailed: TopicPartition => Unit,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
@@ -68,7 +68,6 @@ abstract class AbstractFetcherThread(name: String,
   val fetcherStats = new FetcherStats(metricId)
   val fetcherLagStats = new FetcherLagStats(metricId)
 
-//  val failedPartitions = new mutable.HashSet[TopicPartition]
 
   /* callbacks to be defined in subclass */
 
@@ -138,9 +137,10 @@ abstract class AbstractFetcherThread(name: String,
 
   // deal with partitions with errors, potentially due to leadership changes
   private def handlePartitionsWithErrors(partitions: Iterable[TopicPartition], methodName: String) {
-    if (partitions.nonEmpty)
+    if (partitions.nonEmpty) {
       debug(s"Handling errors in $methodName for partitions $partitions")
       delayPartitions(partitions, fetchBackOffMs)
+    }
   }
 
   /**
@@ -178,6 +178,22 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
+  private def doTruncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+    try {
+      truncate(topicPartition, truncationState)
+    }
+    catch {
+      case e: KafkaStorageException =>
+        info(s"Failed to truncate $topicPartition", e)
+        markPartitionFailed(topicPartition)
+        removePartitions(Set(topicPartition))
+      case t: Throwable =>
+        error(s"Unexpected error occurred during truncating for $topicPartition", t)
+        markPartitionFailed(topicPartition)
+        removePartitions(Set(topicPartition))
+    }
+  }
+
   /**
     * - Build a leader epoch fetch based on partitions that are in the Truncating phase
     * - Send OffsetsForLeaderEpochRequest, retrieving the latest offset for each partition's
@@ -194,6 +210,7 @@ abstract class AbstractFetcherThread(name: String,
       //Check no leadership and no leader epoch changes happened whilst we were unlocked, fetching epochs
       val epochEndOffsets = endOffsets.filter { case (tp, _) =>
         val curPartitionState = partitionStates.stateValue(tp)
+
         val partitionEpochRequest = latestEpochsForPartitions.get(tp).getOrElse {
           throw new IllegalStateException(
             s"Leader replied with partition $tp not requested in OffsetsForLeaderEpoch request")
@@ -201,7 +218,6 @@ abstract class AbstractFetcherThread(name: String,
         val leaderEpochInRequest = partitionEpochRequest.currentLeaderEpoch.get
         curPartitionState != null && leaderEpochInRequest == curPartitionState.currentLeaderEpoch
       }
-
       val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncateToEpochEndOffsets(epochEndOffsets)
       handlePartitionsWithErrors(partitionsWithError, "truncateToEpochEndOffsets")
       updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
@@ -211,28 +227,19 @@ abstract class AbstractFetcherThread(name: String,
   // Visible for testing
   private[server] def truncateToHighWatermark(partitions: Set[TopicPartition]): Unit = inLock(partitionMapLock) {
     val fetchOffsets = mutable.HashMap.empty[TopicPartition, OffsetTruncationState]
-    val partitionsWithError = mutable.HashSet.empty[TopicPartition]
 
     for (tp <- partitions) {
       val partitionState = partitionStates.stateValue(tp)
       if (partitionState != null) {
-        try {
-          val highWatermark = partitionState.fetchOffset
-          val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
+        val highWatermark = partitionState.fetchOffset
+        val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
 
-          info(s"Truncating partition $tp to local high watermark $highWatermark")
-          truncate(tp, truncationState)
+        info(s"Truncating partition $tp to local high watermark $highWatermark")
+        doTruncate(tp, truncationState)
 
-          fetchOffsets.put(tp, truncationState)
-        } catch {
-          case e: KafkaStorageException =>
-            info(s"Failed to truncate $tp", e)
-            partitionsWithError += tp
-        }
+        fetchOffsets.put(tp, truncationState)
       }
     }
-
-    handlePartitionsWithErrors(partitionsWithError, "truncateToHighWatermark")
     updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
   }
 
@@ -241,27 +248,21 @@ abstract class AbstractFetcherThread(name: String,
     val partitionsWithError = mutable.HashSet.empty[TopicPartition]
 
     fetchedEpochs.foreach { case (tp, leaderEpochOffset) =>
-      try {
-        leaderEpochOffset.error match {
-          case Errors.NONE =>
-            val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
-            truncate(tp, offsetTruncationState)
-            fetchOffsets.put(tp, offsetTruncationState)
+      leaderEpochOffset.error match {
+        case Errors.NONE =>
+          val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
+          doTruncate(tp, offsetTruncationState)
 
-          case Errors.FENCED_LEADER_EPOCH =>
-            onPartitionFenced(tp)
+          fetchOffsets.put(tp, offsetTruncationState)
 
-          case error =>
-            info(s"Retrying leaderEpoch request for partition $tp as the leader reported an error: $error")
-            partitionsWithError += tp
-        }
-      } catch {
-        case e: KafkaStorageException =>
-          info(s"Failed to truncate $tp", e)
+        case Errors.FENCED_LEADER_EPOCH =>
+          onPartitionFenced(tp)
+
+        case error =>
+          info(s"Retrying leaderEpoch request for partition $tp as the leader reported an error: $error")
           partitionsWithError += tp
       }
     }
-
     ResultWithPartitions(fetchOffsets, partitionsWithError)
   }
 
@@ -270,7 +271,8 @@ abstract class AbstractFetcherThread(name: String,
       val currentLeaderEpoch = currentFetchState.currentLeaderEpoch
       info(s"Partition $tp has an older epoch ($currentLeaderEpoch) than the current leader. Will await " +
         s"the new LeaderAndIsr state before resuming fetching.")
-      partitionStates.remove(tp)
+      markPartitionFailed(tp)
+      removePartitions(Set(tp))
     }
   }
 
@@ -344,8 +346,9 @@ abstract class AbstractFetcherThread(name: String,
                       partitionsWithError += topicPartition
                     case e: Throwable =>
                       // drop this partition from the fetcher thread and store in a set for failed partitions
-                      error(s"Error while processing data for partition $topicPartition", e)
-                      markPartitionsFailed(Set(topicPartition))
+                      error(s"Unexpected error while processing data for partition $topicPartition", e)
+                      markPartitionFailed(topicPartition)
+                      removePartitions(Set(topicPartition))
                   }
                 case Errors.OFFSET_OUT_OF_RANGE =>
                   if (!handleOutOfRangeError(topicPartition, currentFetchState))

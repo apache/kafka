@@ -34,7 +34,8 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, T]
   private val lock = new Object
   private var numFetchersPerBroker = numFetchers
-  private val failedPartitions = new mutable.HashSet[TopicPartition]
+  private val failedPartitions = new FailedPartitions
+
   this.logIdent = "[" + name + "] "
 
   newGauge(
@@ -69,7 +70,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
 
   newGauge(
     "FailedPartitionsCount", {
-      new Gauge[Long] {
+      new Gauge[Int] {
         def value = failedPartitions.size
       }
     },
@@ -128,7 +129,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   }
 
   // to be defined in subclass to create a specific fetcher
-  def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint, markPartitionsFailed: Set[TopicPartition] => Unit): T
+  def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): T
 
   def addFetcherForPartitions(partitionAndOffsets: Map[TopicPartition, InitialFetchState]) {
     lock synchronized {
@@ -137,7 +138,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
       }
 
       def addAndStartFetcherThread(brokerAndFetcherId: BrokerAndFetcherId, brokerIdAndFetcherId: BrokerIdAndFetcherId): AbstractFetcherThread = {
-        val fetcherThread = createFetcherThread(brokerAndFetcherId.fetcherId, brokerAndFetcherId.broker, markPartitionsFailed)
+        val fetcherThread = createFetcherThread(brokerAndFetcherId.fetcherId, brokerAndFetcherId.broker)
         fetcherThreadMap.put(brokerIdAndFetcherId, fetcherThread)
         fetcherThread.start()
         fetcherThread
@@ -170,21 +171,18 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     lock synchronized {
       for (fetcher <- fetcherThreadMap.values)
         fetcher.removePartitions(partitions)
-      failedPartitions --=  partitions
+      failedPartitions.remove(partitions)
     }
     info(s"Removed fetcher for partitions $partitions")
   }
 
-  def markPartitionsFailed(partitions: Set[TopicPartition]): Unit = {
+  def markPartitionFailed(partition: TopicPartition): Unit = {
     lock synchronized {
-      for (fetcher <- fetcherThreadMap.values)
-        fetcher.removePartitions(partitions)
-      failedPartitions ++= partitions
+      failedPartitions.add(partition)
       shutdownIdleFetcherThreads()
     }
-    info(s"Partitions $partitions marked as failed")
+    warn(s"Partition $partition marked as failed")
   }
-
 
   def shutdownIdleFetcherThreads() {
     lock synchronized {
@@ -210,6 +208,26 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
       }
       fetcherThreadMap.clear()
     }
+  }
+}
+
+class FailedPartitions {
+  private val failedPartitions = new mutable.HashSet[TopicPartition]
+
+  def size: Int = synchronized {
+    failedPartitions.size
+  }
+
+  def add(partition: TopicPartition): Unit = synchronized {
+    failedPartitions += partition
+  }
+
+  def remove(partitions: Set[TopicPartition]): Unit = synchronized {
+    failedPartitions --= partitions
+  }
+
+  def getFailedPartitions: Set[TopicPartition] = {
+    failedPartitions
   }
 }
 
