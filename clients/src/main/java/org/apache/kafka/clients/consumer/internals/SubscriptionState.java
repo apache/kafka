@@ -406,10 +406,6 @@ public class SubscriptionState {
         return topicPartitionState.logStartOffset == null ? null : topicPartitionState.position.offset - topicPartitionState.logStartOffset;
     }
 
-    public Optional<Integer> preferredReadReplica(TopicPartition tp) {
-        return Optional.ofNullable(assignedState(tp).preferredReadReplica);
-    }
-
     public void updateHighWatermark(TopicPartition tp, long highWatermark) {
         assignedState(tp).highWatermark = highWatermark;
     }
@@ -422,12 +418,37 @@ public class SubscriptionState {
         assignedState(tp).lastStableOffset = lastStableOffset;
     }
 
-    public void updatePreferredReadReplica(TopicPartition tp, int preferredReadReplicaId) {
-        assignedState(tp).preferredReadReplica = preferredReadReplicaId;
+    /**
+     * Set the preferred read replica with a lease timeout. After this time, the replica will no longer be valid and
+     * {@link #preferredReadReplica(TopicPartition, long)} will return an empty result.
+     *
+     * @param tp The topic partition
+     * @param preferredReadReplicaId The preferred read replica
+     * @param timeMs The time at which this preferred replica is no longer valid
+     */
+    public void updatePreferredReadReplica(TopicPartition tp, int preferredReadReplicaId, long timeMs) {
+        assignedState(tp).updatePreferredReadReplica(preferredReadReplicaId, timeMs);
     }
 
-    public void clearPreferredReadReplica(TopicPartition tp) {
-        assignedState(tp).preferredReadReplica = null;
+    /**
+     * Get the preferred read replica
+     *
+     * @param tp The topic partition
+     * @param timeMs The current time
+     * @return Returns the current preferred read replica, if it has been set and if it has not expired.
+     */
+    public Optional<Integer> preferredReadReplica(TopicPartition tp, long timeMs) {
+        return assignedState(tp).preferredReadReplica(timeMs);
+    }
+
+    /**
+     * Unset the preferred read replica. This causes the fetcher to go back to the leader for fetches.
+     *
+     * @param tp The topic partition
+     * @return true if the preferred read replica was set, false otherwise.
+     */
+    public boolean clearPreferredReadReplica(TopicPartition tp) {
+        return assignedState(tp).clearPreferredReadReplica();
     }
 
     public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
@@ -566,6 +587,7 @@ public class SubscriptionState {
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
         private Integer preferredReadReplica;
+        private Long preferredReadReplicaLeaseMs;
 
         TopicPartitionState() {
             this.paused = false;
@@ -584,6 +606,29 @@ public class SubscriptionState {
             if (nextState.equals(newState)) {
                 this.fetchState = nextState;
                 runIfTransitioned.run();
+            }
+        }
+
+        private Optional<Integer> preferredReadReplica(long timeMs) {
+            if (timeMs > preferredReadReplicaLeaseMs) {
+                return Optional.empty();
+            } else {
+                return Optional.ofNullable(preferredReadReplica);
+            }
+        }
+
+        private void updatePreferredReadReplica(int preferredReadReplica, long timeMs) {
+            this.preferredReadReplica = preferredReadReplica;
+            this.preferredReadReplicaLeaseMs = timeMs;
+        }
+
+        private boolean clearPreferredReadReplica() {
+            if (preferredReadReplica != null) {
+                this.preferredReadReplica = null;
+                this.preferredReadReplicaLeaseMs = null;
+                return true;
+            } else {
+                return false;
             }
         }
 

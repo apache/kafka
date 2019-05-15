@@ -1014,7 +1014,7 @@ public class Fetcher<K, V> implements Closeable {
      * Determine which replica to read from.
      */
     private Node selectReadReplica(TopicPartition partition, Node leaderReplica) {
-        Optional<Node> node = subscriptions.preferredReadReplica(partition)
+        Optional<Node> node = subscriptions.preferredReadReplica(partition, time.milliseconds())
                 .flatMap(nodeId -> Optional.ofNullable(metadata.fetch().nodeById(nodeId)));
         if (node.isPresent()) {
             if (Arrays.asList(metadata.fetch().partition(partition).offlineReplicas()).contains(node.get())) {
@@ -1163,7 +1163,7 @@ public class Fetcher<K, V> implements Closeable {
 
                 if (partition.preferredReadReplica.isPresent()) {
                     log.trace("Setting the preferred read replica for partition {} to {}", tp, partition.preferredReadReplica.get());
-                    subscriptions.updatePreferredReadReplica(tp, partition.preferredReadReplica.get());
+                    subscriptions.updatePreferredReadReplica(tp, partition.preferredReadReplica.get(), time.milliseconds() + requestTimeoutMs);
                 }
 
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
@@ -1177,10 +1177,8 @@ public class Fetcher<K, V> implements Closeable {
                 log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
-                if (subscriptions.preferredReadReplica(tp).isPresent()) {
-                    // Go back to the leader
-                    subscriptions.clearPreferredReadReplica(tp);
-                } else {
+                if (!subscriptions.clearPreferredReadReplica(tp)) {
+                    // If there's no preferred replica to clear, we're fetching from the leader so handle this error normally
                     if (fetchOffset != subscriptions.position(tp).offset) {
                         log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
                                 "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
