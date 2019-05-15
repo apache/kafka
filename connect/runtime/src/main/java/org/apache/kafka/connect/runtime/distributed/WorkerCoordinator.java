@@ -192,6 +192,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     @Override
     protected void onJoinComplete(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
         ConnectAssignment newAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(memberAssignment);
+        log.debug("Deserialized new assignment: {}", newAssignment);
         currentConnectProtocol = ConnectProtocolCompatibility.protocol(protocol);
         // At this point we always consider ourselves to be a member of the cluster, even if there was an assignment
         // error (the leader couldn't make the assignment) or we are behind the config and cannot yet work on our assigned
@@ -203,11 +204,10 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
                 listener.onRevoked(newAssignment.leader(), newAssignment.revokedConnectors(), newAssignment.revokedTasks());
             }
 
-            log.debug("Deserialized new assignment: {}", newAssignment);
             if (assignmentSnapshot != null) {
                 assignmentSnapshot.connectors().removeAll(newAssignment.revokedConnectors());
                 assignmentSnapshot.tasks().removeAll(newAssignment.revokedTasks());
-                log.debug("Snapshot after delete assignment: {}", assignmentSnapshot);
+                log.debug("After revocations snapshot of assignment: {}", assignmentSnapshot);
                 newAssignment.connectors().addAll(assignmentSnapshot.connectors());
                 newAssignment.tasks().addAll(assignmentSnapshot.tasks());
             }
