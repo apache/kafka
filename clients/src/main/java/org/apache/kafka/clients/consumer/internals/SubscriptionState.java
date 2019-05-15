@@ -610,7 +610,7 @@ public class SubscriptionState {
         }
 
         private Optional<Integer> preferredReadReplica(long timeMs) {
-            if (timeMs > preferredReadReplicaLeaseMs) {
+            if (preferredReadReplicaLeaseMs != null && timeMs > preferredReadReplicaLeaseMs) {
                 return Optional.empty();
             } else {
                 return Optional.ofNullable(preferredReadReplica);
