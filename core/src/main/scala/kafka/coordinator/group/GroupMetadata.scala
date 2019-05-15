@@ -16,11 +16,13 @@
  */
 package kafka.coordinator.group
 
+import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
 
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.utils.Time
@@ -546,10 +548,11 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   def removeExpiredOffsets(currentTimestamp: Long, offsetRetentionMs: Long) : Map[TopicPartition, OffsetAndMetadata] = {
 
-    def getExpiredOffsets(baseTimestamp: CommitRecordMetadataAndOffset => Long): Map[TopicPartition, OffsetAndMetadata] = {
+    def getExpiredOffsets(baseTimestamp: CommitRecordMetadataAndOffset => Long,
+                          onlyCheckOffsetsFromNonSubscribedPartition: Boolean = false): Map[TopicPartition, OffsetAndMetadata] = {
       offsets.filter {
         case (topicPartition, commitRecordMetadataAndOffset) =>
-          !pendingOffsetCommits.contains(topicPartition) && {
+          def isNonPendingAndExpired = !pendingOffsetCommits.contains(topicPartition) && {
             commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestamp match {
               case None =>
                 // current version with no per partition retention
@@ -559,6 +562,11 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
                 currentTimestamp >= expireTimestamp
             }
           }
+
+          if (onlyCheckOffsetsFromNonSubscribedPartition)
+            !isSubscribedTopicPartition(topicPartition) && isNonPendingAndExpired
+          else
+            isNonPendingAndExpired
       }.map {
         case (topicPartition, commitRecordOffsetAndMetadata) =>
           (topicPartition, commitRecordOffsetAndMetadata.offsetAndMetadata)
@@ -574,7 +582,10 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         //   since the last commit timestamp, expire the offset
         getExpiredOffsets(commitRecordMetadataAndOffset =>
           currentStateTimestamp.getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp))
-
+      case Some(_) if is(Stable) =>
+        // even when the group is in Stable state, we still check whether there exist expired offsets from any non-subscribed partitions
+        getExpiredOffsets(commitRecordMetadataAndOffset =>
+          currentStateTimestamp.getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp), true)
       case None =>
         // protocolType is None => standalone (simple) consumer, that uses Kafka for offset storage only
         // expire offsets with no pending offset commit that retention period has passed since their last commit
@@ -589,6 +600,17 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
     offsets --= expiredOffsets.keySet
     expiredOffsets
+  }
+
+  private def isSubscribedTopicPartition(topicPartition: TopicPartition): Boolean = {
+    val topic = topicPartition.topic
+    members.values.foreach { member =>
+      val found = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment)).partitions.stream
+        .anyMatch(_.topic == topic)
+      if (found)
+        return true
+    }
+    false
   }
 
   def allOffsets = offsets.map { case (topicPartition, commitRecordMetadataAndOffset) =>
