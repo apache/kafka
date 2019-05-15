@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.utils.Time
+import scala.collection.JavaConverters._
 
 import scala.collection.{Seq, immutable, mutable}
 
@@ -605,8 +606,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   private def isSubscribedTopicPartition(topicPartition: TopicPartition): Boolean = {
     val topic = topicPartition.topic
     members.values.foreach { member =>
-      val found = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment)).partitions.stream
-        .anyMatch(_.topic == topic)
+      val found = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment)).partitions.asScala.exists(_.topic == topic)
       if (found)
         return true
     }
