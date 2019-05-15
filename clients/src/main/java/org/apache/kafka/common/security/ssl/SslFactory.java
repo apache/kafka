@@ -175,7 +175,7 @@ public class SslFactory implements Reconfigurable {
                 SecurityStore keystore = newKeystore != null ? newKeystore : this.keystore;
                 SecurityStore truststore = newTruststore != null ? newTruststore : this.truststore;
                 this.sslContext = createSSLContext(keystore, truststore);
-                log.info("Created new SSL context with keystore {} truststore {}", keystore, truststore);
+                log.info("Created new {} SSL context with keystore {} truststore {}", mode, keystore, truststore);
                 this.keystore = keystore;
                 this.truststore = truststore;
             } catch (Exception e) {

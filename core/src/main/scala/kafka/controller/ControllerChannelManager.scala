@@ -34,7 +34,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
+import org.apache.kafka.common.{KafkaException, Node, Reconfigurable, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.{HashMap, ListBuffer}
@@ -116,7 +116,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     val controllerToBrokerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
     val brokerNode = broker.node(controllerToBrokerListenerName)
     val logContext = new LogContext(s"[Controller id=${config.brokerId}, targetBrokerId=${brokerNode.idString}] ")
-    val networkClient = {
+    val (networkClient, reconfigurableChannelBuilder) = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
         controllerToBrokerSecurityProtocol,
         JaasContext.Type.SERVER,
@@ -126,6 +126,12 @@ class ControllerChannelManager(controllerContext: ControllerContext,
         time,
         config.saslInterBrokerHandshakeRequestEnable
       )
+      val reconfigurableChannelBuilder = channelBuilder match {
+        case reconfigurable: Reconfigurable =>
+          config.addReconfigurable(reconfigurable)
+          Some(reconfigurable)
+        case _ => None
+      }
       val selector = new Selector(
         NetworkReceive.UNLIMITED,
         Selector.NO_IDLE_TIMEOUT_MS,
@@ -137,7 +143,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
         channelBuilder,
         logContext
       )
-      new NetworkClient(
+      val networkClient = new NetworkClient(
         selector,
         new ManualMetadataUpdater(Seq(brokerNode).asJava),
         config.brokerId.toString,
@@ -153,6 +159,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
         new ApiVersions,
         logContext
       )
+      (networkClient, reconfigurableChannelBuilder)
     }
     val threadName = threadNamePrefix match {
       case None => s"Controller-${config.brokerId}-to-broker-${broker.id}-send-thread"
@@ -176,7 +183,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
     )
 
     brokerStateInfo.put(broker.id, ControllerBrokerStateInfo(networkClient, brokerNode, messageQueue,
-      requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics))
+      requestThread, queueSizeGauge, requestRateAndQueueTimeMetrics, reconfigurableChannelBuilder))
   }
 
   private def brokerMetricTags(brokerId: Int) = Map("broker-id" -> brokerId.toString)
@@ -187,6 +194,7 @@ class ControllerChannelManager(controllerContext: ControllerContext,
       // non-threadsafe classes as described in KAFKA-4959.
       // The call to shutdownLatch.await() in ShutdownableThread.shutdown() serves as a synchronization barrier that
       // hands off the NetworkClient from the RequestSendThread to the ZkEventThread.
+      brokerState.reconfigurableChannelBuilder.foreach(config.removeReconfigurable)
       brokerState.requestSendThread.shutdown()
       brokerState.networkClient.close()
       brokerState.messageQueue.clear()
@@ -573,5 +581,6 @@ case class ControllerBrokerStateInfo(networkClient: NetworkClient,
                                      messageQueue: BlockingQueue[QueueItem],
                                      requestSendThread: RequestSendThread,
                                      queueSizeGauge: Gauge[Int],
-                                     requestRateAndTimeMetrics: Timer)
+                                     requestRateAndTimeMetrics: Timer,
+                                     reconfigurableChannelBuilder: Option[Reconfigurable])
 
