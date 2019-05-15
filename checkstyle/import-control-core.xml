@@ -52,5 +52,10 @@
   <subpackage name="examples">
     <allow pkg="org.apache.kafka.clients" />
   </subpackage>
+  <subpackage name="server">
+    <subpackage name="checkpoints">
+      <allow class="kafka.server.LogDirFailureChannel"/>
+    </subpackage>
+  </subpackage>
 
 </import-control>

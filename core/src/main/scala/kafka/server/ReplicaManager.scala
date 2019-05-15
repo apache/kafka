@@ -30,7 +30,7 @@ import kafka.controller.{KafkaController, StateChangeLogger}
 import kafka.log._
 import kafka.metrics.KafkaMetricsGroup
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.server.checkpoints.OffsetCheckpointFile
+import kafka.server.checkpoints.{OffsetCheckpointFile, OffsetCheckpointFileEntry}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors._
@@ -189,7 +189,7 @@ class ReplicaManager(val config: KafkaConfig,
   val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
   private val highWatermarkCheckPointThreadStarted = new AtomicBoolean(false)
   @volatile var highWatermarkCheckpoints = logManager.liveLogDirs.map(dir =>
-    (dir.getAbsolutePath, new OffsetCheckpointFile(new File(dir, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
+    (dir.getAbsolutePath, OffsetCheckpointFile(new File(dir, ReplicaManager.HighWatermarkFilename), logDirFailureChannel))).toMap
 
   private var hwThreadInitialized = false
   this.logIdent = s"[ReplicaManager broker=$localBrokerId] "
@@ -1414,24 +1414,25 @@ class ReplicaManager(val config: KafkaConfig,
   def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =
     nonOfflinePartition(topicPartition).flatMap(_.leaderReplicaIfLocal.map(_.logEndOffset))
 
-  private def populateHWMMap(mapping: java.util.HashMap[String, util.HashMap[TopicPartition, Long]], optReplica: Option[Replica]): Unit = {
+  private def populateHWMMap(mapping: util.HashMap[String, util.List[OffsetCheckpointFileEntry]], optReplica: Option[Replica]): Unit = {
     optReplica.foreach(replica => {
       if (replica.log.isDefined) {
         val dir = replica.log.get.parentDir
         val tp = replica.topicPartition
-        val slot = mapping.computeIfAbsent(dir, new function.Function[String, util.HashMap[TopicPartition, Long]] {
-          override def apply(t: String): util.HashMap[TopicPartition, Long] = {
-            return new util.HashMap[TopicPartition, Long]()
+        val entry = new OffsetCheckpointFileEntry(tp, replica.highWatermark.messageOffset)
+        val slot = mapping.computeIfAbsent(dir, new function.Function[String, util.List[OffsetCheckpointFileEntry]] {
+          override def apply(t: String): util.List[OffsetCheckpointFileEntry] = {
+            new util.ArrayList[OffsetCheckpointFileEntry]()
           }
         })
-        slot.put(tp, replica.highWatermark.messageOffset)
+        slot.add(entry)
       }
     })
   }
 
   // Flushes the highwatermark value for all partitions to the highwatermark file
   def checkpointHighWatermarks(): Unit = {
-    val hwmMap = new util.HashMap[String, util.HashMap[TopicPartition, Long]](allPartitions.size)
+    val hwmMap = new util.HashMap[String, util.List[OffsetCheckpointFileEntry]](allPartitions.size)
     nonOfflinePartitionsIterator.foreach(partition => {
       populateHWMMap(hwmMap, partition.localReplica)
       populateHWMMap(hwmMap, partition.futureLocalReplica)

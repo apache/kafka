@@ -227,14 +227,14 @@ class LeaderEpochFileCacheTest {
   @Test
   def shouldPersistEpochsBetweenInstances(){
     val checkpointPath = TestUtils.tempFile().getAbsolutePath
-    val checkpoint = new LeaderEpochCheckpointFile(new File(checkpointPath))
+    val checkpoint = LeaderEpochCheckpointFile(new File(checkpointPath))
 
     //Given
     val cache = new LeaderEpochFileCache(tp, logEndOffset _, checkpoint)
     cache.assign(epoch = 2, startOffset = 6)
 
     //When
-    val checkpoint2 = new LeaderEpochCheckpointFile(new File(checkpointPath))
+    val checkpoint2 = LeaderEpochCheckpointFile(new File(checkpointPath))
     val cache2 = new LeaderEpochFileCache(tp, logEndOffset _, checkpoint2)
 
     //Then

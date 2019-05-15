@@ -150,6 +150,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Package name="org.apache.kafka.jmh.common.generated"/>
             <Package name="org.apache.kafka.jmh.record.generated"/>
             <Package name="org.apache.kafka.jmh.producer.generated"/>
+            <Package name="org.apache.kafka.jmh.server.generated"/>
         </Or>
     </Match>
 
@@ -328,6 +329,14 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     <Match>
         <Package name="org.apache.kafka.streams.examples.pageview"/>
         <Bug pattern="UWF_UNWRITTEN_PUBLIC_OR_PROTECTED_FIELD"/>
+    </Match>
+    <!-- Suppress warnings for EQ_UNUSUAL for subclasses of AnyVal -->
+    <Match>
+        <Or>
+            <Class name="kafka.server.checkpoints.LeaderEpochCheckpointFile"/>
+            <Class name="kafka.server.checkpoints.OffsetCheckpointFile"/>
+        </Or>
+        <Bug pattern="EQ_UNUSUAL"></Bug>
     </Match>
 
     <!-- END Suppress warnings for unused members that are undetectably used by Jackson -->
