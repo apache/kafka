@@ -730,7 +730,16 @@ public class TopologyTestDriverTest {
     }
 
     @Test
-    public void shouldReturnCorrectStoreTypeOnly() {
+    public void shouldReturnCorrectPersistentStoreTypeOnly() {
+        shouldReturnCorrectStoreTypeOnly(true);
+    }
+
+    @Test
+    public void shouldReturnCorrectInMemoryStoreTypeOnly() {
+        shouldReturnCorrectStoreTypeOnly(false);
+    }
+
+    private void shouldReturnCorrectStoreTypeOnly(final boolean persistent) {
         final String keyValueStoreName = "keyValueStore";
         final String timestampedKeyValueStoreName = "keyValueTimestampStore";
         final String windowStoreName = "windowStore";
@@ -744,54 +753,80 @@ public class TopologyTestDriverTest {
         // add state stores
         topology.addStateStore(
             Stores.keyValueStoreBuilder(
-                Stores.persistentKeyValueStore(keyValueStoreName),
+                persistent ?
+                    Stores.persistentKeyValueStore(keyValueStoreName) :
+                    Stores.inMemoryKeyValueStore(keyValueStoreName),
                 Serdes.ByteArray(),
                 Serdes.ByteArray()
             ),
             "processor");
         topology.addStateStore(
             Stores.timestampedKeyValueStoreBuilder(
-                Stores.persistentTimestampedKeyValueStore(timestampedKeyValueStoreName),
+                persistent ?
+                    Stores.persistentTimestampedKeyValueStore(timestampedKeyValueStoreName) :
+                    Stores.inMemoryKeyValueStore(timestampedKeyValueStoreName),
                 Serdes.ByteArray(),
                 Serdes.ByteArray()
             ),
             "processor");
         topology.addStateStore(
             Stores.windowStoreBuilder(
-                Stores.persistentWindowStore(
-                    windowStoreName,
-                    Duration.ofMillis(1000L),
-                    Duration.ofMillis(100L),
-                    false),
+                persistent ?
+                    Stores.persistentWindowStore(
+                        windowStoreName,
+                        Duration.ofMillis(1000L),
+                        Duration.ofMillis(100L),
+                        false) :
+                    Stores.inMemoryWindowStore(
+                        windowStoreName,
+                        Duration.ofMillis(1000L),
+                        Duration.ofMillis(100L),
+                        false),
                 Serdes.ByteArray(),
                 Serdes.ByteArray()
             ),
             "processor");
         topology.addStateStore(
             Stores.timestampedWindowStoreBuilder(
-                Stores.persistentTimestampedWindowStore(
-                    timestampedWindowStoreName,
-                    Duration.ofMillis(1000L),
-                    Duration.ofMillis(100L),
-                    false),
+                persistent ?
+                    Stores.persistentTimestampedWindowStore(
+                        timestampedWindowStoreName,
+                        Duration.ofMillis(1000L),
+                        Duration.ofMillis(100L),
+                        false) :
+                    Stores.inMemoryWindowStore(
+                        timestampedWindowStoreName,
+                        Duration.ofMillis(1000L),
+                        Duration.ofMillis(100L),
+                        false),
                 Serdes.ByteArray(),
                 Serdes.ByteArray()
             ),
             "processor");
         topology.addStateStore(
-            Stores.sessionStoreBuilder(
-                Stores.persistentSessionStore(sessionStoreName, Duration.ofMillis(1000L)),
-                Serdes.ByteArray(),
-                Serdes.ByteArray()
-            ),
+            persistent ?
+                Stores.sessionStoreBuilder(
+                    Stores.persistentSessionStore(sessionStoreName, Duration.ofMillis(1000L)),
+                    Serdes.ByteArray(),
+                    Serdes.ByteArray()) :
+                Stores.sessionStoreBuilder(
+                    Stores.inMemorySessionStore(sessionStoreName, Duration.ofMillis(1000L)),
+                    Serdes.ByteArray(),
+                    Serdes.ByteArray()),
             "processor");
         // add global stores
         topology.addGlobalStore(
-            Stores.keyValueStoreBuilder(
-                Stores.persistentKeyValueStore(globalKeyValueStoreName),
-                Serdes.ByteArray(),
-                Serdes.ByteArray()
-            ).withLoggingDisabled(),
+            persistent ?
+                Stores.keyValueStoreBuilder(
+                    Stores.persistentKeyValueStore(globalKeyValueStoreName),
+                    Serdes.ByteArray(),
+                    Serdes.ByteArray()
+                ).withLoggingDisabled() :
+                Stores.keyValueStoreBuilder(
+                    Stores.inMemoryKeyValueStore(globalKeyValueStoreName),
+                    Serdes.ByteArray(),
+                    Serdes.ByteArray()
+                ).withLoggingDisabled(),
             "sourceDummy1",
             Serdes.ByteArray().deserializer(),
             Serdes.ByteArray().deserializer(),
@@ -799,11 +834,17 @@ public class TopologyTestDriverTest {
             "processorDummy1",
             () -> null);
         topology.addGlobalStore(
-            Stores.timestampedKeyValueStoreBuilder(
-                Stores.persistentTimestampedKeyValueStore(globalTimestampedKeyValueStoreName),
-                Serdes.ByteArray(),
-                Serdes.ByteArray()
-            ).withLoggingDisabled(),
+            persistent ?
+                Stores.timestampedKeyValueStoreBuilder(
+                    Stores.persistentTimestampedKeyValueStore(globalTimestampedKeyValueStoreName),
+                    Serdes.ByteArray(),
+                    Serdes.ByteArray()
+                ).withLoggingDisabled() :
+                Stores.timestampedKeyValueStoreBuilder(
+                    Stores.inMemoryKeyValueStore(globalTimestampedKeyValueStoreName),
+                    Serdes.ByteArray(),
+                    Serdes.ByteArray()
+                ).withLoggingDisabled(),
             "sourceDummy2",
             Serdes.ByteArray().deserializer(),
             Serdes.ByteArray().deserializer(),
