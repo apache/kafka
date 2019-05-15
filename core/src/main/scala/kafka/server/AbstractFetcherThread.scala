@@ -194,7 +194,7 @@ abstract class AbstractFetcherThread(name: String,
         addFailedPartition(topicPartition)
         false
       case t: Throwable =>
-        error(s"Unexpected error occurred during truncating for $topicPartition", t)
+        error(s"Unexpected error occurred during truncation for $topicPartition", t)
         addFailedPartition(topicPartition)
         false
     }
@@ -348,9 +348,10 @@ abstract class AbstractFetcherThread(name: String,
                     case e: KafkaStorageException =>
                       error(s"Error while processing data for partition $topicPartition", e)
                       partitionsWithError += topicPartition
-                    case e: Throwable =>
+                    case t: Throwable =>
                       // drop this partition from the fetcher thread and store in a set for failed partitions
-                      error(s"Unexpected error occurred while processing data for partition $topicPartition", e)
+                      error(s"Unexpected error occurred while processing data for partition $topicPartition" +
+                        s"offset ${currentFetchState.fetchOffset}", t)
                       addFailedPartition(topicPartition)
                   }
                 case Errors.OFFSET_OUT_OF_RANGE =>
