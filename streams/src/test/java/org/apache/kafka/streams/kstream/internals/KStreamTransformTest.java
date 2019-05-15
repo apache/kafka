@@ -151,7 +151,7 @@ public class KStreamTransformTest {
                 driver.pipeInput(recordFactory.create(TOPIC_NAME, expectedKey, expectedKey * 10, 0L));
             }
 
-            // This tick will yield yields the "-1:2" result
+            // This tick yields the "-1:2" result
             driver.advanceWallClockTime(2);
             // This tick further advances the clock to 3, which leads to the "-1:3" result
             driver.advanceWallClockTime(1);
