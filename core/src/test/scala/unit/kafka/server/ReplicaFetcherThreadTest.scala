@@ -36,7 +36,7 @@ import org.junit.Assert._
 import org.junit.Test
 
 import scala.collection.JavaConverters._
-import scala.collection.{Map, Set, mutable}
+import scala.collection.{Map, mutable}
 
 class ReplicaFetcherThreadTest {
 
