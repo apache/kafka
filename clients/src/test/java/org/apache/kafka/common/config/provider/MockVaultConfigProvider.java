@@ -14,22 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.controller
+package org.apache.kafka.common.config.provider;
 
-import org.easymock.{EasyMock, IAnswer}
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
 
-object ControllerTestUtils {
+public class MockVaultConfigProvider extends FileConfigProvider {
 
-  /** Since ControllerEvent is sealed, return a subclass of ControllerEvent created with EasyMock */
-  def createMockControllerEvent(controllerState: ControllerState, process: () => Unit): ControllerEvent = {
-    val mockEvent: ControllerEvent = EasyMock.createNiceMock(classOf[ControllerEvent])
-    EasyMock.expect(mockEvent.state).andReturn(controllerState)
-    EasyMock.expect(mockEvent.process()).andAnswer(new IAnswer[Unit]() {
-      def answer(): Unit = {
-        process()
-      }
-    })
-    EasyMock.replay(mockEvent)
-    mockEvent
-  }
+    @Override
+    protected Reader reader(String path) throws IOException {
+        return new StringReader("truststoreKey=testTruststoreKey\ntruststorePassword=randomtruststorePassword");
+    }
 }

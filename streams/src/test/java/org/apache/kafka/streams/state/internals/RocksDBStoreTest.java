@@ -37,6 +37,7 @@ import org.junit.Before;
 import org.junit.Test;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
+import org.rocksdb.Filter;
 import org.rocksdb.Options;
 
 import java.io.File;
@@ -67,7 +68,6 @@ public class RocksDBStoreTest {
 
     InternalMockProcessorContext context;
     RocksDBStore rocksDBStore;
-    private static BloomFilter filter;
 
     @Before
     public void setUp() {
@@ -79,7 +79,6 @@ public class RocksDBStoreTest {
             Serdes.String(),
             Serdes.String(),
             new StreamsConfig(props));
-        filter = new BloomFilter();
     }
 
     RocksDBStore getRocksDBStore() {
@@ -88,7 +87,6 @@ public class RocksDBStoreTest {
 
     @After
     public void tearDown() {
-        filter.close();
         rocksDBStore.close();
     }
 
@@ -490,14 +488,15 @@ public class RocksDBStoreTest {
     public static class TestingBloomFilterRocksDBConfigSetter implements RocksDBConfigSetter {
 
         static boolean bloomFiltersSet;
+        static Filter filter;
 
         @Override
         public void setConfig(final String storeName, final Options options, final Map<String, Object> configs) {
-
             final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
             tableConfig.setBlockCacheSize(50 * 1024 * 1024L);
             tableConfig.setBlockSize(4096L);
             if (enableBloomFilters) {
+                filter = new BloomFilter();
                 tableConfig.setFilter(filter);
                 options.optimizeFiltersForHits();
                 bloomFiltersSet = true;
@@ -507,6 +506,13 @@ public class RocksDBStoreTest {
             }
 
             options.setTableFormatConfig(tableConfig);
+        }
+
+        @Override
+        public void close(final String storeName, final Options options) {
+            if (filter != null) {
+                filter.close();
+            }
         }
     }
 

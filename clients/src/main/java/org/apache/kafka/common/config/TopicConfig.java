@@ -104,6 +104,10 @@ public class TopicConfig {
     public static final String MIN_COMPACTION_LAG_MS_DOC = "The minimum time a message will remain " +
         "uncompacted in the log. Only applicable for logs that are being compacted.";
 
+    public static final String MAX_COMPACTION_LAG_MS_CONFIG = "max.compaction.lag.ms";
+    public static final String MAX_COMPACTION_LAG_MS_DOC = "The maximum time a message will remain " +
+        "ineligible for compaction in the log. Only applicable for logs that are being compacted.";
+
     public static final String MIN_CLEANABLE_DIRTY_RATIO_CONFIG = "min.cleanable.dirty.ratio";
     public static final String MIN_CLEANABLE_DIRTY_RATIO_DOC = "This configuration controls how frequently " +
         "the log compactor will attempt to clean the log (assuming <a href=\"#compaction\">log " +
@@ -111,7 +115,11 @@ public class TopicConfig {
         "50% of the log has been compacted. This ratio bounds the maximum space wasted in " +
         "the log by duplicates (at 50% at most 50% of the log could be duplicates). A " +
         "higher ratio will mean fewer, more efficient cleanings but will mean more wasted " +
-        "space in the log.";
+        "space in the log. If the " + MAX_COMPACTION_LAG_MS_CONFIG + " or the " + MIN_COMPACTION_LAG_MS_CONFIG +
+        " configurations are also specified, then the log compactor considers the log eligible for compaction " +
+        "as soon as either: (i) the dirty ratio threshold has been met and the log has had dirty (uncompacted) " +
+        "records for at least the " + MIN_COMPACTION_LAG_MS_CONFIG + " duration, or (ii) if the log has had " +
+        "dirty (uncompacted) records for at most the " + MAX_COMPACTION_LAG_MS_CONFIG + " period.";
 
     public static final String CLEANUP_POLICY_CONFIG = "cleanup.policy";
     public static final String CLEANUP_POLICY_COMPACT = "compact";
