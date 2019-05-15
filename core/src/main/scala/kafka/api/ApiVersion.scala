@@ -88,7 +88,9 @@ object ApiVersion {
     // New error code for ListOffsets when a new leader is lagging behind former HW (KIP-207)
     KAFKA_2_2_IV1,
     // Introduced static membership.
-    KAFKA_2_3_IV0
+    KAFKA_2_3_IV0,
+    // Add rack_id to FetchRequest, preferred_read_replica to FetchResponse, and replica_id to OffsetsForLeaderRequest
+    KAFKA_2_3_IV1
   )
 
   // Map keys are the union of the short and full versions

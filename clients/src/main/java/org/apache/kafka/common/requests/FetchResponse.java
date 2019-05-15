@@ -223,6 +223,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     public static final long INVALID_HIGHWATERMARK = -1L;
     public static final long INVALID_LAST_STABLE_OFFSET = -1L;
     public static final long INVALID_LOG_START_OFFSET = -1L;
+    public static final int UNSPECIFIED_PREFERRED_REPLICA = -1;
 
     private final int throttleTimeMs;
     private final Errors error;
@@ -378,7 +379,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 long highWatermark = partitionResponseHeader.get(HIGH_WATERMARK);
                 long lastStableOffset = partitionResponseHeader.getOrElse(LAST_STABLE_OFFSET, INVALID_LAST_STABLE_OFFSET);
                 long logStartOffset = partitionResponseHeader.getOrElse(LOG_START_OFFSET, INVALID_LOG_START_OFFSET);
-                int preferredReadReplica = partitionResponseHeader.getOrElse(PREFERRED_READ_REPLICA, -1);
+                int preferredReadReplica = partitionResponseHeader.getOrElse(PREFERRED_READ_REPLICA, UNSPECIFIED_PREFERRED_REPLICA);
 
                 BaseRecords baseRecords = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
                 if (!(baseRecords instanceof MemoryRecords))
