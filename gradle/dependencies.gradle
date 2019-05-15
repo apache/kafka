@@ -86,7 +86,7 @@ versions += [
   owaspDepCheckPlugin: "4.0.2",
   powermock: "2.0.2",
   reflections: "0.9.11",
-  rocksDB: "5.15.10",
+  rocksDB: "5.18.3",
   scalafmt: "1.5.1",
   scalatest: "3.0.7",
   scoverage: "1.3.1",

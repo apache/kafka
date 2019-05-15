@@ -26,6 +26,7 @@ import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
+import org.rocksdb.CompactRangeOptions;
 import org.rocksdb.DBOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -248,16 +249,23 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
         @Override
         public void toggleDbForBulkLoading() {
+            final CompactRangeOptions crOptions = new CompactRangeOptions();
+            crOptions.setChangeLevel(true);
+            crOptions.setTargetLevel(1);
+            crOptions.setTargetPathId(0);
+
             try {
-                db.compactRange(oldColumnFamily, true, 1, 0);
+                db.compactRange(oldColumnFamily, null, null, crOptions);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
             }
             try {
-                db.compactRange(newColumnFamily, true, 1, 0);
+                db.compactRange(newColumnFamily, null, null, crOptions);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
             }
+
+            crOptions.close();
         }
     }
 
