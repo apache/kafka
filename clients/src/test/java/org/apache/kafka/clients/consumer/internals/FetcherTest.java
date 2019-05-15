@@ -2824,7 +2824,7 @@ public class FetcherTest {
             fetchSize,
             2 * numPartitions,
             true,
-            () -> "",
+            "",
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer(),
             metadata,
@@ -3381,7 +3381,7 @@ public class FetcherTest {
             fetchSize,
             maxPollRecords,
             true, // check crc
-            () -> "",
+            "",
             keyDeserializer,
             valueDeserializer,
             metadata,
