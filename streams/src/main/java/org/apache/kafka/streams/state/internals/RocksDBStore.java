@@ -572,19 +572,13 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         }
 
         @Override
+        @SuppressWarnings("deprecation")
         public void toggleDbForBulkLoading() {
-            final CompactRangeOptions crOptions = new CompactRangeOptions();
-            crOptions.setChangeLevel(true);
-            crOptions.setTargetLevel(1);
-            crOptions.setTargetPathId(0);
-
             try {
-                db.compactRange(columnFamily, null, null, crOptions);
+                db.compactRange(columnFamily, true, 1, 0);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
             }
-
-            crOptions.close();
         }
     }
 

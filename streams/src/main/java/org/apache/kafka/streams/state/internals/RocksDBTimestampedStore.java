@@ -248,24 +248,18 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
+        @SuppressWarnings("deprecation")
         public void toggleDbForBulkLoading() {
-            final CompactRangeOptions crOptions = new CompactRangeOptions();
-            crOptions.setChangeLevel(true);
-            crOptions.setTargetLevel(1);
-            crOptions.setTargetPathId(0);
-
             try {
-                db.compactRange(oldColumnFamily, null, null, crOptions);
+                db.compactRange(oldColumnFamily, true, 1, 0);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
             }
             try {
-                db.compactRange(newColumnFamily, null, null, crOptions);
+                db.compactRange(newColumnFamily, true, 1, 0);
             } catch (final RocksDBException e) {
                 throw new ProcessorStateException("Error while range compacting during restoring  store " + name, e);
             }
-
-            crOptions.close();
         }
     }
 
