@@ -609,7 +609,8 @@ class KafkaController(val config: KafkaConfig,
               // first register ISR change listener
               reassignedPartitionContext.registerReassignIsrChangeHandler(zkClient)
               // mark topic ineligible for deletion for the partitions being reassigned
-              topicDeletionManager.markTopicIneligibleForDeletion(Set(topic))
+              topicDeletionManager.markTopicIneligibleForDeletion(Set(topic),
+                reason = "topic reassignment in progress")
               onPartitionReassignment(tp, reassignedPartitionContext)
             } catch {
               case e: ControllerMovedException =>
@@ -1385,7 +1386,8 @@ class KafkaController(val config: KafkaConfig,
           val partitionReassignmentInProgress =
             controllerContext.partitionsBeingReassigned.keySet.map(_.topic).contains(topic)
           if (partitionReassignmentInProgress)
-            topicDeletionManager.markTopicIneligibleForDeletion(Set(topic))
+            topicDeletionManager.markTopicIneligibleForDeletion(Set(topic),
+              reason = "topic reassignment in progress")
         }
         // add topic to deletion list
         topicDeletionManager.enqueueTopicsForDeletion(topicsToBeDeleted)
