@@ -617,6 +617,10 @@ public class Fetcher<K, V> implements Closeable {
                     log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
                             "position to {}", position, partitionRecords.partition, nextPosition);
                     subscriptions.position(partitionRecords.partition, nextPosition);
+                    partitionRecords.preferredReadReplica().ifPresent(replicaId -> {
+                        log.trace("Updating the preferred read replica for partition {} to {}", partitionRecords.partition, replicaId);
+                        subscriptions.updatePreferredReadReplica(partitionRecords.partition, replicaId, time.milliseconds() + requestTimeoutMs);
+                    });
                 }
 
                 Long partitionLag = subscriptions.partitionLag(partitionRecords.partition, isolationLevel);
@@ -1161,11 +1165,6 @@ public class Fetcher<K, V> implements Closeable {
                     subscriptions.updateLastStableOffset(tp, partition.lastStableOffset);
                 }
 
-                if (partition.preferredReadReplica.isPresent()) {
-                    log.trace("Setting the preferred read replica for partition {} to {}", tp, partition.preferredReadReplica.get());
-                    subscriptions.updatePreferredReadReplica(tp, partition.preferredReadReplica.get(), time.milliseconds() + requestTimeoutMs);
-                }
-
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||
                        error == Errors.KAFKA_STORAGE_ERROR ||
@@ -1336,6 +1335,10 @@ public class Fetcher<K, V> implements Closeable {
                 if (bytesRead > 0)
                     subscriptions.movePartitionToEnd(partition);
             }
+        }
+
+        private Optional<Integer> preferredReadReplica() {
+            return completedFetch.partitionData.preferredReadReplica;
         }
 
         private void maybeEnsureValid(RecordBatch batch) {
