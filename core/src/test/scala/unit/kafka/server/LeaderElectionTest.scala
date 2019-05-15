@@ -96,7 +96,28 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
       assertEquals("Second epoch value should be %d".format(leaderEpoch1+1) , leaderEpoch1+1, leaderEpoch2)
 
     servers.last.startup()
+    //make sure second server joins the ISR
+    TestUtils.waitUntilTrue(() => {
+      val partitionInfoOpt = servers.last.metadataCache.getPartitionInfo(topic, partitionId)
+      if (partitionInfoOpt.isDefined) {
+        partitionInfoOpt.get.basePartitionState.isr.size() == 2
+      } else {
+        false
+      }
+    }, "Inconsistent metadata after second broker startup")
+
     servers.head.shutdown()
+    //make sure first server is removed from the ISR
+    TestUtils.waitUntilTrue(() => {
+      val partitionInfoOpt = servers.last.metadataCache.getPartitionInfo(topic, partitionId)
+      if (partitionInfoOpt.isDefined) {
+        partitionInfoOpt.get.basePartitionState.isr.size() == 1 &&
+          partitionInfoOpt.get.basePartitionState.isr.contains(servers.last.config.brokerId)
+      } else {
+        false
+      }
+    }, "Inconsistent metadata after first broker shutdown")
+
     Thread.sleep(zookeeper.tickTime)
     val leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId,
                                                     oldLeaderOpt = if (leader2 == 1) None else Some(leader2))

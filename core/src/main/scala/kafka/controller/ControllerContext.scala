@@ -180,7 +180,7 @@ class ControllerContext {
     *
     * @return a tuple consisting of first the online replicas and followed by the offline replicas
     */
-  def liveOrOfflineReplicas: (Set[PartitionAndReplica], Set[PartitionAndReplica]) = {
+  def onlineAndOfflineReplicas: (Set[PartitionAndReplica], Set[PartitionAndReplica]) = {
     val onlineReplicas = mutable.Set.empty[PartitionAndReplica]
     val offlineReplicas = mutable.Set.empty[PartitionAndReplica]
     for ((topic, partitionReplicas) <- partitionAssignments;

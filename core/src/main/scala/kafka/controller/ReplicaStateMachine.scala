@@ -36,7 +36,7 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
     info("Initializing replica state")
     initializeReplicaState()
     info("Triggering online replica state changes")
-    val (onlineReplicas, offlineReplicas) = controllerContext.liveOrOfflineReplicas
+    val (onlineReplicas, offlineReplicas) = controllerContext.onlineAndOfflineReplicas
     handleStateChanges(onlineReplicas.toSeq, OnlineReplica)
     info("Triggering offline replica state changes")
     handleStateChanges(offlineReplicas.toSeq, OfflineReplica)

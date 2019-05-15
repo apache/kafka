@@ -191,7 +191,7 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     replicaBroker.shutdown()
     replicaBroker.awaitShutdown()
 
-    //Shutdown other broker
+    //Shutdown controller broker
     controllerBroker.shutdown()
     controllerBroker.awaitShutdown()
 
@@ -201,7 +201,8 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
         val partitionInfoOpt = broker.metadataCache.getPartitionInfo(topic, 0)
         if (partitionInfoOpt.isDefined) {
           val partitionInfo = partitionInfoOpt.get
-          !partitionInfo.offlineReplicas.isEmpty && partitionInfo.basePartitionState.leader == -1
+          (!partitionInfo.offlineReplicas.isEmpty && partitionInfo.basePartitionState.leader == -1
+            && !partitionInfo.basePartitionState.replicas.isEmpty && !partitionInfo.basePartitionState.isr.isEmpty)
         } else {
           false
         }
