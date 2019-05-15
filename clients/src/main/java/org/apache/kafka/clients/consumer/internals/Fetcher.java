@@ -76,6 +76,7 @@ import org.slf4j.helpers.MessageFormatter;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -1010,6 +1011,24 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
+     * Determine which replica to read from.
+     */
+    private Node selectReadReplica(TopicPartition partition, Node leaderReplica) {
+        Optional<Node> node = subscriptions.preferredReadReplica(partition)
+                .flatMap(nodeId -> Optional.ofNullable(metadata.fetch().nodeById(nodeId)));
+        if (node.isPresent()) {
+            if (Arrays.asList(metadata.fetch().partition(partition).offlineReplicas()).contains(node.get())) {
+                log.trace("Not fetching from {} since it is marked offline, using the leader instead.", node.get());
+                return leaderReplica;
+            } else {
+                return node.get();
+            }
+        } else {
+            return leaderReplica;
+        }
+    }
+
+    /**
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
@@ -1023,9 +1042,7 @@ public class Fetcher<K, V> implements Closeable {
         for (TopicPartition partition : fetchablePartitions()) {
             // Use the preferred read replica if set, or the position's leader
             SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
-            Node node = subscriptions.preferredReadReplica(partition)
-                    .flatMap(nodeId -> Optional.ofNullable(metadata.fetch().nodeById(nodeId)))
-                    .orElse(position.currentLeader.leader);
+            Node node = selectReadReplica(partition, position.currentLeader.leader);
 
             if (node == null || node.isEmpty()) {
                 metadata.requestUpdate();
@@ -1152,24 +1169,27 @@ public class Fetcher<K, V> implements Closeable {
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||
                        error == Errors.KAFKA_STORAGE_ERROR ||
-                       error == Errors.FENCED_LEADER_EPOCH) {
+                       error == Errors.FENCED_LEADER_EPOCH ||
+                       error == Errors.OFFSET_NOT_AVAILABLE) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
-                // Go back to the leader
-                subscriptions.clearPreferredReadReplica(tp);
-
-                if (fetchOffset != subscriptions.position(tp).offset) {
-                    log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
-                            "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
-                } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
-                    log.info("Fetch offset {} is out of range for partition {}, resetting offset", fetchOffset, tp);
-                    subscriptions.requestOffsetReset(tp);
+                if (subscriptions.preferredReadReplica(tp).isPresent()) {
+                    // Go back to the leader
+                    subscriptions.clearPreferredReadReplica(tp);
                 } else {
-                    throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
+                    if (fetchOffset != subscriptions.position(tp).offset) {
+                        log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
+                                "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
+                    } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
+                        log.info("Fetch offset {} is out of range for partition {}, resetting offset", fetchOffset, tp);
+                        subscriptions.requestOffsetReset(tp);
+                    } else {
+                        throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
+                    }
                 }
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                 //we log the actual partition and not just the topic to help with ACL propagation issues in large clusters
