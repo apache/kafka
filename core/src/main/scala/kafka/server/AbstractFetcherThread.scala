@@ -52,7 +52,7 @@ import scala.math._
 abstract class AbstractFetcherThread(name: String,
                                      clientId: String,
                                      val sourceBroker: BrokerEndPoint,
-                                     addFailedPartition: TopicPartition => Unit,
+                                     markPartitionFailed: TopicPartition => Unit,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
@@ -178,8 +178,8 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-  private def markPartitionFailed(topicPartition: TopicPartition): Unit = {
-    addFailedPartition(topicPartition)
+  private def addFailedPartition(topicPartition: TopicPartition): Unit = {
+    markPartitionFailed(topicPartition)
     removePartitions(Set(topicPartition))
   }
 
@@ -191,11 +191,11 @@ abstract class AbstractFetcherThread(name: String,
     catch {
       case e: KafkaStorageException =>
         info(s"Failed to truncate $topicPartition", e)
-        markPartitionFailed(topicPartition)
+        addFailedPartition(topicPartition)
         false
       case t: Throwable =>
         error(s"Unexpected error occurred during truncating for $topicPartition", t)
-        markPartitionFailed(topicPartition)
+        addFailedPartition(topicPartition)
         false
     }
   }
@@ -277,7 +277,7 @@ abstract class AbstractFetcherThread(name: String,
       val currentLeaderEpoch = currentFetchState.currentLeaderEpoch
       info(s"Partition $tp has an older epoch ($currentLeaderEpoch) than the current leader. Will await " +
         s"the new LeaderAndIsr state before resuming fetching.")
-      markPartitionFailed(tp)
+      addFailedPartition(tp)
     }
   }
 
@@ -351,7 +351,7 @@ abstract class AbstractFetcherThread(name: String,
                     case e: Throwable =>
                       // drop this partition from the fetcher thread and store in a set for failed partitions
                       error(s"Unexpected error occurred while processing data for partition $topicPartition", e)
-                      markPartitionFailed(topicPartition)
+                      addFailedPartition(topicPartition)
                   }
                 case Errors.OFFSET_OUT_OF_RANGE =>
                   if (!handleOutOfRangeError(topicPartition, currentFetchState))
