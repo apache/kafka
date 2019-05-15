@@ -97,8 +97,6 @@ public class KStreamTransformTest {
             driver.advanceWallClockTime(2);
             driver.advanceWallClockTime(1);
 
-            assertEquals(6, processor.theCapturedProcessor().processed.size());
-
             final String[] expected = {
                 "2:10 (ts: 0)",
                 "20:110 (ts: 5)",
@@ -108,6 +106,7 @@ public class KStreamTransformTest {
                 "-1:3 (ts: 3)"
             };
 
+            assertEquals(expected.length, processor.theCapturedProcessor().processed.size());
             for (int i = 0; i < expected.length; i++) {
                 assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));
             }
