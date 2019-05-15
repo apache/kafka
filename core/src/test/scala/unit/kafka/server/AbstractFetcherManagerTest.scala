@@ -22,8 +22,6 @@ import org.easymock.EasyMock
 import org.junit.Test
 import org.junit.Assert._
 
-import scala.collection.Set
-
 class AbstractFetcherManagerTest {
 
   @Test

@@ -175,7 +175,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     info(s"Removed fetcher for partitions $partitions")
   }
 
-  def markPartitionFailed(partition: TopicPartition): Unit = {
+  def addFailedPartition(partition: TopicPartition): Unit = {
     lock synchronized {
       failedPartitions.add(partition)
       shutdownIdleFetcherThreads()

@@ -737,16 +737,17 @@ class AbstractFetcherThreadTest {
 
     val partition1 = new TopicPartition("topic1", 0)
     val partition2 = new TopicPartition("topic2", 0)
+
     val fetcher = new MockFetcherThread {
 
       override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
         if (topicPartition == partition1) {
-          removePartitions(Set(topicPartition))
           throw new KafkaException()
         } else {
           super.processPartitionData(topicPartition, fetchOffset, partitionData)
         }
       }
+
     }
 
     fetcher.setReplicaState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
@@ -769,6 +770,55 @@ class AbstractFetcherThreadTest {
     assertFalse(failedPartitions.getFailedPartitions.contains(partition2))
 
     // simulate a leader epoch
+    fetcher.removePartitions(Set(partition1))
+    failedPartitions.remove(Set(partition1))
+    fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 1)))
+
+    fetcher.doWork()
+
+    // partition1 added back
+    assertTrue(fetcher.fetchState(partition1).nonEmpty)
+    assertFalse(failedPartitions.getFailedPartitions.contains(partition1))
+
+  }
+
+  @Test
+  def testTruncationHandlingPartitionFailure(): Unit = {
+    val partition1 = new TopicPartition("topic1", 0)
+    val partition2 = new TopicPartition("topic2", 0)
+
+    val fetcher = new MockFetcherThread {
+
+      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+        if(topicPartition == partition1)
+          throw new Exception()
+        else {
+          super.truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState)
+        }
+      }
+
+    }
+
+    fetcher.setReplicaState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 0)))
+    fetcher.setLeaderState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
+
+    fetcher.setReplicaState(partition2, MockFetcherThread.PartitionState(leaderEpoch = 0))
+    fetcher.addPartitions(Map(partition2 -> offsetAndEpoch(0L, leaderEpoch = 0)))
+    fetcher.setLeaderState(partition2, MockFetcherThread.PartitionState(leaderEpoch = 0))
+
+    // truncating raises exception for partition1
+    fetcher.doWork()
+
+    // partition1 marked as failed
+    assertTrue(failedPartitions.getFailedPartitions.contains(partition1))
+    assertTrue(fetcher.fetchState(partition1).isEmpty)
+
+    // thread continues with rest of the partitions
+    assertEquals(Some(Fetching), fetcher.fetchState(partition2).map(_.state))
+    assertFalse(failedPartitions.getFailedPartitions.contains(partition2))
+
+    // simulate a leader epoch for partition1
     fetcher.removePartitions(Set(partition1))
     failedPartitions.remove(Set(partition1))
     fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 1)))
