@@ -1547,19 +1547,25 @@ class ReplicaManager(val config: KafkaConfig,
 
     val deadline = time.milliseconds() + requestTimeout
 
-    def electionCallback(expectedLeaders: Map[TopicPartition, Int],
-                         results: Map[TopicPartition, ApiError]): Unit = {
+    def electionCallback(results: Map[TopicPartition, Either[ApiError, Int]]): Unit = {
+      val expectedLeaders = mutable.Map.empty[TopicPartition, Int]
+      val failures = mutable.Map.empty[TopicPartition, ApiError]
+      results.foreach {
+        case (partition, Right(leader)) => expectedLeaders += partition -> leader
+        case (partition, Left(error)) => failures += partition -> error
+      }
+
       if (expectedLeaders.nonEmpty) {
         val watchKeys: Seq[TopicPartitionOperationKey] = expectedLeaders.map{
           case (tp, leader) => new TopicPartitionOperationKey(tp.topic, tp.partition)
         }(breakOut)
         delayedElectLeaderPurgatory.tryCompleteElseWatch(
-          new DelayedElectLeader(deadline - time.milliseconds(), expectedLeaders, results,
+          new DelayedElectLeader(deadline - time.milliseconds(), expectedLeaders, failures,
             this, responseCallback),
           watchKeys)
       } else {
           // There are no partitions actually being elected, so return immediately
-          responseCallback(results)
+          responseCallback(failures)
       }
     }
 

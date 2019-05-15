@@ -658,7 +658,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     partitions: Set[TopicPartition],
     electionType: ElectionType,
     electionTrigger: ElectionTrigger
-  ): (Map[TopicPartition, Int], Map[TopicPartition, Throwable]) = {
+  ): Map[TopicPartition, Either[Throwable, LeaderAndIsr]] = {
     info(s"Starting replica leader election ($electionType) for partitions ${partitions.mkString(",")} triggerd by $electionTrigger")
     try {
       val strategy = electionType match {
@@ -666,23 +666,25 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
         case ElectionType.UNCLEAN => OfflinePartitionLeaderElectionStrategy(true)
       }
 
-      val (success, errors) = partitionStateMachine.handleStateChanges(
+      val results = partitionStateMachine.handleStateChanges(
         partitions.toSeq,
         OnlinePartition,
         Some(strategy)
       )
       if (electionTrigger != AdminClientTriggered) {
-        errors.foreach { case (tp, throwable) =>
-          if (throwable.isInstanceOf[ControllerMovedException]) {
-            error(s"Error completing replica leader election ($electionType) for partition $tp because controller has moved to another broker.", throwable)
-            throw throwable
-          } else {
-            error(s"Error completing replica leader election ($electionType) for partition $tp", throwable)
-          }
+        results.foreach {
+          case (tp, Left(throwable)) =>
+            if (throwable.isInstanceOf[ControllerMovedException]) {
+              error(s"Error completing replica leader election ($electionType) for partition $tp because controller has moved to another broker.", throwable)
+              throw throwable
+            } else {
+              error(s"Error completing replica leader election ($electionType) for partition $tp", throwable)
+            }
+          case (_, Right(_)) => // Ignored; No need to log or throw exception for the success cases
         }
       }
 
-      (success, errors)
+      results
     } finally {
       if (electionTrigger != AdminClientTriggered) {
         removePartitionsFromPreferredReplicaElection(partitions, electionTrigger == AutoTriggered)
@@ -982,16 +984,17 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
           // assigned replica list
           val newLeaderAndIsr = leaderAndIsr.newEpochAndZkVersion
           // update the new leadership decision in zookeeper or retry
-          val UpdateLeaderAndIsrResult(successfulUpdates, _, failedUpdates) =
+          val UpdateLeaderAndIsrResult(finishedUpdates, _) =
             zkClient.updateLeaderAndIsr(immutable.Map(partition -> newLeaderAndIsr), epoch, controllerContext.epochZkVersion)
-          if (successfulUpdates.contains(partition)) {
-            val finalLeaderAndIsr = successfulUpdates(partition)
-            finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(finalLeaderAndIsr, epoch))
-            info(s"Updated leader epoch for partition $partition to ${finalLeaderAndIsr.leaderEpoch}")
-            true
-          } else if (failedUpdates.contains(partition)) {
-            throw failedUpdates(partition)
-          } else false
+
+          finishedUpdates.headOption.map {
+            case (partition, Right(leaderAndIsr)) =>
+              finalLeaderIsrAndControllerEpoch = Some(LeaderIsrAndControllerEpoch(leaderAndIsr, epoch))
+              info(s"Updated leader epoch for partition $partition to ${leaderAndIsr.leaderEpoch}")
+              true
+            case (partition, Left(e)) =>
+              throw e
+          }.getOrElse(false)
         case None =>
           throw new IllegalStateException(s"Cannot update leader epoch for partition $partition as " +
             "leaderAndIsr path is empty. This could mean we somehow tried to reassign a partition that doesn't exist")
@@ -1569,12 +1572,12 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     }
   }
 
-  type ElectLeadersCallback = (Map[TopicPartition, Int], Map[TopicPartition, ApiError])=>Unit
+  type ElectLeadersCallback = Map[TopicPartition, Either[ApiError, Int]] => Unit
 
   def electLeaders(
     partitions: Set[TopicPartition],
     electionType: ElectionType,
-    callback: ElectLeadersCallback = { (_,_) => }
+    callback: ElectLeadersCallback =  _ => {}
   ): Unit = {
     eventManager.put(ReplicaLeaderElection(Some(partitions), electionType, AdminClientTriggered, callback))
   }
@@ -1583,22 +1586,20 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     partitionsFromAdminClientOpt: Option[Set[TopicPartition]],
     electionType: ElectionType,
     electionTrigger: ElectionTrigger = ZkTriggered,
-    callback: ElectLeadersCallback = (_,_) =>{}
+    callback: ElectLeadersCallback = _ => {}
   ) extends PreemptableControllerEvent {
     override def state: ControllerState = ControllerState.ManualLeaderBalance
 
     override def handlePreempt(): Unit = {
-      callback(Map.empty, partitionsFromAdminClientOpt match {
-        case Some(partitions) => partitions.map(partition => partition -> new ApiError(Errors.NOT_CONTROLLER, null)).toMap
-        case None => Map.empty
+      callback(partitionsFromAdminClientOpt.fold(Map.empty[TopicPartition, Either[ApiError, Int]]) { partitions =>
+        partitions.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null)))(breakOut)
       })
     }
 
     override def handleProcess(): Unit = {
       if (!isActive) {
-        callback(Map.empty, partitionsFromAdminClientOpt match {
-          case Some(partitions) => partitions.map(partition => partition -> new ApiError(Errors.NOT_CONTROLLER, null)).toMap
-          case None => Map.empty
+        callback(partitionsFromAdminClientOpt.fold(Map.empty[TopicPartition, Either[ApiError, Int]]) { partitions =>
+          partitions.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null)))(breakOut)
         })
       } else {
         // We need to register the watcher if the path doesn't exist in order to detect future preferred replica
@@ -1628,30 +1629,30 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
             currentLeader != preferredReplica
           }
 
-          val (successfulPartitions, electionErrors) = onReplicaElection(electablePartitions, electionType, electionTrigger)
-          // TODO: Confirm that successfulPartitions == electablePartitions -- electionErrors.keySet
-          val results = electionErrors.map { case (partition, ex) =>
-            val apiError = if (ex.isInstanceOf[StateChangeFailedException]) {
-              val error = if (electionType == ElectionType.PREFERRED) {
-                Errors.PREFERRED_LEADER_NOT_AVAILABLE
+          val results = onReplicaElection(electablePartitions, electionType, electionTrigger).mapValues {
+            case Left(ex) =>
+              if (ex.isInstanceOf[StateChangeFailedException]) {
+                val error = if (electionType == ElectionType.PREFERRED) {
+                  Errors.PREFERRED_LEADER_NOT_AVAILABLE
+                } else {
+                  Errors.PARTITION_LEADER_NOT_AVAILABLE
+                }
+                Left(new ApiError(error, ex.getMessage))
               } else {
-                Errors.PARTITION_LEADER_NOT_AVAILABLE
+                Left(ApiError.fromThrowable(ex))
               }
-              new ApiError(error, ex.getMessage)
-            } else {
-              ApiError.fromThrowable(ex)
-            }
-            partition -> apiError
+            case Right(leaderAndIsr) => Right(leaderAndIsr.leader)
           } ++
-            alreadyPreferred.map(_ -> ApiError.NONE) ++
-            partitionsBeingDeleted.map(_ -> new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is being deleted")) ++
-            invalidPartitions.map ( tp => tp -> new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, s"The partition does not exist.")
+            alreadyPreferred.map(_ -> Left(ApiError.NONE)) ++
+            partitionsBeingDeleted.map(
+              _ -> Left(new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is being deleted"))
+            ) ++
+            invalidPartitions.map(
+              _ -> Left(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, s"The partition does not exist."))
             )
-          debug(s"ReplicaLeaderElection waiting: $successfulPartitions, results: $results")
-          callback(
-            successfulPartitions,
-            results
-          )
+
+          debug(s"ReplicaLeaderElection waiting: $results")
+          callback(results)
         }
       }
     }

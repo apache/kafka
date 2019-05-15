@@ -794,14 +794,20 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
                   expectedPartitionsToRetry: Seq[TopicPartition],
                   expectedFailedPartitions: Map[TopicPartition, (Class[_], String)],
                   actualUpdateLeaderAndIsrResult: UpdateLeaderAndIsrResult): Unit = {
-    val failedPartitionsExcerpt =
-      actualUpdateLeaderAndIsrResult.failedPartitions.mapValues(e => (e.getClass, e.getMessage))
+    val failedPartitionsExcerpt = mutable.Map.empty[TopicPartition, (Class[_], String)]
+    val successfulPartitions = mutable.Map.empty[TopicPartition, LeaderAndIsr]
+
+    actualUpdateLeaderAndIsrResult.finishedPartitions.foreach {
+      case (partition, Left(e)) => failedPartitionsExcerpt += partition -> (e.getClass, e.getMessage)
+      case (partition, Right(leaderAndIsr)) => successfulPartitions += partition -> leaderAndIsr
+    }
+
     assertEquals("Permanently failed updates do not match expected",
       expectedFailedPartitions, failedPartitionsExcerpt)
     assertEquals("Retriable updates (due to BADVERSION) do not match expected",
       expectedPartitionsToRetry, actualUpdateLeaderAndIsrResult.partitionsToRetry)
     assertEquals("Successful updates do not match expected",
-      expectedSuccessfulPartitions, actualUpdateLeaderAndIsrResult.successfulPartitions)
+      expectedSuccessfulPartitions, successfulPartitions)
   }
 
   @Test
