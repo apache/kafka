@@ -138,6 +138,12 @@ public class GenericInMemoryKeyValueStore<K extends Comparable, V>
     }
 
     @Override
+    public KeyValueIterator<K, V> prefixScan(K prefix) {
+        //TODO - bellemare - no idea wtf with this damn class.
+        return null;
+    }
+
+    @Override
     public long approximateNumEntries() {
         return this.map.size();
     }

@@ -32,7 +32,20 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKey;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeyForeignKeyPartitioner;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.CombinedKeySerde;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.ForeignKeySingleLookupProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.KTableKTablePrefixScanProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.KTableRepartitionerProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResolverJoinProcessorSupplier;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapper;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionResponseWrapperSerde;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapper;
+import org.apache.kafka.streams.kstream.internals.foreignkeyjoin.SubscriptionWrapperSerde;
+import org.apache.kafka.streams.kstream.internals.graph.KTableKTableForeignKeyJoinResolutionNode;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
+import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
@@ -43,15 +56,20 @@ import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcess
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.apache.kafka.streams.state.internals.RocksDbKeyValueBytesStoreSupplier;
 
 import java.time.Duration;
 import java.util.Collections;
+
+import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
@@ -88,6 +106,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     private static final String TOSTREAM_NAME = "KTABLE-TOSTREAM-";
 
     private static final String TRANSFORMVALUES_NAME = "KTABLE-TRANSFORMVALUES-";
+
+    public static final String BY_PREFIX = "KTABLE-JOIN-BYPREFIX-";
+
+    private static final String REPARTITION_NAME = "KTABLE-REPARTITION-";
+
+    private static final String SINK_NAME = "KTABLE-SINK-";
 
     private final ProcessorSupplier<?, ?> processorSupplier;
 
@@ -803,4 +827,210 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return (ProcessorParameters<K, VR>) kObjectProcessorParameters;
     }
 
+    @Override
+    public <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
+                                           final ValueMapper<V, KO> foreignKeyExtractor,
+                                           final ValueJoiner<V, VO, VR> joiner,
+                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(other, "other can't be null");
+        Objects.requireNonNull(foreignKeyExtractor, "foreignKeyExtractor can't be null");
+        Objects.requireNonNull(joiner, "joiner can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+
+        return doJoinOnForeignKey(other, foreignKeyExtractor, joiner, new MaterializedInternal<>(materialized));
+    }
+
+
+    private <VR, KO, VO> KTable<K, VR> doJoinOnForeignKey(final KTable<KO, VO> other,
+                                                          final ValueMapper<V, KO> foreignKeyExtractor,
+                                                          final ValueJoiner<V, VO, VR> joiner,
+                                                          final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+        //Old values are a useful optimization. The old values from the other table are compared to the new values,
+        //such that identical values do not cause a prefixScan. PrefixScan and propagation can be expensive and should
+        //not be done needlessly.
+        ((KTableImpl<?, ?, ?>) other).enableSendingOldValues();
+
+        //Old values must be sent such that the KTableRepartitionerProcessorSupplier can propagate deletions to the correct node.
+        //This occurs whenever the extracted foreignKey changes values.
+        enableSendingOldValues();
+
+        final String repartitionProcessorName = builder.newProcessorName(REPARTITION_NAME);
+        final String repartitionTopicName = JOINOTHER_NAME + repartitionProcessorName;
+        final String repartitionSourceName = builder.newProcessorName(SOURCE_NAME + repartitionProcessorName);
+        final String repartitionSinkName = builder.newProcessorName(SINK_NAME + repartitionProcessorName);
+
+        final String oneToOneName = builder.newProcessorName(JOINTHIS_NAME);
+
+        // repartition original => intermediate topic
+        final KTableRepartitionerProcessorSupplier<K, KO, V> repartitionProcessor =
+                new KTableRepartitionerProcessorSupplier<>(foreignKeyExtractor, valSerde.serializer());
+
+        final CombinedKeySerde<KO, K> combinedKeySerde = new CombinedKeySerde<>(((KTableImpl<KO, VO, ?>) other).keySerde(), keySerde);
+
+        //Create the partitioner that will partition CombinedKey on just the foreign portion (right) of the combinedKey.
+        final CombinedKeyForeignKeyPartitioner<KO, K, V> partitioner = new CombinedKeyForeignKeyPartitioner<>(combinedKeySerde);
+
+        //The processor for the CombinedKey intermediary state store. It does two main things:
+        // 1) Loads the data into the new state store. This data is accessed by the KTableKTablePrefixJoin processor.
+        // 2) Gets the foreignKey value data from the Other KTable and creates a SubscriptionWrapperResponse.
+        //    Returns the data keyed on K. Discards the CombinedKey as it is no longer needed after this stage.
+        final String thisStateStoreName = builder.newStoreName(STATE_STORE_NAME);
+        final ForeignKeySingleLookupProcessorSupplier<K, KO, VO> oneToOne =
+                new ForeignKeySingleLookupProcessorSupplier<>(thisStateStoreName, ((KTableImpl<KO, VO, VO>) other).valueGetterSupplier());
+
+        final KeyValueBytesStoreSupplier thisRocksDBRef = new RocksDbKeyValueBytesStoreSupplier(thisStateStoreName, false); //Dont need timestamped store.
+        final StateStore prefixScannableDBRef = thisRocksDBRef.get();
+        final Materialized<CombinedKey<KO, K>, SubscriptionWrapper, KeyValueStore<Bytes, byte[]>> foreignMaterialized =
+                Materialized.<CombinedKey<KO, K>, SubscriptionWrapper, KeyValueStore<Bytes, byte[]>>as(prefixScannableDBRef.name())
+                .withKeySerde(combinedKeySerde)
+                .withValueSerde(new SubscriptionWrapperSerde());
+        final MaterializedInternal<CombinedKey<KO, K>, SubscriptionWrapper, KeyValueStore<Bytes, byte[]>> repartitionedPrefixScannableStore =
+                new MaterializedInternal<>(foreignMaterialized);
+
+        //Performs other-table/foreign-key-driven updates
+        final ProcessorSupplier<KO, Change<VO>> prefixScanProcessorSupplier =
+                new KTableKTablePrefixScanProcessorSupplier<>(oneToOne.valueGetterSupplier());
+
+        //Need to write all updates to a given K back to the same partition, as at this point in the topology
+        //everything is partitioned on KO from the previous repartition step.
+        final String finalRepartitionerName = builder.newProcessorName(REPARTITION_NAME);
+        final String finalRepartitionTopicName = JOINOTHER_NAME + finalRepartitionerName;
+        final String finalRepartitionSourceName = builder.newProcessorName(SOURCE_NAME + finalRepartitionerName);
+        final String finalRepartitionSinkName = builder.newProcessorName(SINK_NAME + finalRepartitionerName);
+
+        //Create the processor to resolve the subscription updates.
+        final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessor = new SubscriptionResolverJoinProcessorSupplier<>(queryableStoreName, valueSerde().serializer(), joiner);
+        final String resolverProcessorName = builder.newProcessorName(KTableImpl.SOURCE_NAME);
+
+        final KTableSource<K, VR> outputProcessor = new KTableSource<>(materializedInternal.storeName(), "todo-somequeryablename");
+        final String outputProcessorName = builder.newProcessorName(SOURCE_NAME);
+
+        final HashSet<String> copartitions = new HashSet<>();
+        copartitions.add(repartitionSourceName);
+        copartitions.addAll(((KTableImpl<?, ?, ?>) other).sourceNodes);
+        //TODO - Figure out a correct copartitioning strategy for topics with differing partition counts.
+//        copartitions.add(finalRepartitionSourceName);
+//        copartitions.addAll(sourceNodes);
+        builder.internalTopologyBuilder.copartitionSources(copartitions);
+
+        final HashSet<String> copartitions2 = new HashSet<>();
+        copartitions2.add(finalRepartitionSourceName);
+        copartitions2.addAll(sourceNodes);
+        builder.internalTopologyBuilder.copartitionSources(copartitions2);
+
+        final ProcessorParameters repartitionProcessorParameters = new ProcessorParameters<>(
+                repartitionProcessor,
+                repartitionProcessorName
+        );
+
+        final ProcessorParameters<CombinedKey<KO, K>, SubscriptionWrapper> oneToOneProcessorParameters = new ProcessorParameters<>(
+                oneToOne,
+                oneToOneName
+        );
+
+        final ProcessorParameters<KO, Change<VO>> prefixScanProcessorParameters = new ProcessorParameters<>(
+                prefixScanProcessorSupplier,
+                builder.newProcessorName(BY_PREFIX)
+        );
+
+        final ProcessorParameters<K, SubscriptionResponseWrapper<VO>> resolverProcessorParameters = new ProcessorParameters<>(
+                resolverProcessor,
+                resolverProcessorName
+        );
+
+        final ProcessorParameters<K, VR> outputProcessorParameters = new ProcessorParameters<>(
+                outputProcessor,
+                outputProcessorName
+        );
+
+        final KTableKTableForeignKeyJoinResolutionNode fkSinkAndResolveNode = new KTableKTableForeignKeyJoinResolutionNode<VR, K, V, KO, VO>(
+                resolverProcessorParameters.processorName(),
+                oneToOneProcessorParameters,
+                prefixScanProcessorParameters,
+                resolverProcessorParameters,
+                finalRepartitionTopicName,
+                finalRepartitionSinkName,
+                finalRepartitionSourceName,
+                keySerde,
+                new SubscriptionResponseWrapperSerde<>(
+                        ((KTableImpl<KO, VO, VO>) other).valSerde.serializer(),
+                        ((KTableImpl<KO, VO, VO>) other).valSerde.deserializer()
+                ),
+                valueGetterSupplier()
+                );
+
+        final OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder<CombinedKey<KO, K>, V> repartitionNodeBuilder =
+                OptimizableRepartitionNode.optimizableRepartitionNodeBuilder();
+
+        final OptimizableRepartitionNode<CombinedKey<KO, K>, V> repartitionNode = repartitionNodeBuilder
+                .withNodeName(repartitionSourceName)
+                .withProcessorParameters(repartitionProcessorParameters)
+                .withSinkName(repartitionSinkName)
+                .withSourceName(repartitionSourceName)
+                .withRepartitionTopic(repartitionTopicName)
+                .withValueSerde(new SubscriptionWrapperSerde())
+                .withPartitioner(partitioner)
+                .withKeySerde(combinedKeySerde)
+                .build();
+
+        final StoreBuilder prefixScanStoreBuilder = new TimestampedKeyValueStoreMaterializer<>(repartitionedPrefixScannableStore).materialize();
+        final StatefulProcessorNode<CombinedKey<KO, K>, V> oneToOneNode = new StatefulProcessorNode<>(
+                oneToOneProcessorParameters.processorName(),
+                oneToOneProcessorParameters,
+//                ((KTableImpl<KO, VO, ?>) other).valueGetterSupplier().storeNames()
+//                ,
+                prefixScanStoreBuilder
+        );
+
+        final StatefulProcessorNode<KO, Change<VO>> oneToManyNode = new StatefulProcessorNode<>(
+                prefixScanProcessorParameters.processorName(),
+                prefixScanProcessorParameters,
+                new String[]{prefixScanStoreBuilder.name()}
+        );
+
+        final StoreBuilder<TimestampedKeyValueStore<K, VR>> storeBuilder;
+        if (materializedInternal != null) {
+            storeBuilder = new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize();
+        } else {
+            storeBuilder = null;
+        }
+
+        final TableProcessorNode outputTableNode = new TableProcessorNode<>(
+                outputProcessorParameters.processorName(),
+                outputProcessorParameters,
+                storeBuilder
+        );
+
+        builder.addGraphNode(streamsGraphNode, repartitionNode);
+        builder.addGraphNode(repartitionNode, oneToOneNode);
+        builder.addGraphNode(((KTableImpl<KO, VO, ?>) other).streamsGraphNode, oneToManyNode);
+        final Set<StreamsGraphNode> joinerParentNodes = new HashSet<>(2);
+        joinerParentNodes.add(oneToManyNode);
+        joinerParentNodes.add(oneToOneNode);
+        builder.addGraphNode(joinerParentNodes, fkSinkAndResolveNode);
+        builder.addGraphNode(fkSinkAndResolveNode, outputTableNode);
+        /*
+        // we can inherit parent key serde if user do not provide specific overrides
+        return new KTableImpl<K, Change<VR>, VR>(
+            kTableKTableJoinNode.nodeName(),
+            kTableKTableJoinNode.keySerde(),
+            kTableKTableJoinNode.valueSerde(),
+            allSourceNodes,
+            kTableKTableJoinNode.queryableStoreName(),
+            kTableKTableJoinNode.joinMerger(),
+            kTableKTableJoinNode,
+            builder
+        );
+         */
+
+        return new KTableImpl<K,V,VR>(
+                outputProcessorName,
+                keySerde,
+                materializedInternal.valueSerde(),
+                Collections.singleton(finalRepartitionSourceName),
+                materializedInternal.storeName(),
+                outputProcessor,
+                outputTableNode,
+                builder);
+    }
 }

@@ -193,7 +193,15 @@ public class ThreadCache {
         }
         return new MemoryLRUCacheBytesIterator(cache.allIterator());
     }
-    
+
+    public MemoryLRUCacheBytesIterator prefix(final String namespace, final Bytes prefix) {
+        final NamedCache cache = getCache(namespace);
+        if (cache == null) {
+            return new MemoryLRUCacheBytesIterator(Collections.emptyIterator());
+        }
+        return new MemoryLRUCacheBytesIterator(cache.subMapPrefixIterator(prefix));
+    }
+
     public long size() {
         long size = 0;
         for (final NamedCache cache : caches.values()) {

@@ -54,6 +54,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -995,6 +996,14 @@ public class StreamThread extends Thread {
                              "Notifying the thread to trigger a new rebalance immediately.", task.id());
                 throw new TaskMigratedException(task);
             }
+
+            //TODO - Remove this info logger.
+            // Illustrates the missing tasks when joining mismatched partition counts with foreignKey join.
+            // This is shown by the NullPointer task exception thrown in KTableKTableForeignKeyInnerJoinMultiIntegrationTest.
+            log.info("` - partition {}. Current tasks: {}",
+                    partition,
+                    taskManager.toString(">")
+                    );
 
             task.addRecords(partition, records.records(partition));
         }

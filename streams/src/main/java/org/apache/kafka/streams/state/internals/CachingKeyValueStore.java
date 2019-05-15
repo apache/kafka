@@ -255,6 +255,15 @@ public class CachingKeyValueStore
     }
 
     @Override
+    public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
+        validateStoreOpen();
+        final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().prefixScan(prefix);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(cacheName);
+
+        return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
+    }
+
+    @Override
     public long approximateNumEntries() {
         validateStoreOpen();
         lock.readLock().lock();

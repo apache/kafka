@@ -274,6 +274,11 @@ class NamedCache {
         return cache.entrySet().iterator();
     }
 
+    synchronized Iterator<Map.Entry<Bytes, LRUNode>> subMapPrefixIterator(final Bytes prefix) {
+        //TODO - bellemare - validate that this actually works...
+        return cache.subMap(prefix, prefix).entrySet().iterator();
+    }
+
     synchronized LRUCacheEntry first() {
         if (head == null) {
             return null;

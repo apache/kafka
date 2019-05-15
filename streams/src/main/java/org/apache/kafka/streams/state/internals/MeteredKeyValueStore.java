@@ -225,6 +225,11 @@ public class MeteredKeyValueStore<K, V>
     }
 
     @Override
+    public KeyValueIterator<K, V> prefixScan(final K prefix) {
+        return new MeteredKeyValueIterator(wrapped().prefixScan(Bytes.wrap(serdes.rawKey(prefix))), this.allTime);
+    }
+
+    @Override
     public void flush() {
         if (flushTime.shouldRecord()) {
             measureLatency(

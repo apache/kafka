@@ -317,6 +317,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         return rocksDbIterator;
     }
 
+    @Override
+    public synchronized KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
+        Objects.requireNonNull(prefix, "prefix cannot be null");
+        validateStoreOpen();
+        // query rocksdb
+        final KeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.prefix(prefix); //RocksDbPrefixIterator(name, db.newIterator(), prefix.get());
+        openIterators.add(rocksDBRangeIterator);
+        return rocksDBRangeIterator;
+    }
+
     /**
      * Return an approximate count of key-value mappings in this store.
      *
@@ -456,6 +466,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
         KeyValueIterator<Bytes, byte[]> all();
 
+        KeyValueIterator<Bytes, byte[]> prefix(final Bytes prefix);
+
         long approximateNumEntries() throws RocksDBException;
 
         void flush() throws RocksDBException;
@@ -534,6 +546,16 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             final RocksIterator innerIterWithTimestamp = db.newIterator(columnFamily);
             innerIterWithTimestamp.seekToFirst();
             return new RocksDbIterator(name, innerIterWithTimestamp, openIterators);
+        }
+
+        @Override
+        public KeyValueIterator<Bytes, byte[]> prefix(Bytes prefix) {
+            return new RocksDBPrefixIterator(
+                name,
+                db.newIterator(columnFamily),
+                openIterators,
+                prefix
+            );
         }
 
         @Override

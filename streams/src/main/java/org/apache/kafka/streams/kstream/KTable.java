@@ -26,6 +26,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
@@ -2118,6 +2119,24 @@ public interface KTable<K, V> {
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
                                      final Named named,
                                      final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+
+    /**
+     *
+     * A many:1 join with the other table. The foreignKeyExtractor selects the key to join with the other table.
+     *
+     * @param other the table containing the records to be joined on. Keyed by KO
+     * @param foreignKeyExtractor extracts the key (KO) from this table's value (V)
+     * @param joiner specifies how to join the records from both tables
+     * @param materialized the materialized output store
+     * @param <VR> the value type of the result {@code KTable}
+     * @param <KO> the key type of the other {@code KTable}
+     * @param <VO> the value type of the other {@code KTable}
+     * @return
+     */
+    <VR, KO, VO> KTable<K, VR> join(final KTable<KO, VO> other,
+                                    final ValueMapper<V, KO> foreignKeyExtractor,
+                                    final ValueJoiner<V, VO, VR> joiner,
+                                    final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Get the name of the local state store used that can be used to query this {@code KTable}.

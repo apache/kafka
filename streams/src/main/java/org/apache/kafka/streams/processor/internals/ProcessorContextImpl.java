@@ -277,6 +277,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
+        public KeyValueIterator<K, V> prefixScan(K prefix) {
+            return wrapped().prefixScan(prefix);
+        }
+
+        @Override
         public long approximateNumEntries() {
             return wrapped().approximateNumEntries();
         }
@@ -473,6 +478,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         @Override
         public KeyValueIterator<K, V> all() {
             return wrapped().all();
+        }
+
+        @Override
+        public KeyValueIterator<K, V> prefixScan(K prefix) {
+            return wrapped().prefixScan(prefix);
         }
 
         @Override

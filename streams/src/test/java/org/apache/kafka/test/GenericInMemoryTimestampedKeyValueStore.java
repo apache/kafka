@@ -139,6 +139,12 @@ public class GenericInMemoryTimestampedKeyValueStore<K extends Comparable, V>
     }
 
     @Override
+    public KeyValueIterator<K, ValueAndTimestamp<V>> prefixScan(K prefix) {
+        //TODO - bellemare - sigh.
+        return null;
+    }
+
+    @Override
     public long approximateNumEntries() {
         return this.map.size();
     }

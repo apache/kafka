@@ -32,7 +32,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
 
     /**
-     * Create a node representing a stateful processor, where the named store has already been registered.
+     * Create a node representing a stateful processor, where the named stores have already been registered.
      */
     public StatefulProcessorNode(final String nodeName,
                                  final ProcessorParameters<K, V> processorParameters,
@@ -73,12 +73,12 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
 
         topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
 
-        if (storeNames != null && storeNames.length > 0) {
-            topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
-        }
-
         if (storeBuilder != null) {
             topologyBuilder.addStateStore(storeBuilder, processorName);
+        }
+
+        if (storeNames != null && storeNames.length > 0) {
+            topologyBuilder.connectProcessorAndStateStores(processorName, storeNames);
         }
     }
 }

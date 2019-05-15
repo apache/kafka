@@ -318,6 +318,18 @@ class KTable[K, V](val inner: KTableJ[K, V]) {
   ): KTable[K, VR] =
     inner.outerJoin[VO, VR](other.inner, joiner.asValueJoiner, materialized)
 
+  def joinOnForeignKeyAlpha[VR, KO, VO](other: KTable[KO, VO],
+                                   keyExtractor: ValueMapper[V, KO],
+                                   joiner: ValueJoiner[V, VO, VR],
+                                   materialized: Materialized[K, VR, KeyValueStore[Bytes, Array[Byte]]]): KTable[K, VR] = {
+
+    inner.join(
+      other.inner,
+      keyExtractor,
+      joiner,
+      materialized)
+  }
+
   /**
    * Get the name of the local state store used that can be used to query this [[KTable]].
    *

@@ -60,6 +60,11 @@ public class NoOpReadOnlyStore<K, V> implements ReadOnlyKeyValueStore<K, V>, Sta
     }
 
     @Override
+    public KeyValueIterator<K, V> prefixScan(K prefix) {
+        return null;
+    }
+
+    @Override
     public long approximateNumEntries() {
         return 0L;
     }

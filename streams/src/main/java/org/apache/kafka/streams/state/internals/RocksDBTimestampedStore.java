@@ -209,6 +209,16 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
+        public KeyValueIterator<Bytes, byte[]> prefix(Bytes prefix) {
+            //TODO - Bellemare - THIS IS NOT CORRECT. DO NOT LET THIS INTO TRUNK! I COPIED THIS FROM all()
+            final RocksIterator innerIterWithTimestamp = db.newIterator(newColumnFamily);
+            innerIterWithTimestamp.seekToFirst();
+            final RocksIterator innerIterNoTimestamp = db.newIterator(oldColumnFamily);
+            innerIterNoTimestamp.seekToFirst();
+            return new RocksDBDualCFIterator(name, innerIterWithTimestamp, innerIterNoTimestamp);
+        }
+
+        @Override
         public long approximateNumEntries() throws RocksDBException {
             return db.getLongProperty(oldColumnFamily, "rocksdb.estimate-num-keys")
                 + db.getLongProperty(newColumnFamily, "rocksdb.estimate-num-keys");

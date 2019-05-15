@@ -98,6 +98,14 @@ public class CompositeReadOnlyKeyValueStore<K, V> implements ReadOnlyKeyValueSto
         return new DelegatingPeekingKeyValueIterator<>(storeName, new CompositeKeyValueIterator<>(stores.iterator(), nextIteratorFunction));
     }
 
+    /**
+     * @throws UnsupportedOperationException
+     */
+    @Override
+    public KeyValueIterator<K, V> prefixScan(final K prefix) {
+        throw new UnsupportedOperationException("prefixScan() not supported in " + getClass().getName());
+    }
+
     @Override
     public long approximateNumEntries() {
         final List<ReadOnlyKeyValueStore<K, V>> stores = storeProvider.stores(storeName, storeType);
