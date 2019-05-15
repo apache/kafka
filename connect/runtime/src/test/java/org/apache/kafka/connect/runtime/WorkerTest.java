@@ -828,7 +828,9 @@ public class WorkerTest extends ThreadedTest {
 
     @Test
     public void testProducerConfigsWithoutOverrides() {
-        assertEquals(defaultProducerConfigs, Worker.producerConfigs(config));
+        Map<String, String> expectedConfigs = new HashMap<>(defaultProducerConfigs);
+        expectedConfigs.put("client.id", "connector-producer-job-0");
+        assertEquals(expectedConfigs, Worker.producerConfigs("connector-producer-" + TASK_ID, config));
     }
 
     @Test
@@ -836,18 +838,21 @@ public class WorkerTest extends ThreadedTest {
         Map<String, String> props = new HashMap<>(workerProps);
         props.put("producer.acks", "-1");
         props.put("producer.linger.ms", "1000");
+        props.put("producer.client.id", "producer-test-id");
         WorkerConfig configWithOverrides = new StandaloneConfig(props);
 
         Map<String, String> expectedConfigs = new HashMap<>(defaultProducerConfigs);
         expectedConfigs.put("acks", "-1");
         expectedConfigs.put("linger.ms", "1000");
-        assertEquals(expectedConfigs, Worker.producerConfigs(configWithOverrides));
+        expectedConfigs.put("client.id", "producer-test-id");
+        assertEquals(expectedConfigs, Worker.producerConfigs("connector-producer-" + TASK_ID, configWithOverrides));
     }
 
     @Test
     public void testConsumerConfigsWithoutOverrides() {
         Map<String, String> expectedConfigs = new HashMap<>(defaultConsumerConfigs);
         expectedConfigs.put("group.id", "connect-test");
+        expectedConfigs.put("client.id", "connector-consumer-test-1");
         assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), config));
     }
 
@@ -856,12 +861,14 @@ public class WorkerTest extends ThreadedTest {
         Map<String, String> props = new HashMap<>(workerProps);
         props.put("consumer.auto.offset.reset", "latest");
         props.put("consumer.max.poll.records", "1000");
+        props.put("consumer.client.id", "consumer-test-id");
         WorkerConfig configWithOverrides = new StandaloneConfig(props);
 
         Map<String, String> expectedConfigs = new HashMap<>(defaultConsumerConfigs);
         expectedConfigs.put("group.id", "connect-test");
         expectedConfigs.put("auto.offset.reset", "latest");
         expectedConfigs.put("max.poll.records", "1000");
+        expectedConfigs.put("client.id", "consumer-test-id");
         assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), configWithOverrides));
     }
 
