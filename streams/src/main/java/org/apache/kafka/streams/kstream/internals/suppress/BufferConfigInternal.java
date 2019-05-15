@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.streams.kstream.Suppressed;
 
+import java.util.Collections;
 import java.util.Map;
 
 import static org.apache.kafka.streams.kstream.internals.suppress.BufferFullStrategy.SHUT_DOWN;
@@ -64,6 +65,6 @@ public abstract class BufferConfigInternal<BC extends Suppressed.BufferConfig<BC
     }
 
     public Map<String, String> getLogConfig() {
-        return logConfig;
+        return isLoggingEnabled() ? logConfig : Collections.emptyMap();
     }
 }
