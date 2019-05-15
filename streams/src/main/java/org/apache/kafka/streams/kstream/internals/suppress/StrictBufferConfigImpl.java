@@ -32,8 +32,8 @@ public class StrictBufferConfigImpl extends BufferConfigInternal<Suppressed.Stri
     public StrictBufferConfigImpl(final long maxRecords,
                                   final long maxBytes,
                                   final BufferFullStrategy bufferFullStrategy,
-                                  final Map<String, String> topicConfig) {
-        super(topicConfig);
+                                  final Map<String, String> logConfig) {
+        super(logConfig);
         this.maxRecords = maxRecords;
         this.maxBytes = maxBytes;
         this.bufferFullStrategy = bufferFullStrategy;
