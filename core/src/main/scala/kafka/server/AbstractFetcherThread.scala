@@ -210,7 +210,6 @@ abstract class AbstractFetcherThread(name: String,
       //Check no leadership and no leader epoch changes happened whilst we were unlocked, fetching epochs
       val epochEndOffsets = endOffsets.filter { case (tp, _) =>
         val curPartitionState = partitionStates.stateValue(tp)
-
         val partitionEpochRequest = latestEpochsForPartitions.get(tp).getOrElse {
           throw new IllegalStateException(
             s"Leader replied with partition $tp not requested in OffsetsForLeaderEpoch request")
@@ -218,6 +217,7 @@ abstract class AbstractFetcherThread(name: String,
         val leaderEpochInRequest = partitionEpochRequest.currentLeaderEpoch.get
         curPartitionState != null && leaderEpochInRequest == curPartitionState.currentLeaderEpoch
       }
+
       val ResultWithPartitions(fetchOffsets, partitionsWithError) = maybeTruncateToEpochEndOffsets(epochEndOffsets)
       handlePartitionsWithErrors(partitionsWithError, "truncateToEpochEndOffsets")
       updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
@@ -240,6 +240,7 @@ abstract class AbstractFetcherThread(name: String,
         fetchOffsets.put(tp, truncationState)
       }
     }
+
     updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
   }
 
@@ -252,7 +253,6 @@ abstract class AbstractFetcherThread(name: String,
         case Errors.NONE =>
           val offsetTruncationState = getOffsetTruncationState(tp, leaderEpochOffset)
           doTruncate(tp, offsetTruncationState)
-
           fetchOffsets.put(tp, offsetTruncationState)
 
         case Errors.FENCED_LEADER_EPOCH =>
@@ -263,6 +263,7 @@ abstract class AbstractFetcherThread(name: String,
           partitionsWithError += tp
       }
     }
+
     ResultWithPartitions(fetchOffsets, partitionsWithError)
   }
 
@@ -279,7 +280,6 @@ abstract class AbstractFetcherThread(name: String,
   private def processFetchRequest(fetchStates: Map[TopicPartition, PartitionFetchState],
                                   fetchRequest: FetchRequest.Builder): Unit = {
     val partitionsWithError = mutable.Set[TopicPartition]()
-
     var responseData: Seq[(TopicPartition, FetchData)] = Seq.empty
 
     try {
@@ -346,7 +346,7 @@ abstract class AbstractFetcherThread(name: String,
                       partitionsWithError += topicPartition
                     case e: Throwable =>
                       // drop this partition from the fetcher thread and store in a set for failed partitions
-                      error(s"Unexpected error while processing data for partition $topicPartition", e)
+                      error(s"Unexpected error occurred while processing data for partition $topicPartition", e)
                       markPartitionFailed(topicPartition)
                       removePartitions(Set(topicPartition))
                   }
@@ -609,7 +609,6 @@ abstract class AbstractFetcherThread(name: String,
       }
       partitionMapCond.signalAll()
     } finally partitionMapLock.unlock()
-
   }
 
   def removePartitions(topicPartitions: Set[TopicPartition]) {

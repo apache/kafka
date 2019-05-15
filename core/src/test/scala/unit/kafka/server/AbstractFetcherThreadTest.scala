@@ -63,6 +63,12 @@ class AbstractFetcherThreadTest {
     OffsetAndEpoch(offset = fetchOffset, leaderEpoch = leaderEpoch)
   }
 
+  private val failedPartitions = new FailedPartitions
+
+  private def markPartitionFailed(partition : TopicPartition): Unit = {
+    failedPartitions.add(partition)
+  }
+
   @Test
   def testMetricsRemovedOnShutdown(): Unit = {
     val partition = new TopicPartition("topic", 0)
@@ -131,7 +137,7 @@ class AbstractFetcherThreadTest {
   @Test
   def testFencedTruncation(): Unit = {
     val partition = new TopicPartition("topic", 0)
-    val fetcher = new MockFetcherThread()
+    val fetcher = new MockFetcherThread
 
     fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
     fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 0)))
@@ -148,8 +154,9 @@ class AbstractFetcherThreadTest {
     assertEquals(0L, replicaState.logEndOffset)
     assertEquals(0L, replicaState.highWatermark)
 
-    // After fencing, the fetcher should remove the partition from tracking
+    // After fencing, the fetcher should remove the partition from tracking and marked as failed
     assertTrue(fetcher.fetchState(partition).isEmpty)
+    assertTrue(failedPartitions.getFailedPartitions.contains(partition))
   }
 
   @Test
@@ -177,8 +184,9 @@ class AbstractFetcherThreadTest {
 
     fetcher.doWork()
 
-    // After fencing, the fetcher should remove the partition from tracking
+    // After fencing, the fetcher should remove the partition from tracking and marked as failed
     assertTrue(fetcher.fetchState(partition).isEmpty)
+    assertTrue(failedPartitions.getFailedPartitions.contains(partition))
   }
 
   @Test
@@ -481,12 +489,12 @@ class AbstractFetcherThreadTest {
     val leaderState = MockFetcherThread.PartitionState(leaderLog, leaderEpoch = 4, highWatermark = 2L)
     fetcher.setLeaderState(partition, leaderState)
 
-    // After the out of range error, we get a fenced error and remove the partition
+    // After the out of range error, we get a fenced error and remove the partition and mark as failed
     fetcher.doWork()
-
     assertEquals(0, replicaState.logEndOffset)
     assertTrue(fetchedEarliestOffset)
     assertTrue(fetcher.fetchState(partition).isEmpty)
+    assertTrue(failedPartitions.getFailedPartitions.contains(partition))
   }
 
   @Test
@@ -579,7 +587,6 @@ class AbstractFetcherThreadTest {
           buffer.putInt(30, buffer.getInt(30) ^ 93242)
           fetchedOnce = true
         }
-
         fetchedData
       }
     }
@@ -708,13 +715,13 @@ class AbstractFetcherThreadTest {
   @Test
   def testTruncationThrowsExceptionIfLeaderReturnsPartitionsNotRequestedInFetchEpochs(): Unit = {
     val partition = new TopicPartition("topic", 0)
-
     val fetcher = new MockFetcherThread {
       override def fetchEpochEndOffsets(partitions: Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
         val unrequestedTp = new TopicPartition("topic2", 0)
         super.fetchEpochEndOffsets(partitions) + (unrequestedTp -> new EpochEndOffset(0, 0))
       }
     }
+
     fetcher.setReplicaState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
     fetcher.addPartitions(Map(partition -> offsetAndEpoch(0L, leaderEpoch = 0)))
     fetcher.setLeaderState(partition, MockFetcherThread.PartitionState(leaderEpoch = 0))
@@ -723,12 +730,6 @@ class AbstractFetcherThreadTest {
     assertThrows[IllegalStateException] {
       fetcher.doWork()
     }
-  }
-
-  val failedPartitions = new FailedPartitions
-
-  def markPartitionFailed(partition : TopicPartition): Unit = {
-    failedPartitions.add(partition)
   }
 
   @Test

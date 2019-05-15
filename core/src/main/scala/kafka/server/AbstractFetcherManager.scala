@@ -35,7 +35,6 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   private val lock = new Object
   private var numFetchersPerBroker = numFetchers
   private val failedPartitions = new FailedPartitions
-
   this.logIdent = "[" + name + "] "
 
   newGauge(
