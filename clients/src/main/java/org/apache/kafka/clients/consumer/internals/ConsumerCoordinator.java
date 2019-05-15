@@ -818,6 +818,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                         .setGroupId(this.groupId)
                         .setGenerationId(generation.generationId)
                         .setMemberId(generation.memberId)
+                        .setGroupInstanceId(groupInstanceId.orElse(null))
                         .setTopics(new ArrayList<>(requestTopicDataMap.values()))
         );
 

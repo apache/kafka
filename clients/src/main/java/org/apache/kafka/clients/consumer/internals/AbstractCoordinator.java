@@ -602,6 +602,7 @@ public abstract class AbstractCoordinator implements Closeable {
                         new SyncGroupRequestData()
                                 .setGroupId(groupId)
                                 .setMemberId(generation.memberId)
+                                .setGroupInstanceId(this.groupInstanceId.orElse(null))
                                 .setGenerationId(generation.generationId)
                                 .setAssignments(Collections.emptyList())
                 );
@@ -628,6 +629,7 @@ public abstract class AbstractCoordinator implements Closeable {
                             new SyncGroupRequestData()
                                     .setGroupId(groupId)
                                     .setMemberId(generation.memberId)
+                                    .setGroupInstanceId(this.groupInstanceId.orElse(null))
                                     .setGenerationId(generation.generationId)
                                     .setAssignments(groupAssignmentList)
                     );
