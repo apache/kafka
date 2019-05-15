@@ -400,14 +400,32 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             this.tasks = tasks;
         }
 
-        public static ConnectorsAndTasks copy(Collection<String> connectors,
-                                              Collection<ConnectorTaskId> tasks) {
-            return new ConnectorsAndTasks(new ArrayList<>(connectors), new ArrayList<>(tasks));
-        }
+        public static class Builder {
+            private Collection<String> withConnectors;
+            private Collection<ConnectorTaskId> withTasks;
 
-        public static ConnectorsAndTasks embed(Collection<String> connectors,
-                                               Collection<ConnectorTaskId> tasks) {
-            return new ConnectorsAndTasks(connectors, tasks);
+            public Builder() {
+            }
+
+            public ConnectorsAndTasks.Builder withCopies(Collection<String> connectors,
+                                                         Collection<ConnectorTaskId> tasks) {
+                withConnectors = new ArrayList<>(connectors);
+                withTasks = new ArrayList<>(tasks);
+                return this;
+            }
+
+            public ConnectorsAndTasks.Builder with(Collection<String> connectors,
+                                                   Collection<ConnectorTaskId> tasks) {
+                withConnectors = new ArrayList<>(connectors);
+                withTasks = new ArrayList<>(tasks);
+                return this;
+            }
+
+            public ConnectorsAndTasks build() {
+                return new ConnectorsAndTasks(
+                        withConnectors != null ? withConnectors : new ArrayList<>(),
+                        withTasks != null ? withTasks : new ArrayList<>());
+            }
         }
 
         public Collection<String> connectors() {
@@ -442,19 +460,43 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
                 Collection<String> connectors,
                 Collection<ConnectorTaskId> tasks
         ) {
-            this.worker = Objects.requireNonNull(worker, "worker cannot be null");
-            this.connectors = Objects.requireNonNull(connectors,
-                    "connectors may be empty but not null");
-            this.tasks = Objects.requireNonNull(tasks,
-                    "tasks may be empty but not null");
+            this.worker = worker;
+            this.connectors = connectors;
+            this.tasks = tasks;
         }
 
-        public static WorkerLoad copy(
-                String worker,
-                Collection<String> connectors,
-                Collection<ConnectorTaskId> tasks
-        ) {
-            return new WorkerLoad(worker, new ArrayList<>(connectors), new ArrayList<>(tasks));
+        public static class Builder {
+            private String withWorker;
+            private Collection<String> withConnectors;
+            private Collection<ConnectorTaskId> withTasks;
+
+            public Builder(String worker) {
+                this.withWorker = Objects.requireNonNull(worker, "worker cannot be null");
+            }
+
+            public WorkerLoad.Builder withCopies(Collection<String> connectors,
+                                                 Collection<ConnectorTaskId> tasks) {
+                withConnectors = new ArrayList<>(
+                        Objects.requireNonNull(connectors, "connectors may be empty but not null"));
+                withTasks = new ArrayList<>(
+                        Objects.requireNonNull(tasks, "tasks may be empty but not null"));
+                return this;
+            }
+
+            public WorkerLoad.Builder with(Collection<String> connectors,
+                                           Collection<ConnectorTaskId> tasks) {
+                withConnectors = Objects.requireNonNull(connectors,
+                        "connectors may be empty but not null");
+                withTasks = Objects.requireNonNull(tasks, "tasks may be empty but not null");
+                return this;
+            }
+
+            public WorkerLoad build() {
+                return new WorkerLoad(
+                        withWorker,
+                        withConnectors != null ? withConnectors : new ArrayList<>(),
+                        withTasks != null ? withTasks : new ArrayList<>());
+            }
         }
 
         public static WorkerLoad embed(

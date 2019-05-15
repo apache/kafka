@@ -561,7 +561,7 @@ public class IncrementalCooperativeAssignorTest {
                 .collect(Collectors.toList());
 
         List<WorkerLoad> expectedAssignment = existingAssignment.stream()
-                .map(wl -> WorkerLoad.copy(wl.worker(), wl.connectors(), wl.tasks()))
+                .map(wl -> new WorkerLoad.Builder(wl.worker()).withCopies(wl.connectors(), wl.tasks()).build())
                 .collect(Collectors.toList());
         expectedAssignment.get(0).connectors().addAll(Arrays.asList("connector6", "connector9"));
         expectedAssignment.get(1).connectors().addAll(Arrays.asList("connector7", "connector10"));
@@ -580,7 +580,7 @@ public class IncrementalCooperativeAssignorTest {
                 .collect(Collectors.toList());
 
         List<WorkerLoad> expectedAssignment = existingAssignment.stream()
-                .map(wl -> WorkerLoad.copy(wl.worker(), wl.connectors(), wl.tasks()))
+                .map(wl -> new WorkerLoad.Builder(wl.worker()).withCopies(wl.connectors(), wl.tasks()).build())
                 .collect(Collectors.toList());
 
         expectedAssignment.get(0).connectors().addAll(Arrays.asList("connector6", "connector9"));

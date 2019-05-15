@@ -56,11 +56,11 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private final Logger log;
     private final Time time;
     private final int maxDelay;
+    private final Set<String> candidateWorkersForReassignment;
     private ConnectorsAndTasks previousAssignment;
     private ConnectorsAndTasks previousRevocation;
     private boolean canRevoke;
     private long scheduledRebalance;
-    private Set<String> candidateWorkersForReassignment;
     private int delay;
 
     public IncrementalCooperativeAssignor(LogContext logContext, Time time, int maxDelay) {
@@ -68,7 +68,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         this.time = time;
         this.maxDelay = maxDelay;
         this.previousAssignment = ConnectorsAndTasks.EMPTY;
-        this.previousRevocation = ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>());
+        this.previousRevocation = new ConnectorsAndTasks.Builder().build();
         this.canRevoke = true;
         this.scheduledRebalance = 0;
         this.candidateWorkersForReassignment = new LinkedHashSet<>();
@@ -153,7 +153,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
         // Base set: The set of configured connectors-and-tasks is a standalone snapshot that can
         // be used to calculate derived sets
-        ConnectorsAndTasks configured = ConnectorsAndTasks.embed(configuredConnectors, configuredTasks);
+        ConnectorsAndTasks configured = new ConnectorsAndTasks.Builder()
+                .with(configuredConnectors, configuredTasks).build();
         log.debug("Configured assignments: {}", configured);
 
         // Base set: The set of active connectors-and-tasks is a standalone snapshot that can be
@@ -239,7 +240,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 (worker, assignment) -> {
                     ConnectorsAndTasks existing = toRevoke.computeIfAbsent(
                         worker,
-                        v -> ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>()));
+                        v -> new ConnectorsAndTasks.Builder().build());
                     existing.connectors().addAll(assignment.connectors());
                     existing.tasks().addAll(assignment.tasks());
                 }
@@ -248,6 +249,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         } else {
             canRevoke = delay == 0;
         }
+
 
         assignConnectors(completeWorkerAssignment, newSubmissions.connectors());
         assignTasks(completeWorkerAssignment, newSubmissions.tasks());
@@ -296,14 +298,14 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         deleted.connectors().forEach(c ->
                 toRevoke.computeIfAbsent(
                     connectorOwners.get(c),
-                    v -> ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>()))
-                    .connectors().add(c));
+                    v -> new ConnectorsAndTasks.Builder().build()
+                ).connectors().add(c));
         // Add the tasks that have been deleted to the revoked set
         deleted.tasks().forEach(t ->
                 toRevoke.computeIfAbsent(
                     taskOwners.get(t),
-                    v -> ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>()))
-                    .tasks().add(t));
+                    v -> new ConnectorsAndTasks.Builder().build()
+                ).tasks().add(t));
         log.debug("Connectors and tasks to delete assignments: {}", toRevoke);
         return toRevoke;
     }
@@ -312,9 +314,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                                                          Map<String, Collection<String>> connectorAssignments,
                                                          Map<String, Collection<ConnectorTaskId>> taskAssignments,
                                                          ConnectorsAndTasks lostAssignments) {
-        ConnectorsAndTasks previousAssignment = ConnectorsAndTasks.embed(
+        ConnectorsAndTasks previousAssignment = new ConnectorsAndTasks.Builder().with(
                 connectorAssignments.values().stream().flatMap(Collection::stream).collect(Collectors.toSet()),
-                taskAssignments.values() .stream() .flatMap(Collection::stream).collect(Collectors.toSet()));
+                taskAssignments.values() .stream() .flatMap(Collection::stream).collect(Collectors.toSet()))
+                .build();
 
         for (ConnectorsAndTasks revoked : toRevoke.values()) {
             previousAssignment.connectors().removeAll(revoked.connectors());
@@ -331,9 +334,10 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         return previousAssignment;
     }
 
-    private void handleLostAssignments(ConnectorsAndTasks lostAssignments,
-                                       ConnectorsAndTasks newSubmissions,
-                                       List<WorkerLoad> completeWorkerAssignment) {
+    // visible for testing
+    protected void handleLostAssignments(ConnectorsAndTasks lostAssignments,
+                                         ConnectorsAndTasks newSubmissions,
+                                         List<WorkerLoad> completeWorkerAssignment) {
         if (lostAssignments.isEmpty()) {
             return;
         }
@@ -361,6 +365,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 newSubmissions.connectors().addAll(lostAssignments.connectors());
                 newSubmissions.tasks().addAll(lostAssignments.tasks());
             }
+            candidateWorkersForReassignment.clear();
             scheduledRebalance = 0;
             delay = 0;
         } else {
@@ -434,7 +439,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             for (int i = existing.connectorsSize(); i > floorConnectors && numToRevoke > 0; --i, --numToRevoke) {
                 ConnectorsAndTasks resources = revoking.computeIfAbsent(
                     existing.worker(),
-                    w -> ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>()));
+                    w -> new ConnectorsAndTasks.Builder().build());
                 resources.connectors().add(connectors.next());
             }
             if (numToRevoke == 0) {
@@ -448,7 +453,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             for (int i = existing.tasksSize(); i > floorTasks && numToRevoke > 0; --i, --numToRevoke) {
                 ConnectorsAndTasks resources = revoking.computeIfAbsent(
                     existing.worker(),
-                    w -> ConnectorsAndTasks.embed(new ArrayList<>(), new ArrayList<>()));
+                    w -> new ConnectorsAndTasks.Builder().build());
                 resources.tasks().add(tasks.next());
             }
             if (numToRevoke == 0) {
@@ -508,7 +513,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             connectors.removeAll(sub.connectors());
             tasks.removeAll(sub.tasks());
         }
-        return ConnectorsAndTasks.embed(connectors, tasks);
+        return new ConnectorsAndTasks.Builder().with(connectors, tasks).build();
     }
 
     private static <T> Map<String, Collection<T>> diff(Map<String, Collection<T>> base,
@@ -532,7 +537,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 .stream()
                 .flatMap(state -> state.assignment().tasks().stream())
                 .collect(Collectors.toSet());
-        return ConnectorsAndTasks.embed(connectors, tasks);
+        return new ConnectorsAndTasks.Builder().with(connectors, tasks).build();
     }
 
     private int calculateDelay(long now) {
@@ -602,8 +607,9 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
 
     private static List<WorkerLoad> workerAssignment(Map<String, ExtendedWorkerState> memberConfigs,
                                                      ConnectorsAndTasks toExclude) {
-        ConnectorsAndTasks ignore = ConnectorsAndTasks
-                .embed(new HashSet<>(toExclude.connectors()), new HashSet<>(toExclude.tasks()));
+        ConnectorsAndTasks ignore = new ConnectorsAndTasks.Builder()
+                .with(new HashSet<>(toExclude.connectors()), new HashSet<>(toExclude.tasks()))
+                .build();
 
         return memberConfigs.entrySet().stream()
                 .map(e -> WorkerLoad.embed(
