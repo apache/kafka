@@ -2816,25 +2816,25 @@ public class FetcherTest {
         buildDependencies(new MetricConfig(), OffsetResetStrategy.EARLIEST);
 
         fetcher = new Fetcher<byte[], byte[]>(
-            new LogContext(),
-            consumerClient,
-            minBytes,
-            maxBytes,
-            maxWaitMs,
-            fetchSize,
-            2 * numPartitions,
-            true,
-            "",
-            new ByteArrayDeserializer(),
-            new ByteArrayDeserializer(),
-            metadata,
-            subscriptions,
-            metrics,
-            metricsRegistry,
-            time,
-            retryBackoffMs,
-            requestTimeoutMs,
-            IsolationLevel.READ_UNCOMMITTED) {
+                new LogContext(),
+                consumerClient,
+                minBytes,
+                maxBytes,
+                maxWaitMs,
+                fetchSize,
+                2 * numPartitions,
+                true,
+                "",
+                new ByteArrayDeserializer(),
+                new ByteArrayDeserializer(),
+                metadata,
+                subscriptions,
+                metrics,
+                metricsRegistry,
+                time,
+                retryBackoffMs,
+                requestTimeoutMs,
+                IsolationLevel.READ_UNCOMMITTED) {
             @Override
             protected FetchSessionHandler sessionHandler(int id) {
                 final FetchSessionHandler handler = super.sessionHandler(id);
@@ -3373,25 +3373,25 @@ public class FetcherTest {
                                      IsolationLevel isolationLevel) {
         buildDependencies(metricConfig, offsetResetStrategy);
         fetcher = new Fetcher<>(
-            new LogContext(),
-            consumerClient,
-            minBytes,
-            maxBytes,
-            maxWaitMs,
-            fetchSize,
-            maxPollRecords,
-            true, // check crc
-            "",
-            keyDeserializer,
-            valueDeserializer,
-            metadata,
-            subscriptions,
-            metrics,
-            metricsRegistry,
-            time,
-            retryBackoffMs,
-            requestTimeoutMs,
-            isolationLevel);
+                new LogContext(),
+                consumerClient,
+                minBytes,
+                maxBytes,
+                maxWaitMs,
+                fetchSize,
+                maxPollRecords,
+                true, // check crc
+                "",
+                keyDeserializer,
+                valueDeserializer,
+                metadata,
+                subscriptions,
+                metrics,
+                metricsRegistry,
+                time,
+                retryBackoffMs,
+                requestTimeoutMs,
+                isolationLevel);
     }
 
     private void buildDependencies(MetricConfig metricConfig, OffsetResetStrategy offsetResetStrategy) {
