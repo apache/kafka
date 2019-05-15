@@ -87,11 +87,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                     member.memberId(),
                     IncrementalCooperativeConnectProtocol.deserializeMetadata(ByteBuffer.wrap(member.metadata())));
         }
-
         log.debug("Member configs: {}", memberConfigs);
-        if (memberConfigs.isEmpty()) {
-            log.warn("Member configs is empty");
-        }
 
         // The new config offset is the maximum seen by any member. We always perform assignment using this offset,
         // even if some members have fallen behind. The config offset used to generate the assignment is included in
