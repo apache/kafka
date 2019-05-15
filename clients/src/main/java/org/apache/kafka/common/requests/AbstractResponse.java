@@ -91,7 +91,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case LEAVE_GROUP:
                 return new LeaveGroupResponse(struct, version);
             case SYNC_GROUP:
-                return new SyncGroupResponse(struct);
+                return new SyncGroupResponse(struct, version);
             case STOP_REPLICA:
                 return new StopReplicaResponse(struct);
             case CONTROLLED_SHUTDOWN:

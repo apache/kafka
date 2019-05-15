@@ -1377,17 +1377,27 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def sendResponseCallback(memberState: Array[Byte], error: Errors) {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new SyncGroupResponse(requestThrottleMs, error, ByteBuffer.wrap(memberState)))
+        new SyncGroupResponse(
+          new SyncGroupResponseData()
+            .setErrorCode(error.code)
+            .setAssignment(memberState)
+            .setThrottleTimeMs(requestThrottleMs)
+        ))
     }
 
-    if (!authorize(request.session, Read, Resource(Group, syncGroupRequest.groupId(), LITERAL))) {
+    if (!authorize(request.session, Read, Resource(Group, syncGroupRequest.data.groupId, LITERAL))) {
       sendResponseCallback(Array[Byte](), Errors.GROUP_AUTHORIZATION_FAILED)
     } else {
+      val assignmentMap = immutable.Map.newBuilder[String, Array[Byte]]
+      syncGroupRequest.data.assignments.asScala.foreach { assignment =>
+        assignmentMap += (assignment.memberId -> assignment.assignment)
+      }
+
       groupCoordinator.handleSyncGroup(
-        syncGroupRequest.groupId,
-        syncGroupRequest.generationId,
-        syncGroupRequest.memberId,
-        syncGroupRequest.groupAssignment().asScala.mapValues(Utils.toArray),
+        syncGroupRequest.data.groupId,
+        syncGroupRequest.data.generationId,
+        syncGroupRequest.data.memberId,
+        assignmentMap.result,
         sendResponseCallback
       )
     }

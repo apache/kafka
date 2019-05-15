@@ -306,7 +306,13 @@ class RequestQuotaTest extends BaseRequestTest {
           new LeaveGroupRequest.Builder(new LeaveGroupRequestData().setGroupId("test-leave-group").setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID))
 
         case ApiKeys.SYNC_GROUP =>
-          new SyncGroupRequest.Builder("test-sync-group", 1, "", Map[String, ByteBuffer]().asJava)
+          new SyncGroupRequest.Builder(
+            new SyncGroupRequestData()
+              .setGroupId("test-sync-group")
+              .setGenerationId(1)
+              .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+              .setAssignments(Collections.emptyList())
+          )
 
         case ApiKeys.DESCRIBE_GROUPS =>
           new DescribeGroupsRequest.Builder(new DescribeGroupsRequestData().setGroups(List("test-group").asJava))
