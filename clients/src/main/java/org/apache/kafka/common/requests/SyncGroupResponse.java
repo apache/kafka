@@ -27,7 +27,7 @@ import java.util.Map;
 
 public class SyncGroupResponse extends AbstractResponse {
 
-    private final SyncGroupResponseData data;
+    public final SyncGroupResponseData data;
 
     public SyncGroupResponse(SyncGroupResponseData data) {
         this.data = data;
@@ -40,10 +40,6 @@ public class SyncGroupResponse extends AbstractResponse {
 
     public SyncGroupResponse(Struct struct, short version) {
         this.data = new SyncGroupResponseData(struct, version);
-    }
-
-    public SyncGroupResponseData data() {
-        return data;
     }
 
     @Override

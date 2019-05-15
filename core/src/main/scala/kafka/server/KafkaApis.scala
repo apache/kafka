@@ -1379,7 +1379,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new SyncGroupResponse(
           new SyncGroupResponseData()
-            .setErrorCode(error.code())
+            .setErrorCode(error.code)
             .setAssignment(memberState)
             .setThrottleTimeMs(requestThrottleMs)
         ))
@@ -1389,15 +1389,15 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(Array[Byte](), Errors.GROUP_AUTHORIZATION_FAILED)
     } else {
       val assignmentMap = immutable.Map.newBuilder[String, Array[Byte]]
-      syncGroupRequest.data.assignments().asScala.foreach { assignment =>
-        assignmentMap += (assignment.memberId() -> assignment.assignment())
+      syncGroupRequest.data.assignments.asScala.foreach { assignment =>
+        assignmentMap += (assignment.memberId -> assignment.assignment)
       }
 
       groupCoordinator.handleSyncGroup(
         syncGroupRequest.data.groupId,
         syncGroupRequest.data.generationId,
         syncGroupRequest.data.memberId,
-        assignmentMap.result(),
+        assignmentMap.result,
         sendResponseCallback
       )
     }

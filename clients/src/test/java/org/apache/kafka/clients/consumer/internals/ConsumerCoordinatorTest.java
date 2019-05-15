@@ -417,8 +417,8 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(consumerId) &&
-                        sync.data().generationId() == 1 &&
+                return sync.data.memberId().equals(consumerId) &&
+                        sync.data.generationId() == 1 &&
                         sync.groupAssignments().containsKey(consumerId);
             }
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
@@ -453,8 +453,8 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(consumerId) &&
-                        sync.data().generationId() == 1 &&
+                return sync.data.memberId().equals(consumerId) &&
+                        sync.data.generationId() == 1 &&
                         sync.groupAssignments().containsKey(consumerId);
             }
         }, syncGroupResponse(Arrays.asList(t2p), Errors.NONE));
@@ -467,8 +467,8 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(consumerId) &&
-                        sync.data().generationId() == 1 &&
+                return sync.data.memberId().equals(consumerId) &&
+                        sync.data.generationId() == 1 &&
                         sync.groupAssignments().containsKey(consumerId);
             }
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
@@ -509,8 +509,8 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(consumerId) &&
-                        sync.data().generationId() == 1 &&
+                return sync.data.memberId().equals(consumerId) &&
+                        sync.data.generationId() == 1 &&
                         sync.groupAssignments().containsKey(consumerId);
             }
         }, syncGroupResponse(singletonList(t2p), Errors.NONE));
@@ -539,8 +539,8 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(consumerId) &&
-                        sync.data().generationId() == 1 &&
+                return sync.data.memberId().equals(consumerId) &&
+                        sync.data.generationId() == 1 &&
                         sync.groupAssignments().containsKey(consumerId);
             }
         }, syncGroupResponse(Arrays.asList(t1p, t2p), Errors.NONE));
@@ -649,8 +649,8 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(consumerId) &&
-                    sync.data().generationId() == 1 &&
+                return sync.data.memberId().equals(consumerId) &&
+                    sync.data.generationId() == 1 &&
                     sync.groupAssignments().isEmpty();
             }
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
@@ -723,8 +723,8 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(consumerId) &&
-                        sync.data().generationId() == 1 &&
+                return sync.data.memberId().equals(consumerId) &&
+                        sync.data.generationId() == 1 &&
                         sync.groupAssignments().isEmpty();
             }
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
@@ -788,8 +788,8 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data().memberId().equals(consumerId) &&
-                        sync.data().generationId() == 1 &&
+                return sync.data.memberId().equals(consumerId) &&
+                        sync.data.generationId() == 1 &&
                         sync.groupAssignments().isEmpty();
             }
         }, syncGroupResponse(Arrays.asList(t1p, t2p), Errors.NONE));
@@ -1039,8 +1039,8 @@ public class ConsumerCoordinatorTest {
             @Override
             public boolean matches(AbstractRequest body) {
                 SyncGroupRequest sync = (SyncGroupRequest) body;
-                if (sync.data().memberId().equals(consumerId) &&
-                        sync.data().generationId() == 1 &&
+                if (sync.data.memberId().equals(consumerId) &&
+                        sync.data.generationId() == 1 &&
                         sync.groupAssignments().containsKey(consumerId)) {
                     // trigger the metadata update including both topics after the sync group request has been sent
                     Map<String, Integer> topicPartitionCounts = new HashMap<>();

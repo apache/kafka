@@ -48,23 +48,16 @@ public class SyncGroupRequest extends AbstractRequest {
         }
     }
 
-    private final SyncGroupRequestData data;
-    private final short version;
+    public final SyncGroupRequestData data;
 
     public SyncGroupRequest(SyncGroupRequestData data, short version) {
         super(ApiKeys.SYNC_GROUP, version);
         this.data = data;
-        this.version = version;
     }
 
     public SyncGroupRequest(Struct struct, short version) {
         super(ApiKeys.SYNC_GROUP, version);
         this.data = new SyncGroupRequestData(struct, version);
-        this.version = version;
-    }
-
-    public SyncGroupRequestData data() {
-        return data;
     }
 
     @Override
@@ -105,6 +98,6 @@ public class SyncGroupRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        return data.toStruct(version);
+        return data.toStruct(version());
     }
 }
