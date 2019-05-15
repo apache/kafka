@@ -246,35 +246,34 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   /**
     * Check whether current leader is rejoined. If not, try to find another joined member to be
-    * new leader. Return null if
+    * new leader. Return false if
     *   1. the group is currently empty (has no designated leader)
     *   2. no member rejoined
     */
-  def maybeElectNewJoinedLeader(): Option[MemberMetadata] = {
-    leaderId.flatMap(
-      currentLeaderId => {
-        val currentLeader = get(currentLeaderId)
-        if (!currentLeader.isAwaitingJoin) {
-          members.find(_._2.isAwaitingJoin) match {
-            case Some(anyJoinedMember) =>
-              leaderId = Option(anyJoinedMember._1)
-              info(s"Group leader [member.id: ${currentLeader.memberId}, " +
-                s"group.instance.id: ${currentLeader.groupInstanceId}] failed to join " +
-                s"before rebalance timeout, while new leader $leaderId was elected.")
-              Some(anyJoinedMember._2)
+  def maybeElectNewJoinedLeader(): Boolean = {
+    leaderId.fold (false) { currentLeaderId => {
+      val currentLeader = get(currentLeaderId)
+      if (!currentLeader.isAwaitingJoin) {
+        members.find(_._2.isAwaitingJoin) match {
+          case Some((anyJoinedMemberId, anyJoinedMember)) =>
+            leaderId = Option(anyJoinedMemberId)
+            info(s"Group leader [member.id: ${currentLeader.memberId}, " +
+              s"group.instance.id: ${currentLeader.groupInstanceId}] failed to join " +
+              s"before rebalance timeout, while new leader $anyJoinedMember was elected.")
+            true
 
-            case None =>
-              info(s"Group leader [member.id: ${currentLeader.memberId}, " +
-                s"group.instance.id: ${currentLeader.groupInstanceId}] failed to join " +
-                s"before rebalance timeout, and the group couldn't proceed to next generation" +
-                s"because no member joined.")
-              None
-          }
-        } else {
-          Some(currentLeader)
+          case None =>
+            info(s"Group leader [member.id: ${currentLeader.memberId}, " +
+              s"group.instance.id: ${currentLeader.groupInstanceId}] failed to join " +
+              s"before rebalance timeout, and the group couldn't proceed to next generation" +
+              s"because no member joined.")
+            false
         }
+      } else {
+        true
       }
-    )
+    }
+    }
   }
 
   /**

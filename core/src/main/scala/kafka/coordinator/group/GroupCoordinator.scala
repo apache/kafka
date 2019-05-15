@@ -928,16 +928,15 @@ class GroupCoordinator(val brokerId: Int,
       }
 
       if (group.is(Dead)) {
-        info(s"group ${group.groupId} is dead, skipping rebalance stage")
-      } else if (group.maybeElectNewJoinedLeader().isEmpty
-        && group.allMembers.nonEmpty) {
+        info(s"Group ${group.groupId} is dead, skipping rebalance stage")
+      } else if (!group.maybeElectNewJoinedLeader() && group.allMembers.nonEmpty) {
         // If all members are not rejoining, we will postpone the completion
-        // of rebalance preparing stage, and send out another dummy delayed operation
+        // of rebalance preparing stage, and send out another delayed operation
         // until session timeout removes all the non-responsive members.
-        error(s"group could not complete rebalance because no members rejoined")
+        error(s"Group ${group.groupId} could not complete rebalance because no members rejoined")
         joinPurgatory.tryCompleteElseWatch(
           new DelayedJoin(this, group, group.rebalanceTimeoutMs),
-          Seq("dummy-key"))
+          Seq(GroupKey(group.groupId)))
       } else {
         group.initNextGeneration()
         if (group.is(Empty)) {
