@@ -542,19 +542,19 @@ public abstract class AbstractCoordinator implements Closeable {
                     }
                 }
             } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-                log.debug("Attempt to join group rejected since coordinator {} is loading the group.", coordinator());
+                log.info("Attempt to join group rejected since coordinator {} is loading the group.", coordinator());
                 // backoff and retry
                 future.raise(error);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
                 // reset the member id and retry immediately
                 resetGeneration();
-                log.debug("Attempt to join group failed due to unknown member id.");
+                log.info("Attempt to join group failed due to unknown member id.");
                 future.raise(Errors.UNKNOWN_MEMBER_ID);
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                     || error == Errors.NOT_COORDINATOR) {
                 // re-discover the coordinator and retry with backoff
                 markCoordinatorUnknown();
-                log.debug("Attempt to join group failed due to obsolete coordinator information: {}", error.message());
+                log.info("Attempt to join group failed due to obsolete coordinator information: {}", error.message());
                 future.raise(error);
             } else if (error == Errors.INCONSISTENT_GROUP_PROTOCOL
                     || error == Errors.INVALID_SESSION_TIMEOUT
