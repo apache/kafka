@@ -22,6 +22,7 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import kafka.server.LogDirFailureTest._
 import kafka.api.IntegrationTestHarness
+import kafka.cluster.Partition
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.{CoreUtils, Exit, TestUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -120,8 +121,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // has fetched from the leader and attempts to append to the offline replica.
     producer.send(record).get
 
-    assertEquals(brokerCount, leaderServer.replicaManager.getPartition(new TopicPartition(topic, anotherPartitionWithTheSameLeader))
-      .toPartition.get.inSyncReplicas.size)
+    assertEquals(brokerCount, leaderServer.replicaManager.nonOfflinePartition(new TopicPartition(topic, anotherPartitionWithTheSameLeader))
+      .get.inSyncReplicas.size)
     followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
       assertFalse("ReplicaFetcherThread should still be working if its partition count > 0", thread.isShutdownComplete)
     }
