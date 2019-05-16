@@ -17,11 +17,14 @@
 
 package org.apache.kafka.connect.connector.policy;
 
+import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.errors.PolicyViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -35,15 +38,23 @@ public class PrincipalConnectorClientConfigOverridePolicy implements ConnectorCl
     private static final Logger log = LoggerFactory.getLogger(PrincipalConnectorClientConfigOverridePolicy.class);
 
     private static final Set<String> ALLOWED_CONFIG =
-        Stream.of(SaslConfigs.SASL_JAAS_CONFIG, SaslConfigs.SASL_MECHANISM).collect(Collectors.toSet());
+        Stream.of(SaslConfigs.SASL_JAAS_CONFIG, SaslConfigs.SASL_MECHANISM, CommonClientConfigs.SECURITY_PROTOCOL_CONFIG).
+            collect(Collectors.toSet());
 
 
     @Override
-    public void validate(ConnectorClientConfigRequest connectorClientConfigRequest) throws PolicyViolationException {
-        if (!ALLOWED_CONFIG.containsAll(connectorClientConfigRequest.clientProps().keySet())) {
-            throw new PolicyViolationException(
-                "Can override " + connectorClientConfigRequest.clientType() + " with only " + ALLOWED_CONFIG);
+    public List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest) {
+        Map<String, Object> inputConfig = connectorClientConfigRequest.clientProps();
+        return inputConfig.entrySet().stream().map(configEntry -> configValue(configEntry)).collect(Collectors.toList());
+    }
+
+    private static ConfigValue configValue(Map.Entry<String, Object> configEntry) {
+        ConfigValue configValue =
+            new ConfigValue(configEntry.getKey(), configEntry.getValue(), new ArrayList<Object>(), new ArrayList<String>());
+        if (!ALLOWED_CONFIG.contains(configEntry.getKey())) {
+            configValue.addErrorMessage("Principal policy allows only " + ALLOWED_CONFIG + "to be overriden");
         }
+        return configValue;
     }
 
     @Override

@@ -21,8 +21,8 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
-import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.metrics.stats.Total;
@@ -72,6 +72,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 
 /**
@@ -625,10 +626,11 @@ public class Worker {
             clientOverrides,
             clientType
         );
-        try {
-            connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
-        } catch (PolicyViolationException e) {
-            throw new ConnectException("Error applying client config overrides", e);
+        List<ConfigValue> configValues = connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
+        List<ConfigValue> errorConfigs = configValues.stream().
+            filter(configValue -> configValue.errorMessages().size() > 0).collect(Collectors.toList());
+        if (errorConfigs.size() > 0) {
+            throw new ConnectException("Client Config Overrides not allowed " + errorConfigs);
         }
         return clientOverrides;
     }

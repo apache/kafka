@@ -24,7 +24,6 @@ import org.apache.kafka.common.config.ConfigDef.ConfigKey;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
-import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
@@ -405,29 +404,28 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         Map<String, ConfigKey> configKeys = configDef.configKeys();
         Set<String> groups = new HashSet<>();
         Map<String, Object> clientConfigs = connectorConfig.originalsWithPrefix(prefix);
-        for (Map.Entry<String, Object> clientConfig : clientConfigs.entrySet()) {
-            ConfigKey configKey = configKeys.get(clientConfig.getKey());
-            ConfigKeyInfo configKeyInfo = null;
-            if (configKey != null) {
-                if (configKey.group != null) {
-                    groups.add(configKey.group);
+        ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
+            connName, connectorType, connectorClass, clientConfigs, clientType);
+        List<ConfigValue> configValues = connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
+        if (configValues != null) {
+            for (ConfigValue validatedConfigValue : configValues) {
+                ConfigKey configKey = configKeys.get(validatedConfigValue.name());
+                ConfigKeyInfo configKeyInfo = null;
+                if (configKey != null) {
+                    if (configKey.group != null) {
+                        groups.add(configKey.group);
+                    }
+                    configKeyInfo = convertConfigKey(configKey, prefix);
                 }
-                configKeyInfo = convertConfigKey(configKey, prefix);
-            }
-            Map<String, Object> clientProps = Collections.singletonMap(clientConfig.getKey(), clientConfig.getValue());
-            ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
-                connName, connectorType, connectorClass, clientProps, clientType);
 
-            ConfigValue configValue = new ConfigValue(prefix + clientConfig.getKey(), clientConfig.getValue(),
-                                                      new ArrayList<Object>(), new ArrayList<String>());
-            try {
-                connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
-            } catch (PolicyViolationException e) {
-                errorCount++;
-                configValue.addErrorMessage(e.getMessage());
+                ConfigValue configValue = new ConfigValue(prefix + validatedConfigValue.name(), validatedConfigValue.value(),
+                                                          validatedConfigValue.recommendedValues(), validatedConfigValue.errorMessages());
+                if (configValue.errorMessages().size() > 0) {
+                    errorCount++;
+                }
+                ConfigValueInfo configValueInfo = convertConfigValue(configValue, configKey != null ? configKey.type : null);
+                configInfoList.add(new ConfigInfo(configKeyInfo, configValueInfo));
             }
-            ConfigValueInfo configValueInfo = convertConfigValue(configValue, configKey != null ? configKey.type : null);
-            configInfoList.add(new ConfigInfo(configKeyInfo, configValueInfo));
         }
         return new ConfigInfos(connectorClass.toString(), errorCount, new ArrayList<>(groups), configInfoList);
     }

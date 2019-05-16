@@ -18,7 +18,9 @@
 package org.apache.kafka.connect.connector.policy;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.config.ConfigValue;
+
+import java.util.List;
 
 /**
  * <p>An interface for enforcing a policy on overriding of client configs via the connector configs.
@@ -38,7 +40,7 @@ public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoC
      *
      * @param connectorClientConfigRequest an instance of {@code ConnectorClientConfigRequest} that provides the configs to overridden and
      *                                     its context; never {@code null}
-     * @throws PolicyViolationException if any of the overridden property doesn't meet the defined policy
+     * @return List of Config, each Config should indicate if they are allowed via {@link ConfigValue#errorMessages}
      */
-    void validate(ConnectorClientConfigRequest connectorClientConfigRequest) throws PolicyViolationException;
+    List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest);
 }

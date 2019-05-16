@@ -19,42 +19,31 @@ package org.apache.kafka.connect.connector.policy;
 
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.errors.PolicyViolationException;
-import org.apache.kafka.connect.health.ConnectorType;
-import org.apache.kafka.connect.runtime.WorkerTest;
 import org.junit.Test;
 
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
-public class NoneConnectorClientConfigOverridePolicyTest {
+public class NoneConnectorClientConfigOverridePolicyTest extends BaseConnectorClientConfigOverridePolicyTest {
 
     ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
 
     @Test
     public void testNoOverrides() {
-        Map<String, Object> clientConfig = Collections.emptyMap();
-        ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
-            "test",
-            ConnectorType.SOURCE,
-            WorkerTest.WorkerTestConnector.class,
-            clientConfig,
-            ConnectorClientConfigRequest.ClientType.PRODUCER);
-        noneConnectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
+        testValidOverride(Collections.emptyMap());
     }
 
-    @Test(expected = PolicyViolationException.class)
+    @Test
     public void testWithOverrides() {
         Map<String, Object> clientConfig = new HashMap<>();
         clientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, "test");
         clientConfig.put(ProducerConfig.ACKS_CONFIG, "none");
-        ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
-            "test",
-            ConnectorType.SOURCE,
-            WorkerTest.WorkerTestConnector.class,
-            clientConfig,
-            ConnectorClientConfigRequest.ClientType.PRODUCER);
-        noneConnectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
+        testInvalidOverride(clientConfig);
+    }
+
+    @Override
+    protected ConnectorClientConfigOverridePolicy policyToTest() {
+        return noneConnectorClientConfigOverridePolicy;
     }
 }

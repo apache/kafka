@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
@@ -120,7 +121,7 @@ public class AbstractHerderTest {
     private final String kafkaClusterId = "I4ZmrWqfT2e-upky_4fdPA";
     private final int generation = 5;
     private final String connector = "connector";
-    private final ConnectorClientConfigOverridePolicy ignoreConnectorClientConfigOverridePolicy = null;
+    private final ConnectorClientConfigOverridePolicy noneConnectorClientConfigOverridePolicy = new NoneConnectorClientConfigOverridePolicy();
 
     @MockStrict private Worker worker;
     @MockStrict private WorkerConfigTransformer transformer;
@@ -137,9 +138,10 @@ public class AbstractHerderTest {
                 String.class,
                 String.class,
                 StatusBackingStore.class,
-                ConfigBackingStore.class
+                ConfigBackingStore.class,
+                ConnectorClientConfigOverridePolicy.class
             )
-            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
+            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
             .addMockedMethod("generation")
             .createMock();
 
@@ -160,9 +162,10 @@ public class AbstractHerderTest {
                 String.class,
                 String.class,
                 StatusBackingStore.class,
-                ConfigBackingStore.class
+                ConfigBackingStore.class,
+                ConnectorClientConfigOverridePolicy.class
             )
-            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore)
+            .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
             .addMockedMethod("generation")
             .createMock();
 
@@ -186,7 +189,7 @@ public class AbstractHerderTest {
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
                                  ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, ignoreConnectorClientConfigOverridePolicy)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -227,7 +230,7 @@ public class AbstractHerderTest {
         AbstractHerder herder = partialMockBuilder(AbstractHerder.class)
                 .withConstructor(Worker.class, String.class, String.class, StatusBackingStore.class, ConfigBackingStore.class,
                                  ConnectorClientConfigOverridePolicy.class)
-                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, ignoreConnectorClientConfigOverridePolicy)
+                .withArgs(worker, workerId, kafkaClusterId, statusStore, configStore, noneConnectorClientConfigOverridePolicy)
                 .addMockedMethod("generation")
                 .createMock();
 
@@ -260,7 +263,7 @@ public class AbstractHerderTest {
 
     @Test(expected = BadRequestException.class)
     public void testConfigValidationEmptyConfig() {
-        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, ignoreConnectorClientConfigOverridePolicy);
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
         replayAll();
 
         herder.validateConnectorConfig(new HashMap<String, String>());
@@ -270,7 +273,7 @@ public class AbstractHerderTest {
 
     @Test()
     public void testConfigValidationMissingName() {
-        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, ignoreConnectorClientConfigOverridePolicy);
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
         replayAll();
 
         Map<String, String> config = Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, TestSourceConnector.class.getName());
@@ -295,7 +298,7 @@ public class AbstractHerderTest {
 
     @Test(expected = ConfigException.class)
     public void testConfigValidationInvalidTopics() {
-        AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, ignoreConnectorClientConfigOverridePolicy);
+        AbstractHerder herder = createConfigValidationHerder(TestSinkConnector.class, noneConnectorClientConfigOverridePolicy);
         replayAll();
 
         Map<String, String> config = new HashMap<>();
@@ -310,7 +313,7 @@ public class AbstractHerderTest {
 
     @Test()
     public void testConfigValidationTransformsExtendResults() {
-        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, ignoreConnectorClientConfigOverridePolicy);
+        AbstractHerder herder = createConfigValidationHerder(TestSourceConnector.class, noneConnectorClientConfigOverridePolicy);
 
         // 2 transform aliases defined -> 2 plugin lookups
         Set<PluginDesc<Transformation>> transformations = new HashSet<>();

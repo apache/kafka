@@ -17,10 +17,12 @@
 
 package org.apache.kafka.connect.connector.policy;
 
-import org.apache.kafka.common.errors.PolicyViolationException;
+import org.apache.kafka.common.config.ConfigValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -30,8 +32,9 @@ public class AllConnectorClientConfigOverridePolicy implements ConnectorClientCo
     private static final Logger log = LoggerFactory.getLogger(AllConnectorClientConfigOverridePolicy.class);
 
     @Override
-    public void validate(ConnectorClientConfigRequest connectorClientConfigRequest) throws PolicyViolationException {
+    public List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest) {
         //allow all no op
+        return Collections.emptyList();
     }
 
     @Override
