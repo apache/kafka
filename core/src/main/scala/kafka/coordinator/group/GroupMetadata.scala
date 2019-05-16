@@ -245,6 +245,37 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   /**
+    * Check whether current leader is rejoined. If not, try to find another joined member to be
+    * new leader. Return false if
+    *   1. the group is currently empty (has no designated leader)
+    *   2. no member rejoined
+    */
+  def maybeElectNewJoinedLeader(): Boolean = {
+    leaderId.map { currentLeaderId =>
+      val currentLeader = get(currentLeaderId)
+      if (!currentLeader.isAwaitingJoin) {
+        members.find(_._2.isAwaitingJoin) match {
+          case Some((anyJoinedMemberId, anyJoinedMember)) =>
+            leaderId = Option(anyJoinedMemberId)
+            info(s"Group leader [member.id: ${currentLeader.memberId}, " +
+              s"group.instance.id: ${currentLeader.groupInstanceId}] failed to join " +
+              s"before rebalance timeout, while new leader $anyJoinedMember was elected.")
+            true
+
+          case None =>
+            info(s"Group leader [member.id: ${currentLeader.memberId}, " +
+              s"group.instance.id: ${currentLeader.groupInstanceId}] failed to join " +
+              s"before rebalance timeout, and the group couldn't proceed to next generation" +
+              s"because no member joined.")
+            false
+        }
+      } else {
+        true
+      }
+    }.getOrElse(false)
+  }
+
+  /**
     * [For static members only]: Replace the old member id with the new one,
     * keep everything else unchanged and return the updated member.
     */
@@ -377,7 +408,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def initNextGeneration() = {
-    assert(notYetRejoinedMembers == List.empty[MemberMetadata])
     if (members.nonEmpty) {
       generationId += 1
       protocol = Some(selectProtocol)
