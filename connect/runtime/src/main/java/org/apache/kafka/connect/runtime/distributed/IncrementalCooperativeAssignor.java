@@ -621,15 +621,14 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
                 .build();
 
         return memberConfigs.entrySet().stream()
-                .map(e -> WorkerLoad.embed(
-                        e.getKey(),
+                .map(e -> new WorkerLoad.Builder(e.getKey()).with(
                         e.getValue().assignment().connectors().stream()
                                 .filter(v -> !ignore.connectors().contains(v))
                                 .collect(Collectors.toList()),
                         e.getValue().assignment().tasks().stream()
                                 .filter(v -> !ignore.tasks().contains(v))
                                 .collect(Collectors.toList())
-                        )
+                        ).build()
                 ).collect(Collectors.toList());
     }
 

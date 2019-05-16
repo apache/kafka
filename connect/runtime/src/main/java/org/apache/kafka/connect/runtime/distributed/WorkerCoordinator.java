@@ -482,14 +482,6 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             }
         }
 
-        public static WorkerLoad embed(
-                String worker,
-                Collection<String> connectors,
-                Collection<ConnectorTaskId> tasks
-        ) {
-            return new WorkerLoad(worker, connectors, tasks);
-        }
-
         public String worker() {
             return worker;
         }

@@ -918,14 +918,14 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     private WorkerLoad emptyWorkerLoad(String worker) {
-        return WorkerLoad.embed(worker, new ArrayList<>(), new ArrayList<>());
+        return new WorkerLoad.Builder(worker).build();
     }
 
     private WorkerLoad workerLoad(String worker, int connectorStart, int connectorNum,
                                   int taskStart, int taskNum) {
-        return WorkerLoad.embed(worker,
+        return new WorkerLoad.Builder(worker).with(
                 newConnectors(connectorStart, connectorStart + connectorNum),
-                newTasks(taskStart, taskStart + taskNum));
+                newTasks(taskStart, taskStart + taskNum)).build();
     }
 
     private static List<String> newConnectors(int start, int end) {

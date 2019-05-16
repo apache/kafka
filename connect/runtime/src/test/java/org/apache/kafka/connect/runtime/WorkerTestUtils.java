@@ -22,7 +22,6 @@ import org.apache.kafka.connect.runtime.distributed.ExtendedWorkerState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
 import java.util.AbstractMap.SimpleEntry;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -39,14 +38,14 @@ import static org.junit.Assert.assertNotNull;
 public class WorkerTestUtils {
 
     public static WorkerLoad emptyWorkerLoad(String worker) {
-        return WorkerLoad.embed(worker, new ArrayList<>(), new ArrayList<>());
+        return new WorkerLoad.Builder(worker).build();
     }
 
     public WorkerLoad workerLoad(String worker, int connectorStart, int connectorNum,
                                   int taskStart, int taskNum) {
-        return WorkerLoad.embed(worker,
+        return new WorkerLoad.Builder(worker).with(
                 newConnectors(connectorStart, connectorStart + connectorNum),
-                newTasks(taskStart, taskStart + taskNum));
+                newTasks(taskStart, taskStart + taskNum)).build();
     }
 
     public static List<String> newConnectors(int start, int end) {
