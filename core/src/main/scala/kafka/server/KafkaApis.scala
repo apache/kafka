@@ -399,9 +399,10 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         // call coordinator to handle commit offset
         groupCoordinator.handleCommitOffsets(
-          offsetCommitRequest.data().groupId(),
-          offsetCommitRequest.data().memberId(),
-          offsetCommitRequest.data().generationId(),
+          offsetCommitRequest.data.groupId,
+          offsetCommitRequest.data.memberId,
+          getGroupInstanceId(offsetCommitRequest.data.groupInstanceId),
+          offsetCommitRequest.data.generationId,
           partitionData,
           sendResponseCallback)
       }
@@ -1397,6 +1398,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         syncGroupRequest.data.groupId,
         syncGroupRequest.data.generationId,
         syncGroupRequest.data.memberId,
+        getGroupInstanceId(syncGroupRequest.data.groupInstanceId),
         assignmentMap.result,
         sendResponseCallback
       )
@@ -1446,9 +1448,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       groupCoordinator.handleHeartbeat(
         heartbeatRequest.data.groupId,
         heartbeatRequest.data.memberId,
+        getGroupInstanceId(heartbeatRequest.data.groupInstanceId),
         heartbeatRequest.data.generationid,
         sendResponseCallback)
     }
+  }
+
+  def getGroupInstanceId(rawInstanceId: String): Option[String] = {
+      if (rawInstanceId == null ||
+        config.interBrokerProtocolVersion < KAFKA_2_3_IV0)
+        None
+      else
+        Some(rawInstanceId)
   }
 
   def handleLeaveGroupRequest(request: RequestChannel.Request) {

@@ -249,15 +249,9 @@ class GroupCoordinator(val brokerId: Int,
             clientId, clientHost, protocolType, protocols, group, responseCallback)
         }
       } else {
-        val staticMemberId = if (group.hasStaticMember(groupInstanceId))
-          Some(group.getStaticMemberId(groupInstanceId))
-        else
-          None
-        val groupInstanceIdNotFound = groupInstanceId.isDefined && staticMemberId.isEmpty
-
-        if (staticMemberId.isDefined && staticMemberId.get != memberId) {
+        val groupInstanceIdNotFound = groupInstanceId.isDefined && !group.hasStaticMember(groupInstanceId)
+        if (!group.validateMemberIdIfStatic(memberId, groupInstanceId)) {
           // given member id doesn't match with the groupInstanceId. Inform duplicate instance to shut down immediately.
-          group.logFencingInstanceIdError(memberId, groupInstanceId, staticMemberId.get)
           responseCallback(joinError(memberId, Errors.FENCED_INSTANCE_ID))
         } else if (!group.has(memberId) || groupInstanceIdNotFound) {
             // If the dynamic member trying to register with an unrecognized id, or
@@ -325,6 +319,7 @@ class GroupCoordinator(val brokerId: Int,
   def handleSyncGroup(groupId: String,
                       generation: Int,
                       memberId: String,
+                      groupInstanceId: Option[String],
                       groupAssignment: Map[String, Array[Byte]],
                       responseCallback: SyncCallback): Unit = {
     validateGroupStatus(groupId, ApiKeys.SYNC_GROUP) match {
@@ -340,7 +335,7 @@ class GroupCoordinator(val brokerId: Int,
       case None =>
         groupManager.getGroup(groupId) match {
           case None => responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
-          case Some(group) => doSyncGroup(group, generation, memberId, groupAssignment, responseCallback)
+          case Some(group) => doSyncGroup(group, generation, memberId, groupInstanceId, groupAssignment, responseCallback)
         }
     }
   }
@@ -348,10 +343,11 @@ class GroupCoordinator(val brokerId: Int,
   private def doSyncGroup(group: GroupMetadata,
                           generationId: Int,
                           memberId: String,
+                          groupInstanceId: Option[String],
                           groupAssignment: Map[String, Array[Byte]],
                           responseCallback: SyncCallback) {
     group.inLock {
-      if (!group.validateMemberIdIfStatic(memberId)) {
+      if (!group.validateMemberIdIfStatic(memberId, groupInstanceId)) {
         responseCallback(Array.empty, Errors.FENCED_INSTANCE_ID)
       } else if (!group.has(memberId)) {
         responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
@@ -485,6 +481,7 @@ class GroupCoordinator(val brokerId: Int,
 
   def handleHeartbeat(groupId: String,
                       memberId: String,
+                      groupInstanceId: Option[String],
                       generationId: Int,
                       responseCallback: Errors => Unit) {
     validateGroupStatus(groupId, ApiKeys.HEARTBEAT).foreach { error =>
@@ -501,7 +498,7 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
       case Some(group) => group.inLock {
-        if (!group.validateMemberIdIfStatic(memberId)) {
+        if (!group.validateMemberIdIfStatic(memberId, groupInstanceId)) {
           responseCallback(Errors.FENCED_INSTANCE_ID)
         } else if (!group.has(memberId)) {
           responseCallback(Errors.UNKNOWN_MEMBER_ID)
@@ -548,12 +545,13 @@ class GroupCoordinator(val brokerId: Int,
         val group = groupManager.getGroup(groupId).getOrElse {
           groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
         }
-        doCommitOffsets(group, NoMemberId, NoGeneration, producerId, producerEpoch, offsetMetadata, responseCallback)
+        doCommitOffsets(group, NoMemberId, None, NoGeneration, producerId, producerEpoch, offsetMetadata, responseCallback)
     }
   }
 
   def handleCommitOffsets(groupId: String,
                           memberId: String,
+                          groupInstanceId: Option[String],
                           generationId: Int,
                           offsetMetadata: immutable.Map[TopicPartition, OffsetAndMetadata],
                           responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
@@ -565,7 +563,7 @@ class GroupCoordinator(val brokerId: Int,
             if (generationId < 0) {
               // the group is not relying on Kafka for group management, so allow the commit
               val group = groupManager.addGroup(new GroupMetadata(groupId, Empty, time))
-              doCommitOffsets(group, memberId, generationId, NO_PRODUCER_ID, NO_PRODUCER_EPOCH,
+              doCommitOffsets(group, memberId, groupInstanceId, generationId, NO_PRODUCER_ID, NO_PRODUCER_EPOCH,
                 offsetMetadata, responseCallback)
             } else {
               // or this is a request coming from an older generation. either way, reject the commit
@@ -573,7 +571,7 @@ class GroupCoordinator(val brokerId: Int,
             }
 
           case Some(group) =>
-            doCommitOffsets(group, memberId, generationId, NO_PRODUCER_ID, NO_PRODUCER_EPOCH,
+            doCommitOffsets(group, memberId, groupInstanceId, generationId, NO_PRODUCER_ID, NO_PRODUCER_EPOCH,
               offsetMetadata, responseCallback)
         }
     }
@@ -589,6 +587,7 @@ class GroupCoordinator(val brokerId: Int,
 
   private def doCommitOffsets(group: GroupMetadata,
                               memberId: String,
+                              groupInstanceId: Option[String],
                               generationId: Int,
                               producerId: Long,
                               producerEpoch: Short,
@@ -597,7 +596,7 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       if (group.is(Dead)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
-      } else if (!group.validateMemberIdIfStatic(memberId)) {
+      } else if (!group.validateMemberIdIfStatic(memberId, groupInstanceId)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.FENCED_INSTANCE_ID))
       } else if ((generationId < 0 && group.is(Empty)) || (producerId != NO_PRODUCER_ID)) {
         // The group is only using Kafka to store offsets.
