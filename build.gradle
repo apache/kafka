@@ -1437,7 +1437,12 @@ project(':connect:api') {
 
   javadoc {
     include "**/org/apache/kafka/connect/**" // needed for the `javadocAll` task
-    options.links "https://docs.oracle.com/javase/8/docs/api/"
+    // Work around javadoc external linking issue in some OpenJDK 11 versions
+    // See https://bugs.openjdk.java.net/browse/JDK-8212233
+    if (JavaVersion.current().isJava11())
+      options.links "https://docs.oracle.com/en/java/javase/11/docs/api/"
+    else
+      options.links "https://docs.oracle.com/javase/8/docs/api/"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -1716,5 +1721,10 @@ task aggregatedJavadoc(type: Javadoc) {
   classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
   includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
-  options.links "https://docs.oracle.com/javase/8/docs/api/"
+  // Work around javadoc external linking issue in some OpenJDK 11 versions
+  // See https://bugs.openjdk.java.net/browse/JDK-8212233
+  if (JavaVersion.current().isJava11())
+    options.links "https://docs.oracle.com/en/java/javase/11/docs/api/"
+  else
+    options.links "https://docs.oracle.com/javase/8/docs/api/"
 }
