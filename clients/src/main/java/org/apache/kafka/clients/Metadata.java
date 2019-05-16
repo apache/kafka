@@ -129,6 +129,10 @@ public class Metadata implements Closeable {
         return Math.max(timeToExpire, timeToAllowUpdate(nowMs));
     }
 
+    public long metadataExpireMs() {
+        return this.metadataExpireMs;
+    }
+
     /**
      * Request an update of the current cluster metadata info, return the current updateVersion before the update
      */

@@ -617,10 +617,6 @@ public class Fetcher<K, V> implements Closeable {
                     log.trace("Returning fetched records at offset {} for assigned partition {} and update " +
                             "position to {}", position, partitionRecords.partition, nextPosition);
                     subscriptions.position(partitionRecords.partition, nextPosition);
-                    partitionRecords.preferredReadReplica().ifPresent(replicaId -> {
-                        log.trace("Updating the preferred read replica for partition {} to {}", partitionRecords.partition, replicaId);
-                        subscriptions.updatePreferredReadReplica(partitionRecords.partition, replicaId, time.milliseconds() + requestTimeoutMs);
-                    });
                 }
 
                 Long partitionLag = subscriptions.partitionLag(partitionRecords.partition, isolationLevel);
@@ -1022,7 +1018,8 @@ public class Fetcher<K, V> implements Closeable {
                 .flatMap(nodeId -> Optional.ofNullable(metadata.fetch().nodeById(nodeId)));
         if (node.isPresent()) {
             if (Arrays.asList(metadata.fetch().partition(partition).offlineReplicas()).contains(node.get())) {
-                log.trace("Not fetching from {} since it is marked offline, using the leader instead.", node.get());
+                log.trace("Not fetching from {} for {} since it is marked offline, using the leader instead.", node.get(), partition);
+                subscriptions.clearPreferredReadReplica(partition);
                 return leaderReplica;
             } else {
                 return node.get();
@@ -1163,6 +1160,11 @@ public class Fetcher<K, V> implements Closeable {
                 if (partition.lastStableOffset >= 0) {
                     log.trace("Updating last stable offset for partition {} to {}", tp, partition.lastStableOffset);
                     subscriptions.updateLastStableOffset(tp, partition.lastStableOffset);
+                }
+
+                if (partition.preferredReadReplica.isPresent()) {
+                    subscriptions.updatePreferredReadReplica(partitionRecords.partition, partition.preferredReadReplica.get(),
+                            time.milliseconds() + metadata.metadataExpireMs());
                 }
 
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||

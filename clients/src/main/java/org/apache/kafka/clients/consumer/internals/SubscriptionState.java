@@ -611,6 +611,7 @@ public class SubscriptionState {
 
         private Optional<Integer> preferredReadReplica(long timeMs) {
             if (preferredReadReplicaLeaseMs != null && timeMs > preferredReadReplicaLeaseMs) {
+                preferredReadReplica = null;
                 return Optional.empty();
             } else {
                 return Optional.ofNullable(preferredReadReplica);
@@ -618,8 +619,10 @@ public class SubscriptionState {
         }
 
         private void updatePreferredReadReplica(int preferredReadReplica, long timeMs) {
-            this.preferredReadReplica = preferredReadReplica;
-            this.preferredReadReplicaLeaseMs = timeMs;
+            if (this.preferredReadReplica == null || preferredReadReplica != this.preferredReadReplica) {
+                this.preferredReadReplica = preferredReadReplica;
+                this.preferredReadReplicaLeaseMs = timeMs;
+            }
         }
 
         private boolean clearPreferredReadReplica() {
