@@ -651,8 +651,8 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
     * @param partitions The partitions to have their preferred leader elected
     * @param electionType The type of election to perform
     * @param electionTrigger The reason for tigger this election
-    * @return A map of failed elections where keys are partitions which had an error and the corresponding value is
-    *         the exception that was thrown.
+    * @return A map of failed and successful elections. The keys are the topic partitions and the corresponding values are
+    *         either the exception that was thrown or new leader & ISR.
     */
   private[this] def onReplicaElection(
     partitions: Set[TopicPartition],

@@ -140,9 +140,9 @@ class ZkPartitionStateMachine(config: KafkaConfig,
    * @param partitions The partitions
    * @param targetState The state
    * @param partitionLeaderElectionStrategyOpt The leader election strategy if a leader election is required.
-   * @return a tuple with two maps when transition to OnlinePartition, for all other transtitions it returns two empty maps:
-   *         1. topic partitions and the corresponding expected leader ids
-   *         2. partitions and corresponding throwable for those partitions which could not transition to the OnlineState
+   * @return A map of failed and successful elections when targetState is OnlinePartitions. The keys are the
+   *         topic partitions and the corresponding values are either the exception that was thrown or new
+   *         leader & ISR.
    */
   override def handleStateChanges(
     partitions: Seq[TopicPartition],
@@ -193,9 +193,9 @@ class ZkPartitionStateMachine(config: KafkaConfig,
    * --nothing other than marking the partition state as NonExistentPartition
    * @param partitions  The partitions for which the state transition is invoked
    * @param targetState The end state that the partition should be moved to
-   * @return a tuple with two maps when transition to OnlinePartition, for all other transtitions it returns two empty maps:
-   *         1. topic partitions and the corresponding expected leader ids
-   *         2. partitions and corresponding throwable for those partitions which could not transition to the OnlineState
+   * @return A map of failed and successful elections when targetState is OnlinePartitions. The keys are the
+   *         topic partitions and the corresponding values are either the exception that was thrown or new
+   *         leader & ISR.
    */
   private def doHandleStateChanges(
     partitions: Seq[TopicPartition],
@@ -313,8 +313,8 @@ class ZkPartitionStateMachine(config: KafkaConfig,
    * Repeatedly attempt to elect leaders for multiple partitions until there are no more remaining partitions to retry.
    * @param partitions The partitions that we're trying to elect leaders for.
    * @param partitionLeaderElectionStrategy The election strategy to use.
-   * @return A map with each topic partition under election with either the new leader and isr, or the exception in the
-   *         case of an error.
+   * @return A map of failed and successful elections. The keys are the topic partitions and the corresponding values are
+   *         either the exception that was thrown or new leader & ISR.
    */
   private def electLeaderForPartitions(
     partitions: Seq[TopicPartition],
@@ -396,8 +396,11 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     }
 
     val (partitionsWithoutLeaders, partitionsWithLeaders) = partitionLeaderElectionStrategy match {
-      case OfflinePartitionLeaderElectionStrategy(isUnclean) =>
-        val partitionsWithUncleanLeaderElectionState = collectUncleanLeaderElectionState(validPartitionsForElection, isUnclean)
+      case OfflinePartitionLeaderElectionStrategy(allowUnclean) =>
+        val partitionsWithUncleanLeaderElectionState = collectUncleanLeaderElectionState(
+          validPartitionsForElection,
+          allowUnclean
+        )
         leaderForOffline(controllerContext, partitionsWithUncleanLeaderElectionState).partition(_.leaderAndIsr.isEmpty)
       case ReassignPartitionLeaderElectionStrategy =>
         leaderForReassign(controllerContext, validPartitionsForElection).partition(_.leaderAndIsr.isEmpty)
@@ -427,10 +430,22 @@ class ZkPartitionStateMachine(config: KafkaConfig,
 
     (finishedUpdates ++ failedElections, updatesToRetry)
   }
-
+  /* For the provided set of topic partition and partition sync state it attempts to determine if unclean
+   * leader election should be performed. Unclean election should be performed if there are no live
+   * replica which are in sync and unclean leader election is allowed (allowUnclean parameter is true or
+   * the topic has been configured to allow unclean election).
+   *
+   * @param leaderIsrAndControllerEpochs set of partition to determine if unclean leader election should be
+   *                                     allowed
+   * @param allowUnclean whether to allow unclean election without having to read the topic configuration
+   * @return a sequence of three element tuple:
+   *         1. topic partition
+   *         2. leader, isr and controller epoc. Some means election should be performed
+   *         3. allow unclean
+   */
   private def collectUncleanLeaderElectionState(
     leaderIsrAndControllerEpochs: Seq[(TopicPartition, LeaderIsrAndControllerEpoch)],
-    isUnclean: Boolean
+    allowUnclean: Boolean
   ): Seq[(TopicPartition, Option[LeaderIsrAndControllerEpoch], Boolean)] = {
     val (partitionsWithNoLiveInSyncReplicas, partitionsWithLiveInSyncReplicas) = leaderIsrAndControllerEpochs.partition {
       case (partition, leaderIsrAndControllerEpoch) =>
@@ -441,25 +456,36 @@ class ZkPartitionStateMachine(config: KafkaConfig,
         liveInSyncReplicas.isEmpty
     }
 
-    val (logConfigs, failed) = zkClient.getLogConfigs(
-      partitionsWithNoLiveInSyncReplicas.map { case (partition, _) => partition.topic },
-      config.originals()
-    )
-
-    partitionsWithNoLiveInSyncReplicas.map { case (partition, leaderIsrAndControllerEpoch) =>
-      if (failed.contains(partition.topic)) {
-        logFailedStateChange(partition, partitionState(partition), OnlinePartition, failed(partition.topic))
-        (partition, None, false)
-      } else {
-        (
-          partition,
-          Option(leaderIsrAndControllerEpoch),
-          isUnclean || logConfigs(partition.topic).uncleanLeaderElectionEnable.booleanValue()
-        )
+    val electionForPartitionWithoutLiveReplicas = if (allowUnclean) {
+      partitionsWithNoLiveInSyncReplicas.map { case (partition, leaderIsrAndControllerEpoch) =>
+        (partition, Option(leaderIsrAndControllerEpoch), true)
       }
-    } ++ partitionsWithLiveInSyncReplicas.map { case (partition, leaderIsrAndControllerEpoch) =>
-      (partition, Option(leaderIsrAndControllerEpoch), false)
+    } else {
+      val (logConfigs, failed) = zkClient.getLogConfigs(
+        partitionsWithNoLiveInSyncReplicas.map { case (partition, _) => partition.topic },
+        config.originals()
+      )
+
+      partitionsWithNoLiveInSyncReplicas.map { case (partition, leaderIsrAndControllerEpoch) =>
+        if (failed.contains(partition.topic)) {
+          logFailedStateChange(partition, partitionState(partition), OnlinePartition, failed(partition.topic))
+          (partition, None, false)
+        } else {
+          (
+            partition,
+            Option(leaderIsrAndControllerEpoch),
+            logConfigs(partition.topic).uncleanLeaderElectionEnable.booleanValue()
+          )
+        }
+      }
     }
+
+    (
+      electionForPartitionWithoutLiveReplicas ++
+      partitionsWithLiveInSyncReplicas.map { case (partition, leaderIsrAndControllerEpoch) =>
+        (partition, Option(leaderIsrAndControllerEpoch), false)
+      }
+    )
   }
 
   private def logInvalidTransition(partition: TopicPartition, targetState: PartitionState): Unit = {
@@ -509,7 +535,7 @@ object PartitionLeaderElectionAlgorithms {
 }
 
 sealed trait PartitionLeaderElectionStrategy
-final case class OfflinePartitionLeaderElectionStrategy(isUnclean: Boolean) extends PartitionLeaderElectionStrategy
+final case class OfflinePartitionLeaderElectionStrategy(allowUnclean: Boolean) extends PartitionLeaderElectionStrategy
 final case object ReassignPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
 final case object PreferredReplicaPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
 final case object ControlledShutdownPartitionLeaderElectionStrategy extends PartitionLeaderElectionStrategy
