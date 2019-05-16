@@ -76,7 +76,6 @@ class GroupCoordinatorTest {
   private val leaderInstanceId = Some("leader")
   private val followerInstanceId = Some("follower")
   private val invalidMemberId = "invalidMember"
-
   private val metadata = Array[Byte]()
   private val protocols = List(("range", metadata))
   private val protocolSuperset = List(("range", metadata), ("roundrobin", metadata))
