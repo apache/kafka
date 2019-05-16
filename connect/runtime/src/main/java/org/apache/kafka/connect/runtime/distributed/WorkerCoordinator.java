@@ -176,7 +176,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     protected void onJoinComplete(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
         ExtendedAssignment newAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(memberAssignment);
         log.debug("Deserialized new assignment: {}", newAssignment);
-        currentConnectProtocol = ConnectProtocolCompatibility.protocol(protocol);
+        currentConnectProtocol = ConnectProtocolCompatibility.fromProtocol(protocol);
         // At this point we always consider ourselves to be a member of the cluster, even if there was an assignment
         // error (the leader couldn't make the assignment) or we are behind the config and cannot yet work on our assigned
         // tasks. It's the responsibility of the code driving this process to decide how to react (e.g. trying to get
@@ -202,7 +202,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     @Override
     protected Map<String, ByteBuffer> performAssignment(String leaderId, String protocol, List<JoinGroupResponseMember> allMemberMetadata) {
-        return ConnectProtocolCompatibility.protocol(protocol) == EAGER
+        return ConnectProtocolCompatibility.fromProtocol(protocol) == EAGER
                ? eagerAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this)
                : incrementalAssignor.performAssignment(leaderId, protocol, allMemberMetadata, this);
     }
