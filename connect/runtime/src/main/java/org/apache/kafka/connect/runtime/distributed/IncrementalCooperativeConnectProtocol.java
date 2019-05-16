@@ -24,7 +24,10 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.protocol.types.Type;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
+import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
+import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import static org.apache.kafka.common.protocol.types.Type.NULLABLE_BYTES;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.ASSIGNMENT_KEY_NAME;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONFIG_OFFSET_KEY_NAME;
@@ -37,6 +40,9 @@ import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.LEADE
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.LEADER_URL_KEY_NAME;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.URL_KEY_NAME;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.VERSION_KEY_NAME;
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
+
 
 /**
  * This class implements a group protocol for Kafka Connect workers that support incremental and
@@ -141,6 +147,25 @@ public class IncrementalCooperativeConnectProtocol {
         ALLOCATION_V1.write(buffer, allocation);
         buffer.flip();
         return buffer;
+    }
+
+    /**
+     * Returns the collection of Connect protocols that are supported by this version along
+     * with their serialized metadata. The protocols are ordered by preference.
+     *
+     * @param workerState the current state of the worker metadata
+     * @return the collection of Connect protocol metadata
+     */
+    public static JoinGroupRequestProtocolCollection metadataRequest(ExtendedWorkerState workerState) {
+        // Order matters in terms of protocol preference
+        return new JoinGroupRequestProtocolCollection(Arrays.asList(
+                new JoinGroupRequestProtocol()
+                        .setName(COMPATIBLE.protocol())
+                        .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(workerState).array()),
+                new JoinGroupRequestProtocol()
+                        .setName(EAGER.protocol())
+                        .setMetadata(ConnectProtocol.serializeMetadata(workerState).array()))
+                .iterator());
     }
 
     /**

@@ -27,11 +27,16 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+
+import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
+import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
+import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
 
 /**
  * This class implements the protocol for Kafka Connect workers in a group. It includes the format of worker state used when
@@ -114,6 +119,9 @@ public class ConnectProtocol {
      *   Url                => [String]
      *   ConfigOffset       => Int64
      * </pre>
+     *
+     * @param workerState the current state of the worker metadata
+     * @return the serialized state of the worker metadata
      */
     public static ByteBuffer serializeMetadata(WorkerState workerState) {
         Struct struct = new Struct(CONFIG_STATE_V0);
@@ -124,6 +132,21 @@ public class ConnectProtocol {
         CONFIG_STATE_V0.write(buffer, struct);
         buffer.flip();
         return buffer;
+    }
+
+    /**
+     * Returns the collection of Connect protocols that are supported by this version along
+     * with their serialized metadata. The protocols are ordered by preference.
+     *
+     * @param workerState the current state of the worker metadata
+     * @return the collection of Connect protocol metadata
+     */
+    public static JoinGroupRequestProtocolCollection metadataRequest(WorkerState workerState) {
+        return new JoinGroupRequestProtocolCollection(Collections.singleton(
+                new JoinGroupRequestProtocol()
+                        .setName(EAGER.protocol())
+                        .setMetadata(ConnectProtocol.serializeMetadata(workerState).array()))
+                .iterator());
     }
 
     /**
@@ -212,7 +235,6 @@ public class ConnectProtocol {
         return new Assignment(error, leader, leaderUrl, offset, connectorIds, taskIds);
     }
 
-
     /**
      * A class that captures the deserialized form of a worker's metadata.
      */
@@ -246,7 +268,6 @@ public class ConnectProtocol {
                     '}';
         }
     }
-
 
     /**
      * The basic assignment of connectors and tasks introduced with V0 version of the Connect protocol.

@@ -32,7 +32,6 @@ import org.slf4j.Logger;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -42,10 +41,8 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import static org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
-import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.COMPATIBLE;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocolCompatibility.EAGER;
 import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativeConnectProtocol.ExtendedWorkerState;
 
@@ -166,24 +163,11 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     public JoinGroupRequestProtocolCollection metadata() {
         configSnapshot = configStorage.snapshot();
         ExtendedWorkerState workerState = new ExtendedWorkerState(restUrl, configSnapshot.offset(), assignmentSnapshot);
-        ByteBuffer metadata;
         switch (protocolCompatibility) {
             case EAGER:
-                metadata = ConnectProtocol.serializeMetadata(workerState);
-                return new JoinGroupRequestProtocolCollection(Collections.singleton(
-                        new JoinGroupRequestProtocol()
-                                .setName(protocolCompatibility.protocol())
-                                .setMetadata(metadata.array()))
-                        .iterator());
+                return ConnectProtocol.metadataRequest(workerState);
             case COMPATIBLE:
-                return new JoinGroupRequestProtocolCollection(Arrays.asList(
-                        new JoinGroupRequestProtocol()
-                                .setName(COMPATIBLE.protocol())
-                                .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(workerState).array()),
-                        new JoinGroupRequestProtocol()
-                                .setName(EAGER.protocol())
-                                .setMetadata(ConnectProtocol.serializeMetadata(workerState).array()))
-                        .iterator());
+                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState);
             default:
                 throw new IllegalStateException("Unknown Connect protocol compatibility mode " + protocolCompatibility);
         }
