@@ -103,7 +103,7 @@ public class StandaloneHerder extends AbstractHerder {
         // There's no coordination/hand-off to do here since this is all standalone. Instead, we
         // should just clean up the stuff we normally would, i.e. cleanly checkpoint and shutdown all
         // the tasks.
-        for (String connName : configState.connectors()) {
+        for (String connName : connectors()) {
             removeConnectorTasks(connName);
             worker.stopConnector(connName);
         }
@@ -118,12 +118,12 @@ public class StandaloneHerder extends AbstractHerder {
 
     @Override
     public synchronized void connectors(Callback<Collection<String>> callback) {
-        callback.onCompletion(null, configState.connectors());
+        callback.onCompletion(null, connectors());
     }
-
+    
     @Override
     public synchronized void connectorInfo(String connName, Callback<ConnectorInfo> callback) {
-        ConnectorInfo connectorInfo = createConnectorInfo(connName);
+        ConnectorInfo connectorInfo = connectorInfo(connName);
         if (connectorInfo == null) {
             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
             return;
