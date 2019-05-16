@@ -305,7 +305,7 @@ public enum Errors {
             PreferredLeaderNotAvailableException::new),
     GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.", GroupMaxSizeReachedException::new),
     FENCED_INSTANCE_ID(82, "The broker rejected this static consumer since " +
-            "another consumer with the same group.instance.id has registered with a more recent timestamp.",
+            "another consumer with the same group.instance.id has registered with a different member.id.",
             FencedInstanceIdException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);

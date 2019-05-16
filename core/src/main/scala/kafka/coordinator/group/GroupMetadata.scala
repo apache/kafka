@@ -327,12 +327,6 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
-  def isUnknownMember(memberId: String,
-                      groupInstanceId: Option[String]): Boolean = {
-    val groupInstanceIdNotFound = groupInstanceId.isDefined && !hasStaticMember(groupInstanceId)
-    groupInstanceIdNotFound || has(memberId)
-  }
-
   def currentState = state
 
   def notYetRejoinedMembers = members.values.filter(!_.isAwaitingJoin).toList
@@ -363,8 +357,8 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   /**
     * Verify the member.id is up to date for static members. Return false if both conditions met:
-    *   1. given member is static
-    *   2. corresponding member.id doesn't match
+    *   1. given member is a known static member to group
+    *   2. group stored member.id doesn't match with given member.id
     */
   def validateMemberIdIfStatic(memberId: String,
                                groupInstanceId: Option[String]): Boolean = {

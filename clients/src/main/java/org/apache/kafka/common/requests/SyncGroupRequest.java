@@ -72,6 +72,7 @@ public class SyncGroupRequest extends AbstractRequest {
                        );
             case 1:
             case 2:
+            case 3:
                 return new SyncGroupResponse(
                         new SyncGroupResponseData()
                             .setErrorCode(Errors.forException(e).code())

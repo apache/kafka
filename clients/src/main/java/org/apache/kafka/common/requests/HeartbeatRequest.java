@@ -68,6 +68,7 @@ public class HeartbeatRequest extends AbstractRequest {
                 return new HeartbeatResponse(response);
             case 1:
             case 2:
+            case 3:
                 response.setThrottleTimeMs(throttleTimeMs);
                 return new HeartbeatResponse(response);
             default:

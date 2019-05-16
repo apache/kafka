@@ -131,6 +131,7 @@ public class OffsetCommitRequest extends AbstractRequest {
             case 4:
             case 5:
             case 6:
+            case 7:
                 return new OffsetCommitResponse(
                         new OffsetCommitResponseData()
                                 .setTopics(responseTopicData)
