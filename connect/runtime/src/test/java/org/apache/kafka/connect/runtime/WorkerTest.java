@@ -846,8 +846,8 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
         Map<String, String> expectedConfigs = new HashMap<>(defaultProducerConfigs);
         expectedConfigs.put("client.id", "connector-producer-job-0");
-        assertEquals(expectedConfigs, Worker.producerConfigs(TASK_ID,"connector-producer-" + TASK_ID, config, connectorConfig,
-                                                                    null, noneConnectorClientConfigOverridePolicy));
+        assertEquals(expectedConfigs,
+                     Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, config, connectorConfig, null, noneConnectorClientConfigOverridePolicy));
     }
 
     @Test
@@ -865,8 +865,8 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).andReturn(
             new HashMap<String, Object>());
         PowerMock.replayAll();
-        assertEquals(expectedConfigs, Worker.producerConfigs(TASK_ID,"connector-producer-" + TASK_ID, configWithOverrides, connectorConfig,
-                                                             null, allConnectorClientConfigOverridePolicy));
+        assertEquals(expectedConfigs,
+                     Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy));
     }
 
     @Test
@@ -888,8 +888,8 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX))
             .andReturn(connConfig);
         PowerMock.replayAll();
-        assertEquals(expectedConfigs, Worker.producerConfigs(TASK_ID,"connector-producer-" + TASK_ID, configWithOverrides, connectorConfig,
-                                                             null, allConnectorClientConfigOverridePolicy));
+        assertEquals(expectedConfigs,
+                     Worker.producerConfigs(TASK_ID, "connector-producer-" + TASK_ID, configWithOverrides, connectorConfig, null, allConnectorClientConfigOverridePolicy));
     }
 
     @Test
@@ -897,8 +897,7 @@ public class WorkerTest extends ThreadedTest {
         Map<String, String> expectedConfigs = new HashMap<>(defaultConsumerConfigs);
         expectedConfigs.put("group.id", "connect-test");
         expectedConfigs.put("client.id", "connector-consumer-test-1");
-        EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).andReturn(
-            new HashMap<String, Object>());
+        EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).andReturn(new HashMap<>());
         PowerMock.replayAll();
         assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), config, connectorConfig,
                                                              null, noneConnectorClientConfigOverridePolicy));
@@ -917,8 +916,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("auto.offset.reset", "latest");
         expectedConfigs.put("max.poll.records", "1000");
         expectedConfigs.put("client.id", "consumer-test-id");
-        EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX))
-            .andReturn(new HashMap<String, Object>());
+        EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX)).andReturn(new HashMap<>());
         PowerMock.replayAll();
         assertEquals(expectedConfigs, Worker.consumerConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connectorConfig,
                                                              null, noneConnectorClientConfigOverridePolicy));
