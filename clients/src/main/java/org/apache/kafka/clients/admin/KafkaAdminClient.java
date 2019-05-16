@@ -2948,33 +2948,11 @@ public class KafkaAdminClient extends AdminClient {
     @Override
     public ElectPreferredLeadersResult electPreferredLeaders(final Collection<TopicPartition> partitions,
                                                              ElectPreferredLeadersOptions options) {
+        final ElectLeadersOptions newOptions = new ElectLeadersOptions();
+        newOptions.timeoutMs(options.timeoutMs());
         final Set<TopicPartition> topicPartitions = partitions == null ? null : new HashSet<>(partitions);
 
-        final KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture = new KafkaFutureImpl<>();
-        final long now = time.milliseconds();
-
-        runnable.call(new Call("electLeaders", calcDeadlineMs(now, options.timeoutMs()),
-                new ControllerNodeProvider()) {
-
-            @Override
-            public AbstractRequest.Builder createRequest(int timeoutMs) {
-                return new ElectLeadersRequest.Builder(ElectionType.PREFERRED, topicPartitions, timeoutMs);
-            }
-
-            @Override
-            public void handleResponse(AbstractResponse abstractResponse) {
-                ElectLeadersResponse response = (ElectLeadersResponse) abstractResponse;
-                electionFuture.complete(
-                        ElectLeadersResponse.fromResponseData(response.data()));
-            }
-
-            @Override
-            void handleFailure(Throwable throwable) {
-                electionFuture.completeExceptionally(throwable);
-            }
-        }, now);
-
-        return new ElectPreferredLeadersResult(electionFuture, topicPartitions);
+        return new ElectPreferredLeadersResult(electLeaders(ElectionType.PREFERRED, topicPartitions, newOptions));
     }
 
     @Override

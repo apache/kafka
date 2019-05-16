@@ -311,10 +311,6 @@ class PartitionStateMachineTest {
         )
       )
 
-    EasyMock
-      .expect(mockZkClient.getLogConfigs(List(partition.topic), config.originals()))
-      .andReturn((Map(partition.topic -> LogConfig()), Map.empty))
-
     val leaderAndIsrAfterElection = leaderAndIsr.newLeaderAndIsr(brokerId, List(brokerId))
     val updatedLeaderAndIsr = leaderAndIsrAfterElection.withZkVersion(2)
 

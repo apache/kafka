@@ -2412,7 +2412,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     ): Unit = {
       sendResponseMaybeThrottle(request, requestThrottleMs => {
         val results = result
-          .groupBy { case (tp, error) => tp.topic }
+          .groupBy { case (tp, _) => tp.topic }
           .map { case (topic, ps) =>
             (
               topic,

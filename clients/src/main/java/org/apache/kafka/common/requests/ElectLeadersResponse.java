@@ -60,6 +60,8 @@ public class ElectLeadersResponse extends AbstractResponse {
         this.version = version;
         this.data = new ElectLeadersResponseData();
 
+        data.setThrottleTimeMs(throttleTimeMs);
+
         if (version >= 1) {
             data.setErrorCode(errorCode);
         }
@@ -119,18 +121,6 @@ public class ElectLeadersResponse extends AbstractResponse {
     @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 3;
-    }
-
-    public static Map<TopicPartition, ApiError> fromResponseData(ElectLeadersResponseData data) {
-        Map<TopicPartition, ApiError> map = new HashMap<>();
-        for (ElectLeadersResponseData.ReplicaElectionResult topicResults : data.replicaElectionResults()) {
-            for (ElectLeadersResponseData.PartitionResult partitionResult : topicResults.partitionResult()) {
-                map.put(new TopicPartition(topicResults.topic(), partitionResult.partitionId()),
-                        new ApiError(Errors.forCode(partitionResult.errorCode()),
-                                partitionResult.errorMessage()));
-            }
-        }
-        return map;
     }
 
     public static Map<TopicPartition, Optional<Throwable>> electLeadersResult(ElectLeadersResponseData data) {

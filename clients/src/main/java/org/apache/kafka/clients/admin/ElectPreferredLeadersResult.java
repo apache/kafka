@@ -17,6 +17,11 @@
 
 package org.apache.kafka.clients.admin;
 
+
+import java.util.Collection;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -25,10 +30,6 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
-
-import java.util.Collection;
-import java.util.Map;
-import java.util.Set;
 
 /**
  * The result of {@link AdminClient#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}
@@ -40,13 +41,10 @@ import java.util.Set;
 @InterfaceStability.Evolving
 @Deprecated
 public class ElectPreferredLeadersResult {
+    private final ElectLeadersResult electionResult;
 
-    private final KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture;
-    private final Set<TopicPartition> partitions;
-
-    ElectPreferredLeadersResult(KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture, Set<TopicPartition> partitions) {
-        this.electionFuture = electionFuture;
-        this.partitions = partitions;
+    ElectPreferredLeadersResult(ElectLeadersResult electionResult) {
+        this.electionResult = electionResult;
     }
 
     /**
@@ -56,30 +54,28 @@ public class ElectPreferredLeadersResult {
      */
     public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
-        electionFuture.whenComplete(new KafkaFuture.BiConsumer<Map<TopicPartition, ApiError>, Throwable>() {
-            @Override
-            public void accept(Map<TopicPartition, ApiError> topicPartitions, Throwable throwable) {
-                if (throwable != null) {
-                    result.completeExceptionally(throwable);
-                } else if (!topicPartitions.containsKey(partition)) {
-                    result.completeExceptionally(new UnknownTopicOrPartitionException(
-                            "Preferred leader election for partition \"" + partition +
-                                    "\" was not attempted"));
-                } else if (partitions == null && topicPartitions.isEmpty()) {
-                    // If partitions is null, we requested information about all partitions.  In
-                    // that case, if topicPartitions is empty, that indicates a
-                    // CLUSTER_AUTHORIZATION_FAILED error.
-                    result.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
-                } else {
-                    ApiException exception = topicPartitions.get(partition).exception();
-                    if (exception == null) {
-                        result.complete(null);
-                    } else {
-                        result.completeExceptionally(exception);
+
+        electionResult.partitions().whenComplete(
+                new KafkaFuture.BiConsumer<Map<TopicPartition, Optional<Throwable>>, Throwable>() {
+                    @Override
+                    public void accept(Map<TopicPartition, Optional<Throwable>> topicPartitions, Throwable throwable) {
+                        if (throwable != null) {
+                            result.completeExceptionally(throwable);
+                        } else if (!topicPartitions.containsKey(partition)) {
+                            result.completeExceptionally(new UnknownTopicOrPartitionException(
+                                        "Preferred leader election for partition \"" + partition +
+                                        "\" was not attempted"));
+                        } else {
+                            Optional<Throwable> exception = topicPartitions.get(partition);
+                            if (exception.isPresent()) {
+                                result.completeExceptionally(exception.get());
+                            } else {
+                                result.complete(null);
+                            }
+                        }
                     }
-                }
-            }
-        });
+                });
+
         return result;
     }
 
@@ -93,29 +89,27 @@ public class ElectPreferredLeadersResult {
      * with a null {@code partitions} argument.</p>
      */
     public KafkaFuture<Set<TopicPartition>> partitions() {
-        if (partitions != null) {
-            return KafkaFutureImpl.completedFuture(this.partitions);
-        } else {
-            final KafkaFutureImpl<Set<TopicPartition>> result = new KafkaFutureImpl<>();
-            electionFuture.whenComplete(new KafkaFuture.BiConsumer<Map<TopicPartition, ApiError>, Throwable>() {
-                @Override
-                public void accept(Map<TopicPartition, ApiError> topicPartitions, Throwable throwable) {
-                    if (throwable != null) {
-                        result.completeExceptionally(throwable);
-                    } else if (topicPartitions.isEmpty()) {
-                        result.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
-                    } else {
-                        for (ApiError apiError : topicPartitions.values()) {
-                            if (apiError.isFailure()) {
-                                result.completeExceptionally(apiError.exception());
+        final KafkaFutureImpl<Set<TopicPartition>> result = new KafkaFutureImpl<>();
+
+        electionResult.partitions().whenComplete(
+                new KafkaFuture.BiConsumer<Map<TopicPartition, Optional<Throwable>>, Throwable>() {
+                    @Override
+                    public void accept(Map<TopicPartition, Optional<Throwable>> topicPartitions, Throwable throwable) {
+                        if (throwable != null) {
+                            result.completeExceptionally(throwable);
+                        } else {
+                            for (Optional<Throwable> exception : topicPartitions.values()) {
+                                if (exception.isPresent()) {
+                                    result.completeExceptionally(exception.get());
+                                    return;
+                                }
                             }
+                            result.complete(topicPartitions.keySet());
                         }
-                        result.complete(topicPartitions.keySet());
                     }
-                }
-            });
-            return result;
-        }
+                });
+
+        return result;
     }
 
     /**
@@ -123,19 +117,25 @@ public class ElectPreferredLeadersResult {
      */
     public KafkaFuture<Void> all() {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
-        electionFuture.thenApply(new KafkaFuture.Function<Map<TopicPartition, ApiError>, Void>() {
-            @Override
-            public Void apply(Map<TopicPartition, ApiError> topicPartitions) {
-                for (ApiError apiError : topicPartitions.values()) {
-                    if (apiError.isFailure()) {
-                        result.completeExceptionally(apiError.exception());
-                        return null;
+
+        electionResult.partitions().whenComplete(
+                new KafkaFuture.BiConsumer<Map<TopicPartition, Optional<Throwable>>, Throwable>() {
+                    @Override
+                    public void accept(Map<TopicPartition, Optional<Throwable>> topicPartitions, Throwable throwable) {
+                        if (throwable != null) {
+                            result.completeExceptionally(throwable);
+                        } else {
+                            for (Optional<Throwable> exception : topicPartitions.values()) {
+                                if (exception.isPresent()) {
+                                    result.completeExceptionally(exception.get());
+                                    return;
+                                }
+                            }
+                            result.complete(null);
+                        }
                     }
-                }
-                result.complete(null);
-                return null;
-            }
-        });
+                });
+
         return result;
     }
 }
