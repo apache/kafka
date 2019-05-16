@@ -568,7 +568,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
      * assignment tries to balance the load between workers, by assigning connectors to workers
      * that have equal load, starting with the least loaded workers.
      *
-     * @param workerAssignment the current worker assignment
+     * @param workerAssignment the current worker assignment; assigned connectors are added to this list
      * @param connectors the connectors to be assigned
      */
     protected void assignConnectors(List<WorkerLoad> workerAssignment, Collection<String> connectors) {
@@ -598,7 +598,7 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
      * assignment tries to balance the load between workers, by assigning tasks to workers that
      * have equal load, starting with the least loaded workers.
      *
-     * @param workerAssignment the current worker assignment
+     * @param workerAssignment the current worker assignment; assigned tasks are added to this list
      * @param tasks the tasks to be assigned
      */
     protected void assignTasks(List<WorkerLoad> workerAssignment, Collection<ConnectorTaskId> tasks) {

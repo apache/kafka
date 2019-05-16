@@ -281,7 +281,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
      *
      * @return the leader state
      */
-    public LeaderState leaderState() {
+    private LeaderState leaderState() {
         return leaderState;
     }
 
