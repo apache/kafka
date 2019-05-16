@@ -42,7 +42,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
     run(args, timeout)
   }
   def run(args: Array[String], timeout: Int = 30000): Unit = {
-    println("This tool is deprecate. Please use kafka-leader-election tool. Tracking issue at: TBD")
+    println("This tool is deprecated. Please use kafka-leader-election tool. Tracking issue at: TBD")
     val commandOpts = new PreferredReplicaLeaderElectionCommandOptions(args)
     CommandLineUtils.printHelpAndExitIfNeeded(commandOpts, "This tool helps to causes leadership for each partition to be transferred back to the 'preferred replica'," +
       " it can be used to balance leadership among the servers.")

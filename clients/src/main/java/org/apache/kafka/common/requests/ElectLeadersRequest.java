@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -60,7 +61,7 @@ public class ElectLeadersRequest extends AbstractRequest {
 
         private ElectLeadersRequestData toRequestData(short version) {
             if (electionType != ElectionType.PREFERRED && version == 0) {
-                throw new IllegalStateException("API Version 0 only supports PREFERRED election type");
+                throw new UnsupportedVersionException("API Version 0 only supports PREFERRED election type");
             }
 
             ElectLeadersRequestData data = new ElectLeadersRequestData()

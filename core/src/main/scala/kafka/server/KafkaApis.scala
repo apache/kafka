@@ -2404,11 +2404,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleElectReplicaLeader(request: RequestChannel.Request): Unit = {
 
     val electionRequest = request.body[ElectLeadersRequest]
-    val partitions: Set[TopicPartition] = if (electionRequest.data().topicPartitions() == null) {
-      metadataCache.getAllPartitions()
-    } else {
-      electionRequest.topicPartitions
-    }
 
     def sendResponseCallback(
       error: ApiError,
@@ -2438,15 +2433,25 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     if (!authorize(request.session, Alter, Resource.ClusterResource)) {
       val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null);
-      val partitionErrors: Map[TopicPartition, ApiError] =
-      if (electionRequest.data().topicPartitions() == null) {
+      val partitionErrors: Map[TopicPartition, ApiError] = if (electionRequest.data().topicPartitions() == null) {
         // Don't leak the set of partitions if the client lack authz
         Map.empty[TopicPartition, ApiError]
+      } else if (electionRequest.version > 0) {
+        // After version 0 authz are return as a top level error
+        Map.empty[TopicPartition, ApiError]
       } else {
-        partitions.map(partition => partition -> error)(breakOut)
+        // For version 0 we need to return authz error for each partition
+        electionRequest.topicPartitions.map(partition => partition -> error)(breakOut)
       }
+
       sendResponseCallback(error)(partitionErrors)
     } else {
+      val partitions = if (electionRequest.data().topicPartitions() == null) {
+        metadataCache.getAllPartitions()
+      } else {
+        electionRequest.topicPartitions
+      }
+
       replicaManager.electLeaders(
         controller,
         partitions,

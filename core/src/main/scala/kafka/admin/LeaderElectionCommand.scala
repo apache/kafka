@@ -45,7 +45,7 @@ final object LeaderElectionCommand extends Logging {
     val commandOptions = new LeaderElectionCommandOptions(args)
     CommandLineUtils.printHelpAndExitIfNeeded(
       commandOptions,
-      "This tool attempts to elect a new leader from a set of topic partitions. The type of elections supported are preferred replicas and unclean replicas."
+      "This tool attempts to elect a new leader for a set of topic partitions. The type of elections supported are preferred replicas and unclean replicas."
     )
 
     val electionType = commandOptions.options.valueOf(commandOptions.electionType)
@@ -157,16 +157,6 @@ final object LeaderElectionCommand extends Logging {
       throw rootException
     }
   }
-
-  private[this] def completedExceptionally(future: KafkaFuture[_]): Boolean = {
-    try {
-      future.get()
-      false
-    } catch {
-      case (_: Throwable) =>
-        true
-    }
-  }
 }
 
 private final class LeaderElectionCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
@@ -220,7 +210,7 @@ private final class LeaderElectionCommandOptions(args: Array[String]) extends Co
   val electionType = parser
     .accepts(
       "election-type",
-      "Type of election to attempt. Possible values are \"preferred\" for preferred leader election or \"unclean\" for unclean leader election. REQUIRED.")
+      "Type of election to attempt. Possible values are \"preferred\" for preferred leader election or \"unclean\" for unclean leader election. If preferred election is selection, the election is only performed if the current leader is not the preferred leader for the topic partition. If unclean election is selected, the election is only performed if there are no leader for the topic partition. REQUIRED.")
     .withRequiredArg
     .required
     .describedAs("election type")

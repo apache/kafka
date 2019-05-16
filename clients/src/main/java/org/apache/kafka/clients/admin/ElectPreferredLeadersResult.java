@@ -39,7 +39,7 @@ import java.util.Set;
  */
 @InterfaceStability.Evolving
 @Deprecated
-final public class ElectPreferredLeadersResult {
+public class ElectPreferredLeadersResult {
 
     private final KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture;
     private final Set<TopicPartition> partitions;
