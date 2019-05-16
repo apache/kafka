@@ -68,7 +68,6 @@ abstract class AbstractFetcherThread(name: String,
   val fetcherStats = new FetcherStats(metricId)
   val fetcherLagStats = new FetcherLagStats(metricId)
 
-
   /* callbacks to be defined in subclass */
 
   // process fetched data
@@ -345,7 +344,7 @@ abstract class AbstractFetcherThread(name: String,
                       error(s"Error while processing data for partition $topicPartition", e)
                       partitionsWithError += topicPartition
                     case t: Throwable =>
-                      // drop this partition from the fetcher thread and store in a set for failed partitions
+                      // stop monitoring this partition and add it to the set of failed partitions
                       error(s"Unexpected error occurred while processing data for partition $topicPartition " +
                         s"at offset ${currentFetchState.fetchOffset}", t)
                       markPartitionFailed(topicPartition)
