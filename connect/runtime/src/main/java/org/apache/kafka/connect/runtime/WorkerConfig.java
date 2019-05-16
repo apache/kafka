@@ -215,7 +215,8 @@ public class WorkerConfig extends AbstractConfig {
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "client.config.policy";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =
         "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
-        + "overriden by the connector> The default implementation is `None` and other possible values include `All` and `Principal`.";
+        + "overriden by the connector. The default implementation is `None`. The other possible policies in the framework include `All` "
+        + "and `Principal`. ";
     public static final String CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT = "None";
 
 
