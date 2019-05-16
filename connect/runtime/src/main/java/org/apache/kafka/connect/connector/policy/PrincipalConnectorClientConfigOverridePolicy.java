@@ -23,8 +23,6 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -34,32 +32,21 @@ import java.util.stream.Stream;
  * Allows all {@code sasl} configurations to be overridden via the connector configs by setting {@code client.config.policy} to
  * {@code Principal}. This allows to set a principal per connector.
  */
-public class PrincipalConnectorClientConfigOverridePolicy implements ConnectorClientConfigOverridePolicy {
+public class PrincipalConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy {
     private static final Logger log = LoggerFactory.getLogger(PrincipalConnectorClientConfigOverridePolicy.class);
 
     private static final Set<String> ALLOWED_CONFIG =
         Stream.of(SaslConfigs.SASL_JAAS_CONFIG, SaslConfigs.SASL_MECHANISM, CommonClientConfigs.SECURITY_PROTOCOL_CONFIG).
             collect(Collectors.toSet());
 
-
     @Override
-    public List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest) {
-        Map<String, Object> inputConfig = connectorClientConfigRequest.clientProps();
-        return inputConfig.entrySet().stream().map(configEntry -> configValue(configEntry)).collect(Collectors.toList());
-    }
-
-    private static ConfigValue configValue(Map.Entry<String, Object> configEntry) {
-        ConfigValue configValue =
-            new ConfigValue(configEntry.getKey(), configEntry.getValue(), new ArrayList<Object>(), new ArrayList<String>());
-        if (!ALLOWED_CONFIG.contains(configEntry.getKey())) {
-            configValue.addErrorMessage("Principal policy allows only " + ALLOWED_CONFIG + "to be overriden");
-        }
-        return configValue;
+    protected String policyName() {
+        return "Principal";
     }
 
     @Override
-    public void close() {
-
+    protected boolean isAllowed(ConfigValue configValue) {
+        return ALLOWED_CONFIG.contains(configValue.name());
     }
 
     @Override

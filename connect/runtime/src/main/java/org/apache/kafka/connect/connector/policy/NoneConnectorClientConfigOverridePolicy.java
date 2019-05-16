@@ -21,34 +21,23 @@ import org.apache.kafka.common.config.ConfigValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
 /**
  * Disallow any client configuration to be overridden via the connector configs by setting {@code client.config.policy} to {@code None}.
  * This is the default behavior.
  */
-public class NoneConnectorClientConfigOverridePolicy implements ConnectorClientConfigOverridePolicy {
+public class NoneConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy {
     private static final Logger log = LoggerFactory.getLogger(NoneConnectorClientConfigOverridePolicy.class);
 
     @Override
-    public List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest) {
-        Map<String, Object> inputConfig = connectorClientConfigRequest.clientProps();
-        return inputConfig.entrySet().stream().map(configEntry -> configValue(configEntry)).collect(Collectors.toList());
-    }
-
-    private static ConfigValue configValue(Map.Entry<String, Object> configEntry) {
-        ConfigValue configValue =
-            new ConfigValue(configEntry.getKey(), configEntry.getValue(), new ArrayList<Object>(), new ArrayList<String>());
-        configValue.addErrorMessage("None policy doesn't allow any client overrides");
-        return configValue;
+    protected String policyName() {
+        return "None";
     }
 
     @Override
-    public void close() {
-
+    protected boolean isAllowed(ConfigValue configValue) {
+        return false;
     }
 
     @Override

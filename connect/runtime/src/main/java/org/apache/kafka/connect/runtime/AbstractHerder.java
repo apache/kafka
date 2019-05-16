@@ -402,7 +402,7 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         int errorCount = 0;
         List<ConfigInfo> configInfoList = new LinkedList<>();
         Map<String, ConfigKey> configKeys = configDef.configKeys();
-        Set<String> groups = new HashSet<>();
+        Set<String> groups = new LinkedHashSet<>();
         Map<String, Object> clientConfigs = connectorConfig.originalsWithPrefix(prefix);
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
             connName, connectorType, connectorClass, clientConfigs, clientType);

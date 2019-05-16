@@ -963,6 +963,47 @@ public class WorkerTest extends ThreadedTest {
                                null, noneConnectorClientConfigOverridePolicy);
     }
 
+    @Test
+    public void testAdminConfigsClientOverridesWithAllPolicy() {
+        Map<String, String> props = new HashMap<>(workerProps);
+        props.put("admin.client.id", "testid");
+        props.put("admin.metadata.max.age.ms", "5000");
+        WorkerConfig configWithOverrides = new StandaloneConfig(props);
+
+        Map<String, Object> connConfig = new HashMap<String, Object>();
+        connConfig.put("metadata.max.age.ms", "10000");
+
+        Map<String, String> expectedConfigs = new HashMap<>();
+        expectedConfigs.put("bootstrap.servers", "localhost:9092");
+        expectedConfigs.put("client.id", "testid");
+        expectedConfigs.put("metadata.max.age.ms", "10000");
+
+        EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX))
+            .andReturn(connConfig);
+        PowerMock.replayAll();
+        assertEquals(expectedConfigs, Worker.adminConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connectorConfig,
+                                                             null, allConnectorClientConfigOverridePolicy));
+
+    }
+
+    @Test(expected = ConnectException.class)
+    public void testAdminConfigsClientOverridesWithNonePolicy() {
+        Map<String, String> props = new HashMap<>(workerProps);
+        props.put("admin.client.id", "testid");
+        props.put("admin.metadata.max.age.ms", "5000");
+        WorkerConfig configWithOverrides = new StandaloneConfig(props);
+
+        Map<String, Object> connConfig = new HashMap<String, Object>();
+        connConfig.put("metadata.max.age.ms", "10000");
+
+        EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX))
+            .andReturn(connConfig);
+        PowerMock.replayAll();
+        Worker.adminConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connectorConfig,
+                                                          null, noneConnectorClientConfigOverridePolicy);
+
+    }
+
 
     private void assertStatistics(Worker worker, int connectors, int tasks) {
         MetricGroup workerMetrics = worker.workerMetricsGroup().metricGroup();

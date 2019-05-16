@@ -21,25 +21,22 @@ import org.apache.kafka.common.config.ConfigValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 
 /**
  * Allows all client configurations to be overridden via the connector configs by setting {@code client.config.policy} to {@code All}
  */
-public class AllConnectorClientConfigOverridePolicy implements ConnectorClientConfigOverridePolicy {
+public class AllConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy {
     private static final Logger log = LoggerFactory.getLogger(AllConnectorClientConfigOverridePolicy.class);
 
     @Override
-    public List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest) {
-        //allow all no op
-        return Collections.emptyList();
+    protected String policyName() {
+        return "All";
     }
 
     @Override
-    public void close() {
-
+    protected boolean isAllowed(ConfigValue configValue) {
+        return true;
     }
 
     @Override

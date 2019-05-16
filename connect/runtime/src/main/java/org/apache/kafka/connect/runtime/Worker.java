@@ -556,6 +556,7 @@ public class Worker {
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
 
+        // Connector-specified overrides
         Map<String, Object> producerOverrides =
             connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
                                            ConnectorType.SOURCE, ConnectorClientConfigRequest.ClientType.PRODUCER,
@@ -584,7 +585,7 @@ public class Worker {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
         consumerProps.putAll(config.originalsWithPrefix("consumer."));
-
+        // Connector-specified overrides
         Map<String, Object> consumerOverrides =
             connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
                                            ConnectorType.SINK, ConnectorClientConfigRequest.ClientType.CONSUMER,
@@ -604,6 +605,7 @@ public class Worker {
         // User-specified overrides
         adminProps.putAll(config.originalsWithPrefix("admin."));
 
+        // Connector-specified overrides
         Map<String, Object> adminOverrides =
             connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
                                            ConnectorType.SINK, ConnectorClientConfigRequest.ClientType.ADMIN,
@@ -631,6 +633,7 @@ public class Worker {
         List<ConfigValue> configValues = connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
         List<ConfigValue> errorConfigs = configValues.stream().
             filter(configValue -> configValue.errorMessages().size() > 0).collect(Collectors.toList());
+        // These should be caught when the herder validates the connector configuration, but just in case
         if (errorConfigs.size() > 0) {
             throw new ConnectException("Client Config Overrides not allowed " + errorConfigs);
         }
@@ -651,7 +654,7 @@ public class Worker {
         // check if topic for dead letter queue exists
         String topic = connConfig.dlqTopicName();
         if (topic != null && !topic.isEmpty()) {
-            Map<String, Object> producerProps = producerConfigs(id,"connector-dlq-producer-" + id, config, connConfig, connectorClass,
+            Map<String, Object> producerProps = producerConfigs(id, "connector-dlq-producer-" + id, config, connConfig, connectorClass,
                                                                 connectorClientConfigOverridePolicy);
             Map<String, Object> adminProps = adminConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
