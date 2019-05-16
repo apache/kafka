@@ -16,108 +16,64 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.message.HeartbeatRequestData;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
 
-import static org.apache.kafka.common.protocol.CommonFields.GENERATION_ID;
-import static org.apache.kafka.common.protocol.CommonFields.GROUP_ID;
-import static org.apache.kafka.common.protocol.CommonFields.MEMBER_ID;
 
 public class HeartbeatRequest extends AbstractRequest {
-    private static final Schema HEARTBEAT_REQUEST_V0 = new Schema(
-            GROUP_ID,
-            GENERATION_ID,
-            MEMBER_ID);
-
-    /* v1 request is the same as v0. Throttle time has been added to response */
-    private static final Schema HEARTBEAT_REQUEST_V1 = HEARTBEAT_REQUEST_V0;
-
-    /**
-     * The version number is bumped to indicate that on quota violation brokers send out responses before throttling.
-     */
-    private static final Schema HEARTBEAT_REQUEST_V2 = HEARTBEAT_REQUEST_V1;
-
-    public static Schema[] schemaVersions() {
-        return new Schema[] {HEARTBEAT_REQUEST_V0, HEARTBEAT_REQUEST_V1,
-            HEARTBEAT_REQUEST_V2};
-    }
 
     public static class Builder extends AbstractRequest.Builder<HeartbeatRequest> {
-        private final String groupId;
-        private final int groupGenerationId;
-        private final String memberId;
+        private final HeartbeatRequestData data;
 
-        public Builder(String groupId, int groupGenerationId, String memberId) {
+        public Builder(HeartbeatRequestData data) {
             super(ApiKeys.HEARTBEAT);
-            this.groupId = groupId;
-            this.groupGenerationId = groupGenerationId;
-            this.memberId = memberId;
+            this.data = data;
         }
 
         @Override
         public HeartbeatRequest build(short version) {
-            return new HeartbeatRequest(groupId, groupGenerationId, memberId, version);
+            return new HeartbeatRequest(data, version);
         }
 
         @Override
         public String toString() {
-            StringBuilder bld = new StringBuilder();
-            bld.append("(type=HeartbeatRequest").
-                append(", groupId=").append(groupId).
-                append(", groupGenerationId=").append(groupGenerationId).
-                append(", memberId=").append(memberId).
-                append(")");
-            return bld.toString();
+            return data.toString();
         }
     }
 
-    private final String groupId;
-    private final int groupGenerationId;
-    private final String memberId;
+    public final HeartbeatRequestData data;
 
-    private HeartbeatRequest(String groupId, int groupGenerationId, String memberId, short version) {
+    private HeartbeatRequest(HeartbeatRequestData data, short version) {
         super(ApiKeys.HEARTBEAT, version);
-        this.groupId = groupId;
-        this.groupGenerationId = groupGenerationId;
-        this.memberId = memberId;
+        this.data = data;
     }
 
     public HeartbeatRequest(Struct struct, short version) {
         super(ApiKeys.HEARTBEAT, version);
-        groupId = struct.get(GROUP_ID);
-        groupGenerationId = struct.get(GENERATION_ID);
-        memberId = struct.get(MEMBER_ID);
+        this.data = new HeartbeatRequestData(struct, version);
     }
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+        HeartbeatResponseData response = new HeartbeatResponseData();
+        response.setErrorCode(Errors.forException(e).code());
         short versionId = version();
         switch (versionId) {
             case 0:
-                return new HeartbeatResponse(Errors.forException(e));
+                return new HeartbeatResponse(response);
             case 1:
             case 2:
-                return new HeartbeatResponse(throttleTimeMs, Errors.forException(e));
+                response.setThrottleTimeMs(throttleTimeMs);
+                return new HeartbeatResponse(response);
             default:
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.HEARTBEAT.latestVersion()));
         }
-    }
-
-    public String groupId() {
-        return groupId;
-    }
-
-    public int groupGenerationId() {
-        return groupGenerationId;
-    }
-
-    public String memberId() {
-        return memberId;
     }
 
     public static HeartbeatRequest parse(ByteBuffer buffer, short version) {
@@ -126,10 +82,6 @@ public class HeartbeatRequest extends AbstractRequest {
 
     @Override
     protected Struct toStruct() {
-        Struct struct = new Struct(ApiKeys.HEARTBEAT.requestSchema(version()));
-        struct.set(GROUP_ID, groupId);
-        struct.set(GENERATION_ID, groupGenerationId);
-        struct.set(MEMBER_ID, memberId);
-        return struct;
+        return data.toStruct(version());
     }
 }

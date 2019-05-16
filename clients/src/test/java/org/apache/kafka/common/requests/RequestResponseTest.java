@@ -53,6 +53,8 @@ import org.apache.kafka.common.message.ElectPreferredLeadersResponseData;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectPreferredLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.message.HeartbeatRequestData;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData;
@@ -772,11 +774,14 @@ public class RequestResponseTest {
     }
 
     private HeartbeatRequest createHeartBeatRequest() {
-        return new HeartbeatRequest.Builder("group1", 1, "consumer1").build();
+        return new HeartbeatRequest.Builder(new HeartbeatRequestData()
+                .setGroupId("group1")
+                .setGenerationid(1)
+                .setMemberId("consumer1")).build();
     }
 
     private HeartbeatResponse createHeartBeatResponse() {
-        return new HeartbeatResponse(Errors.NONE);
+        return new HeartbeatResponse(new HeartbeatResponseData().setErrorCode(Errors.NONE.code()));
     }
 
     private JoinGroupRequest createJoinGroupRequest(int version) {

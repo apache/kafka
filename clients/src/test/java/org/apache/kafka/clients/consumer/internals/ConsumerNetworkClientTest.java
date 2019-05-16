@@ -30,6 +30,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.HeartbeatRequestData;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
@@ -378,11 +380,14 @@ public class ConsumerNetworkClientTest {
     }
 
     private HeartbeatRequest.Builder heartbeat() {
-        return new HeartbeatRequest.Builder("group", 1, "memberId");
+        return new HeartbeatRequest.Builder(new HeartbeatRequestData()
+                .setGroupId("group")
+                .setGenerationid(1)
+                .setMemberId("memberId"));
     }
 
     private HeartbeatResponse heartbeatResponse(Errors error) {
-        return new HeartbeatResponse(error);
+        return new HeartbeatResponse(new HeartbeatResponseData().setErrorCode(error.code()));
     }
 
 }

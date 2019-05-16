@@ -87,7 +87,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case JOIN_GROUP:
                 return new JoinGroupResponse(struct, version);
             case HEARTBEAT:
-                return new HeartbeatResponse(struct);
+                return new HeartbeatResponse(struct, version);
             case LEAVE_GROUP:
                 return new LeaveGroupResponse(struct, version);
             case SYNC_GROUP:
