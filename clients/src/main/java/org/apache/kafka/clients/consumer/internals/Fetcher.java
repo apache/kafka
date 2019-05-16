@@ -1018,7 +1018,8 @@ public class Fetcher<K, V> implements Closeable {
                 .flatMap(nodeId -> Optional.ofNullable(metadata.fetch().nodeById(nodeId)));
         if (node.isPresent()) {
             if (Arrays.asList(metadata.fetch().partition(partition).offlineReplicas()).contains(node.get())) {
-                log.trace("Not fetching from {} for {} since it is marked offline, using the leader instead.", node.get(), partition);
+                log.trace("Not fetching from {} for partition {} since it is marked offline, using the leader instead.",
+                        node.get(), partition);
                 subscriptions.clearPreferredReadReplica(partition);
                 return leaderReplica;
             } else {
@@ -1163,8 +1164,10 @@ public class Fetcher<K, V> implements Closeable {
                 }
 
                 if (partition.preferredReadReplica.isPresent()) {
-                    subscriptions.updatePreferredReadReplica(partitionRecords.partition, partition.preferredReadReplica.get(),
-                            time.milliseconds() + metadata.metadataExpireMs());
+                    long expireTimeMs = time.milliseconds() + metadata.metadataExpireMs();
+                    log.trace("Updating preferred read replica for partition {} to {}, set to expire at {}",
+                            tp, partition.preferredReadReplica.get(), expireTimeMs);
+                    subscriptions.updatePreferredReadReplica(partitionRecords.partition, partition.preferredReadReplica.get(), expireTimeMs);
                 }
 
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
@@ -1189,6 +1192,8 @@ public class Fetcher<K, V> implements Closeable {
                     } else {
                         throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
                     }
+                } else {
+                    log.debug("Unset the preferred read replica for {} since we got {}", tp, error);
                 }
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                 //we log the actual partition and not just the topic to help with ACL propagation issues in large clusters

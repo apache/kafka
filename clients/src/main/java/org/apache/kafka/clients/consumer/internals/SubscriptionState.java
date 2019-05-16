@@ -587,7 +587,7 @@ public class SubscriptionState {
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
         private Integer preferredReadReplica;
-        private Long preferredReadReplicaLeaseMs;
+        private Long preferredReadReplicaExpireTimeMs;
 
         TopicPartitionState() {
             this.paused = false;
@@ -610,7 +610,7 @@ public class SubscriptionState {
         }
 
         private Optional<Integer> preferredReadReplica(long timeMs) {
-            if (preferredReadReplicaLeaseMs != null && timeMs > preferredReadReplicaLeaseMs) {
+            if (preferredReadReplicaExpireTimeMs != null && timeMs > preferredReadReplicaExpireTimeMs) {
                 preferredReadReplica = null;
                 return Optional.empty();
             } else {
@@ -621,14 +621,14 @@ public class SubscriptionState {
         private void updatePreferredReadReplica(int preferredReadReplica, long timeMs) {
             if (this.preferredReadReplica == null || preferredReadReplica != this.preferredReadReplica) {
                 this.preferredReadReplica = preferredReadReplica;
-                this.preferredReadReplicaLeaseMs = timeMs;
+                this.preferredReadReplicaExpireTimeMs = timeMs;
             }
         }
 
         private boolean clearPreferredReadReplica() {
             if (preferredReadReplica != null) {
                 this.preferredReadReplica = null;
-                this.preferredReadReplicaLeaseMs = null;
+                this.preferredReadReplicaExpireTimeMs = null;
                 return true;
             } else {
                 return false;
