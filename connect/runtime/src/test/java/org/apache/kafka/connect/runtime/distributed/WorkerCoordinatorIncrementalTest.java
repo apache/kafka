@@ -205,8 +205,8 @@ public class WorkerCoordinatorIncrementalTest {
     public void testMetadataWithExistingAssignment() {
         when(configStorage.snapshot()).thenReturn(configState1);
 
-        ConnectAssignment assignment = new ConnectAssignment(
-                CONNECT_PROTOCOL_V1, ConnectAssignment.NO_ERROR, leaderId, leaderUrl, configState1.offset(),
+        ExtendedAssignment assignment = new ExtendedAssignment(
+                CONNECT_PROTOCOL_V1, ExtendedAssignment.NO_ERROR, leaderId, leaderUrl, configState1.offset(),
                 Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
         ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
@@ -225,7 +225,7 @@ public class WorkerCoordinatorIncrementalTest {
         ExtendedWorkerState state = IncrementalCooperativeConnectProtocol
                 .deserializeMetadata(ByteBuffer.wrap(selectedMetadata.metadata()));
         assertEquals(offset, state.offset());
-        assertNotEquals(ConnectAssignment.empty(), state.assignment());
+        assertNotEquals(ExtendedAssignment.empty(), state.assignment());
         assertEquals(Collections.singletonList(connectorId1), state.assignment().connectors());
         assertEquals(Arrays.asList(taskId1x0, taskId2x0), state.assignment().tasks());
 
@@ -236,8 +236,8 @@ public class WorkerCoordinatorIncrementalTest {
     public void testMetadataWithExistingAssignmentButOlderProtocolSelection() {
         when(configStorage.snapshot()).thenReturn(configState1);
 
-        ConnectAssignment assignment = new ConnectAssignment(
-                CONNECT_PROTOCOL_V1, ConnectAssignment.NO_ERROR, leaderId, leaderUrl, configState1.offset(),
+        ExtendedAssignment assignment = new ExtendedAssignment(
+                CONNECT_PROTOCOL_V1, ExtendedAssignment.NO_ERROR, leaderId, leaderUrl, configState1.offset(),
                 Collections.singletonList(connectorId1), Arrays.asList(taskId1x0, taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
         ByteBuffer buf = IncrementalCooperativeConnectProtocol.serializeAssignment(assignment);
@@ -256,7 +256,7 @@ public class WorkerCoordinatorIncrementalTest {
         ExtendedWorkerState state = IncrementalCooperativeConnectProtocol
                 .deserializeMetadata(ByteBuffer.wrap(selectedMetadata.metadata()));
         assertEquals(offset, state.offset());
-        assertNotEquals(ConnectAssignment.empty(), state.assignment());
+        assertNotEquals(ExtendedAssignment.empty(), state.assignment());
 
         verify(configStorage, times(1)).snapshot();
     }
@@ -274,13 +274,13 @@ public class WorkerCoordinatorIncrementalTest {
 
         Map<String, ByteBuffer> result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
 
-        ConnectAssignment leaderAssignment = deserializeAssignment(result, leaderId);
+        ExtendedAssignment leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
                 Collections.singletonList(connectorId1), 4,
                 Collections.emptyList(), 0,
                 leaderAssignment);
 
-        ConnectAssignment memberAssignment = deserializeAssignment(result, memberId);
+        ExtendedAssignment memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
                 Collections.singletonList(connectorId2), 4,
                 Collections.emptyList(), 0,
@@ -308,7 +308,7 @@ public class WorkerCoordinatorIncrementalTest {
                 Collections.emptyList(), 0,
                 memberAssignment);
 
-        ConnectAssignment anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
+        ExtendedAssignment anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
         assertAssignment(leaderId, offset,
                 Collections.emptyList(), 0,
                 Collections.emptyList(), 0,
@@ -332,19 +332,19 @@ public class WorkerCoordinatorIncrementalTest {
 
         Map<String, ByteBuffer> result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
 
-        ConnectAssignment leaderAssignment = deserializeAssignment(result, leaderId);
+        ExtendedAssignment leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
                 Collections.singletonList(connectorId1), 3,
                 Collections.emptyList(), 0,
                 leaderAssignment);
 
-        ConnectAssignment memberAssignment = deserializeAssignment(result, memberId);
+        ExtendedAssignment memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
                 Collections.singletonList(connectorId2), 3,
                 Collections.emptyList(), 0,
                 memberAssignment);
 
-        ConnectAssignment anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
+        ExtendedAssignment anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
         assertAssignment(leaderId, offset,
                 Collections.emptyList(), 2,
                 Collections.emptyList(), 0,
@@ -430,19 +430,19 @@ public class WorkerCoordinatorIncrementalTest {
 
         Map<String, ByteBuffer> result = coordinator.performAssignment(leaderId, compatibility.protocol(), responseMembers);
 
-        ConnectAssignment leaderAssignment = deserializeAssignment(result, leaderId);
+        ExtendedAssignment leaderAssignment = deserializeAssignment(result, leaderId);
         assertAssignment(leaderId, offset,
                 Collections.singletonList(connectorId1), 3,
                 Collections.emptyList(), 0,
                 leaderAssignment);
 
-        ConnectAssignment memberAssignment = deserializeAssignment(result, memberId);
+        ExtendedAssignment memberAssignment = deserializeAssignment(result, memberId);
         assertAssignment(leaderId, offset,
                 Collections.singletonList(connectorId2), 3,
                 Collections.emptyList(), 0,
                 memberAssignment);
 
-        ConnectAssignment anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
+        ExtendedAssignment anotherMemberAssignment = deserializeAssignment(result, anotherMemberId);
         assertAssignment(leaderId, offset,
                 Collections.emptyList(), 2,
                 Collections.emptyList(), 0,
@@ -528,7 +528,7 @@ public class WorkerCoordinatorIncrementalTest {
     }
 
     private static class MockRebalanceListener implements WorkerRebalanceListener {
-        public ConnectAssignment assignment = null;
+        public ExtendedAssignment assignment = null;
 
         public String revokedLeader;
         public Collection<String> revokedConnectors = Collections.emptyList();
@@ -538,7 +538,7 @@ public class WorkerCoordinatorIncrementalTest {
         public int assignedCount = 0;
 
         @Override
-        public void onAssigned(ConnectAssignment assignment, int generation) {
+        public void onAssigned(ExtendedAssignment assignment, int generation) {
             this.assignment = assignment;
             assignedCount++;
         }
@@ -555,7 +555,7 @@ public class WorkerCoordinatorIncrementalTest {
         }
     }
 
-    private static ConnectAssignment deserializeAssignment(Map<String, ByteBuffer> assignment,
+    private static ExtendedAssignment deserializeAssignment(Map<String, ByteBuffer> assignment,
                                                            String member) {
         return IncrementalCooperativeConnectProtocol.deserializeAssignment(assignment.get(member));
     }
@@ -563,7 +563,7 @@ public class WorkerCoordinatorIncrementalTest {
     private static void addJoinGroupResponseMember(List<JoinGroupResponseMember> responseMembers,
                                                    String member,
                                                    long offset,
-                                                   ConnectAssignment assignment) {
+                                                   ExtendedAssignment assignment) {
         responseMembers.add(new JoinGroupResponseMember()
                 .setMemberId(member)
                 .setMetadata(IncrementalCooperativeConnectProtocol.serializeMetadata(

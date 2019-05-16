@@ -139,8 +139,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     // Track enough information about the current membership state to be able to determine which requests via the API
     // and the from other nodes are safe to process
     private boolean rebalanceResolved;
-    private ConnectAssignment runningAssignment = ConnectAssignment.empty();
-    private ConnectAssignment assignment;
+    private ExtendedAssignment runningAssignment = ExtendedAssignment.empty();
+    private ExtendedAssignment assignment;
     private boolean canReadConfigs;
     private ClusterConfigState configState;
 
@@ -901,7 +901,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
         startAndStop(callables);
         runningAssignment = member.currentProtocolVersion() == CONNECT_PROTOCOL_V0
-                            ? ConnectAssignment.empty()
+                            ? ExtendedAssignment.empty()
                             : assignment;
 
         log.info("Finished starting connectors and tasks");
@@ -1269,7 +1269,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
 
         @Override
-        public void onAssigned(ConnectAssignment assignment, int generation) {
+        public void onAssigned(ExtendedAssignment assignment, int generation) {
             // This callback just logs the info and saves it. The actual response is handled in the main loop, which
             // ensures the group member's logic for rebalancing can complete, potentially long-running steps to
             // catch up (or backoff if we fail) not executed in a callback, and so we'll be able to invoke other

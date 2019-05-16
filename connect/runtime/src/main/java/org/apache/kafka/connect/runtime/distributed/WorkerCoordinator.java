@@ -56,7 +56,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     private final Logger log;
     private final String restUrl;
     private final ConfigBackingStore configStorage;
-    private ConnectAssignment assignmentSnapshot;
+    private ExtendedAssignment assignmentSnapshot;
     private ClusterConfigState configSnapshot;
     private final WorkerRebalanceListener listener;
     private final ConnectProtocolCompatibility protocolCompatibility;
@@ -174,7 +174,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
 
     @Override
     protected void onJoinComplete(int generation, String memberId, String protocol, ByteBuffer memberAssignment) {
-        ConnectAssignment newAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(memberAssignment);
+        ExtendedAssignment newAssignment = IncrementalCooperativeConnectProtocol.deserializeAssignment(memberAssignment);
         log.debug("Deserialized new assignment: {}", newAssignment);
         currentConnectProtocol = ConnectProtocolCompatibility.protocol(protocol);
         // At this point we always consider ourselves to be a member of the cluster, even if there was an assignment

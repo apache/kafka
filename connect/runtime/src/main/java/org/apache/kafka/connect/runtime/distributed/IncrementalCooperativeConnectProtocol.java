@@ -185,7 +185,7 @@ public class IncrementalCooperativeConnectProtocol {
         String url = configState.getString(URL_KEY_NAME);
         Struct allocation = ALLOCATION_V1.read(buffer);
         // Protocol version is embedded with the assignment in the metadata
-        ConnectAssignment assignment = deserializeAssignment(allocation.getBytes(ALLOCATION_KEY_NAME));
+        ExtendedAssignment assignment = deserializeAssignment(allocation.getBytes(ALLOCATION_KEY_NAME));
         return new ExtendedWorkerState(url, configOffset, assignment);
     }
 
@@ -203,9 +203,9 @@ public class IncrementalCooperativeConnectProtocol {
      *   ScheduledDelay     => Int32
      * </pre>
      */
-    public static ByteBuffer serializeAssignment(ConnectAssignment assignment) {
+    public static ByteBuffer serializeAssignment(ExtendedAssignment assignment) {
         // comparison depends on reference equality for now
-        if (assignment == null || ConnectAssignment.empty().equals(assignment)) {
+        if (assignment == null || ExtendedAssignment.empty().equals(assignment)) {
             return null;
         }
         Struct struct = assignment.toStruct();
@@ -225,7 +225,7 @@ public class IncrementalCooperativeConnectProtocol {
      * @return the deserialized assignment
      * @throws SchemaException on incompatible Connect protocol version
      */
-    public static ConnectAssignment deserializeAssignment(ByteBuffer buffer) {
+    public static ExtendedAssignment deserializeAssignment(ByteBuffer buffer) {
         if (buffer == null) {
             return null;
         }
@@ -233,7 +233,7 @@ public class IncrementalCooperativeConnectProtocol {
         Short version = header.getShort(VERSION_KEY_NAME);
         checkVersionCompatibility(version);
         Struct struct = ASSIGNMENT_V1.read(buffer);
-        return ConnectAssignment.fromStruct(version, struct);
+        return ExtendedAssignment.fromStruct(version, struct);
     }
 
     private static void checkVersionCompatibility(short version) {

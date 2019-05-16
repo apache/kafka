@@ -17,7 +17,7 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
-import org.apache.kafka.connect.runtime.distributed.ConnectAssignment;
+import org.apache.kafka.connect.runtime.distributed.ExtendedAssignment;
 import org.apache.kafka.connect.runtime.distributed.ExtendedWorkerState;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
@@ -75,7 +75,7 @@ public class WorkerTestUtils {
 
     public static Map<String, ExtendedWorkerState> memberConfigs(String givenLeader,
                                                                  long givenOffset,
-                                                                 Map<String, ConnectAssignment> givenAssignments) {
+                                                                 Map<String, ExtendedAssignment> givenAssignments) {
         return givenAssignments.entrySet().stream()
                 .collect(Collectors.toMap(
                     Map.Entry::getKey,
@@ -133,7 +133,7 @@ public class WorkerTestUtils {
                                         int expectedAssignedTaskNum,
                                         List<String> expectedRevokedConnectors,
                                         int expectedRevokedTaskNum,
-                                        ConnectAssignment assignment) {
+                                        ExtendedAssignment assignment) {
         assertAssignment(false, expectedLeader, expectedOffset,
                 expectedAssignedConnectors, expectedAssignedTaskNum,
                 expectedRevokedConnectors, expectedRevokedTaskNum,
@@ -148,7 +148,7 @@ public class WorkerTestUtils {
                                         List<String> expectedRevokedConnectors,
                                         int expectedRevokedTaskNum,
                                         int expectedDelay,
-                                        ConnectAssignment assignment) {
+                                        ExtendedAssignment assignment) {
         assertAssignment(false, expectedLeader, expectedOffset,
                 expectedAssignedConnectors, expectedAssignedTaskNum,
                 expectedRevokedConnectors, expectedRevokedTaskNum,
@@ -164,7 +164,7 @@ public class WorkerTestUtils {
                                         List<String> expectedRevokedConnectors,
                                         int expectedRevokedTaskNum,
                                         int expectedDelay,
-                                        ConnectAssignment assignment) {
+                                        ExtendedAssignment assignment) {
         assertNotNull("Assignment can't be null", assignment);
 
         assertEquals("Wrong status in " + assignment, expectFailed, assignment.failed());

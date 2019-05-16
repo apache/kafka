@@ -69,7 +69,7 @@ public class IncrementalCooperativeAssignorTest {
     private WorkerCoordinator coordinator;
 
     @Captor
-    ArgumentCaptor<Map<String, ConnectAssignment>> assignmentsCapture;
+    ArgumentCaptor<Map<String, ExtendedAssignment>> assignmentsCapture;
 
     private ClusterConfigState configState;
     private Map<String, ExtendedWorkerState> memberConfigs;
@@ -81,8 +81,8 @@ public class IncrementalCooperativeAssignorTest {
     private int rebalanceDelay;
     private IncrementalCooperativeAssignor assignor;
     private int rebalanceNum;
-    Map<String, ConnectAssignment> assignments;
-    Map<String, ConnectAssignment> returnedAssignments;
+    Map<String, ExtendedAssignment> assignments;
+    Map<String, ExtendedAssignment> returnedAssignments;
 
     @Before
     public void setup() {
@@ -954,7 +954,7 @@ public class IncrementalCooperativeAssignorTest {
 
     private static Map<String, ExtendedWorkerState> memberConfigs(String givenLeader,
                                                                   long givenOffset,
-                                                                  Map<String, ConnectAssignment> givenAssignments) {
+                                                                  Map<String, ExtendedAssignment> givenAssignments) {
         return givenAssignments.entrySet().stream()
                 .collect(Collectors.toMap(
                     Map.Entry::getKey,
@@ -1002,7 +1002,7 @@ public class IncrementalCooperativeAssignorTest {
                 ).collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue));
     }
 
-    private void applyAssignments(Map<String, ConnectAssignment> newAssignments) {
+    private void applyAssignments(Map<String, ExtendedAssignment> newAssignments) {
         newAssignments.forEach((k, v) -> {
             assignments.computeIfAbsent(k, noop -> newExpandableAssignment())
                     .connectors()
@@ -1019,8 +1019,8 @@ public class IncrementalCooperativeAssignorTest {
         });
     }
 
-    private ConnectAssignment newExpandableAssignment() {
-        return new ConnectAssignment(
+    private ExtendedAssignment newExpandableAssignment() {
+        return new ExtendedAssignment(
                 CONNECT_PROTOCOL_V1,
                 ConnectProtocol.Assignment.NO_ERROR,
                 leader,
@@ -1071,7 +1071,7 @@ public class IncrementalCooperativeAssignorTest {
                 is(expectedLeaderUrl(expectedLeader)));
     }
 
-    private void assertDelay(int expectedDelay, Map<String, ConnectAssignment> newAssignments) {
+    private void assertDelay(int expectedDelay, Map<String, ExtendedAssignment> newAssignments) {
         newAssignments.values().stream()
                 .forEach(a -> assertEquals(
                         "Wrong rebalance delay in " + a, expectedDelay, a.delay()));

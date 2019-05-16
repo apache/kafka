@@ -1659,18 +1659,18 @@ public class DistributedHerderTest {
         PowerMock.expectLastCall().andAnswer(new IAnswer<Object>() {
             @Override
             public Object answer() throws Throwable {
-                ConnectAssignment assignment;
+                ExtendedAssignment assignment;
                 if (!revokedConnectors.isEmpty() || !revokedTasks.isEmpty()) {
                     rebalanceListener.onRevoked("leader", revokedConnectors, revokedTasks);
                 }
 
                 if (connectProtocolVersion == CONNECT_PROTOCOL_V0) {
-                    assignment = new ConnectAssignment(
+                    assignment = new ExtendedAssignment(
                             connectProtocolVersion, error, "leader", "leaderUrl", offset,
                             assignedConnectors, assignedTasks,
                             Collections.emptyList(), Collections.emptyList(), 0);
                 } else {
-                    assignment = new ConnectAssignment(
+                    assignment = new ExtendedAssignment(
                             connectProtocolVersion, error, "leader", "leaderUrl", offset,
                             assignedConnectors, assignedTasks,
                             new ArrayList<>(revokedConnectors), new ArrayList<>(revokedTasks), delay);

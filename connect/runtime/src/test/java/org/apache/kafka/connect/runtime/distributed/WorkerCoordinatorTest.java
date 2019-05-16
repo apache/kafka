@@ -558,7 +558,7 @@ public class WorkerCoordinatorTest {
     }
 
     private static class MockRebalanceListener implements WorkerRebalanceListener {
-        public ConnectAssignment assignment = null;
+        public ExtendedAssignment assignment = null;
 
         public String revokedLeader;
         public Collection<String> revokedConnectors;
@@ -568,7 +568,7 @@ public class WorkerCoordinatorTest {
         public int assignedCount = 0;
 
         @Override
-        public void onAssigned(ConnectAssignment assignment, int generation) {
+        public void onAssigned(ExtendedAssignment assignment, int generation) {
             this.assignment = assignment;
             assignedCount++;
         }

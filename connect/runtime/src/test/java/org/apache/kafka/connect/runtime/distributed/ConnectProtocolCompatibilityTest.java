@@ -147,7 +147,7 @@ public class ConnectProtocolCompatibilityTest {
 
     @Test
     public void testCoopToCoopAssignment() {
-        ConnectAssignment assignment = new ConnectAssignment(
+        ExtendedAssignment assignment = new ExtendedAssignment(
                 CONNECT_PROTOCOL_V1, ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
                 Arrays.asList(connectorId1, connectorId3), Arrays.asList(taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
@@ -160,7 +160,7 @@ public class ConnectProtocolCompatibilityTest {
         assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
         assertEquals(Collections.singletonList(taskId2x0), leaderAssignment.tasks());
 
-        ConnectAssignment assignment2 = new ConnectAssignment(
+        ExtendedAssignment assignment2 = new ExtendedAssignment(
                 CONNECT_PROTOCOL_V1, ConnectProtocol.Assignment.NO_ERROR, "member", LEADER_URL, 1L,
                 Arrays.asList(connectorId2), Arrays.asList(taskId1x0, taskId3x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
@@ -206,7 +206,7 @@ public class ConnectProtocolCompatibilityTest {
 
     @Test
     public void testCoopToEagerAssignment() {
-        ConnectAssignment assignment = new ConnectAssignment(
+        ExtendedAssignment assignment = new ExtendedAssignment(
                 CONNECT_PROTOCOL_V1, ConnectProtocol.Assignment.NO_ERROR, "leader", LEADER_URL, 1L,
                 Arrays.asList(connectorId1, connectorId3), Arrays.asList(taskId2x0),
                 Collections.emptyList(), Collections.emptyList(), 0);
@@ -219,7 +219,7 @@ public class ConnectProtocolCompatibilityTest {
         assertEquals(Arrays.asList(connectorId1, connectorId3), leaderAssignment.connectors());
         assertEquals(Collections.singletonList(taskId2x0), leaderAssignment.tasks());
 
-        ConnectAssignment assignment2 = new ConnectAssignment(
+        ExtendedAssignment assignment2 = new ExtendedAssignment(
                 CONNECT_PROTOCOL_V1, ConnectProtocol.Assignment.NO_ERROR, "member", LEADER_URL, 1L,
                 Arrays.asList(connectorId2), Arrays.asList(taskId1x0, taskId3x0),
                 Collections.emptyList(), Collections.emptyList(), 0);

@@ -47,13 +47,13 @@ import static org.apache.kafka.connect.runtime.distributed.IncrementalCooperativ
  * The extended assignment of connectors and tasks that includes revoked connectors and tasks
  * as well as a scheduled rebalancing delay.
  */
-public class ConnectAssignment extends ConnectProtocol.Assignment {
+public class ExtendedAssignment extends ConnectProtocol.Assignment {
     private final short version;
     private final Collection<String> revokedConnectorIds;
     private final Collection<ConnectorTaskId> revokedTaskIds;
     private final int delay;
 
-    private static final ConnectAssignment EMPTY = new ConnectAssignment(
+    private static final ExtendedAssignment EMPTY = new ExtendedAssignment(
             CONNECT_PROTOCOL_V1, ConnectProtocol.Assignment.NO_ERROR, null, null, -1,
             Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), 0);
 
@@ -72,7 +72,7 @@ public class ConnectAssignment extends ConnectProtocol.Assignment {
      * @param revokedTaskIds list of task IDs that the worker should stop running; may not be null
      * @param delay the scheduled delay after which the worker should rejoin the group
      */
-    public ConnectAssignment(short version, short error, String leader, String leaderUrl, long configOffset,
+    public ExtendedAssignment(short version, short error, String leader, String leaderUrl, long configOffset,
                              Collection<String> connectorIds, Collection<ConnectorTaskId> taskIds,
                              Collection<String> revokedConnectorIds, Collection<ConnectorTaskId> revokedTaskIds,
                              int delay) {
@@ -126,7 +126,7 @@ public class ConnectAssignment extends ConnectProtocol.Assignment {
      *
      * @return an empty assignment
      */
-    public static ConnectAssignment empty() {
+    public static ExtendedAssignment empty() {
         return EMPTY;
     }
 
@@ -196,10 +196,10 @@ public class ConnectAssignment extends ConnectProtocol.Assignment {
      * @param struct a struct representing an assignment
      * @return the assignment
      */
-    public static ConnectAssignment fromStruct(short version, Struct struct) {
+    public static ExtendedAssignment fromStruct(short version, Struct struct) {
         return struct == null
                ? null
-               : new ConnectAssignment(
+               : new ExtendedAssignment(
                        version,
                        struct.getShort(ERROR_KEY_NAME),
                        struct.getString(LEADER_KEY_NAME),

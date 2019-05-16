@@ -20,11 +20,11 @@ package org.apache.kafka.connect.runtime.distributed;
  * A class that captures the deserialized form of a worker's metadata.
  */
 public class ExtendedWorkerState extends ConnectProtocol.WorkerState {
-    private final ConnectAssignment assignment;
+    private final ExtendedAssignment assignment;
 
-    public ExtendedWorkerState(String url, long offset, ConnectAssignment assignment) {
+    public ExtendedWorkerState(String url, long offset, ExtendedAssignment assignment) {
         super(url, offset);
-        this.assignment = assignment != null ? assignment : ConnectAssignment.empty();
+        this.assignment = assignment != null ? assignment : ExtendedAssignment.empty();
     }
 
     /**
@@ -33,7 +33,7 @@ public class ExtendedWorkerState extends ConnectProtocol.WorkerState {
      *
      * @return the assignment of connectors and tasks
      */
-    public ConnectAssignment assignment() {
+    public ExtendedAssignment assignment() {
         return assignment;
     }
 
