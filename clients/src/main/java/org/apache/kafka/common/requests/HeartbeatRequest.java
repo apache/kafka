@@ -46,7 +46,7 @@ public class HeartbeatRequest extends AbstractRequest {
         }
     }
 
-    private final HeartbeatRequestData data;
+    public final HeartbeatRequestData data;
 
     private HeartbeatRequest(HeartbeatRequestData data, short version) {
         super(ApiKeys.HEARTBEAT, version);
@@ -74,18 +74,6 @@ public class HeartbeatRequest extends AbstractRequest {
                 throw new IllegalArgumentException(String.format("Version %d is not valid. Valid versions for %s are 0 to %d",
                         versionId, this.getClass().getSimpleName(), ApiKeys.HEARTBEAT.latestVersion()));
         }
-    }
-
-    public String groupId() {
-        return data.groupId();
-    }
-
-    public int groupGenerationId() {
-        return data.generationid();
-    }
-
-    public String memberId() {
-        return data.memberId();
     }
 
     public static HeartbeatRequest parse(ByteBuffer buffer, short version) {

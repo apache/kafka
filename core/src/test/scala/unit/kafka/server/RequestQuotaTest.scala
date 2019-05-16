@@ -300,7 +300,7 @@ class RequestQuotaTest extends BaseRequestTest {
           )
 
         case ApiKeys.HEARTBEAT =>
-          new HeartbeatRequest.Builder(new HeartbeatRequestData().setGroupId("test-group").setGenerationid(1).setMemberId(""))
+          new HeartbeatRequest.Builder(new HeartbeatRequestData().setGroupId("test-group").setGenerationid(1).setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID))
 
         case ApiKeys.LEAVE_GROUP =>
           new LeaveGroupRequest.Builder(new LeaveGroupRequestData().setGroupId("test-leave-group").setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID))

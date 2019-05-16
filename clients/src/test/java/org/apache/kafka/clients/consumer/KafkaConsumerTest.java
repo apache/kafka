@@ -1443,7 +1443,7 @@ public class KafkaConsumerTest {
             }
         }, new HeartbeatResponse(
                 new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code())),
-            coordinator);
+                coordinator);
 
         // join group
         final ByteBuffer byteBuffer = ConsumerProtocol.serializeSubscription(new PartitionAssignor.Subscription(singletonList(topic)));
