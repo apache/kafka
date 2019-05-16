@@ -2410,39 +2410,48 @@ class KafkaApis(val requestChannel: RequestChannel,
       electionRequest.topicPartitions
     }
 
-    def sendResponseCallback(result: Map[TopicPartition, ApiError]): Unit = {
+    def sendResponseCallback(
+      error: ApiError,
+    )(
+      result: Map[TopicPartition, ApiError]
+    ): Unit = {
       sendResponseMaybeThrottle(request, requestThrottleMs => {
-        val results = result.
-          groupBy{case (tp, error) => tp.topic}.
-          map{case (topic, ps) => new ElectLeadersResponseData.ReplicaElectionResult()
-            .setTopic(topic)
-            .setPartitionResult(ps.map{
-            case (tp, error) =>
-              new ElectLeadersResponseData.PartitionResult()
-                .setErrorCode(error.error.code)
-                .setErrorMessage(error.message())
-                .setPartitionId(tp.partition)}.toList.asJava)}
-        val data = new ElectLeadersResponseData()
-          .setThrottleTimeMs(requestThrottleMs)
-          .setReplicaElectionResults(results.toList.asJava)
-        new ElectLeadersResponse(data)})
+        val results = result
+          .groupBy { case (tp, error) => tp.topic }
+          .map { case (topic, ps) =>
+            (
+              topic,
+              ps.map { case (topicPartition, error) =>
+                Int.box(topicPartition.partition) -> error
+              }.asJava
+            )
+          }.asJava
+
+        new ElectLeadersResponse(
+          requestThrottleMs,
+          error.error.code,
+          results,
+          electionRequest.version
+        )
+      })
     }
+
     if (!authorize(request.session, Alter, Resource.ClusterResource)) {
       val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null);
-      val partitionErrors =
+      val partitionErrors: Map[TopicPartition, ApiError] =
       if (electionRequest.data().topicPartitions() == null) {
         // Don't leak the set of partitions if the client lack authz
         Map.empty[TopicPartition, ApiError]
       } else {
-        partitions.map(partition => partition -> error).toMap
+        partitions.map(partition => partition -> error)(breakOut)
       }
-      sendResponseCallback(partitionErrors)
+      sendResponseCallback(error)(partitionErrors)
     } else {
       replicaManager.electLeaders(
         controller,
         partitions,
         electionRequest.electionType,
-        sendResponseCallback,
+        sendResponseCallback(ApiError.NONE),
         electionRequest.data().timeoutMs()
       )
     }

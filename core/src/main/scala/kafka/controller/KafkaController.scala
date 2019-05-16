@@ -1635,7 +1635,7 @@ class KafkaController(val config: KafkaConfig, zkClient: KafkaZkClient, time: Ti
                 val error = if (electionType == ElectionType.PREFERRED) {
                   Errors.PREFERRED_LEADER_NOT_AVAILABLE
                 } else {
-                  Errors.PARTITION_LEADER_NOT_AVAILABLE
+                  Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE
                 }
                 Left(new ApiError(error, ex.getMessage))
               } else {

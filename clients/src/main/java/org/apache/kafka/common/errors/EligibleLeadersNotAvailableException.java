@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.common.errors;
 
-public class PartitionLeaderNotAvailableException extends InvalidMetadataException {
+public class EligibleLeadersNotAvailableException extends InvalidMetadataException {
 
-    public PartitionLeaderNotAvailableException(String message) {
+    public EligibleLeadersNotAvailableException(String message) {
         super(message);
     }
 
-    public PartitionLeaderNotAvailableException(String message, Throwable cause) {
+    public EligibleLeadersNotAvailableException(String message, Throwable cause) {
         super(message, cause);
     }
 }

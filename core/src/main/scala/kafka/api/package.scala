@@ -25,11 +25,11 @@ import scala.collection.breakOut
 package object api {
   implicit final class ElectLeadersRequestOps(val self: ElectLeadersRequest) extends AnyVal {
     def topicPartitions: Set[TopicPartition] = {
-      if (self.data().topicPartitions() == null) {
+      if (self.data.topicPartitions == null) {
         Set.empty
       } else {
-        self.data.topicPartitions().asScala.flatMap { topicPartition =>
-          topicPartition.partitionId().asScala.map { partitionId =>
+        self.data.topicPartitions.asScala.flatMap { topicPartition =>
+          topicPartition.partitionId.asScala.map { partitionId =>
             new TopicPartition(topicPartition.topic, partitionId)
           }
         }(breakOut)
@@ -40,7 +40,7 @@ package object api {
       if (self.version == 0) {
         ElectionType.PREFERRED
       } else {
-        byteToElectionType(self.data().electionType())
+        byteToElectionType(self.data.electionType)
       }
     }
 

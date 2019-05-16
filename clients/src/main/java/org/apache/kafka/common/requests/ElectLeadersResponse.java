@@ -20,6 +20,7 @@ package org.apache.kafka.common.requests;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
@@ -30,23 +31,62 @@ import org.apache.kafka.common.protocol.types.Struct;
 
 public class ElectLeadersResponse extends AbstractResponse {
 
+    private final short version;
     private final ElectLeadersResponseData data;
 
-    public ElectLeadersResponse(ElectLeadersResponseData data) {
-        this.data = data;
-    }
-
     public ElectLeadersResponse(Struct struct, short version) {
+        this.version = version;
         this.data = new ElectLeadersResponseData(struct, version);
     }
 
     public ElectLeadersResponse(Struct struct) {
-        short latestVersion = (short) (ElectLeadersResponseData.SCHEMAS.length - 1);
-        this.data = new ElectLeadersResponseData(struct, latestVersion);
+        this.version = (short) (ElectLeadersResponseData.SCHEMAS.length - 1);
+        this.data = new ElectLeadersResponseData(struct, version);
+    }
+
+    public ElectLeadersResponse(
+            int throttleTimeMs,
+            short errorCode,
+            Map<String, Map<Integer, ApiError>> electionResults) {
+        this(throttleTimeMs, errorCode, electionResults, (short) (ElectLeadersResponseData.SCHEMAS.length - 1));
+    }
+
+    public ElectLeadersResponse(
+            int throttleTimeMs,
+            short errorCode,
+            Map<String, Map<Integer, ApiError>> electionResults,
+            short version) {
+
+        this.version = version;
+        this.data = new ElectLeadersResponseData();
+
+        if (version >= 1) {
+            data.setErrorCode(errorCode);
+        }
+
+        for (Map.Entry<String, Map<Integer, ApiError>> topicEntry : electionResults.entrySet()) {
+            ReplicaElectionResult replicaElectionResult = new ReplicaElectionResult();
+            replicaElectionResult.setTopic(topicEntry.getKey());
+
+            for (Map.Entry<Integer, ApiError> partitionEntry : topicEntry.getValue().entrySet()) {
+                PartitionResult partitionResult = new PartitionResult();
+                partitionResult.setPartitionId(partitionEntry.getKey());
+                partitionResult.setErrorCode(partitionEntry.getValue().error().code());
+                partitionResult.setErrorMessage(partitionEntry.getValue().message());
+
+                replicaElectionResult.partitionResult().add(partitionResult);
+            }
+
+            data.replicaElectionResults().add(replicaElectionResult);
+        }
     }
 
     public ElectLeadersResponseData data() {
         return data;
+    }
+
+    public short version() {
+        return version;
     }
 
     @Override
@@ -90,6 +130,26 @@ public class ElectLeadersResponse extends AbstractResponse {
                                 partitionResult.errorMessage()));
             }
         }
+        return map;
+    }
+
+    public static Map<TopicPartition, Optional<Throwable>> electLeadersResult(ElectLeadersResponseData data) {
+        Map<TopicPartition, Optional<Throwable>> map = new HashMap<>();
+
+        for (ElectLeadersResponseData.ReplicaElectionResult topicResults : data.replicaElectionResults()) {
+            for (ElectLeadersResponseData.PartitionResult partitionResult : topicResults.partitionResult()) {
+                Optional<Throwable> value = Optional.empty();
+                Errors error = Errors.forCode(partitionResult.errorCode());
+                if (error != Errors.NONE) {
+
+                    value = Optional.of(error.exception(partitionResult.errorMessage()));
+                }
+
+                map.put(new TopicPartition(topicResults.topic(), partitionResult.partitionId()),
+                        value);
+            }
+        }
+
         return map;
     }
 }

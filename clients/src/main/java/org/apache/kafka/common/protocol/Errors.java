@@ -73,7 +73,7 @@ import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
-import org.apache.kafka.common.errors.PartitionLeaderNotAvailableException;
+import org.apache.kafka.common.errors.EligibleLeadersNotAvailableException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -307,8 +307,8 @@ public enum Errors {
     GROUP_MAX_SIZE_REACHED(81, "The consumer group has reached its max size.", GroupMaxSizeReachedException::new),
     FENCED_INSTANCE_ID(82, "The coordinator reports a more recent member.id associated with the consumer's group.instance.id.",
             FencedInstanceIdException::new),
-    PARTITION_LEADER_NOT_AVAILABLE(83, "A topic partition leader was not available",
-            PartitionLeaderNotAvailableException::new);
+    ELIGIBLE_LEADERS_NOT_AVAILABLE(83, "Eligible topic partition leaders are not available",
+            EligibleLeadersNotAvailableException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

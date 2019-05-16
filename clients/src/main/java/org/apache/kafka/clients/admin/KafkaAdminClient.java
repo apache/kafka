@@ -2982,7 +2982,7 @@ public class KafkaAdminClient extends AdminClient {
             final ElectionType electionType,
             final Set<TopicPartition> topicPartitions,
             ElectLeadersOptions options) {
-        final KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture = new KafkaFutureImpl<>();
+        final KafkaFutureImpl<Map<TopicPartition, Optional<Throwable>>> electionFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("electLeaders", calcDeadlineMs(now, options.timeoutMs()),
                 new ControllerNodeProvider()) {
@@ -2995,8 +2995,24 @@ public class KafkaAdminClient extends AdminClient {
             @Override
             public void handleResponse(AbstractResponse abstractResponse) {
                 ElectLeadersResponse response = (ElectLeadersResponse) abstractResponse;
-                electionFuture.complete(
-                        ElectLeadersResponse.fromResponseData(response.data()));
+                Map<TopicPartition, Optional<Throwable>> result = ElectLeadersResponse.electLeadersResult(response.data());
+
+                if (response.version() > 0) {
+                    Errors error = Errors.forCode(response.data().errorCode());
+                    if (error != Errors.NONE) {
+                        electionFuture.completeExceptionally(error.exception());
+                        return;
+                    }
+                } else if (topicPartitions == null && result.isEmpty()) {
+                    /* If the version is 0, the topicPartitions is null (we requested information
+                     * about all partitions) and the result is empty, then that indicates a
+                     * CLUSTER_AUTHORIZATION_FAILED error.
+                     */
+                    electionFuture.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
+                    return;
+                }
+
+                electionFuture.complete(result);
             }
 
             @Override
@@ -3004,6 +3020,7 @@ public class KafkaAdminClient extends AdminClient {
                 electionFuture.completeExceptionally(throwable);
             }
         }, now);
-        return new ElectLeadersResult(electionFuture, topicPartitions);
+
+        return new ElectLeadersResult(electionFuture);
     }
 }

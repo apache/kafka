@@ -119,41 +119,38 @@ final object LeaderElectionCommand extends Logging {
   ): Unit = {
     val partitions = topicPartitions.map(_.asJava).getOrElse(null)
     debug(s"Calling AdminClient.electLeaders($electionType, $partitions)")
-    val result = client.electLeaders(electionType, partitions)
 
-    val attemptedPartitions = topicPartitions.getOrElse {
-      try {
-        result.partitions().get.asScala
-      } catch {
-          case e: ExecutionException =>
-            val cause = e.getCause
-            if (cause.isInstanceOf[TimeoutException]) {
-              println("Timeout waiting for election results")
-            }
-            throw new AdminCommandFailedException("Timeout waiting for election results", cause)
-          case e: Throwable =>
-            println("Error while making request")
-            e.printStackTrace()
-            return
-      }
+    val electionResults = try {
+      client.electLeaders(electionType, partitions).partitions.get.asScala
+    } catch {
+      case e: ExecutionException =>
+        val cause = e.getCause
+        if (cause.isInstanceOf[TimeoutException]) {
+          println("Timeout waiting for election results")
+        }
+        throw new AdminCommandFailedException("Timeout waiting for election results", cause)
+      case e: Throwable =>
+        println("Error while making request")
+        e.printStackTrace()
+        return
     }
 
-    val (failed, succeeded) = attemptedPartitions
-      .map(topicPartition => topicPartition -> result.partitionResult(topicPartition))
-      .partition { case (_, partitionResult) => completedExceptionally(partitionResult) }
+    val succeeded = electionResults.flatMap { case (topicPartition, error) =>
+      if (error.isPresent) None else Option(topicPartition)
+    }
+
+    val failed = electionResults.flatMap { case (topicPartition, error) =>
+      if (error.isPresent) Option(topicPartition -> error.get()) else  None
+    }
 
     if (!succeeded.isEmpty) {
-      val partitions = succeeded.map(_._1).mkString(", ")
+      val partitions = succeeded.mkString(", ")
       println(s"Successfully completed leader election ($electionType) for partitions $partitions")
     }
 
     if (!failed.isEmpty) {
       val rootException = new AdminCommandFailedException(s"${failed.size} replica(s) could not be elected")
-      failed.foreach { case (topicPartition, future) =>
-        val exception = Try(future.get()).fold(
-          identity,
-          _ => new AdminCommandFailedException("Exceptional future with no exception")
-        )
+      failed.foreach { case (topicPartition, exception) =>
         println(s"Error completing leader election ($electionType) for partition: $topicPartition: $exception")
         rootException.addSuppressed(exception)
       }

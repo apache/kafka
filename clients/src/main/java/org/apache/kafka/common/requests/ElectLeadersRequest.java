@@ -19,14 +19,13 @@ package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ElectLeadersRequestData.TopicPartitions;
 import org.apache.kafka.common.message.ElectLeadersRequestData;
-import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
-import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.types.Struct;
@@ -102,20 +101,19 @@ public class ElectLeadersRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        ElectLeadersResponseData response = new ElectLeadersResponseData();
-        response.setThrottleTimeMs(throttleTimeMs);
         ApiError apiError = ApiError.fromThrowable(e);
-        for (TopicPartitions topic : data.topicPartitions()) {
-            ReplicaElectionResult electionResult = new ReplicaElectionResult().setTopic(topic.topic());
-            for (Integer partitionId : topic.partitionId()) {
-                electionResult.partitionResult().add(new ElectLeadersResponseData.PartitionResult()
-                        .setPartitionId(partitionId)
-                        .setErrorCode(apiError.error().code())
-                        .setErrorMessage(apiError.message()));
+        Map<String, Map<Integer, ApiError>> electionResult = new HashMap<>();
+        if (version == 0) {
+            for (TopicPartitions topic : data.topicPartitions()) {
+                Map<Integer, ApiError> partitionResult = new HashMap<>();
+                for (Integer partitionId : topic.partitionId()) {
+                    partitionResult.put(partitionId, apiError);
+                }
+                electionResult.put(topic.topic(), partitionResult);
             }
-            response.replicaElectionResults().add(electionResult);
         }
-        return new ElectLeadersResponse(response);
+
+        return new ElectLeadersResponse(throttleTimeMs, apiError.error().code(), electionResult, version);
     }
 
     public static ElectLeadersRequest parse(ByteBuffer buffer, short version) {

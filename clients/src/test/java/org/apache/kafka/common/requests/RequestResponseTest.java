@@ -48,9 +48,6 @@ import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicRe
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
-import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
-import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
-import org.apache.kafka.common.message.ElectLeadersResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
@@ -1499,16 +1496,13 @@ public class RequestResponseTest {
     }
 
     private ElectLeadersResponse createElectLeadersResponse() {
-        ElectLeadersResponseData data = new ElectLeadersResponseData().setThrottleTimeMs(200);
-        ReplicaElectionResult resultsByTopic = new ReplicaElectionResult().setTopic("myTopic");
-        resultsByTopic.partitionResult().add(new PartitionResult().setPartitionId(0)
-                .setErrorCode(Errors.NONE.code())
-                .setErrorMessage(Errors.NONE.message()));
-        resultsByTopic.partitionResult().add(new PartitionResult().setPartitionId(1)
-                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()));
-        data.replicaElectionResults().add(resultsByTopic);
-        return new ElectLeadersResponse(data);
+        String topic = "myTopic";
+        Map<String, Map<Integer, ApiError>> electionResults = new HashMap<>();
+        electionResults.put(topic, new HashMap<>());
+        electionResults.get(topic).put(0, ApiError.NONE);
+        electionResults.get(topic).put(1, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION));
+
+        return new ElectLeadersResponse(200, Errors.NONE.code(), electionResults);
     }
 
     private IncrementalAlterConfigsRequest createIncrementalAlterConfigsRequest() {

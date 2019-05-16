@@ -20,15 +20,11 @@ package org.apache.kafka.clients.admin;
 
 import java.util.Collection;
 import java.util.Map;
-import java.util.Set;
+import java.util.Optional;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import org.apache.kafka.common.errors.ApiException;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.ApiError;
 
 /**
  * The result of {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOptions)}
@@ -37,101 +33,18 @@ import org.apache.kafka.common.requests.ApiError;
  */
 @InterfaceStability.Evolving
 final public class ElectLeadersResult {
-    private final KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture;
-    private final Set<TopicPartition> partitions;
+    private final KafkaFutureImpl<Map<TopicPartition, Optional<Throwable>>> electionFuture;
 
-    ElectLeadersResult(KafkaFutureImpl<Map<TopicPartition, ApiError>> electionFuture, Set<TopicPartition> partitions) {
+    ElectLeadersResult(KafkaFutureImpl<Map<TopicPartition, Optional<Throwable>>> electionFuture) {
         this.electionFuture = electionFuture;
-        this.partitions = partitions;
     }
 
     /**
-     * Get the result of the election for the given {@code partition}.
-     * If there was not an election triggered for the given {@code partition}, the
-     * returned future will complete with an error.
+     * <p>Get a future for the topic partitions for which a leader election was attempted.
+     * If the election succeeded then the value for a topic partition will be the empty Optional.
+     * Otherwise the election failed and the Optional will be set with the error.</p>
      */
-    public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
-        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
-        electionFuture.whenComplete(new KafkaFuture.BiConsumer<Map<TopicPartition, ApiError>, Throwable>() {
-            @Override
-            public void accept(Map<TopicPartition, ApiError> topicPartitions, Throwable throwable) {
-                if (throwable != null) {
-                    result.completeExceptionally(throwable);
-                } else if (!topicPartitions.containsKey(partition)) {
-                    result.completeExceptionally(new UnknownTopicOrPartitionException(
-                            "Leader election for partition \"" + partition +
-                                    "\" was not attempted"));
-                } else if (partitions == null && topicPartitions.isEmpty()) {
-                    // If partitions is null, we requested information about all partitions.  In
-                    // that case, if topicPartitions is empty, that indicates a
-                    // CLUSTER_AUTHORIZATION_FAILED error.
-                    result.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
-                } else {
-                    ApiException exception = topicPartitions.get(partition).exception();
-                    if (exception == null) {
-                        result.complete(null);
-                    } else {
-                        result.completeExceptionally(exception);
-                    }
-                }
-            }
-        });
-        return result;
-    }
-
-    /**
-     * <p>Get a future for the topic partitions for which a leader election
-     * was attempted. A partition will be present in this result if
-     * an election was attempted even if the election was not successful.</p>
-     *
-     * <p>This method is provided to discover the partitions attempted when
-     * {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOptions)} is called
-     * with a null {@code partitions} argument.</p>
-     */
-    public KafkaFuture<Set<TopicPartition>> partitions() {
-        if (partitions != null) {
-            return KafkaFutureImpl.completedFuture(this.partitions);
-        } else {
-            final KafkaFutureImpl<Set<TopicPartition>> result = new KafkaFutureImpl<>();
-            electionFuture.whenComplete(new KafkaFuture.BiConsumer<Map<TopicPartition, ApiError>, Throwable>() {
-                @Override
-                public void accept(Map<TopicPartition, ApiError> topicPartitions, Throwable throwable) {
-                    if (throwable != null) {
-                        result.completeExceptionally(throwable);
-                    } else if (topicPartitions.isEmpty()) {
-                        result.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
-                    } else {
-                        for (ApiError apiError : topicPartitions.values()) {
-                            if (apiError.isFailure()) {
-                                result.completeExceptionally(apiError.exception());
-                            }
-                        }
-                        result.complete(topicPartitions.keySet());
-                    }
-                }
-            });
-            return result;
-        }
-    }
-
-    /**
-     * Return a future which succeeds if all the topic elections succeed.
-     */
-    public KafkaFuture<Void> all() {
-        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
-        electionFuture.thenApply(new KafkaFuture.Function<Map<TopicPartition, ApiError>, Void>() {
-            @Override
-            public Void apply(Map<TopicPartition, ApiError> topicPartitions) {
-                for (ApiError apiError : topicPartitions.values()) {
-                    if (apiError.isFailure()) {
-                        result.completeExceptionally(apiError.exception());
-                        return null;
-                    }
-                }
-                result.complete(null);
-                return null;
-            }
-        });
-        return result;
+    public KafkaFuture<Map<TopicPartition, Optional<Throwable>>> partitions() {
+        return electionFuture;
     }
 }
