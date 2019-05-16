@@ -251,7 +251,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     *   2. no member rejoined
     */
   def maybeElectNewJoinedLeader(): Boolean = {
-    leaderId.fold (false) { currentLeaderId => {
+    leaderId.map { currentLeaderId =>
       val currentLeader = get(currentLeaderId)
       if (!currentLeader.isAwaitingJoin) {
         members.find(_._2.isAwaitingJoin) match {
@@ -272,8 +272,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       } else {
         true
       }
-    }
-    }
+    }.getOrElse(false)
   }
 
   /**

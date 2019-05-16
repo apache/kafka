@@ -735,7 +735,37 @@ class GroupCoordinatorTest extends JUnitSuite {
   }
 
   @Test
-  def testDynamicMemberFailToRejoinBeforeRebalanceTimeout() {
+  def testLeaderFailToRejoinBeforeFinalRebalanceTimeoutWithLongSessionTimeout() {
+    groupStuckInRebalanceTimeoutDueToNonjoinedStaticMember()
+
+    timer.advanceClock(DefaultRebalanceTimeout + 1)
+    // The static leader should already session timeout, moving group towards Empty
+    assertEquals(Set.empty, getGroup(groupId).allMembers)
+    assertEquals(null, getGroup(groupId).leaderOrNull)
+    assertEquals(3, getGroup(groupId).generationId)
+    assertGroupState(groupState = Empty)
+  }
+
+  @Test
+  def testLeaderRejoinBeforeFinalRebalanceTimeoutWithLongSessionTimeout() {
+    groupStuckInRebalanceTimeoutDueToNonjoinedStaticMember()
+
+    EasyMock.reset(replicaManager)
+    // The static leader should be back now, moving group towards CompletingRebalance
+    val leaderRejoinGroupResult = staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, leaderInstanceId, protocolType, protocols)
+    checkJoinGroupResult(leaderRejoinGroupResult,
+      Errors.NONE,
+      3,
+      Set(leaderInstanceId),
+      groupId,
+      CompletingRebalance
+    )
+    assertEquals(1, getGroup(groupId).allMembers.size)
+    assertNotEquals(null, getGroup(groupId).leaderOrNull)
+    assertEquals(3, getGroup(groupId).generationId)
+  }
+
+  def groupStuckInRebalanceTimeoutDueToNonjoinedStaticMember() {
     val longSessionTimeout = DefaultSessionTimeout * 2
     val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId, sessionTimeout = longSessionTimeout)
 
@@ -760,16 +790,10 @@ class GroupCoordinatorTest extends JUnitSuite {
 
     timer.advanceClock(DefaultRebalanceTimeout + 1)
     // Only static leader is maintained, and group is stuck at PreparingRebalance stage
+    assertEquals(1, getGroup(groupId).allMembers.size)
     assertEquals(Set(rebalanceResult.leaderId), getGroup(groupId).allMembers)
     assertEquals(2, getGroup(groupId).generationId)
     assertGroupState(groupState = PreparingRebalance)
-
-    timer.advanceClock(DefaultRebalanceTimeout + 1)
-    // The static leader should already session timeout, moving group towards Empty
-    assertEquals(Set.empty, getGroup(groupId).allMembers)
-    assertEquals(null, getGroup(groupId).leaderOrNull)
-    assertEquals(3, getGroup(groupId).generationId)
-    assertGroupState(groupState = Empty)
   }
 
   @Test
