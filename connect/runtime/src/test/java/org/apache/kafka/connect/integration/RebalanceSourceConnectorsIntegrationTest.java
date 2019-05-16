@@ -50,7 +50,6 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CON
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertTrue;
 
 /**
  * Integration tests for incremental cooperative rebalancing between Connect workers
@@ -61,8 +60,8 @@ public class RebalanceSourceConnectorsIntegrationTest {
     private static final Logger log = LoggerFactory.getLogger(RebalanceSourceConnectorsIntegrationTest.class);
 
     private static final int NUM_TOPIC_PARTITIONS = 3;
-    private static final int CONNECTOR_SETUP_DURATION_MS = 15000;
-    private static final int WORKER_SETUP_DURATION_MS = 15000;
+    private static final int CONNECTOR_SETUP_DURATION_MS = 30_000;
+    private static final int WORKER_SETUP_DURATION_MS = 30_000;
     private static final int NUM_TASKS = 4;
     private static final String CONNECTOR_NAME = "seq-source1";
     private static final String TOPIC_NAME = "sequential-topic";
@@ -99,9 +98,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.stop();
     }
 
-    /**
-     * TODO: javadoc
-     */
     @Test
     public void testStartTwoConnectors() throws Exception {
         // create test topic
@@ -124,7 +120,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
 
         // start a source connector
-        props.put(TASKS_MAX_CONFIG, String.valueOf(4));
         connect.configureConnector("another-source", props);
 
         waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, NUM_TASKS).orElse(false),
@@ -134,43 +129,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
     }
 
-    /**
-     * TODO: javadoc
-     */
-    @Test
-    public void testDeleteOnlyConnector() throws Exception {
-        // create test topic
-        connect.kafka().createTopic(TOPIC_NAME, NUM_TOPIC_PARTITIONS);
-
-        // setup up props for the source connector
-        Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
-        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
-        props.put("throughput", String.valueOf(1));
-        props.put("messages.per.poll", String.valueOf(10));
-        props.put(TOPICS_CONFIG, TOPIC_NAME);
-        props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-        props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
-
-        waitForCondition(() -> this.assertWorkersUp(3),
-                WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
-
-        // start a source connector
-        connect.configureConnector(CONNECTOR_NAME, props);
-
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME, 4).orElse(true),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
-
-        // delete connector
-        connect.deleteConnector(CONNECTOR_NAME);
-
-        waitForCondition(() -> !this.assertConnectorAndTasksRunning(CONNECTOR_NAME, 4).orElse(true),
-                CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not stop in time.");
-    }
-
-    /**
-     * TODO: javadoc
-     */
     @Test
     public void testDeleteConnector() throws Exception {
         // create test topic
@@ -199,22 +157,19 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 }
             });
 
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, 4).orElse(true),
+        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(true),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
 
         // delete connector
         connect.deleteConnector(CONNECTOR_NAME + 3);
 
-        waitForCondition(() -> !this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, 4).orElse(true),
+        waitForCondition(() -> !this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(true),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not stop in time.");
 
-        waitForCondition(this::assertConnectorAndTasksAreBalanced,
+        waitForCondition(this::assertConnectorAndTasksAreUnique,
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
     }
 
-    /**
-     * TODO: javadoc
-     */
     @Test
     public void testAddingWorker() throws Exception {
         // create test topic
@@ -243,7 +198,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 }
             });
 
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, 4).orElse(false),
+        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
 
         connect.addWorker();
@@ -251,16 +206,13 @@ public class RebalanceSourceConnectorsIntegrationTest {
         waitForCondition(() -> this.assertWorkersUp(4),
                 WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
 
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, 4).orElse(false),
+        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
 
-        waitForCondition(this::assertConnectorAndTasksAreBalanced,
+        waitForCondition(this::assertConnectorAndTasksAreUnique,
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
     }
 
-    /**
-     * TODO: javadoc
-     */
     @Test
     public void testRemovingWorker() throws Exception {
         // create test topic
@@ -289,7 +241,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 }
             });
 
-        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, 4).orElse(false),
+        waitForCondition(() -> this.assertConnectorAndTasksRunning(CONNECTOR_NAME + 3, NUM_TASKS).orElse(false),
                 CONNECTOR_SETUP_DURATION_MS, "Connector tasks did not start in time.");
 
         connect.removeWorker();
@@ -297,7 +249,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         waitForCondition(() -> this.assertWorkersUp(2),
                 WORKER_SETUP_DURATION_MS, "Connect workers did not start in time.");
 
-        waitForCondition(this::assertConnectorAndTasksAreBalanced,
+        waitForCondition(this::assertConnectorAndTasksAreUnique,
                 WORKER_SETUP_DURATION_MS, "Connect and tasks are imbalanced between the workers.");
     }
 
@@ -323,6 +275,10 @@ public class RebalanceSourceConnectorsIntegrationTest {
     }
 
     /**
+     * Verifies whether the supplied number of workers matches the number of workers
+     * currently running.
+     * @param numWorkers the expected number of active workers
+     * @return true if exactly numWorkers are active; false if more or fewer workers are running
      */
     private boolean assertWorkersUp(int numWorkers) {
         try {
@@ -334,9 +290,7 @@ public class RebalanceSourceConnectorsIntegrationTest {
         }
     }
 
-    /**
-     */
-    private boolean assertConnectorAndTasksAreBalanced() {
+    private boolean assertConnectorAndTasksAreUnique() {
         try {
             Map<String, Collection<String>> connectors = new HashMap<>();
             Map<String, Collection<String>> tasks = new HashMap<>();
@@ -344,15 +298,13 @@ public class RebalanceSourceConnectorsIntegrationTest {
                 ConnectorStateInfo info = connect.connectorStatus(connector);
                 connectors.computeIfAbsent(info.connector().workerId(), k -> new ArrayList<>())
                         .add(connector);
-                info.tasks().stream().forEach(
+                info.tasks().forEach(
                     t -> tasks.computeIfAbsent(t.workerId(), k -> new ArrayList<>())
                            .add(connector + "-" + t.id()));
             }
 
             int maxConnectors = connectors.values().stream().mapToInt(Collection::size).max().orElse(0);
-            int minConnectors = connectors.values().stream().mapToInt(Collection::size).min().orElse(0);
             int maxTasks = tasks.values().stream().mapToInt(Collection::size).max().orElse(0);
-            int minTasks = tasks.values().stream().mapToInt(Collection::size).min().orElse(0);
 
             assertNotEquals("Found no connectors running!", maxConnectors, 0);
             assertNotEquals("Found no tasks running!", maxTasks, 0);
@@ -362,8 +314,6 @@ public class RebalanceSourceConnectorsIntegrationTest {
             assertEquals("Task assignments are not unique: " + tasks,
                     tasks.values().size(),
                     tasks.values().stream().distinct().collect(Collectors.toList()).size());
-            assertTrue("Connectors are imbalanced: " + connectors, maxConnectors - minConnectors < 3);
-            assertTrue("Tasks are imbalanced: " + tasks, maxTasks - minTasks < 3);
             return true;
         } catch (Exception e) {
             log.error("Could not check connector state info.", e);
