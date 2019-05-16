@@ -138,7 +138,7 @@ public class IncrementalCooperativeConnectProtocol {
                 .set(CONFIG_OFFSET_KEY_NAME, workerState.offset());
         // Not a big issue if we embed the protocol version with the assignment in the metadata
         Struct allocation = new Struct(ALLOCATION_V1)
-                .set(ALLOCATION_KEY_NAME, serializeAssignment(workerState.assignment));
+                .set(ALLOCATION_KEY_NAME, serializeAssignment(workerState.assignment()));
         ByteBuffer buffer = ByteBuffer.allocate(CONNECT_PROTOCOL_HEADER_V1.sizeOf()
                                                 + CONFIG_STATE_V1.sizeOf(configState)
                                                 + ALLOCATION_V1.sizeOf(allocation));
@@ -234,37 +234,6 @@ public class IncrementalCooperativeConnectProtocol {
         checkVersionCompatibility(version);
         Struct struct = ASSIGNMENT_V1.read(buffer);
         return ConnectAssignment.fromStruct(version, struct);
-    }
-
-    /**
-     * A class that captures the deserialized form of a worker's metadata.
-     */
-    public static class ExtendedWorkerState extends ConnectProtocol.WorkerState {
-        private final ConnectAssignment assignment;
-
-        public ExtendedWorkerState(String url, long offset, ConnectAssignment assignment) {
-            super(url, offset);
-            this.assignment = assignment != null ? assignment : ConnectAssignment.empty();
-        }
-
-        /**
-         * This method returns which was the assignment of connectors and tasks on a worker at the
-         * moment that its state was captured by this class.
-         *
-         * @return the assignment of connectors and tasks
-         */
-        public ConnectAssignment assignment() {
-            return assignment;
-        }
-
-        @Override
-        public String toString() {
-            return "WorkerState{" +
-                    "url='" + url() + '\'' +
-                    ", offset=" + offset() +
-                    ", " + assignment +
-                    '}';
-        }
     }
 
     private static void checkVersionCompatibility(short version) {
