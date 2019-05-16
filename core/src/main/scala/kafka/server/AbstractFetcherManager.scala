@@ -34,7 +34,8 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   private[server] val fetcherThreadMap = new mutable.HashMap[BrokerIdAndFetcherId, T]
   private val lock = new Object
   private var numFetchersPerBroker = numFetchers
-  private val failedPartitions = new FailedPartitions
+
+  val failedPartitions = new FailedPartitions
   this.logIdent = "[" + name + "] "
 
   newGauge(
@@ -175,14 +176,6 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     info(s"Removed fetcher for partitions $partitions")
   }
 
-  def markPartitionFailed(partition: TopicPartition): Unit = {
-    lock synchronized {
-      failedPartitions.add(partition)
-      shutdownIdleFetcherThreads()
-    }
-    warn(s"Partition $partition marked as failed")
-  }
-
   def shutdownIdleFetcherThreads() {
     lock synchronized {
       val keysToBeRemoved = new mutable.HashSet[BrokerIdAndFetcherId]
@@ -211,22 +204,22 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
 }
 
 class FailedPartitions {
-  private val failedPartitions = new mutable.HashSet[TopicPartition]
+  private val failedPartitionsSet = new mutable.HashSet[TopicPartition]
 
   def size: Int = synchronized {
-    failedPartitions.size
+    failedPartitionsSet.size
   }
 
-  def add(partition: TopicPartition): Unit = synchronized {
-    failedPartitions += partition
+  def add(topicPartition: TopicPartition): Unit = synchronized {
+    failedPartitionsSet += topicPartition
   }
 
-  def remove(partitions: Set[TopicPartition]): Unit = synchronized {
-    failedPartitions --= partitions
+  def remove(topicPartitions: Set[TopicPartition]): Unit = synchronized {
+    failedPartitionsSet --= topicPartitions
   }
 
-  def getFailedPartitions: Set[TopicPartition] = {
-    failedPartitions
+  def contains(topicPartition: TopicPartition): Boolean = synchronized {
+    failedPartitionsSet.contains(topicPartition)
   }
 }
 

@@ -52,7 +52,7 @@ import scala.math._
 abstract class AbstractFetcherThread(name: String,
                                      clientId: String,
                                      val sourceBroker: BrokerEndPoint,
-                                     markPartitionFailed: TopicPartition => Unit,
+                                     failedPartitions: FailedPartitions,
                                      fetchBackOffMs: Int = 0,
                                      isInterruptible: Boolean = true)
   extends ShutdownableThread(name, isInterruptible) {
@@ -178,11 +178,6 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-  private def addFailedPartition(topicPartition: TopicPartition): Unit = {
-    markPartitionFailed(topicPartition)
-    removePartitions(Set(topicPartition))
-  }
-
   private def doTruncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Boolean = {
     try {
       truncate(topicPartition, truncationState)
@@ -190,12 +185,13 @@ abstract class AbstractFetcherThread(name: String,
     }
     catch {
       case e: KafkaStorageException =>
-        info(s"Failed to truncate $topicPartition", e)
-        addFailedPartition(topicPartition)
+        info(s"Failed to truncate $topicPartition " + s"at offset ${truncationState.offset}", e)
+        markPartitionFailed(topicPartition)
         false
       case t: Throwable =>
-        error(s"Unexpected error occurred during truncation for $topicPartition", t)
-        addFailedPartition(topicPartition)
+        error(s"Unexpected error occurred during truncation for $topicPartition "
+          + s"at offset ${truncationState.offset}", t)
+        markPartitionFailed(topicPartition)
         false
     }
   }
@@ -277,7 +273,7 @@ abstract class AbstractFetcherThread(name: String,
       val currentLeaderEpoch = currentFetchState.currentLeaderEpoch
       info(s"Partition $tp has an older epoch ($currentLeaderEpoch) than the current leader. Will await " +
         s"the new LeaderAndIsr state before resuming fetching.")
-      addFailedPartition(tp)
+      markPartitionFailed(tp)
     }
   }
 
@@ -350,9 +346,9 @@ abstract class AbstractFetcherThread(name: String,
                       partitionsWithError += topicPartition
                     case t: Throwable =>
                       // drop this partition from the fetcher thread and store in a set for failed partitions
-                      error(s"Unexpected error occurred while processing data for partition $topicPartition" +
-                        s"offset ${currentFetchState.fetchOffset}", t)
-                      addFailedPartition(topicPartition)
+                      error(s"Unexpected error occurred while processing data for partition $topicPartition " +
+                        s"at offset ${currentFetchState.fetchOffset}", t)
+                      markPartitionFailed(topicPartition)
                   }
                 case Errors.OFFSET_OUT_OF_RANGE =>
                   if (!handleOutOfRangeError(topicPartition, currentFetchState))
@@ -398,6 +394,16 @@ abstract class AbstractFetcherThread(name: String,
       }
     } finally partitionMapLock.unlock()
   }
+
+  private def markPartitionFailed(topicPartition: TopicPartition): Unit = {
+    partitionMapLock.lock()
+    try {
+      failedPartitions.add(topicPartition)
+      removePartitions(Set(topicPartition))
+    } finally partitionMapLock.unlock()
+    warn(s"Partition $topicPartition marked as failed")
+  }
+
 
   def addPartitions(initialFetchStates: Map[TopicPartition, OffsetAndEpoch]) {
     partitionMapLock.lockInterruptibly()

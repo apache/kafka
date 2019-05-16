@@ -65,10 +65,6 @@ class AbstractFetcherThreadTest {
 
   private val failedPartitions = new FailedPartitions
 
-  private def markPartitionFailed(partition : TopicPartition): Unit = {
-    failedPartitions.add(partition)
-  }
-
   @Test
   def testMetricsRemovedOnShutdown(): Unit = {
     val partition = new TopicPartition("topic", 0)
@@ -156,7 +152,7 @@ class AbstractFetcherThreadTest {
 
     // After fencing, the fetcher should remove the partition from tracking and marked as failed
     assertTrue(fetcher.fetchState(partition).isEmpty)
-    assertTrue(failedPartitions.getFailedPartitions.contains(partition))
+    assertTrue(failedPartitions.contains(partition))
   }
 
   @Test
@@ -186,7 +182,7 @@ class AbstractFetcherThreadTest {
 
     // After fencing, the fetcher should remove the partition from tracking and marked as failed
     assertTrue(fetcher.fetchState(partition).isEmpty)
-    assertTrue(failedPartitions.getFailedPartitions.contains(partition))
+    assertTrue(failedPartitions.contains(partition))
   }
 
   @Test
@@ -494,7 +490,7 @@ class AbstractFetcherThreadTest {
     assertEquals(0, replicaState.logEndOffset)
     assertTrue(fetchedEarliestOffset)
     assertTrue(fetcher.fetchState(partition).isEmpty)
-    assertTrue(failedPartitions.getFailedPartitions.contains(partition))
+    assertTrue(failedPartitions.contains(partition))
   }
 
   @Test
@@ -762,12 +758,12 @@ class AbstractFetcherThreadTest {
     fetcher.doWork()
 
     // partition1 marked as failed
-    assertTrue(failedPartitions.getFailedPartitions.contains(partition1))
+    assertTrue(failedPartitions.contains(partition1))
     assertTrue(fetcher.fetchState(partition1).isEmpty)
 
     // fetcher continues with rest of the partitions
     assertEquals(Some(Fetching), fetcher.fetchState(partition2).map(_.state))
-    assertFalse(failedPartitions.getFailedPartitions.contains(partition2))
+    assertFalse(failedPartitions.contains(partition2))
 
     // simulate a leader epoch
     fetcher.removePartitions(Set(partition1))
@@ -778,7 +774,7 @@ class AbstractFetcherThreadTest {
 
     // partition1 added back
     assertTrue(fetcher.fetchState(partition1).nonEmpty)
-    assertFalse(failedPartitions.getFailedPartitions.contains(partition1))
+    assertFalse(failedPartitions.contains(partition1))
 
   }
 
@@ -811,12 +807,12 @@ class AbstractFetcherThreadTest {
     fetcher.doWork()
 
     // partition1 marked as failed
-    assertTrue(failedPartitions.getFailedPartitions.contains(partition1))
+    assertTrue(failedPartitions.contains(partition1))
     assertTrue(fetcher.fetchState(partition1).isEmpty)
 
     // thread continues with rest of the partitions
     assertEquals(Some(Fetching), fetcher.fetchState(partition2).map(_.state))
-    assertFalse(failedPartitions.getFailedPartitions.contains(partition2))
+    assertFalse(failedPartitions.contains(partition2))
 
     // simulate a leader epoch for partition1
     fetcher.removePartitions(Set(partition1))
@@ -827,7 +823,7 @@ class AbstractFetcherThreadTest {
 
     // partition1 added back
     assertTrue(fetcher.fetchState(partition1).nonEmpty)
-    assertFalse(failedPartitions.getFailedPartitions.contains(partition1))
+    assertFalse(failedPartitions.contains(partition1))
 
   }
 
@@ -855,7 +851,7 @@ class AbstractFetcherThreadTest {
     extends AbstractFetcherThread("mock-fetcher",
       clientId = "mock-fetcher",
       sourceBroker = new BrokerEndPoint(leaderId, host = "localhost", port = Random.nextInt()),
-      markPartitionFailed: TopicPartition => Unit) {
+      failedPartitions) {
 
     import MockFetcherThread.PartitionState
 
