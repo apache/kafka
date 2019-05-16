@@ -34,8 +34,11 @@ import java.util.Iterator;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
@@ -56,12 +59,13 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
     private final Logger log;
     private final Time time;
     private final int maxDelay;
-    private final Set<String> candidateWorkersForReassignment;
     private ConnectorsAndTasks previousAssignment;
     private ConnectorsAndTasks previousRevocation;
     private boolean canRevoke;
-    private long scheduledRebalance;
-    private int delay;
+    // visible for testing
+    protected final Set<String> candidateWorkersForReassignment;
+    protected long scheduledRebalance;
+    protected int delay;
 
     public IncrementalCooperativeAssignor(LogContext logContext, Time time, int maxDelay) {
         this.log = logContext.logger(IncrementalCooperativeAssignor.class);
@@ -246,7 +250,6 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             canRevoke = delay == 0;
         }
 
-
         assignConnectors(completeWorkerAssignment, newSubmissions.connectors());
         assignTasks(completeWorkerAssignment, newSubmissions.tasks());
 
@@ -342,21 +345,19 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
         log.debug("Found the following connectors and tasks missing from previous assignment: "
                 + lostAssignments);
 
+        log.info("Time diff now: {} - scheduledRebalance {} = {}", now, scheduledRebalance, now - scheduledRebalance);
+
         if (scheduledRebalance > 0 && now >= scheduledRebalance) {
             // delayed rebalance expired and it's time to assign resources
+            Optional<WorkerLoad> candidateWorkerLoad = Optional.empty();
             if (!candidateWorkersForReassignment.isEmpty()) {
-                // At the moment we pick the first one.
-                // The set is non-empty so it has at least one element.
-                String recoveredWorker = candidateWorkersForReassignment.iterator().next();
-                WorkerLoad workerLoad = completeWorkerAssignment.stream()
-                        .filter(w -> recoveredWorker.equals(w.worker()))
-                        .findAny()
-                        .orElse(null);
+                candidateWorkerLoad = pickCandidateWorkerForReassignment(completeWorkerAssignment);
+            }
 
-                if (workerLoad != null) {
-                    lostAssignments.connectors().forEach(workerLoad::assign);
-                    lostAssignments.tasks().forEach(workerLoad::assign);
-                }
+            if (candidateWorkerLoad.isPresent()) {
+                WorkerLoad workerLoad = candidateWorkerLoad.get();
+                lostAssignments.connectors().forEach(workerLoad::assign);
+                lostAssignments.tasks().forEach(workerLoad::assign);
             } else {
                 newSubmissions.connectors().addAll(lostAssignments.connectors());
                 newSubmissions.tasks().addAll(lostAssignments.tasks());
@@ -365,10 +366,8 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             scheduledRebalance = 0;
             delay = 0;
         } else {
-            candidateWorkersForReassignment.addAll(completeWorkerAssignment.stream()
-                    .filter(WorkerLoad::isEmpty)
-                    .map(WorkerLoad::worker)
-                    .collect(Collectors.toSet()));
+            candidateWorkersForReassignment
+                    .addAll(candidateWorkersForReassignment(completeWorkerAssignment));
             if (now < scheduledRebalance) {
                 // a delayed rebalance is in progress, but it's not yet time to reassign
                 // unaccounted resources
@@ -382,6 +381,22 @@ public class IncrementalCooperativeAssignor implements ConnectAssignor {
             }
             scheduledRebalance = now + delay;
         }
+    }
+
+    private Set<String> candidateWorkersForReassignment(List<WorkerLoad> completeWorkerAssignment) {
+        return completeWorkerAssignment.stream()
+                .filter(WorkerLoad::isEmpty)
+                .map(WorkerLoad::worker)
+                .collect(Collectors.toSet());
+    }
+
+    private Optional<WorkerLoad> pickCandidateWorkerForReassignment(List<WorkerLoad> completeWorkerAssignment) {
+        Map<String, WorkerLoad> activeWorkers = completeWorkerAssignment.stream()
+                .collect(Collectors.toMap(WorkerLoad::worker, Function.identity()));
+        return candidateWorkersForReassignment.stream()
+                .map(activeWorkers::get)
+                .filter(Objects::nonNull)
+                .findFirst();
     }
 
     /**
