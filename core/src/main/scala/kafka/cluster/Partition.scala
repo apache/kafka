@@ -278,6 +278,7 @@ class Partition(val topicPartition: TopicPartition,
     * does not exist. This method assumes that the current replica has already been created.
     *
     * @param logDir log directory
+    * @param highWatermarkCheckpoints Checkpoint to load initial high watermark from
     * @return true iff the future replica is created
     */
   def maybeCreateFutureReplica(logDir: String, highWatermarkCheckpoints: OffsetCheckpoints): Boolean = {
