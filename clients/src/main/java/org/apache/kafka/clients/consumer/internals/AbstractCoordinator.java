@@ -205,6 +205,7 @@ public abstract class AbstractCoordinator implements Closeable {
      * Perform assignment for the group. This is used by the leader to push state to all the members
      * of the group (e.g. to push partition assignments in the case of the new consumer)
      * @param leaderId The id of the leader (which is this member)
+     * @param protocol The protocol selected by the coordinator
      * @param allMemberMetadata Metadata from all members of the group
      * @return A map from each member to their state assignment
      */
