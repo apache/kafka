@@ -362,8 +362,17 @@ public class KTableKTableForeignKeyInnerJoinIntegrationTest {
     private KafkaStreams prepareTopology(final String queryableName) {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTable<Integer, Float> table1 = builder.table(TABLE_1, Consumed.with(Serdes.Integer(), Serdes.Float()));
-        final KTable<String, Long> table2 = builder.table(TABLE_2, Consumed.with(Serdes.String(), Serdes.Long()));
+        //TODO - bellemare - this appears to only work when I materialize the state... because I cannot access auto-materialized stateSupplier in internalStreamsBuilder!
+        Materialized<Integer, Float, KeyValueStore<Bytes, byte[]>> table1Mat = Materialized.as("table-1-test");
+            table1Mat.withKeySerde(Serdes.Integer()).withValueSerde(Serdes.Float());
+
+        final KTable<Integer, Float> table1 = builder.table(TABLE_1,
+                Consumed.with(Serdes.Integer(), Serdes.Float()),
+                table1Mat);
+
+        Materialized<String, Long, KeyValueStore<Bytes, byte[]>> table2Mat = Materialized.as("table-2-test");
+        table2Mat.withKeySerde(Serdes.String()).withValueSerde(Serdes.Long());
+        final KTable<String, Long> table2 = builder.table(TABLE_2, Consumed.with(Serdes.String(), Serdes.Long()), table2Mat);
 
         Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized = null;
         if (queryableName != null) {

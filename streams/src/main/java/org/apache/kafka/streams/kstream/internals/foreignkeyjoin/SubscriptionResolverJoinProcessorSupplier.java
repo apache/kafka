@@ -26,7 +26,13 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.Random;
@@ -47,17 +53,37 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
     @Override
     public Processor<K, SubscriptionResponseWrapper<VO>> get() {
         return new AbstractProcessor<K, SubscriptionResponseWrapper<VO>>() {
-            private KeyValueStore<K, V> originalSource;
+
+            //private KeyValueStore<K, V> originalSource;
+            //TODO - How to handle the other various store types?
+            private TimestampedKeyValueStore<K,V> originalSource;
 
             @Override
             public void init(final ProcessorContext context) {
                 super.init(context);
-                originalSource = (KeyValueStore<K, V>) context.getStateStore(stateStoreName);
+                originalSource = (TimestampedKeyValueStore<K,V>)context.getStateStore(stateStoreName);
             }
 
             @Override
             public void process(K key, SubscriptionResponseWrapper<VO> value) {
-                final V currentValue = originalSource.get(key);
+
+//                final StateStore store = stateManager.getStore(name);
+//                if (store instanceof TimestampedKeyValueStore) {
+//                    return new ProcessorContextImpl.TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store);
+//                } else if (store instanceof KeyValueStore) {
+//                    return new ProcessorContextImpl.KeyValueStoreReadWriteDecorator((KeyValueStore) store);
+//                } else if (store instanceof TimestampedWindowStore) {
+//                    return new ProcessorContextImpl.TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store);
+//                } else if (store instanceof WindowStore) {
+//                    return new ProcessorContextImpl.WindowStoreReadWriteDecorator((WindowStore) store);
+//                } else if (store instanceof SessionStore) {
+//                    return new ProcessorContextImpl.SessionStoreReadWriteDecorator((SessionStore) store);
+//                }
+//
+//                return store;
+
+
+                final V currentValue = originalSource.get(key).value();
                 long[] currentHash = (currentValue == null ?
                         Murmur3.hash128(new byte[]{}):
                         Murmur3.hash128(valueSerializer.serialize(context().topic(), currentValue)));

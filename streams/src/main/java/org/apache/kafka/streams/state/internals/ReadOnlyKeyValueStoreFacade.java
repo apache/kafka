@@ -46,11 +46,6 @@ public class ReadOnlyKeyValueStoreFacade<K, V> implements ReadOnlyKeyValueStore<
     }
 
     @Override
-    public KeyValueIterator<K, V> prefixScan(K prefix) {
-        return new KeyValueIteratorFacade<>(inner.prefixScan(prefix));
-    }
-
-    @Override
     public long approximateNumEntries() {
         return inner.approximateNumEntries();
     }

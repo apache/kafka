@@ -20,9 +20,11 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueIteratorFacade;
 import org.apache.kafka.streams.state.internals.ReadOnlyKeyValueStoreFacade;
 
 import java.util.List;
@@ -63,6 +65,11 @@ public class KeyValueStoreFacade<K, V> extends ReadOnlyKeyValueStoreFacade<K, V>
     @Override
     public V delete(final K key) {
         return getValueOrNull(inner.delete(key));
+    }
+
+    @Override
+    public KeyValueIterator<K, V> prefixScan(final K prefix) {
+        return new KeyValueIteratorFacade<>(inner.prefixScan(prefix));
     }
 
     @Override

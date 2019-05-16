@@ -208,14 +208,13 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             return new RocksDBDualCFIterator(name, innerIterWithTimestamp, innerIterNoTimestamp);
         }
 
+        /**
+         * @throws UnsupportedOperationException
+         */
         @Override
         public KeyValueIterator<Bytes, byte[]> prefix(Bytes prefix) {
-            //TODO - Bellemare - THIS IS NOT CORRECT. DO NOT LET THIS INTO TRUNK! I COPIED THIS FROM all()
-            final RocksIterator innerIterWithTimestamp = db.newIterator(newColumnFamily);
-            innerIterWithTimestamp.seekToFirst();
-            final RocksIterator innerIterNoTimestamp = db.newIterator(oldColumnFamily);
-            innerIterNoTimestamp.seekToFirst();
-            return new RocksDBDualCFIterator(name, innerIterWithTimestamp, innerIterNoTimestamp);
+            //TODO - Bellemare - How do we support this here?
+            throw new UnsupportedOperationException("prefixScan() not supported in " + getClass().getName());
         }
 
         @Override

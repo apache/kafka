@@ -30,6 +30,19 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
     private final String[] storeNames;
     private final StoreBuilder<? extends StateStore> storeBuilder;
 
+    /**
+     * Create a node representing a stateful processor, where the named stores have already been registered,
+     * and where the store needs to be built and registered as part of building this node.
+     */
+    public StatefulProcessorNode(final String nodeName,
+                                 final ProcessorParameters<K, V> processorParameters,
+                                 final String[] storeNames,
+                                 final StoreBuilder<? extends StateStore> materializedKTableStoreBuilder) {
+        super(nodeName, processorParameters);
+
+        this.storeNames = storeNames;
+        this.storeBuilder = materializedKTableStoreBuilder;
+    }
 
     /**
      * Create a node representing a stateful processor, where the named stores have already been registered.

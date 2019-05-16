@@ -60,6 +60,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.slf4j.Logger;
@@ -874,18 +875,25 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         // 1) Loads the data into the new state store. This data is accessed by the KTableKTablePrefixJoin processor.
         // 2) Gets the foreignKey value data from the Other KTable and creates a SubscriptionWrapperResponse.
         //    Returns the data keyed on K. Discards the CombinedKey as it is no longer needed after this stage.
-        final String thisStateStoreName = builder.newStoreName(STATE_STORE_NAME);
+        final String thisStateStoreName = builder.newStoreName(STATE_STORE_NAME + "-thisSSName-");
         final ForeignKeySingleLookupProcessorSupplier<K, KO, VO> oneToOne =
                 new ForeignKeySingleLookupProcessorSupplier<>(thisStateStoreName, ((KTableImpl<KO, VO, VO>) other).valueGetterSupplier());
 
-        final KeyValueBytesStoreSupplier thisRocksDBRef = new RocksDbKeyValueBytesStoreSupplier(thisStateStoreName, false); //Dont need timestamped store.
-        final StateStore prefixScannableDBRef = thisRocksDBRef.get();
-        final Materialized<CombinedKey<KO, K>, SubscriptionWrapper, KeyValueStore<Bytes, byte[]>> foreignMaterialized =
-                Materialized.<CombinedKey<KO, K>, SubscriptionWrapper, KeyValueStore<Bytes, byte[]>>as(prefixScannableDBRef.name())
-                .withKeySerde(combinedKeySerde)
-                .withValueSerde(new SubscriptionWrapperSerde());
-        final MaterializedInternal<CombinedKey<KO, K>, SubscriptionWrapper, KeyValueStore<Bytes, byte[]>> repartitionedPrefixScannableStore =
-                new MaterializedInternal<>(foreignMaterialized);
+        final RocksDbKeyValueBytesStoreSupplier thisRocksDBRef = new RocksDbKeyValueBytesStoreSupplier(thisStateStoreName, false); //Dont need timestamped store.
+
+//        final StateStore prefixScannableDBRef = thisRocksDBRef.get();
+        StoreBuilder<KeyValueStore<Bytes, byte[]>> prefixScanStoreBuilder = Stores.keyValueStoreBuilder(thisRocksDBRef,
+                combinedKeySerde,
+                new SubscriptionWrapperSerde());
+//        myStore.build();
+//        final Materialized<CombinedKey<KO, K>, SubscriptionWrapper, KeyValueStore<Bytes, byte[]>> foreignMaterialized =
+//            Materialized.<CombinedKey<KO, K>, SubscriptionWrapper>as(thisRocksDBRef)
+//                .withKeySerde(combinedKeySerde)
+//                .withValueSerde(new SubscriptionWrapperSerde());
+//        final MaterializedInternal<CombinedKey<KO, K>, SubscriptionWrapper, KeyValueStore<Bytes, byte[]>> repartitionedPrefixScannableStore =
+//                new MaterializedInternal<>(foreignMaterialized);
+
+
 
         //Performs other-table/foreign-key-driven updates
         final ProcessorSupplier<KO, Change<VO>> prefixScanProcessorSupplier =
@@ -900,10 +908,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         //Create the processor to resolve the subscription updates.
         final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessor = new SubscriptionResolverJoinProcessorSupplier<>(queryableStoreName, valueSerde().serializer(), joiner);
-        final String resolverProcessorName = builder.newProcessorName(KTableImpl.SOURCE_NAME);
+        final String resolverProcessorName = builder.newProcessorName(KTableImpl.SOURCE_NAME + "resolver");
 
-        final KTableSource<K, VR> outputProcessor = new KTableSource<>(materializedInternal.storeName(), "todo-somequeryablename");
-        final String outputProcessorName = builder.newProcessorName(SOURCE_NAME);
+        final KTableSource<K, VR> outputProcessor = new KTableSource<>(materializedInternal.storeName(), materializedInternal.queryableStoreName());
+        final String outputProcessorName = builder.newProcessorName(SOURCE_NAME + "output");
 
         final HashSet<String> copartitions = new HashSet<>();
         copartitions.add(repartitionSourceName);
@@ -973,12 +981,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 .withKeySerde(combinedKeySerde)
                 .build();
 
-        final StoreBuilder prefixScanStoreBuilder = new TimestampedKeyValueStoreMaterializer<>(repartitionedPrefixScannableStore).materialize();
-        final StatefulProcessorNode<CombinedKey<KO, K>, V> oneToOneNode = new StatefulProcessorNode<>(
+        final StatefulProcessorNode<CombinedKey<KO, K>, V> oneToOneNode = new StatefulProcessorNode(
                 oneToOneProcessorParameters.processorName(),
                 oneToOneProcessorParameters,
-//                ((KTableImpl<KO, VO, ?>) other).valueGetterSupplier().storeNames()
-//                ,
+                ((KTableImpl<KO, VO, ?>) other).valueGetterSupplier().storeNames(),
                 prefixScanStoreBuilder
         );
 
@@ -998,7 +1004,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final TableProcessorNode outputTableNode = new TableProcessorNode<>(
                 outputProcessorParameters.processorName(),
                 outputProcessorParameters,
-                storeBuilder
+                storeBuilder,
+                new String[]{this.queryableStoreName}  //Is this right? The TableProcessorNode will try to do something with this???
         );
 
         builder.addGraphNode(streamsGraphNode, repartitionNode);
