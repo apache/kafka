@@ -44,7 +44,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
  * In either of the cases above, the timestamp that has actually been used will be returned to user in
  * {@link RecordMetadata}
  */
-public class ProducerRecord<K, V> {
+public class ProducerRecord<K, V> implements org.apache.kafka.clients.ClientRecord<K, V> {
 
     private final String topic;
     private final Integer partition;
@@ -144,6 +144,7 @@ public class ProducerRecord<K, V> {
     /**
      * @return The topic this record is being sent to
      */
+    @Override
     public String topic() {
         return topic;
     }
@@ -151,6 +152,7 @@ public class ProducerRecord<K, V> {
     /**
      * @return The headers
      */
+    @Override
     public Headers headers() {
         return headers;
     }
@@ -158,6 +160,7 @@ public class ProducerRecord<K, V> {
     /**
      * @return The key (or null if no key is specified)
      */
+    @Override
     public K key() {
         return key;
     }
@@ -165,6 +168,7 @@ public class ProducerRecord<K, V> {
     /**
      * @return The value
      */
+    @Override
     public V value() {
         return value;
     }
@@ -172,6 +176,7 @@ public class ProducerRecord<K, V> {
     /**
      * @return The timestamp, which is in milliseconds since epoch.
      */
+    @Override
     public Long timestamp() {
         return timestamp;
     }
