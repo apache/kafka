@@ -846,7 +846,7 @@ public class WorkerTest extends ThreadedTest {
         PowerMock.replayAll();
         Map<String, String> expectedConfigs = new HashMap<>(defaultProducerConfigs);
         expectedConfigs.put("client.id", "connector-producer-job-0");
-        assertEquals(defaultProducerConfigs, Worker.producerConfigs("connector-producer-" + TASK_ID, config, connectorConfig,
+        assertEquals(expectedConfigs, Worker.producerConfigs(TASK_ID,"connector-producer-" + TASK_ID, config, connectorConfig,
                                                                     null, noneConnectorClientConfigOverridePolicy));
     }
 
@@ -865,7 +865,7 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX)).andReturn(
             new HashMap<String, Object>());
         PowerMock.replayAll();
-        assertEquals(expectedConfigs, Worker.producerConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connectorConfig,
+        assertEquals(expectedConfigs, Worker.producerConfigs(TASK_ID,"connector-producer-" + TASK_ID, configWithOverrides, connectorConfig,
                                                              null, allConnectorClientConfigOverridePolicy));
     }
 
@@ -888,7 +888,7 @@ public class WorkerTest extends ThreadedTest {
         EasyMock.expect(connectorConfig.originalsWithPrefix(ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX))
             .andReturn(connConfig);
         PowerMock.replayAll();
-        assertEquals(expectedConfigs, Worker.producerConfigs(new ConnectorTaskId("test", 1), configWithOverrides, connectorConfig,
+        assertEquals(expectedConfigs, Worker.producerConfigs(TASK_ID,"connector-producer-" + TASK_ID, configWithOverrides, connectorConfig,
                                                              null, allConnectorClientConfigOverridePolicy));
     }
 
@@ -937,7 +937,7 @@ public class WorkerTest extends ThreadedTest {
         expectedConfigs.put("auto.offset.reset", "latest");
         expectedConfigs.put("max.poll.records", "5000");
         expectedConfigs.put("max.poll.interval.ms", "1000");
-
+        expectedConfigs.put("client.id", "connector-consumer-test-1");
         Map<String, Object> connConfig = new HashMap<String, Object>();
         connConfig.put("max.poll.records", "5000");
         connConfig.put("max.poll.interval.ms", "1000");

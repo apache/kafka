@@ -509,7 +509,8 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
-            Map<String, Object> producerProps = producerConfigs("connector-producer-" + id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
+            Map<String, Object> producerProps = producerConfigs(id, "connector-producer-" + id, config, connConfig, connectorClass,
+                                                                connectorClientConfigOverridePolicy);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
@@ -534,7 +535,8 @@ public class Worker {
         }
     }
 
-    static Map<String, Object> producerConfigs(String defaultClientId,
+    static Map<String, Object> producerConfigs(ConnectorTaskId id,
+                                               String defaultClientId,
                                                WorkerConfig config,
                                                ConnectorConfig connConfig,
                                                Class<? extends Connector>  connectorClass,
@@ -649,7 +651,8 @@ public class Worker {
         // check if topic for dead letter queue exists
         String topic = connConfig.dlqTopicName();
         if (topic != null && !topic.isEmpty()) {
-            Map<String, Object> producerProps = producerConfigs("connector-dlq-producer-" + id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
+            Map<String, Object> producerProps = producerConfigs(id,"connector-dlq-producer-" + id, config, connConfig, connectorClass,
+                                                                connectorClientConfigOverridePolicy);
             Map<String, Object> adminProps = adminConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
             DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
             reporters.add(reporter);
