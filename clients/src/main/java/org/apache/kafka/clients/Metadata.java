@@ -73,6 +73,11 @@ public class Metadata implements Closeable {
     private boolean isClosed;
     private final Map<TopicPartition, Integer> lastSeenLeaderEpochs;
 
+    private boolean bootstrapping = false;
+
+    /** Addresses with which the metadata was originally bootstrapped. */
+    private List<InetSocketAddress> bootstrapAddresses;
+
     /**
      * Create a new Metadata instance
      *
@@ -220,6 +225,19 @@ public class Metadata implements Closeable {
         this.lastSuccessfulRefreshMs = now;
         this.updateVersion += 1;
         this.cache = MetadataCache.bootstrap(addresses);
+        this.bootstrapAddresses = addresses;
+        this.bootstrapping = true;
+    }
+
+    public synchronized void rebootstrap(long now) {
+        if (!this.bootstrapping) {
+            this.needUpdate = true;
+            this.lastRefreshMs = now;
+            this.lastSuccessfulRefreshMs = now;
+            this.updateVersion += 1;
+            this.cache = MetadataCache.bootstrap(this.bootstrapAddresses);
+            this.bootstrapping = true;
+        }
     }
 
     /**
@@ -251,6 +269,7 @@ public class Metadata implements Closeable {
         this.lastRefreshMs = now;
         this.lastSuccessfulRefreshMs = now;
         this.updateVersion += 1;
+        this.bootstrapping = false;
 
         String previousClusterId = cache.cluster().clusterResource().clusterId();
 

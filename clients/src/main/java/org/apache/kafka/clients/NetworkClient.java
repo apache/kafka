@@ -997,6 +997,11 @@ public class NetworkClient implements KafkaClient {
             // Beware that the behavior of this method and the computation of timeouts for poll() are
             // highly dependent on the behavior of leastLoadedNode.
             Node node = leastLoadedNode(now);
+            if (node == null && !hasFetchInProgress()) {
+                metadata.rebootstrap(now);
+                node = leastLoadedNode(now);
+            }
+
             if (node == null) {
                 log.debug("Give up sending metadata request since no node is available");
                 return reconnectBackoffMs;
