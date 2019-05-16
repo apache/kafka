@@ -49,10 +49,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class KTableKTableOuterJoinTest {
-    final private String topic1 = "topic1";
-    final private String topic2 = "topic2";
-    final private String output = "output";
-
+    private final String topic1 = "topic1";
+    private final String topic2 = "topic2";
+    private final String output = "output";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final ConsumerRecordFactory<Integer, String> recordFactory =
         new ConsumerRecordFactory<>(Serdes.Integer().serializer(), Serdes.String().serializer(), 0L);

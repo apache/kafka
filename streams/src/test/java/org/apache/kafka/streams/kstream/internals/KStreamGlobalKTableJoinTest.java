@@ -42,11 +42,14 @@ import java.util.Set;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamGlobalKTableJoinTest {
+    private final static String[] EMPTY = new String[0];
+
     private final String streamTopic = "streamTopic";
     private final String globalTableTopic = "globalTableTopic";
+    private final int[] expectedKeys = {0, 1, 2, 3};
+
     private TopologyTestDriver driver;
     private MockProcessor<Integer, String> processor;
-    private final int[] expectedKeys = {0, 1, 2, 3};
     private StreamsBuilder builder;
 
     @Before
@@ -123,7 +126,7 @@ public class KStreamGlobalKTableJoinTest {
         // push two items to the primary stream. the globalTable is empty
 
         pushToStream(2, "X", true);
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
     }
 
     @Test
@@ -132,12 +135,12 @@ public class KStreamGlobalKTableJoinTest {
         // push two items to the primary stream. the globalTable is empty
 
         pushToStream(2, "X", true);
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push two items to the globalTable. this should not produce any item.
 
         pushToGlobalTable(2, "Y");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce two items.
 
@@ -147,7 +150,7 @@ public class KStreamGlobalKTableJoinTest {
         // push all items to the globalTable. this should not produce any item
 
         pushToGlobalTable(4, "YY");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce four items.
 
@@ -157,7 +160,7 @@ public class KStreamGlobalKTableJoinTest {
         // push all items to the globalTable. this should not produce any item
 
         pushToGlobalTable(4, "YYY");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
     }
 
     @Test
@@ -166,7 +169,7 @@ public class KStreamGlobalKTableJoinTest {
         // push two items to the globalTable. this should not produce any item.
 
         pushToGlobalTable(2, "Y");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce two items.
 
@@ -181,7 +184,7 @@ public class KStreamGlobalKTableJoinTest {
         // push all four items to the globalTable. this should not produce any item.
 
         pushToGlobalTable(4, "Y");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce four items.
 
@@ -191,7 +194,7 @@ public class KStreamGlobalKTableJoinTest {
         // push two items with null to the globalTable as deletes. this should not produce any item.
 
         pushNullValueToGlobalTable(2);
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce two items.
 
@@ -205,13 +208,13 @@ public class KStreamGlobalKTableJoinTest {
         // push all items to the globalTable. this should not produce any item
 
         pushToGlobalTable(4, "Y");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream with no foreign key, resulting in null keyMapper values.
         // this should not produce any item.
 
         pushToStream(4, "XXX", false);
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
     }
 
 }

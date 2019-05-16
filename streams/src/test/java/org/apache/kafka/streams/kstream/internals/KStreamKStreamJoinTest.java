@@ -48,9 +48,9 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamKStreamJoinTest {
     private final static String[] EMPTY = new String[0];
+
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
-
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final ConsumerRecordFactory<Integer, String> recordFactory =
         new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);

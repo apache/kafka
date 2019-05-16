@@ -48,12 +48,12 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamKTableJoinTest {
+    private final static String[] EMPTY = new String[0];
+
     private final String streamTopic = "streamTopic";
     private final String tableTopic = "tableTopic";
-
     private final ConsumerRecordFactory<Integer, String> recordFactory =
         new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
-
     private final int[] expectedKeys = {0, 1, 2, 3};
 
     private MockProcessor<Integer, String> processor;
@@ -120,18 +120,18 @@ public class KStreamKTableJoinTest {
     public void shouldNotJoinWithEmptyTableOnStreamUpdates() {
         // push two items to the primary stream. the table is empty
         pushToStream(2, "X");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
     }
 
     @Test
     public void shouldNotJoinOnTableUpdates() {
         // push two items to the primary stream. the table is empty
         pushToStream(2, "X");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push two items to the table. this should not produce any item.
         pushToTable(2, "Y");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce two items.
         pushToStream(4, "X");
@@ -139,7 +139,7 @@ public class KStreamKTableJoinTest {
 
         // push all items to the table. this should not produce any item
         pushToTable(4, "YY");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce four items.
         pushToStream(4, "X");
@@ -147,14 +147,14 @@ public class KStreamKTableJoinTest {
 
         // push all items to the table. this should not produce any item
         pushToTable(4, "YYY");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
     }
 
     @Test
     public void shouldJoinOnlyIfMatchFoundOnStreamUpdates() {
         // push two items to the table. this should not produce any item.
         pushToTable(2, "Y");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce two items.
         pushToStream(4, "X");
@@ -166,7 +166,7 @@ public class KStreamKTableJoinTest {
     public void shouldClearTableEntryOnNullValueUpdates() {
         // push all four items to the table. this should not produce any item.
         pushToTable(4, "Y");
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce four items.
         pushToStream(4, "X");
@@ -174,7 +174,7 @@ public class KStreamKTableJoinTest {
 
         // push two items with null to the table as deletes. this should not produce any item.
         pushNullValueToTable();
-        processor.checkAndClearProcessResult(new String[0]);
+        processor.checkAndClearProcessResult(EMPTY);
 
         // push all four items to the primary stream. this should produce two items.
         pushToStream(4, "XX");

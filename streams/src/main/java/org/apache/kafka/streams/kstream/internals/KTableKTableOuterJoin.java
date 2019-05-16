@@ -149,14 +149,34 @@ class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         @Override
         public ValueAndTimestamp<R> get(final K key) {
             R newValue = null;
-            final V1 value1 = getValueOrNull(valueGetter1.get(key));
-            final V2 value2 = getValueOrNull(valueGetter2.get(key));
+
+            final ValueAndTimestamp<V1> valueAndTimestamp1 = valueGetter1.get(key);
+            final V1 value1;
+            final long timestamp1;
+            if (valueAndTimestamp1 == null) {
+                value1 = null;
+                timestamp1 = UNKNOWN;
+            } else {
+                value1 = valueAndTimestamp1.value();
+                timestamp1 = valueAndTimestamp1.timestamp();
+            }
+
+            final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter2.get(key);
+            final V2 value2;
+            final long timestamp2;
+            if (valueAndTimestamp2 == null) {
+                value2 = null;
+                timestamp2 = UNKNOWN;
+            } else {
+                value2 = valueAndTimestamp2.value();
+                timestamp2 = valueAndTimestamp2.timestamp();
+            }
 
             if (value1 != null || value2 != null) {
                 newValue = joiner.apply(value1, value2);
             }
 
-            return ValueAndTimestamp.make(newValue, -1L);
+            return ValueAndTimestamp.make(newValue, Math.max(timestamp1, timestamp2));
         }
 
         @Override

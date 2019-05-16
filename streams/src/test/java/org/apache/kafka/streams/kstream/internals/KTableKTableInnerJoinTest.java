@@ -51,11 +51,11 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class KTableKTableInnerJoinTest {
+    private final static String[] EMPTY = new String[0];
 
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
-    final private String output = "output";
-
+    private final String output = "output";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materialized =
         Materialized.with(Serdes.Integer(), Serdes.String());
@@ -169,7 +169,7 @@ public class KTableKTableInnerJoinTest {
             driver.pipeInput(recordFactory.create(topic1, null, "SomeVal", 42L));
             // left: X0:0 (ts: 5), X1:1 (ts: 6)
             // right:
-            proc.checkAndClearProcessResult(new String[0]);
+            proc.checkAndClearProcessResult(EMPTY);
 
             // push two items to the other stream. this should produce two items.
             for (int i = 0; i < 2; i++) {
@@ -279,7 +279,7 @@ public class KTableKTableInnerJoinTest {
             driver.pipeInput(recordFactory.create(topic1, null, "SomeVal", 42L));
             // left: X0:0 (ts: 5), X1:1 (ts: 6)
             // right:
-            proc.checkAndClearProcessResult(new String[0]);
+            proc.checkAndClearProcessResult(EMPTY);
 
             // push two items to the other stream. this should produce two items.
             for (int i = 0; i < 2; i++) {
