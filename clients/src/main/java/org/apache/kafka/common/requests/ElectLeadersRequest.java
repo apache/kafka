@@ -82,18 +82,15 @@ public class ElectLeadersRequest extends AbstractRequest {
     }
 
     private final ElectLeadersRequestData data;
-    private final short version;
 
     private ElectLeadersRequest(ElectLeadersRequestData data, short version) {
         super(ApiKeys.ELECT_LEADERS, version);
         this.data = data;
-        this.version = version;
     }
 
     public ElectLeadersRequest(Struct struct, short version) {
         super(ApiKeys.ELECT_LEADERS, version);
         this.data = new ElectLeadersRequestData(struct, version);
-        this.version = version;
     }
 
     public ElectLeadersRequestData data() {
@@ -104,28 +101,24 @@ public class ElectLeadersRequest extends AbstractRequest {
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         ApiError apiError = ApiError.fromThrowable(e);
         Map<String, Map<Integer, ApiError>> electionResult = new HashMap<>();
-        if (version == 0) {
-            for (TopicPartitions topic : data.topicPartitions()) {
-                Map<Integer, ApiError> partitionResult = new HashMap<>();
-                for (Integer partitionId : topic.partitionId()) {
-                    partitionResult.put(partitionId, apiError);
-                }
-                electionResult.put(topic.topic(), partitionResult);
+
+        for (TopicPartitions topic : data.topicPartitions()) {
+            Map<Integer, ApiError> partitionResult = new HashMap<>();
+            for (Integer partitionId : topic.partitionId()) {
+                partitionResult.put(partitionId, apiError);
             }
+            electionResult.put(topic.topic(), partitionResult);
         }
 
-        return new ElectLeadersResponse(throttleTimeMs, apiError.error().code(), electionResult, version);
+        return new ElectLeadersResponse(throttleTimeMs, apiError.error().code(), electionResult, version());
     }
 
     public static ElectLeadersRequest parse(ByteBuffer buffer, short version) {
         return new ElectLeadersRequest(ApiKeys.ELECT_LEADERS.parseRequest(version, buffer), version);
     }
 
-    /**
-     * Visible for testing.
-     */
     @Override
-    public Struct toStruct() {
-        return data.toStruct(version);
+    protected Struct toStruct() {
+        return data.toStruct(version());
     }
 }

@@ -2981,13 +2981,6 @@ public class KafkaAdminClient extends AdminClient {
                         electionFuture.completeExceptionally(error.exception());
                         return;
                     }
-                } else if (topicPartitions == null && result.isEmpty()) {
-                    /* If the version is 0, the topicPartitions is null (we requested information
-                     * about all partitions) and the result is empty, then that indicates a
-                     * CLUSTER_AUTHORIZATION_FAILED error.
-                     */
-                    electionFuture.completeExceptionally(Errors.CLUSTER_AUTHORIZATION_FAILED.exception());
-                    return;
                 }
 
                 electionFuture.complete(result);

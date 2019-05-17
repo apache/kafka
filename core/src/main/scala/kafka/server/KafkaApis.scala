@@ -1642,7 +1642,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           .setName(topic))
       }
       results.asScala.foreach(topic => {
-         if (!authorize(request.session, Delete, Resource(Topic, topic.name, LITERAL))) 
+         if (!authorize(request.session, Delete, Resource(Topic, topic.name, LITERAL)))
            topic.setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
          else if (!metadataCache.contains(topic.name))
            topic.setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
@@ -2408,10 +2408,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     def sendResponseCallback(
       error: ApiError,
     )(
-      result: Map[TopicPartition, ApiError]
+      results: Map[TopicPartition, ApiError]
     ): Unit = {
       sendResponseMaybeThrottle(request, requestThrottleMs => {
-        val results = result
+        val electionResults = results
           .groupBy { case (tp, _) => tp.topic }
           .map { case (topic, ps) =>
             (
@@ -2425,24 +2425,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         new ElectLeadersResponse(
           requestThrottleMs,
           error.error.code,
-          results,
+          electionResults,
           electionRequest.version
         )
       })
     }
 
     if (!authorize(request.session, Alter, Resource.ClusterResource)) {
-      val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null);
-      val partitionErrors: Map[TopicPartition, ApiError] = if (electionRequest.data().topicPartitions() == null) {
-        // Don't leak the set of partitions if the client lack authz
-        Map.empty[TopicPartition, ApiError]
-      } else if (electionRequest.version > 0) {
-        // After version 0 authz are return as a top level error
-        Map.empty[TopicPartition, ApiError]
-      } else {
-        // For version 0 we need to return authz error for each partition
+      val error = new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)
+      val partitionErrors: Map[TopicPartition, ApiError] =
         electionRequest.topicPartitions.map(partition => partition -> error)(breakOut)
-      }
 
       sendResponseCallback(error)(partitionErrors)
     } else {

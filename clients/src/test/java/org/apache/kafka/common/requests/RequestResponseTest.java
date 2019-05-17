@@ -343,7 +343,7 @@ public class RequestResponseTest {
         checkRequest(createElectLeadersRequest());
         checkRequest(createElectLeadersRequestNullPartitions());
         checkErrorResponse(createElectLeadersRequest(), new UnknownServerException());
-        checkResponse(createElectLeadersResponse(), 0);
+        checkResponse(createElectLeadersResponse(), 1);
         checkRequest(createIncrementalAlterConfigsRequest());
         checkErrorResponse(createIncrementalAlterConfigsRequest(), new UnknownServerException());
         checkResponse(createIncrementalAlterConfigsResponse(), 0);
@@ -1486,13 +1486,13 @@ public class RequestResponseTest {
     }
 
     private ElectLeadersRequest createElectLeadersRequestNullPartitions() {
-        return new ElectLeadersRequest.Builder(ElectionType.PREFERRED, null, 100).build((short) 0);
+        return new ElectLeadersRequest.Builder(ElectionType.PREFERRED, null, 100).build((short) 1);
     }
 
     private ElectLeadersRequest createElectLeadersRequest() {
         List<TopicPartition> partitions = asList(new TopicPartition("data", 1), new TopicPartition("data", 2));
 
-        return new ElectLeadersRequest.Builder(ElectionType.PREFERRED, partitions, 100).build((short) 0);
+        return new ElectLeadersRequest.Builder(ElectionType.PREFERRED, partitions, 100).build((short) 1);
     }
 
     private ElectLeadersResponse createElectLeadersResponse() {

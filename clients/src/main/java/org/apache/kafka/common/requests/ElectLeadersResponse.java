@@ -34,13 +34,12 @@ public class ElectLeadersResponse extends AbstractResponse {
     private final short version;
     private final ElectLeadersResponseData data;
 
-    public ElectLeadersResponse(Struct struct, short version) {
-        this.version = version;
-        this.data = new ElectLeadersResponseData(struct, version);
+    public ElectLeadersResponse(Struct struct) {
+        this(struct, ApiKeys.ELECT_LEADERS.latestVersion());
     }
 
-    public ElectLeadersResponse(Struct struct) {
-        this.version = (short) (ElectLeadersResponseData.SCHEMAS.length - 1);
+    public ElectLeadersResponse(Struct struct, short version) {
+        this.version = version;
         this.data = new ElectLeadersResponseData(struct, version);
     }
 
@@ -48,7 +47,7 @@ public class ElectLeadersResponse extends AbstractResponse {
             int throttleTimeMs,
             short errorCode,
             Map<String, Map<Integer, ApiError>> electionResults) {
-        this(throttleTimeMs, errorCode, electionResults, (short) (ElectLeadersResponseData.SCHEMAS.length - 1));
+        this(throttleTimeMs, errorCode, electionResults, ApiKeys.ELECT_LEADERS.latestVersion());
     }
 
     public ElectLeadersResponse(
@@ -114,13 +113,12 @@ public class ElectLeadersResponse extends AbstractResponse {
     }
 
     public static ElectLeadersResponse parse(ByteBuffer buffer, short version) {
-        return new ElectLeadersResponse(
-                ApiKeys.ELECT_LEADERS.responseSchema(version).read(buffer), version);
+        return new ElectLeadersResponse(ApiKeys.ELECT_LEADERS.responseSchema(version).read(buffer), version);
     }
 
     @Override
     public boolean shouldClientThrottle(short version) {
-        return version >= 3;
+        return true;
     }
 
     public static Map<TopicPartition, Optional<Throwable>> electLeadersResult(ElectLeadersResponseData data) {
