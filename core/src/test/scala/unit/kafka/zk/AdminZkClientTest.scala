@@ -164,7 +164,7 @@ class AdminZkClientTest extends ZooKeeperTestHarness with Logging with RackAware
     val adminZkClient = new AdminZkClient(zkMock)
 
     intercept[TopicExistsException] {
-      adminZkClient.validateTopicCreate(topic, Map.empty, new Properties)
+      adminZkClient.validateTopicCreate(topic, Map.empty, new Properties, true)
     }
   }
 

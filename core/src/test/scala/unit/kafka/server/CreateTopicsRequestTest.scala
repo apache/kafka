@@ -59,6 +59,8 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     // Basic
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq(existingTopic))),
       Map(existingTopic -> error(Errors.TOPIC_ALREADY_EXISTS, Some("Topic 'existing-topic' already exists."))))
+    validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq(existingTopic, replicationFactor = brokerList.size + 1))),
+      Map(existingTopic -> error(Errors.TOPIC_ALREADY_EXISTS, Some("Topic 'existing-topic' already exists."))))
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-partitions", numPartitions = -2))),
       Map("error-partitions" -> error(Errors.INVALID_PARTITIONS)), checkErrorMessage = false)
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-replication",
