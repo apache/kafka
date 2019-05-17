@@ -532,7 +532,7 @@ public class ConsumerConfig extends AbstractConfig {
     }
 
     public static ConfigDef configDef() {
-        return  CONFIG;
+        return  new ConfigDef(CONFIG);
     }
 
     public static void main(String[] args) {
