@@ -23,7 +23,7 @@ import java.util
 import java.util.{Collections, Optional}
 import java.util.Arrays.asList
 
-import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0}
+import kafka.api.{ApiVersion, KAFKA_0_10_2_IV0, KAFKA_2_2_IV1}
 import kafka.controller.KafkaController
 import kafka.coordinator.group.GroupCoordinator
 import kafka.coordinator.transaction.TransactionCoordinator
@@ -542,6 +542,25 @@ class KafkaApisTest {
         )
       )._2)
 
+    EasyMock.replay(groupCoordinator)
+  }
+
+  @Test
+  def rejectRequestWhenStaticMembershipNotSupported() {
+    val capturedResponse = expectNoThrottling()
+    EasyMock.replay(clientRequestQuotaManager, requestChannel)
+
+    val (joinGroupRequest, requestChannelRequest) = buildRequest(new JoinGroupRequest.Builder(
+      new JoinGroupRequestData()
+        .setGroupId("test")
+        .setMemberId("test")
+        .setGroupInstanceId("instanceId")
+        .setProtocolType("consumer")
+        .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection)))
+    createKafkaApis(KAFKA_2_2_IV1).handleJoinGroupRequest(requestChannelRequest)
+
+    val response = readResponse(ApiKeys.JOIN_GROUP, joinGroupRequest, capturedResponse).asInstanceOf[JoinGroupResponse]
+    assertEquals(Errors.UNSUPPORTED_VERSION, response.error())
     EasyMock.replay(groupCoordinator)
   }
 
