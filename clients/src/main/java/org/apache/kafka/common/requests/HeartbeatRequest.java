@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -37,6 +38,10 @@ public class HeartbeatRequest extends AbstractRequest {
 
         @Override
         public HeartbeatRequest build(short version) {
+            if (data.groupInstanceId() != null && version < 3) {
+                throw new UnsupportedVersionException("The broker join group protocol version " + version + " doesn't support static membership." +
+                        "Please unset consumer config group.instance.id field to proceed.");
+            }
             return new HeartbeatRequest(data, version);
         }
 

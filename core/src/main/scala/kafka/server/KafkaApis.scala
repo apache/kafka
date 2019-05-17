@@ -298,6 +298,22 @@ class KafkaApis(val requestChannel: RequestChannel,
     val header = request.header
     val offsetCommitRequest = request.body[OffsetCommitRequest]
 
+    val unauthorizedTopicErrors = mutable.Map[TopicPartition, Errors]()
+    val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
+    // the callback for sending an offset commit response
+    def sendResponseCallback(commitStatus: immutable.Map[TopicPartition, Errors]) {
+      val combinedCommitStatus = commitStatus ++ unauthorizedTopicErrors ++ nonExistingTopicErrors
+      if (isDebugEnabled)
+        combinedCommitStatus.foreach { case (topicPartition, error) =>
+          if (error != Errors.NONE) {
+            debug(s"Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
+              s"on partition $topicPartition failed due to ${error.exceptionName}")
+          }
+        }
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new OffsetCommitResponse(requestThrottleMs, combinedCommitStatus.asJava))
+    }
+
     // reject the request if not authorized to the group
     if (!authorize(request.session, Read, Resource(Group, offsetCommitRequest.data().groupId, LITERAL))) {
       val error = Errors.GROUP_AUTHORIZATION_FAILED
@@ -310,10 +326,19 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setTopics(responseTopicList)
             .setThrottleTimeMs(requestThrottleMs)
       ))
+    } else if (offsetCommitRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion < KAFKA_2_3_IV0) {
+      // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
+      // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
+      // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
+      var errorMap = new mutable.HashMap[TopicPartition, Errors]
+      for (topicData <- offsetCommitRequest.data().topics().asScala) {
+        for (partitionData <- topicData.partitions().asScala) {
+          val topicPartition = new TopicPartition(topicData.name(), partitionData.partitionIndex())
+          errorMap += topicPartition -> Errors.UNSUPPORTED_VERSION
+        }
+      }
+      sendResponseCallback(errorMap.toMap)
     } else {
-
-      val unauthorizedTopicErrors = mutable.Map[TopicPartition, Errors]()
-      val nonExistingTopicErrors = mutable.Map[TopicPartition, Errors]()
       val authorizedTopicRequestInfoBldr = immutable.Map.newBuilder[TopicPartition, OffsetCommitRequestData.OffsetCommitRequestPartition]
 
       for (topicData <- offsetCommitRequest.data().topics().asScala) {
@@ -329,20 +354,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       val authorizedTopicRequestInfo = authorizedTopicRequestInfoBldr.result()
-
-      // the callback for sending an offset commit response
-      def sendResponseCallback(commitStatus: immutable.Map[TopicPartition, Errors]) {
-        val combinedCommitStatus = commitStatus ++ unauthorizedTopicErrors ++ nonExistingTopicErrors
-        if (isDebugEnabled)
-          combinedCommitStatus.foreach { case (topicPartition, error) =>
-            if (error != Errors.NONE) {
-              debug(s"Offset commit request with correlation id ${header.correlationId} from client ${header.clientId} " +
-                s"on partition $topicPartition failed due to ${error.exceptionName}")
-            }
-          }
-        sendResponseMaybeThrottle(request, requestThrottleMs =>
-          new OffsetCommitResponse(requestThrottleMs, combinedCommitStatus.asJava))
-      }
 
       if (authorizedTopicRequestInfo.isEmpty)
         sendResponseCallback(Map.empty)
@@ -401,7 +412,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         groupCoordinator.handleCommitOffsets(
           offsetCommitRequest.data.groupId,
           offsetCommitRequest.data.memberId,
-          getGroupInstanceId(offsetCommitRequest.data.groupInstanceId),
+          Option(offsetCommitRequest.data.groupInstanceId),
           offsetCommitRequest.data.generationId,
           partitionData,
           sendResponseCallback)
@@ -1329,7 +1340,19 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, createResponse)
     }
 
-    if (!authorize(request.session, Read, Resource(Group, joinGroupRequest.data().groupId(), LITERAL))) {
+    if (joinGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion < KAFKA_2_3_IV0) {
+      // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
+      // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
+      // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
+      sendResponseCallback(JoinGroupResult(
+        List.empty,
+        JoinGroupResponse.UNKNOWN_MEMBER_ID,
+        JoinGroupResponse.UNKNOWN_GENERATION_ID,
+        JoinGroupResponse.UNKNOWN_PROTOCOL,
+        JoinGroupResponse.UNKNOWN_MEMBER_ID,
+        Errors.UNSUPPORTED_VERSION
+      ))
+    } else if (!authorize(request.session, Read, Resource(Group, joinGroupRequest.data().groupId(), LITERAL))) {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new JoinGroupResponse(
           new JoinGroupResponseData()
@@ -1342,22 +1365,8 @@ class KafkaApis(val requestChannel: RequestChannel,
             .setMembers(Collections.emptyList())
         )
       )
-    } else if (joinGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion < KAFKA_2_3_IV0) {
-      // Reject client request if client is using static membership while IBP is < 2.3.
-      sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new JoinGroupResponse(
-          new JoinGroupResponseData()
-            .setThrottleTimeMs(requestThrottleMs)
-            .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-            .setGenerationId(JoinGroupResponse.UNKNOWN_GENERATION_ID)
-            .setProtocolName(JoinGroupResponse.UNKNOWN_PROTOCOL)
-            .setLeader(JoinGroupResponse.UNKNOWN_MEMBER_ID)
-            .setMemberId(JoinGroupResponse.UNKNOWN_MEMBER_ID)
-            .setMembers(Collections.emptyList())
-        )
-      )
-    } else {
-      val groupInstanceId = getGroupInstanceId(joinGroupRequest.data.groupInstanceId)
+    }  else {
+      val groupInstanceId = Option(joinGroupRequest.data.groupInstanceId)
 
       // Only return MEMBER_ID_REQUIRED error if joinGroupRequest version is >= 4
       // and groupInstanceId is configured to unknown.
@@ -1394,7 +1403,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         ))
     }
 
-    if (!authorize(request.session, Read, Resource(Group, syncGroupRequest.data.groupId, LITERAL))) {
+    if (syncGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion < KAFKA_2_3_IV0) {
+      // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
+      // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
+      // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
+      sendResponseCallback(Array[Byte](), Errors.UNSUPPORTED_VERSION)
+    } else if (!authorize(request.session, Read, Resource(Group, syncGroupRequest.data.groupId, LITERAL))) {
       sendResponseCallback(Array[Byte](), Errors.GROUP_AUTHORIZATION_FAILED)
     } else {
       val assignmentMap = immutable.Map.newBuilder[String, Array[Byte]]
@@ -1406,7 +1420,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         syncGroupRequest.data.groupId,
         syncGroupRequest.data.generationId,
         syncGroupRequest.data.memberId,
-        getGroupInstanceId(syncGroupRequest.data.groupInstanceId),
+        Option(syncGroupRequest.data.groupInstanceId),
         assignmentMap.result,
         sendResponseCallback
       )
@@ -1445,7 +1459,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, createResponse)
     }
 
-    if (!authorize(request.session, Read, Resource(Group, heartbeatRequest.data.groupId, LITERAL))) {
+    if (heartbeatRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion < KAFKA_2_3_IV0) {
+      // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
+      // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
+      // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
+      sendResponseCallback(Errors.UNSUPPORTED_VERSION)
+    } else if (!authorize(request.session, Read, Resource(Group, heartbeatRequest.data.groupId, LITERAL))) {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
         new HeartbeatResponse(
             new HeartbeatResponseData()
@@ -1456,21 +1475,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       groupCoordinator.handleHeartbeat(
         heartbeatRequest.data.groupId,
         heartbeatRequest.data.memberId,
-        getGroupInstanceId(heartbeatRequest.data.groupInstanceId),
+        Option(heartbeatRequest.data.groupInstanceId),
         heartbeatRequest.data.generationid,
         sendResponseCallback)
     }
-  }
-
-  def getGroupInstanceId(rawInstanceId: String): Option[String] = {
-    // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
-    // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
-    // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
-    if (rawInstanceId == null ||
-      config.interBrokerProtocolVersion < KAFKA_2_3_IV0)
-      None
-    else
-      Some(rawInstanceId)
   }
 
   def handleLeaveGroupRequest(request: RequestChannel.Request) {
