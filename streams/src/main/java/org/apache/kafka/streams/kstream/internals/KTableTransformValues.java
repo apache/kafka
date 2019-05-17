@@ -27,6 +27,7 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Objects;
 
+import static org.apache.kafka.streams.processor.internals.RecordQueue.UNKNOWN;
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
@@ -145,7 +146,7 @@ class KTableTransformValues<K, V, V1> implements KTableProcessorSupplier<K, V, V
             final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);
             return ValueAndTimestamp.make(
                 valueTransformer.transform(key, getValueOrNull(valueAndTimestamp)),
-                valueAndTimestamp == null ? context.timestamp() : valueAndTimestamp.timestamp());
+                valueAndTimestamp == null ? UNKNOWN : valueAndTimestamp.timestamp());
         }
 
         @Override

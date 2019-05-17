@@ -90,13 +90,6 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             // first try to remove the old value
             if (value.oldValue != null && oldAgg != null) {
                 intermediateAgg = remove.apply(key, value.oldValue, oldAgg);
-                // TODO: not sure if this make sense
-                // technically, if we remove a value from an aggregation,
-                // it's timestamp should not contribute the result timestamp anymore
-                // -> because we compute the result timestamp as max(...),
-                // we would need to keep all ts that contributed to the current result ts,
-                // and pick the largest of the remaining ones
-                // however, storing the complete history is not feasible... :(
                 newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
             } else {
                 intermediateAgg = oldAgg;

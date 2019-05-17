@@ -106,11 +106,10 @@ class KTableKTableLeftJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R, 
                 timestampRight = valueAndTimestampRight.timestamp();
             }
 
+            resultTimestamp = Math.max(context().timestamp(), timestampRight);
+
             if (change.newValue != null) {
                 newValue = joiner.apply(change.newValue, value2);
-                resultTimestamp = Math.max(context().timestamp(), timestampRight);
-            } else {
-                resultTimestamp = context().timestamp();
             }
 
             if (sendOldValues && change.oldValue != null) {

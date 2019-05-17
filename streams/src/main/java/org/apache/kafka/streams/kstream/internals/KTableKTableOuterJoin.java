@@ -100,11 +100,7 @@ class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
                 }
                 resultTimestamp = context().timestamp();
             } else {
-                if (change.newValue != null) {
-                    resultTimestamp = Math.max(context().timestamp(), valueAndTimestamp2.timestamp());
-                } else {
-                    resultTimestamp = context().timestamp();
-                }
+                resultTimestamp = Math.max(context().timestamp(), valueAndTimestamp2.timestamp());
             }
 
             if (value2 != null || change.newValue != null) {

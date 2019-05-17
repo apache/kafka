@@ -100,11 +100,10 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
                 return;
             }
 
+            resultTimestamp = Math.max(context().timestamp(), valueAndTimestampRight.timestamp());
+
             if (change.newValue != null) {
                 newValue = joiner.apply(change.newValue, valueRight);
-                resultTimestamp = Math.max(context().timestamp(), valueAndTimestampRight.timestamp());
-            } else {
-                resultTimestamp = context().timestamp();
             }
 
             if (sendOldValues && change.oldValue != null) {

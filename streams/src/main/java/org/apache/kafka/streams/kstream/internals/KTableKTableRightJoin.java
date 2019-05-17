@@ -97,11 +97,7 @@ class KTableKTableRightJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
                 return;
             }
 
-            if (change.newValue != null) {
-                resultTimestamp = Math.max(context().timestamp(), valueAndTimestampLeft.timestamp());
-            } else {
-                resultTimestamp = context().timestamp();
-            }
+            resultTimestamp = Math.max(context().timestamp(), valueAndTimestampLeft.timestamp());
 
             // joiner == "reverse joiner"
             newValue = joiner.apply(change.newValue, valueLeft);
