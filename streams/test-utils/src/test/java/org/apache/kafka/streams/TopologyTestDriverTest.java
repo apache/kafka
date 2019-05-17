@@ -78,6 +78,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -749,7 +750,173 @@ public class TopologyTestDriverTest {
         final String globalTimestampedKeyValueStoreName = "globalKeyValueTimestampStore";
 
         final Topology topology = setupSingleProcessorTopology();
+        addStoresToTopology(
+            topology,
+            persistent,
+            keyValueStoreName,
+            timestampedKeyValueStoreName,
+            windowStoreName,
+            timestampedWindowStoreName,
+            sessionStoreName,
+            globalKeyValueStoreName,
+            globalTimestampedKeyValueStoreName);
 
+
+        testDriver = new TopologyTestDriver(topology, config);
+
+        // verify state stores
+        assertNotNull(testDriver.getKeyValueStore(keyValueStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStore(keyValueStoreName));
+        assertNull(testDriver.getWindowStore(keyValueStoreName));
+        assertNull(testDriver.getTimestampedWindowStore(keyValueStoreName));
+        assertNull(testDriver.getSessionStore(keyValueStoreName));
+
+        assertNotNull(testDriver.getKeyValueStore(timestampedKeyValueStoreName));
+        assertNotNull(testDriver.getTimestampedKeyValueStore(timestampedKeyValueStoreName));
+        assertNull(testDriver.getWindowStore(timestampedKeyValueStoreName));
+        assertNull(testDriver.getTimestampedWindowStore(timestampedKeyValueStoreName));
+        assertNull(testDriver.getSessionStore(timestampedKeyValueStoreName));
+
+        assertNull(testDriver.getKeyValueStore(windowStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStore(windowStoreName));
+        assertNotNull(testDriver.getWindowStore(windowStoreName));
+        assertNull(testDriver.getTimestampedWindowStore(windowStoreName));
+        assertNull(testDriver.getSessionStore(windowStoreName));
+
+        assertNull(testDriver.getKeyValueStore(timestampedWindowStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStore(timestampedWindowStoreName));
+        assertNotNull(testDriver.getWindowStore(timestampedWindowStoreName));
+        assertNotNull(testDriver.getTimestampedWindowStore(timestampedWindowStoreName));
+        assertNull(testDriver.getSessionStore(timestampedWindowStoreName));
+
+        assertNull(testDriver.getKeyValueStore(sessionStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStore(sessionStoreName));
+        assertNull(testDriver.getWindowStore(sessionStoreName));
+        assertNull(testDriver.getTimestampedWindowStore(sessionStoreName));
+        assertNotNull(testDriver.getSessionStore(sessionStoreName));
+
+        // verify global stores
+        assertNotNull(testDriver.getKeyValueStore(globalKeyValueStoreName));
+        assertNull(testDriver.getTimestampedKeyValueStore(globalKeyValueStoreName));
+        assertNull(testDriver.getWindowStore(globalKeyValueStoreName));
+        assertNull(testDriver.getTimestampedWindowStore(globalKeyValueStoreName));
+        assertNull(testDriver.getSessionStore(globalKeyValueStoreName));
+
+        assertNotNull(testDriver.getKeyValueStore(globalTimestampedKeyValueStoreName));
+        assertNotNull(testDriver.getTimestampedKeyValueStore(globalTimestampedKeyValueStoreName));
+        assertNull(testDriver.getWindowStore(globalTimestampedKeyValueStoreName));
+        assertNull(testDriver.getTimestampedWindowStore(globalTimestampedKeyValueStoreName));
+        assertNull(testDriver.getSessionStore(globalTimestampedKeyValueStoreName));
+    }
+
+    @Test
+    public void shouldThrowIfInMemoryBuiltInStoreIsAccessedWithUntypedMethod() {
+        shouldThrowIfBuiltInStoreIsAccessedWithUntypedMethod(false);
+    }
+
+    @Test
+    public void shouldThrowIfPersistentBuiltInStoreIsAccessedWithUntypedMethod() {
+        shouldThrowIfBuiltInStoreIsAccessedWithUntypedMethod(true);
+    }
+
+    private void shouldThrowIfBuiltInStoreIsAccessedWithUntypedMethod(final boolean persistent) {
+        final String keyValueStoreName = "keyValueStore";
+        final String timestampedKeyValueStoreName = "keyValueTimestampStore";
+        final String windowStoreName = "windowStore";
+        final String timestampedWindowStoreName = "windowTimestampStore";
+        final String sessionStoreName = "sessionStore";
+        final String globalKeyValueStoreName = "globalKeyValueStore";
+        final String globalTimestampedKeyValueStoreName = "globalKeyValueTimestampStore";
+
+        final Topology topology = setupSingleProcessorTopology();
+        addStoresToTopology(
+            topology,
+            persistent,
+            keyValueStoreName,
+            timestampedKeyValueStoreName,
+            windowStoreName,
+            timestampedWindowStoreName,
+            sessionStoreName,
+            globalKeyValueStoreName,
+            globalTimestampedKeyValueStoreName);
+
+
+        testDriver = new TopologyTestDriver(topology, config);
+
+        {
+            final IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> testDriver.getStateStore(keyValueStoreName));
+            assertThat(
+                e.getMessage(),
+                equalTo("Store " + keyValueStoreName
+                    + " is a key-value store and should be accessed via `getKeyValueStore()`"));
+        }
+        {
+            final IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> testDriver.getStateStore(timestampedKeyValueStoreName));
+            assertThat(
+                e.getMessage(),
+                equalTo("Store " + timestampedKeyValueStoreName
+                    + " is a timestamped key-value store and should be accessed via `getTimestampedKeyValueStore()`"));
+        }
+        {
+            final IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> testDriver.getStateStore(windowStoreName));
+            assertThat(
+                e.getMessage(),
+                equalTo("Store " + windowStoreName
+                    + " is a window store and should be accessed via `getWindowStore()`"));
+        }
+        {
+            final IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> testDriver.getStateStore(timestampedWindowStoreName));
+            assertThat(
+                e.getMessage(),
+                equalTo("Store " + timestampedWindowStoreName
+                    + " is a timestamped window store and should be accessed via `getTimestampedWindowStore()`"));
+        }
+        {
+            final IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> testDriver.getStateStore(sessionStoreName));
+            assertThat(
+                e.getMessage(),
+                equalTo("Store " + sessionStoreName
+                    + " is a session store and should be accessed via `getSessionStore()`"));
+        }
+        {
+            final IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> testDriver.getStateStore(globalKeyValueStoreName));
+            assertThat(
+                e.getMessage(),
+                equalTo("Store " + globalKeyValueStoreName
+                    + " is a key-value store and should be accessed via `getKeyValueStore()`"));
+        }
+        {
+            final IllegalArgumentException e = assertThrows(
+                IllegalArgumentException.class,
+                () -> testDriver.getStateStore(globalTimestampedKeyValueStoreName));
+            assertThat(
+                e.getMessage(),
+                equalTo("Store " + globalTimestampedKeyValueStoreName
+                    + " is a timestamped key-value store and should be accessed via `getTimestampedKeyValueStore()`"));
+        }
+    }
+
+    private void addStoresToTopology(final Topology topology,
+                                     final boolean persistent,
+                                     final String keyValueStoreName,
+                                     final String timestampedKeyValueStoreName,
+                                     final String windowStoreName,
+                                     final String timestampedWindowStoreName,
+                                     final String sessionStoreName,
+                                     final String globalKeyValueStoreName,
+                                     final String globalTimestampedKeyValueStoreName) {
         // add state stores
         topology.addStateStore(
             Stores.keyValueStoreBuilder(
@@ -835,52 +1002,6 @@ public class TopologyTestDriverTest {
             "topicDummy2",
             "processorDummy2",
             () -> null);
-
-        testDriver = new TopologyTestDriver(topology, config);
-
-        // verify state stores
-        assertNotNull(testDriver.getKeyValueStore(keyValueStoreName));
-        assertNull(testDriver.getTimestampedKeyValueStore(keyValueStoreName));
-        assertNull(testDriver.getWindowStore(keyValueStoreName));
-        assertNull(testDriver.getTimestampedWindowStore(keyValueStoreName));
-        assertNull(testDriver.getSessionStore(keyValueStoreName));
-
-        assertNotNull(testDriver.getKeyValueStore(timestampedKeyValueStoreName));
-        assertNotNull(testDriver.getTimestampedKeyValueStore(timestampedKeyValueStoreName));
-        assertNull(testDriver.getWindowStore(timestampedKeyValueStoreName));
-        assertNull(testDriver.getTimestampedWindowStore(timestampedKeyValueStoreName));
-        assertNull(testDriver.getSessionStore(timestampedKeyValueStoreName));
-
-        assertNull(testDriver.getKeyValueStore(windowStoreName));
-        assertNull(testDriver.getTimestampedKeyValueStore(windowStoreName));
-        assertNotNull(testDriver.getWindowStore(windowStoreName));
-        assertNull(testDriver.getTimestampedWindowStore(windowStoreName));
-        assertNull(testDriver.getSessionStore(windowStoreName));
-
-        assertNull(testDriver.getKeyValueStore(timestampedWindowStoreName));
-        assertNull(testDriver.getTimestampedKeyValueStore(timestampedWindowStoreName));
-        assertNotNull(testDriver.getWindowStore(timestampedWindowStoreName));
-        assertNotNull(testDriver.getTimestampedWindowStore(timestampedWindowStoreName));
-        assertNull(testDriver.getSessionStore(timestampedWindowStoreName));
-
-        assertNull(testDriver.getKeyValueStore(sessionStoreName));
-        assertNull(testDriver.getTimestampedKeyValueStore(sessionStoreName));
-        assertNull(testDriver.getWindowStore(sessionStoreName));
-        assertNull(testDriver.getTimestampedWindowStore(sessionStoreName));
-        assertNotNull(testDriver.getSessionStore(sessionStoreName));
-
-        // verify global stores
-        assertNotNull(testDriver.getKeyValueStore(globalKeyValueStoreName));
-        assertNull(testDriver.getTimestampedKeyValueStore(globalKeyValueStoreName));
-        assertNull(testDriver.getWindowStore(globalKeyValueStoreName));
-        assertNull(testDriver.getTimestampedWindowStore(globalKeyValueStoreName));
-        assertNull(testDriver.getSessionStore(globalKeyValueStoreName));
-
-        assertNotNull(testDriver.getKeyValueStore(globalTimestampedKeyValueStoreName));
-        assertNotNull(testDriver.getTimestampedKeyValueStore(globalTimestampedKeyValueStoreName));
-        assertNull(testDriver.getWindowStore(globalTimestampedKeyValueStoreName));
-        assertNull(testDriver.getTimestampedWindowStore(globalTimestampedKeyValueStoreName));
-        assertNull(testDriver.getSessionStore(globalTimestampedKeyValueStoreName));
     }
 
     @Test
