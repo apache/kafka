@@ -1334,7 +1334,21 @@ class KafkaApis(val requestChannel: RequestChannel,
         new JoinGroupResponse(
           new JoinGroupResponseData()
             .setThrottleTimeMs(requestThrottleMs)
-            .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())
+            .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
+            .setGenerationId(JoinGroupResponse.UNKNOWN_GENERATION_ID)
+            .setProtocolName(JoinGroupResponse.UNKNOWN_PROTOCOL)
+            .setLeader(JoinGroupResponse.UNKNOWN_MEMBER_ID)
+            .setMemberId(JoinGroupResponse.UNKNOWN_MEMBER_ID)
+            .setMembers(Collections.emptyList())
+        )
+      )
+    } else if (joinGroupRequest.data.groupInstanceId != null && config.interBrokerProtocolVersion < KAFKA_2_3_IV0) {
+      // Reject client request if client is using static membership while IBP is < 2.3.
+      sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new JoinGroupResponse(
+          new JoinGroupResponseData()
+            .setThrottleTimeMs(requestThrottleMs)
+            .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
             .setGenerationId(JoinGroupResponse.UNKNOWN_GENERATION_ID)
             .setProtocolName(JoinGroupResponse.UNKNOWN_PROTOCOL)
             .setLeader(JoinGroupResponse.UNKNOWN_MEMBER_ID)

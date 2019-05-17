@@ -575,6 +575,10 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else {
                     future.raise(error);
                 }
+            } else if (error == Errors.UNSUPPORTED_VERSION) {
+                log.error("Attempt to join group failed due to unsupported version error. Please unset field group.instance.id and retry" +
+                        "to see if the problem resolves");
+                future.raise(error);
             } else if (error == Errors.MEMBER_ID_REQUIRED) {
                 // Broker requires a concrete member id to be allowed to join the group. Update member id
                 // and send another join group request in next cycle.
