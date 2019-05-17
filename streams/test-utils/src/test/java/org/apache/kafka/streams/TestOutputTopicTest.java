@@ -25,9 +25,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.test.TestInputTopic;
-import org.apache.kafka.streams.test.TestOutputTopic;
-import org.apache.kafka.streams.test.TopologyTestDriver;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -55,7 +52,7 @@ public class TestOutputTopicTest {
     private final static String INPUT_TOPIC_MAP = OUTPUT_TOPIC;
     private final static String OUTPUT_TOPIC_MAP = "output2";
 
-    private org.apache.kafka.streams.test.TopologyTestDriver testDriver;
+    private TopologyTestDriver testDriver;
     private final Serde<String> stringSerde = new Serdes.StringSerde();
     private final Serde<Long> longSerde = new Serdes.LongSerde();
 
