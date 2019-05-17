@@ -338,6 +338,9 @@ public class NetworkClientTest {
     @Test
     public void testLeastLoadedNode() {
         client.ready(node, time.milliseconds());
+        assertFalse(client.isReady(node, time.milliseconds()));
+        assertEquals(node, client.leastLoadedNode(time.milliseconds()));
+
         awaitReady(client, node);
         client.poll(1, time.milliseconds());
         assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));

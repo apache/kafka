@@ -166,7 +166,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => resp.error),
     ApiKeys.UPDATE_METADATA -> ((resp: requests.UpdateMetadataResponse) => resp.error),
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.error),
-    ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => resp.error),
+    ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => Errors.forCode(resp.data.errorCode())),
     ApiKeys.DESCRIBE_GROUPS -> ((resp: DescribeGroupsResponse) => {
       val errorCode = resp.data().groups().asScala.find(g => group.equals(g.groupId())).head.errorCode()
       Errors.forCode(errorCode)
@@ -340,7 +340,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createSyncGroupRequest = {
-    new SyncGroupRequest.Builder(group, 1, "", Map[String, ByteBuffer]().asJava).build()
+    new SyncGroupRequest.Builder(
+      new SyncGroupRequestData()
+        .setGroupId(group)
+        .setGenerationId(1)
+        .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+        .setAssignments(Collections.emptyList())
+    ).build()
   }
 
   private def createDescribeGroupsRequest = {
@@ -374,7 +380,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ).build()
   }
 
-  private def heartbeatRequest = new HeartbeatRequest.Builder(group, 1, "").build()
+  private def heartbeatRequest = new HeartbeatRequest.Builder(new HeartbeatRequestData().setGroupId(group).setGenerationid(1).setMemberId("")).build()
 
   private def leaveGroupRequest = new LeaveGroupRequest.Builder(new LeaveGroupRequestData().setGroupId(group).setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
 

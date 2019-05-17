@@ -919,15 +919,25 @@ class GroupCoordinator(val brokerId: Int,
 
   def onCompleteJoin(group: GroupMetadata) {
     group.inLock {
-      // remove any members who haven't joined the group yet
-      group.notYetRejoinedMembers.foreach { failedMember =>
+      // remove dynamic members who haven't joined the group yet
+      group.notYetRejoinedMembers.filterNot(_.isStaticMember) foreach { failedMember =>
         removeHeartbeatForLeavingMember(group, failedMember)
         group.remove(failedMember.memberId)
         group.removeStaticMember(failedMember.groupInstanceId)
         // TODO: cut the socket connection to the client
       }
 
-      if (!group.is(Dead)) {
+      if (group.is(Dead)) {
+        info(s"Group ${group.groupId} is dead, skipping rebalance stage")
+      } else if (!group.maybeElectNewJoinedLeader() && group.allMembers.nonEmpty) {
+        // If all members are not rejoining, we will postpone the completion
+        // of rebalance preparing stage, and send out another delayed operation
+        // until session timeout removes all the non-responsive members.
+        error(s"Group ${group.groupId} could not complete rebalance because no members rejoined")
+        joinPurgatory.tryCompleteElseWatch(
+          new DelayedJoin(this, group, group.rebalanceTimeoutMs),
+          Seq(GroupKey(group.groupId)))
+      } else {
         group.initNextGeneration()
         if (group.is(Empty)) {
           info(s"Group ${group.groupId} with generation ${group.generationId} is now empty " +
@@ -947,7 +957,6 @@ class GroupCoordinator(val brokerId: Int,
 
           // trigger the awaiting join group response callback for all the members after rebalancing
           for (member <- group.allMemberMetadata) {
-            assert(member.awaitingJoinCallback != null)
             val joinResult = JoinGroupResult(
               members = if (group.isLeader(member.memberId)) {
                 group.currentMemberMetadata

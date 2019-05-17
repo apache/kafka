@@ -1377,17 +1377,27 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     def sendResponseCallback(memberState: Array[Byte], error: Errors) {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new SyncGroupResponse(requestThrottleMs, error, ByteBuffer.wrap(memberState)))
+        new SyncGroupResponse(
+          new SyncGroupResponseData()
+            .setErrorCode(error.code)
+            .setAssignment(memberState)
+            .setThrottleTimeMs(requestThrottleMs)
+        ))
     }
 
-    if (!authorize(request.session, Read, Resource(Group, syncGroupRequest.groupId(), LITERAL))) {
+    if (!authorize(request.session, Read, Resource(Group, syncGroupRequest.data.groupId, LITERAL))) {
       sendResponseCallback(Array[Byte](), Errors.GROUP_AUTHORIZATION_FAILED)
     } else {
+      val assignmentMap = immutable.Map.newBuilder[String, Array[Byte]]
+      syncGroupRequest.data.assignments.asScala.foreach { assignment =>
+        assignmentMap += (assignment.memberId -> assignment.assignment)
+      }
+
       groupCoordinator.handleSyncGroup(
-        syncGroupRequest.groupId,
-        syncGroupRequest.generationId,
-        syncGroupRequest.memberId,
-        syncGroupRequest.groupAssignment().asScala.mapValues(Utils.toArray),
+        syncGroupRequest.data.groupId,
+        syncGroupRequest.data.generationId,
+        syncGroupRequest.data.memberId,
+        assignmentMap.result,
         sendResponseCallback
       )
     }
@@ -1414,7 +1424,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     // the callback for sending a heartbeat response
     def sendResponseCallback(error: Errors) {
       def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val response = new HeartbeatResponse(requestThrottleMs, error)
+        val response = new HeartbeatResponse(
+            new HeartbeatResponseData()
+              .setThrottleTimeMs(requestThrottleMs)
+              .setErrorCode(error.code))
         trace("Sending heartbeat response %s for correlation id %d to client %s."
           .format(response, request.header.correlationId, request.header.clientId))
         response
@@ -1422,15 +1435,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseMaybeThrottle(request, createResponse)
     }
 
-    if (!authorize(request.session, Read, Resource(Group, heartbeatRequest.groupId, LITERAL))) {
+    if (!authorize(request.session, Read, Resource(Group, heartbeatRequest.data.groupId, LITERAL))) {
       sendResponseMaybeThrottle(request, requestThrottleMs =>
-        new HeartbeatResponse(requestThrottleMs, Errors.GROUP_AUTHORIZATION_FAILED))
+        new HeartbeatResponse(
+            new HeartbeatResponseData()
+              .setThrottleTimeMs(requestThrottleMs)
+              .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)))
     } else {
       // let the coordinator to handle heartbeat
       groupCoordinator.handleHeartbeat(
-        heartbeatRequest.groupId,
-        heartbeatRequest.memberId,
-        heartbeatRequest.groupGenerationId,
+        heartbeatRequest.data.groupId,
+        heartbeatRequest.data.memberId,
+        heartbeatRequest.data.generationid,
         sendResponseCallback)
     }
   }

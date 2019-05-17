@@ -182,7 +182,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             protocolSet.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName(assignor.name())
-                    .setMetadata(metadata.array()));
+                    .setMetadata(Utils.toArray(metadata)));
         }
         return protocolSet;
     }

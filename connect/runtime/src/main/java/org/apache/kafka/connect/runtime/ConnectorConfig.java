@@ -140,6 +140,11 @@ public class ConnectorConfig extends AbstractConfig {
             "a failure. This is 'false' by default, which will prevent record keys, values, and headers from being written to log files, " +
             "although some information such as topic and partition number will still be logged.";
 
+
+    public static final String CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX = "producer.overrides.";
+    public static final String CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX = "consumer.overrides.";
+    public static final String CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX = "admin.overrides.";
+
     private final EnrichedConnectorConfig enrichedConfig;
     private static class EnrichedConnectorConfig extends AbstractConfig {
         EnrichedConnectorConfig(ConfigDef configDef, Map<String, String> props) {

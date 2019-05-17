@@ -81,7 +81,8 @@
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
               files="DistributedHerder(|Test).java"/>
-
+    <suppress checks="ClassFanOutComplexity"
+              files="Worker.java"/>
     <suppress checks="MethodLength"
               files="(KafkaConfigBackingStore|RequestResponseTest|WorkerSinkTaskTest).java"/>
 
