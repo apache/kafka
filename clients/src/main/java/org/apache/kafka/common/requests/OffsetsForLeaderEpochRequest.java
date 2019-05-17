@@ -134,7 +134,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
 
     public OffsetsForLeaderEpochRequest(Struct struct, short version) {
         super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
-        replicaId = struct.get(REPLICA_ID);
+        replicaId = struct.getOrElse(REPLICA_ID, CONSUMER_REPLICA_ID);
         epochsByPartition = new HashMap<>();
         for (Object topicAndEpochsObj : struct.get(TOPICS)) {
             Struct topicAndEpochs = (Struct) topicAndEpochsObj;

@@ -401,7 +401,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 }
 
                 PartitionData<MemoryRecords> partitionData = new PartitionData<>(error, highWatermark, lastStableOffset,
-                        logStartOffset, preferredReadReplica == -1 ? null : preferredReadReplica, abortedTransactions, records);
+                        logStartOffset, preferredReadReplica == UNSPECIFIED_PREFERRED_REPLICA ? null : preferredReadReplica,
+                        abortedTransactions, records);
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
