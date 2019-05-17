@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams;
 
+import org.apache.kafka.clients.ClientRecord;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -390,27 +391,32 @@ public class TopologyTestDriver implements Closeable {
      * @param consumerRecord the record to be processed
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
-        final String topicName = consumerRecord.topic();
+        pipeRecord();
+    }
+
+    protected void pipeRecord(final ClientRecord<byte[], byte[]> record) {
+        final String topicName = record.topic();
 
         if (!internalTopologyBuilder.getSourceTopicNames().isEmpty()) {
-            validateSourceTopicNameRegexPattern(consumerRecord.topic());
+            validateSourceTopicNameRegexPattern(record.topic());
         }
         final TopicPartition topicPartition = getTopicPartition(topicName);
         if (topicPartition != null) {
             final long offset = offsetsByTopicPartition.get(topicPartition).incrementAndGet() - 1;
             task.addRecords(topicPartition, Collections.singleton(new ConsumerRecord<>(
-                topicName,
-                topicPartition.partition(),
-                offset,
-                consumerRecord.timestamp(),
-                consumerRecord.timestampType(),
-                (long) ConsumerRecord.NULL_CHECKSUM,
-                consumerRecord.serializedKeySize(),
-                consumerRecord.serializedValueSize(),
-                consumerRecord.key(),
-                consumerRecord.value(),
-                consumerRecord.headers())));
+                    topicName,
+                    topicPartition.partition(),
+                    offset,
+                    record.timestamp(),
+                    TimestampType.CREATE_TIME,
+                    (long) ConsumerRecord.NULL_CHECKSUM,
+                    record.key() == null ? 0 : record.key().length,
+                    record.value() == null ? 0 : record.value().length,
+                    record.key(),
+                    record.value(),
+                    record.headers())));
 
             // Process the record ...
             task.process();
@@ -427,14 +433,14 @@ public class TopologyTestDriver implements Closeable {
                 globalTopicPartition.topic(),
                 globalTopicPartition.partition(),
                 offset,
-                consumerRecord.timestamp(),
-                consumerRecord.timestampType(),
+                record.timestamp(),
+                TimestampType.CREATE_TIME,
                 (long) ConsumerRecord.NULL_CHECKSUM,
-                consumerRecord.serializedKeySize(),
-                consumerRecord.serializedValueSize(),
-                consumerRecord.key(),
-                consumerRecord.value(),
-                consumerRecord.headers()));
+                record.key() == null ? 0 : record.key().length,
+                record.value() == null ? 0 : record.value().length,
+                record.key(),
+                record.value(),
+                record.headers()));
             globalStateTask.flushState();
         }
     }
@@ -476,22 +482,7 @@ public class TopologyTestDriver implements Closeable {
             final String outputTopicName = record.topic();
             if (internalTopics.contains(outputTopicName) || processorTopology.sourceTopics().contains(outputTopicName)
                 || globalPartitionsByTopic.containsKey(outputTopicName)) {
-
-                final byte[] serializedKey = record.key();
-                final byte[] serializedValue = record.value();
-
-                pipeInput(new ConsumerRecord<>(
-                    outputTopicName,
-                    -1,
-                    -1L,
-                    record.timestamp(),
-                    TimestampType.CREATE_TIME,
-                    0L,
-                    serializedKey == null ? 0 : serializedKey.length,
-                    serializedValue == null ? 0 : serializedValue.length,
-                    serializedKey,
-                    serializedValue,
-                    record.headers()));
+                pipeRecord(record);
             }
         }
     }
@@ -502,6 +493,7 @@ public class TopologyTestDriver implements Closeable {
      * @param records a list of records to be processed
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public void pipeInput(final List<ConsumerRecord<byte[], byte[]>> records) {
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             pipeInput(record);
@@ -533,6 +525,7 @@ public class TopologyTestDriver implements Closeable {
      * @return the next record on that topic, or {@code null} if there is no record available
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public ProducerRecord<byte[], byte[]> readOutput(final String topic) {
         final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topic);
         if (outputRecords == null) {
@@ -551,6 +544,7 @@ public class TopologyTestDriver implements Closeable {
      * @return the next record on that topic, or {@code null} if there is no record available
      */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public <K, V> ProducerRecord<K, V> readOutput(final String topic,
                                                   final Deserializer<K> keyDeserializer,
                                                   final Deserializer<V> valueDeserializer) {
@@ -561,6 +555,11 @@ public class TopologyTestDriver implements Closeable {
         final K key = keyDeserializer.deserialize(record.topic(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.value());
         return new ProducerRecord<>(record.topic(), record.partition(), record.timestamp(), key, value, record.headers());
+    }
+
+
+    final protected Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(String topic) {
+        return outputRecordsByTopic.get(topic);
     }
 
     /**
