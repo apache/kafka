@@ -94,23 +94,18 @@ class KTableKTableOuterJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
             final ValueAndTimestamp<V2> valueAndTimestamp2 = valueGetter.get(key);
             final V2 value2 = getValueOrNull(valueAndTimestamp2);
-            final long timestamp2;
             if (value2 == null) {
                 if (change.newValue == null && change.oldValue == null) {
                     return;
                 }
-                timestamp2 = UNKNOWN;
+                resultTimestamp = context().timestamp();
             } else {
-                timestamp2 = valueAndTimestamp2.timestamp();
+                if (change.newValue != null) {
+                    resultTimestamp = Math.max(context().timestamp(), valueAndTimestamp2.timestamp());
+                } else {
+                    resultTimestamp = context().timestamp();
+                }
             }
-
-            final long timestamp1;
-            if (change.newValue == null) {
-                timestamp1 = UNKNOWN;
-            } else {
-                timestamp1 = context().timestamp();
-            }
-            resultTimestamp = Math.max(timestamp1, timestamp2);
 
             if (value2 != null || change.newValue != null) {
                 newValue = joiner.apply(change.newValue, value2);

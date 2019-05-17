@@ -144,8 +144,8 @@ public class KTableKTableOuterJoinTest {
             driver.pipeInput(recordFactory.create(topic2, expectedKeys[1], null, 7L));
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
-            assertOutputKeyValueTimestamp(driver, 0, "XXX0+null", 6L);
-            assertOutputKeyValueTimestamp(driver, 1, "XXX1+null", 6L);
+            assertOutputKeyValueTimestamp(driver, 0, "XXX0+null", 5L);
+            assertOutputKeyValueTimestamp(driver, 1, "XXX1+null", 7L);
             assertNull(driver.readOutput(output));
 
             // push all four items to the primary stream. this should produce four items.
@@ -169,8 +169,8 @@ public class KTableKTableOuterJoinTest {
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
             assertOutputKeyValueTimestamp(driver, 0, null, 0L);
             assertOutputKeyValueTimestamp(driver, 1, null, 42L);
-            assertOutputKeyValueTimestamp(driver, 2, "null+YY2", 10L);
-            assertOutputKeyValueTimestamp(driver, 3, "null+YY3", 15L);
+            assertOutputKeyValueTimestamp(driver, 2, "null+YY2", 5L);
+            assertOutputKeyValueTimestamp(driver, 3, "null+YY3", 20L);
             assertNull(driver.readOutput(output));
         }
     }
@@ -255,7 +255,7 @@ public class KTableKTableOuterJoinTest {
             driver.pipeInput(recordFactory.create(topic2, expectedKeys[1], null, 7L));
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
-            proc.checkAndClearProcessResult("0:(XXX0+null<-null) (ts: 6)", "1:(XXX1+null<-null) (ts: 6)");
+            proc.checkAndClearProcessResult("0:(XXX0+null<-null) (ts: 5)", "1:(XXX1+null<-null) (ts: 7)");
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
@@ -276,7 +276,7 @@ public class KTableKTableOuterJoinTest {
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
             proc.checkAndClearProcessResult(
                 "0:(null<-null) (ts: 0)", "1:(null<-null) (ts: 42)",
-                "2:(null+YY2<-null) (ts: 10)", "3:(null+YY3<-null) (ts: 15)");
+                "2:(null+YY2<-null) (ts: 5)", "3:(null+YY3<-null) (ts: 20)");
         }
     }
 
@@ -362,7 +362,7 @@ public class KTableKTableOuterJoinTest {
             driver.pipeInput(recordFactory.create(topic2, expectedKeys[1], null, 7L));
             // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
-            proc.checkAndClearProcessResult("0:(XXX0+null<-XXX0+YY0) (ts: 6)", "1:(XXX1+null<-XXX1+YY1) (ts: 6)");
+            proc.checkAndClearProcessResult("0:(XXX0+null<-XXX0+YY0) (ts: 5)", "1:(XXX1+null<-XXX1+YY1) (ts: 7)");
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
@@ -383,7 +383,7 @@ public class KTableKTableOuterJoinTest {
             // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
             proc.checkAndClearProcessResult(
                 "0:(null<-XXXX0+null) (ts: 0)", "1:(null<-XXXX1+null) (ts: 42)",
-                "2:(null+YY2<-XXXX2+YY2) (ts: 10)", "3:(null+YY3<-XXXX3+YY3) (ts: 15)");
+                "2:(null+YY2<-XXXX2+YY2) (ts: 5)", "3:(null+YY3<-XXXX3+YY3) (ts: 20)");
         }
     }
 
