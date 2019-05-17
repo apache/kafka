@@ -24,7 +24,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.DefaultRecordBatch;
@@ -38,6 +40,7 @@ import org.apache.kafka.common.requests.AddPartitionsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnRequest;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
@@ -709,7 +712,7 @@ public class TransactionManager {
         lookupCoordinator(request.coordinatorType(), request.coordinatorKey());
     }
 
-    void setInFlightTransactionalRequestCorrelationId(int correlationId) {
+    void setInFlightCorrelationId(int correlationId) {
         inFlightRequestCorrelationId = correlationId;
     }
 
@@ -833,8 +836,16 @@ public class TransactionManager {
     }
 
     private void maybeFailWithError() {
-        if (hasError())
-            throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
+        if (hasError()) {
+            // for ProducerFencedException, do not wrap it as a KafkaException
+            // but create a new instance without the call trace since it was not thrown because of the current call
+            if (lastError instanceof ProducerFencedException) {
+                throw new ProducerFencedException("The producer has been rejected from the broker because " +
+                    "it tried to use an old epoch with the transactionalId");
+            } else {
+                throw new KafkaException("Cannot execute transactional method because we are in an error state", lastError);
+            }
+        }
     }
 
     private boolean maybeTerminateRequestWithError(TxnRequestHandler requestHandler) {
@@ -866,7 +877,10 @@ public class TransactionManager {
                 throw new IllegalStateException("Invalid coordinator type: " + type);
         }
 
-        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(type, coordinatorKey);
+        FindCoordinatorRequest.Builder builder = new FindCoordinatorRequest.Builder(
+                new FindCoordinatorRequestData()
+                    .setKeyType(type.id())
+                    .setKey(coordinatorKey));
         enqueueRequest(new FindCoordinatorHandler(builder));
     }
 
@@ -1193,10 +1207,11 @@ public class TransactionManager {
         public void handleResponse(AbstractResponse response) {
             FindCoordinatorResponse findCoordinatorResponse = (FindCoordinatorResponse) response;
             Errors error = findCoordinatorResponse.error();
+            CoordinatorType coordinatorType = CoordinatorType.forId(builder.data().keyType());
 
             if (error == Errors.NONE) {
                 Node node = findCoordinatorResponse.node();
-                switch (builder.coordinatorType()) {
+                switch (coordinatorType) {
                     case GROUP:
                         consumerGroupCoordinator = node;
                         break;
@@ -1209,11 +1224,11 @@ public class TransactionManager {
             } else if (error == Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED) {
                 fatalError(error.exception());
             } else if (findCoordinatorResponse.error() == Errors.GROUP_AUTHORIZATION_FAILED) {
-                abortableError(new GroupAuthorizationException(builder.coordinatorKey()));
+                abortableError(new GroupAuthorizationException(builder.data().key()));
             } else {
                 fatalError(new KafkaException(String.format("Could not find a coordinator with type %s with key %s due to" +
-                        "unexpected error: %s", builder.coordinatorType(), builder.coordinatorKey(),
-                        findCoordinatorResponse.error().message())));
+                        "unexpected error: %s", coordinatorType, builder.data().key(),
+                        findCoordinatorResponse.data().errorMessage())));
             }
         }
     }

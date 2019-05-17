@@ -29,6 +29,7 @@ import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.junit.Assert.{assertEquals, assertNull, assertTrue}
 import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.Timeout
+import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
 

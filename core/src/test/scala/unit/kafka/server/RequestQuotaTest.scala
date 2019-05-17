@@ -28,7 +28,8 @@ import org.apache.kafka.common.message._
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, ResourceType => AdminResourceType}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.message.ControlledShutdownRequestData
-import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicSet}
+import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.metrics.{KafkaMetric, Quota, Sensor}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
@@ -250,15 +251,35 @@ class RequestQuotaTest extends BaseRequestTest {
               ApiKeys.CONTROLLED_SHUTDOWN.latestVersion)
 
         case ApiKeys.OFFSET_COMMIT =>
-          new OffsetCommitRequest.Builder("test-group",
-            Map(tp -> new OffsetCommitRequest.PartitionData(0, Optional.empty[Integer](), "metadata")).asJava).
-            setMemberId("").setGenerationId(1)
-
+          new OffsetCommitRequest.Builder(
+            new OffsetCommitRequestData()
+              .setGroupId("test-group")
+              .setGenerationId(1)
+              .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+              .setTopics(
+                Collections.singletonList(
+                  new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                    .setName(topic)
+                    .setPartitions(
+                      Collections.singletonList(
+                        new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                          .setPartitionIndex(0)
+                          .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                          .setCommittedOffset(0)
+                          .setCommittedMetadata("metadata")
+                      )
+                    )
+                )
+              )
+          )
         case ApiKeys.OFFSET_FETCH =>
           new OffsetFetchRequest.Builder("test-group", List(tp).asJava)
 
         case ApiKeys.FIND_COORDINATOR =>
-          new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, "test-group")
+          new FindCoordinatorRequest.Builder(
+              new FindCoordinatorRequestData()
+                .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
+                .setKey("test-group"))
 
         case ApiKeys.JOIN_GROUP =>
           new JoinGroupRequest.Builder(
@@ -266,9 +287,10 @@ class RequestQuotaTest extends BaseRequestTest {
               .setGroupId("test-join-group")
               .setSessionTimeoutMs(200)
               .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+              .setGroupInstanceId(null)
               .setProtocolType("consumer")
               .setProtocols(
-                new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+                new JoinGroupRequestProtocolCollection(
                   Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName("consumer-range")
                     .setMetadata("test".getBytes())).iterator()
@@ -278,13 +300,19 @@ class RequestQuotaTest extends BaseRequestTest {
           )
 
         case ApiKeys.HEARTBEAT =>
-          new HeartbeatRequest.Builder("test-group", 1, "")
+          new HeartbeatRequest.Builder(new HeartbeatRequestData().setGroupId("test-group").setGenerationid(1).setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID))
 
         case ApiKeys.LEAVE_GROUP =>
           new LeaveGroupRequest.Builder(new LeaveGroupRequestData().setGroupId("test-leave-group").setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID))
 
         case ApiKeys.SYNC_GROUP =>
-          new SyncGroupRequest.Builder("test-sync-group", 1, "", Map[String, ByteBuffer]().asJava)
+          new SyncGroupRequest.Builder(
+            new SyncGroupRequestData()
+              .setGroupId("test-sync-group")
+              .setGenerationId(1)
+              .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+              .setAssignments(Collections.emptyList())
+          )
 
         case ApiKeys.DESCRIBE_GROUPS =>
           new DescribeGroupsRequest.Builder(new DescribeGroupsRequestData().setGroups(List("test-group").asJava))
@@ -304,7 +332,7 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.CREATE_TOPICS => {
           new CreateTopicsRequest.Builder(
             new CreateTopicsRequestData().setTopics(
-              new CreatableTopicSet(Collections.singleton(
+              new CreatableTopicCollection(Collections.singleton(
                 new CreatableTopic().setName("topic-2").setNumPartitions(1).
                   setReplicationFactor(1.toShort)).iterator())))
         }
@@ -469,11 +497,13 @@ class RequestQuotaTest extends BaseRequestTest {
       case ApiKeys.LIST_OFFSETS => new ListOffsetResponse(response).throttleTimeMs
       case ApiKeys.METADATA =>
         new MetadataResponse(response, ApiKeys.DESCRIBE_GROUPS.latestVersion).throttleTimeMs
-      case ApiKeys.OFFSET_COMMIT => new OffsetCommitResponse(response).throttleTimeMs
+      case ApiKeys.OFFSET_COMMIT =>
+        new OffsetCommitResponse(response, ApiKeys.OFFSET_COMMIT.latestVersion).throttleTimeMs
       case ApiKeys.OFFSET_FETCH => new OffsetFetchResponse(response).throttleTimeMs
-      case ApiKeys.FIND_COORDINATOR => new FindCoordinatorResponse(response).throttleTimeMs
+      case ApiKeys.FIND_COORDINATOR =>
+        new FindCoordinatorResponse(response, ApiKeys.FIND_COORDINATOR.latestVersion).throttleTimeMs
       case ApiKeys.JOIN_GROUP => new JoinGroupResponse(response).throttleTimeMs
-      case ApiKeys.HEARTBEAT => new HeartbeatResponse(response).throttleTimeMs
+      case ApiKeys.HEARTBEAT => new HeartbeatResponse(response, ApiKeys.HEARTBEAT.latestVersion).throttleTimeMs
       case ApiKeys.LEAVE_GROUP => new LeaveGroupResponse(response).throttleTimeMs
       case ApiKeys.SYNC_GROUP => new SyncGroupResponse(response).throttleTimeMs
       case ApiKeys.DESCRIBE_GROUPS =>
@@ -516,7 +546,10 @@ class RequestQuotaTest extends BaseRequestTest {
     // Request until throttled using client-id with default small quota
     val clientId = apiKey.toString
     val client = Client(clientId, apiKey)
-    val throttled = client.runUntil(response => responseThrottleTime(apiKey, response) > 0)
+
+    val throttled = client.runUntil(response =>
+      responseThrottleTime(apiKey, response) > 0
+    )
 
     assertTrue(s"Response not throttled: $client", throttled)
     assertTrue(s"Throttle time metrics not updated: $client" , throttleTimeMetricValue(clientId) > 0)

@@ -21,6 +21,7 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -29,6 +30,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.message.HeartbeatRequestData;
+import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.HeartbeatRequest;
 import org.apache.kafka.common.requests.HeartbeatResponse;
@@ -238,7 +241,7 @@ public class ConsumerNetworkClientTest {
             fail("Expected authentication error thrown");
         } catch (AuthenticationException e) {
             // After the exception is raised, it should have been cleared
-            assertNull(metadata.getAndClearAuthenticationException());
+            assertNull(metadata.getAndClearMetadataException());
         }
     }
 
@@ -256,6 +259,18 @@ public class ConsumerNetworkClientTest {
                 Collections.singletonMap("topic", Errors.TOPIC_AUTHORIZATION_FAILED), Collections.emptyMap());
         metadata.update(metadataResponse, time.milliseconds());
         consumerClient.poll(time.timer(Duration.ZERO));
+    }
+
+    @Test
+    public void testMetadataFailurePropagated() {
+        KafkaException metadataException = new KafkaException();
+        metadata.failedUpdate(time.milliseconds(), metadataException);
+        try {
+            consumerClient.poll(time.timer(Duration.ZERO));
+            fail("Expected poll to throw exception");
+        } catch (Exception e) {
+            assertEquals(metadataException, e);
+        }
     }
 
     @Test
@@ -365,11 +380,14 @@ public class ConsumerNetworkClientTest {
     }
 
     private HeartbeatRequest.Builder heartbeat() {
-        return new HeartbeatRequest.Builder("group", 1, "memberId");
+        return new HeartbeatRequest.Builder(new HeartbeatRequestData()
+                .setGroupId("group")
+                .setGenerationid(1)
+                .setMemberId("memberId"));
     }
 
     private HeartbeatResponse heartbeatResponse(Errors error) {
-        return new HeartbeatResponse(error);
+        return new HeartbeatResponse(new HeartbeatResponseData().setErrorCode(error.code()));
     }
 
 }

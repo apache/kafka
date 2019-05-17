@@ -212,6 +212,14 @@ public class WorkerConfig extends AbstractConfig {
             + "<code>ConnectRestExtension</code> allows you to inject into Connect's REST API user defined resources like filters. "
             + "Typically used to add custom capability like logging, security, etc. ";
 
+    public static final String CONNECTOR_CLIENT_POLICY_CLASS_CONFIG = "client.config.policy";
+    public static final String CONNECTOR_CLIENT_POLICY_CLASS_DOC =
+        "Class name or alias of implementation of <code>ConnectorClientConfigOverridePolicy</code>. Defines what client configurations can be "
+        + "overriden by the connector. The default implementation is `None`. The other possible policies in the framework include `All` "
+        + "and `Principal`. ";
+    public static final String CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT = "None";
+
+
     public static final String METRICS_SAMPLE_WINDOW_MS_CONFIG = CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG;
     public static final String METRICS_NUM_SAMPLES_CONFIG = CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG;
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
@@ -289,7 +297,9 @@ public class WorkerConfig extends AbstractConfig {
                         Collections.emptyList(),
                         Importance.LOW, CONFIG_PROVIDERS_DOC)
                 .define(REST_EXTENSION_CLASSES_CONFIG, Type.LIST, "",
-                        Importance.LOW, REST_EXTENSION_CLASSES_DOC);
+                        Importance.LOW, REST_EXTENSION_CLASSES_DOC)
+                .define(CONNECTOR_CLIENT_POLICY_CLASS_CONFIG, Type.STRING, CONNECTOR_CLIENT_POLICY_CLASS_DEFAULT,
+                        Importance.MEDIUM, CONNECTOR_CLIENT_POLICY_CLASS_DOC);
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {

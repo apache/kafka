@@ -34,11 +34,12 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
 import org.apache.kafka.common.message._
-import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicSet}
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigSet}
+import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigCollection}
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.PatternType.LITERAL
@@ -48,6 +49,7 @@ import org.apache.kafka.common.{KafkaException, Node, TopicPartition, requests}
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.Assert._
 import org.junit.{After, Assert, Before, Test}
+import org.scalatest.Assertions.intercept
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable
@@ -158,12 +160,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => resp.responses.asScala.find(_._1 == tp).get._2.error),
     ApiKeys.FETCH -> ((resp: requests.FetchResponse[Records]) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
     ApiKeys.LIST_OFFSETS -> ((resp: requests.ListOffsetResponse) => resp.responseData.asScala.find(_._1 == tp).get._2.error),
-    ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => resp.responseData.asScala.find(_._1 == tp).get._2),
+    ApiKeys.OFFSET_COMMIT -> ((resp: requests.OffsetCommitResponse) => Errors.forCode(
+      resp.data().topics().get(0).partitions().get(0).errorCode())),
     ApiKeys.OFFSET_FETCH -> ((resp: requests.OffsetFetchResponse) => resp.error),
     ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => resp.error),
     ApiKeys.UPDATE_METADATA -> ((resp: requests.UpdateMetadataResponse) => resp.error),
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.error),
-    ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => resp.error),
+    ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => Errors.forCode(resp.data.errorCode())),
     ApiKeys.DESCRIBE_GROUPS -> ((resp: DescribeGroupsResponse) => {
       val errorCode = resp.data().groups().asScala.find(g => group.equals(g.groupId())).head.errorCode()
       Errors.forCode(errorCode)
@@ -300,7 +303,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createFindCoordinatorRequest = {
-    new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, group).build()
+    new FindCoordinatorRequest.Builder(
+        new FindCoordinatorRequestData()
+          .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
+          .setKey(group)).build()
   }
 
   private def createUpdateMetadataRequest = {
@@ -315,7 +321,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createJoinGroupRequest = {
-    val protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+    val protocolSet = new JoinGroupRequestProtocolCollection(
       Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
         .setName("consumer-range")
         .setMetadata("test".getBytes())
@@ -326,6 +332,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         .setGroupId(group)
         .setSessionTimeoutMs(10000)
         .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+        .setGroupInstanceId(null)
         .setProtocolType("consumer")
         .setProtocols(protocolSet)
         .setRebalanceTimeoutMs(60000)
@@ -333,7 +340,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createSyncGroupRequest = {
-    new SyncGroupRequest.Builder(group, 1, "", Map[String, ByteBuffer]().asJava).build()
+    new SyncGroupRequest.Builder(
+      new SyncGroupRequestData()
+        .setGroupId(group)
+        .setGenerationId(1)
+        .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+        .setAssignments(Collections.emptyList())
+    ).build()
   }
 
   private def createDescribeGroupsRequest = {
@@ -342,9 +355,23 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createOffsetCommitRequest = {
     new requests.OffsetCommitRequest.Builder(
-      group, Map(tp -> new requests.OffsetCommitRequest.PartitionData(0L, Optional.empty[Integer](), "metadata")).asJava).
-      setMemberId("").setGenerationId(1).
-      build()
+        new OffsetCommitRequestData()
+          .setGroupId(group)
+          .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+          .setGenerationId(1)
+          .setTopics(Collections.singletonList(
+            new OffsetCommitRequestData.OffsetCommitRequestTopic()
+              .setName(topic)
+              .setPartitions(Collections.singletonList(
+                new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                  .setPartitionIndex(part)
+                  .setCommittedOffset(0)
+                  .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
+                  .setCommitTimestamp(OffsetCommitRequest.DEFAULT_TIMESTAMP)
+                  .setCommittedMetadata("metadata")
+              )))
+          )
+    ).build()
   }
 
   private def createPartitionsRequest = {
@@ -353,7 +380,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ).build()
   }
 
-  private def heartbeatRequest = new HeartbeatRequest.Builder(group, 1, "").build()
+  private def heartbeatRequest = new HeartbeatRequest.Builder(new HeartbeatRequestData().setGroupId(group).setGenerationid(1).setMemberId("")).build()
 
   private def leaveGroupRequest = new LeaveGroupRequest.Builder(new LeaveGroupRequestData().setGroupId(group).setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
 
@@ -375,7 +402,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createTopicsRequest =
     new CreateTopicsRequest.Builder(new CreateTopicsRequestData().setTopics(
-      new CreatableTopicSet(Collections.singleton(new CreatableTopic().
+      new CreatableTopicCollection(Collections.singleton(new CreatableTopic().
         setName(createTopic).setNumPartitions(1).
           setReplicationFactor(1.toShort)).iterator))).build()
 
@@ -402,7 +429,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val alterableConfig = new AlterableConfig
     alterableConfig.setName(LogConfig.MaxMessageBytesProp).
       setValue("1000000").setConfigOperation(AlterConfigOp.OpType.SET.id())
-    val alterableConfigSet = new AlterableConfigSet
+    val alterableConfigSet = new AlterableConfigCollection
     alterableConfigSet.add(alterableConfig)
     data.resources().add(new AlterConfigsResource().
       setResourceName(tp.topic).setResourceType(ConfigResource.Type.TOPIC.id()).

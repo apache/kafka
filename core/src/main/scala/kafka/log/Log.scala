@@ -159,7 +159,7 @@ case class RollParams(maxSegmentMs: Long,
 
 object RollParams {
   def apply(config: LogConfig, appendInfo: LogAppendInfo, messagesSize: Int, now: Long): RollParams = {
-   new RollParams(config.segmentMs,
+   new RollParams(config.maxSegmentMs,
      config.segmentSize,
      appendInfo.maxTimestamp,
      appendInfo.lastOffset,
@@ -570,17 +570,7 @@ class Log(@volatile var dir: File,
     // before the swap file is restored as the new segment file.
     completeSwapOperations(swapFiles)
 
-    if (logSegments.isEmpty) {
-      // no existing segments, create a new mutable segment beginning at offset 0
-      addSegment(LogSegment.open(dir = dir,
-        baseOffset = 0,
-        config,
-        time = time,
-        fileAlreadyExists = false,
-        initFileSize = this.initFileSize,
-        preallocate = config.preallocate))
-      0
-    } else if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
+    if (!dir.getAbsolutePath.endsWith(Log.DeleteDirSuffix)) {
       val nextOffset = retryOnOffsetOverflow {
         recoverLog()
       }
@@ -588,7 +578,9 @@ class Log(@volatile var dir: File,
       // reset the index size of the currently active log segment to allow more entries
       activeSegment.resizeIndexes(config.maxIndexSize)
       nextOffset
-    } else 0
+    } else {
+      0
+    }
   }
 
   private def updateLogEndOffset(messageOffset: Long) {
@@ -626,6 +618,27 @@ class Log(@volatile var dir: File,
         }
       }
     }
+
+    if (logSegments.nonEmpty) {
+      val logEndOffset = activeSegment.readNextOffset
+      if (logEndOffset < logStartOffset) {
+        warn(s"Deleting all segments because logEndOffset ($logEndOffset) is smaller than logStartOffset ($logStartOffset). " +
+          "This could happen if segment files were deleted from the file system.")
+        logSegments.foreach(deleteSegment)
+      }
+    }
+
+    if (logSegments.isEmpty) {
+      // no existing segments, create a new mutable segment beginning at logStartOffset
+      addSegment(LogSegment.open(dir = dir,
+        baseOffset = logStartOffset,
+        config,
+        time = time,
+        fileAlreadyExists = false,
+        initFileSize = this.initFileSize,
+        preallocate = config.preallocate))
+    }
+
     recoveryPoint = activeSegment.readNextOffset
     recoveryPoint
   }
@@ -717,6 +730,14 @@ class Log(@volatile var dir: File,
   private[log] def activeProducersWithLastSequence: Map[Long, Int] = lock synchronized {
     producerStateManager.activeProducers.map { case (producerId, producerIdEntry) =>
       (producerId, producerIdEntry.lastSeq)
+    }
+  }
+
+  private[log] def lastRecordsOfActiveProducers: Map[Long, LastRecord] = lock synchronized {
+    producerStateManager.activeProducers.map { case (producerId, producerIdEntry) =>
+      val lastDataOffset = if (producerIdEntry.lastDataOffset >= 0 ) Some(producerIdEntry.lastDataOffset) else None
+      val lastRecord = LastRecord(lastDataOffset, producerIdEntry.producerEpoch)
+      producerId -> lastRecord
     }
   }
 
@@ -909,8 +930,17 @@ class Log(@volatile var dir: File,
 
         // update the epoch cache with the epoch stamped onto the message by the leader
         validRecords.batches.asScala.foreach { batch =>
-          if (batch.magic >= RecordBatch.MAGIC_VALUE_V2)
+          if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
             maybeAssignEpochStartOffset(batch.partitionLeaderEpoch, batch.baseOffset)
+          } else {
+            // In partial upgrade scenarios, we may get a temporary regression to the message format. In
+            // order to ensure the safety of leader election, we clear the epoch cache so that we revert
+            // to truncation by high watermark after the next leader election.
+            leaderEpochCache.filter(_.nonEmpty).foreach { cache =>
+              warn(s"Clearing leader epoch cache after unexpected append with message format v${batch.magic}")
+              cache.clearAndFlush()
+            }
+          }
         }
 
         // check messages set size may be exceed config.segmentSize
@@ -1994,6 +2024,20 @@ class Log(@volatile var dir: File,
       }
       // okay we are safe now, remove the swap suffix
       sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
+    }
+  }
+
+  /**
+    * This function does not acquire Log.lock. The caller has to make sure log segments don't get deleted during
+    * this call, and also protects against calling this function on the same segment in parallel.
+    *
+    * Currently, it is used by LogCleaner threads on log compact non-active segments only with LogCleanerManager's lock
+    * to ensure no other logcleaner threads and retention thread can work on the same segment.
+    */
+  private[log] def getFirstBatchTimestampForSegments(segments: Iterable[LogSegment]): Iterable[Long] = {
+    segments.map {
+      segment =>
+        segment.getFirstBatchTimestamp()
     }
   }
 

@@ -24,7 +24,7 @@
   "fields": [
     { "name": "Topics", "type": "[]OffsetForLeaderTopic", "versions": "0+",
       "about": "Each topic to get offsets for.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]OffsetForLeaderPartition", "versions": "0+",
         "about": "Each partition to get offsets for.", "fields": [

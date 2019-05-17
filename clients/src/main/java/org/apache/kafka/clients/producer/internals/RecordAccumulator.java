@@ -72,9 +72,9 @@ public final class RecordAccumulator {
     private final AtomicInteger appendsInProgress;
     private final int batchSize;
     private final CompressionType compression;
-    private final long lingerMs;
+    private final int lingerMs;
     private final long retryBackoffMs;
-    private final long deliveryTimeoutMs;
+    private final int deliveryTimeoutMs;
     private final BufferPool free;
     private final Time time;
     private final ApiVersions apiVersions;
@@ -106,9 +106,9 @@ public final class RecordAccumulator {
     public RecordAccumulator(LogContext logContext,
                              int batchSize,
                              CompressionType compression,
-                             long lingerMs,
+                             int lingerMs,
                              long retryBackoffMs,
-                             long deliveryTimeoutMs,
+                             int deliveryTimeoutMs,
                              Metrics metrics,
                              String metricGrpName,
                              Time time,

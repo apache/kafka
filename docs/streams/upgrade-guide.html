@@ -73,7 +73,7 @@
     <h3><a id="streams_api_changes_230" href="#streams_api_changes_230">Streams API changes in 2.3.0</a></h3>
     <p>Version 2.3.0 adds the Suppress operator to the <code>kafka-streams-scala</code> Ktable API.</p>
     <p>
-        As of 2.3.0 Streams now offers an in-memory version of the window store, in addition to the persistent one based on RocksDB. The new public interface <code>inMemoryWindowStore()</code> is added to Stores that provides a built-in in-memory window store.
+        As of 2.3.0 Streams now offers an in-memory version of the window and the session store, in addition to the persistent ones based on RocksDB. The new public interfaces <code>inMemoryWindowStore()</code> and <code>inMemorySessionStore()</code> are added to Stores and provide the built-in in-memory window or session store.
     </p>
 
     <p>

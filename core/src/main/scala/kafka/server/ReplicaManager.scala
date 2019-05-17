@@ -388,7 +388,7 @@ class ReplicaManager(val config: KafkaConfig,
           s"${stopReplicaRequest.controllerEpoch}. Latest known controller epoch is $controllerEpoch")
         (responseMap, Errors.STALE_CONTROLLER_EPOCH)
       } else {
-        val partitions = stopReplicaRequest.partitions.asScala
+        val partitions = stopReplicaRequest.partitions.asScala.toSet
         controllerEpoch = stopReplicaRequest.controllerEpoch
         // First stop fetchers for all partitions, then stop the corresponding replicas
         replicaFetcherManager.removeFetcherForPartitions(partitions)

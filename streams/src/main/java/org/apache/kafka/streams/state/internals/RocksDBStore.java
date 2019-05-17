@@ -90,6 +90,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
     WriteOptions wOptions;
     FlushOptions fOptions;
+    private BloomFilter filter;
+
+    private RocksDBConfigSetter configSetter;
 
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
@@ -120,7 +123,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
         tableConfig.setBlockSize(BLOCK_SIZE);
-        tableConfig.setFilter(new BloomFilter());
+        
+        filter = new BloomFilter();
+        tableConfig.setFilter(filter);
 
         userSpecifiedOptions.optimizeFiltersForHits();
         userSpecifiedOptions.setTableFormatConfig(tableConfig);
@@ -151,7 +156,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
 
         if (configSetterClass != null) {
-            final RocksDBConfigSetter configSetter = Utils.newInstance(configSetterClass);
+            configSetter = Utils.newInstance(configSetterClass);
             configSetter.setConfig(name, userSpecifiedOptions, configs);
         }
 
@@ -387,11 +392,18 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
         open = false;
         closeOpenIterators();
+
+        if (configSetter != null) {
+            configSetter.close(name, userSpecifiedOptions);
+            configSetter = null;
+        }
+
         dbAccessor.close();
         userSpecifiedOptions.close();
         wOptions.close();
         fOptions.close();
         db.close();
+        filter.close();
 
         dbAccessor = null;
         userSpecifiedOptions = null;

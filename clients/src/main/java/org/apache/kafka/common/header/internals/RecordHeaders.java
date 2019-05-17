@@ -157,7 +157,7 @@ public class RecordHeaders implements Headers {
 
         RecordHeaders headers1 = (RecordHeaders) o;
 
-        return headers != null ? headers.equals(headers1.headers) : headers1.headers == null;
+        return Objects.equals(headers, headers1.headers);
     }
 
     @Override
