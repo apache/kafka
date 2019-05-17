@@ -2078,6 +2078,20 @@ public class ConsumerCoordinatorTest {
 
     @Test(expected = FencedInstanceIdException.class)
     public void testCommitOffsetRequestAsyncWithFencedInstanceIdException() {
+        receiveFencedInstanceIdException();
+    }
+
+    @Test
+    public void testCommitOffsetRequestAsyncAlwaysReceiveFencedException() {
+       // Once we get fenced exception once, we should always hit fencing case.
+       assertThrows(FencedInstanceIdException.class, this::receiveFencedInstanceIdException);
+       assertThrows(FencedInstanceIdException.class, () ->
+               coordinator.commitOffsetsAsync(singletonMap(t1p, new OffsetAndMetadata(100L)), new MockCommitCallback()));
+       assertThrows(FencedInstanceIdException.class, () ->
+               coordinator.commitOffsetsSync(singletonMap(t1p, new OffsetAndMetadata(100L)), time.timer(Long.MAX_VALUE)));
+    }
+
+    private void receiveFencedInstanceIdException() {
         subscriptions.assignFromUser(singleton(t1p));
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));

@@ -1138,7 +1138,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                             // however, then the session timeout may expire before we can rejoin.
                                             heartbeat.receiveHeartbeat();
                                         } else if (e instanceof FencedInstanceIdException) {
-                                            log.error("Caught fenced group.instance.id error in heartbeat thread", e);
+                                            log.error("Caught fenced group.instance.id {} error in heartbeat thread", groupInstanceId, e);
                                             heartbeatThread.failed.set(e);
                                         } else {
                                             heartbeat.failHeartbeat();

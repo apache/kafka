@@ -67,6 +67,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -94,6 +95,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private MetadataSnapshot metadataSnapshot;
     private MetadataSnapshot assignmentSnapshot;
     private Timer nextAutoCommitTimer;
+    private AtomicBoolean asyncCommitFenced;
 
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
@@ -159,6 +161,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
         this.pendingAsyncCommits = new AtomicInteger();
+        this.asyncCommitFenced = new AtomicBoolean(false);
 
         if (autoCommitEnabled)
             this.nextAutoCommitTimer = time.timer(autoCommitIntervalMs);
@@ -589,6 +592,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     // visible for testing
     void invokeCompletedOffsetCommitCallbacks() {
+        if (asyncCommitFenced.get()) {
+            throw new FencedInstanceIdException("Get fenced exception for group.instance.id " + groupInstanceId.orElse("unset_instance_id"));
+        }
         while (true) {
             OffsetCommitCompletion completion = completedOffsetCommits.poll();
             if (completion == null) {
@@ -652,9 +658,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             public void onFailure(RuntimeException e) {
                 Exception commitException = e;
 
-                if (e instanceof RetriableException)
+                if (e instanceof RetriableException) {
                     commitException = new RetriableCommitFailedException(e);
+                }
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
+                if (commitException instanceof FencedInstanceIdException) {
+                    asyncCommitFenced.set(true);
+                }
             }
         });
     }
