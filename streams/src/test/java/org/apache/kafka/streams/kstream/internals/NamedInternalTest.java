@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.junit.Test;
-import org.junit.TestCouldNotBeSkippedException;
 
 import static org.junit.Assert.assertEquals;
 
@@ -31,12 +30,12 @@ public class NamedInternalTest {
         int index = 0;
 
         @Override
-        public String newProcessorName(String prefix) {
+        public String newProcessorName(final String prefix) {
             return prefix + "PROCESSOR-" + index++;
         }
 
         @Override
-        public String newStoreName(String prefix) {
+        public String newStoreName(final String prefix) {
             return prefix + "STORE-"  + index++;
         }
 

@@ -18,8 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Named;
 
-import java.util.Optional;
-
 public class NamedInternal extends Named {
 
     public static NamedInternal empty() {
