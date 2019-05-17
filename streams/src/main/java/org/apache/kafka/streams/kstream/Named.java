@@ -55,7 +55,7 @@ public class Named implements NamedOperation<Named> {
         return new Named(name);
     }
 
-    static void validate(final String name) {
+    protected static void validate(final String name) {
         if (name.isEmpty())
             throw new TopologyException("Name is illegal, it can't be empty");
         if (name.equals(".") || name.equals(".."))
