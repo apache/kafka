@@ -21,11 +21,18 @@ import com.yammer.metrics.core.Gauge
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.TopicPartition
 import org.easymock.EasyMock
-import org.junit.Test
+import org.junit.{Before, Test}
 import org.junit.Assert._
+
 import scala.collection.JavaConverters._
 
 class AbstractFetcherManagerTest {
+
+  @Before
+  def cleanMetricRegistry(): Unit = {
+    for (metricName <- Metrics.defaultRegistry().allMetrics().keySet().asScala)
+      Metrics.defaultRegistry().removeMetric(metricName)
+  }
 
   private def getMetricValue(name: String): Any = {
     Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getName == name).values.headOption.get.

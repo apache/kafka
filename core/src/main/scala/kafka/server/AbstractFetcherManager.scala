@@ -37,7 +37,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   val failedPartitions = new FailedPartitions
   this.logIdent = "[" + name + "] "
 
-  val maxLag = newGauge(
+  newGauge(
     "MaxLag",
     new Gauge[Long] {
       // current max lag across all fetchers/topics/partitions
@@ -50,7 +50,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
     Map("clientId" -> clientId)
   )
 
-  val minFetchRate = newGauge(
+  newGauge(
   "MinFetchRate", {
     new Gauge[Double] {
       // current min fetch rate across all fetchers/topics/partitions
@@ -164,7 +164,6 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         info(s"Added fetcher to broker ${brokerAndFetcherId.broker} for partitions $initialOffsetAndEpochs")
 
         failedPartitions.removeAll(partitionAndOffsets.keySet)
-        info(s"Removed from failed partitions set ${partitionAndOffsets.keySet}")
       }
     }
   }

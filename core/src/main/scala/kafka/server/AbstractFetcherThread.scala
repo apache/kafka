@@ -184,7 +184,7 @@ abstract class AbstractFetcherThread(name: String,
     }
     catch {
       case e: KafkaStorageException =>
-        info(s"Failed to truncate $topicPartition at offset ${truncationState.offset}", e)
+        error(s"Failed to truncate $topicPartition at offset ${truncationState.offset}", e)
         markPartitionFailed(topicPartition)
         false
       case t: Throwable =>
@@ -341,7 +341,8 @@ abstract class AbstractFetcherThread(name: String,
                         s"offset ${currentFetchState.fetchOffset}", ime)
                       partitionsWithError += topicPartition
                     case e: KafkaStorageException =>
-                      error(s"Error while processing data for partition $topicPartition", e)
+                      error(s"Error while processing data for partition $topicPartition " +
+                        s"at offset ${currentFetchState.fetchOffset}", e)
                       markPartitionFailed(topicPartition)
                     case t: Throwable =>
                       // stop monitoring this partition and add it to the set of failed partitions

@@ -741,7 +741,7 @@ class AbstractFetcherThreadTest {
         }
       }
     }
-    fetcherThreadHandlingPartitionFailure(fetcherForAppend)
+    verifyFetcherThreadHandlingPartitionFailure(fetcherForAppend)
   }
 
   @Test
@@ -755,10 +755,10 @@ class AbstractFetcherThreadTest {
         }
       }
     }
-    fetcherThreadHandlingPartitionFailure(fetcherForTruncation)
+    verifyFetcherThreadHandlingPartitionFailure(fetcherForTruncation)
   }
 
-  def fetcherThreadHandlingPartitionFailure(fetcher: MockFetcherThread): Unit = {
+  private def verifyFetcherThreadHandlingPartitionFailure(fetcher: MockFetcherThread): Unit = {
 
     fetcher.setReplicaState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
     fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 0)))
