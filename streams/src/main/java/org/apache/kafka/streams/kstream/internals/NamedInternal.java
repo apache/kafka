@@ -17,8 +17,6 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Named;
-import java.util.Optional;
-import java.util.function.Supplier;
 
 public class NamedInternal extends Named {
 
@@ -33,14 +31,14 @@ public class NamedInternal extends Named {
     /**
      * Creates a new {@link NamedInternal} instance.
      *
-     * @param internal  the internal name.
+     * @param internal the internal name.
      */
     NamedInternal(final String internal) {
         super(internal);
     }
 
     /**
-     * @return  a string name.
+     * @return a string name.
      */
     public String name() {
         return name;
@@ -51,31 +49,31 @@ public class NamedInternal extends Named {
         return new NamedInternal(name);
     }
 
-    /**
-     * Check whether an internal name is defined.
-     * @return {@code false} if no name is set.
-     */
-    public boolean isDefined() {
-        return name != null;
-    }
+    String suffixWithOrElseGet(final String suffix, final InternalNameProvider provider, final String prefix) {
+        // We actually do not need to generate processor names for operation if a name is specified.
+        // But before returning, we still need to burn index for the operation to keep topology backward compatibility.
+        if (name != null) {
+            provider.newProcessorName(prefix);
 
-    String suffixWithOrElseGet(final String suffix, final Supplier<String> supplier) {
-        final Optional<String> suffixed = Optional.ofNullable(this.name).map(s -> s + suffix);
-        // Creating a new named will re-validate generated name as suffixed string could be too large.
-        return new NamedInternal(suffixed.orElseGet(supplier)).name();
+            final String suffixed = name + suffix;
+            // Re-validate generated name as suffixed string could be too large.
+            Named.validate(suffixed);
+
+            return suffixed;
+        } else {
+            return provider.newProcessorName(prefix);
+        }
     }
 
     String orElseGenerateWithPrefix(final InternalNameProvider provider, final String prefix) {
-        return orElseGet(() -> provider.newProcessorName(prefix));
+        // We actually do not need to generate processor names for operation if a name is specified.
+        // But before returning, we still need to burn index for the operation to keep topology backward compatibility.
+        if (name != null) {
+            provider.newProcessorName(prefix);
+            return name;
+        }  else {
+            return provider.newProcessorName(prefix);
+        }
     }
 
-    /**
-     * Returns the internal name or the value returns from the supplier.
-     *
-     * @param supplier  the supplier to be used if internal name is empty.
-     * @return an internal string name.
-     */
-    private String orElseGet(final Supplier<String> supplier) {
-        return Optional.ofNullable(this.name).orElseGet(supplier);
-    }
 }

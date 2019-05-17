@@ -424,7 +424,7 @@ public class StreamsBuilderTest {
         builder.stream(STREAM_TOPIC_TWO);
         builder.build();
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
-        assertSpecifiedNameForOperation(topology, expected, "KSTREAM-SOURCE-0000000000");
+        assertSpecifiedNameForOperation(topology, expected, "KSTREAM-SOURCE-0000000001");
     }
 
     @Test
@@ -440,8 +440,8 @@ public class StreamsBuilderTest {
                 topology,
                 expected,
                 expected + "-table-source",
-                "KSTREAM-SOURCE-0000000002",
-                "KTABLE-SOURCE-0000000003");
+                "KSTREAM-SOURCE-0000000004",
+                "KTABLE-SOURCE-0000000005");
     }
 
     @Test
@@ -467,7 +467,7 @@ public class StreamsBuilderTest {
         stream.to(STREAM_TOPIC_TWO);
         builder.build();
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
-        assertSpecifiedNameForOperation(topology, "KSTREAM-SOURCE-0000000000", expected, "KSTREAM-SINK-0000000001");
+        assertSpecifiedNameForOperation(topology, "KSTREAM-SOURCE-0000000000", expected, "KSTREAM-SINK-0000000002");
     }
 
     private void assertSpecifiedNameForOperation(final ProcessorTopology topology, final String... expected) {
