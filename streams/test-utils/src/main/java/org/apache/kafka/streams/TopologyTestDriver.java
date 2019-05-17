@@ -63,6 +63,9 @@ import org.apache.kafka.streams.processor.internals.StoreChangelogReader;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.ReadOnlySessionStore;
+import org.apache.kafka.streams.state.ReadOnlyWindowStore;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
@@ -571,6 +574,10 @@ public class TopologyTestDriver implements Closeable {
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
      * <p>
      * Note, that {@code StateStore} might be {@code null} if a store is added but not connected to any processor.
+     * <p>
+     * <strong>Caution:</strong> Using this method to access stores that are added by the DSL is unsafe as the store
+     * types may change. Stores added by the DSL should only be accessed via the corresponding typed methods
+     * like {@link #getKeyValueStore(String)} etc.
      *
      * @return all stores my name
      * @see #getStateStore(String)
@@ -584,7 +591,7 @@ public class TopologyTestDriver implements Closeable {
     public Map<String, StateStore> getAllStateStores() {
         final Map<String, StateStore> allStores = new HashMap<>();
         for (final String storeName : internalTopologyBuilder.allStateStoreName()) {
-            allStores.put(storeName, getStateStore(storeName));
+            allStores.put(storeName, getStateStore(storeName, false));
         }
         return allStores;
     }
@@ -593,11 +600,17 @@ public class TopologyTestDriver implements Closeable {
      * Get the {@link StateStore} with the given name.
      * The store can be a "regular" or global store.
      * <p>
+     * Should be used for custom stores only.
+     * For built-in stores, the corresponding typed methods like {@link #getKeyValueStore(String)} should be used.
+     * <p>
      * This is often useful in test cases to pre-populate the store before the test case instructs the topology to
      * {@link #pipeInput(ConsumerRecord) process an input message}, and/or to check the store afterward.
      *
      * @param name the name of the store
      * @return the state store, or {@code null} if no store has been registered with the given name
+     * @throws IllegalArgumentException if the store is a built-in store like {@link KeyValueStore},
+     * {@link WindowStore}, or {@link SessionStore}
+     *
      * @see #getAllStateStores()
      * @see #getKeyValueStore(String)
      * @see #getTimestampedKeyValueStore(String)
@@ -606,10 +619,18 @@ public class TopologyTestDriver implements Closeable {
      * @see #getSessionStore(String)
      */
     @SuppressWarnings("WeakerAccess")
-    public StateStore getStateStore(final String name) {
+    public StateStore getStateStore(final String name) throws IllegalArgumentException {
+        return getStateStore(name, true);
+    }
+
+    private StateStore getStateStore(final String name,
+                                     final boolean throwForBuiltInStores) {
         if (task != null) {
             final StateStore stateStore = ((ProcessorContextImpl) task.context()).getStateMgr().getStore(name);
             if (stateStore != null) {
+                if (throwForBuiltInStores) {
+                    throwIfBuiltInStore(stateStore);
+                }
                 return stateStore;
             }
         }
@@ -617,12 +638,38 @@ public class TopologyTestDriver implements Closeable {
         if (globalStateManager != null) {
             final StateStore stateStore = globalStateManager.getGlobalStore(name);
             if (stateStore != null) {
+                if (throwForBuiltInStores) {
+                    throwIfBuiltInStore(stateStore);
+                }
                 return stateStore;
             }
 
         }
 
         return null;
+    }
+
+    private void throwIfBuiltInStore(final StateStore stateStore) {
+        if (stateStore instanceof TimestampedKeyValueStore) {
+            throw new IllegalArgumentException("Store " + stateStore.name()
+                + " is a timestamped key-value store and should be accessed via `getTimestampedKeyValueStore()`");
+        }
+        if (stateStore instanceof ReadOnlyKeyValueStore) {
+            throw new IllegalArgumentException("Store " + stateStore.name()
+                + " is a key-value store and should be accessed via `getKeyValueStore()`");
+        }
+        if (stateStore instanceof TimestampedWindowStore) {
+            throw new IllegalArgumentException("Store " + stateStore.name()
+                + " is a timestamped window store and should be accessed via `getTimestampedWindowStore()`");
+        }
+        if (stateStore instanceof ReadOnlyWindowStore) {
+            throw new IllegalArgumentException("Store " + stateStore.name()
+                + " is a window store and should be accessed via `getWindowStore()`");
+        }
+        if (stateStore instanceof ReadOnlySessionStore) {
+            throw new IllegalArgumentException("Store " + stateStore.name()
+                + " is a session store and should be accessed via `getSessionStore()`");
+        }
     }
 
     /**
@@ -648,7 +695,7 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> KeyValueStore<K, V> getKeyValueStore(final String name) {
-        final StateStore store = getStateStore(name);
+        final StateStore store = getStateStore(name, false);
         if (store instanceof TimestampedKeyValueStore) {
             log.info("Method #getTimestampedKeyValueStore() should be used to access a TimestampedKeyValueStore.");
             return new KeyValueStoreFacade<>((TimestampedKeyValueStore<K, V>) store);
@@ -674,7 +721,7 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> KeyValueStore<K, ValueAndTimestamp<V>> getTimestampedKeyValueStore(final String name) {
-        final StateStore store = getStateStore(name);
+        final StateStore store = getStateStore(name, false);
         return store instanceof TimestampedKeyValueStore ? (TimestampedKeyValueStore<K, V>) store : null;
     }
 
@@ -701,7 +748,7 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> WindowStore<K, V> getWindowStore(final String name) {
-        final StateStore store = getStateStore(name);
+        final StateStore store = getStateStore(name, false);
         if (store instanceof TimestampedWindowStore) {
             log.info("Method #getTimestampedWindowStore() should be used to access a TimestampedWindowStore.");
             return new WindowStoreFacade<>((TimestampedWindowStore<K, V>) store);
@@ -727,7 +774,7 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> WindowStore<K, ValueAndTimestamp<V>> getTimestampedWindowStore(final String name) {
-        final StateStore store = getStateStore(name);
+        final StateStore store = getStateStore(name, false);
         return store instanceof TimestampedWindowStore ? (TimestampedWindowStore<K, V>) store : null;
     }
 
@@ -749,7 +796,7 @@ public class TopologyTestDriver implements Closeable {
      */
     @SuppressWarnings({"unchecked", "WeakerAccess"})
     public <K, V> SessionStore<K, V> getSessionStore(final String name) {
-        final StateStore store = getStateStore(name);
+        final StateStore store = getStateStore(name, false);
         return store instanceof SessionStore ? (SessionStore<K, V>) store : null;
     }
 
