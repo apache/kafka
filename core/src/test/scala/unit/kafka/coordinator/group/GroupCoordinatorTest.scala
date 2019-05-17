@@ -735,19 +735,6 @@ class GroupCoordinatorTest {
   }
 
   @Test
-  def staticMemberSyncWithInvalidMemberId() {
-    val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
-
-    val invalidMemberIdList = List("no_delimiter", followerInstanceId.get + "-123x")
-    for (invalidMemberId <- invalidMemberIdList) {
-      EasyMock.reset(replicaManager)
-      // The fencing won't happen because the member.id is ill-formatted or last portion is not a timestamp.
-      val syncGroupResult = syncGroupFollower(groupId, rebalanceResult.generation, invalidMemberId)
-      assertEquals(Errors.UNKNOWN_MEMBER_ID, syncGroupResult._2)
-    }
-  }
-
-  @Test
   def staticMemberJoinWithUnknownInstanceIdAndKnownMemberId() {
     val rebalanceResult = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
 
