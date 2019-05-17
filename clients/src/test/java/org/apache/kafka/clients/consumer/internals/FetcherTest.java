@@ -3276,9 +3276,14 @@ public class FetcherTest {
         client.updateMetadata(TestUtils.metadataUpdateWith(2, singletonMap(topicName, 4)));
         subscriptions.seek(tp0, 0);
 
+        // Node preferred replica before first fetch response
+        Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(selected.id(), -1);
+
         assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
 
+        // Set preferred read replica to node=1
         client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L,
                 FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, 1));
         consumerClient.poll(time.timer(0));
@@ -3287,8 +3292,32 @@ public class FetcherTest {
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchedRecords();
         assertTrue(partitionRecords.containsKey(tp0));
 
-        Optional<Integer> preferredReadReplica = subscriptions.preferredReadReplica(tp0, time.milliseconds());
-        assertOptional(preferredReadReplica, id -> assertEquals(id.intValue(), 1));
+        // verify
+        selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(selected.id(), 1);
+
+
+        assertEquals(1, fetcher.sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+
+        // Set preferred read replica to node=2, which isn't in our metadata, should revert to leader
+        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L,
+                FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, 2));
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+        fetchedRecords();
+        selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(selected.id(), -1);
+    }
+
+    @Test
+    public void testPreferredReadReplicaOffsetError() {
+        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
+                Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED, Duration.ofMinutes(5).toMillis());
+
+        subscriptions.assignFromUser(singleton(tp0));
+        client.updateMetadata(TestUtils.metadataUpdateWith(2, singletonMap(topicName, 4)));
+        subscriptions.seek(tp0, 0);
 
         assertEquals(1, fetcher.sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
@@ -3300,40 +3329,8 @@ public class FetcherTest {
 
         fetchedRecords();
 
-
-
-        /*
-        // read after expiration
-        preferredReadReplica = subscriptions.preferredReadReplica(tp0,
-                time.milliseconds() + Duration.ofMinutes(10).toMillis());
-        assertFalse(preferredReadReplica.isPresent());
-
-        // gets unset after expiration
-        preferredReadReplica = subscriptions.preferredReadReplica(tp0, time.milliseconds());
-        assertFalse(preferredReadReplica.isPresent());
-        */
-    }
-
-    @Test
-    public void testPreferredReadReplicaOffsetError() {
-        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(), new BytesDeserializer(),
-                Integer.MAX_VALUE, IsolationLevel.READ_COMMITTED, Duration.ofMinutes(5).toMillis());
-
-        assignFromUser(singleton(tp0));
-        subscriptions.seek(tp0, 0);
-
-        assertEquals(1, fetcher.sendFetches());
-        assertFalse(fetcher.hasCompletedFetches());
-
-        client.prepareResponse(fullFetchResponse(tp0, this.records, Errors.NONE, 100L,
-                FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, 42));
-        consumerClient.poll(time.timer(0));
-        assertTrue(fetcher.hasCompletedFetches());
-
-        fetchedRecords();
-
-        Optional<Integer> preferredReadReplica = subscriptions.preferredReadReplica(tp0, time.milliseconds());
-        assertOptional(preferredReadReplica, id -> assertEquals(id.intValue(), 42));
+        Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(selected.id(), 1);
 
         // Return an error, should unset the preferred read replica
         assertEquals(1, fetcher.sendFetches());
@@ -3346,8 +3343,8 @@ public class FetcherTest {
 
         fetchedRecords();
 
-        preferredReadReplica = subscriptions.preferredReadReplica(tp0, time.milliseconds());
-        assertFalse(preferredReadReplica.isPresent());
+        selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(selected.id(), -1);
     }
 
     private MockClient.RequestMatcher listOffsetRequestMatcher(final long timestamp) {

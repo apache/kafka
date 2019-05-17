@@ -1012,7 +1012,7 @@ public class Fetcher<K, V> implements Closeable {
     /**
      * Determine which replica to read from.
      */
-    private Node selectReadReplica(TopicPartition partition, Node leaderReplica, long currentTimeMs) {
+    Node selectReadReplica(TopicPartition partition, Node leaderReplica, long currentTimeMs) {
         Optional<Integer> nodeId = subscriptions.preferredReadReplica(partition, currentTimeMs);
         if (nodeId.isPresent()) {
             Optional<Node> node = nodeId.flatMap(id -> metadata.fetch().nodeIfOnline(partition, id));
