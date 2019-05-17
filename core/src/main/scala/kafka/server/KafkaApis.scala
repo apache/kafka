@@ -1343,13 +1343,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
       )
     } else {
-      val encodedGroupInstanceId = joinGroupRequest.data().groupInstanceId
-      val groupInstanceId =
-        if (encodedGroupInstanceId == null ||
-        config.interBrokerProtocolVersion < KAFKA_2_3_IV0)
-          None
-        else
-          Some(encodedGroupInstanceId)
+      val groupInstanceId = getGroupInstanceId(joinGroupRequest.data().groupInstanceId)
 
       // Only return MEMBER_ID_REQUIRED error if joinGroupRequest version is >= 4
       // and groupInstanceId is configured to unknown.
@@ -1455,11 +1449,14 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def getGroupInstanceId(rawInstanceId: String): Option[String] = {
-      if (rawInstanceId == null ||
-        config.interBrokerProtocolVersion < KAFKA_2_3_IV0)
-        None
-      else
-        Some(rawInstanceId)
+    // Only enable static membership when IBP >= 2.3, because it is not safe for the broker to use the static member logic
+    // until we are sure that all brokers support it. If static group being loaded by an older coordinator, it will discard
+    // the group.instance.id field, so static members could accidentally become "dynamic", which leads to wrong states.
+    if (rawInstanceId == null ||
+      config.interBrokerProtocolVersion < KAFKA_2_3_IV0)
+      None
+    else
+      Some(rawInstanceId)
   }
 
   def handleLeaveGroupRequest(request: RequestChannel.Request) {

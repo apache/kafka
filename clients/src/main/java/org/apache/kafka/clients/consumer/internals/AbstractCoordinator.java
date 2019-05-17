@@ -902,6 +902,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 new HeartbeatRequest.Builder(new HeartbeatRequestData()
                         .setGroupId(groupId)
                         .setGenerationid(this.generation.generationId)
+                        .setGroupInstanceId(this.groupInstanceId.orElse(null))
                         .setMemberId(this.generation.memberId));
         return client.send(coordinator, requestBuilder)
                 .compose(new HeartbeatResponseHandler());
@@ -1137,6 +1138,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                             // however, then the session timeout may expire before we can rejoin.
                                             heartbeat.receiveHeartbeat();
                                         } else if (e instanceof FencedInstanceIdException) {
+                                            log.error("Caught fenced group.instance.id error in heartbeat thread", e);
                                             heartbeatThread.failed.set(e);
                                         } else {
                                             heartbeat.failHeartbeat();

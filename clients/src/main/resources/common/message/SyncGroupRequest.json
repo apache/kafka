@@ -33,8 +33,6 @@
       "about": "Each assignment.", "fields": [
       { "name": "MemberId", "type": "string", "versions": "0+",
         "about": "The ID of the member to assign." },
-      { "name": "GroupInstanceId", "type": "string", "versions": "3+", "nullableVersions": "3+",
-        "about": "The identifier of the member provided by end user." },
       { "name": "Assignment", "type": "bytes", "versions": "0+",
         "about": "The member assignment." }
     ]}

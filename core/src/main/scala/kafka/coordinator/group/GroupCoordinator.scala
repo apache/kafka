@@ -250,7 +250,7 @@ class GroupCoordinator(val brokerId: Int,
         }
       } else {
         val groupInstanceIdNotFound = groupInstanceId.isDefined && !group.hasStaticMember(groupInstanceId)
-        if (!group.validateMemberIdIfStatic(memberId, groupInstanceId)) {
+        if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
           // given member id doesn't match with the groupInstanceId. Inform duplicate instance to shut down immediately.
           responseCallback(joinError(memberId, Errors.FENCED_INSTANCE_ID))
         } else if (!group.has(memberId) || groupInstanceIdNotFound) {
@@ -347,7 +347,13 @@ class GroupCoordinator(val brokerId: Int,
                           groupAssignment: Map[String, Array[Byte]],
                           responseCallback: SyncCallback) {
     group.inLock {
-      if (!group.validateMemberIdIfStatic(memberId, groupInstanceId)) {
+      if (group.is(Dead)) {
+        // if the group is marked as dead, it means some other thread has just removed the group
+        // from the coordinator metadata; this is likely that the group has migrated to some other
+        // coordinator OR the group is in a transient unstable phase. Let the member retry
+        // joining without the specified member id.
+        responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
+      } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
         responseCallback(Array.empty, Errors.FENCED_INSTANCE_ID)
       } else if (!group.has(memberId)) {
         responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
@@ -355,7 +361,7 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(Array.empty, Errors.ILLEGAL_GENERATION)
       } else {
         group.currentState match {
-          case Empty | Dead =>
+          case Empty =>
             responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
 
           case PreparingRebalance =>
@@ -498,7 +504,13 @@ class GroupCoordinator(val brokerId: Int,
         responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
       case Some(group) => group.inLock {
-        if (!group.validateMemberIdIfStatic(memberId, groupInstanceId)) {
+        if (group.is(Dead)) {
+          // if the group is marked as dead, it means some other thread has just removed the group
+          // from the coordinator metadata; it is likely that the group has migrated to some other
+          // coordinator OR the group is in a transient unstable phase. Let the member retry
+          // joining without the specified member id.
+          responseCallback(Errors.UNKNOWN_MEMBER_ID)
+        } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
           responseCallback(Errors.FENCED_INSTANCE_ID)
         } else if (!group.has(memberId)) {
           responseCallback(Errors.UNKNOWN_MEMBER_ID)
@@ -506,13 +518,6 @@ class GroupCoordinator(val brokerId: Int,
           responseCallback(Errors.ILLEGAL_GENERATION)
         } else {
           group.currentState match {
-            case Dead =>
-              // if the group is marked as dead, it means some other thread has just removed the group
-              // from the coordinator metadata; it is likely that the group has migrated to some other
-              // coordinator OR the group is in a transient unstable phase. Let the member retry
-              // joining without the specified member id.
-              responseCallback(Errors.UNKNOWN_MEMBER_ID)
-
             case Empty =>
               responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
@@ -595,8 +600,12 @@ class GroupCoordinator(val brokerId: Int,
                               responseCallback: immutable.Map[TopicPartition, Errors] => Unit) {
     group.inLock {
       if (group.is(Dead)) {
+        // if the group is marked as dead, it means some other thread has just removed the group
+        // from the coordinator metadata; it is likely that the group has migrated to some other
+        // coordinator OR the group is in a transient unstable phase. Let the member retry
+        // joining without the specified member id.
         responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
-      } else if (!group.validateMemberIdIfStatic(memberId, groupInstanceId)) {
+      } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.FENCED_INSTANCE_ID))
       } else if ((generationId < 0 && group.is(Empty)) || (producerId != NO_PRODUCER_ID)) {
         // The group is only using Kafka to store offsets.

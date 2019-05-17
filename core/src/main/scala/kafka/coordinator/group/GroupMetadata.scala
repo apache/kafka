@@ -356,19 +356,19 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   /**
-    * Verify the member.id is up to date for static members. Return false if both conditions met:
+    * Verify the member.id is up to date for static members. Return true if both conditions met:
     *   1. given member is a known static member to group
     *   2. group stored member.id doesn't match with given member.id
     */
-  def validateMemberIdIfStatic(memberId: String,
-                               groupInstanceId: Option[String]): Boolean = {
+  def isStaticMemberFenced(memberId: String,
+                           groupInstanceId: Option[String]): Boolean = {
     if (hasStaticMember(groupInstanceId)
       && getStaticMemberId(groupInstanceId) != memberId) {
         error(s"given member.id $memberId is identified as a known static member ${groupInstanceId.get}," +
           s"but not matching the expected member.id ${getStaticMemberId(groupInstanceId)}")
-        false
+        true
     } else
-      true
+      false
   }
 
   def canRebalance = GroupMetadata.validPreviousStates(PreparingRebalance).contains(state)

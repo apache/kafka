@@ -64,6 +64,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotSame;
 import static org.junit.Assert.assertSame;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -271,16 +272,12 @@ public class AbstractCoordinatorTest {
 
         mockClient.prepareResponse(joinGroupFollowerResponse(generation, memberId, JoinGroupResponse.UNKNOWN_MEMBER_ID, Errors.NONE));
         mockClient.prepareResponse(syncGroupResponse(Errors.FENCED_INSTANCE_ID));
-        try {
-            coordinator.ensureActiveGroup();
-            fail("Failed to catch expected FencedInstanceIdException");
-        } catch (RuntimeException e) {
-            assertTrue("Sync group request was fenced due to duplicate instance id", e instanceof FencedInstanceIdException);
-        }
+
+        assertThrows(FencedInstanceIdException.class, () -> coordinator.ensureActiveGroup());
     }
 
     @Test
-    public void testHeartbeatRequestWithFencedInstanceIdException() {
+    public void testHeartbeatRequestWithFencedInstanceIdException() throws InterruptedException {
         setupCoordinator();
         mockClient.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
 
@@ -291,13 +288,18 @@ public class AbstractCoordinatorTest {
         mockClient.prepareResponse(syncGroupResponse(Errors.NONE));
         mockClient.prepareResponse(heartbeatResponse(Errors.FENCED_INSTANCE_ID));
 
-        coordinator.ensureActiveGroup();
-
-        RequestFuture<Void> future = coordinator.sendHeartbeatRequest();
-        assertTrue(consumerClient.poll(future, mockTime.timer(REQUEST_TIMEOUT_MS)));
-        assertEquals(Errors.FENCED_INSTANCE_ID.message(), future.exception().getMessage());
-        // Make sure the exception is fatal.
-        assertFalse(future.isRetriable());
+        try {
+            coordinator.ensureActiveGroup();
+            mockTime.sleep(HEARTBEAT_INTERVAL_MS);
+            long startMs = System.currentTimeMillis();
+            while (System.currentTimeMillis() - startMs < 1000) {
+                Thread.sleep(10);
+                coordinator.pollHeartbeat(mockTime.milliseconds());
+            }
+            fail("Expected pollHeartbeat to raise fenced instance id exception in 1 second");
+        } catch (RuntimeException exception) {
+            assertTrue(exception instanceof FencedInstanceIdException);
+        }
     }
 
     @Test
