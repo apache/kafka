@@ -247,6 +247,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
+        @SuppressWarnings("deprecation")
         public void toggleDbForBulkLoading() {
             try {
                 db.compactRange(oldColumnFamily, true, 1, 0);

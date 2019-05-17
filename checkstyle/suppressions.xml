@@ -111,6 +111,8 @@
               files="KafkaConfigBackingStore.java"/>
     <suppress checks="CyclomaticComplexity"
               files="(Values|ConnectHeader|ConnectHeaders).java"/>
+    <suppress checks="CyclomaticComplexity"
+              files="RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest.java"/>
 
     <suppress checks="JavaNCSS"
               files="KafkaConfigBackingStore.java"/>
