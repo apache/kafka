@@ -16,13 +16,6 @@
  */
 package org.apache.kafka.common.record;
 
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.network.TransportLayer;
-import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
-import org.apache.kafka.common.utils.AbstractIterator;
-import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
-
 import java.io.Closeable;
 import java.io.File;
 import java.io.IOException;
@@ -36,27 +29,42 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.network.TransportLayer;
+import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
+import org.apache.kafka.common.utils.AbstractIterator;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
 /**
  * A {@link Records} implementation backed by a file. An optional start and end position can be applied to this
  * instance to enable slicing a range of the log records.
  */
 public class FileRecords extends AbstractRecords implements Closeable {
+    private static final Logger log = LoggerFactory.getLogger(FileRecords.class);
+
     private final boolean isSlice;
     private final int start;
     private final int end;
 
     private final Iterable<FileLogInputStream.FileChannelRecordBatch> batches;
 
+    // channel configuration
+    private final FileChannelOptions fileChannelOptions;
+
     // mutable state
     private final AtomicInteger size;
-    private final FileChannel channel;
+    private volatile FileChannel channel;
     private volatile File file;
 
     /**
-     * The {@code FileRecords.open} methods should be used instead of this constructor whenever possible.
+     * The {@link FileRecords#open} methods should be used instead of this constructor whenever possible.
      * The constructor is visible for tests.
      */
     FileRecords(File file,
+                FileChannelOptions fileChannelOptions,
                 FileChannel channel,
                 int start,
                 int end,
@@ -66,15 +74,20 @@ public class FileRecords extends AbstractRecords implements Closeable {
         this.start = start;
         this.end = end;
         this.isSlice = isSlice;
+        this.fileChannelOptions = fileChannelOptions;
         this.size = new AtomicInteger();
+        this.batches = batchesFrom(start);
+        initializeFromChannel();
+    }
 
+    private void initializeFromChannel() throws IOException {
         if (isSlice) {
             // don't check the file size if this is just a slice view
             size.set(end - start);
         } else {
             if (channel.size() > Integer.MAX_VALUE)
                 throw new KafkaException("The size of segment " + file + " (" + channel.size() +
-                        ") is larger than the maximum allowed segment size of " + Integer.MAX_VALUE);
+                    ") is larger than the maximum allowed segment size of " + Integer.MAX_VALUE);
 
             int limit = Math.min((int) channel.size(), end);
             size.set(limit - start);
@@ -83,8 +96,6 @@ public class FileRecords extends AbstractRecords implements Closeable {
             // set the file position to the last byte in the file
             channel.position(limit);
         }
-
-        batches = batchesFrom(start);
     }
 
     @Override
@@ -146,7 +157,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
         // handle integer overflow or if end is beyond the end of the file
         if (end < 0 || end >= start + sizeInBytes())
             end = start + sizeInBytes();
-        return new FileRecords(file, channel, this.start + position, end, true);
+        return new FileRecords(file, fileChannelOptions, channel, this.start + position, end, true);
     }
 
     /**
@@ -159,7 +170,7 @@ public class FileRecords extends AbstractRecords implements Closeable {
     public int append(MemoryRecords records) throws IOException {
         if (records.sizeInBytes() > Integer.MAX_VALUE - size.get())
             throw new IllegalArgumentException("Append of size " + records.sizeInBytes() +
-                    " bytes is too large for segment with current file position at " + size.get());
+                " bytes is too large for segment with current file position at " + size.get());
 
         int written = records.writeFullyTo(channel);
         size.getAndAdd(written);
@@ -241,12 +252,52 @@ public class FileRecords extends AbstractRecords implements Closeable {
         int originalSize = sizeInBytes();
         if (targetSize > originalSize || targetSize < 0)
             throw new KafkaException("Attempt to truncate log segment " + file + " to " + targetSize + " bytes failed, " +
-                    " size of this log segment is " + originalSize + " bytes.");
+                " size of this log segment is " + originalSize + " bytes.");
         if (targetSize < (int) channel.size()) {
             channel.truncate(targetSize);
             size.set(targetSize);
         }
         return originalSize - targetSize;
+    }
+
+    /**
+     * Truncate this file message set to the given size in bytes. Note that this API does no checking that the
+     * given size falls on a valid message boundary.
+     * In some versions of the JDK truncating to the same size as the file message set will cause an
+     * update of the files mtime, so truncate is only performed if the targetSize is smaller than the
+     * size of the underlying FileChannel.
+     * Before truncation, the files will get rolled into a backup tmp file.
+     * It is expected that no other threads will do writes to the log when this function is called.
+     * @param targetSize The size to truncate to. Must be between 0 and sizeInBytes.
+     * @return The number of bytes truncated off
+     */
+    public int backupAndTruncateTo(int targetSize, RecordsBackupNameStrategy backupNameStrategy) throws IOException {
+        int originalSize = sizeInBytes();
+        if (targetSize > originalSize || targetSize < 0) {
+            throw new KafkaException("Attempt to truncate log segment " + file + " to " + targetSize + " bytes failed, " +
+                " size of this log segment is " + originalSize + " bytes.");
+        } else if (targetSize == originalSize) {
+            return truncateTo(targetSize);
+        }
+
+        File backupFile = backupNameStrategy.getBackupFile(file);
+        String logFileName = file.getAbsolutePath();
+        String backupFileName = backupFile.getAbsolutePath();
+        if (targetSize == 0) { // rename the vile
+            log.error("Renaming {} to {} to avoid truncating live data.", logFileName, backupFileName);
+            close();
+            renameTo(new File(backupFileName));
+            this.file = new File(logFileName);
+            this.channel = openChannel(file, fileChannelOptions.withFileAlreadyExists(false));
+            initializeFromChannel();
+            return originalSize - size.get();
+        } else {
+            log.error("Copying file {} to {} to avoid truncating live data.", logFileName, backupFileName);
+            flush();
+            trim();
+            Files.copy(file.toPath(), new File(backupFileName).toPath());
+            return truncateTo(targetSize);
+        }
     }
 
     @Override
@@ -407,9 +458,15 @@ public class FileRecords extends AbstractRecords implements Closeable {
                                    boolean fileAlreadyExists,
                                    int initFileSize,
                                    boolean preallocate) throws IOException {
-        FileChannel channel = openChannel(file, mutable, fileAlreadyExists, initFileSize, preallocate);
+        FileChannelOptions fileChannelOptions = new FileChannelOptions(
+            mutable,
+            fileAlreadyExists,
+            initFileSize,
+            preallocate
+        );
+        FileChannel channel = openChannel(file, fileChannelOptions);
         int end = (!fileAlreadyExists && preallocate) ? 0 : Integer.MAX_VALUE;
-        return new FileRecords(file, channel, 0, end, false);
+        return new FileRecords(file, fileChannelOptions, channel, 0, end, false);
     }
 
     public static FileRecords open(File file,
@@ -432,23 +489,17 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * For windows NTFS and some old LINUX file system, set preallocate to true and initFileSize
      * with one value (for example 512 * 1025 *1024 ) can improve the kafka produce performance.
      * @param file File path
-     * @param mutable mutable
-     * @param fileAlreadyExists File already exists or not
-     * @param initFileSize The size used for pre allocate file, for example 512 * 1025 *1024
-     * @param preallocate Pre-allocate file or not, gotten from configuration.
+     * @param options options to describe how to open the file channel.
      */
     private static FileChannel openChannel(File file,
-                                           boolean mutable,
-                                           boolean fileAlreadyExists,
-                                           int initFileSize,
-                                           boolean preallocate) throws IOException {
-        if (mutable) {
-            if (fileAlreadyExists || !preallocate) {
+                                           FileChannelOptions options) throws IOException {
+        if (options.isMutable()) {
+            if (options.isFileAlreadyExists() || !options.isPreallocate()) {
                 return FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
-                        StandardOpenOption.WRITE);
+                    StandardOpenOption.WRITE);
             } else {
                 RandomAccessFile randomAccessFile = new RandomAccessFile(file, "rw");
-                randomAccessFile.setLength(initFileSize);
+                randomAccessFile.setLength(options.getInitFileSize());
                 return randomAccessFile.getChannel();
             }
         } else {
@@ -477,8 +528,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
             LogOffsetPosition that = (LogOffsetPosition) o;
 
             return offset == that.offset &&
-                    position == that.position &&
-                    size == that.size;
+                position == that.position &&
+                size == that.size;
 
         }
 
@@ -493,10 +544,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
         @Override
         public String toString() {
             return "LogOffsetPosition(" +
-                    "offset=" + offset +
-                    ", position=" + position +
-                    ", size=" + size +
-                    ')';
+                "offset=" + offset +
+                ", position=" + position +
+                ", size=" + size +
+                ')';
         }
     }
 
@@ -517,8 +568,8 @@ public class FileRecords extends AbstractRecords implements Closeable {
             if (o == null || getClass() != o.getClass()) return false;
             TimestampAndOffset that = (TimestampAndOffset) o;
             return timestamp == that.timestamp &&
-                    offset == that.offset &&
-                    Objects.equals(leaderEpoch, that.leaderEpoch);
+                offset == that.offset &&
+                Objects.equals(leaderEpoch, that.leaderEpoch);
         }
 
         @Override
@@ -529,10 +580,10 @@ public class FileRecords extends AbstractRecords implements Closeable {
         @Override
         public String toString() {
             return "TimestampAndOffset(" +
-                    "timestamp=" + timestamp +
-                    ", offset=" + offset +
-                    ", leaderEpoch=" + leaderEpoch +
-                    ')';
+                "timestamp=" + timestamp +
+                ", offset=" + offset +
+                ", leaderEpoch=" + leaderEpoch +
+                ')';
         }
     }
 }

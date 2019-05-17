@@ -432,7 +432,8 @@ object LogCleaner {
   def createNewCleanedSegment(log: Log, baseOffset: Long): LogSegment = {
     LogSegment.deleteIfExists(log.dir, baseOffset, fileSuffix = Log.CleanedFileSuffix)
     LogSegment.open(log.dir, baseOffset, log.config, Time.SYSTEM, fileAlreadyExists = false,
-      fileSuffix = Log.CleanedFileSuffix, initFileSize = log.initFileSize, preallocate = log.config.preallocate)
+      backupOnTruncateToZero = log.config.backupOnTruncateToZero, fileSuffix = Log.CleanedFileSuffix,
+      initFileSize = log.initFileSize, preallocate = log.config.preallocate)
   }
 
   /**

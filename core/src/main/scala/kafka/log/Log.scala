@@ -468,6 +468,7 @@ class Log(@volatile var dir: File,
           baseOffset = baseOffset,
           config,
           time = time,
+          backupOnTruncateToZero = config.backupOnTruncateToZero,
           fileAlreadyExists = true)
 
         try segment.sanityCheck(timeIndexFileNewlyCreated)
@@ -522,6 +523,7 @@ class Log(@volatile var dir: File,
         baseOffset = baseOffset,
         config,
         time = time,
+        backupOnTruncateToZero = config.backupOnTruncateToZero,
         fileSuffix = SwapFileSuffix)
       info(s"Found log file ${swapFile.getPath} from interrupted swap operation, repairing.")
       recoverSegment(swapSegment)
@@ -634,6 +636,7 @@ class Log(@volatile var dir: File,
         baseOffset = logStartOffset,
         config,
         time = time,
+        backupOnTruncateToZero = config.backupOnTruncateToZero,
         fileAlreadyExists = false,
         initFileSize = this.initFileSize,
         preallocate = config.preallocate))
@@ -1701,6 +1704,7 @@ class Log(@volatile var dir: File,
           config,
           time = time,
           fileAlreadyExists = false,
+          backupOnTruncateToZero = config.backupOnTruncateToZero,
           initFileSize = initFileSize,
           preallocate = config.preallocate)
         addSegment(segment)
@@ -1878,6 +1882,7 @@ class Log(@volatile var dir: File,
           config = config,
           time = time,
           fileAlreadyExists = false,
+          backupOnTruncateToZero = config.backupOnTruncateToZero,
           initFileSize = initFileSize,
           preallocate = config.preallocate))
         updateLogEndOffset(newOffset)

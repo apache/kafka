@@ -40,6 +40,7 @@ object Defaults {
   val FlushMs = kafka.server.Defaults.LogFlushSchedulerIntervalMs
   val RetentionSize = kafka.server.Defaults.LogRetentionBytes
   val RetentionMs = kafka.server.Defaults.LogRetentionHours * 60 * 60 * 1000L
+  val BackupOnTruncateToZero = kafka.server.Defaults.LogBackupOnTruncateToZero
   val MaxMessageSize = kafka.server.Defaults.MessageMaxBytes
   val MaxIndexSize = kafka.server.Defaults.LogIndexSizeMaxBytes
   val IndexInterval = kafka.server.Defaults.LogIndexIntervalBytes
@@ -97,8 +98,10 @@ case class LogConfig(props: java.util.Map[_, _], overriddenConfigs: Set[String] 
   val messageFormatVersion = ApiVersion(getString(LogConfig.MessageFormatVersionProp))
   val messageTimestampType = TimestampType.forName(getString(LogConfig.MessageTimestampTypeProp))
   val messageTimestampDifferenceMaxMs = getLong(LogConfig.MessageTimestampDifferenceMaxMsProp).longValue
+  val backupOnTruncateToZero = getBoolean(LogConfig.BackupOnTruncateToZeroProp)
   val LeaderReplicationThrottledReplicas = getList(LogConfig.LeaderReplicationThrottledReplicasProp)
   val FollowerReplicationThrottledReplicas = getList(LogConfig.FollowerReplicationThrottledReplicasProp)
+
   val messageDownConversionEnable = getBoolean(LogConfig.MessageDownConversionEnableProp)
 
   def randomSegmentJitter: Long =
@@ -120,6 +123,7 @@ object LogConfig {
   val SegmentMsProp = TopicConfig.SEGMENT_MS_CONFIG
   val SegmentJitterMsProp = TopicConfig.SEGMENT_JITTER_MS_CONFIG
   val SegmentIndexBytesProp = TopicConfig.SEGMENT_INDEX_BYTES_CONFIG
+  val BackupOnTruncateToZeroProp = TopicConfig.SEGMENT_BACKUP_ON_TRUNCATE_TO_ZERO_CONFIG
   val FlushMessagesProp = TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG
   val FlushMsProp = TopicConfig.FLUSH_MS_CONFIG
   val RetentionBytesProp = TopicConfig.RETENTION_BYTES_CONFIG
@@ -143,6 +147,7 @@ object LogConfig {
   val MessageTimestampDifferenceMaxMsProp = TopicConfig.MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG
   val MessageDownConversionEnableProp = TopicConfig.MESSAGE_DOWNCONVERSION_ENABLE_CONFIG
 
+
   // Leave these out of TopicConfig for now as they are replication quota configs
   val LeaderReplicationThrottledReplicasProp = "leader.replication.throttled.replicas"
   val FollowerReplicationThrottledReplicasProp = "follower.replication.throttled.replicas"
@@ -151,6 +156,7 @@ object LogConfig {
   val SegmentMsDoc = TopicConfig.SEGMENT_MS_DOC
   val SegmentJitterMsDoc = TopicConfig.SEGMENT_JITTER_MS_DOC
   val MaxIndexSizeDoc = TopicConfig.SEGMENT_INDEX_BYTES_DOC
+  val BackupOnTruncateToZeroDoc = TopicConfig.SEGMENT_BACKUP_ON_TRUNCATE_TO_ZERO_DOC
   val FlushIntervalDoc = TopicConfig.FLUSH_MESSAGES_INTERVAL_DOC
   val FlushMsDoc = TopicConfig.FLUSH_MS_DOC
   val RetentionSizeDoc = TopicConfig.RETENTION_BYTES_DOC
@@ -233,6 +239,8 @@ object LogConfig {
         KafkaConfig.LogRollTimeJitterMillisProp)
       .define(SegmentIndexBytesProp, INT, Defaults.MaxIndexSize, atLeast(0), MEDIUM, MaxIndexSizeDoc,
         KafkaConfig.LogIndexSizeMaxBytesProp)
+      .define(BackupOnTruncateToZeroProp, BOOLEAN, Defaults.BackupOnTruncateToZero, MEDIUM, BackupOnTruncateToZeroDoc,
+        KafkaConfig.BackupOnTruncateToZeroProp)
       .define(FlushMessagesProp, LONG, Defaults.FlushInterval, atLeast(0), MEDIUM, FlushIntervalDoc,
         KafkaConfig.LogFlushIntervalMessagesProp)
       .define(FlushMsProp, LONG, Defaults.FlushMs, atLeast(0), MEDIUM, FlushMsDoc,
