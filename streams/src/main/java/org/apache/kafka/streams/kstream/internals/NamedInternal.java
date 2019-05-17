@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Named;
+
 import java.util.Optional;
 import java.util.function.Supplier;
 
@@ -53,20 +54,36 @@ public class NamedInternal extends Named {
 
     /**
      * Check whether an internal name is defined.
+     *
      * @return {@code false} if no name is set.
      */
     public boolean isDefined() {
         return name != null;
     }
 
+    String suffixWithOrElseGet(final String suffix, final InternalNameProvider provider, final String prefix) {
+        backwardCompatibility(provider, prefix);
+        return suffixWithOrElseGet(suffix, () -> provider.newProcessorName(prefix));
+    }
+
     String suffixWithOrElseGet(final String suffix, final Supplier<String> supplier) {
         final Optional<String> suffixed = Optional.ofNullable(this.name).map(s -> s + suffix);
+
         // Creating a new named will re-validate generated name as suffixed string could be too large.
         return new NamedInternal(suffixed.orElseGet(supplier)).name();
     }
 
     String orElseGenerateWithPrefix(final InternalNameProvider provider, final String prefix) {
+        backwardCompatibility(provider, prefix);
         return orElseGet(() -> provider.newProcessorName(prefix));
+    }
+
+    private void backwardCompatibility(final InternalNameProvider provider, final String prefix) {
+        // We actually do not need to generate processor names for operation if a name is specified.
+        // But before returning, we still need to burn index for the operation to keep topology backward compatibility.
+        if (isDefined() && provider != null) {
+            provider.newProcessorName(prefix);
+        }
     }
 
     /**

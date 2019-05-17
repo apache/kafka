@@ -26,6 +26,10 @@ public class Named implements NamedOperation<Named> {
 
     protected String name;
 
+    protected Named(final Named named) {
+        this(Objects.requireNonNull(named, "named can't be null").name);
+    }
+
     protected Named(final String name) {
         this.name = name;
         if (name != null) {
