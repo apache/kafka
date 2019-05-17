@@ -1164,10 +1164,12 @@ public class Fetcher<K, V> implements Closeable {
                 }
 
                 if (partition.preferredReadReplica.isPresent()) {
-                    long expireTimeMs = time.milliseconds() + metadata.metadataExpireMs();
-                    log.trace("Updating preferred read replica for partition {} to {}, set to expire at {}",
-                            tp, partition.preferredReadReplica.get(), expireTimeMs);
-                    subscriptions.updatePreferredReadReplica(partitionRecords.partition, partition.preferredReadReplica.get(), expireTimeMs);
+                    subscriptions.updatePreferredReadReplica(partitionRecords.partition, partition.preferredReadReplica.get(), () -> {
+                        long expireTimeMs = time.milliseconds() + metadata.metadataExpireMs();
+                        log.trace("Updating preferred read replica for partition {} to {}, set to expire at {}",
+                                tp, partition.preferredReadReplica.get(), expireTimeMs);
+                        return expireTimeMs;
+                    });
                 }
 
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
@@ -1193,7 +1195,7 @@ public class Fetcher<K, V> implements Closeable {
                         throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
                     }
                 } else {
-                    log.debug("Unset the preferred read replica for {} since we got {}", tp, error);
+                    log.debug("Unset the preferred read replica for {} since we got {} when fetching {}", tp, error, fetchOffset);
                 }
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                 //we log the actual partition and not just the topic to help with ACL propagation issues in large clusters

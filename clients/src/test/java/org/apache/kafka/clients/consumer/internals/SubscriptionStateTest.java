@@ -318,7 +318,7 @@ public class SubscriptionStateTest {
         assertFalse(state.preferredReadReplica(tp0, 0L).isPresent());
 
         // Set the preferred replica with lease
-        state.updatePreferredReadReplica(tp0, 42, 10L);
+        state.updatePreferredReadReplica(tp0, 42, () -> 10L);
         TestUtils.assertOptional(state.preferredReadReplica(tp0, 9L),  value -> assertEquals(value.intValue(), 42));
         TestUtils.assertOptional(state.preferredReadReplica(tp0, 10L),  value -> assertEquals(value.intValue(), 42));
         assertFalse(state.preferredReadReplica(tp0, 11L).isPresent());
@@ -329,13 +329,13 @@ public class SubscriptionStateTest {
         assertFalse(state.preferredReadReplica(tp0, 11L).isPresent());
 
         // Set to new preferred replica with lease
-        state.updatePreferredReadReplica(tp0, 43, 20L);
+        state.updatePreferredReadReplica(tp0, 43, () -> 20L);
         TestUtils.assertOptional(state.preferredReadReplica(tp0, 11L),  value -> assertEquals(value.intValue(), 43));
         TestUtils.assertOptional(state.preferredReadReplica(tp0, 20L),  value -> assertEquals(value.intValue(), 43));
         assertFalse(state.preferredReadReplica(tp0, 21L).isPresent());
 
         // Set to new preferred replica without clearing first
-        state.updatePreferredReadReplica(tp0, 44, 30L);
+        state.updatePreferredReadReplica(tp0, 44, () -> 30L);
         TestUtils.assertOptional(state.preferredReadReplica(tp0, 30L),  value -> assertEquals(value.intValue(), 44));
         assertFalse(state.preferredReadReplica(tp0, 31L).isPresent());
     }
