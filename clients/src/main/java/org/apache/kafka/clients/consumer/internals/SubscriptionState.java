@@ -448,7 +448,7 @@ public class SubscriptionState {
      * @param tp The topic partition
      * @return true if the preferred read replica was set, false otherwise.
      */
-    public boolean clearPreferredReadReplica(TopicPartition tp) {
+    public Optional<Integer> clearPreferredReadReplica(TopicPartition tp) {
         return assignedState(tp).clearPreferredReadReplica();
     }
 
@@ -626,13 +626,14 @@ public class SubscriptionState {
             }
         }
 
-        private boolean clearPreferredReadReplica() {
+        private Optional<Integer> clearPreferredReadReplica() {
             if (preferredReadReplica != null) {
+                int removedReplicaId = this.preferredReadReplica;
                 this.preferredReadReplica = null;
                 this.preferredReadReplicaExpireTimeMs = null;
-                return true;
+                return Optional.of(removedReplicaId);
             } else {
-                return false;
+                return Optional.empty();
             }
         }
 

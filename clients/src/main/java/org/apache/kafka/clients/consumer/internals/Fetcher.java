@@ -1014,16 +1014,16 @@ public class Fetcher<K, V> implements Closeable {
      * Determine which replica to read from.
      */
     private Node selectReadReplica(TopicPartition partition, Node leaderReplica) {
-        Optional<Node> node = subscriptions.preferredReadReplica(partition, time.milliseconds())
-                .flatMap(nodeId -> Optional.ofNullable(metadata.fetch().nodeById(nodeId)));
-        if (node.isPresent()) {
-            if (Arrays.asList(metadata.fetch().partition(partition).offlineReplicas()).contains(node.get())) {
-                log.trace("Not fetching from {} for partition {} since it is marked offline, using the leader instead.",
-                        node.get(), partition);
+        Optional<Integer> nodeId = subscriptions.preferredReadReplica(partition, time.milliseconds());
+        if (nodeId.isPresent()) {
+            Optional<Node> node = nodeId.flatMap(id -> metadata.fetch().nodeIfOnline(partition, id));
+            if (node.isPresent()) {
+                return node.get();
+            } else {
+                log.trace("Not fetching from {} for partition {} since it is marked offline or is missing from our metadata," +
+                          " using the leader instead.", nodeId, partition);
                 subscriptions.clearPreferredReadReplica(partition);
                 return leaderReplica;
-            } else {
-                return node.get();
             }
         } else {
             return leaderReplica;
@@ -1183,7 +1183,8 @@ public class Fetcher<K, V> implements Closeable {
                 log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
-                if (!subscriptions.clearPreferredReadReplica(tp)) {
+                Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);
+                if (!clearedReplicaId.isPresent()) {
                     // If there's no preferred replica to clear, we're fetching from the leader so handle this error normally
                     if (fetchOffset != subscriptions.position(tp).offset) {
                         log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
@@ -1195,7 +1196,8 @@ public class Fetcher<K, V> implements Closeable {
                         throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
                     }
                 } else {
-                    log.debug("Unset the preferred read replica for {} since we got {} when fetching {}", tp, error, fetchOffset);
+                    log.debug("Unset the preferred read replica {} for partition {} since we got {} when fetching {}",
+                            clearedReplicaId.get(), tp, error, fetchOffset);
                 }
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                 //we log the actual partition and not just the topic to help with ACL propagation issues in large clusters
