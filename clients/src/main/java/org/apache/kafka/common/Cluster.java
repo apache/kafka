@@ -193,7 +193,7 @@ public final class Cluster {
      */
     public Optional<Node> nodeIfOnline(TopicPartition partition, int id) {
         Node node = nodeById(id);
-        if (Arrays.asList(partition(partition).offlineReplicas()).contains(node)) {
+        if (node != null && !Arrays.asList(partition(partition).offlineReplicas()).contains(node)) {
             return Optional.of(node);
         } else {
             return Optional.empty();

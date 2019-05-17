@@ -76,7 +76,6 @@ import org.slf4j.helpers.MessageFormatter;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -1013,8 +1012,8 @@ public class Fetcher<K, V> implements Closeable {
     /**
      * Determine which replica to read from.
      */
-    private Node selectReadReplica(TopicPartition partition, Node leaderReplica) {
-        Optional<Integer> nodeId = subscriptions.preferredReadReplica(partition, time.milliseconds());
+    private Node selectReadReplica(TopicPartition partition, Node leaderReplica, long currentTimeMs) {
+        Optional<Integer> nodeId = subscriptions.preferredReadReplica(partition, currentTimeMs);
         if (nodeId.isPresent()) {
             Optional<Node> node = nodeId.flatMap(id -> metadata.fetch().nodeIfOnline(partition, id));
             if (node.isPresent()) {
@@ -1041,10 +1040,12 @@ public class Fetcher<K, V> implements Closeable {
         subscriptions.assignedPartitions().forEach(
             tp -> subscriptions.maybeValidatePosition(tp, metadata.leaderAndEpoch(tp)));
 
+        long currentTimeMs = time.milliseconds();
+
         for (TopicPartition partition : fetchablePartitions()) {
             // Use the preferred read replica if set, or the position's leader
             SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
-            Node node = selectReadReplica(partition, position.currentLeader.leader);
+            Node node = selectReadReplica(partition, position.currentLeader.leader, currentTimeMs);
 
             if (node == null || node.isEmpty()) {
                 metadata.requestUpdate();
@@ -1166,7 +1167,7 @@ public class Fetcher<K, V> implements Closeable {
                 if (partition.preferredReadReplica.isPresent()) {
                     subscriptions.updatePreferredReadReplica(partitionRecords.partition, partition.preferredReadReplica.get(), () -> {
                         long expireTimeMs = time.milliseconds() + metadata.metadataExpireMs();
-                        log.trace("Updating preferred read replica for partition {} to {}, set to expire at {}",
+                        log.debug("Updating preferred read replica for partition {} to {}, set to expire at {}",
                                 tp, partition.preferredReadReplica.get(), expireTimeMs);
                         return expireTimeMs;
                     });
