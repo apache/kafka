@@ -511,7 +511,7 @@ public class AbstractConfig {
         Map<String, ConfigProvider> configProviderInstances = new HashMap<>();
         for (Map.Entry<String, String> entry : providerMap.entrySet()) {
             try {
-                String prefix = CONFIG_PROVIDERS_CONFIG + "." + entry.getKey() + ".";
+                String prefix = CONFIG_PROVIDERS_CONFIG + "." + entry.getKey() + ".param.";
                 Map<String, ?> configProperties = configProviderProperties(prefix, providerConfigProperties);
                 ConfigProvider provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
                 provider.configure(configProperties);
