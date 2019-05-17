@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
@@ -401,14 +400,14 @@ public class ConsumerNetworkClientTest {
 
         consumerClient.trySend(time.milliseconds());
         // only check one time when the node doesn't ready
-        assertEquals(checkCount.getAndSet(0), 1);
+        assertEquals(1, checkCount.getAndSet(0));
         assertEquals(2, consumerClient.pendingRequestCount(node));
         assertEquals(0, client.inFlightRequestCount(node.idString()));
 
         isReady.set(true);
         consumerClient.trySend(time.milliseconds());
         // check node ready or not for every request
-        assertEquals(checkCount.getAndSet(0), 2);
+        assertEquals(2, checkCount.getAndSet(0));
         assertEquals(2, consumerClient.pendingRequestCount(node));
         assertEquals(2, client.inFlightRequestCount(node.idString()));
     }
