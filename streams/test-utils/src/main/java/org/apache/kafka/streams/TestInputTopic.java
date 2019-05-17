@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.test;
+package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.ClientRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -22,6 +22,9 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.test.TestRecordFactory;
 
 import java.util.List;
 import java.util.Objects;

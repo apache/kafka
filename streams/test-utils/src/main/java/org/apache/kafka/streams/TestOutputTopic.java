@@ -14,13 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.test;
+package org.apache.kafka.streams;
 
 import org.apache.kafka.clients.ClientRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.TopologyTestDriver;
 
 import java.util.HashMap;
 import java.util.LinkedList;

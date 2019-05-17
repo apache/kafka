@@ -36,6 +36,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -72,6 +73,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
+import org.apache.kafka.streams.test.TestRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -393,7 +395,7 @@ public class TopologyTestDriver implements Closeable {
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
-        pipeRecord();
+        pipeRecord(new TestRecord<>(consumerRecord));
     }
 
     protected void pipeRecord(final ClientRecord<byte[], byte[]> record) {
@@ -559,8 +561,87 @@ public class TopologyTestDriver implements Closeable {
 
 
     final protected Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(String topic) {
+        //Throw expection if not found
         return outputRecordsByTopic.get(topic);
     }
+
+    public final <K, V> TestInputTopic<K, V> createInputTopic(final String topicName,
+                                                              final Serde<K> keySerde,
+                                                              final Serde<V> valueSerde) {
+        return new TestInputTopic<K, V>(this, topicName, keySerde, valueSerde);
+    }
+
+    public final <K, V> TestOutputTopic<K, V> createOutputTopic(final String topicName,
+                                                                final Serde<K> keySerde,
+                                                                final Serde<V> valueSerde) {
+        return new TestOutputTopic<K, V>(this, topicName, keySerde, valueSerde);
+    }
+
+    /**
+     * Read the next record from the given topic.
+     * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
+     *
+     * @param topic the name of the topic
+     * @return the next record on that topic, or {@code null} if there is no record available
+     */
+    @SuppressWarnings("WeakerAccess")
+    ClientRecord<byte[], byte[]> readRecord(final String topic) {
+        final Queue<? extends ClientRecord<byte[], byte[]>> outputRecords = getRecordsQueue(topic);
+        if (outputRecords == null) {
+            return null;
+        }
+        return outputRecords.poll();
+    }
+
+    /**
+     * Read the next record from the given topic.
+     * These records were output by the topology during the previous calls to {@link #pipeInput(ConsumerRecord)}.
+     *
+     * @param topic             the name of the topic
+     * @param keyDeserializer   the deserializer for the key type
+     * @param valueDeserializer the deserializer for the value type
+     * @return the next record on that topic, or {@code null} if there is no record available
+     */
+    @SuppressWarnings("WeakerAccess")
+    <K, V> ClientRecord<K, V> readRecord(final String topic,
+                                         final Deserializer<K> keyDeserializer,
+                                         final Deserializer<V> valueDeserializer) {
+        final Queue<? extends ClientRecord<byte[], byte[]>> outputRecords = getRecordsQueue(topic);
+        if (outputRecords == null) {
+            //throw
+            return null;
+        }
+        final ClientRecord<byte[], byte[]> record = outputRecords.poll();
+        if (record == null) {
+            //throw
+            return null;
+        }
+        final K key = keyDeserializer.deserialize(record.topic(), record.key());
+        final V value = valueDeserializer.deserialize(record.topic(), record.value());
+        return new TestRecord<>(record.topic(), record.timestamp(), key, value, record.headers());
+    }
+
+    /**
+     * Serialize an input recond and send on the specified topic to the topology and then
+     * commit the messages.
+     *
+     * @param record             ClientRecord to be send
+     * @param keySerializer the key serializer
+     * @param valueSerializer the value serializer
+     */
+    @SuppressWarnings("WeakerAccess")
+    <K, V> void pipeRecord(               final ClientRecord<K, V> record,
+                                          final Serializer<K> keySerializer,
+                                          final Serializer<V> valueSerializer) {
+        final byte[] serializedKey = keySerializer.serialize(record.topic(), record.headers(), record.key());
+        final byte[] serializedValue = valueSerializer.serialize(record.topic(), record.headers(), record.value());
+        pipeRecord(new TestRecord<>(record.topic(), record.timestamp(), serializedKey, serializedValue, record.headers()));
+    }
+
+    final long getQueueSize(final String topic) {
+        return getRecordsQueue(topic).size();
+    }
+
 
     /**
      * Get all {@link StateStore StateStores} from the topology.
