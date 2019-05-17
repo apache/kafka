@@ -58,10 +58,9 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class KTableKTableLeftJoinTest {
-    final private String topic1 = "topic1";
-    final private String topic2 = "topic2";
-    final private String output = "output";
-
+    private final String topic1 = "topic1";
+    private final String topic2 = "topic2";
+    private final String output = "output";
     private final Consumed<Integer, String> consumed = Consumed.with(Serdes.Integer(), Serdes.String());
     private final ConsumerRecordFactory<Integer, String> recordFactory =
         new ConsumerRecordFactory<>(Serdes.Integer().serializer(), Serdes.String().serializer(), 0L);
@@ -87,70 +86,96 @@ public class KTableKTableLeftJoinTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i]));
+                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], 5L + i));
             }
             // pass tuple with null key, it will be discarded in join process
-            driver.pipeInput(recordFactory.create(topic1, null, "SomeVal"));
-            assertOutputKeyValue(driver, 0, "X0+null");
-            assertOutputKeyValue(driver, 1, "X1+null");
+            driver.pipeInput(recordFactory.create(topic1, null, "SomeVal", 42L));
+            // left: X0:0 (ts: 5), X1:1 (ts: 6)
+            // right:
+            assertOutputKeyValueTimestamp(driver, 0, "X0+null", 5L);
+            assertOutputKeyValueTimestamp(driver, 1, "X1+null", 6L);
             assertNull(driver.readOutput(output));
 
             // push two items to the other stream. this should produce two items.
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i]));
+                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i], 10L * i));
             }
             // pass tuple with null key, it will be discarded in join process
-            driver.pipeInput(recordFactory.create(topic2, null, "AnotherVal"));
-            assertOutputKeyValue(driver, 0, "X0+Y0");
-            assertOutputKeyValue(driver, 1, "X1+Y1");
+            driver.pipeInput(recordFactory.create(topic2, null, "AnotherVal", 73L));
+            // left: X0:0 (ts: 5), X1:1 (ts: 6)
+            // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
+            assertOutputKeyValueTimestamp(driver, 0, "X0+Y0", 5L);
+            assertOutputKeyValueTimestamp(driver, 1, "X1+Y1", 10L);
             assertNull(driver.readOutput(output));
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "X" + expectedKey));
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, 7L));
             }
-            assertOutputKeyValue(driver, 0, "X0+Y0");
-            assertOutputKeyValue(driver, 1, "X1+Y1");
-            assertOutputKeyValue(driver, 2, "X2+null");
-            assertOutputKeyValue(driver, 3, "X3+null");
+            // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
+            // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
+            assertOutputKeyValueTimestamp(driver, 0, "XX0+Y0", 7L);
+            assertOutputKeyValueTimestamp(driver, 1, "XX1+Y1", 10L);
+            assertOutputKeyValueTimestamp(driver, 2, "XX2+null", 7L);
+            assertOutputKeyValueTimestamp(driver, 3, "XX3+null", 7L);
             assertNull(driver.readOutput(output));
 
             // push all items to the other stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey));
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, expectedKey * 5L));
             }
-            assertOutputKeyValue(driver, 0, "X0+YY0");
-            assertOutputKeyValue(driver, 1, "X1+YY1");
-            assertOutputKeyValue(driver, 2, "X2+YY2");
-            assertOutputKeyValue(driver, 3, "X3+YY3");
+            // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
+            // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
+            assertOutputKeyValueTimestamp(driver, 0, "XX0+YY0", 7L);
+            assertOutputKeyValueTimestamp(driver, 1, "XX1+YY1", 7L);
+            assertOutputKeyValueTimestamp(driver, 2, "XX2+YY2", 10L);
+            assertOutputKeyValueTimestamp(driver, 3, "XX3+YY3", 15L);
             assertNull(driver.readOutput(output));
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "X" + expectedKey));
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXX" + expectedKey, 6L));
             }
-            assertOutputKeyValue(driver, 0, "X0+YY0");
-            assertOutputKeyValue(driver, 1, "X1+YY1");
-            assertOutputKeyValue(driver, 2, "X2+YY2");
-            assertOutputKeyValue(driver, 3, "X3+YY3");
+            // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
+            // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
+            assertOutputKeyValueTimestamp(driver, 0, "XXX0+YY0", 6L);
+            assertOutputKeyValueTimestamp(driver, 1, "XXX1+YY1", 6L);
+            assertOutputKeyValueTimestamp(driver, 2, "XXX2+YY2", 10L);
+            assertOutputKeyValueTimestamp(driver, 3, "XXX3+YY3", 15L);
             assertNull(driver.readOutput(output));
 
             // push two items with null to the other stream as deletes. this should produce two item.
-            for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], null));
-            }
-            assertOutputKeyValue(driver, 0, "X0+null");
-            assertOutputKeyValue(driver, 1, "X1+null");
+            driver.pipeInput(recordFactory.create(topic2, expectedKeys[0], null, 5L));
+            driver.pipeInput(recordFactory.create(topic2, expectedKeys[1], null, 7L));
+            // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            assertOutputKeyValueTimestamp(driver, 0, "XXX0+null", 6L);
+            assertOutputKeyValueTimestamp(driver, 1, "XXX1+null", 7L);
             assertNull(driver.readOutput(output));
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey));
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXX" + expectedKey, 13L));
             }
-            assertOutputKeyValue(driver, 0, "XX0+null");
-            assertOutputKeyValue(driver, 1, "XX1+null");
-            assertOutputKeyValue(driver, 2, "XX2+YY2");
-            assertOutputKeyValue(driver, 3, "XX3+YY3");
+            // left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            assertOutputKeyValueTimestamp(driver, 0, "XXXX0+null", 13L);
+            assertOutputKeyValueTimestamp(driver, 1, "XXXX1+null", 13L);
+            assertOutputKeyValueTimestamp(driver, 2, "XXXX2+YY2", 13L);
+            assertOutputKeyValueTimestamp(driver, 3, "XXXX3+YY3", 15L);
+            assertNull(driver.readOutput(output));
+
+            // push three items to the primary stream with null. this should produce four items.
+            driver.pipeInput(recordFactory.create(topic1, expectedKeys[0], null, 0L));
+            driver.pipeInput(recordFactory.create(topic1, expectedKeys[1], null, 42L));
+            driver.pipeInput(recordFactory.create(topic1, expectedKeys[2], null, 5L));
+            driver.pipeInput(recordFactory.create(topic1, expectedKeys[3], null, 20L));
+            // left:
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            assertOutputKeyValueTimestamp(driver, 0, null, 0L);
+            assertOutputKeyValueTimestamp(driver, 1, null, 42L);
+            assertOutputKeyValueTimestamp(driver, 2, null, 10L);
+            assertOutputKeyValueTimestamp(driver, 3, null, 20L);
             assertNull(driver.readOutput(output));
         }
     }
@@ -182,45 +207,81 @@ public class KTableKTableLeftJoinTest {
 
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i]));
+                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], 5L + i));
             }
-            proc.checkAndClearProcessResult("0:(X0+null<-null) (ts: 0)", "1:(X1+null<-null) (ts: 0)");
+            // pass tuple with null key, it will be discarded in join process
+            driver.pipeInput(recordFactory.create(topic1, null, "SomeVal", 42L));
+            // left: X0:0 (ts: 5), X1:1 (ts: 6)
+            // right:
+            proc.checkAndClearProcessResult("0:(X0+null<-null) (ts: 5)", "1:(X1+null<-null) (ts: 6)");
 
             // push two items to the other stream. this should produce two items.
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i]));
+                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i], 10L * i));
             }
-            proc.checkAndClearProcessResult("0:(X0+Y0<-null) (ts: 0)", "1:(X1+Y1<-null) (ts: 0)");
+            // pass tuple with null key, it will be discarded in join process
+            driver.pipeInput(recordFactory.create(topic2, null, "AnotherVal", 73L));
+            // left: X0:0 (ts: 5), X1:1 (ts: 6)
+            // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
+            proc.checkAndClearProcessResult("0:(X0+Y0<-null) (ts: 5)", "1:(X1+Y1<-null) (ts: 10)");
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "X" + expectedKey));
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, 7L));
             }
-            proc.checkAndClearProcessResult("0:(X0+Y0<-null) (ts: 0)", "1:(X1+Y1<-null) (ts: 0)", "2:(X2+null<-null) (ts: 0)", "3:(X3+null<-null) (ts: 0)");
+            // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
+            // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
+            proc.checkAndClearProcessResult(
+                "0:(XX0+Y0<-null) (ts: 7)", "1:(XX1+Y1<-null) (ts: 10)",
+                "2:(XX2+null<-null) (ts: 7)", "3:(XX3+null<-null) (ts: 7)");
 
             // push all items to the other stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey));
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, expectedKey * 5L));
             }
-            proc.checkAndClearProcessResult("0:(X0+YY0<-null) (ts: 0)", "1:(X1+YY1<-null) (ts: 0)", "2:(X2+YY2<-null) (ts: 0)", "3:(X3+YY3<-null) (ts: 0)");
+            // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
+            // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(
+                "0:(XX0+YY0<-null) (ts: 7)", "1:(XX1+YY1<-null) (ts: 7)",
+                "2:(XX2+YY2<-null) (ts: 10)", "3:(XX3+YY3<-null) (ts: 15)");
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "X" + expectedKey));
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXX" + expectedKey, 6L));
             }
-            proc.checkAndClearProcessResult("0:(X0+YY0<-null) (ts: 0)", "1:(X1+YY1<-null) (ts: 0)", "2:(X2+YY2<-null) (ts: 0)", "3:(X3+YY3<-null) (ts: 0)");
+            // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
+            // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(
+                "0:(XXX0+YY0<-null) (ts: 6)", "1:(XXX1+YY1<-null) (ts: 6)",
+                "2:(XXX2+YY2<-null) (ts: 10)", "3:(XXX3+YY3<-null) (ts: 15)");
 
             // push two items with null to the other stream as deletes. this should produce two item.
-            for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], null));
-            }
-            proc.checkAndClearProcessResult("0:(X0+null<-null) (ts: 0)", "1:(X1+null<-null) (ts: 0)");
+            driver.pipeInput(recordFactory.create(topic2, expectedKeys[0], null, 5L));
+            driver.pipeInput(recordFactory.create(topic2, expectedKeys[1], null, 7L));
+            // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult("0:(XXX0+null<-null) (ts: 6)", "1:(XXX1+null<-null) (ts: 7)");
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey));
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXX" + expectedKey, 13L));
             }
-            proc.checkAndClearProcessResult("0:(XX0+null<-null) (ts: 0)", "1:(XX1+null<-null) (ts: 0)", "2:(XX2+YY2<-null) (ts: 0)", "3:(XX3+YY3<-null) (ts: 0)");
+            // left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(
+                "0:(XXXX0+null<-null) (ts: 13)", "1:(XXXX1+null<-null) (ts: 13)",
+                "2:(XXXX2+YY2<-null) (ts: 13)", "3:(XXXX3+YY3<-null) (ts: 15)");
+
+            // push four items to the primary stream with null. this should produce four items.
+            driver.pipeInput(recordFactory.create(topic1, expectedKeys[0], null, 0L));
+            driver.pipeInput(recordFactory.create(topic1, expectedKeys[1], null, 42L));
+            driver.pipeInput(recordFactory.create(topic1, expectedKeys[2], null, 5L));
+            driver.pipeInput(recordFactory.create(topic1, expectedKeys[3], null, 20L));
+            // left:
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(
+                "0:(null<-null) (ts: 0)", "1:(null<-null) (ts: 42)",
+                "2:(null<-null) (ts: 10)", "3:(null<-null) (ts: 20)");
         }
     }
 
@@ -253,45 +314,81 @@ public class KTableKTableLeftJoinTest {
 
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i]));
+                driver.pipeInput(recordFactory.create(topic1, expectedKeys[i], "X" + expectedKeys[i], 5L + i));
             }
-            proc.checkAndClearProcessResult("0:(X0+null<-null) (ts: 0)", "1:(X1+null<-null) (ts: 0)");
+            // pass tuple with null key, it will be discarded in join process
+            driver.pipeInput(recordFactory.create(topic1, null, "SomeVal", 42L));
+            // left: X0:0 (ts: 5), X1:1 (ts: 6)
+            // right:
+            proc.checkAndClearProcessResult("0:(X0+null<-null) (ts: 5)", "1:(X1+null<-null) (ts: 6)");
 
             // push two items to the other stream. this should produce two items.
             for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i]));
+                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], "Y" + expectedKeys[i], 10L * i));
             }
-            proc.checkAndClearProcessResult("0:(X0+Y0<-X0+null) (ts: 0)", "1:(X1+Y1<-X1+null) (ts: 0)");
+            // pass tuple with null key, it will be discarded in join process
+            driver.pipeInput(recordFactory.create(topic2, null, "AnotherVal", 73L));
+            // left: X0:0 (ts: 5), X1:1 (ts: 6)
+            // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
+            proc.checkAndClearProcessResult("0:(X0+Y0<-X0+null) (ts: 5)", "1:(X1+Y1<-X1+null) (ts: 10)");
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "X" + expectedKey));
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey, 7L));
             }
-            proc.checkAndClearProcessResult("0:(X0+Y0<-X0+Y0) (ts: 0)", "1:(X1+Y1<-X1+Y1) (ts: 0)", "2:(X2+null<-null) (ts: 0)", "3:(X3+null<-null) (ts: 0)");
+            // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
+            // right: Y0:0 (ts: 0), Y1:1 (ts: 10)
+            proc.checkAndClearProcessResult(
+                "0:(XX0+Y0<-X0+Y0) (ts: 7)", "1:(XX1+Y1<-X1+Y1) (ts: 10)",
+                "2:(XX2+null<-null) (ts: 7)", "3:(XX3+null<-null) (ts: 7)");
 
             // push all items to the other stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey));
+                driver.pipeInput(recordFactory.create(topic2, expectedKey, "YY" + expectedKey, expectedKey * 5L));
             }
-            proc.checkAndClearProcessResult("0:(X0+YY0<-X0+Y0) (ts: 0)", "1:(X1+YY1<-X1+Y1) (ts: 0)", "2:(X2+YY2<-X2+null) (ts: 0)", "3:(X3+YY3<-X3+null) (ts: 0)");
+            // left: XX0:0 (ts: 7), XX1:1 (ts: 7), XX2:2 (ts: 7), XX3:3 (ts: 7)
+            // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(
+                "0:(XX0+YY0<-XX0+Y0) (ts: 7)", "1:(XX1+YY1<-XX1+Y1) (ts: 7)",
+                "2:(XX2+YY2<-XX2+null) (ts: 10)", "3:(XX3+YY3<-XX3+null) (ts: 15)");
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "X" + expectedKey));
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXX" + expectedKey, 6L));
             }
-            proc.checkAndClearProcessResult("0:(X0+YY0<-X0+YY0) (ts: 0)", "1:(X1+YY1<-X1+YY1) (ts: 0)", "2:(X2+YY2<-X2+YY2) (ts: 0)", "3:(X3+YY3<-X3+YY3) (ts: 0)");
+            // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
+            // right: YY0:0 (ts: 0), YY1:1 (ts: 5), YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(
+                "0:(XXX0+YY0<-XX0+YY0) (ts: 6)", "1:(XXX1+YY1<-XX1+YY1) (ts: 6)",
+                "2:(XXX2+YY2<-XX2+YY2) (ts: 10)", "3:(XXX3+YY3<-XX3+YY3) (ts: 15)");
 
             // push two items with null to the other stream as deletes. this should produce two item.
-            for (int i = 0; i < 2; i++) {
-                driver.pipeInput(recordFactory.create(topic2, expectedKeys[i], null));
-            }
-            proc.checkAndClearProcessResult("0:(X0+null<-X0+YY0) (ts: 0)", "1:(X1+null<-X1+YY1) (ts: 0)");
+            driver.pipeInput(recordFactory.create(topic2, expectedKeys[0], null, 5L));
+            driver.pipeInput(recordFactory.create(topic2, expectedKeys[1], null, 7L));
+            // left: XXX0:0 (ts: 6), XXX1:1 (ts: 6), XXX2:2 (ts: 6), XXX3:3 (ts: 6)
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult("0:(XXX0+null<-XXX0+YY0) (ts: 6)", "1:(XXX1+null<-XXX1+YY1) (ts: 7)");
 
             // push all four items to the primary stream. this should produce four items.
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XX" + expectedKey));
+                driver.pipeInput(recordFactory.create(topic1, expectedKey, "XXXX" + expectedKey, 13L));
             }
-            proc.checkAndClearProcessResult("0:(XX0+null<-X0+null) (ts: 0)", "1:(XX1+null<-X1+null) (ts: 0)", "2:(XX2+YY2<-X2+YY2) (ts: 0)", "3:(XX3+YY3<-X3+YY3) (ts: 0)");
+            // left: XXXX0:0 (ts: 13), XXXX1:1 (ts: 13), XXXX2:2 (ts: 13), XXXX3:3 (ts: 13)
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(
+                "0:(XXXX0+null<-XXX0+null) (ts: 13)", "1:(XXXX1+null<-XXX1+null) (ts: 13)",
+                "2:(XXXX2+YY2<-XXX2+YY2) (ts: 13)", "3:(XXXX3+YY3<-XXX3+YY3) (ts: 15)");
+
+            // push four items to the primary stream with null. this should produce four items.
+            driver.pipeInput(recordFactory.create(topic1, expectedKeys[0], null, 0L));
+            driver.pipeInput(recordFactory.create(topic1, expectedKeys[1], null, 42L));
+            driver.pipeInput(recordFactory.create(topic1, expectedKeys[2], null, 5L));
+            driver.pipeInput(recordFactory.create(topic1, expectedKeys[3], null, 20L));
+            // left:
+            // right: YY2:2 (ts: 10), YY3:3 (ts: 15)
+            proc.checkAndClearProcessResult(
+                "0:(null<-XXXX0+null) (ts: 0)", "1:(null<-XXXX1+null) (ts: 42)",
+                "2:(null<-XXXX2+YY2) (ts: 10)", "3:(null<-XXXX3+YY3) (ts: 20)");
         }
     }
 
@@ -403,9 +500,14 @@ public class KTableKTableLeftJoinTest {
         assertThat(appender.getMessages(), hasItem("Skipping record due to null key. change=[(new<-old)] topic=[left] partition=[-1] offset=[-2]"));
     }
 
-    private void assertOutputKeyValue(final TopologyTestDriver driver,
-                                      final Integer expectedKey,
-                                      final String expectedValue) {
-        OutputVerifier.compareKeyValue(driver.readOutput(output, Serdes.Integer().deserializer(), Serdes.String().deserializer()), expectedKey, expectedValue);
+    private void assertOutputKeyValueTimestamp(final TopologyTestDriver driver,
+                                               final Integer expectedKey,
+                                               final String expectedValue,
+                                               final long expectedTimestamp) {
+        OutputVerifier.compareKeyValueTimestamp(
+            driver.readOutput(output, Serdes.Integer().deserializer(), Serdes.String().deserializer()),
+            expectedKey,
+            expectedValue,
+            expectedTimestamp);
     }
 }

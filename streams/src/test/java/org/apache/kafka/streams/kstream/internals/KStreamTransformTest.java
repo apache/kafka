@@ -77,6 +77,7 @@ public class KStreamTransformTest {
 
         kstreamDriver.setUp(builder);
         for (final int expectedKey : expectedKeys) {
+            kstreamDriver.setTime(expectedKey / 2L);
             kstreamDriver.process(topicName, expectedKey, expectedKey * 10);
         }
 
@@ -88,7 +89,7 @@ public class KStreamTransformTest {
 
         //String[] expected = {"2:10", "20:110", "200:1110", "2000:11110", "-1:2", "-1:3"};
 
-        final String[] expected = {"2:10 (ts: 0)", "20:110 (ts: 0)", "200:1110 (ts: 0)", "2000:11110 (ts: 0)"};
+        final String[] expected = {"2:10 (ts: 0)", "20:110 (ts: 5)", "200:1110 (ts: 50)", "2000:11110 (ts: 500)"};
 
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.theCapturedProcessor().processed.get(i));

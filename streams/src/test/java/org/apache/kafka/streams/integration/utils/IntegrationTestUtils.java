@@ -678,11 +678,11 @@ public class IntegrationTestUtils {
 
     }
 
-    public static void verifyKeyValueTimestamps(final Properties consumerConfig,
-                                                final String topic,
-                                                final List<KeyValueTimestamp<String, Long>> expected) {
+    public static <K, V> void verifyKeyValueTimestamps(final Properties consumerConfig,
+                                                       final String topic,
+                                                       final List<KeyValueTimestamp<K, V>> expected) {
 
-        final List<ConsumerRecord<String, Long>> results;
+        final List<ConsumerRecord<K, V>> results;
         try {
             results = waitUntilMinRecordsReceived(consumerConfig, topic, expected.size());
         } catch (final InterruptedException e) {
@@ -692,9 +692,9 @@ public class IntegrationTestUtils {
         if (results.size() != expected.size()) {
             throw new AssertionError(printRecords(results) + " != " + expected);
         }
-        final Iterator<KeyValueTimestamp<String, Long>> expectedIterator = expected.iterator();
-        for (final ConsumerRecord<String, Long> result : results) {
-            final KeyValueTimestamp<String, Long> expected1 = expectedIterator.next();
+        final Iterator<KeyValueTimestamp<K, V>> expectedIterator = expected.iterator();
+        for (final ConsumerRecord<K, V> result : results) {
+            final KeyValueTimestamp<K, V> expected1 = expectedIterator.next();
             try {
                 compareKeyValueTimestamp(result, expected1.key(), expected1.value(), expected1.timestamp());
             } catch (final AssertionError e) {

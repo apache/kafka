@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -202,8 +203,10 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
         }
 
         @Override
-        public Agg get(final Windowed<K> key) {
-            return store.fetchSession(key.key(), key.window().start(), key.window().end());
+        public ValueAndTimestamp<Agg> get(final Windowed<K> key) {
+            return ValueAndTimestamp.make(
+                store.fetchSession(key.key(), key.window().start(), key.window().end()),
+                key.window().end());
         }
 
         @Override

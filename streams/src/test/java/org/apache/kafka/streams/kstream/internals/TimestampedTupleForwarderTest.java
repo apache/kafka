@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.junit.Test;
@@ -60,15 +61,19 @@ public class TimestampedTupleForwarderTest {
 
         expect(store.setFlushListener(null, sendOldValues)).andReturn(false);
         if (sendOldValues) {
-            context.forward("key", new Change<>("newValue",  "oldValue"));
+            context.forward("key1", new Change<>("newValue1",  "oldValue1"));
+            context.forward("key2", new Change<>("newValue2",  "oldValue2"), To.all().withTimestamp(42L));
         } else {
-            context.forward("key", new Change<>("newValue", null));
+            context.forward("key1", new Change<>("newValue1", null));
+            context.forward("key2", new Change<>("newValue2", null), To.all().withTimestamp(42L));
         }
         expectLastCall();
         replay(store, context);
 
-        new TimestampedTupleForwarder<>(store, context, null, sendOldValues)
-            .maybeForward("key", "newValue", "oldValue");
+        final TimestampedTupleForwarder<String, String> forwarder =
+            new TimestampedTupleForwarder<>(store, context, null, sendOldValues);
+        forwarder.maybeForward("key1", "newValue1", "oldValue1");
+        forwarder.maybeForward("key2", "newValue2", "oldValue2", 42L);
 
         verify(store, context);
     }
@@ -81,8 +86,10 @@ public class TimestampedTupleForwarderTest {
         expect(store.setFlushListener(null, false)).andReturn(true);
         replay(store, context);
 
-        new TimestampedTupleForwarder<>(store, context, null, false)
-            .maybeForward("key", "newValue", "oldValue");
+        final TimestampedTupleForwarder<String, String> forwarder =
+            new TimestampedTupleForwarder<>(store, context, null, false);
+        forwarder.maybeForward("key", "newValue", "oldValue");
+        forwarder.maybeForward("key", "newValue", "oldValue", 42L);
 
         verify(store, context);
     }

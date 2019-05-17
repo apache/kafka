@@ -81,6 +81,18 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         return newValue;
     }
 
+    private ValueAndTimestamp<V1> computeValueAndTimestamp(final K key, final ValueAndTimestamp<V> valueAndTimestamp) {
+        V1 newValue = null;
+        long timestamp = 0;
+
+        if (valueAndTimestamp != null) {
+            newValue = mapper.apply(key, valueAndTimestamp.value());
+            timestamp = valueAndTimestamp.timestamp();
+        }
+
+        return ValueAndTimestamp.make(newValue, timestamp);
+    }
+
 
     private class KTableMapValuesProcessor extends AbstractProcessor<K, Change<V>> {
         private TimestampedKeyValueStore<K, V1> store;
@@ -128,8 +140,8 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         }
 
         @Override
-        public V1 get(final K key) {
-            return computeValue(key, parentGetter.get(key));
+        public ValueAndTimestamp<V1> get(final K key) {
+            return computeValueAndTimestamp(key, parentGetter.get(key));
         }
 
         @Override

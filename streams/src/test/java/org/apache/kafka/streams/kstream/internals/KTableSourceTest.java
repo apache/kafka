@@ -29,6 +29,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
@@ -64,16 +65,16 @@ public class KTableSourceTest {
         final ConsumerRecordFactory<String, Integer> integerFactory =
             new ConsumerRecordFactory<>(new StringSerializer(), new IntegerSerializer(), 0L);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(integerFactory.create(topic1, "A", 1));
-            driver.pipeInput(integerFactory.create(topic1, "B", 2));
-            driver.pipeInput(integerFactory.create(topic1, "C", 3));
-            driver.pipeInput(integerFactory.create(topic1, "D", 4));
-            driver.pipeInput(integerFactory.create(topic1, "A", null));
-            driver.pipeInput(integerFactory.create(topic1, "B", null));
+            driver.pipeInput(integerFactory.create(topic1, "A", 1, 10L));
+            driver.pipeInput(integerFactory.create(topic1, "B", 2, 11L));
+            driver.pipeInput(integerFactory.create(topic1, "C", 3, 12L));
+            driver.pipeInput(integerFactory.create(topic1, "D", 4, 13L));
+            driver.pipeInput(integerFactory.create(topic1, "A", null, 14L));
+            driver.pipeInput(integerFactory.create(topic1, "B", null, 15L));
         }
 
         assertEquals(
-            asList("A:1 (ts: 0)", "B:2 (ts: 0)", "C:3 (ts: 0)", "D:4 (ts: 0)", "A:null (ts: 0)", "B:null (ts: 0)"),
+            asList("A:1 (ts: 10)", "B:2 (ts: 11)", "C:3 (ts: 12)", "D:4 (ts: 13)", "A:null (ts: 14)", "B:null (ts: 15)"),
             supplier.theCapturedProcessor().processed);
     }
 
@@ -112,33 +113,33 @@ public class KTableSourceTest {
             final KTableValueGetter<String, String> getter1 = getterSupplier1.get();
             getter1.init(driver.setCurrentNodeForProcessorContext(table1.name));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "01"));
-            driver.pipeInput(recordFactory.create(topic1, "B", "01"));
-            driver.pipeInput(recordFactory.create(topic1, "C", "01"));
+            driver.pipeInput(recordFactory.create(topic1, "A", "01", 10L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "01", 20L));
+            driver.pipeInput(recordFactory.create(topic1, "C", "01", 15L));
 
-            assertEquals("01", getter1.get("A"));
-            assertEquals("01", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+            assertEquals(ValueAndTimestamp.make("01", 10L), getter1.get("A"));
+            assertEquals(ValueAndTimestamp.make("01", 20L), getter1.get("B"));
+            assertEquals(ValueAndTimestamp.make("01", 15L), getter1.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "02"));
-            driver.pipeInput(recordFactory.create(topic1, "B", "02"));
+            driver.pipeInput(recordFactory.create(topic1, "A", "02", 30L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "02", 5L));
 
-            assertEquals("02", getter1.get("A"));
-            assertEquals("02", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+            assertEquals(ValueAndTimestamp.make("02", 30L), getter1.get("A"));
+            assertEquals(ValueAndTimestamp.make("02", 5L), getter1.get("B"));
+            assertEquals(ValueAndTimestamp.make("01", 15L), getter1.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "03"));
+            driver.pipeInput(recordFactory.create(topic1, "A", "03", 29L));
 
-            assertEquals("03", getter1.get("A"));
-            assertEquals("02", getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+            assertEquals(ValueAndTimestamp.make("03", 29L), getter1.get("A"));
+            assertEquals(ValueAndTimestamp.make("02", 5L), getter1.get("B"));
+            assertEquals(ValueAndTimestamp.make("01", 15L), getter1.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
-            driver.pipeInput(recordFactory.create(topic1, "B", (String) null));
+            driver.pipeInput(recordFactory.create(topic1, "A", (String) null, 50L));
+            driver.pipeInput(recordFactory.create(topic1, "B", (String) null, 3L));
 
             assertNull(getter1.get("A"));
             assertNull(getter1.get("B"));
-            assertEquals("01", getter1.get("C"));
+            assertEquals(ValueAndTimestamp.make("01", 15L), getter1.get("C"));
         }
     }
 
@@ -156,21 +157,21 @@ public class KTableSourceTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final MockProcessor<String, Integer> proc1 = supplier.theCapturedProcessor();
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "01"));
-            driver.pipeInput(recordFactory.create(topic1, "B", "01"));
-            driver.pipeInput(recordFactory.create(topic1, "C", "01"));
-            proc1.checkAndClearProcessResult("A:(01<-null) (ts: 0)", "B:(01<-null) (ts: 0)", "C:(01<-null) (ts: 0)");
+            driver.pipeInput(recordFactory.create(topic1, "A", "01", 10L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "01", 20L));
+            driver.pipeInput(recordFactory.create(topic1, "C", "01", 15L));
+            proc1.checkAndClearProcessResult("A:(01<-null) (ts: 10)", "B:(01<-null) (ts: 20)", "C:(01<-null) (ts: 15)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "02"));
-            driver.pipeInput(recordFactory.create(topic1, "B", "02"));
-            proc1.checkAndClearProcessResult("A:(02<-null) (ts: 0)", "B:(02<-null) (ts: 0)");
+            driver.pipeInput(recordFactory.create(topic1, "A", "02", 8L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "02", 22L));
+            proc1.checkAndClearProcessResult("A:(02<-null) (ts: 8)", "B:(02<-null) (ts: 22)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "03"));
-            proc1.checkAndClearProcessResult("A:(03<-null) (ts: 0)");
+            driver.pipeInput(recordFactory.create(topic1, "A", "03", 12L));
+            proc1.checkAndClearProcessResult("A:(03<-null) (ts: 12)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
-            driver.pipeInput(recordFactory.create(topic1, "B", (String) null));
-            proc1.checkAndClearProcessResult("A:(null<-null) (ts: 0)", "B:(null<-null) (ts: 0)");
+            driver.pipeInput(recordFactory.create(topic1, "A", (String) null, 15L));
+            driver.pipeInput(recordFactory.create(topic1, "B", (String) null, 20L));
+            proc1.checkAndClearProcessResult("A:(null<-null) (ts: 15)", "B:(null<-null) (ts: 20)");
         }
     }
 
@@ -190,21 +191,21 @@ public class KTableSourceTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final MockProcessor<String, Integer> proc1 = supplier.theCapturedProcessor();
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "01"));
-            driver.pipeInput(recordFactory.create(topic1, "B", "01"));
-            driver.pipeInput(recordFactory.create(topic1, "C", "01"));
-            proc1.checkAndClearProcessResult("A:(01<-null) (ts: 0)", "B:(01<-null) (ts: 0)", "C:(01<-null) (ts: 0)");
+            driver.pipeInput(recordFactory.create(topic1, "A", "01", 10L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "01", 20L));
+            driver.pipeInput(recordFactory.create(topic1, "C", "01", 15L));
+            proc1.checkAndClearProcessResult("A:(01<-null) (ts: 10)", "B:(01<-null) (ts: 20)", "C:(01<-null) (ts: 15)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "02"));
-            driver.pipeInput(recordFactory.create(topic1, "B", "02"));
-            proc1.checkAndClearProcessResult("A:(02<-01) (ts: 0)", "B:(02<-01) (ts: 0)");
+            driver.pipeInput(recordFactory.create(topic1, "A", "02", 8L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "02", 22L));
+            proc1.checkAndClearProcessResult("A:(02<-01) (ts: 8)", "B:(02<-01) (ts: 22)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", "03"));
-            proc1.checkAndClearProcessResult("A:(03<-02) (ts: 0)");
+            driver.pipeInput(recordFactory.create(topic1, "A", "03", 12L));
+            proc1.checkAndClearProcessResult("A:(03<-02) (ts: 12)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", (String) null));
-            driver.pipeInput(recordFactory.create(topic1, "B", (String) null));
-            proc1.checkAndClearProcessResult("A:(null<-03) (ts: 0)", "B:(null<-02) (ts: 0)");
+            driver.pipeInput(recordFactory.create(topic1, "A", (String) null, 15L));
+            driver.pipeInput(recordFactory.create(topic1, "B", (String) null, 20L));
+            proc1.checkAndClearProcessResult("A:(null<-03) (ts: 15)", "B:(null<-02) (ts: 20)");
         }
     }
 }

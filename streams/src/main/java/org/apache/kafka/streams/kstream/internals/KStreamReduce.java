@@ -84,18 +84,20 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
 
             final ValueAndTimestamp<V> oldAggAndTimestamp = store.get(key);
             final V oldAgg = getValueOrNull(oldAggAndTimestamp);
-            V newAgg = oldAgg;
 
-            // try to add the new value
-            if (newAgg == null) {
+            final V newAgg;
+            final long newTimestamp;
+
+            if (oldAgg == null) {
                 newAgg = value;
+                newTimestamp = context().timestamp();
             } else {
-                newAgg = reducer.apply(newAgg, value);
+                newAgg = reducer.apply(oldAgg, value);
+                newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
             }
 
-            // update the store with the new value
-            store.put(key, ValueAndTimestamp.make(newAgg, context().timestamp()));
-            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null);
+            store.put(key, ValueAndTimestamp.make(newAgg, newTimestamp));
+            tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null, newTimestamp);
         }
     }
 
@@ -125,8 +127,8 @@ public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V,
         }
 
         @Override
-        public V get(final K key) {
-            return getValueOrNull(store.get(key));
+        public ValueAndTimestamp<V> get(final K key) {
+            return store.get(key);
         }
 
         @Override

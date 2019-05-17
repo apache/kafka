@@ -28,8 +28,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
 
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
-
 public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableSource.class);
 
@@ -101,8 +99,17 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             }
 
             if (queryableName != null) {
-                final ValueAndTimestamp<V> oldValueAndTimestamp = sendOldValues ? store.get(key) : null;
-                final V oldValue = getValueOrNull(oldValueAndTimestamp);
+                final ValueAndTimestamp<V> oldValueAndTimestamp = store.get(key);
+                final V oldValue;
+                if (oldValueAndTimestamp != null) {
+                    oldValue = oldValueAndTimestamp.value();
+                    if (context().timestamp() < oldValueAndTimestamp.timestamp()) {
+                        LOG.warn("Detected out-of-order KTable update for {} at offset {}, partition {}.",
+                            store.name(), context().offset(), context().partition());
+                    }
+                } else {
+                    oldValue = null;
+                }
                 store.put(key, ValueAndTimestamp.make(value, context().timestamp()));
                 tupleForwarder.maybeForward(key, value, oldValue);
             } else {

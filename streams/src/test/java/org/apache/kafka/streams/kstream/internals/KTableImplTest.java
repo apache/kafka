@@ -103,17 +103,19 @@ public class KTableImplTest {
         table4.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic1, "A", "01"));
-            driver.pipeInput(recordFactory.create(topic1, "B", "02"));
-            driver.pipeInput(recordFactory.create(topic1, "C", "03"));
-            driver.pipeInput(recordFactory.create(topic1, "D", "04"));
+            driver.pipeInput(recordFactory.create(topic1, "A", "01", 5L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "02", 100L));
+            driver.pipeInput(recordFactory.create(topic1, "C", "03", 0L));
+            driver.pipeInput(recordFactory.create(topic1, "D", "04", 0L));
+            driver.pipeInput(recordFactory.create(topic1, "A", "05", 10L));
+            driver.pipeInput(recordFactory.create(topic1, "A", "06", 8L));
         }
 
         final List<MockProcessor<String, Object>> processors = supplier.capturedProcessors(4);
-        assertEquals(asList("A:01 (ts: 0)", "B:02 (ts: 0)", "C:03 (ts: 0)", "D:04 (ts: 0)"), processors.get(0).processed);
-        assertEquals(asList("A:1 (ts: 0)", "B:2 (ts: 0)", "C:3 (ts: 0)", "D:4 (ts: 0)"), processors.get(1).processed);
-        assertEquals(asList("A:null (ts: 0)", "B:2 (ts: 0)", "C:null (ts: 0)", "D:4 (ts: 0)"), processors.get(2).processed);
-        assertEquals(asList("A:01 (ts: 0)", "B:02 (ts: 0)", "C:03 (ts: 0)", "D:04 (ts: 0)"), processors.get(3).processed);
+        assertEquals(asList("A:01 (ts: 5)", "B:02 (ts: 100)", "C:03 (ts: 0)", "D:04 (ts: 0)", "A:05 (ts: 10)", "A:06 (ts: 8)"), processors.get(0).processed);
+        assertEquals(asList("A:1 (ts: 5)", "B:2 (ts: 100)", "C:3 (ts: 0)", "D:4 (ts: 0)", "A:5 (ts: 10)", "A:6 (ts: 8)"), processors.get(1).processed);
+        assertEquals(asList("A:null (ts: 5)", "B:2 (ts: 100)", "C:null (ts: 0)", "D:4 (ts: 0)", "A:null (ts: 10)", "A:6 (ts: 8)"), processors.get(2).processed);
+        assertEquals(asList("A:01 (ts: 5)", "B:02 (ts: 100)", "C:03 (ts: 0)", "D:04 (ts: 0)", "A:05 (ts: 10)", "A:06 (ts: 8)"), processors.get(3).processed);
     }
 
     @Test
