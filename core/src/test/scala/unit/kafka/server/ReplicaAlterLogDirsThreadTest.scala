@@ -45,7 +45,6 @@ class ReplicaAlterLogDirsThreadTest {
     OffsetAndEpoch(offset = fetchOffset, leaderEpoch = leaderEpoch)
   }
 
-
   @Test
   def issuesEpochRequestFromLocalReplica(): Unit = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:1234"))

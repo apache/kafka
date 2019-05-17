@@ -184,7 +184,7 @@ abstract class AbstractFetcherThread(name: String,
     }
     catch {
       case e: KafkaStorageException =>
-        info(s"Failed to truncate $topicPartition " + s"at offset ${truncationState.offset}", e)
+        info(s"Failed to truncate $topicPartition at offset ${truncationState.offset}", e)
         markPartitionFailed(topicPartition)
         false
       case t: Throwable =>
@@ -236,7 +236,7 @@ abstract class AbstractFetcherThread(name: String,
         val truncationState = OffsetTruncationState(highWatermark, truncationCompleted = true)
 
         info(s"Truncating partition $tp to local high watermark $highWatermark")
-        if(doTruncate(tp, truncationState))
+        if (doTruncate(tp, truncationState))
           fetchOffsets.put(tp, truncationState)
       }
     }
@@ -342,7 +342,7 @@ abstract class AbstractFetcherThread(name: String,
                       partitionsWithError += topicPartition
                     case e: KafkaStorageException =>
                       error(s"Error while processing data for partition $topicPartition", e)
-                      partitionsWithError += topicPartition
+                      markPartitionFailed(topicPartition)
                     case t: Throwable =>
                       // stop monitoring this partition and add it to the set of failed partitions
                       error(s"Unexpected error occurred while processing data for partition $topicPartition " +

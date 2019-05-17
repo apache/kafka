@@ -46,6 +46,10 @@ import scala.collection.mutable.ArrayBuffer
 
 class AbstractFetcherThreadTest {
 
+  private val partition1 = new TopicPartition("topic1", 0)
+  private val partition2 = new TopicPartition("topic2", 0)
+  private val failedPartitions = new FailedPartitions
+
   @Before
   def cleanMetricRegistry(): Unit = {
     for (metricName <- Metrics.defaultRegistry().allMetrics().keySet().asScala)
@@ -62,8 +66,6 @@ class AbstractFetcherThreadTest {
   private def offsetAndEpoch(fetchOffset: Long, leaderEpoch: Int): OffsetAndEpoch = {
     OffsetAndEpoch(offset = fetchOffset, leaderEpoch = leaderEpoch)
   }
-
-  private val failedPartitions = new FailedPartitions
 
   @Test
   def testMetricsRemovedOnShutdown(): Unit = {
@@ -150,7 +152,7 @@ class AbstractFetcherThreadTest {
     assertEquals(0L, replicaState.logEndOffset)
     assertEquals(0L, replicaState.highWatermark)
 
-    // After fencing, the fetcher should remove the partition from tracking and marked as failed
+    // After fencing, the fetcher should remove the partition from tracking and mark as failed
     assertTrue(fetcher.fetchState(partition).isEmpty)
     assertTrue(failedPartitions.contains(partition))
   }
@@ -180,7 +182,7 @@ class AbstractFetcherThreadTest {
 
     fetcher.doWork()
 
-    // After fencing, the fetcher should remove the partition from tracking and marked as failed
+    // After fencing, the fetcher should remove the partition from tracking and mark as failed
     assertTrue(fetcher.fetchState(partition).isEmpty)
     assertTrue(failedPartitions.contains(partition))
   }
@@ -729,13 +731,8 @@ class AbstractFetcherThreadTest {
   }
 
   @Test
-  def testReplicaFetcherThreadHandlingPartitionFailure(): Unit = {
-
-    val partition1 = new TopicPartition("topic1", 0)
-    val partition2 = new TopicPartition("topic2", 0)
-
-    val fetcher = new MockFetcherThread {
-
+  def testFetcherThreadHandlingPartitionFailureDuringAppending(): Unit = {
+    val fetcherForAppend = new MockFetcherThread {
       override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = {
         if (topicPartition == partition1) {
           throw new KafkaException()
@@ -743,8 +740,25 @@ class AbstractFetcherThreadTest {
           super.processPartitionData(topicPartition, fetchOffset, partitionData)
         }
       }
-
     }
+    fetcherThreadHandlingPartitionFailure(fetcherForAppend)
+  }
+
+  @Test
+  def testFetcherThreadHandlingPartitionFailureDuringTruncation(): Unit = {
+    val fetcherForTruncation = new MockFetcherThread {
+      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
+        if(topicPartition == partition1)
+          throw new Exception()
+        else {
+          super.truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState)
+        }
+      }
+    }
+    fetcherThreadHandlingPartitionFailure(fetcherForTruncation)
+  }
+
+  def fetcherThreadHandlingPartitionFailure(fetcher: MockFetcherThread): Unit = {
 
     fetcher.setReplicaState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
     fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 0)))
@@ -759,70 +773,20 @@ class AbstractFetcherThreadTest {
 
     // partition1 marked as failed
     assertTrue(failedPartitions.contains(partition1))
-    assertTrue(fetcher.fetchState(partition1).isEmpty)
+    assertEquals(None, fetcher.fetchState(partition1))
 
-    // fetcher continues with rest of the partitions
+    // make sure the fetcher continues to work with rest of the partitions
+    fetcher.doWork()
     assertEquals(Some(Fetching), fetcher.fetchState(partition2).map(_.state))
     assertFalse(failedPartitions.contains(partition2))
 
-    // simulate a leader epoch
+    // simulate a leader change
     fetcher.removePartitions(Set(partition1))
-    failedPartitions.remove(Set(partition1))
+    failedPartitions.removeAll(Set(partition1))
     fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 1)))
 
-    fetcher.doWork()
-
     // partition1 added back
-    assertTrue(fetcher.fetchState(partition1).nonEmpty)
-    assertFalse(failedPartitions.contains(partition1))
-
-  }
-
-  @Test
-  def testTruncationHandlingPartitionFailure(): Unit = {
-    val partition1 = new TopicPartition("topic1", 0)
-    val partition2 = new TopicPartition("topic2", 0)
-
-    val fetcher = new MockFetcherThread {
-
-      override def truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState): Unit = {
-        if(topicPartition == partition1)
-          throw new Exception()
-        else {
-          super.truncate(topicPartition: TopicPartition, truncationState: OffsetTruncationState)
-        }
-      }
-
-    }
-
-    fetcher.setReplicaState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
-    fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 0)))
-    fetcher.setLeaderState(partition1, MockFetcherThread.PartitionState(leaderEpoch = 0))
-
-    fetcher.setReplicaState(partition2, MockFetcherThread.PartitionState(leaderEpoch = 0))
-    fetcher.addPartitions(Map(partition2 -> offsetAndEpoch(0L, leaderEpoch = 0)))
-    fetcher.setLeaderState(partition2, MockFetcherThread.PartitionState(leaderEpoch = 0))
-
-    // truncating raises exception for partition1
-    fetcher.doWork()
-
-    // partition1 marked as failed
-    assertTrue(failedPartitions.contains(partition1))
-    assertTrue(fetcher.fetchState(partition1).isEmpty)
-
-    // thread continues with rest of the partitions
-    assertEquals(Some(Fetching), fetcher.fetchState(partition2).map(_.state))
-    assertFalse(failedPartitions.contains(partition2))
-
-    // simulate a leader epoch for partition1
-    fetcher.removePartitions(Set(partition1))
-    failedPartitions.remove(Set(partition1))
-    fetcher.addPartitions(Map(partition1 -> offsetAndEpoch(0L, leaderEpoch = 1)))
-
-    fetcher.doWork()
-
-    // partition1 added back
-    assertTrue(fetcher.fetchState(partition1).nonEmpty)
+    assertEquals(Some(Truncating), fetcher.fetchState(partition1).map(_.state))
     assertFalse(failedPartitions.contains(partition1))
 
   }
