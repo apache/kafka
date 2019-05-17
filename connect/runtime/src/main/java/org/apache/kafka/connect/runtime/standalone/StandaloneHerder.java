@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.standalone;
 
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -62,12 +63,14 @@ public class StandaloneHerder extends AbstractHerder {
 
     private ClusterConfigState configState;
 
-    public StandaloneHerder(Worker worker, String kafkaClusterId) {
+    public StandaloneHerder(Worker worker, String kafkaClusterId,
+                            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         this(worker,
                 worker.workerId(),
                 kafkaClusterId,
                 new MemoryStatusBackingStore(),
-                new MemoryConfigBackingStore(worker.configTransformer()));
+                new MemoryConfigBackingStore(worker.configTransformer()),
+             connectorClientConfigOverridePolicy);
     }
 
     // visible for testing
@@ -75,8 +78,9 @@ public class StandaloneHerder extends AbstractHerder {
                      String workerId,
                      String kafkaClusterId,
                      StatusBackingStore statusBackingStore,
-                     MemoryConfigBackingStore configBackingStore) {
-        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore);
+                     MemoryConfigBackingStore configBackingStore,
+                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
         this.configState = ClusterConfigState.EMPTY;
         this.requestExecutorService = Executors.newSingleThreadScheduledExecutor();
         configBackingStore.setUpdateListener(new ConfigUpdateListener());

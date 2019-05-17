@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Frequencies;
@@ -30,7 +31,10 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigRequest;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.health.ConnectorType;
 import org.apache.kafka.connect.runtime.ConnectMetrics.LiteralSupplier;
 import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.distributed.ClusterConfigState;
@@ -68,6 +72,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.stream.Collectors;
 
 
 /**
@@ -98,15 +103,16 @@ public class Worker {
     private final ConcurrentMap<ConnectorTaskId, WorkerTask> tasks = new ConcurrentHashMap<>();
     private SourceTaskOffsetCommitter sourceTaskOffsetCommitter;
     private WorkerConfigTransformer workerConfigTransformer;
+    private ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy;
 
     public Worker(
-            String workerId,
-            Time time,
-            Plugins plugins,
-            WorkerConfig config,
-            OffsetBackingStore offsetBackingStore
-    ) {
-        this(workerId, time, plugins, config, offsetBackingStore, Executors.newCachedThreadPool());
+        String workerId,
+        Time time,
+        Plugins plugins,
+        WorkerConfig config,
+        OffsetBackingStore offsetBackingStore,
+        ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        this(workerId, time, plugins, config, offsetBackingStore, Executors.newCachedThreadPool(), connectorClientConfigOverridePolicy);
     }
 
     @SuppressWarnings("deprecation")
@@ -116,7 +122,8 @@ public class Worker {
             Plugins plugins,
             WorkerConfig config,
             OffsetBackingStore offsetBackingStore,
-            ExecutorService executorService
+            ExecutorService executorService,
+            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy
     ) {
         this.metrics = new ConnectMetrics(workerId, config, time);
         this.executor = executorService;
@@ -124,6 +131,7 @@ public class Worker {
         this.time = time;
         this.plugins = plugins;
         this.config = config;
+        this.connectorClientConfigOverridePolicy = connectorClientConfigOverridePolicy;
         this.workerMetricsGroup = new WorkerMetricsGroup(metrics);
 
         // Internal converters are required properties, thus getClass won't return null.
@@ -486,7 +494,8 @@ public class Worker {
                                        HeaderConverter headerConverter,
                                        ClassLoader loader) {
         ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
-
+        final Class<? extends Connector> connectorClass = plugins.connectorClass(
+            connConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connConfig.errorRetryTimeout(),
                 connConfig.errorMaxDelayInMillis(), connConfig.errorToleranceType(), Time.SYSTEM);
         retryWithToleranceOperator.metrics(errorHandlingMetrics);
@@ -500,7 +509,8 @@ public class Worker {
                     internalKeyConverter, internalValueConverter);
             OffsetStorageWriter offsetWriter = new OffsetStorageWriter(offsetBackingStore, id.connector(),
                     internalKeyConverter, internalValueConverter);
-            Map<String, Object> producerProps = producerConfigs("connector-producer-" + id, config);
+            Map<String, Object> producerProps = producerConfigs(id, "connector-producer-" + id, config, connConfig, connectorClass,
+                                                                connectorClientConfigOverridePolicy);
             KafkaProducer<byte[], byte[]> producer = new KafkaProducer<>(producerProps);
 
             // Note we pass the configState as it performs dynamic transformations under the covers
@@ -511,9 +521,9 @@ public class Worker {
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connConfig.<SinkRecord>transformations(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connConfig.originalsStrings());
-            retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics));
+            retryWithToleranceOperator.reporters(sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass));
 
-            Map<String, Object> consumerProps = consumerConfigs(id, config);
+            Map<String, Object> consumerProps = consumerConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverter,
@@ -525,7 +535,12 @@ public class Worker {
         }
     }
 
-    static Map<String, Object> producerConfigs(String defaultClientId, WorkerConfig config) {
+    static Map<String, Object> producerConfigs(ConnectorTaskId id,
+                                               String defaultClientId,
+                                               WorkerConfig config,
+                                               ConnectorConfig connConfig,
+                                               Class<? extends Connector>  connectorClass,
+                                               ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArraySerializer");
@@ -540,11 +555,22 @@ public class Worker {
         producerProps.put(ProducerConfig.CLIENT_ID_CONFIG, defaultClientId);
         // User-specified overrides
         producerProps.putAll(config.originalsWithPrefix("producer."));
+
+        // Connector-specified overrides
+        Map<String, Object> producerOverrides =
+            connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX,
+                                           ConnectorType.SOURCE, ConnectorClientConfigRequest.ClientType.PRODUCER,
+                                           connectorClientConfigOverridePolicy);
+        producerProps.putAll(producerOverrides);
+
         return producerProps;
     }
 
-
-    static Map<String, Object> consumerConfigs(ConnectorTaskId id, WorkerConfig config) {
+    static Map<String, Object> consumerConfigs(ConnectorTaskId id,
+                                               WorkerConfig config,
+                                               ConnectorConfig connConfig,
+                                               Class<? extends Connector> connectorClass,
+                                               ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         // Include any unknown worker configs so consumer configs can be set globally on the worker
         // and through to the task
         Map<String, Object> consumerProps = new HashMap<>();
@@ -559,7 +585,59 @@ public class Worker {
         consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, "org.apache.kafka.common.serialization.ByteArrayDeserializer");
 
         consumerProps.putAll(config.originalsWithPrefix("consumer."));
+        // Connector-specified overrides
+        Map<String, Object> consumerOverrides =
+            connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX,
+                                           ConnectorType.SINK, ConnectorClientConfigRequest.ClientType.CONSUMER,
+                                           connectorClientConfigOverridePolicy);
+        consumerProps.putAll(consumerOverrides);
+
         return consumerProps;
+    }
+
+    static Map<String, Object> adminConfigs(ConnectorTaskId id,
+                                            WorkerConfig config,
+                                            ConnectorConfig connConfig,
+                                            Class<? extends Connector> connectorClass,
+                                            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        Map<String, Object> adminProps = new HashMap<>();
+        adminProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, Utils.join(config.getList(WorkerConfig.BOOTSTRAP_SERVERS_CONFIG), ","));
+        // User-specified overrides
+        adminProps.putAll(config.originalsWithPrefix("admin."));
+
+        // Connector-specified overrides
+        Map<String, Object> adminOverrides =
+            connectorClientConfigOverrides(id, connConfig, connectorClass, ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX,
+                                           ConnectorType.SINK, ConnectorClientConfigRequest.ClientType.ADMIN,
+                                           connectorClientConfigOverridePolicy);
+        adminProps.putAll(adminOverrides);
+
+        return adminProps;
+    }
+
+    private static Map<String, Object> connectorClientConfigOverrides(ConnectorTaskId id,
+                                                                      ConnectorConfig connConfig,
+                                                                      Class<? extends Connector> connectorClass,
+                                                                      String clientConfigPrefix,
+                                                                      ConnectorType connectorType,
+                                                                      ConnectorClientConfigRequest.ClientType clientType,
+                                                                      ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        Map<String, Object> clientOverrides = connConfig.originalsWithPrefix(clientConfigPrefix);
+        ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
+            id.connector(),
+            connectorType,
+            connectorClass,
+            clientOverrides,
+            clientType
+        );
+        List<ConfigValue> configValues = connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);
+        List<ConfigValue> errorConfigs = configValues.stream().
+            filter(configValue -> configValue.errorMessages().size() > 0).collect(Collectors.toList());
+        // These should be caught when the herder validates the connector configuration, but just in case
+        if (errorConfigs.size() > 0) {
+            throw new ConnectException("Client Config Overrides not allowed " + errorConfigs);
+        }
+        return clientOverrides;
     }
 
     ErrorHandlingMetrics errorHandlingMetrics(ConnectorTaskId id) {
@@ -567,7 +645,8 @@ public class Worker {
     }
 
     private List<ErrorReporter> sinkTaskReporters(ConnectorTaskId id, SinkConnectorConfig connConfig,
-                                                  ErrorHandlingMetrics errorHandlingMetrics) {
+                                                  ErrorHandlingMetrics errorHandlingMetrics,
+                                                  Class<? extends Connector> connectorClass) {
         ArrayList<ErrorReporter> reporters = new ArrayList<>();
         LogReporter logReporter = new LogReporter(id, connConfig, errorHandlingMetrics);
         reporters.add(logReporter);
@@ -575,8 +654,10 @@ public class Worker {
         // check if topic for dead letter queue exists
         String topic = connConfig.dlqTopicName();
         if (topic != null && !topic.isEmpty()) {
-            Map<String, Object> producerProps = producerConfigs("connector-dlq-producer-" + id, config);
-            DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(config, id, connConfig, producerProps, errorHandlingMetrics);
+            Map<String, Object> producerProps = producerConfigs(id, "connector-dlq-producer-" + id, config, connConfig, connectorClass,
+                                                                connectorClientConfigOverridePolicy);
+            Map<String, Object> adminProps = adminConfigs(id, config, connConfig, connectorClass, connectorClientConfigOverridePolicy);
+            DeadLetterQueueReporter reporter = DeadLetterQueueReporter.createAndSetup(adminProps, id, connConfig, producerProps, errorHandlingMetrics);
             reporters.add(reporter);
         }
 

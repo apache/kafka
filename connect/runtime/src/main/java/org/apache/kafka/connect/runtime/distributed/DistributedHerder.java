@@ -30,6 +30,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -165,8 +166,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                              String kafkaClusterId,
                              StatusBackingStore statusBackingStore,
                              ConfigBackingStore configBackingStore,
-                             String restUrl) {
-        this(config, worker, worker.workerId(), kafkaClusterId, statusBackingStore, configBackingStore, null, restUrl, worker.metrics(), time);
+                             String restUrl,
+                             ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        this(config, worker, worker.workerId(), kafkaClusterId, statusBackingStore, configBackingStore, null, restUrl, worker.metrics(),
+             time, connectorClientConfigOverridePolicy);
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
     }
 
@@ -180,8 +183,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       WorkerGroupMember member,
                       String restUrl,
                       ConnectMetrics metrics,
-                      Time time) {
-        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore);
+                      Time time,
+                      ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
 
         this.time = time;
         this.herderMetrics = new HerderMetrics(metrics);
