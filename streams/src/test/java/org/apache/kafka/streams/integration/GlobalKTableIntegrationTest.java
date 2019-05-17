@@ -29,7 +29,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
@@ -39,7 +38,9 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreTypes;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.Stores;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.IntegrationTest;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -68,7 +69,6 @@ public class GlobalKTableIntegrationTest {
     private final KeyValueMapper<String, Long, Long> keyMapper = (key, value) -> value;
     private final ValueJoiner<Long, String, String> joiner = (value1, value2) -> value1 + "+" + value2;
     private final String globalStore = "globalStore";
-    private final Map<String, String> results = new HashMap<>();
     private StreamsBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
@@ -76,7 +76,7 @@ public class GlobalKTableIntegrationTest {
     private String streamTopic;
     private GlobalKTable<Long, String> globalTable;
     private KStream<String, Long> stream;
-    private ForeachAction<String, String> foreachAction;
+    private MockProcessorSupplier<String, String> supplier;
 
     @Before
     public void before() throws Exception {
@@ -96,7 +96,7 @@ public class GlobalKTableIntegrationTest {
                                                   .withValueSerde(Serdes.String()));
         final Consumed<String, Long> stringLongConsumed = Consumed.with(Serdes.String(), Serdes.Long());
         stream = builder.stream(streamTopic, stringLongConsumed);
-        foreachAction = results::put;
+        supplier = new MockProcessorSupplier<>();
     }
 
     @After
@@ -110,24 +110,34 @@ public class GlobalKTableIntegrationTest {
     @Test
     public void shouldKStreamGlobalKTableLeftJoin() throws Exception {
         final KStream<String, String> streamTableJoin = stream.leftJoin(globalTable, keyMapper, joiner);
-        streamTableJoin.foreach(foreachAction);
+        streamTableJoin.process(supplier);
         produceInitialGlobalTableValues();
         startStreams();
+        long firstTimestamp = mockTime.milliseconds();
         produceTopicValues(streamTopic);
 
-        final Map<String, String> expected = new HashMap<>();
-        expected.put("a", "1+A");
-        expected.put("b", "2+B");
-        expected.put("c", "3+C");
-        expected.put("d", "4+D");
-        expected.put("e", "5+null");
+        final Map<String, ValueAndTimestamp<String>> expected = new HashMap<>();
+        expected.put("a", ValueAndTimestamp.make("1+A", firstTimestamp));
+        expected.put("b", ValueAndTimestamp.make("2+B", firstTimestamp + 1L));
+        expected.put("c", ValueAndTimestamp.make("3+C", firstTimestamp + 2L));
+        expected.put("d", ValueAndTimestamp.make("4+D", firstTimestamp + 3L));
+        expected.put("e", ValueAndTimestamp.make("5+null", firstTimestamp + 4L));
 
         TestUtils.waitForCondition(
-            () -> results.equals(expected),
+            () -> {
+                if (supplier.capturedProcessorsCount() < 2) {
+                    return false;
+                }
+                final Map<String, ValueAndTimestamp<String>> result = new HashMap<>();
+                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey);
+                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey);
+                return result.equals(expected);
+            },
             30000L,
             "waiting for initial values");
 
 
+        firstTimestamp = mockTime.milliseconds();
         produceGlobalTableValues();
 
         final ReadOnlyKeyValueStore<Long, String> replicatedStore =
@@ -138,16 +148,29 @@ public class GlobalKTableIntegrationTest {
             30000,
             "waiting for data in replicated store");
 
+        final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStoreWithTimestamp =
+            kafkaStreams.store(globalStore, QueryableStoreTypes.timestampedKeyValueStore());
+        assertThat(replicatedStoreWithTimestamp.get(5L), equalTo(ValueAndTimestamp.make("J", firstTimestamp + 4L)));
+
+        firstTimestamp = mockTime.milliseconds();
         produceTopicValues(streamTopic);
 
-        expected.put("a", "1+F");
-        expected.put("b", "2+G");
-        expected.put("c", "3+H");
-        expected.put("d", "4+I");
-        expected.put("e", "5+J");
+        expected.put("a", ValueAndTimestamp.make("1+F", firstTimestamp));
+        expected.put("b", ValueAndTimestamp.make("2+G", firstTimestamp + 1L));
+        expected.put("c", ValueAndTimestamp.make("3+H", firstTimestamp + 2L));
+        expected.put("d", ValueAndTimestamp.make("4+I", firstTimestamp + 3L));
+        expected.put("e", ValueAndTimestamp.make("5+J", firstTimestamp + 4L));
 
         TestUtils.waitForCondition(
-            () -> results.equals(expected),
+            () -> {
+                if (supplier.capturedProcessorsCount() < 2) {
+                    return false;
+                }
+                final Map<String, ValueAndTimestamp<String>> result = new HashMap<>();
+                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey);
+                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey);
+                return result.equals(expected);
+            },
             30000L,
             "waiting for final values");
     }
@@ -155,23 +178,33 @@ public class GlobalKTableIntegrationTest {
     @Test
     public void shouldKStreamGlobalKTableJoin() throws Exception {
         final KStream<String, String> streamTableJoin = stream.join(globalTable, keyMapper, joiner);
-        streamTableJoin.foreach(foreachAction);
+        streamTableJoin.process(supplier);
         produceInitialGlobalTableValues();
         startStreams();
+        long firstTimestamp = mockTime.milliseconds();
         produceTopicValues(streamTopic);
 
-        final Map<String, String> expected = new HashMap<>();
-        expected.put("a", "1+A");
-        expected.put("b", "2+B");
-        expected.put("c", "3+C");
-        expected.put("d", "4+D");
+        final Map<String, ValueAndTimestamp<String>> expected = new HashMap<>();
+        expected.put("a", ValueAndTimestamp.make("1+A", firstTimestamp));
+        expected.put("b", ValueAndTimestamp.make("2+B", firstTimestamp + 1L));
+        expected.put("c", ValueAndTimestamp.make("3+C", firstTimestamp + 2L));
+        expected.put("d", ValueAndTimestamp.make("4+D", firstTimestamp + 3L));
 
         TestUtils.waitForCondition(
-            () -> results.equals(expected),
+            () -> {
+                if (supplier.capturedProcessorsCount() < 2) {
+                    return false;
+                }
+                final Map<String, ValueAndTimestamp<String>> result = new HashMap<>();
+                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey);
+                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey);
+                return result.equals(expected);
+            },
             30000L,
             "waiting for initial values");
 
 
+        firstTimestamp = mockTime.milliseconds();
         produceGlobalTableValues();
 
         final ReadOnlyKeyValueStore<Long, String> replicatedStore =
@@ -182,16 +215,29 @@ public class GlobalKTableIntegrationTest {
             30000,
             "waiting for data in replicated store");
 
+        final ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> replicatedStoreWithTimestamp =
+            kafkaStreams.store(globalStore, QueryableStoreTypes.timestampedKeyValueStore());
+        assertThat(replicatedStoreWithTimestamp.get(5L), equalTo(ValueAndTimestamp.make("J", firstTimestamp + 4L)));
+
+        firstTimestamp = mockTime.milliseconds();
         produceTopicValues(streamTopic);
 
-        expected.put("a", "1+F");
-        expected.put("b", "2+G");
-        expected.put("c", "3+H");
-        expected.put("d", "4+I");
-        expected.put("e", "5+J");
+        expected.put("a", ValueAndTimestamp.make("1+F", firstTimestamp));
+        expected.put("b", ValueAndTimestamp.make("2+G", firstTimestamp + 1L));
+        expected.put("c", ValueAndTimestamp.make("3+H", firstTimestamp + 2L));
+        expected.put("d", ValueAndTimestamp.make("4+I", firstTimestamp + 3L));
+        expected.put("e", ValueAndTimestamp.make("5+J", firstTimestamp + 4L));
 
         TestUtils.waitForCondition(
-            () -> results.equals(expected),
+            () -> {
+                if (supplier.capturedProcessorsCount() < 2) {
+                    return false;
+                }
+                final Map<String, ValueAndTimestamp<String>> result = new HashMap<>();
+                result.putAll(supplier.capturedProcessors(2).get(0).lastValueAndTimestampPerKey);
+                result.putAll(supplier.capturedProcessors(2).get(1).lastValueAndTimestampPerKey);
+                return result.equals(expected);
+            },
             30000L,
             "waiting for final values");
     }
@@ -209,11 +255,16 @@ public class GlobalKTableIntegrationTest {
         startStreams();
         ReadOnlyKeyValueStore<Long, String> store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
         assertThat(store.approximateNumEntries(), equalTo(4L));
+        ReadOnlyKeyValueStore<Long, ValueAndTimestamp<String>> timestampedStore =
+            kafkaStreams.store(globalStore, QueryableStoreTypes.timestampedKeyValueStore());
+        assertThat(timestampedStore.approximateNumEntries(), equalTo(4L));
         kafkaStreams.close();
 
         startStreams();
         store = kafkaStreams.store(globalStore, QueryableStoreTypes.keyValueStore());
         assertThat(store.approximateNumEntries(), equalTo(4L));
+        timestampedStore = kafkaStreams.store(globalStore, QueryableStoreTypes.timestampedKeyValueStore());
+        assertThat(timestampedStore.approximateNumEntries(), equalTo(4L));
     }
 
     private void createTopics() throws Exception {
