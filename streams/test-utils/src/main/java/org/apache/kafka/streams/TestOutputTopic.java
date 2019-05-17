@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.streams.test;
 
+import org.apache.kafka.clients.ClientRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.TopologyTestDriver;
 
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -51,18 +51,12 @@ import java.util.Objects;
  * @param <K> the type of the Kafka key
  * @param <V> the type of the Kafka value
  * @see TopologyTestDriver
- * @see ConsumerRecordFactory
  */
 public class TestOutputTopic<K, V> {
-    //Possibility to use in subclasses
-    @SuppressWarnings({"WeakerAccess"})
-    protected final TopologyTestDriver driver;
-    @SuppressWarnings({"WeakerAccess"})
-    protected final String topic;
-    @SuppressWarnings({"WeakerAccess"})
-    protected final Deserializer<K> keyDeserializer;
-    @SuppressWarnings({"WeakerAccess"})
-    protected final Deserializer<V> valueDeserializer;
+    private final TopologyTestDriver driver;
+    private final String topic;
+    private final Deserializer<K> keyDeserializer;
+    private final Deserializer<V> valueDeserializer;
 
     /**
      * Create a test output topic to read messages from
@@ -111,7 +105,7 @@ public class TestOutputTopic<K, V> {
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public V readValue() {
-        final ProducerRecord<K, V> record = readRecord();
+        final ClientRecord<K, V> record = readRecord();
         if (record == null) return null;
         return record.value();
     }
@@ -123,7 +117,7 @@ public class TestOutputTopic<K, V> {
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public KeyValue<K, V> readKeyValue() {
-        final ProducerRecord<K, V> record = readRecord();
+        final ClientRecord<K, V> record = readRecord();
         if (record == null) return null;
         return new KeyValue<>(record.key(), record.value());
     }
@@ -134,8 +128,8 @@ public class TestOutputTopic<K, V> {
      * @return Next output as ProducerRecord
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public ProducerRecord<K, V> readRecord() {
-        return driver.readOutput(topic, keyDeserializer, valueDeserializer);
+    public ClientRecord<K, V> readRecord() {
+        return driver.readRecord(topic, keyDeserializer, valueDeserializer);
     }
 
     /**
@@ -147,7 +141,7 @@ public class TestOutputTopic<K, V> {
     @SuppressWarnings({"WeakerAccess", "unused"})
     public Map<K, V> readKeyValuesToMap() {
         final Map<K, V> output = new HashMap<>();
-        ProducerRecord<K, V> outputRow;
+        ClientRecord<K, V> outputRow;
         while ((outputRow = readRecord()) != null) {
             output.put(outputRow.key(), outputRow.value());
         }
@@ -184,8 +178,16 @@ public class TestOutputTopic<K, V> {
         return output;
     }
 
+    final long getQueueSize() {
+        return driver.getQueueSize(topic);
+    }
+
+    final boolean isEmpty() {
+        return getQueueSize() == 0;
+    };
+
     @Override
     public String toString() {
-        return "TestOutputTopic{topic='" + topic + "'}";
+        return "TestOutputTopic{topic='" + topic + "',size=" + getQueueSize() + "}";
     }
 }
