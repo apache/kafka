@@ -364,11 +364,11 @@ public class EmbeddedConnectCluster {
         }
         if (httpCon.getResponseCode() < HttpURLConnection.HTTP_BAD_REQUEST) {
             try (InputStream is = httpCon.getInputStream()) {
-                log.info("Put response for URL={} is {}", url, responseToString(is));
+                log.info("PUT response for URL={} is {}", url, responseToString(is));
             }
         } else {
             try (InputStream is = httpCon.getErrorStream()) {
-                log.info("Put error response for URL={} is {}", url, responseToString(is));
+                log.info("PUT error response for URL={} is {}", url, responseToString(is));
             }
         }
         return httpCon.getResponseCode();
@@ -393,7 +393,7 @@ public class EmbeddedConnectCluster {
             while ((c = is.read()) != -1) {
                 response.append((char) c);
             }
-            log.debug("Get response for URL={} is {}", url, response);
+            log.debug("GET response for URL={} is {}", url, response);
             return response.toString();
         } catch (IOException e) {
             Response.Status status = Response.Status.fromStatusCode(httpCon.getResponseCode());

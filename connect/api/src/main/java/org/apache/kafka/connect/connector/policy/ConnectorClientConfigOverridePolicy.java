@@ -40,7 +40,8 @@ public interface ConnectorClientConfigOverridePolicy extends Configurable, AutoC
      *
      * @param connectorClientConfigRequest an instance of {@code ConnectorClientConfigRequest} that provides the configs to overridden and
      *                                     its context; never {@code null}
-     * @return List of Config, each Config should indicate if they are allowed via {@link ConfigValue#errorMessages}; never null
+     * @return list of {@link ConfigValue} instances that describe each client configuration in the request and includes an 
+               {@link ConfigValue#errorMessages error} if the configuration is not allowed by the policy; never null
      */
     List<ConfigValue> validate(ConnectorClientConfigRequest connectorClientConfigRequest);
 }
