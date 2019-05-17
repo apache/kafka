@@ -314,7 +314,8 @@ public class KafkaBasedLog<K, V> {
                             readToLogEnd();
                             log.trace("Finished read to end log for topic {}", topic);
                         } catch (TimeoutException e) {
-                            log.warn("Timeout while reading log to end {}", e.getMessage());
+                            log.warn("Timeout while reading log to end for topic '{}'. Retrying automatically. " +
+                                "This may occur when brokers are unavailable or unreachable. Reason: {}", topic, e.getMessage());
                             continue;
                         } catch (WakeupException e) {
                             // Either received another get() call and need to retry reading to end of log or stop() was

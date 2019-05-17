@@ -218,6 +218,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         this.pollException = pollException;
     }
 
+    public synchronized void setOffsetsException(KafkaException exception) {
+        this.offsetsException = exception;
+    }
+
     @Override
     public synchronized void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         ensureNotClosed();
@@ -419,10 +423,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             result.put(tp, endOffset);
         }
         return result;
-    }
-
-    public synchronized void setOffsetsException(KafkaException exception) {
-        this.offsetsException = exception;
     }
 
     @Override
