@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.test;
+package org.apache.kafka.streams;
 
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
@@ -22,18 +22,17 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.TestInputTopic;
-import org.apache.kafka.streams.TestOutputTopic;
-import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
+import org.apache.kafka.streams.test.OutputVerifier;
+import org.apache.kafka.streams.test.TestInputTopic;
+import org.apache.kafka.streams.test.TestOutputTopic;
+import org.apache.kafka.streams.test.TopologyTestDriver;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -60,11 +59,9 @@ public class TestInputTopicTest {
     private final static String INPUT_TOPIC_MAP = OUTPUT_TOPIC;
     private final static String OUTPUT_TOPIC_MAP = "output2";
 
-    private TopologyTestDriver testDriver;
+    private org.apache.kafka.streams.test.TopologyTestDriver testDriver;
     private final Serde<String> stringSerde = new Serdes.StringSerde();
     private final Serde<Long> longSerde = new Serdes.LongSerde();
-    private final StringDeserializer stringDeserializer = new StringDeserializer();
-    private final StringSerializer stringSerializer = new StringSerializer();
 
     private final Properties config = mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, "TestInputTopicTest"),
@@ -95,8 +92,8 @@ public class TestInputTopicTest {
 
     @Test
     public void testValue() {
-        final TestInputTopic<String, String> inputTopic = new TestInputTopic<>(testDriver, INPUT_TOPIC, stringSerde, stringSerde);
-        final TestOutputTopic<String, String> outputTopic = new TestOutputTopic<>(testDriver, OUTPUT_TOPIC, stringSerde, stringSerde);
+        final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, stringSerde, stringSerde);
+        final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde, stringSerde);
         //Feed word "Hello" to inputTopic and no kafka key, timestamp is irrelevant in this case
         inputTopic.pipeInput("Hello");
         assertThat(outputTopic.readValue(), equalTo("Hello"));
@@ -108,8 +105,8 @@ public class TestInputTopicTest {
     public void testValueList() {
         //Note using here string key serde even other topic is expecting long
         //Does not affect when key not used
-        final TestInputTopic<String, String> inputTopic = new TestInputTopic<>(testDriver, INPUT_TOPIC, stringSerializer, stringSerializer);
-        final TestOutputTopic<String, String> outputTopic = new TestOutputTopic<>(testDriver, OUTPUT_TOPIC, stringDeserializer, stringDeserializer);
+        final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, stringSerde, stringSerde);
+        final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde, stringSerde);
         final List<String> inputList = Arrays.asList("This", "is", "an", "example");
         //Feed list of words to inputTopic and no kafka key, timestamp is irrelevant in this case
         inputTopic.pipeValueList(inputList);
@@ -120,8 +117,8 @@ public class TestInputTopicTest {
 
     @Test
     public void testKeyValue() {
-        final TestInputTopic<Long, String> inputTopic = new TestInputTopic<>(testDriver, INPUT_TOPIC, longSerde, stringSerde);
-        final TestOutputTopic<Long, String> outputTopic = new TestOutputTopic<>(testDriver, OUTPUT_TOPIC, longSerde, stringSerde);
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde);
+        final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello");
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>(1L, "Hello")));
         assertThat(outputTopic.readRecord(), nullValue());
@@ -129,8 +126,8 @@ public class TestInputTopicTest {
 
     @Test
     public void testKeyValueList() {
-        final TestInputTopic<Long, String> inputTopic = new TestInputTopic<>(testDriver, INPUT_TOPIC_MAP, longSerde, stringSerde);
-        final TestOutputTopic<String, Long> outputTopic = new TestOutputTopic<>(testDriver, OUTPUT_TOPIC_MAP, stringSerde, longSerde);
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC_MAP, longSerde, stringSerde);
+        final TestOutputTopic<String, Long> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC_MAP, stringSerde, longSerde);
         final List<String> inputList = Arrays.asList("This", "is", "an", "example");
         final List<KeyValue<Long, String>> input = new LinkedList<>();
         final List<KeyValue<String, Long>> expected = new LinkedList<>();
@@ -149,8 +146,8 @@ public class TestInputTopicTest {
     public void testTimestampMs() {
         long baseTime = 3;
         final long advance = 2;
-        final TestInputTopic<Long, String> inputTopic = new TestInputTopic<>(testDriver, INPUT_TOPIC, longSerde, stringSerde);
-        final TestOutputTopic<Long, String> outputTopic = new TestOutputTopic<>(testDriver, OUTPUT_TOPIC, longSerde, stringSerde);
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde);
+        final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput("Hello", baseTime);
         OutputVerifier.compareValueTimestamp(outputTopic.readRecord(), "Hello", baseTime);
         inputTopic.pipeInput(2L, "Kafka", ++baseTime);
@@ -173,8 +170,8 @@ public class TestInputTopicTest {
                     new RecordHeader("bar", (byte[]) null),
                     new RecordHeader("\"A\\u00ea\\u00f1\\u00fcC\"", "value".getBytes())
                 });
-        final TestInputTopic<Long, String> inputTopic = new TestInputTopic<>(testDriver, INPUT_TOPIC, longSerde, stringSerde);
-        final TestOutputTopic<Long, String> outputTopic = new TestOutputTopic<>(testDriver, OUTPUT_TOPIC, longSerde, stringSerde);
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde);
+        final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello", headers);
         OutputVerifier.compareKeyValueHeaders(outputTopic.readRecord(), 1L, "Hello", headers);
         inputTopic.pipeInput(2L, "Kafka", headers, baseTime);
@@ -185,8 +182,9 @@ public class TestInputTopicTest {
     public void testStartTimestampMs() {
         final long baseTime = 3;
         final long advance = 2;
-        final TestInputTopic<Long, String> inputTopic = new TestInputTopic<>(testDriver, INPUT_TOPIC, longSerde, stringSerde, baseTime);
-        final TestOutputTopic<Long, String> outputTopic = new TestOutputTopic<>(testDriver, OUTPUT_TOPIC, longSerde, stringSerde);
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, longSerde, stringSerde);
+        inputTopic.configureTiming(baseTime);
+        final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello");
         OutputVerifier.compareKeyValueTimestamp(outputTopic.readRecord(), 1L, "Hello", baseTime);
         inputTopic.pipeInput(2L, "World");
@@ -201,8 +199,9 @@ public class TestInputTopicTest {
     public void testTimestampMsAutoAdvance() {
         final long baseTime = 3;
         final long advance = 2;
-        final TestInputTopic<Long, String> inputTopic = new TestInputTopic<>(testDriver, INPUT_TOPIC, longSerde, stringSerde, baseTime, advance);
-        final TestOutputTopic<Long, String> outputTopic = new TestOutputTopic<>(testDriver, OUTPUT_TOPIC, longSerde, stringSerde);
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde);
+        inputTopic.configureTiming(baseTime, advance);
+        final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput("Hello");
         OutputVerifier.compareValueTimestamp(outputTopic.readRecord(), "Hello", baseTime);
         inputTopic.pipeInput(2L, "Kafka");
@@ -212,10 +211,10 @@ public class TestInputTopicTest {
 
     @Test
     public void testMultipleTopics() {
-        final TestInputTopic<Long, String> inputTopic1 = new TestInputTopic<>(testDriver, INPUT_TOPIC, longSerde, stringSerde);
-        final TestInputTopic<Long, String> inputTopic2 = new TestInputTopic<>(testDriver, INPUT_TOPIC_MAP, longSerde, stringSerde);
-        final TestOutputTopic<Long, String> outputTopic1 = new TestOutputTopic<>(testDriver, OUTPUT_TOPIC, longSerde, stringSerde);
-        final TestOutputTopic<String, Long> outputTopic2 = new TestOutputTopic<>(testDriver, OUTPUT_TOPIC_MAP, stringSerde, longSerde);
+        final TestInputTopic<Long, String> inputTopic1 = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde);
+        final TestInputTopic<Long, String> inputTopic2 = testDriver.createInputTopic( INPUT_TOPIC_MAP, longSerde, stringSerde);
+        final TestOutputTopic<Long, String> outputTopic1 = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
+        final TestOutputTopic<String, Long> outputTopic2 = testDriver.createOutputTopic(OUTPUT_TOPIC_MAP, stringSerde, longSerde);
         inputTopic1.pipeInput(1L, "Hello");
         assertThat(outputTopic1.readKeyValue(), equalTo(new KeyValue<>(1L, "Hello")));
         assertThat(outputTopic2.readKeyValue(), equalTo(new KeyValue<>("Hello", 1L)));
@@ -230,13 +229,13 @@ public class TestInputTopicTest {
 
     @Test
     public void testNonExistingTopic() {
-        final TestInputTopic<Long, String> inputTopic = new TestInputTopic<>(testDriver, "no-exist", longSerde, stringSerde);
+        final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( "no-exist", longSerde, stringSerde);
         assertThrows("Unknown topic", IllegalArgumentException.class, () -> inputTopic.pipeInput(1L, "Hello"));
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateTopicWithNullTopicName() {
-        final TestInputTopic<String, String> inputTopic = new TestInputTopic<>(testDriver, null, stringSerde, stringSerde);
+        final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic( null, stringSerde, stringSerde);
     }
 
     @Test(expected = NullPointerException.class)
@@ -247,13 +246,13 @@ public class TestInputTopicTest {
 
     @Test(expected = StreamsException.class)
     public void testWrongSerde() {
-        final TestInputTopic<String, String> inputTopic = new TestInputTopic<>(testDriver, INPUT_TOPIC_MAP, stringSerde, stringSerde);
+        final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC_MAP, stringSerde, stringSerde);
         inputTopic.pipeInput("1L", "Hello");
     }
 
     @Test
     public void testToString() {
-        final TestInputTopic<String, String> inputTopic = new TestInputTopic<>(testDriver, "topicName", stringSerde, stringSerde);
+        final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic( "topicName", stringSerde, stringSerde);
         assertThat(inputTopic.toString(), equalTo("TestInputTopic{topic='topicName'}"));
     }
 }
