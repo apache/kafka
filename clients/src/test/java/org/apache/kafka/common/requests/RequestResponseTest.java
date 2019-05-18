@@ -797,8 +797,20 @@ public class RequestResponseTest {
                             .setGroupId("group1")
                             .setSessionTimeoutMs(30000)
                             .setMemberId("consumer1")
+                            .setGroupInstanceId(null)
                             .setProtocolType("consumer")
                             .setProtocols(protocols))
+                    .build((short) version);
+        } else if (version <= 4) {
+            return new JoinGroupRequest.Builder(
+                    new JoinGroupRequestData()
+                            .setGroupId("group1")
+                            .setSessionTimeoutMs(30000)
+                            .setMemberId("consumer1")
+                            .setGroupInstanceId(null)
+                            .setProtocolType("consumer")
+                            .setProtocols(protocols)
+                            .setRebalanceTimeoutMs(60000)) // v1 and above contains rebalance timeout
                     .build((short) version);
         } else {
             return new JoinGroupRequest.Builder(
@@ -806,6 +818,7 @@ public class RequestResponseTest {
                             .setGroupId("group1")
                             .setSessionTimeoutMs(30000)
                             .setMemberId("consumer1")
+                            .setGroupInstanceId("groupInstanceId") // v5 and above could set group instance id
                             .setProtocolType("consumer")
                             .setProtocols(protocols)
                             .setRebalanceTimeoutMs(60000)) // v1 and above contains rebalance timeout
@@ -955,6 +968,7 @@ public class RequestResponseTest {
         return new OffsetCommitRequest.Builder(new OffsetCommitRequestData()
                 .setGroupId("group1")
                 .setMemberId("consumer1")
+                .setGroupInstanceId(null)
                 .setGenerationId(100)
                 .setTopics(Collections.singletonList(
                         new OffsetCommitRequestData.OffsetCommitRequestTopic()
