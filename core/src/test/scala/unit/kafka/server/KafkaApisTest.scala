@@ -627,8 +627,6 @@ class KafkaApisTest {
     ))
     createKafkaApis(KAFKA_2_2_IV1).handleOffsetCommitRequest(requestChannelRequest)
 
-    val response = readResponse(ApiKeys.OFFSET_COMMIT, offsetCommitRequest, capturedResponse).asInstanceOf[OffsetCommitResponse]
-
     val expectedTopicErrors = Collections.singletonList(
       new OffsetCommitResponseData.OffsetCommitResponseTopic()
         .setName("test")
@@ -638,6 +636,7 @@ class KafkaApisTest {
             .setErrorCode(Errors.UNSUPPORTED_VERSION.code())
         ))
     )
+    val response = readResponse(ApiKeys.OFFSET_COMMIT, offsetCommitRequest, capturedResponse).asInstanceOf[OffsetCommitResponse]
     assertEquals(expectedTopicErrors, response.data.topics())
     EasyMock.replay(groupCoordinator)
   }

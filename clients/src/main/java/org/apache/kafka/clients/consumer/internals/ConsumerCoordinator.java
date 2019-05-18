@@ -599,11 +599,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             OffsetCommitCompletion completion = completedOffsetCommits.poll();
             if (completion == null) {
                 break;
-            } else if (completion.exception instanceof FencedInstanceIdException) {
-                throw (FencedInstanceIdException) completion.exception;
-            } else {
-                completion.invoke();
             }
+            completion.invoke();
         }
     }
 

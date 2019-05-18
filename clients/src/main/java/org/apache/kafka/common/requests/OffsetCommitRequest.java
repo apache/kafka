@@ -55,7 +55,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         @Override
         public OffsetCommitRequest build(short version) {
             if (data.groupInstanceId() != null && version < 7) {
-                throw new UnsupportedVersionException("The broker join group protocol version " + version + " doesn't support static membership." +
+                throw new UnsupportedVersionException("The broker offset commit protocol version " + version + " doesn't support static membership. " +
                         "Please unset consumer config group.instance.id field to proceed.");
             }
             return new OffsetCommitRequest(data, version);
