@@ -593,7 +593,7 @@ class KafkaApisTest {
         .setGroupId("test")
         .setMemberId("test")
         .setGroupInstanceId("instanceId")
-        .setGenerationid(1)
+        .setGenerationId(1)
     ))
     createKafkaApis(KAFKA_2_2_IV1).handleHeartbeatRequest(requestChannelRequest)
 

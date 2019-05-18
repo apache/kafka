@@ -905,9 +905,9 @@ public abstract class AbstractCoordinator implements Closeable {
         HeartbeatRequest.Builder requestBuilder =
                 new HeartbeatRequest.Builder(new HeartbeatRequestData()
                         .setGroupId(groupId)
-                        .setGenerationid(this.generation.generationId)
+                        .setMemberId(this.generation.memberId)
                         .setGroupInstanceId(this.groupInstanceId.orElse(null))
-                        .setMemberId(this.generation.memberId));
+                        .setGenerationId(this.generation.generationId));
         return client.send(coordinator, requestBuilder)
                 .compose(new HeartbeatResponseHandler());
     }

@@ -417,7 +417,7 @@ public class ConsumerNetworkClientTest {
     private HeartbeatRequest.Builder heartbeat() {
         return new HeartbeatRequest.Builder(new HeartbeatRequestData()
                 .setGroupId("group")
-                .setGenerationid(1)
+                .setGenerationId(1)
                 .setMemberId("memberId"));
     }
 

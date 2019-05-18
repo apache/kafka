@@ -1476,7 +1476,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         heartbeatRequest.data.groupId,
         heartbeatRequest.data.memberId,
         Option(heartbeatRequest.data.groupInstanceId),
-        heartbeatRequest.data.generationid,
+        heartbeatRequest.data.generationId,
         sendResponseCallback)
     }
   }
