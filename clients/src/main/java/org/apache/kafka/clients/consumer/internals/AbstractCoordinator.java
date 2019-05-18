@@ -1144,6 +1144,7 @@ public abstract class AbstractCoordinator implements Closeable {
                                         } else if (e instanceof FencedInstanceIdException) {
                                             log.error("Caught fenced group.instance.id {} error in heartbeat thread", groupInstanceId);
                                             heartbeatThread.failed.set(e);
+                                            heartbeatThread.disable();
                                         } else {
                                             heartbeat.failHeartbeat();
                                             // wake up the thread if it's sleeping to reschedule the heartbeat

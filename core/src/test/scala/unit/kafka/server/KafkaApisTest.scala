@@ -621,7 +621,7 @@ class KafkaApisTest {
                 .setPartitionIndex(0)
                 .setCommittedOffset(100)
                 .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
-                .setCommittedMetadata(""),
+                .setCommittedMetadata("")
             ))
         ))
     ))
