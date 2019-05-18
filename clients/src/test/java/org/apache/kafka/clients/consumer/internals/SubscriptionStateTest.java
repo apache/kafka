@@ -23,6 +23,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.util.Arrays;
@@ -307,6 +308,36 @@ public class SubscriptionStateTest {
         assertEquals(0, state.subscription().size());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
+    }
+
+    @Test
+    public void testPreferredReadReplicaLease() {
+        state.assignFromUser(Collections.singleton(tp0));
+
+        // Default state
+        assertFalse(state.preferredReadReplica(tp0, 0L).isPresent());
+
+        // Set the preferred replica with lease
+        state.updatePreferredReadReplica(tp0, 42, () -> 10L);
+        TestUtils.assertOptional(state.preferredReadReplica(tp0, 9L),  value -> assertEquals(value.intValue(), 42));
+        TestUtils.assertOptional(state.preferredReadReplica(tp0, 10L),  value -> assertEquals(value.intValue(), 42));
+        assertFalse(state.preferredReadReplica(tp0, 11L).isPresent());
+
+        // Unset the preferred replica
+        state.clearPreferredReadReplica(tp0);
+        assertFalse(state.preferredReadReplica(tp0, 9L).isPresent());
+        assertFalse(state.preferredReadReplica(tp0, 11L).isPresent());
+
+        // Set to new preferred replica with lease
+        state.updatePreferredReadReplica(tp0, 43, () -> 20L);
+        TestUtils.assertOptional(state.preferredReadReplica(tp0, 11L),  value -> assertEquals(value.intValue(), 43));
+        TestUtils.assertOptional(state.preferredReadReplica(tp0, 20L),  value -> assertEquals(value.intValue(), 43));
+        assertFalse(state.preferredReadReplica(tp0, 21L).isPresent());
+
+        // Set to new preferred replica without clearing first
+        state.updatePreferredReadReplica(tp0, 44, () -> 30L);
+        TestUtils.assertOptional(state.preferredReadReplica(tp0, 30L),  value -> assertEquals(value.intValue(), 44));
+        assertFalse(state.preferredReadReplica(tp0, 31L).isPresent());
     }
 
     private static class MockRebalanceListener implements ConsumerRebalanceListener {

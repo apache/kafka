@@ -36,6 +36,15 @@ import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
 import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
 
 public class OffsetsForLeaderEpochRequest extends AbstractRequest {
+    private static final Field.Int32 REPLICA_ID = new Field.Int32("replica_id",
+            "Broker id of the follower. For normal consumers, use -1.");
+
+    /**
+     * Sentinel replica_id value to indicate a regular consumer rather than another broker
+     */
+    public static final int CONSUMER_REPLICA_ID = -1;
+
+
     private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
             "An array of topics to get epochs for");
     private static final Field.ComplexArray PARTITIONS = new Field.ComplexArray("partitions",
@@ -67,28 +76,40 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V2 = new Schema(
             TOPICS_V2);
 
+    private static final Schema OFFSET_FOR_LEADER_EPOCH_REQUEST_V3 = new Schema(
+            REPLICA_ID,
+            TOPICS_V2);
+
     public static Schema[] schemaVersions() {
         return new Schema[]{OFFSET_FOR_LEADER_EPOCH_REQUEST_V0, OFFSET_FOR_LEADER_EPOCH_REQUEST_V1,
-            OFFSET_FOR_LEADER_EPOCH_REQUEST_V2};
+            OFFSET_FOR_LEADER_EPOCH_REQUEST_V2, OFFSET_FOR_LEADER_EPOCH_REQUEST_V3};
     }
 
-    private Map<TopicPartition, PartitionData> epochsByPartition;
+    private final Map<TopicPartition, PartitionData> epochsByPartition;
+
+    private final int replicaId;
 
     public Map<TopicPartition, PartitionData> epochsByTopicPartition() {
         return epochsByPartition;
     }
 
+    public int replicaId() {
+        return replicaId;
+    }
+
     public static class Builder extends AbstractRequest.Builder<OffsetsForLeaderEpochRequest> {
         private final Map<TopicPartition, PartitionData> epochsByPartition;
+        private final int replicaId;
 
         public Builder(short version, Map<TopicPartition, PartitionData> epochsByPartition) {
             super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
             this.epochsByPartition = epochsByPartition;
+            this.replicaId = CONSUMER_REPLICA_ID;
         }
 
         @Override
         public OffsetsForLeaderEpochRequest build(short version) {
-            return new OffsetsForLeaderEpochRequest(epochsByPartition, version);
+            return new OffsetsForLeaderEpochRequest(epochsByPartition, replicaId, version);
         }
 
         public static OffsetsForLeaderEpochRequest parse(ByteBuffer buffer, short version) {
@@ -105,13 +126,15 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         }
     }
 
-    public OffsetsForLeaderEpochRequest(Map<TopicPartition, PartitionData> epochsByPartition, short version) {
+    public OffsetsForLeaderEpochRequest(Map<TopicPartition, PartitionData> epochsByPartition, int replicaId, short version) {
         super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
         this.epochsByPartition = epochsByPartition;
+        this.replicaId = replicaId;
     }
 
     public OffsetsForLeaderEpochRequest(Struct struct, short version) {
         super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
+        replicaId = struct.getOrElse(REPLICA_ID, CONSUMER_REPLICA_ID);
         epochsByPartition = new HashMap<>();
         for (Object topicAndEpochsObj : struct.get(TOPICS)) {
             Struct topicAndEpochs = (Struct) topicAndEpochsObj;
@@ -134,6 +157,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         Struct requestStruct = new Struct(ApiKeys.OFFSET_FOR_LEADER_EPOCH.requestSchema(version()));
+        requestStruct.set(REPLICA_ID, replicaId);
 
         Map<String, Map<Integer, PartitionData>> topicsToPartitionEpochs = CollectionUtils.groupPartitionDataByTopic(epochsByPartition);
 

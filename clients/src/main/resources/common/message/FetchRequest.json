@@ -44,7 +44,7 @@
   // Version 10 indicates that we can use the ZStd compression algorithm, as
   // described in KIP-110.
   //
-  "validVersions": "0-10",
+  "validVersions": "0-11",
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "0+",
       "about": "The broker ID of the follower, of -1 if this request is from a consumer." },
@@ -84,6 +84,8 @@
         "about": "The partition name." },
       { "name": "ForgottenPartitionIndexes", "type": "[]int32", "versions": "7+",
         "about": "The partitions indexes to forget." }
-    ]}
+    ]},
+    { "name": "RackId", "type":  "string", "versions": "11+", "default": "", "ignorable": true,
+      "about": "Rack ID of the consumer making this request"}
   ]
 }
