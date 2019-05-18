@@ -680,7 +680,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             if (groupInstanceId != null) {
                 JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
                 this.groupInstanceId = Optional.of(groupInstanceId);
-                logContext = new LogContext("[Consumer groupInstanceId=" + groupInstanceId + ", clientId=" + clientId + ", groupId=" + groupId + "] ");
+                logContext = new LogContext("[Consumer instanceId=" + groupInstanceId + ", clientId=" + clientId + ", groupId=" + groupId + "] ");
             } else {
                 this.groupInstanceId = Optional.empty();
                 logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId + "] ");

@@ -887,7 +887,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             future.raise(error);
                             return;
                         } else if (error == Errors.FENCED_INSTANCE_ID) {
-                            log.error("Received fatal exception: group.instance.id {} gets fenced", groupInstanceId);
+                            log.error("Received fatal exception: group.instance.id gets fenced");
                             future.raise(error);
                             return;
                         } else if (error == Errors.UNKNOWN_MEMBER_ID

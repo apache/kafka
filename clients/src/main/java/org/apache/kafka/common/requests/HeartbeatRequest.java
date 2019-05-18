@@ -39,8 +39,8 @@ public class HeartbeatRequest extends AbstractRequest {
         @Override
         public HeartbeatRequest build(short version) {
             if (data.groupInstanceId() != null && version < 3) {
-                throw new UnsupportedVersionException("The broker heartbeat protocol version " + version + " doesn't support static membership." +
-                        "Please unset consumer config group.instance.id field to proceed.");
+                throw new UnsupportedVersionException("The broker heartbeat protocol version " +
+                        version + " does not support usage of config group.instance.id.");
             }
             return new HeartbeatRequest(data, version);
         }

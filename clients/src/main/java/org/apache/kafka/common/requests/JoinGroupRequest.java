@@ -41,8 +41,8 @@ public class JoinGroupRequest extends AbstractRequest {
         @Override
         public JoinGroupRequest build(short version) {
             if (data.groupInstanceId() != null && version < 5) {
-                throw new UnsupportedVersionException("The broker join group protocol version " + version + " doesn't support static membership." +
-                        "Please unset consumer config group.instance.id field to proceed.");
+                throw new UnsupportedVersionException("The broker join group protocol version " +
+                        version + " does not support usage of config group.instance.id.");
             }
             return new JoinGroupRequest(data, version);
         }
