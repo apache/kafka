@@ -48,6 +48,7 @@ public class KTableAggregateTest {
     private final Serde<String> stringSerde = Serdes.String();
     private final Consumed<String, String> consumed = Consumed.with(stringSerde, stringSerde);
     private final Grouped<String, String> stringSerialized = Grouped.with(stringSerde, stringSerde);
+    private final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
 
     @Test
     public void testAggBasic() {
@@ -66,7 +67,6 @@ public class KTableAggregateTest {
                 Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized")
                     .withValueSerde(stringSerde));
 
-        final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (
@@ -134,7 +134,6 @@ public class KTableAggregateTest {
                 Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as("topic1-Canonized")
                     .withValueSerde(stringSerde));
 
-        final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
         table2.toStream().process(supplier);
 
         try (
@@ -210,7 +209,6 @@ public class KTableAggregateTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
 
-        final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
         builder
             .table(input, consumed)
             .groupBy(MockMapper.selectValueKeyValueMapper(), stringSerialized)
@@ -226,7 +224,6 @@ public class KTableAggregateTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String input = "count-test-input";
 
-        final MockProcessorSupplier<String, Object> supplier = new MockProcessorSupplier<>();
         builder
             .table(input, consumed)
             .groupBy(MockMapper.selectValueKeyValueMapper(), stringSerialized)
