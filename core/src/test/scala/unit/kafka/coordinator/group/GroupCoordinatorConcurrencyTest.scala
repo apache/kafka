@@ -180,10 +180,10 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     override def runWithCallback(member: GroupMember, responseCallback: SyncGroupCallback): Unit = {
       if (member.leader) {
         groupCoordinator.handleSyncGroup(member.groupId, member.generationId, member.memberId,
-            member.group.assignment, responseCallback)
+          member.groupInstanceId, member.group.assignment, responseCallback)
       } else {
-         groupCoordinator.handleSyncGroup(member.groupId, member.generationId, member.memberId,
-             Map.empty[String, Array[Byte]], responseCallback)
+        groupCoordinator.handleSyncGroup(member.groupId, member.generationId, member.memberId,
+          member.groupInstanceId, Map.empty[String, Array[Byte]], responseCallback)
       }
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
@@ -198,7 +198,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: HeartbeatCallback): Unit = {
-      groupCoordinator.handleHeartbeat( member.groupId, member.memberId,  member.generationId, responseCallback)
+      groupCoordinator.handleHeartbeat(member.groupId, member.memberId,
+        member.groupInstanceId, member.generationId, responseCallback)
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
        val error = await(member, DefaultSessionTimeout)
@@ -213,8 +214,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     override def runWithCallback(member: GroupMember, responseCallback: CommitOffsetCallback): Unit = {
       val tp = new TopicPartition("topic", 0)
       val offsets = immutable.Map(tp -> OffsetAndMetadata(1, "", Time.SYSTEM.milliseconds()))
-      groupCoordinator.handleCommitOffsets(member.groupId, member.memberId, member.generationId,
-          offsets, responseCallback)
+      groupCoordinator.handleCommitOffsets(member.groupId, member.memberId,
+        member.groupInstanceId, member.generationId, offsets, responseCallback)
     }
     override def awaitAndVerify(member: GroupMember): Unit = {
        val offsets = await(member, 500)
@@ -307,6 +308,7 @@ object GroupCoordinatorConcurrencyTest {
 
   class GroupMember(val group: Group, val groupPartitionId: Int, val leader: Boolean) extends CoordinatorMember {
     @volatile var memberId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID
+    @volatile var groupInstanceId: Option[String] = None
     @volatile var generationId: Int = -1
     def groupId: String = group.groupId
   }

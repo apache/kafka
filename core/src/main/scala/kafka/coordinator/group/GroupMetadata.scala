@@ -137,6 +137,8 @@ private object GroupMetadata {
     })
     group
   }
+
+  private val MemberIdDelimiter = "-"
 }
 
 /**
@@ -251,7 +253,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     *   2. no member rejoined
     */
   def maybeElectNewJoinedLeader(): Boolean = {
-    leaderId.map { currentLeaderId =>
+    leaderId.exists { currentLeaderId =>
       val currentLeader = get(currentLeaderId)
       if (!currentLeader.isAwaitingJoin) {
         members.find(_._2.isAwaitingJoin) match {
@@ -272,7 +274,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       } else {
         true
       }
-    }.getOrElse(false)
+    }
   }
 
   /**
@@ -343,7 +345,31 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     timeout.max(member.rebalanceTimeoutMs)
   }
 
-  def generateMemberIdSuffix = UUID.randomUUID().toString
+  def generateMemberId(clientId: String,
+                       groupInstanceId: Option[String]): String = {
+    groupInstanceId match {
+      case None =>
+        clientId + GroupMetadata.MemberIdDelimiter + UUID.randomUUID().toString
+      case Some(instanceId) =>
+        instanceId + GroupMetadata.MemberIdDelimiter + currentStateTimestamp.get
+    }
+  }
+
+  /**
+    * Verify the member.id is up to date for static members. Return true if both conditions met:
+    *   1. given member is a known static member to group
+    *   2. group stored member.id doesn't match with given member.id
+    */
+  def isStaticMemberFenced(memberId: String,
+                           groupInstanceId: Option[String]): Boolean = {
+    if (hasStaticMember(groupInstanceId)
+      && getStaticMemberId(groupInstanceId) != memberId) {
+        error(s"given member.id $memberId is identified as a known static member ${groupInstanceId.get}," +
+          s"but not matching the expected member.id ${getStaticMemberId(groupInstanceId)}")
+        true
+    } else
+      false
+  }
 
   def canRebalance = GroupMetadata.validPreviousStates(PreparingRebalance).contains(state)
 
