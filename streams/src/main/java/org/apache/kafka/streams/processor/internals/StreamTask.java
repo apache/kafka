@@ -757,12 +757,19 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     public void addRecords(final TopicPartition partition, final Iterable<ConsumerRecord<byte[], byte[]>> records) {
         // if condition put here in case of restarts and rebalances to check for correct timestamp
         if (recordInfo.queue() != null && getPartitionTime(partition) == RecordQueue.UNKNOWN) {
-            final OffsetAndMetadata metadata = consumer.committed(partition);
+            final OffsetAndMetadata metadata;
+            if (!eosEnabled) {
+                metadata = consumer.committed(partition);
+            } else {
+                //Offset metadata information could not be retrieved when eos is enabled
+                metadata = null;
+            }
+            
             if (metadata != null) {
                 final long committedTimestamp = Long.parseLong(metadata.metadata());
                 partitionGroup.setPartitionTimestamp(partition, committedTimestamp);
-                log.info("A committed timestamp was detected: setting the partition time of partition {}"
-                         + " to {} in stream task {}", partition, committedTimestamp, this);
+                log.debug("A committed timestamp was detected: setting the partition time of partition {}"
+                          + " to {} in stream task {}", partition, committedTimestamp, this);
             }
         }
 

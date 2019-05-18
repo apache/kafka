@@ -95,10 +95,6 @@ public class PartitionGroup {
         partitionQueues.get(partition).setPartitionTime(timestamp);
     }
 
-    TopicPartition getNextTopicPartition() {
-        return nonEmptyQueuesByTime.peek().partition();
-    }
-
     /**
      * Get the next record and queue
      *
