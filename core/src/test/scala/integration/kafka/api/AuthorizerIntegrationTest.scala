@@ -380,9 +380,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ).build()
   }
 
-  private def heartbeatRequest = new HeartbeatRequest.Builder(new HeartbeatRequestData().setGroupId(group).setGenerationid(1).setMemberId("")).build()
+  private def heartbeatRequest = new HeartbeatRequest.Builder(
+    new HeartbeatRequestData()
+      .setGroupId(group)
+      .setGenerationId(1)
+      .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
 
-  private def leaveGroupRequest = new LeaveGroupRequest.Builder(new LeaveGroupRequestData().setGroupId(group).setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
+  private def leaveGroupRequest = new LeaveGroupRequest.Builder(
+    new LeaveGroupRequestData()
+      .setGroupId(group)
+      .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
 
   private def deleteGroupsRequest = new DeleteGroupsRequest.Builder(Set(group).asJava).build()
 

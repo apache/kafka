@@ -776,7 +776,7 @@ public class RequestResponseTest {
     private HeartbeatRequest createHeartBeatRequest() {
         return new HeartbeatRequest.Builder(new HeartbeatRequestData()
                 .setGroupId("group1")
-                .setGenerationid(1)
+                .setGenerationId(1)
                 .setMemberId("consumer1")).build();
     }
 

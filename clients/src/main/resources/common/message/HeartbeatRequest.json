@@ -23,7 +23,7 @@
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group id." },
-    { "name": "Generationid", "type": "int32", "versions": "0+",
+    { "name": "GenerationId", "type": "int32", "versions": "0+",
       "about": "The generation of the group." },
     { "name": "MemberId", "type": "string", "versions": "0+",
       "about": "The member ID." },
