@@ -1602,6 +1602,7 @@ class KafkaController(val config: KafkaConfig,
           processIsrChangeNotification()
         case Startup =>
           processStartup()
+        case _ =>
       }
     } catch {
       case e: ControllerMovedException =>

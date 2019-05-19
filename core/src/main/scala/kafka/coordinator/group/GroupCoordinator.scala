@@ -401,6 +401,8 @@ class GroupCoordinator(val brokerId: Int,
             val memberMetadata = group.get(memberId)
             responseCallback(memberMetadata.assignment, Errors.NONE)
             completeAndScheduleNextHeartbeatExpiration(group, group.get(memberId))
+
+          case _ =>
         }
       }
     }
@@ -533,6 +535,8 @@ class GroupCoordinator(val brokerId: Int,
                 val member = group.get(memberId)
                 completeAndScheduleNextHeartbeatExpiration(group, member)
                 responseCallback(Errors.NONE)
+
+            case _ =>
           }
         }
       }
