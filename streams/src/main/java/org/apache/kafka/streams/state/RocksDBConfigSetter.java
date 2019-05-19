@@ -16,12 +16,14 @@
  */
 package org.apache.kafka.streams.state;
 
+import org.rocksdb.ColumnFamilyOptions;
+import org.rocksdb.DBOptions;
 import org.rocksdb.Options;
-
-import java.util.Map;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+
+import java.util.Map;
 
 /**
  * An interface to that allows developers to customize the RocksDB settings for a given Store.
@@ -44,6 +46,17 @@ public interface RocksDBConfigSetter {
     void setConfig(final String storeName, final Options options, final Map<String, Object> configs);
 
     /**
+     * Set the rocks db options for the provided storeName.
+     *
+     * @param storeName             the name of the store being configured
+     * @param dbOptions             the RocksDB DBOptions
+     * @param columnFamilyOptions   the RocksDB ColumnFamilyOptions
+     * @param configs               the configuration supplied to {@link org.apache.kafka.streams.StreamsConfig}
+     */
+    default void setConfig(final String storeName, final DBOptions dbOptions, final ColumnFamilyOptions columnFamilyOptions, final Map<String, Object> configs) {
+    }
+
+    /**
      * Close any user-constructed objects that inherit from {@code org.rocksdb.RocksObject}.
      * <p>
      * Any object created with {@code new} in {@link RocksDBConfigSetter#setConfig setConfig()} and that inherits
@@ -58,5 +71,23 @@ public interface RocksDBConfigSetter {
      */
     default void close(final String storeName, final Options options) {
         LOG.warn("The default close will be removed in 3.0.0 -- you should overwrite it if you have implemented RocksDBConfigSetter");
+    }
+
+
+    /**
+     * Close any user-constructed objects that inherit from {@code org.rocksdb.RocksObject}.
+     * <p>
+     * Any object created with {@code new} in {@link RocksDBConfigSetter#setConfig setConfig()} and that inherits
+     * from {@code org.rocksdb.RocksObject} should have {@code org.rocksdb.RocksObject#close()}
+     * called on it here to avoid leaking off-heap memory. Objects to be closed can be saved by the user or retrieved
+     * back from {@code options} using its getter methods.
+     * <p>
+     * Example objects needing to be closed include {@code org.rocksdb.Filter} and {@code org.rocksdb.Cache}.
+     *
+     * @param storeName             the name of the store being configured
+     * @param dbOptions             the RocksDB options
+     * @param columnFamilyOptions   the RocksDB options
+     */
+    default void close(final String storeName, final DBOptions dbOptions, final ColumnFamilyOptions columnFamilyOptions) {
     }
 }

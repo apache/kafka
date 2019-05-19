@@ -42,6 +42,7 @@ import org.rocksdb.DBOptions;
 import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
 import org.rocksdb.LRUCache;
+import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
@@ -54,6 +55,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
@@ -124,67 +126,136 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             throw new ProcessorStateException(fatal);
         }
 
-        // initialize the default rocksdb options
-        final DBOptions tempDbOptions = new DBOptions();
-        final ColumnFamilyOptions tempColumnFamilyOptions = new ColumnFamilyOptions();
-        final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions =
-                new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(tempDbOptions, tempColumnFamilyOptions);
+        // list the existing column families
+        final List<byte[]> columnFamilies;
+        try {
+            columnFamilies = RocksDB.listColumnFamilies(new Options(), dbDir.getAbsolutePath());
+        } catch (final RocksDBException fatal) {
+            throw new ProcessorStateException(fatal);
+        }
 
-        final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
-        cache = new LRUCache(BLOCK_CACHE_SIZE);
-        tableConfig.setBlockCache(cache);
-        tableConfig.setBlockSize(BLOCK_SIZE);
+        if (columnFamilies.isEmpty() || (columnFamilies.size() == 1 && Arrays.equals(columnFamilies.get(0), RocksDB.DEFAULT_COLUMN_FAMILY))) {
+            // initialize the default rocksdb options
+            final DBOptions tempDbOptions = new DBOptions();
+            final ColumnFamilyOptions tempColumnFamilyOptions = new ColumnFamilyOptions();
+            final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions =
+                    new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(tempDbOptions, tempColumnFamilyOptions);
 
-        filter = new BloomFilter();
-        tableConfig.setFilter(filter);
+            final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
+            cache = new LRUCache(BLOCK_CACHE_SIZE);
+            tableConfig.setBlockCache(cache);
+            tableConfig.setBlockSize(BLOCK_SIZE);
 
-        userSpecifiedOptions.optimizeFiltersForHits();
-        userSpecifiedOptions.setTableFormatConfig(tableConfig);
-        userSpecifiedOptions.setWriteBufferSize(WRITE_BUFFER_SIZE);
-        userSpecifiedOptions.setCompressionType(COMPRESSION_TYPE);
-        userSpecifiedOptions.setCompactionStyle(COMPACTION_STYLE);
-        userSpecifiedOptions.setMaxWriteBufferNumber(MAX_WRITE_BUFFERS);
-        userSpecifiedOptions.setCreateIfMissing(true);
-        userSpecifiedOptions.setErrorIfExists(false);
-        userSpecifiedOptions.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
-        // this is the recommended way to increase parallelism in RocksDb
-        // note that the current implementation of setIncreaseParallelism affects the number
-        // of compaction threads but not flush threads (the latter remains one). Also
-        // the parallelism value needs to be at least two because of the code in
-        // https://github.com/facebook/rocksdb/blob/62ad0a9b19f0be4cefa70b6b32876e764b7f3c11/util/options.cc#L580
-        // subtracts one from the value passed to determine the number of compaction threads
-        // (this could be a bug in the RocksDB code and their devs have been contacted).
-        userSpecifiedOptions.setIncreaseParallelism(Math.max(Runtime.getRuntime().availableProcessors(), 2));
+            filter = new BloomFilter();
+            tableConfig.setFilter(filter);
 
-        wOptions = new WriteOptions();
-        wOptions.setDisableWAL(true);
+            userSpecifiedOptions.optimizeFiltersForHits();
+            userSpecifiedOptions.setTableFormatConfig(tableConfig);
+            userSpecifiedOptions.setWriteBufferSize(WRITE_BUFFER_SIZE);
+            userSpecifiedOptions.setCompressionType(COMPRESSION_TYPE);
+            userSpecifiedOptions.setCompactionStyle(COMPACTION_STYLE);
+            userSpecifiedOptions.setMaxWriteBufferNumber(MAX_WRITE_BUFFERS);
+            userSpecifiedOptions.setCreateIfMissing(true);
+            userSpecifiedOptions.setErrorIfExists(false);
+            userSpecifiedOptions.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
+            // this is the recommended way to increase parallelism in RocksDb
+            // note that the current implementation of setIncreaseParallelism affects the number
+            // of compaction threads but not flush threads (the latter remains one). Also
+            // the parallelism value needs to be at least two because of the code in
+            // https://github.com/facebook/rocksdb/blob/62ad0a9b19f0be4cefa70b6b32876e764b7f3c11/util/options.cc#L580
+            // subtracts one from the value passed to determine the number of compaction threads
+            // (this could be a bug in the RocksDB code and their devs have been contacted).
+            userSpecifiedOptions.setIncreaseParallelism(Math.max(Runtime.getRuntime().availableProcessors(), 2));
 
-        fOptions = new FlushOptions();
-        fOptions.setWaitForFlush(true);
+            wOptions = new WriteOptions();
+            wOptions.setDisableWAL(true);
 
-        final Map<String, Object> configs = context.appConfigs();
-        final Class<RocksDBConfigSetter> configSetterClass =
-            (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
+            fOptions = new FlushOptions();
+            fOptions.setWaitForFlush(true);
 
-        final RocksDBConfigSetter configSetter;
-        if (configSetterClass != null) {
-            configSetter = Utils.newInstance(configSetterClass);
-            configSetter.setConfig(name, userSpecifiedOptions, configs);
+            final Map<String, Object> configs = context.appConfigs();
+            final Class<RocksDBConfigSetter> configSetterClass =
+                    (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
+
+            final RocksDBConfigSetter configSetter;
+            if (configSetterClass != null) {
+                configSetter = Utils.newInstance(configSetterClass);
+                configSetter.setConfig(name, userSpecifiedOptions, configs);
+            } else {
+                configSetter = null;
+            }
+
+            if (prepareForBulkload) {
+                userSpecifiedOptions.prepareForBulkLoad();
+            }
+
+            dbOptions = new DBOptions(tempDbOptions);
+            columnFamilyOptions = new ColumnFamilyOptions(tempColumnFamilyOptions);
+
+            if (configSetter != null) {
+                configSetter.close(name, userSpecifiedOptions);
+            }
+            userSpecifiedOptions.close();
         } else {
-            configSetter = null;
-        }
+            final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
+            cache = new LRUCache(BLOCK_CACHE_SIZE);
+            tableConfig.setBlockCache(cache);
+            tableConfig.setBlockSize(BLOCK_SIZE);
 
-        if (prepareForBulkload) {
-            userSpecifiedOptions.prepareForBulkLoad();
-        }
+            filter = new BloomFilter();
+            tableConfig.setFilter(filter);
 
-        dbOptions = new DBOptions(tempDbOptions);
-        columnFamilyOptions = new ColumnFamilyOptions(tempColumnFamilyOptions);
+            dbOptions = new DBOptions();
+            dbOptions.setCreateIfMissing(true);
+            dbOptions.setErrorIfExists(false);
+            dbOptions.setInfoLogLevel(InfoLogLevel.ERROR_LEVEL);
+            // this is the recommended way to increase parallelism in RocksDb
+            // note that the current implementation of setIncreaseParallelism affects the number
+            // of compaction threads but not flush threads (the latter remains one). Also
+            // the parallelism value needs to be at least two because of the code in
+            // https://github.com/facebook/rocksdb/blob/62ad0a9b19f0be4cefa70b6b32876e764b7f3c11/util/options.cc#L580
+            // subtracts one from the value passed to determine the number of compaction threads
+            // (this could be a bug in the RocksDB code and their devs have been contacted).
+            dbOptions.setIncreaseParallelism(Math.max(Runtime.getRuntime().availableProcessors(), 2));
 
-        if (configSetter != null) {
-            configSetter.close(name, userSpecifiedOptions);
+            columnFamilyOptions = new ColumnFamilyOptions();
+            columnFamilyOptions.optimizeFiltersForHits();
+            columnFamilyOptions.setTableFormatConfig(tableConfig);
+            columnFamilyOptions.setWriteBufferSize(WRITE_BUFFER_SIZE);
+            columnFamilyOptions.setCompressionType(COMPRESSION_TYPE);
+            columnFamilyOptions.setCompactionStyle(COMPACTION_STYLE);
+            columnFamilyOptions.setMaxWriteBufferNumber(MAX_WRITE_BUFFERS);
+
+            wOptions = new WriteOptions();
+            wOptions.setDisableWAL(true);
+
+            fOptions = new FlushOptions();
+            fOptions.setWaitForFlush(true);
+
+            final Map<String, Object> configs = context.appConfigs();
+            final Class<RocksDBConfigSetter> configSetterClass =
+                    (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
+
+            final RocksDBConfigSetter configSetter;
+            if (configSetterClass != null) {
+                configSetter = Utils.newInstance(configSetterClass);
+                configSetter.setConfig(name, dbOptions, columnFamilyOptions, configs);
+            } else {
+                configSetter = null;
+            }
+
+            if (prepareForBulkload) {
+                dbOptions.setMaxBackgroundFlushes(4);
+                columnFamilyOptions.setDisableAutoCompactions(true);
+                columnFamilyOptions.setLevel0FileNumCompactionTrigger(1 << 30);
+                columnFamilyOptions.setLevel0SlowdownWritesTrigger(1 << 30);
+                columnFamilyOptions.setLevel0StopWritesTrigger(1 << 30);
+            }
+
+            if (configSetter != null) {
+                configSetter.close(name, dbOptions, columnFamilyOptions);
+            }
         }
-        userSpecifiedOptions.close();
 
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;

@@ -37,8 +37,10 @@ import org.junit.Before;
 import org.junit.Test;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
-import org.rocksdb.Filter;
 import org.rocksdb.Cache;
+import org.rocksdb.ColumnFamilyOptions;
+import org.rocksdb.DBOptions;
+import org.rocksdb.Filter;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
 
@@ -485,6 +487,13 @@ public class RocksDBStoreTest {
 
             options.setLevel0FileNumCompactionTrigger(10);
         }
+
+        @Override
+        public void setConfig(final String storeName, final DBOptions dboptions, final ColumnFamilyOptions columnFamilyOptions, final Map<String, Object> configs) {
+            called = true;
+
+            columnFamilyOptions.setLevel0FileNumCompactionTrigger(10);
+        }
     }
 
     public static class TestingBloomFilterRocksDBConfigSetter implements RocksDBConfigSetter {
@@ -513,7 +522,34 @@ public class RocksDBStoreTest {
         }
 
         @Override
+        public void setConfig(final String storeName, final DBOptions dboptions, final ColumnFamilyOptions columnFamilyOptions, final Map<String, Object> configs) {
+            final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
+            cache = new LRUCache(50 * 1024 * 1024L);
+            tableConfig.setBlockCache(cache);
+            tableConfig.setBlockSize(4096L);
+            if (enableBloomFilters) {
+                filter = new BloomFilter();
+                tableConfig.setFilter(filter);
+                columnFamilyOptions.optimizeFiltersForHits();
+                bloomFiltersSet = true;
+            } else {
+                columnFamilyOptions.setOptimizeFiltersForHits(false);
+                bloomFiltersSet = false;
+            }
+
+            columnFamilyOptions.setTableFormatConfig(tableConfig);
+        }
+
+        @Override
         public void close(final String storeName, final Options options) {
+            if (filter != null) {
+                filter.close();
+            }
+            cache.close();
+        }
+
+        @Override
+        public void close(final String storeName, final DBOptions dboptions, final ColumnFamilyOptions columnFamilyOptions) {
             if (filter != null) {
                 filter.close();
             }
