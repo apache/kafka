@@ -52,6 +52,7 @@ import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Assert;
+import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -114,6 +115,7 @@ public class TopologyTestDriverTest {
         mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath())
     ));
     private KeyValueStore<String, Long> store;
+    private MockProcessorSupplier<String, Object> supplier;
 
     private final StringDeserializer stringDeserializer = new StringDeserializer();
     private final LongDeserializer longDeserializer = new LongDeserializer();
@@ -240,8 +242,10 @@ public class TopologyTestDriverTest {
 
         final String sourceName = "source";
 
+        supplier = new MockProcessorSupplier<>(punctuationIntervalMs, punctuationType);
+
         topology.addSource(sourceName, SOURCE_TOPIC_1);
-        topology.addProcessor("processor", new MockProcessorSupplier(punctuationIntervalMs, punctuationType), sourceName);
+        topology.addProcessor("processor", supplier, sourceName);
 
         return topology;
     }
@@ -287,7 +291,7 @@ public class TopologyTestDriverTest {
     @Test
     public void shouldInitProcessor() {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
-        assertTrue(mockProcessors.get(0).initialized);
+        assertTrue(supplier.theCapturedProcessor().initialized);
     }
 
     @Test
@@ -536,9 +540,8 @@ public class TopologyTestDriverTest {
 
     @Test
     public void shouldPunctuateOnStreamsTime() {
-        final MockPunctuator mockPunctuator = new MockPunctuator();
         testDriver = new TopologyTestDriver(
-            setupSingleProcessorTopology(10L, PunctuationType.STREAM_TIME, mockPunctuator),
+            setupSingleProcessorTopology(10L, PunctuationType.STREAM_TIME),
             config);
 
         final List<Long> expectedPunctuations = new LinkedList<>();
@@ -585,9 +588,8 @@ public class TopologyTestDriverTest {
 
     @Test
     public void shouldPunctuateOnWallClockTime() {
-        final MockPunctuator mockPunctuator = new MockPunctuator();
         testDriver = new TopologyTestDriver(
-            setupSingleProcessorTopology(10L, PunctuationType.WALL_CLOCK_TIME, mockPunctuator),
+            setupSingleProcessorTopology(10L, PunctuationType.WALL_CLOCK_TIME),
             config,
             0);
 
