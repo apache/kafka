@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.rocksdb.Options;
+import org.rocksdb.ColumnFamilyOptions;
 
 public class RocksDBTimestampedSegmentedBytesStoreTest
     extends AbstractRocksDBSegmentedBytesStoreTest<TimestampedSegment> {
@@ -37,7 +37,7 @@ public class RocksDBTimestampedSegmentedBytesStoreTest
     }
 
     @Override
-    Options getOptions(final TimestampedSegment segment) {
-        return segment.getOptions();
+    ColumnFamilyOptions getOptions(final TimestampedSegment segment) {
+        return segment.getCFOptions();
     }
 }

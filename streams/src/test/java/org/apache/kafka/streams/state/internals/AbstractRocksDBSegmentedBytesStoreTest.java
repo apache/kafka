@@ -42,7 +42,7 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 import org.junit.runners.Parameterized.Parameter;
 import org.junit.runners.Parameterized.Parameters;
-import org.rocksdb.Options;
+import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.WriteBatch;
 
 import java.io.File;
@@ -138,7 +138,7 @@ public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> 
 
     abstract AbstractSegments<S> newSegments();
 
-    abstract Options getOptions(S segment);
+    abstract ColumnFamilyOptions getOptions(S segment);
 
     @Test
     public void shouldPutAndFetch() {

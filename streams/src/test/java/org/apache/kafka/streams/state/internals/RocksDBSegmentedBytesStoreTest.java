@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
-import org.rocksdb.Options;
+import org.rocksdb.ColumnFamilyOptions;
 
 public class RocksDBSegmentedBytesStoreTest extends AbstractRocksDBSegmentedBytesStoreTest<KeyValueSegment> {
 
@@ -37,7 +37,7 @@ public class RocksDBSegmentedBytesStoreTest extends AbstractRocksDBSegmentedByte
     }
 
     @Override
-    Options getOptions(final KeyValueSegment segment) {
-        return segment.getOptions();
+    ColumnFamilyOptions getOptions(final KeyValueSegment segment) {
+        return segment.getCFOptions();
     }
 }

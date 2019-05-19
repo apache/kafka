@@ -42,7 +42,6 @@ import org.rocksdb.DBOptions;
 import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
 import org.rocksdb.LRUCache;
-import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
@@ -89,13 +88,12 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     RocksDBAccessor dbAccessor;
 
     // the following option objects will be created in openDB and closed in the close() method
-    private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
-    WriteOptions wOptions;
-    FlushOptions fOptions;
     private Cache cache;
     private BloomFilter filter;
-
-    private RocksDBConfigSetter configSetter;
+    WriteOptions wOptions;
+    FlushOptions fOptions;
+    DBOptions dbOptions;
+    ColumnFamilyOptions columnFamilyOptions;
 
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
@@ -117,11 +115,20 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
     @SuppressWarnings("unchecked")
     void openDB(final ProcessorContext context) {
-        // initialize the default rocksdb options
+        dbDir = new File(new File(context.stateDir(), parentDir), name);
 
-        final DBOptions dbOptions = new DBOptions();
-        final ColumnFamilyOptions columnFamilyOptions = new ColumnFamilyOptions();
-        userSpecifiedOptions = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, columnFamilyOptions);
+        try {
+            Files.createDirectories(dbDir.getParentFile().toPath());
+            Files.createDirectories(dbDir.getAbsoluteFile().toPath());
+        } catch (final IOException fatal) {
+            throw new ProcessorStateException(fatal);
+        }
+
+        // initialize the default rocksdb options
+        final DBOptions tempDbOptions = new DBOptions();
+        final ColumnFamilyOptions tempColumnFamilyOptions = new ColumnFamilyOptions();
+        final RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions =
+                new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(tempDbOptions, tempColumnFamilyOptions);
 
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
         cache = new LRUCache(BLOCK_CACHE_SIZE);
@@ -159,23 +166,25 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         final Class<RocksDBConfigSetter> configSetterClass =
             (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
 
+        final RocksDBConfigSetter configSetter;
         if (configSetterClass != null) {
             configSetter = Utils.newInstance(configSetterClass);
             configSetter.setConfig(name, userSpecifiedOptions, configs);
+        } else {
+            configSetter = null;
         }
 
         if (prepareForBulkload) {
             userSpecifiedOptions.prepareForBulkLoad();
         }
 
-        dbDir = new File(new File(context.stateDir(), parentDir), name);
+        dbOptions = new DBOptions(tempDbOptions);
+        columnFamilyOptions = new ColumnFamilyOptions(tempColumnFamilyOptions);
 
-        try {
-            Files.createDirectories(dbDir.getParentFile().toPath());
-            Files.createDirectories(dbDir.getAbsoluteFile().toPath());
-        } catch (final IOException fatal) {
-            throw new ProcessorStateException(fatal);
+        if (configSetter != null) {
+            configSetter.close(name, userSpecifiedOptions);
         }
+        userSpecifiedOptions.close();
 
         openRocksDB(dbOptions, columnFamilyOptions);
         open = true;
@@ -397,24 +406,25 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         open = false;
         closeOpenIterators();
 
-        if (configSetter != null) {
-            configSetter.close(name, userSpecifiedOptions);
-            configSetter = null;
-        }
-
         dbAccessor.close();
-        userSpecifiedOptions.close();
-        wOptions.close();
-        fOptions.close();
         db.close();
+
+        dbAccessor = null;
+        db = null;
+
+        columnFamilyOptions.close();
+        dbOptions.close();
+
+        columnFamilyOptions = null;
+        dbOptions = null;
+
+        fOptions.close();
+        wOptions.close();
         filter.close();
         cache.close();
 
-        dbAccessor = null;
-        userSpecifiedOptions = null;
-        wOptions = null;
         fOptions = null;
-        db = null;
+        wOptions = null;
         filter = null;
         cache = null;
     }
@@ -617,7 +627,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     }
 
     // for testing
-    public Options getOptions() {
-        return userSpecifiedOptions;
+    public ColumnFamilyOptions getCFOptions() {
+        return columnFamilyOptions;
     }
 }
