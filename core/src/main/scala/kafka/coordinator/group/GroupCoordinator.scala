@@ -170,8 +170,8 @@ class GroupCoordinator(val brokerId: Int,
         // if the group is marked as dead, it means some other thread has just removed the group
         // from the coordinator metadata; it is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
-        // joining without the specified member id.
-        responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.UNKNOWN_MEMBER_ID))
+        // joining without resetting specified member id in case we need to fence.
+        responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.COORDINATOR_NOT_AVAILABLE))
       } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else {
@@ -235,8 +235,8 @@ class GroupCoordinator(val brokerId: Int,
         // if the group is marked as dead, it means some other thread has just removed the group
         // from the coordinator metadata; this is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
-        // joining without the specified member id.
-        responseCallback(joinError(memberId, Errors.UNKNOWN_MEMBER_ID))
+        // joining without resetting specified member id in case we need to fence.
+        responseCallback(joinError(memberId, Errors.COORDINATOR_NOT_AVAILABLE))
       } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
         responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
       } else if (group.isPendingMember(memberId)) {
@@ -334,7 +334,7 @@ class GroupCoordinator(val brokerId: Int,
 
       case None =>
         groupManager.getGroup(groupId) match {
-          case None => responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
+          case None => responseCallback(Array.empty, Errors.COORDINATOR_NOT_AVAILABLE)
           case Some(group) => doSyncGroup(group, generation, memberId, groupInstanceId, groupAssignment, responseCallback)
         }
     }
@@ -351,8 +351,8 @@ class GroupCoordinator(val brokerId: Int,
         // if the group is marked as dead, it means some other thread has just removed the group
         // from the coordinator metadata; this is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
-        // joining without the specified member id.
-        responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
+        // joining without resetting specified member id in case we need to fence.
+        responseCallback(Array.empty, Errors.COORDINATOR_NOT_AVAILABLE)
       } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
         responseCallback(Array.empty, Errors.FENCED_INSTANCE_ID)
       } else if (!group.has(memberId)) {
@@ -419,14 +419,14 @@ class GroupCoordinator(val brokerId: Int,
       case None =>
         // if the group is marked as dead, it means some other thread has just removed the group
         // from the coordinator metadata; it is likely that the group has migrated to some other
-        // coordinator OR the group is in a transient unstable phase. Let the consumer to retry
-        // joining without specified consumer id,
-        responseCallback(Errors.UNKNOWN_MEMBER_ID)
+        // coordinator OR the group is in a transient unstable phase. Let the member retry
+        // joining without resetting specified member id in case we need to fence.
+        responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
 
       case Some(group) =>
         group.inLock {
           if (group.is(Dead)) {
-            responseCallback(Errors.UNKNOWN_MEMBER_ID)
+            responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
           } else if (group.isPendingMember(memberId)) {
             // if a pending member is leaving, it needs to be removed from the pending list, heartbeat cancelled
             // and if necessary, prompt a JoinGroup completion.
@@ -504,15 +504,15 @@ class GroupCoordinator(val brokerId: Int,
 
     groupManager.getGroup(groupId) match {
       case None =>
-        responseCallback(Errors.UNKNOWN_MEMBER_ID)
+        responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
 
       case Some(group) => group.inLock {
         if (group.is(Dead)) {
           // if the group is marked as dead, it means some other thread has just removed the group
           // from the coordinator metadata; it is likely that the group has migrated to some other
           // coordinator OR the group is in a transient unstable phase. Let the member retry
-          // joining without the specified member id.
-          responseCallback(Errors.UNKNOWN_MEMBER_ID)
+          // joining without resetting specified member id in case we need to fence.
+          responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
         } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
           responseCallback(Errors.FENCED_INSTANCE_ID)
         } else if (!group.has(memberId)) {
@@ -609,8 +609,8 @@ class GroupCoordinator(val brokerId: Int,
         // if the group is marked as dead, it means some other thread has just removed the group
         // from the coordinator metadata; it is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
-        // joining without the specified member id.
-        responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
+        // joining without resetting specified member id in case we need to fence.
+        responseCallback(offsetMetadata.mapValues(_ => Errors.COORDINATOR_NOT_AVAILABLE))
       } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.FENCED_INSTANCE_ID))
       } else if ((generationId < 0 && group.is(Empty)) || (producerId != NO_PRODUCER_ID)) {
