@@ -348,7 +348,7 @@ class StreamsUpgradeTest(Test):
         while retries > 0:
             for p in self.processors:
                 found = list(p.node.account.ssh_capture("grep \"Finished assignment for group\" %s" % p.LOG_FILE, allow_fail=True))
-                if len(found) == self.leader_counter[p] + 1:
+                if len(found) >= self.leader_counter[p] + 1:
                     if self.leader is not None:
                         raise Exception("Could not uniquely identify leader")
                     self.leader = p
