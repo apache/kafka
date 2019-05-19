@@ -48,6 +48,8 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
     private final long scheduleInterval;
 
     private boolean commitRequested = false;
+    private boolean initialized = false;
+    private boolean closed = false;
 
     public MockProcessor(final PunctuationType punctuationType,
                          final long scheduleInterval) {
@@ -57,6 +59,19 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
     public MockProcessor() {
         this(PunctuationType.STREAM_TIME, -1);
+    }
+
+    public boolean isInitialized() {
+        return initialized;
+    }
+
+    public boolean isClosed() {
+        return closed;
+    }
+
+    @Override
+    public void close() {
+        closed = true;
     }
 
     @Override
@@ -77,6 +92,8 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
                             .add(timestamp);
                 });
         }
+
+        initialized = true;
     }
 
     @Override

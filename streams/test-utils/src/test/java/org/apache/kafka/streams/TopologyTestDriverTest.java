@@ -291,7 +291,7 @@ public class TopologyTestDriverTest {
     @Test
     public void shouldInitProcessor() {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
-        assertTrue(supplier.theCapturedProcessor().initialized);
+        assertTrue(supplier.theCapturedProcessor().isInitialized());
     }
 
     @Test
@@ -299,7 +299,7 @@ public class TopologyTestDriverTest {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
 
         testDriver.close();
-        assertTrue(mockProcessors.get(0).closed);
+        assertTrue(supplier.theCapturedProcessor().isClosed());
         // As testDriver is already closed, bypassing @After tearDown testDriver.close().
         testDriver = null;
     }
@@ -339,7 +339,7 @@ public class TopologyTestDriverTest {
 
         testDriver.pipeInput(consumerRecord1);
 
-        final List<Record> processedRecords = mockProcessors.get(0).processedRecords;
+        final List<Record> processedRecords = supplier.theCapturedProcessor().processedValues;
         assertEquals(1, processedRecords.size());
 
         final Record record = processedRecords.get(0);
