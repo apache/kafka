@@ -47,6 +47,8 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
+import org.apache.kafka.test.MockProcessorSupplier;
+import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Assert;
@@ -194,83 +196,6 @@ public class TopologyTestDriverTest {
         }
     }
 
-    private final static class Punctuation {
-        private final long intervalMs;
-        private final PunctuationType punctuationType;
-        private final Punctuator callback;
-
-        Punctuation(final long intervalMs,
-                    final PunctuationType punctuationType,
-                    final Punctuator callback) {
-            this.intervalMs = intervalMs;
-            this.punctuationType = punctuationType;
-            this.callback = callback;
-        }
-    }
-
-    private final class MockPunctuator implements Punctuator {
-        private final List<Long> punctuatedAt = new LinkedList<>();
-
-        @Override
-        public void punctuate(final long timestamp) {
-            punctuatedAt.add(timestamp);
-        }
-    }
-
-    private final class MockProcessor implements Processor {
-        private final Collection<Punctuation> punctuations;
-        private ProcessorContext context;
-
-        private boolean initialized = false;
-        private boolean closed = false;
-        private final List<Record> processedRecords = new ArrayList<>();
-
-        MockProcessor(final Collection<Punctuation> punctuations) {
-            this.punctuations = punctuations;
-        }
-
-        @Override
-        public void init(final ProcessorContext context) {
-            initialized = true;
-            this.context = context;
-            for (final Punctuation punctuation : punctuations) {
-                this.context.schedule(Duration.ofMillis(punctuation.intervalMs), punctuation.punctuationType, punctuation.callback);
-            }
-        }
-
-        @Override
-        public void process(final Object key, final Object value) {
-            processedRecords.add(new Record(key, value, context.headers(), context.timestamp(), context.offset(), context.topic()));
-            context.forward(key, value);
-        }
-
-        @Override
-        public void close() {
-            closed = true;
-        }
-    }
-
-    private final List<MockProcessor> mockProcessors = new ArrayList<>();
-
-    private final class MockProcessorSupplier implements ProcessorSupplier {
-        private final Collection<Punctuation> punctuations;
-
-        private MockProcessorSupplier() {
-            this(Collections.emptySet());
-        }
-
-        private MockProcessorSupplier(final Collection<Punctuation> punctuations) {
-            this.punctuations = punctuations;
-        }
-
-        @Override
-        public Processor get() {
-            final MockProcessor mockProcessor = new MockProcessor(punctuations);
-            mockProcessors.add(mockProcessor);
-            return mockProcessor;
-        }
-    }
-
     @After
     public void tearDown() {
         if (testDriver != null) {
@@ -305,25 +230,18 @@ public class TopologyTestDriverTest {
 
 
     private Topology setupSingleProcessorTopology() {
-        return setupSingleProcessorTopology(-1, null, null);
+        return setupSingleProcessorTopology(-1, null);
     }
 
     private Topology setupSingleProcessorTopology(final long punctuationIntervalMs,
-                                                  final PunctuationType punctuationType,
-                                                  final Punctuator callback) {
-        final Collection<Punctuation> punctuations;
-        if (punctuationIntervalMs > 0 && punctuationType != null && callback != null) {
-            punctuations = Collections.singleton(new Punctuation(punctuationIntervalMs, punctuationType, callback));
-        } else {
-            punctuations = Collections.emptySet();
-        }
+                                                  final PunctuationType punctuationType) {
 
         final Topology topology = new Topology();
 
         final String sourceName = "source";
 
         topology.addSource(sourceName, SOURCE_TOPIC_1);
-        topology.addProcessor("processor", new MockProcessorSupplier(punctuations), sourceName);
+        topology.addProcessor("processor", new MockProcessorSupplier(punctuationIntervalMs, punctuationType), sourceName);
 
         return topology;
     }

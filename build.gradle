@@ -1210,6 +1210,7 @@ project(':streams:test-utils') {
     compile project(':clients')
 
     testCompile project(':clients').sourceSets.test.output
+    testCompile project(':streams').sourceSets.test.output
     testCompile libs.junit
     testCompile libs.easymock
 
