@@ -106,16 +106,18 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
         } else {
             lastValueAndTimestampPerKey.remove(key);
         }
-        processed.add(
-            (key == null ? "null" : key) +
-            ":" + (value == null ? "null" : value) +
-            " (ts: " + context().timestamp() + ")"
-        );
+        processed.add(makeRecord(key, value, context().timestamp()));
 
         if (commitRequested) {
             context().commit();
             commitRequested = false;
         }
+    }
+
+    public static String makeRecord(final Object key, final Object value, final long timestamp) {
+        return (key == null ? "null" : key) +
+            ":" + (value == null ? "null" : value) +
+            " (ts: " + timestamp + ")";
     }
 
     public void checkAndClearProcessResult(final String... expected) {
