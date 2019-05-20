@@ -1391,8 +1391,6 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     // preferred leader unavailable with null argument
     electResult = client.electPreferredLeaders(null, shortTimeout)
-    e = intercept[ExecutionException](electResult.partitions.get()).getCause
-    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
 
     e = intercept[ExecutionException](electResult.partitionResult(partition1).get()).getCause
     assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)

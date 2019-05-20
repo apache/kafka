@@ -378,8 +378,6 @@ class ZkReplicaStateMachine(config: KafkaConfig,
         return (partitions.map(_ -> Left(e))(breakOut), Seq.empty)
     }
 
-    val leaderAndIsrs = mutable.Map.empty[TopicPartition, LeaderAndIsr]
-    val failed = mutable.Map.empty[TopicPartition, Exception]
     val partitionsWithNoLeaderAndIsrInZk = mutable.Buffer.empty[TopicPartition]
 
     val result: Map[TopicPartition, Either[Exception, LeaderAndIsr]] = getDataResponses.flatMap { getDataResponse =>

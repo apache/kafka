@@ -28,7 +28,10 @@ import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{Logging, TestUtils, ZkUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, PreferredLeaderNotAvailableException, TimeoutException, UnknownTopicOrPartitionException}
+import org.apache.kafka.common.errors.ClusterAuthorizationException
+import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException
+import org.apache.kafka.common.errors.TimeoutException
+import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.network.ListenerName
 import org.junit.Assert._
 import org.junit.{After, Test}
@@ -298,8 +301,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
       fail();
     } catch {
       case e: AdminCommandFailedException =>
-        assertEquals("1 preferred replica(s) could not be elected", e.getMessage)
-        assertTrue(e.getSuppressed()(0).getMessage.contains("Timed out waiting for a node assignment"))
+        assertEquals("Timeout waiting for election results", e.getMessage)
         // Check we still have the same leader
         assertEquals(leader, getLeader(testPartition))
     } finally {
@@ -325,8 +327,8 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
       fail();
     } catch {
       case e: AdminCommandFailedException =>
-        assertEquals("1 preferred replica(s) could not be elected", e.getMessage)
-        assertTrue(e.getSuppressed()(0).isInstanceOf[ClusterAuthorizationException])
+        assertEquals("Not authorized to perform leader election", e.getMessage)
+        assertTrue(e.getCause().isInstanceOf[ClusterAuthorizationException])
         // Check we still have the same leader
         assertEquals(leader, getLeader(testPartition))
     } finally {

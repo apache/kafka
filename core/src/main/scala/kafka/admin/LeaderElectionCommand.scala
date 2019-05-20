@@ -18,23 +18,22 @@ package kafka.admin
 
 import java.util.Properties
 import java.util.concurrent.ExecutionException
+import joptsimple.util.EnumConverter
 import kafka.common.AdminCommandFailedException
 import kafka.utils.CommandDefaultOptions
 import kafka.utils.CommandLineUtils
 import kafka.utils.CoreUtils
 import kafka.utils.Json
 import kafka.utils.Logging
-import joptsimple.util.EnumConverter
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.admin.{AdminClient => JAdminClient}
 import org.apache.kafka.common.ElectionType
-import org.apache.kafka.common.KafkaFuture
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.ClusterAuthorizationException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.utils.Utils
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
-import scala.util.Try
 
 final object LeaderElectionCommand extends Logging {
   def main(args: Array[String]): Unit = {
@@ -127,8 +126,12 @@ final object LeaderElectionCommand extends Logging {
         val cause = e.getCause
         if (cause.isInstanceOf[TimeoutException]) {
           println("Timeout waiting for election results")
+          throw new AdminCommandFailedException("Timeout waiting for election results", cause)
+        } else if (cause.isInstanceOf[ClusterAuthorizationException]) {
+          println(s"Not authorized to perform leader election")
+          throw new AdminCommandFailedException("Not authorized to perform leader election", cause)
         }
-        throw new AdminCommandFailedException("Timeout waiting for election results", cause)
+        throw e
       case e: Throwable =>
         println("Error while making request")
         e.printStackTrace()

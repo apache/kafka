@@ -95,12 +95,6 @@ public class ElectPreferredLeadersResult {
                         if (throwable != null) {
                             result.completeExceptionally(throwable);
                         } else {
-                            for (Optional<Throwable> exception : topicPartitions.values()) {
-                                if (exception.isPresent()) {
-                                    result.completeExceptionally(exception.get());
-                                    return;
-                                }
-                            }
                             result.complete(topicPartitions.keySet());
                         }
                     }
