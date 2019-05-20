@@ -1437,7 +1437,11 @@ project(':connect:api') {
 
   javadoc {
     include "**/org/apache/kafka/connect/**" // needed for the `javadocAll` task
-    options.links "https://docs.oracle.com/javase/8/docs/api/"
+    // The URL structure was changed to include the locale after Java 8
+    if (JavaVersion.current().isJava11Compatible())
+      options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+    else
+      options.links "https://docs.oracle.com/javase/8/docs/api/"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -1717,5 +1721,9 @@ task aggregatedJavadoc(type: Javadoc) {
   classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
   includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
-  options.links "https://docs.oracle.com/javase/8/docs/api/"
+  // The URL structure was changed to include the locale after Java 8
+  if (JavaVersion.current().isJava11Compatible())
+    options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+  else
+    options.links "https://docs.oracle.com/javase/8/docs/api/"
 }
