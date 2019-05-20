@@ -332,4 +332,9 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
 
     <!-- END Suppress warnings for unused members that are undetectably used by Jackson -->
 
+    <Match>
+        <Package name="io.confluent.support.metrics.collectors"/>
+        <Source name="CollectorFactory.java"/>
+        <Bug pattern="IS2_INCONSISTENT_SYNC"/>
+    </Match>
 </FindBugsFilter>
