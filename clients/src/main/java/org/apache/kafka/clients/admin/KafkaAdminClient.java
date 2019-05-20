@@ -2940,17 +2940,6 @@ public class KafkaAdminClient extends AdminClient {
         return Collections.unmodifiableMap(this.metrics.metrics());
     }
 
-    @Deprecated
-    @Override
-    public ElectPreferredLeadersResult electPreferredLeaders(final Collection<TopicPartition> partitions,
-                                                             ElectPreferredLeadersOptions options) {
-        final ElectLeadersOptions newOptions = new ElectLeadersOptions();
-        newOptions.timeoutMs(options.timeoutMs());
-        final Set<TopicPartition> topicPartitions = partitions == null ? null : new HashSet<>(partitions);
-
-        return new ElectPreferredLeadersResult(electLeaders(ElectionType.PREFERRED, topicPartitions, newOptions));
-    }
-
     @Override
     public ElectLeadersResult electLeaders(
             final ElectionType electionType,

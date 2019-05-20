@@ -33,7 +33,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl;
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  *
- * @deprecated Since TDB. Use {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOption)}.
+ * @deprecated Since 2.4.0. Use {@link AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  */
 @InterfaceStability.Evolving
 @Deprecated

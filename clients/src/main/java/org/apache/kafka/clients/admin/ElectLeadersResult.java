@@ -27,7 +27,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 
 /**
- * The result of {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOptions)}
+ * The result of {@link AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */

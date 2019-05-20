@@ -17,10 +17,11 @@
 
 package org.apache.kafka.common;
 
+import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Options for {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOptions)}.
+ * Options for {@link AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */

@@ -22,7 +22,7 @@ import org.apache.kafka.common.annotation.InterfaceStability;
 import java.util.Collection;
 
 /**
- * Options for {@link AdminClient#electLeaders(ElectionType, Collection, ElectLeadersOptions)}.
+ * Options for {@link AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  *
  * The API of this class is evolving, see {@link AdminClient} for details.
  */
