@@ -88,6 +88,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Queue;
 import java.util.Set;
@@ -560,9 +561,14 @@ public class TopologyTestDriver implements Closeable {
     }
 
 
-    final protected Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(String topic) {
-        //Throw expection if not found
-        return outputRecordsByTopic.get(topic);
+    final protected Queue<ProducerRecord<byte[], byte[]>> getRecordsQueue(String topicName) {
+        final Queue<ProducerRecord<byte[], byte[]>> outputRecords = outputRecordsByTopic.get(topicName);
+        if (outputRecords == null) {
+            if (!processorTopology.sinkTopics().contains(topicName)) {
+                throw new IllegalArgumentException("Unknown topic: " + topicName);
+            }
+        }
+        return outputRecords;
     }
 
     public final <K, V> TestInputTopic<K, V> createInputTopic(final String topicName,
@@ -608,13 +614,11 @@ public class TopologyTestDriver implements Closeable {
                                          final Deserializer<V> valueDeserializer) {
         final Queue<? extends ClientRecord<byte[], byte[]>> outputRecords = getRecordsQueue(topic);
         if (outputRecords == null) {
-            //throw
-            return null;
+            throw new NoSuchElementException("Uninitialized topic: " + topic);
         }
         final ClientRecord<byte[], byte[]> record = outputRecords.poll();
         if (record == null) {
-            //throw
-            return null;
+            throw new NoSuchElementException("Empty topic: " + topic);
         }
         final K key = keyDeserializer.deserialize(record.topic(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.value());
@@ -639,7 +643,12 @@ public class TopologyTestDriver implements Closeable {
     }
 
     final long getQueueSize(final String topic) {
-        return getRecordsQueue(topic).size();
+        final Queue<ProducerRecord<byte[], byte[]>> queue = getRecordsQueue(topic);
+        if (queue == null ) {
+            //Return 0 if not initialized, getRecordsQueue throw exception if non existing topic
+            return 0;
+        }
+        return queue.size();
     }
 
 

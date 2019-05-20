@@ -107,7 +107,6 @@ public class TestOutputTopic<K, V> {
     @SuppressWarnings({"WeakerAccess", "unused"})
     public V readValue() {
         final ClientRecord<K, V> record = readRecord();
-        if (record == null) return null;
         return record.value();
     }
 
@@ -119,7 +118,6 @@ public class TestOutputTopic<K, V> {
     @SuppressWarnings({"WeakerAccess", "unused"})
     public KeyValue<K, V> readKeyValue() {
         final ClientRecord<K, V> record = readRecord();
-        if (record == null) return null;
         return new KeyValue<>(record.key(), record.value());
     }
 
@@ -143,7 +141,8 @@ public class TestOutputTopic<K, V> {
     public Map<K, V> readKeyValuesToMap() {
         final Map<K, V> output = new HashMap<>();
         ClientRecord<K, V> outputRow;
-        while ((outputRow = readRecord()) != null) {
+        while (!isEmpty()) {
+            outputRow = readRecord();
             output.put(outputRow.key(), outputRow.value());
         }
         return output;
@@ -158,7 +157,8 @@ public class TestOutputTopic<K, V> {
     public List<KeyValue<K, V>> readKeyValuesToList() {
         final List<KeyValue<K, V>> output = new LinkedList<>();
         KeyValue<K, V> outputRow;
-        while ((outputRow = readKeyValue()) != null) {
+        while (!isEmpty()) {
+            outputRow = readKeyValue();
             output.add(outputRow);
         }
         return output;
@@ -173,7 +173,8 @@ public class TestOutputTopic<K, V> {
     public List<V> readValuesToList() {
         final List<V> output = new LinkedList<>();
         V outputValue;
-        while ((outputValue = readValue()) != null) {
+        while (!isEmpty()) {
+            outputValue = readValue();
             output.add(outputValue);
         }
         return output;

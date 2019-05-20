@@ -96,7 +96,7 @@ public class TestInputTopicTest {
         inputTopic.pipeInput("Hello");
         assertThat(outputTopic.readValue(), equalTo("Hello"));
         //No more output in topic
-        assertThat(outputTopic.readRecord(), nullValue());
+        assertThat(outputTopic.isEmpty(), is(true));
     }
 
     @Test
@@ -119,7 +119,7 @@ public class TestInputTopicTest {
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello");
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>(1L, "Hello")));
-        assertThat(outputTopic.readRecord(), nullValue());
+        assertThat(outputTopic.isEmpty(), is(true));
     }
 
     @Test
@@ -216,13 +216,13 @@ public class TestInputTopicTest {
         inputTopic1.pipeInput(1L, "Hello");
         assertThat(outputTopic1.readKeyValue(), equalTo(new KeyValue<>(1L, "Hello")));
         assertThat(outputTopic2.readKeyValue(), equalTo(new KeyValue<>("Hello", 1L)));
-        assertThat(outputTopic1.readRecord(), nullValue());
-        assertThat(outputTopic2.readRecord(), nullValue());
+        assertThat(outputTopic1.isEmpty(), is(true));
+        assertThat(outputTopic2.isEmpty(), is(true));
         inputTopic2.pipeInput(1L, "Hello");
         //This is not visible in outputTopic1 even it is the same topic
         assertThat(outputTopic2.readKeyValue(), equalTo(new KeyValue<>("Hello", 1L)));
-        assertThat(outputTopic1.readRecord(), nullValue());
-        assertThat(outputTopic2.readRecord(), nullValue());
+        assertThat(outputTopic1.isEmpty(), is(true));
+        assertThat(outputTopic2.isEmpty(), is(true));
     }
 
     @Test

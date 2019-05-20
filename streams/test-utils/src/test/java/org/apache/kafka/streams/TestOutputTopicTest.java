@@ -34,6 +34,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Properties;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -44,6 +45,7 @@ import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertThrows;
 
 public class TestOutputTopicTest {
 
@@ -91,7 +93,7 @@ public class TestOutputTopicTest {
         inputTopic.pipeInput("Hello");
         assertThat(outputTopic.readValue(), equalTo("Hello"));
         //No more output in topic
-        assertThat(outputTopic.readRecord(), nullValue());
+        assertThat(outputTopic.isEmpty(), is(true));
     }
 
     @Test
@@ -114,7 +116,7 @@ public class TestOutputTopicTest {
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello");
         assertThat(outputTopic.readKeyValue(), equalTo(new KeyValue<>(1L, "Hello")));
-        assertThat(outputTopic.readRecord(), nullValue());
+        assertThat(outputTopic.isEmpty(), is(true));
     }
 
     @Test
@@ -159,18 +161,37 @@ public class TestOutputTopicTest {
         final TestOutputTopic<Long, String> outputTopic1 = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         final TestOutputTopic<String, Long> outputTopic2 = testDriver.createOutputTopic(OUTPUT_TOPIC_MAP, stringSerde, longSerde);
         inputTopic.pipeInput(1L, "Hello");
+        assertThat(outputTopic1.isEmpty(), is(false));
+        assertThat(outputTopic2.isEmpty(), is(false));
         assertThat(outputTopic1.readKeyValue(), equalTo(new KeyValue<>(1L, "Hello")));
         assertThat(outputTopic2.readKeyValue(), equalTo(new KeyValue<>("Hello", 1L)));
-        assertThat(outputTopic1.readRecord(), nullValue());
-        assertThat(outputTopic2.readRecord(), nullValue());
+        assertThat(outputTopic1.isEmpty(), is(true));
+        assertThat(outputTopic2.isEmpty(), is(true));
     }
 
     @Test
     public void testNonExistingTopic() {
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic("no-exist", longSerde, stringSerde);
-        assertThat(outputTopic.readRecord(), nullValue());
-        //I was expecting this to throw an error, but returning now only null
+        assertThrows("Unknown topic", IllegalArgumentException.class, () -> outputTopic.readRecord());
     }
+
+    @Test
+    public void testNonUsedTopic() {
+        final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
+        assertThrows("Uninitialized topic", NoSuchElementException.class, () -> outputTopic.readRecord());
+    }
+
+    @Test
+    public void testEmptyTopic() {
+        final TestInputTopic<String, String> inputTopic = testDriver.createInputTopic(INPUT_TOPIC, stringSerde, stringSerde);
+        final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde, stringSerde);
+        //Feed word "Hello" to inputTopic and no kafka key, timestamp is irrelevant in this case
+        inputTopic.pipeInput("Hello");
+        assertThat(outputTopic.readValue(), equalTo("Hello"));
+        //No more output in topic
+        assertThrows("Empty topic", NoSuchElementException.class, () -> outputTopic.readRecord());
+    }
+
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowToCreateTopicWithNullTopicName() {
@@ -192,7 +213,7 @@ public class TestOutputTopicTest {
 
     @Test
     public void testToString() {
-        final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic("topicName", stringSerde, stringSerde);
-        assertThat(outputTopic.toString(), equalTo("TestOutputTopic{topic='topicName'}"));
+        final TestOutputTopic<String, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, stringSerde, stringSerde);
+        assertThat(outputTopic.toString(), equalTo("TestOutputTopic{topic='output1',size=0}"));
     }
 }
