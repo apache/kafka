@@ -1364,7 +1364,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             maybeThrowInvalidGroupIdException();
             if (!coordinator.commitOffsetsSync(subscriptions.allConsumed(), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
-                        "committing the current consumed offsets");
+                        "committing the current consumed offsets. Try tuning 'default.api.timeout.ms' option");
             }
         } finally {
             release();
@@ -1450,7 +1450,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             offsets.forEach(this::updateLastSeenEpochIfNewer);
             if (!coordinator.commitOffsetsSync(new HashMap<>(offsets), time.timer(timeout))) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before successfully " +
-                        "committing offsets " + offsets);
+                        "committing offsets " + offsets + "Try tuning 'default.api.timeout.ms' option");
             }
         } finally {
             release();
@@ -1711,7 +1711,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             } while (timer.notExpired());
 
             throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the position " +
-                    "for partition " + partition + " could be determined");
+                    "for partition " + partition + " could be determined,  Try tuning 'default.api.timeout.ms' option");
         } finally {
             release();
         }
