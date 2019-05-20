@@ -240,7 +240,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
     def _rest_with_retry(self, path, body=None, node=None, method="GET", retries=40, retry_backoff=.25):
         """
         Invokes a REST API with retries for errors that may occur during normal operation (notably 409 CONFLICT
-        responses that can occur due to rebalancing).
+        responses that can occur due to rebalancing or 404 when the connect resources are not initialized yet).
         """
         exception_to_throw = None
         for i in range(0, retries + 1):
@@ -248,7 +248,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
                 return self._rest(path, body, node, method)
             except ConnectRestError as e:
                 exception_to_throw = e
-                if e.status != 409:
+                if e.status != 409 and e.status != 404:
                     break
                 time.sleep(retry_backoff)
         raise exception_to_throw

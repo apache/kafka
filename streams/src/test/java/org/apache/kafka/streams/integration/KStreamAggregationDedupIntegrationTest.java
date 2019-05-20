@@ -52,6 +52,7 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static java.time.Duration.ofMillis;
 
@@ -69,7 +70,7 @@ public class KStreamAggregationDedupIntegrationTest {
         new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private final MockTime mockTime = CLUSTER.time;
-    private static volatile int testNo = 0;
+    private static volatile AtomicInteger testNo = new AtomicInteger(0);
     private StreamsBuilder builder;
     private Properties streamsConfiguration;
     private KafkaStreams kafkaStreams;
@@ -81,11 +82,10 @@ public class KStreamAggregationDedupIntegrationTest {
 
     @Before
     public void before() throws InterruptedException {
-        testNo++;
         builder = new StreamsBuilder();
         createTopics();
         streamsConfiguration = new Properties();
-        final String applicationId = "kgrouped-stream-test-" + testNo;
+        final String applicationId = "kgrouped-stream-test-" + testNo.incrementAndGet();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");

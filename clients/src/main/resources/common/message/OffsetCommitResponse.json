@@ -24,7 +24,8 @@
   // Starting in version 4, on quota violation, brokers send out responses before throttling.
   //
   // Versions 5 and 6 are the same as version 4.
-  "validVersions": "0-6",
+  // Version 7 offsetCommitRequest supports a new field called groupInstanceId to indicate member identity across restarts.
+  "validVersions": "0-7",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "3+", "ignorable": true,
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },

@@ -635,7 +635,9 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
 
                 // can be ignored: transaction got already aborted by brokers/transactional-coordinator if this happens
             }
+        }
 
+        if (eosEnabled) {
             try {
                 recordCollector.close();
             } catch (final Throwable e) {

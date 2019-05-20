@@ -25,7 +25,7 @@ import java.util.Objects;
  *
  * @param <V>
  */
-public class ValueAndTimestamp<V> {
+public final class ValueAndTimestamp<V> {
     private final V value;
     private final long timestamp;
 
@@ -48,6 +48,18 @@ public class ValueAndTimestamp<V> {
     public static <V> ValueAndTimestamp<V> make(final V value,
                                                 final long timestamp) {
         return value == null ? null : new ValueAndTimestamp<>(value, timestamp);
+    }
+
+    /**
+     * Return the wrapped {@code value} of the given {@code valueAndTimestamp} parameter
+     * if the parameter is not {@code null}.
+     *
+     * @param valueAndTimestamp a {@link ValueAndTimestamp} instance; can be {@code null}
+     * @param <V> the type of the value
+     * @return the wrapped {@code value} of {@code valueAndTimestamp} if not {@code null}; otherwise {@code null}
+     */
+    public static <V> V getValueOrNull(final ValueAndTimestamp<V> valueAndTimestamp) {
+        return valueAndTimestamp == null ? null : valueAndTimestamp.value();
     }
 
     public V value() {

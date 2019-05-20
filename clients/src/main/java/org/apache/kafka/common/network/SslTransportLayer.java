@@ -863,7 +863,8 @@ public class SslTransportLayer implements TransportLayer {
     private void maybeProcessHandshakeFailure(SSLException sslException, boolean flush, IOException ioException) throws IOException {
         if (sslException instanceof SSLHandshakeException || sslException instanceof SSLProtocolException ||
                 sslException instanceof SSLPeerUnverifiedException || sslException instanceof SSLKeyException ||
-                sslException.getMessage().contains("Unrecognized SSL message"))
+                sslException.getMessage().contains("Unrecognized SSL message") ||
+                sslException.getMessage().contains("Received fatal alert: "))
             handshakeFailure(sslException, flush);
         else if (ioException == null)
             throw sslException;

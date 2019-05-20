@@ -107,6 +107,17 @@ final class ClusterConnectionStates {
     }
 
     /**
+     * Check whether a connection is either being established or awaiting API version information.
+     * @param id The id of the node to check
+     * @return true if the node is either connecting or has connected and is awaiting API versions, false otherwise
+     */
+    public boolean isPreparingConnection(String id) {
+        NodeConnectionState state = nodeState.get(id);
+        return state != null &&
+                (state.state == ConnectionState.CONNECTING || state.state == ConnectionState.CHECKING_API_VERSIONS);
+    }
+
+    /**
      * Enter the connecting state for the given connection, moving to a new resolved address if necessary.
      * @param id the id of the connection
      * @param now the current time in ms

@@ -14,22 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.controller
 
-import org.easymock.{EasyMock, IAnswer}
+package org.apache.kafka.connect.runtime.health;
 
-object ControllerTestUtils {
+import org.apache.kafka.connect.health.ConnectClusterDetails;
 
-  /** Since ControllerEvent is sealed, return a subclass of ControllerEvent created with EasyMock */
-  def createMockControllerEvent(controllerState: ControllerState, process: () => Unit): ControllerEvent = {
-    val mockEvent: ControllerEvent = EasyMock.createNiceMock(classOf[ControllerEvent])
-    EasyMock.expect(mockEvent.state).andReturn(controllerState)
-    EasyMock.expect(mockEvent.process()).andAnswer(new IAnswer[Unit]() {
-      def answer(): Unit = {
-        process()
-      }
-    })
-    EasyMock.replay(mockEvent)
-    mockEvent
-  }
+public class ConnectClusterDetailsImpl implements ConnectClusterDetails {
+
+    private final String kafkaClusterId;
+
+    public ConnectClusterDetailsImpl(String kafkaClusterId) {
+        this.kafkaClusterId = kafkaClusterId;
+    }
+
+    @Override
+    public String kafkaClusterId() {
+        return kafkaClusterId;
+    }
 }

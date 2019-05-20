@@ -21,6 +21,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
@@ -31,6 +32,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.ToInternal;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
@@ -67,6 +69,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     private static final long GAP_MS = 5 * 60 * 1000L;
     private static final String STORE_NAME = "session-store";
 
+    private final ToInternal toInternal = new ToInternal();
     private final Initializer<Long> initializer = () -> 0L;
     private final Aggregator<String, String, Long> aggregator = (aggKey, value, aggregate) -> aggregate + 1;
     private final Merger<String, Long> sessionMerger = (aggKey, aggOne, aggTwo) -> aggOne + aggTwo;
@@ -78,7 +81,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             aggregator,
             sessionMerger);
 
-    private final List<KeyValue> results = new ArrayList<>();
+    private final List<KeyValueTimestamp> results = new ArrayList<>();
     private final Processor<String, String> processor = sessionAggregator.get();
     private SessionStore<String, Long> sessionStore;
     private InternalMockProcessorContext context;
@@ -100,7 +103,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
         ) {
             @Override
             public <K, V> void forward(final K key, final V value, final To to) {
-                results.add(KeyValue.pair(key, value));
+                toInternal.update(to);
+                results.add(new KeyValueTimestamp<>(key, value, toInternal.timestamp()));
             }
         };
 
@@ -195,9 +199,18 @@ public class KStreamSessionWindowAggregateProcessorTest {
         sessionStore.flush();
         assertEquals(
             Arrays.asList(
-                KeyValue.pair(new Windowed<>(sessionId, new SessionWindow(0, 0)), new Change<>(1L, null)),
-                KeyValue.pair(new Windowed<>(sessionId, new SessionWindow(GAP_MS + 1, GAP_MS + 1)), new Change<>(2L, null)),
-                KeyValue.pair(new Windowed<>(sessionId, new SessionWindow(time, time)), new Change<>(3L, null))
+                new KeyValueTimestamp<>(
+                    new Windowed<>(sessionId, new SessionWindow(0, 0)),
+                    new Change<>(1L, null),
+                    0L),
+                new KeyValueTimestamp<>(
+                    new Windowed<>(sessionId, new SessionWindow(GAP_MS + 1, GAP_MS + 1)),
+                    new Change<>(2L, null),
+                    GAP_MS + 1),
+                new KeyValueTimestamp<>(
+                    new Windowed<>(sessionId, new SessionWindow(time, time)),
+                    new Change<>(3L, null),
+                    time)
             ),
             results
         );
@@ -244,13 +257,34 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         assertEquals(
             Arrays.asList(
-                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), new Change<>(1L, null)),
-                KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), new Change<>(1L, null)),
-                KeyValue.pair(new Windowed<>("c", new SessionWindow(0, 0)), new Change<>(1L, null)),
-                KeyValue.pair(new Windowed<>("d", new SessionWindow(0, GAP_MS / 2)), new Change<>(2L, null)),
-                KeyValue.pair(new Windowed<>("b", new SessionWindow(GAP_MS + 1, GAP_MS + 1)), new Change<>(1L, null)),
-                KeyValue.pair(new Windowed<>("a", new SessionWindow(GAP_MS + 1, GAP_MS + 1 + GAP_MS / 2)), new Change<>(2L, null)),
-                KeyValue.pair(new Windowed<>("c", new SessionWindow(GAP_MS + 1 + GAP_MS / 2, GAP_MS + 1 + GAP_MS / 2)), new Change<>(1L, null))
+                new KeyValueTimestamp<>(
+                    new Windowed<>("a", new SessionWindow(0, 0)),
+                    new Change<>(1L, null),
+                    0L),
+                new KeyValueTimestamp<>(
+                    new Windowed<>("b", new SessionWindow(0, 0)),
+                    new Change<>(1L, null),
+                    0L),
+                new KeyValueTimestamp<>(
+                    new Windowed<>("c", new SessionWindow(0, 0)),
+                    new Change<>(1L, null),
+                    0L),
+                new KeyValueTimestamp<>(
+                    new Windowed<>("d", new SessionWindow(0, GAP_MS / 2)),
+                    new Change<>(2L, null),
+                    GAP_MS / 2),
+                new KeyValueTimestamp<>(
+                    new Windowed<>("b", new SessionWindow(GAP_MS + 1, GAP_MS + 1)),
+                    new Change<>(1L, null),
+                    GAP_MS + 1),
+                new KeyValueTimestamp<>(
+                    new Windowed<>("a", new SessionWindow(GAP_MS + 1, GAP_MS + 1 + GAP_MS / 2)),
+                    new Change<>(2L, null),
+                    GAP_MS + 1 + GAP_MS / 2),
+                new KeyValueTimestamp<>(new Windowed<>(
+                    "c",
+                    new SessionWindow(GAP_MS + 1 + GAP_MS / 2, GAP_MS + 1 + GAP_MS / 2)), new Change<>(1L, null),
+                    GAP_MS + 1 + GAP_MS / 2)
             ),
             results
         );
@@ -265,8 +299,8 @@ public class KStreamSessionWindowAggregateProcessorTest {
         context.setTime(GAP_MS + 1);
         processor.process("a", "1");
         processor.process("a", "2");
-        final long t0 = getter.get(new Windowed<>("a", new SessionWindow(0, 0)));
-        final long t1 = getter.get(new Windowed<>("a", new SessionWindow(GAP_MS + 1, GAP_MS + 1)));
+        final long t0 = getter.get(new Windowed<>("a", new SessionWindow(0, 0))).value();
+        final long t1 = getter.get(new Windowed<>("a", new SessionWindow(GAP_MS + 1, GAP_MS + 1))).value();
         assertEquals(1L, t0);
         assertEquals(2L, t1);
     }
@@ -283,9 +317,18 @@ public class KStreamSessionWindowAggregateProcessorTest {
 
         assertEquals(
             Arrays.asList(
-                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), new Change<>(1L, null)),
-                KeyValue.pair(new Windowed<>("b", new SessionWindow(0, 0)), new Change<>(1L, null)),
-                KeyValue.pair(new Windowed<>("c", new SessionWindow(0, 0)), new Change<>(1L, null))
+                new KeyValueTimestamp<>(
+                    new Windowed<>("a", new SessionWindow(0, 0)),
+                    new Change<>(1L, null),
+                    0L),
+                new KeyValueTimestamp<>(
+                    new Windowed<>("b", new SessionWindow(0, 0)),
+                    new Change<>(1L, null),
+                    0L),
+                new KeyValueTimestamp<>(
+                    new Windowed<>("c", new SessionWindow(0, 0)),
+                    new Change<>(1L, null),
+                    0L)
             ),
             results
         );
@@ -302,9 +345,18 @@ public class KStreamSessionWindowAggregateProcessorTest {
         processor.process("a", "1");
         assertEquals(
             Arrays.asList(
-                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), new Change<>(1L, null)),
-                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 0)), new Change<>(null, null)),
-                KeyValue.pair(new Windowed<>("a", new SessionWindow(0, 5)), new Change<>(2L, null))
+                new KeyValueTimestamp<>(
+                    new Windowed<>("a", new SessionWindow(0, 0)),
+                    new Change<>(1L, null),
+                    0L),
+                new KeyValueTimestamp<>(
+                    new Windowed<>("a", new SessionWindow(0, 0)),
+                    new Change<>(null, null),
+                    0L),
+                new KeyValueTimestamp<>(
+                    new Windowed<>("a", new SessionWindow(0, 5)),
+                    new Change<>(2L, null),
+                    5L)
             ),
             results
         );

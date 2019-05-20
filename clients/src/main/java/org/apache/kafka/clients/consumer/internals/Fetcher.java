@@ -126,6 +126,7 @@ public class Fetcher<K, V> implements Closeable {
     private final long requestTimeoutMs;
     private final int maxPollRecords;
     private final boolean checkCrcs;
+    private final String clientRackId;
     private final ConsumerMetadata metadata;
     private final FetchManagerMetrics sensors;
     private final SubscriptionState subscriptions;
@@ -149,6 +150,7 @@ public class Fetcher<K, V> implements Closeable {
                    int fetchSize,
                    int maxPollRecords,
                    boolean checkCrcs,
+                   String clientRackId,
                    Deserializer<K> keyDeserializer,
                    Deserializer<V> valueDeserializer,
                    ConsumerMetadata metadata,
@@ -171,6 +173,7 @@ public class Fetcher<K, V> implements Closeable {
         this.fetchSize = fetchSize;
         this.maxPollRecords = maxPollRecords;
         this.checkCrcs = checkCrcs;
+        this.clientRackId = clientRackId;
         this.keyDeserializer = keyDeserializer;
         this.valueDeserializer = valueDeserializer;
         this.completedFetches = new ConcurrentLinkedQueue<>();
@@ -223,7 +226,9 @@ public class Fetcher<K, V> implements Closeable {
                     .isolationLevel(isolationLevel)
                     .setMaxBytes(this.maxBytes)
                     .metadata(data.metadata())
-                    .toForget(data.toForget());
+                    .toForget(data.toForget())
+                    .rackId(clientRackId);
+
             if (log.isDebugEnabled()) {
                 log.debug("Sending {} {} to broker {}", isolationLevel, data.toString(), fetchTarget);
             }
@@ -1005,6 +1010,26 @@ public class Fetcher<K, V> implements Closeable {
     }
 
     /**
+     * Determine which replica to read from.
+     */
+    Node selectReadReplica(TopicPartition partition, Node leaderReplica, long currentTimeMs) {
+        Optional<Integer> nodeId = subscriptions.preferredReadReplica(partition, currentTimeMs);
+        if (nodeId.isPresent()) {
+            Optional<Node> node = nodeId.flatMap(id -> metadata.fetch().nodeIfOnline(partition, id));
+            if (node.isPresent()) {
+                return node.get();
+            } else {
+                log.trace("Not fetching from {} for partition {} since it is marked offline or is missing from our metadata," +
+                          " using the leader instead.", nodeId, partition);
+                subscriptions.clearPreferredReadReplica(partition);
+                return leaderReplica;
+            }
+        } else {
+            return leaderReplica;
+        }
+    }
+
+    /**
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
@@ -1015,10 +1040,12 @@ public class Fetcher<K, V> implements Closeable {
         subscriptions.assignedPartitions().forEach(
             tp -> subscriptions.maybeValidatePosition(tp, metadata.leaderAndEpoch(tp)));
 
+        long currentTimeMs = time.milliseconds();
+
         for (TopicPartition partition : fetchablePartitions()) {
+            // Use the preferred read replica if set, or the position's leader
             SubscriptionState.FetchPosition position = this.subscriptions.position(partition);
-            Metadata.LeaderAndEpoch leaderAndEpoch = position.currentLeader;
-            Node node = leaderAndEpoch.leader;
+            Node node = selectReadReplica(partition, position.currentLeader.leader, currentTimeMs);
 
             if (node == null || node.isEmpty()) {
                 metadata.requestUpdate();
@@ -1032,23 +1059,23 @@ public class Fetcher<K, V> implements Closeable {
                 log.trace("Skipping fetch for partition {} because there is an in-flight request to {}", partition, node);
             } else {
                 // if there is a leader and no in-flight requests, issue a new fetch
-                FetchSessionHandler.Builder builder = fetchable.get(leaderAndEpoch.leader);
+                FetchSessionHandler.Builder builder = fetchable.get(node);
                 if (builder == null) {
-                    int id = leaderAndEpoch.leader.id();
+                    int id = node.id();
                     FetchSessionHandler handler = sessionHandler(id);
                     if (handler == null) {
                         handler = new FetchSessionHandler(logContext, id);
                         sessionHandlers.put(id, handler);
                     }
                     builder = handler.newBuilder();
-                    fetchable.put(leaderAndEpoch.leader, builder);
+                    fetchable.put(node, builder);
                 }
 
                 builder.add(partition, new FetchRequest.PartitionData(position.offset,
-                        FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize, leaderAndEpoch.epoch));
+                        FetchRequest.INVALID_LOG_START_OFFSET, this.fetchSize, position.currentLeader.epoch));
 
                 log.debug("Added {} fetch request for partition {} at position {} to node {}", isolationLevel,
-                    partition, position, leaderAndEpoch.leader);
+                    partition, position, node);
             }
         }
 
@@ -1136,24 +1163,42 @@ public class Fetcher<K, V> implements Closeable {
                     log.trace("Updating last stable offset for partition {} to {}", tp, partition.lastStableOffset);
                     subscriptions.updateLastStableOffset(tp, partition.lastStableOffset);
                 }
+
+                if (partition.preferredReadReplica.isPresent()) {
+                    subscriptions.updatePreferredReadReplica(partitionRecords.partition, partition.preferredReadReplica.get(), () -> {
+                        long expireTimeMs = time.milliseconds() + metadata.metadataExpireMs();
+                        log.debug("Updating preferred read replica for partition {} to {}, set to expire at {}",
+                                tp, partition.preferredReadReplica.get(), expireTimeMs);
+                        return expireTimeMs;
+                    });
+                }
+
             } else if (error == Errors.NOT_LEADER_FOR_PARTITION ||
                        error == Errors.REPLICA_NOT_AVAILABLE ||
                        error == Errors.KAFKA_STORAGE_ERROR ||
-                       error == Errors.FENCED_LEADER_EPOCH) {
+                       error == Errors.FENCED_LEADER_EPOCH ||
+                       error == Errors.OFFSET_NOT_AVAILABLE) {
                 log.debug("Error in fetch for partition {}: {}", tp, error.exceptionName());
                 this.metadata.requestUpdate();
             } else if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 log.warn("Received unknown topic or partition error in fetch for partition {}", tp);
                 this.metadata.requestUpdate();
             } else if (error == Errors.OFFSET_OUT_OF_RANGE) {
-                if (fetchOffset != subscriptions.position(tp).offset) {
-                    log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
-                            "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
-                } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
-                    log.info("Fetch offset {} is out of range for partition {}, resetting offset", fetchOffset, tp);
-                    subscriptions.requestOffsetReset(tp);
+                Optional<Integer> clearedReplicaId = subscriptions.clearPreferredReadReplica(tp);
+                if (!clearedReplicaId.isPresent()) {
+                    // If there's no preferred replica to clear, we're fetching from the leader so handle this error normally
+                    if (fetchOffset != subscriptions.position(tp).offset) {
+                        log.debug("Discarding stale fetch response for partition {} since the fetched offset {} " +
+                                "does not match the current offset {}", tp, fetchOffset, subscriptions.position(tp));
+                    } else if (subscriptions.hasDefaultOffsetResetPolicy()) {
+                        log.info("Fetch offset {} is out of range for partition {}, resetting offset", fetchOffset, tp);
+                        subscriptions.requestOffsetReset(tp);
+                    } else {
+                        throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
+                    }
                 } else {
-                    throw new OffsetOutOfRangeException(Collections.singletonMap(tp, fetchOffset));
+                    log.debug("Unset the preferred read replica {} for partition {} since we got {} when fetching {}",
+                            clearedReplicaId.get(), tp, error, fetchOffset);
                 }
             } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                 //we log the actual partition and not just the topic to help with ACL propagation issues in large clusters
@@ -1302,6 +1347,10 @@ public class Fetcher<K, V> implements Closeable {
                 if (bytesRead > 0)
                     subscriptions.movePartitionToEnd(partition);
             }
+        }
+
+        private Optional<Integer> preferredReadReplica() {
+            return completedFetch.partitionData.preferredReadReplica;
         }
 
         private void maybeEnsureValid(RecordBatch batch) {

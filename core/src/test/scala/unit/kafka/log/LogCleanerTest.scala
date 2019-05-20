@@ -527,6 +527,45 @@ class LogCleanerTest {
   }
 
   @Test
+  def testEmptyBatchRemovalWithSequenceReuse(): Unit = {
+    // The group coordinator always writes batches beginning with sequence number 0. This test
+    // ensures that we still remove old empty batches and transaction markers under this expectation.
+
+    val producerEpoch = 0.toShort
+    val producerId = 1L
+    val tp = new TopicPartition("test", 0)
+    val cleaner = makeCleaner(Int.MaxValue)
+    val logProps = new Properties()
+    logProps.put(LogConfig.SegmentBytesProp, 2048: java.lang.Integer)
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+
+    val appendFirstTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch, isFromClient = false)
+    appendFirstTransaction(Seq(1))
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+
+    val appendSecondTransaction = appendTransactionalAsLeader(log, producerId, producerEpoch, isFromClient = false)
+    appendSecondTransaction(Seq(2))
+    log.appendAsLeader(commitMarker(producerId, producerEpoch), leaderEpoch = 0, isFromClient = false)
+
+    log.appendAsLeader(record(1, 1), leaderEpoch = 0)
+    log.appendAsLeader(record(2, 1), leaderEpoch = 0)
+
+    // Roll the log to ensure that the data is cleanable.
+    log.roll()
+
+    // Both transactional batches will be cleaned. The last one will remain in the log
+    // as an empty batch in order to preserve the producer sequence number and epoch
+    cleaner.doClean(LogToClean(tp, log, 0L, 100L), deleteHorizonMs = Long.MaxValue)
+    assertEquals(List(1, 3, 4, 5), offsetsInLog(log))
+    assertEquals(List(1, 2, 3, 4, 5), lastOffsetsPerBatchInLog(log))
+
+    // On the second round of cleaning, the marker from the first transaction should be removed.
+    cleaner.doClean(LogToClean(tp, log, 0L, 100L), deleteHorizonMs = Long.MaxValue)
+    assertEquals(List(3, 4, 5), offsetsInLog(log))
+    assertEquals(List(2, 3, 4, 5), lastOffsetsPerBatchInLog(log))
+  }
+
+  @Test
   def testAbortMarkerRetentionWithEmptyBatch(): Unit = {
     val tp = new TopicPartition("test", 0)
     val cleaner = makeCleaner(Int.MaxValue)
@@ -1521,13 +1560,19 @@ class LogCleanerTest {
       partitionLeaderEpoch, new SimpleRecord(key.toString.getBytes, value.toString.getBytes))
   }
 
-  private def appendTransactionalAsLeader(log: Log, producerId: Long, producerEpoch: Short): Seq[Int] => LogAppendInfo = {
-    appendIdempotentAsLeader(log, producerId, producerEpoch, isTransactional = true)
+  private def appendTransactionalAsLeader(log: Log,
+                                          producerId: Long,
+                                          producerEpoch: Short,
+                                          leaderEpoch: Int = 0,
+                                          isFromClient: Boolean = true): Seq[Int] => LogAppendInfo = {
+    appendIdempotentAsLeader(log, producerId, producerEpoch, isTransactional = true, isFromClient = isFromClient)
   }
 
   private def appendIdempotentAsLeader(log: Log, producerId: Long,
                                        producerEpoch: Short,
-                                       isTransactional: Boolean = false): Seq[Int] => LogAppendInfo = {
+                                       isTransactional: Boolean = false,
+                                       leaderEpoch: Int = 0,
+                                       isFromClient: Boolean = true): Seq[Int] => LogAppendInfo = {
     var sequence = 0
     keys: Seq[Int] => {
       val simpleRecords = keys.map { key =>
@@ -1539,7 +1584,7 @@ class LogCleanerTest {
       else
         MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence, simpleRecords: _*)
       sequence += simpleRecords.size
-      log.appendAsLeader(records, leaderEpoch = 0)
+      log.appendAsLeader(records, leaderEpoch, isFromClient)
     }
   }
 
