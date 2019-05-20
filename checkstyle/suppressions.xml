@@ -81,7 +81,8 @@
     <!-- Connect -->
     <suppress checks="ClassFanOutComplexity"
               files="DistributedHerder(|Test).java"/>
-
+    <suppress checks="ClassFanOutComplexity"
+              files="Worker.java"/>
     <suppress checks="MethodLength"
               files="(KafkaConfigBackingStore|RequestResponseTest|WorkerSinkTaskTest).java"/>
 
@@ -110,6 +111,8 @@
               files="KafkaConfigBackingStore.java"/>
     <suppress checks="CyclomaticComplexity"
               files="(Values|ConnectHeader|ConnectHeaders).java"/>
+    <suppress checks="CyclomaticComplexity"
+              files="RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest.java"/>
 
     <suppress checks="JavaNCSS"
               files="KafkaConfigBackingStore.java"/>

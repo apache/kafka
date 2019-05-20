@@ -61,8 +61,8 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicSet;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCollection;
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
@@ -72,7 +72,7 @@ import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigSet;
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfigCollection;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterableConfig;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.AlterConfigsResource;
 import org.apache.kafka.common.metrics.JmxReporter;
@@ -1281,7 +1281,7 @@ public class KafkaAdminClient extends AdminClient {
     public CreateTopicsResult createTopics(final Collection<NewTopic> newTopics,
                                            final CreateTopicsOptions options) {
         final Map<String, KafkaFutureImpl<Void>> topicFutures = new HashMap<>(newTopics.size());
-        final CreatableTopicSet topics = new CreatableTopicSet();
+        final CreatableTopicCollection topics = new CreatableTopicCollection();
         for (NewTopic newTopic : newTopics) {
             if (topicNameIsUnrepresentable(newTopic.name())) {
                 KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
@@ -2026,7 +2026,7 @@ public class KafkaAdminClient extends AdminClient {
         IncrementalAlterConfigsRequestData requestData = new IncrementalAlterConfigsRequestData();
         requestData.setValidateOnly(validateOnly);
         for (ConfigResource resource : resources) {
-            AlterableConfigSet alterableConfigSet = new AlterableConfigSet();
+            AlterableConfigCollection alterableConfigSet = new AlterableConfigCollection();
             for (AlterConfigOp configEntry : configs.get(resource))
                 alterableConfigSet.add(new AlterableConfig().
                         setName(configEntry.configEntry().name()).
@@ -2552,7 +2552,7 @@ public class KafkaAdminClient extends AdminClient {
                 void handleResponse(AbstractResponse abstractResponse) {
                     final FindCoordinatorResponse fcResponse = (FindCoordinatorResponse) abstractResponse;
 
-                    if (handleFindCoordinatorError(fcResponse, futures.get(groupId)))
+                    if (handleGroupRequestError(fcResponse.error(), futures.get(groupId)))
                         return;
 
                     final long nowDescribeConsumerGroups = time.milliseconds();
@@ -2578,38 +2578,37 @@ public class KafkaAdminClient extends AdminClient {
                                 .findFirst().get();
 
                             final Errors groupError = Errors.forCode(describedGroup.errorCode());
-                            if (groupError != Errors.NONE) {
-                                // TODO: KAFKA-6789, we can retry based on the error code
-                                future.completeExceptionally(groupError.exception());
-                            } else {
-                                final String protocolType = describedGroup.protocolType();
-                                if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
-                                    final List<DescribedGroupMember> members = describedGroup.members();
-                                    final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
-                                    final Set<AclOperation> authorizedOperations = validAclOperations(describedGroup.authorizedOperations());
-                                    for (DescribedGroupMember groupMember : members) {
-                                        Set<TopicPartition> partitions = Collections.emptySet();
-                                        if (groupMember.memberAssignment().length > 0) {
-                                            final PartitionAssignor.Assignment assignment = ConsumerProtocol.
-                                                deserializeAssignment(ByteBuffer.wrap(groupMember.memberAssignment()));
-                                            partitions = new HashSet<>(assignment.partitions());
-                                        }
-                                        final MemberDescription memberDescription =
-                                            new MemberDescription(groupMember.memberId(),
-                                                groupMember.clientId(),
-                                                groupMember.clientHost(),
-                                                new MemberAssignment(partitions));
-                                        memberDescriptions.add(memberDescription);
+
+                            if (handleGroupRequestError(groupError, future))
+                                return;
+
+                            final String protocolType = describedGroup.protocolType();
+                            if (protocolType.equals(ConsumerProtocol.PROTOCOL_TYPE) || protocolType.isEmpty()) {
+                                final List<DescribedGroupMember> members = describedGroup.members();
+                                final List<MemberDescription> memberDescriptions = new ArrayList<>(members.size());
+                                final Set<AclOperation> authorizedOperations = validAclOperations(describedGroup.authorizedOperations());
+                                for (DescribedGroupMember groupMember : members) {
+                                    Set<TopicPartition> partitions = Collections.emptySet();
+                                    if (groupMember.memberAssignment().length > 0) {
+                                        final PartitionAssignor.Assignment assignment = ConsumerProtocol.
+                                            deserializeAssignment(ByteBuffer.wrap(groupMember.memberAssignment()));
+                                        partitions = new HashSet<>(assignment.partitions());
                                     }
-                                    final ConsumerGroupDescription consumerGroupDescription =
-                                            new ConsumerGroupDescription(groupId, protocolType.isEmpty(),
-                                                memberDescriptions,
-                                                describedGroup.protocolData(),
-                                                ConsumerGroupState.parse(describedGroup.groupState()),
-                                                fcResponse.node(),
-                                                authorizedOperations);
-                                    future.complete(consumerGroupDescription);
+                                    final MemberDescription memberDescription =
+                                        new MemberDescription(groupMember.memberId(),
+                                            groupMember.clientId(),
+                                            groupMember.clientHost(),
+                                            new MemberAssignment(partitions));
+                                    memberDescriptions.add(memberDescription);
                                 }
+                                final ConsumerGroupDescription consumerGroupDescription =
+                                    new ConsumerGroupDescription(groupId, protocolType.isEmpty(),
+                                        memberDescriptions,
+                                        describedGroup.protocolData(),
+                                        ConsumerGroupState.parse(describedGroup.groupState()),
+                                        fcResponse.node(),
+                                        authorizedOperations);
+                                future.complete(consumerGroupDescription);
                             }
                         }
 
@@ -2642,11 +2641,10 @@ public class KafkaAdminClient extends AdminClient {
             .collect(Collectors.toSet());
     }
 
-    private boolean handleFindCoordinatorError(FindCoordinatorResponse response, KafkaFutureImpl<?> future) {
-        Errors error = response.error();
-        if (error.exception() instanceof RetriableException) {
+    private boolean handleGroupRequestError(Errors error, KafkaFutureImpl<?> future) {
+        if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS || error == Errors.COORDINATOR_NOT_AVAILABLE) {
             throw error.exception();
-        } else if (response.hasError()) {
+        } else if (error != Errors.NONE) {
             future.completeExceptionally(error.exception());
             return true;
         }
@@ -2798,7 +2796,7 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
-                if (handleFindCoordinatorError(response, groupOffsetListingFuture))
+                if (handleGroupRequestError(response.error(), groupOffsetListingFuture))
                     return;
 
                 final long nowListConsumerGroupOffsets = time.milliseconds();
@@ -2816,26 +2814,25 @@ public class KafkaAdminClient extends AdminClient {
                         final OffsetFetchResponse response = (OffsetFetchResponse) abstractResponse;
                         final Map<TopicPartition, OffsetAndMetadata> groupOffsetsListing = new HashMap<>();
 
-                        if (response.hasError()) {
-                            groupOffsetListingFuture.completeExceptionally(response.error().exception());
-                        } else {
-                            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
-                                    response.responseData().entrySet()) {
-                                final TopicPartition topicPartition = entry.getKey();
-                                OffsetFetchResponse.PartitionData partitionData = entry.getValue();
-                                final Errors error = partitionData.error;
+                        if (handleGroupRequestError(response.error(), groupOffsetListingFuture))
+                            return;
 
-                                if (error == Errors.NONE) {
-                                    final Long offset = partitionData.offset;
-                                    final String metadata = partitionData.metadata;
-                                    final Optional<Integer> leaderEpoch = partitionData.leaderEpoch;
-                                    groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
-                                } else {
-                                    log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
-                                }
+                        for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry :
+                            response.responseData().entrySet()) {
+                            final TopicPartition topicPartition = entry.getKey();
+                            OffsetFetchResponse.PartitionData partitionData = entry.getValue();
+                            final Errors error = partitionData.error;
+
+                            if (error == Errors.NONE) {
+                                final Long offset = partitionData.offset;
+                                final String metadata = partitionData.metadata;
+                                final Optional<Integer> leaderEpoch = partitionData.leaderEpoch;
+                                groupOffsetsListing.put(topicPartition, new OffsetAndMetadata(offset, leaderEpoch, metadata));
+                            } else {
+                                log.warn("Skipping return offset for {} due to error {}.", topicPartition, error);
                             }
-                            groupOffsetListingFuture.complete(groupOffsetsListing);
                         }
+                        groupOffsetListingFuture.complete(groupOffsetsListing);
                     }
 
                     @Override
@@ -2892,7 +2889,7 @@ public class KafkaAdminClient extends AdminClient {
                 void handleResponse(AbstractResponse abstractResponse) {
                     final FindCoordinatorResponse response = (FindCoordinatorResponse) abstractResponse;
 
-                    if (handleFindCoordinatorError(response, futures.get(groupId)))
+                    if (handleGroupRequestError(response.error(), futures.get(groupId)))
                         return;
 
                     final long nowDeleteConsumerGroups = time.milliseconds();
@@ -2913,11 +2910,10 @@ public class KafkaAdminClient extends AdminClient {
                             KafkaFutureImpl<Void> future = futures.get(groupId);
                             final Errors groupError = response.get(groupId);
 
-                            if (groupError != Errors.NONE) {
-                                future.completeExceptionally(groupError.exception());
-                            } else {
-                                future.complete(null);
-                            }
+                            if (handleGroupRequestError(groupError, future))
+                                return;
+
+                            future.complete(null);
                         }
 
                         @Override

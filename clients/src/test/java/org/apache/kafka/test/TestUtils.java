@@ -35,6 +35,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Field;
 import java.nio.ByteBuffer;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -462,6 +463,17 @@ public class TestUtils {
             assertion.accept(optional.get());
         } else {
             fail("Missing value from Optional");
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> T fieldValue(Object o, Class<?> clazz, String fieldName)  {
+        try {
+            Field field = clazz.getDeclaredField(fieldName);
+            field.setAccessible(true);
+            return (T) field.get(o);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 }

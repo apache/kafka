@@ -24,7 +24,7 @@
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The error code, or 0 if there was no error." },
-    { "name": "ProducerId", "type": "int64", "versions": "0+",
+    { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId",
       "default": -1, "about": "The current producer id." },
     { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
       "about": "The current epoch associated with the producer id." }

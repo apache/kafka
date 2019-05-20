@@ -149,7 +149,6 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       .describedAs("config file")
       .ofType(classOf[String])
 
-    parser.accepts("")
     options = parser.parse(args: _*)
   }
 

@@ -37,6 +37,12 @@ import scala.collection.{immutable, mutable}
 
 class CorruptSnapshotException(msg: String) extends KafkaException(msg)
 
+/**
+ * The last written record for a given producer. The last data offset may be undefined
+ * if the only log entry for a producer is a transaction marker.
+ */
+case class LastRecord(lastDataOffset: Option[Long], producerEpoch: Short)
+
 
 // ValidationType and its subtypes define the extent of the validation to perform on a given ProducerAppendInfo instance
 private[log] sealed trait ValidationType

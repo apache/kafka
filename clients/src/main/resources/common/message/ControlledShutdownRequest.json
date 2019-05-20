@@ -26,7 +26,7 @@
   // Version 2 adds BrokerEpoch.
   "validVersions": "0-2",
   "fields": [
-    { "name": "BrokerId", "type": "int32", "versions": "0+",
+    { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The id of the broker for which controlled shutdown has been requested." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "2+", "default": "-1", "ignorable": true,
       "about": "The broker epoch." }

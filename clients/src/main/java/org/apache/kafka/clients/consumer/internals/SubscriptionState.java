@@ -40,6 +40,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collector;
 import java.util.stream.Collectors;
@@ -418,6 +419,39 @@ public class SubscriptionState {
         assignedState(tp).lastStableOffset = lastStableOffset;
     }
 
+    /**
+     * Set the preferred read replica with a lease timeout. After this time, the replica will no longer be valid and
+     * {@link #preferredReadReplica(TopicPartition, long)} will return an empty result.
+     *
+     * @param tp The topic partition
+     * @param preferredReadReplicaId The preferred read replica
+     * @param timeMs The time at which this preferred replica is no longer valid
+     */
+    public void updatePreferredReadReplica(TopicPartition tp, int preferredReadReplicaId, Supplier<Long> timeMs) {
+        assignedState(tp).updatePreferredReadReplica(preferredReadReplicaId, timeMs);
+    }
+
+    /**
+     * Get the preferred read replica
+     *
+     * @param tp The topic partition
+     * @param timeMs The current time
+     * @return Returns the current preferred read replica, if it has been set and if it has not expired.
+     */
+    public Optional<Integer> preferredReadReplica(TopicPartition tp, long timeMs) {
+        return assignedState(tp).preferredReadReplica(timeMs);
+    }
+
+    /**
+     * Unset the preferred read replica. This causes the fetcher to go back to the leader for fetches.
+     *
+     * @param tp The topic partition
+     * @return true if the preferred read replica was set, false otherwise.
+     */
+    public Optional<Integer> clearPreferredReadReplica(TopicPartition tp) {
+        return assignedState(tp).clearPreferredReadReplica();
+    }
+
     public Map<TopicPartition, OffsetAndMetadata> allConsumed() {
         Map<TopicPartition, OffsetAndMetadata> allConsumed = new HashMap<>();
         assignment.stream().forEach(state -> {
@@ -553,7 +587,8 @@ public class SubscriptionState {
         private boolean paused;  // whether this partition has been paused by the user
         private OffsetResetStrategy resetStrategy;  // the strategy to use if the offset needs resetting
         private Long nextRetryTimeMs;
-
+        private Integer preferredReadReplica;
+        private Long preferredReadReplicaExpireTimeMs;
 
         TopicPartitionState() {
             this.paused = false;
@@ -564,6 +599,7 @@ public class SubscriptionState {
             this.lastStableOffset = null;
             this.resetStrategy = null;
             this.nextRetryTimeMs = null;
+            this.preferredReadReplica = null;
         }
 
         private void transitionState(FetchState newState, Runnable runIfTransitioned) {
@@ -571,6 +607,33 @@ public class SubscriptionState {
             if (nextState.equals(newState)) {
                 this.fetchState = nextState;
                 runIfTransitioned.run();
+            }
+        }
+
+        private Optional<Integer> preferredReadReplica(long timeMs) {
+            if (preferredReadReplicaExpireTimeMs != null && timeMs > preferredReadReplicaExpireTimeMs) {
+                preferredReadReplica = null;
+                return Optional.empty();
+            } else {
+                return Optional.ofNullable(preferredReadReplica);
+            }
+        }
+
+        private void updatePreferredReadReplica(int preferredReadReplica, Supplier<Long> timeMs) {
+            if (this.preferredReadReplica == null || preferredReadReplica != this.preferredReadReplica) {
+                this.preferredReadReplica = preferredReadReplica;
+                this.preferredReadReplicaExpireTimeMs = timeMs.get();
+            }
+        }
+
+        private Optional<Integer> clearPreferredReadReplica() {
+            if (preferredReadReplica != null) {
+                int removedReplicaId = this.preferredReadReplica;
+                this.preferredReadReplica = null;
+                this.preferredReadReplicaExpireTimeMs = null;
+                return Optional.of(removedReplicaId);
+            } else {
+                return Optional.empty();
             }
         }
 
@@ -594,6 +657,7 @@ public class SubscriptionState {
             if (position != null && !position.safeToFetchFrom(currentLeaderAndEpoch)) {
                 FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeaderAndEpoch);
                 validatePosition(newPosition);
+                preferredReadReplica = null;
             }
             return this.fetchState.equals(FetchStates.AWAIT_VALIDATION);
         }

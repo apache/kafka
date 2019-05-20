@@ -72,11 +72,9 @@ final class ClusterConnectionStates {
      */
     public boolean isBlackedOut(String id, long now) {
         NodeConnectionState state = nodeState.get(id);
-        if (state == null)
-            return false;
-        else
-            return state.state.isDisconnected() &&
-                   now - state.lastConnectAttemptMs < state.reconnectBackoffMs;
+        return state != null
+                && state.state.isDisconnected()
+                && now - state.lastConnectAttemptMs < state.reconnectBackoffMs;
     }
 
     /**
@@ -106,6 +104,17 @@ final class ClusterConnectionStates {
     public boolean isConnecting(String id) {
         NodeConnectionState state = nodeState.get(id);
         return state != null && state.state == ConnectionState.CONNECTING;
+    }
+
+    /**
+     * Check whether a connection is either being established or awaiting API version information.
+     * @param id The id of the node to check
+     * @return true if the node is either connecting or has connected and is awaiting API versions, false otherwise
+     */
+    public boolean isPreparingConnection(String id) {
+        NodeConnectionState state = nodeState.get(id);
+        return state != null &&
+                (state.state == ConnectionState.CONNECTING || state.state == ConnectionState.CHECKING_API_VERSIONS);
     }
 
     /**

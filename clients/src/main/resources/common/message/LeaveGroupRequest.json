@@ -20,7 +20,7 @@
   // Version 1 and 2 are the same as version 0.
   "validVersions": "0-2",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "0+",
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The ID of the group to leave." },
     { "name": "MemberId", "type": "string", "versions": "0+",
       "about": "The member ID to remove from the group." }

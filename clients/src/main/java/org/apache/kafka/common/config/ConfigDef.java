@@ -30,6 +30,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.BiConsumer;
+import java.util.function.Supplier;
 import java.util.regex.Pattern;
 
 /**
@@ -949,6 +951,32 @@ public class ConfigDef {
 
         public String toString() {
             return "non-null string";
+        }
+    }
+
+    public static class LambdaValidator implements Validator {
+        BiConsumer<String, Object> ensureValid;
+        Supplier<String> toStringFunction;
+
+        private LambdaValidator(BiConsumer<String, Object> ensureValid,
+                                Supplier<String> toStringFunction) {
+            this.ensureValid = ensureValid;
+            this.toStringFunction = toStringFunction;
+        }
+
+        public static LambdaValidator with(BiConsumer<String, Object> ensureValid,
+                                           Supplier<String> toStringFunction) {
+            return new LambdaValidator(ensureValid, toStringFunction);
+        }
+
+        @Override
+        public void ensureValid(String name, Object value) {
+            ensureValid.accept(name, value);
+        }
+
+        @Override
+        public String toString() {
+            return toStringFunction.get();
         }
     }
 

@@ -23,6 +23,7 @@ import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
 
 import java.nio.ByteBuffer;
+import java.util.Objects;
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.common.protocol.types.Type.INT16;
@@ -145,7 +146,7 @@ public class RequestHeader extends AbstractRequestResponse {
         return apiKey == that.apiKey &&
                 apiVersion == that.apiVersion &&
                 correlationId == that.correlationId &&
-                (clientId == null ? that.clientId == null : clientId.equals(that.clientId));
+                Objects.equals(clientId, that.clientId);
     }
 
     @Override

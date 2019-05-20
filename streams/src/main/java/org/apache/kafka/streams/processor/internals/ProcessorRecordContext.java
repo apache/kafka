@@ -29,7 +29,7 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 public class ProcessorRecordContext implements RecordContext {
 
-    private long timestamp;
+    private final long timestamp;
     private final long offset;
     private final String topic;
     private final int partition;
@@ -46,10 +46,6 @@ public class ProcessorRecordContext implements RecordContext {
         this.topic = topic;
         this.partition = partition;
         this.headers = headers;
-    }
-
-    public void setTimestamp(final long timestamp) {
-        this.timestamp = timestamp;
     }
 
     @Override
