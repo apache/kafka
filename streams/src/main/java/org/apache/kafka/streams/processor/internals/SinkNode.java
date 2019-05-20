@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.nio.ByteBuffer;
+
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
@@ -84,9 +88,14 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
         }
 
         final String topic = topicExtractor.extract(key, value, this.context.recordContext());
+        final Headers headers = context.headers();
+        if (partitionTime != null) {
+            headers.add(new RecordHeader("partition-time", ByteBuffer.allocate(Long.BYTES).putLong(partitionTime)));
+            partitionTime = null;
+        }
 
         try {
-            collector.send(topic, key, value, context.headers(), timestamp, keySerializer, valSerializer, partitioner);
+            collector.send(topic, key, value, headers, timestamp, keySerializer, valSerializer, partitioner);
         } catch (final ClassCastException e) {
             final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
             final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();

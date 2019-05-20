@@ -172,6 +172,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             if (sendTo == null) {
                 final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
                 for (final ProcessorNode child : children) {
+                    child.setPartitionTime(previousNode.partitionTime());
                     forward(child, key, value);
                 }
             } else {
@@ -180,6 +181,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                     throw new StreamsException("Unknown downstream node: " + sendTo
                         + " either does not exist or is not connected to this processor.");
                 }
+                child.setPartitionTime(previousNode.partitionTime());
                 forward(child, key, value);
             }
         } finally {

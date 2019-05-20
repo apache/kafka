@@ -361,6 +361,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             log.trace("Start processing one record [{}]", record);
 
             updateProcessorContext(record, currNode);
+            currNode.setPartitionTime(partitionGroup.getPartitionTimestamp(partition));
             currNode.process(record.key(), record.value());
 
             log.trace("Completed processing one record [{}]", record);

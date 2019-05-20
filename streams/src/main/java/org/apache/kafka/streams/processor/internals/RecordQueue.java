@@ -191,6 +191,10 @@ public class RecordQueue {
             }
 
             headRecord = new StampedRecord(deserialized, timestamp);
+            final Long retrievedPartitionTime = headRecord.partitionTime();
+            if (retrievedPartitionTime != null && retrievedPartitionTime > partitionTime) {
+                partitionTime = retrievedPartitionTime;
+            }
 
             // update the partition timestamp if the current head record's timestamp has exceed its value
             if (timestamp > partitionTime) {

@@ -41,6 +41,7 @@ public class ProcessorNode<K, V> {
     // TODO: 'children' can be removed when #forward() via index is removed
     private final List<ProcessorNode<?, ?>> children;
     private final Map<String, ProcessorNode<?, ?>> childByName;
+    protected Long partitionTime;
 
     private NodeMetrics nodeMetrics;
     private final Processor<K, V> processor;
@@ -53,7 +54,6 @@ public class ProcessorNode<K, V> {
         this(name, null, null);
     }
 
-
     public ProcessorNode(final String name, final Processor<K, V> processor, final Set<String> stateStores) {
         this.name = name;
         this.processor = processor;
@@ -61,8 +61,17 @@ public class ProcessorNode<K, V> {
         this.childByName = new HashMap<>();
         this.stateStores = stateStores;
         this.time = new SystemTime();
+        this.partitionTime = null;
     }
 
+
+    public void setPartitionTime(final Long partitionTime) {
+        this.partitionTime = partitionTime;
+    }
+
+    public Long partitionTime() {
+        return partitionTime;
+    }
 
     public final String name() {
         return name;

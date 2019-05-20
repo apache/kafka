@@ -16,8 +16,11 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.nio.ByteBuffer;
+
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeader;
 
 public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
 
@@ -43,6 +46,16 @@ public class StampedRecord extends Stamped<ConsumerRecord<Object, Object>> {
 
     public long offset() {
         return value.offset();
+    }
+
+    public Long partitionTime() {
+        // cast is safe since only header inserted for this specific key is RecordHeader
+        final RecordHeader header = (RecordHeader) value.headers().lastHeader("partition-time");
+        if (header != null) {
+            value.headers().remove("partition-time");
+            return ByteBuffer.wrap(header.value()).getLong();
+        }
+        return null;
     }
 
     public Headers headers() {
