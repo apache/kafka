@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Cancellable;
@@ -46,15 +47,23 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
     private final PunctuationType punctuationType;
     private final long scheduleInterval;
+    private final boolean keepMetadata;
 
     private boolean commitRequested = false;
     private boolean initialized = false;
     private boolean closed = false;
 
     public MockProcessor(final PunctuationType punctuationType,
-                         final long scheduleInterval) {
+                         final long scheduleInterval,
+                         final boolean keepMetadata) {
         this.punctuationType = punctuationType;
         this.scheduleInterval = scheduleInterval;
+        this.keepMetadata = keepMetadata;
+    }
+
+    public MockProcessor(final PunctuationType punctuationType,
+                         final long scheduleInterval) {
+        this(punctuationType, scheduleInterval, false);
     }
 
     public MockProcessor() {
@@ -106,7 +115,12 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
         } else {
             lastValueAndTimestampPerKey.remove(key);
         }
-        processed.add(makeRecord(key, value, context().timestamp()));
+
+        if (keepMetadata) {
+            processed.add(makeRecord(key, value, context().timestamp(), context().offset(), context().topic()));
+        } else {
+            processed.add(makeRecord(key, value, context().timestamp()));
+        }
 
         if (commitRequested) {
             context().commit();
@@ -118,6 +132,24 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
         return (key == null ? "null" : key) +
             ":" + (value == null ? "null" : value) +
             " (ts: " + timestamp + ")";
+    }
+
+    public static String makeRecord(final Object key,
+                                    final Object value,
+                                    final long timestamp,
+                                    final long offset,
+                                    final String topic) {
+        return "key: " + (key == null ? "null" : key) +
+            ", value: " + (value == null ? "null" : value) +
+            ", timestamp: " + timestamp + ", offset: " + offset + ", topic: " + topic;
+    }
+
+    public static String makeRecord(final ConsumerRecord consumerRecord) {
+        return makeRecord(consumerRecord.key(),
+            consumerRecord.value(),
+            consumerRecord.timestamp(),
+            0 /* not using consumer's own offset since it's default to -1 */,
+            consumerRecord.topic());
     }
 
     public void checkAndClearProcessResult(final String... expected) {

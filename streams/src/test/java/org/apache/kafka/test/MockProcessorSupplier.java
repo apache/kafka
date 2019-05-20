@@ -27,6 +27,7 @@ import static org.junit.Assert.assertEquals;
 
 public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
 
+    private final boolean keepMetadata;
     private final long scheduleInterval;
     private final PunctuationType punctuationType;
     private final List<MockProcessor<K, V>> processors = new ArrayList<>();
@@ -35,18 +36,23 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
         this(-1L);
     }
 
-    public MockProcessorSupplier(final long scheduleInterval) {
-        this(scheduleInterval, PunctuationType.STREAM_TIME);
+    public MockProcessorSupplier(final boolean keepMetadata) {
+        this(-1L, PunctuationType.STREAM_TIME, keepMetadata);
     }
 
-    public MockProcessorSupplier(final long scheduleInterval, final PunctuationType punctuationType) {
+    public MockProcessorSupplier(final long scheduleInterval) {
+        this(scheduleInterval, PunctuationType.STREAM_TIME, false);
+    }
+
+    public MockProcessorSupplier(final long scheduleInterval, final PunctuationType punctuationType, final boolean keepMetadata) {
         this.scheduleInterval = scheduleInterval;
         this.punctuationType = punctuationType;
+        this.keepMetadata = keepMetadata;
     }
 
     @Override
     public Processor<K, V> get() {
-        final MockProcessor<K, V> processor = new MockProcessor<>(punctuationType, scheduleInterval);
+        final MockProcessor<K, V> processor = new MockProcessor<>(punctuationType, scheduleInterval, keepMetadata);
         processors.add(processor);
         return processor;
     }
