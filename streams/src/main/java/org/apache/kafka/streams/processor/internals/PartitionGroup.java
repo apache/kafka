@@ -109,6 +109,9 @@ public class PartitionGroup {
         if (queue != null) {
             // get the first record from this queue.
             record = queue.poll();
+            if (queue.timestamp() > streamTime) {
+                streamTime = queue.timestamp();
+            }
 
             if (record != null) {
                 --totalBuffered;
