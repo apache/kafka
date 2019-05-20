@@ -64,7 +64,7 @@ public class TestRecord<K, V> implements org.apache.kafka.clients.ClientRecord<K
      * @param value The record contents
      * @param headers the headers that will be included in the record
      */
-    public TestRecord(String topic, Long timestamp, K key, V value, Iterable<Header> headers) {
+    public TestRecord(String topic, Long timestamp, K key, V value, Headers headers) {
         if (topic == null)
             throw new IllegalArgumentException("Topic cannot be null.");
         if (timestamp != null && timestamp < 0)
@@ -100,7 +100,7 @@ public class TestRecord<K, V> implements org.apache.kafka.clients.ClientRecord<K
      * @param value The record contents
      * @param headers The headers that will be included in the record
      */
-    public TestRecord(String topic, K key, V value, Iterable<Header> headers) {
+    public TestRecord(String topic, K key, V value, Headers headers) {
         this(topic,  null, key, value, headers);
     }
     
