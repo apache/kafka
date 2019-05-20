@@ -104,12 +104,12 @@ public class TestInputTopic<K, V> {
     }
 
     public void configureTiming(final long startTimestampMs) {
-        //this(driver, topicName, new TestRecordFactory<>(topicName, keySerializer, valueSerializer, startTimestampMs, autoAdvanceMs));
+        factory.configureTiming(startTimestampMs);
     }
 
     public void configureTiming(final long startTimestampMs,
                           final long autoAdvanceMs) {
-        //this(driver, topicName, new TestRecordFactory<>(topicName, keySerializer, valueSerializer, startTimestampMs, autoAdvanceMs));
+        factory.configureTiming(startTimestampMs,autoAdvanceMs);
     }
 
 
