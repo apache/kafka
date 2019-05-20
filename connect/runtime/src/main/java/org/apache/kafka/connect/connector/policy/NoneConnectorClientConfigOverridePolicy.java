@@ -24,7 +24,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Map;
 
 /**
- * Disallow any client configuration to be overridden via the connector configs by setting {@code client.config.policy} to {@code None}.
+ * Disallow any client configuration to be overridden via the connector configs by setting {@code connector.client.config.override.policy} to {@code None}.
  * This is the default behavior.
  */
 public class NoneConnectorClientConfigOverridePolicy extends AbstractConnectorClientConfigOverridePolicy {
