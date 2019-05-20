@@ -419,7 +419,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     val UpdateLeaderAndIsrResult(finishedUpdates, updatesToRetry) = zkClient.updateLeaderAndIsr(
       adjustedLeaderAndIsrs, controllerContext.epoch, controllerContext.epochZkVersion)
     finishedUpdates.foreach { case (partition, result) =>
-      result.foreach { leaderAndIsr =>
+      result.right.foreach { leaderAndIsr =>
         val replicas = controllerContext.partitionReplicaAssignment(partition)
         val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
         controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)

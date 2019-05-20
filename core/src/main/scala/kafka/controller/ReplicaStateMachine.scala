@@ -312,13 +312,13 @@ class ZkReplicaStateMachine(config: KafkaConfig,
   ): (Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]], Seq[TopicPartition]) = {
     val (leaderAndIsrs, partitionsWithNoLeaderAndIsrInZk) = getTopicPartitionStatesFromZk(partitions)
     val (leaderAndIsrsWithReplica, leaderAndIsrsWithoutReplica) = leaderAndIsrs.partition { case (_, result) =>
-      result.map { leaderAndIsr =>
+      result.right.map { leaderAndIsr =>
         leaderAndIsr.isr.contains(replicaId)
-      }.getOrElse(false)
+      }.right.getOrElse(false)
     }
     val adjustedLeaderAndIsrs: Map[TopicPartition, LeaderAndIsr] = leaderAndIsrsWithReplica.flatMap {
       case (partition, result) =>
-        result.toOption.map { leaderAndIsr =>
+        result.right.toOption.map { leaderAndIsr =>
           val newLeader = if (replicaId == leaderAndIsr.leader) LeaderAndIsr.NoLeader else leaderAndIsr.leader
           val adjustedIsr = if (leaderAndIsr.isr.size == 1) leaderAndIsr.isr else leaderAndIsr.isr.filter(_ != replicaId)
           partition -> leaderAndIsr.newLeaderAndIsr(newLeader, adjustedIsr)
@@ -345,7 +345,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     val leaderIsrAndControllerEpochs = (leaderAndIsrsWithoutReplica ++ finishedPartitions).map { case (partition, result) =>
       (
         partition,
-        result.map { leaderAndIsr =>
+        result.right.map { leaderAndIsr =>
           val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
           controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
           leaderIsrAndControllerEpoch
