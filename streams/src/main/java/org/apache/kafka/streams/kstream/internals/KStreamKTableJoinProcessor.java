@@ -26,6 +26,8 @@ import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+
 class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1, V1> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoinProcessor.class);
 
@@ -73,7 +75,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
             skippedRecordsSensor.record();
         } else {
             final K2 mappedKey = keyMapper.apply(key, value);
-            final V2 value2 = mappedKey == null ? null : valueGetter.get(mappedKey);
+            final V2 value2 = mappedKey == null ? null : getValueOrNull(valueGetter.get(mappedKey));
             if (leftJoin || value2 != null) {
                 context().forward(key, joiner.apply(value, value2));
             }

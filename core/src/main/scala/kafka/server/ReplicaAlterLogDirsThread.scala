@@ -39,12 +39,14 @@ import scala.collection.{Map, Seq, Set, mutable}
 class ReplicaAlterLogDirsThread(name: String,
                                 sourceBroker: BrokerEndPoint,
                                 brokerConfig: KafkaConfig,
+                                failedPartitions: FailedPartitions,
                                 replicaMgr: ReplicaManager,
                                 quota: ReplicationQuotaManager,
                                 brokerTopicStats: BrokerTopicStats)
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
                                 sourceBroker = sourceBroker,
+                                failedPartitions,
                                 fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
                                 isInterruptible = false) {
 

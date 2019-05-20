@@ -34,6 +34,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.TestName
+import org.scalatest.Assertions.{fail, intercept}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionException

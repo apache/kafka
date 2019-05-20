@@ -28,7 +28,8 @@ import org.apache.kafka.common.config.ConfigDef.{Importance, Type}
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef}
 import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException}
 import org.apache.kafka.common.internals.ClusterResourceListeners
-import org.apache.kafka.common.message.{DescribeGroupsRequestData, DescribeGroupsResponseData}
+import org.apache.kafka.common.message.{DescribeGroupsRequestData, DescribeGroupsResponseData, FindCoordinatorRequestData}
+
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.Selector
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -41,6 +42,7 @@ import org.apache.kafka.common.{Node, TopicPartition}
 
 import scala.collection.JavaConverters._
 import scala.util.{Failure, Success, Try}
+import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 
 /**
   * A Scala administrative client for Kafka which supports managing and inspecting topics, brokers,
@@ -108,7 +110,10 @@ class AdminClient(val time: Time,
   }
 
   def findCoordinator(groupId: String, timeoutMs: Long = 0): Node = {
-    val requestBuilder = new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, groupId)
+    val requestBuilder = new FindCoordinatorRequest.Builder(
+        new FindCoordinatorRequestData()
+          .setKeyType(CoordinatorType.GROUP.id)
+          .setKey(groupId))
 
     def sendRequest: Try[FindCoordinatorResponse] =
       Try(sendAnyNode(ApiKeys.FIND_COORDINATOR, requestBuilder).asInstanceOf[FindCoordinatorResponse])

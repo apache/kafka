@@ -143,7 +143,6 @@ public class FineGrainedAutoResetIntegrationTest {
         props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
         props.put(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000");
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        props.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
                 "testAutoOffsetId",
@@ -157,7 +156,7 @@ public class FineGrainedAutoResetIntegrationTest {
     }
 
     @Test
-    public void shouldOnlyReadRecordsWhereEarliestSpecifiedWithNoCommittedOffsetsWithGlobalAutoOffsetResetLatest() throws  Exception {
+    public void shouldOnlyReadRecordsWhereEarliestSpecifiedWithNoCommittedOffsetsWithGlobalAutoOffsetResetLatest() throws Exception {
         streamsConfiguration.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "latest");
 
         final List<String> expectedReceivedValues = Arrays.asList(topic1TestMessage, topic2TestMessage);
@@ -165,13 +164,13 @@ public class FineGrainedAutoResetIntegrationTest {
     }
 
     @Test
-    public void shouldOnlyReadRecordsWhereEarliestSpecifiedWithNoCommittedOffsetsWithDefaultGlobalAutoOffsetResetEarliest() throws  Exception {
+    public void shouldOnlyReadRecordsWhereEarliestSpecifiedWithNoCommittedOffsetsWithDefaultGlobalAutoOffsetResetEarliest() throws Exception {
         final List<String> expectedReceivedValues = Arrays.asList(topic1TestMessage, topic2TestMessage, topicYTestMessage, topicZTestMessage);
         shouldOnlyReadForEarliest("_1", TOPIC_1_1, TOPIC_2_1, TOPIC_A_1, TOPIC_C_1, TOPIC_Y_1, TOPIC_Z_1, OUTPUT_TOPIC_1, expectedReceivedValues);
     }
 
     @Test
-    public void shouldOnlyReadRecordsWhereEarliestSpecifiedWithInvalidCommittedOffsets() throws  Exception {
+    public void shouldOnlyReadRecordsWhereEarliestSpecifiedWithInvalidCommittedOffsets() throws Exception {
         commitInvalidOffsets();
 
         final List<String> expectedReceivedValues = Arrays.asList(topic1TestMessage, topic2TestMessage, topicYTestMessage, topicZTestMessage);
@@ -230,7 +229,7 @@ public class FineGrainedAutoResetIntegrationTest {
     private void commitInvalidOffsets() {
         final KafkaConsumer<String, String> consumer = new KafkaConsumer<>(TestUtils.consumerConfig(
             CLUSTER.bootstrapServers(),
-            streamsConfiguration.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
+            "commit_invalid_offset_app", // Having a separate application id to avoid waiting for last test poll interval timeout.
             StringDeserializer.class,
             StringDeserializer.class));
 

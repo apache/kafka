@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.FixedOrderMap;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateStore;
@@ -29,8 +30,8 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
@@ -45,8 +46,7 @@ abstract class AbstractStateManager implements StateManager {
     OffsetCheckpoint checkpoint;
 
     final Map<TopicPartition, Long> checkpointableOffsets = new HashMap<>();
-    final Map<String, StateStore> stores = new LinkedHashMap<>();
-    final Map<String, StateStore> globalStores = new LinkedHashMap<>();
+    final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
 
     AbstractStateManager(final File baseDir,
                          final boolean eosEnabled) {
@@ -60,17 +60,16 @@ abstract class AbstractStateManager implements StateManager {
     }
 
     public void reinitializeStateStoresForPartitions(final Logger log,
-                                                     final Map<String, StateStore> stateStores,
+                                                     final FixedOrderMap<String, Optional<StateStore>> stateStores,
                                                      final Map<String, String> storeToChangelogTopic,
                                                      final Collection<TopicPartition> partitions,
                                                      final InternalProcessorContext processorContext) {
         final Map<String, String> changelogTopicToStore = inverseOneToOneMap(storeToChangelogTopic);
-        final Set<String> storeToBeReinitialized = new HashSet<>();
-        final Map<String, StateStore> storesCopy = new HashMap<>(stateStores);
+        final Set<String> storesToBeReinitialized = new HashSet<>();
 
         for (final TopicPartition topicPartition : partitions) {
             checkpointableOffsets.remove(topicPartition);
-            storeToBeReinitialized.add(changelogTopicToStore.get(topicPartition.topic()));
+            storesToBeReinitialized.add(changelogTopicToStore.get(topicPartition.topic()));
         }
 
         if (!eosEnabled) {
@@ -82,36 +81,44 @@ abstract class AbstractStateManager implements StateManager {
             }
         }
 
-        for (final Map.Entry<String, StateStore> entry : storesCopy.entrySet()) {
-            final StateStore stateStore = entry.getValue();
-            final String storeName = stateStore.name();
-            if (storeToBeReinitialized.contains(storeName)) {
-                try {
-                    stateStore.close();
-                } catch (final RuntimeException ignoreAndSwallow) { /* ignore */ }
-                processorContext.uninitialize();
-                stateStores.remove(entry.getKey());
-
-                // TODO remove this eventually
-                // -> (only after we are sure, we don't need it for backward compatibility reasons anymore; maybe 2.0 release?)
-                // this is an ugly "hack" that is required because RocksDBStore does not follow the pattern to put the
-                // store directory as <taskDir>/<storeName> but nests it with an intermediate <taskDir>/rocksdb/<storeName>
-                try {
-                    Utils.delete(new File(baseDir + File.separator + "rocksdb" + File.separator + storeName));
-                } catch (final IOException fatalException) {
-                    log.error("Failed to reinitialize store {}.", storeName, fatalException);
-                    throw new StreamsException(String.format("Failed to reinitialize store %s.", storeName), fatalException);
-                }
-
-                try {
-                    Utils.delete(new File(baseDir + File.separator + storeName));
-                } catch (final IOException fatalException) {
-                    log.error("Failed to reinitialize store {}.", storeName, fatalException);
-                    throw new StreamsException(String.format("Failed to reinitialize store %s.", storeName), fatalException);
-                }
-
-                stateStore.init(processorContext, stateStore);
+        for (final String storeName : storesToBeReinitialized) {
+            if (!stateStores.containsKey(storeName)) {
+                // the store has never been registered; carry on...
+                continue;
             }
+            final StateStore stateStore = stateStores
+                .get(storeName)
+                .orElseThrow(
+                    () -> new IllegalStateException(
+                        "Re-initializing store that has not been initialized. This is a bug in Kafka Streams."
+                    )
+                );
+
+            try {
+                stateStore.close();
+            } catch (final RuntimeException ignoreAndSwallow) { /* ignore */ }
+            processorContext.uninitialize();
+            stateStores.put(storeName, Optional.empty());
+
+            // TODO remove this eventually
+            // -> (only after we are sure, we don't need it for backward compatibility reasons anymore; maybe 2.0 release?)
+            // this is an ugly "hack" that is required because RocksDBStore does not follow the pattern to put the
+            // store directory as <taskDir>/<storeName> but nests it with an intermediate <taskDir>/rocksdb/<storeName>
+            try {
+                Utils.delete(new File(baseDir + File.separator + "rocksdb" + File.separator + storeName));
+            } catch (final IOException fatalException) {
+                log.error("Failed to reinitialize store {}.", storeName, fatalException);
+                throw new StreamsException(String.format("Failed to reinitialize store %s.", storeName), fatalException);
+            }
+
+            try {
+                Utils.delete(new File(baseDir + File.separator + storeName));
+            } catch (final IOException fatalException) {
+                log.error("Failed to reinitialize store {}.", storeName, fatalException);
+                throw new StreamsException(String.format("Failed to reinitialize store %s.", storeName), fatalException);
+            }
+
+            stateStore.init(processorContext, stateStore);
         }
     }
 
