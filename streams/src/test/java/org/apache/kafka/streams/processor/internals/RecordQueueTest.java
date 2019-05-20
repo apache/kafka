@@ -117,7 +117,7 @@ public class RecordQueueTest {
         // poll the first record, now with 1, 3
         assertEquals(2L, queue.poll().timestamp);
         assertEquals(2, queue.size());
-        assertEquals(2L, queue.timestamp());
+        assertEquals(1L, queue.timestamp());
 
         // poll the second record, now with 3
         assertEquals(1L, queue.poll().timestamp);
@@ -143,15 +143,15 @@ public class RecordQueueTest {
 
         // poll the rest records
         assertEquals(4L, queue.poll().timestamp);
-        assertEquals(4L, queue.timestamp());
+        assertEquals(1L, queue.timestamp());
 
         assertEquals(1L, queue.poll().timestamp);
-        assertEquals(4L, queue.timestamp());
+        assertEquals(2L, queue.timestamp());
 
         assertEquals(2L, queue.poll().timestamp);
         assertTrue(queue.isEmpty());
         assertEquals(0, queue.size());
-        assertEquals(4L, queue.timestamp());
+        assertEquals(RecordQueue.UNKNOWN, queue.timestamp());
 
         // add three more records with 4, 5, 6
         final List<ConsumerRecord<byte[], byte[]>> list3 = Arrays.asList(

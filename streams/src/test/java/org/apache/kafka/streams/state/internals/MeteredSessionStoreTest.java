@@ -57,6 +57,7 @@ import static org.easymock.EasyMock.verify;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(EasyMockRunner.class)
@@ -172,7 +173,7 @@ public class MeteredSessionStoreTest {
 
     @Test
     public void shouldFetchForKeyAndRecordFetchMetric() {
-        expect(inner.findSessions(Bytes.wrap(keyBytes), 0, Long.MAX_VALUE))
+        expect(inner.fetch(Bytes.wrap(keyBytes)))
                 .andReturn(new KeyValueIteratorStub<>(
                         Collections.singleton(KeyValue.pair(windowedKeyBytes, keyBytes)).iterator()));
         init();
@@ -189,7 +190,7 @@ public class MeteredSessionStoreTest {
 
     @Test
     public void shouldFetchRangeFromStoreAndRecordFetchMetric() {
-        expect(inner.findSessions(Bytes.wrap(keyBytes), Bytes.wrap(keyBytes), 0, Long.MAX_VALUE))
+        expect(inner.fetch(Bytes.wrap(keyBytes), Bytes.wrap(keyBytes)))
                 .andReturn(new KeyValueIteratorStub<>(
                         Collections.singleton(KeyValue.pair(windowedKeyBytes, keyBytes)).iterator()));
         init();
@@ -209,6 +210,14 @@ public class MeteredSessionStoreTest {
         init();
         final KafkaMetric metric = metric("restore-rate");
         assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldNotThrowNullPointerExceptionIfFetchSessionReturnsNull() {
+        expect(inner.fetchSession(Bytes.wrap("a".getBytes()), 0, Long.MAX_VALUE)).andReturn(null);
+
+        init();
+        assertNull(metered.fetchSession("a", 0, Long.MAX_VALUE));
     }
 
     @Test(expected = NullPointerException.class)

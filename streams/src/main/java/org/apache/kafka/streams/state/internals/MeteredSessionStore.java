@@ -151,22 +151,28 @@ public class MeteredSessionStore<K, V>
     @Override
     public V fetchSession(final K key, final long startTime, final long endTime) {
         Objects.requireNonNull(key, "key cannot be null");
-        final V value;
         final Bytes bytesKey = keyBytes(key);
         final long startNs = time.nanoseconds();
         try {
-            value = serdes.valueFrom(wrapped().fetchSession(bytesKey, startTime, endTime));
+            final byte[] result = wrapped().fetchSession(bytesKey, startTime, endTime);
+            if (result == null) {
+                return null;
+            }
+            return serdes.valueFrom(result);
         } finally {
             metrics.recordLatency(flushTime, startNs, time.nanoseconds());
         }
-
-        return value;
     }
 
     @Override
     public KeyValueIterator<Windowed<K>, V> fetch(final K key) {
         Objects.requireNonNull(key, "key cannot be null");
-        return findSessions(key, 0, Long.MAX_VALUE);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().fetch(keyBytes(key)),
+            fetchTime,
+            metrics,
+            serdes,
+            time);
     }
 
     @Override
@@ -174,7 +180,12 @@ public class MeteredSessionStore<K, V>
                                                   final K to) {
         Objects.requireNonNull(from, "from cannot be null");
         Objects.requireNonNull(to, "to cannot be null");
-        return findSessions(from, to, 0, Long.MAX_VALUE);
+        return new MeteredWindowedKeyValueIterator<>(
+            wrapped().fetch(keyBytes(from), keyBytes(to)),
+            fetchTime,
+            metrics,
+            serdes,
+            time);
     }
 
     @Override

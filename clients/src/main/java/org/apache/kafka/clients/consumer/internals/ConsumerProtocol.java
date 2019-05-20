@@ -50,7 +50,7 @@ import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
  *   AssignedPartitions => [Topic Partitions]
  *     Topic            => String
  *     Partitions       => [int32]
- *     UserData   => Bytes
+ *   UserData           => Bytes
  *   ErrorCode          => [int16]
  * </pre>
  *
@@ -199,8 +199,7 @@ public class ConsumerProtocol {
             Struct assignment = (Struct) structObj;
             String topic = assignment.getString(TOPIC_KEY_NAME);
             for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                Integer partition = (Integer) partitionObj;
-                ownedPartitions.add(new TopicPartition(topic, partition));
+                ownedPartitions.add(new TopicPartition(topic, (Integer) partitionObj));
             }
         }
 
@@ -290,8 +289,7 @@ public class ConsumerProtocol {
             Struct assignment = (Struct) structObj;
             String topic = assignment.getString(TOPIC_KEY_NAME);
             for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                Integer partition = (Integer) partitionObj;
-                partitions.add(new TopicPartition(topic, partition));
+                partitions.add(new TopicPartition(topic, (Integer) partitionObj));
             }
         }
         return new PartitionAssignor.Assignment(CONSUMER_PROTOCOL_V0, partitions, userData);
@@ -305,8 +303,7 @@ public class ConsumerProtocol {
             Struct assignment = (Struct) structObj;
             String topic = assignment.getString(TOPIC_KEY_NAME);
             for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                Integer partition = (Integer) partitionObj;
-                partitions.add(new TopicPartition(topic, partition));
+                partitions.add(new TopicPartition(topic, (Integer) partitionObj));
             }
         }
 

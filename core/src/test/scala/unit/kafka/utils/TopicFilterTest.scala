@@ -20,9 +20,8 @@ package kafka.utils
 import org.apache.kafka.common.internals.Topic
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.junit.JUnitSuite
 
-class TopicFilterTest extends JUnitSuite {
+class TopicFilterTest {
 
   @Test
   def testWhitelists() {

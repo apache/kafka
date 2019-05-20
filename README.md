@@ -1,8 +1,8 @@
 Apache Kafka
 =================
-See our [web site](http://kafka.apache.org) for details on the project.
+See our [web site](https://kafka.apache.org) for details on the project.
 
-You need to have [Gradle](http://www.gradle.org/installation) and [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
+You need to have [Gradle](https://www.gradle.org/installation) and [Java](https://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
 Kafka requires Gradle 5.0 or higher.
 
@@ -19,7 +19,7 @@ Now everything else will work.
 ### Build a jar and run it ###
     ./gradlew jar
 
-Follow instructions in http://kafka.apache.org/documentation.html#quickstart
+Follow instructions in https://kafka.apache.org/documentation.html#quickstart
 
 ### Build source jar ###
     ./gradlew srcJar
@@ -209,4 +209,4 @@ See [vagrant/README.md](vagrant/README.md).
 Apache Kafka is interested in building the community; we would welcome any thoughts or [patches](https://issues.apache.org/jira/browse/KAFKA). You can reach us [on the Apache mailing lists](http://kafka.apache.org/contact.html).
 
 To contribute follow the instructions here:
- * http://kafka.apache.org/contributing.html
+ * https://kafka.apache.org/contributing.html

@@ -54,7 +54,7 @@ public class KTableMapKeysTest {
 
         final KStream<String, String> convertedStream = table1.toStream((key, value) -> keyMap.get(key));
 
-        final String[] expected = new String[]{"ONE:V_ONE (ts: 0)", "TWO:V_TWO (ts: 0)", "THREE:V_THREE (ts: 0)"};
+        final String[] expected = new String[]{"ONE:V_ONE (ts: 5)", "TWO:V_TWO (ts: 10)", "THREE:V_THREE (ts: 15)"};
         final int[] originalKeys = new int[]{1, 2, 3};
         final String[] values = new String[]{"V_ONE", "V_TWO", "V_THREE"};
 
@@ -63,7 +63,7 @@ public class KTableMapKeysTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (int i = 0; i < originalKeys.length; i++) {
-                driver.pipeInput(recordFactory.create(topic1, originalKeys[i], values[i]));
+                driver.pipeInput(recordFactory.create(topic1, originalKeys[i], values[i], 5 + i * 5));
             }
         }
 

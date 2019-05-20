@@ -27,6 +27,8 @@ import org.apache.kafka.streams.state.internals.ReadOnlyKeyValueStoreFacade;
 
 import java.util.List;
 
+import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+
 public class KeyValueStoreFacade<K, V> extends ReadOnlyKeyValueStoreFacade<K, V> implements KeyValueStore<K, V> {
 
     public KeyValueStoreFacade(final TimestampedKeyValueStore<K, V> inner) {
@@ -48,8 +50,7 @@ public class KeyValueStoreFacade<K, V> extends ReadOnlyKeyValueStoreFacade<K, V>
     @Override
     public V putIfAbsent(final K key,
                          final V value) {
-        final ValueAndTimestamp<V> old = inner.putIfAbsent(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP));
-        return old == null ? null : old.value();
+        return getValueOrNull(inner.putIfAbsent(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP)));
     }
 
     @Override
@@ -61,8 +62,7 @@ public class KeyValueStoreFacade<K, V> extends ReadOnlyKeyValueStoreFacade<K, V>
 
     @Override
     public V delete(final K key) {
-        final ValueAndTimestamp<V> old = inner.delete(key);
-        return old == null ? null : old.value();
+        return getValueOrNull(inner.delete(key));
     }
 
     @Override

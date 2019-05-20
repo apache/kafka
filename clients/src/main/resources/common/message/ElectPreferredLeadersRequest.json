@@ -22,7 +22,7 @@
     { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+", "nullableVersions": "0+",
       "about": "The topic partitions to elect the preferred leader of.",
       "fields": [
-        { "name": "Topic", "type": "string", "versions": "0+",
+        { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
           "about": "The name of a topic." },
         { "name": "PartitionId", "type": "[]int32", "versions": "0+",
           "about": "The partitions of this topic whose preferred leader should be elected" }

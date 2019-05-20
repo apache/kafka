@@ -16,24 +16,28 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.Test;
 
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 
 import static java.util.Collections.singleton;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 public class SubscriptionStateTest {
@@ -47,6 +51,7 @@ public class SubscriptionStateTest {
     private final TopicPartition tp1 = new TopicPartition(topic, 1);
     private final TopicPartition t1p0 = new TopicPartition(topic1, 0);
     private final MockRebalanceListener rebalanceListener = new MockRebalanceListener();
+    private final Metadata.LeaderAndEpoch leaderAndEpoch = new Metadata.LeaderAndEpoch(Node.noNode(), Optional.empty());
 
     @Test
     public void partitionAssignment() {
@@ -56,7 +61,7 @@ public class SubscriptionStateTest {
         assertFalse(state.hasAllFetchPositions());
         state.seek(tp0, 1);
         assertTrue(state.isFetchable(tp0));
-        assertEquals(1L, state.position(tp0).longValue());
+        assertEquals(1L, state.position(tp0).offset);
         state.assignFromUser(Collections.<TopicPartition>emptySet());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
@@ -146,31 +151,33 @@ public class SubscriptionStateTest {
     }
 
     @Test
-    public void verifyAssignmentListener() {
-        final AtomicReference<Set<TopicPartition>> assignmentRef = new AtomicReference<>();
-        state.addListener(assignmentRef::set);
+    public void verifyAssignmentId() {
+        assertEquals(0, state.assignmentId());
         Set<TopicPartition> userAssignment = Utils.mkSet(tp0, tp1);
         state.assignFromUser(userAssignment);
-        assertEquals(userAssignment, assignmentRef.get());
+        assertEquals(1, state.assignmentId());
+        assertEquals(userAssignment, state.assignedPartitions());
 
         state.unsubscribe();
-        assertEquals(Collections.emptySet(), assignmentRef.get());
+        assertEquals(2, state.assignmentId());
+        assertEquals(Collections.emptySet(), state.assignedPartitions());
 
         Set<TopicPartition> autoAssignment = Utils.mkSet(t1p0);
         state.subscribe(singleton(topic1), rebalanceListener);
         assertTrue(state.assignFromSubscribed(autoAssignment));
-        assertEquals(autoAssignment, assignmentRef.get());
+        assertEquals(3, state.assignmentId());
+        assertEquals(autoAssignment, state.assignedPartitions());
     }
 
     @Test
     public void partitionReset() {
         state.assignFromUser(singleton(tp0));
         state.seek(tp0, 5);
-        assertEquals(5L, (long) state.position(tp0));
+        assertEquals(5L, state.position(tp0).offset);
         state.requestOffsetReset(tp0);
         assertFalse(state.isFetchable(tp0));
         assertTrue(state.isOffsetResetNeeded(tp0));
-        assertEquals(null, state.position(tp0));
+        assertNotNull(state.position(tp0));
 
         // seek should clear the reset and make the partition fetchable
         state.seek(tp0, 0);
@@ -187,7 +194,7 @@ public class SubscriptionStateTest {
         assertTrue(state.partitionsAutoAssigned());
         assertTrue(state.assignFromSubscribed(singleton(tp0)));
         state.seek(tp0, 1);
-        assertEquals(1L, state.position(tp0).longValue());
+        assertEquals(1L, state.position(tp0).offset);
         assertTrue(state.assignFromSubscribed(singleton(tp1)));
         assertTrue(state.isAssigned(tp1));
         assertFalse(state.isAssigned(tp0));
@@ -211,7 +218,7 @@ public class SubscriptionStateTest {
     public void invalidPositionUpdate() {
         state.subscribe(singleton(topic), rebalanceListener);
         assertTrue(state.assignFromSubscribed(singleton(tp0)));
-        state.position(tp0, 0);
+        state.position(tp0, new SubscriptionState.FetchPosition(0, Optional.empty(), leaderAndEpoch));
     }
 
     @Test
@@ -229,7 +236,7 @@ public class SubscriptionStateTest {
 
     @Test(expected = IllegalStateException.class)
     public void cantChangePositionForNonAssignedPartition() {
-        state.position(tp0, 1);
+        state.position(tp0, new SubscriptionState.FetchPosition(1, Optional.empty(), leaderAndEpoch));
     }
 
     @Test(expected = IllegalStateException.class)
@@ -301,6 +308,36 @@ public class SubscriptionStateTest {
         assertEquals(0, state.subscription().size());
         assertTrue(state.assignedPartitions().isEmpty());
         assertEquals(0, state.numAssignedPartitions());
+    }
+
+    @Test
+    public void testPreferredReadReplicaLease() {
+        state.assignFromUser(Collections.singleton(tp0));
+
+        // Default state
+        assertFalse(state.preferredReadReplica(tp0, 0L).isPresent());
+
+        // Set the preferred replica with lease
+        state.updatePreferredReadReplica(tp0, 42, () -> 10L);
+        TestUtils.assertOptional(state.preferredReadReplica(tp0, 9L),  value -> assertEquals(value.intValue(), 42));
+        TestUtils.assertOptional(state.preferredReadReplica(tp0, 10L),  value -> assertEquals(value.intValue(), 42));
+        assertFalse(state.preferredReadReplica(tp0, 11L).isPresent());
+
+        // Unset the preferred replica
+        state.clearPreferredReadReplica(tp0);
+        assertFalse(state.preferredReadReplica(tp0, 9L).isPresent());
+        assertFalse(state.preferredReadReplica(tp0, 11L).isPresent());
+
+        // Set to new preferred replica with lease
+        state.updatePreferredReadReplica(tp0, 43, () -> 20L);
+        TestUtils.assertOptional(state.preferredReadReplica(tp0, 11L),  value -> assertEquals(value.intValue(), 43));
+        TestUtils.assertOptional(state.preferredReadReplica(tp0, 20L),  value -> assertEquals(value.intValue(), 43));
+        assertFalse(state.preferredReadReplica(tp0, 21L).isPresent());
+
+        // Set to new preferred replica without clearing first
+        state.updatePreferredReadReplica(tp0, 44, () -> 30L);
+        TestUtils.assertOptional(state.preferredReadReplica(tp0, 30L),  value -> assertEquals(value.intValue(), 44));
+        assertFalse(state.preferredReadReplica(tp0, 31L).isPresent());
     }
 
     private static class MockRebalanceListener implements ConsumerRebalanceListener {

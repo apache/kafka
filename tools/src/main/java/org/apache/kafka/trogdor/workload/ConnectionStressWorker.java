@@ -309,6 +309,7 @@ public class ConnectionStressWorker implements TaskWorker {
         // Otherwise, if some threads take a while to terminate, this could lead
         // to a misleading rate getting reported.
         this.statusUpdaterFuture.cancel(false);
+        this.statusUpdaterExecutor.shutdown();
         this.statusUpdaterExecutor.awaitTermination(1, TimeUnit.DAYS);
         this.statusUpdaterExecutor = null;
         new StatusUpdater().run();
