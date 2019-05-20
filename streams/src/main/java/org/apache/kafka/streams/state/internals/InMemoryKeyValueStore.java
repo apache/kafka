@@ -30,6 +30,7 @@ import java.util.Iterator;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.function.BiFunction;
 
 public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     private final String name;
@@ -109,6 +110,11 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public byte[] delete(final Bytes key) {
         return map.remove(key);
+    }
+    
+    public byte[] compute(Bytes key, BiFunction<Bytes,byte[],byte[]> remappingFunction)
+    {
+        return map.compute(key,remappingFunction);
     }
 
     @Override
