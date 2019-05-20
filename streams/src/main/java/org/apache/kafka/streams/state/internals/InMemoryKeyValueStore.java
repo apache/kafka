@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.TreeMap;
+import java.util.function.BiFunction;
 
 public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
     private final String name;
@@ -129,6 +130,11 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
         return this.map.remove(key);
     }
 
+    public synchronized V compute(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction)
+    {
+        return this.map.compute(key,remappingFunction);
+    }
+    
     @Override
     public synchronized KeyValueIterator<K, V> range(final K from,
                                                      final K to) {
