@@ -132,7 +132,7 @@ public class InMemoryKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
     public synchronized V compute(K key, BiFunction<? super K, ? super V, ? extends V> remappingFunction)
     {
-        return this.map.compute(key,remappingFunction);
+        return map.compute(key,remappingFunction);
     }
     
     @Override
