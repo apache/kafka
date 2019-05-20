@@ -28,6 +28,7 @@ import kafka.utils._
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.FileRecords.LogOffsetPosition
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.utils.Time
 
 import scala.collection.JavaConverters._
 import scala.math._
