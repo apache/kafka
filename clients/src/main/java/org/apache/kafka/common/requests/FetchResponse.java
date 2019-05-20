@@ -40,6 +40,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Queue;
+import java.util.function.Predicate;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
@@ -223,7 +224,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     public static final long INVALID_HIGHWATERMARK = -1L;
     public static final long INVALID_LAST_STABLE_OFFSET = -1L;
     public static final long INVALID_LOG_START_OFFSET = -1L;
-    public static final int UNSPECIFIED_PREFERRED_REPLICA = -1;
+    public static final int INVALID_PREFERRED_REPLICA_ID = -1;
 
     private final int throttleTimeMs;
     private final Errors error;
@@ -277,14 +278,14 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                              long highWatermark,
                              long lastStableOffset,
                              long logStartOffset,
-                             Integer preferredReadReplica,
+                             Optional<Integer> preferredReadReplica,
                              List<AbortedTransaction> abortedTransactions,
                              T records) {
             this.error = error;
             this.highWatermark = highWatermark;
             this.lastStableOffset = lastStableOffset;
             this.logStartOffset = logStartOffset;
-            this.preferredReadReplica = Optional.ofNullable(preferredReadReplica);
+            this.preferredReadReplica = preferredReadReplica;
             this.abortedTransactions = abortedTransactions;
             this.records = records;
         }
@@ -379,7 +380,9 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 long highWatermark = partitionResponseHeader.get(HIGH_WATERMARK);
                 long lastStableOffset = partitionResponseHeader.getOrElse(LAST_STABLE_OFFSET, INVALID_LAST_STABLE_OFFSET);
                 long logStartOffset = partitionResponseHeader.getOrElse(LOG_START_OFFSET, INVALID_LOG_START_OFFSET);
-                int preferredReadReplica = partitionResponseHeader.getOrElse(PREFERRED_READ_REPLICA, UNSPECIFIED_PREFERRED_REPLICA);
+                Optional<Integer> preferredReadReplica = Optional.of(
+                    partitionResponseHeader.getOrElse(PREFERRED_READ_REPLICA, INVALID_PREFERRED_REPLICA_ID)
+                ).filter(Predicate.isEqual(INVALID_PREFERRED_REPLICA_ID).negate());
 
                 BaseRecords baseRecords = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
                 if (!(baseRecords instanceof MemoryRecords))
@@ -401,8 +404,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 }
 
                 PartitionData<MemoryRecords> partitionData = new PartitionData<>(error, highWatermark, lastStableOffset,
-                        logStartOffset, preferredReadReplica == UNSPECIFIED_PREFERRED_REPLICA ? null : preferredReadReplica,
-                        abortedTransactions, records);
+                        logStartOffset, preferredReadReplica, abortedTransactions, records);
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
