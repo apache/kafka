@@ -112,9 +112,9 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         return map.remove(key);
     }
     
-    public byte[] compute(Bytes key, BiFunction<Bytes,byte[],byte[]> remappingFunction)
+    public byte[] compute(final Bytes key, final BiFunction<Bytes, byte[] , byte[]> remappingFunction)
     {
-        return map.compute(key,remappingFunction);
+        return map.compute(key, remappingFunction);
     }
 
     @Override
