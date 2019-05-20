@@ -29,7 +29,7 @@
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "Topics", "type": "[]ListOffsetTopicResponse", "versions": "0+",
       "about": "Each topic in the response.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name" },
       { "name": "Partitions", "type": "[]ListOffsetPartitionResponse", "versions": "0+",
         "about": "Each partition in the response.", "fields": [

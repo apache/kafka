@@ -159,8 +159,8 @@ public class ConsumerMetadataTest {
     private ConsumerMetadata newConsumerMetadata(boolean includeInternalTopics) {
         long refreshBackoffMs = 50;
         long expireMs = 50000;
-        return new ConsumerMetadata(refreshBackoffMs, expireMs, includeInternalTopics, subscription, new LogContext(),
-                new ClusterResourceListeners());
+        return new ConsumerMetadata(refreshBackoffMs, expireMs, includeInternalTopics, false,
+                subscription, new LogContext(), new ClusterResourceListeners());
     }
 
 }

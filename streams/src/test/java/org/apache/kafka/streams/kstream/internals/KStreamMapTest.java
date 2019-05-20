@@ -50,11 +50,11 @@ public class KStreamMapTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey, 10L - expectedKey));
             }
         }
 
-        final String[] expected = new String[]{"V0:0 (ts: 0)", "V1:1 (ts: 0)", "V2:2 (ts: 0)", "V3:3 (ts: 0)"};
+        final String[] expected = new String[]{"V0:0 (ts: 10)", "V1:1 (ts: 9)", "V2:2 (ts: 8)", "V3:3 (ts: 7)"};
         assertEquals(4, supplier.theCapturedProcessor().processed.size());
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));

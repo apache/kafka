@@ -37,6 +37,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.junit.Assert._
+import org.scalatest.Assertions.intercept
 
 class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   val brokerId1 = 0

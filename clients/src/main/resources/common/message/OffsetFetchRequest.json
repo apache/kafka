@@ -25,11 +25,12 @@
   // Version 3, 4, and 5 are the same as version 2.
   "validVersions": "0-5",
   "fields": [
-    { "name": "GroupId", "type": "string", "versions": "0+",
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The group to fetch offsets for." },
     { "name": "Topics", "type": "[]OffsetFetchRequestTopic", "versions": "0+", "nullableVersions": "2+",
       "about": "Each topic we would like to fetch offsets for, or null to fetch offsets for all topics.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+" },
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name."},
       { "name": "PartitionIndexes", "type": "[]int32", "versions": "0+",
         "about": "The partition indexes we would like to fetch offsets for." }
     ]}

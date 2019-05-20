@@ -88,7 +88,7 @@ public class SinkRecord extends ConnectRecord<SinkRecord> {
     @Override
     public int hashCode() {
         int result = super.hashCode();
-        result = 31 * result + (int) (kafkaOffset ^ (kafkaOffset >>> 32));
+        result = 31 * result + Long.hashCode(kafkaOffset);
         result = 31 * result + timestampType.hashCode();
         return result;
     }

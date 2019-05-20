@@ -62,12 +62,7 @@ public class KStreamForeachTest {
 
         final List<KeyValue<Integer, String>> actualRecords = new ArrayList<>();
         final ForeachAction<Integer, String> action =
-            new ForeachAction<Integer, String>() {
-                @Override
-                public void apply(final Integer key, final String value) {
-                    actualRecords.add(new KeyValue<>(key * 2, value.toUpperCase(Locale.ROOT)));
-                }
-            };
+            (key, value) -> actualRecords.add(new KeyValue<>(key * 2, value.toUpperCase(Locale.ROOT)));
 
         // When
         final StreamsBuilder builder = new StreamsBuilder();
@@ -91,10 +86,7 @@ public class KStreamForeachTest {
 
     @Test
     public void testTypeVariance() {
-        final ForeachAction<Number, Object> consume = new ForeachAction<Number, Object>() {
-            @Override
-            public void apply(final Number key, final Object value) {}
-        };
+        final ForeachAction<Number, Object> consume = (key, value) -> { };
 
         new StreamsBuilder()
             .<Integer, String>stream("emptyTopic")
