@@ -27,6 +27,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -35,6 +36,8 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -42,6 +45,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -60,8 +64,10 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
@@ -89,6 +95,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private MetadataSnapshot metadataSnapshot;
     private MetadataSnapshot assignmentSnapshot;
     private Timer nextAutoCommitTimer;
+    private AtomicBoolean asyncCommitFenced;
 
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
@@ -117,6 +124,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     public ConsumerCoordinator(LogContext logContext,
                                ConsumerNetworkClient client,
                                String groupId,
+                               Optional<String> groupInstanceId,
                                int rebalanceTimeoutMs,
                                int sessionTimeoutMs,
                                Heartbeat heartbeat,
@@ -129,19 +137,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                long retryBackoffMs,
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
-                               ConsumerInterceptors<?, ?> interceptors,
-                               final boolean leaveGroupOnClose) {
+                               ConsumerInterceptors<?, ?> interceptors) {
         super(logContext,
               client,
               groupId,
+              groupInstanceId,
               rebalanceTimeoutMs,
               sessionTimeoutMs,
               heartbeat,
               metrics,
               metricGrpPrefix,
               time,
-              retryBackoffMs,
-              leaveGroupOnClose);
+              retryBackoffMs);
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.updateVersion());
@@ -154,6 +161,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
         this.interceptors = interceptors;
         this.pendingAsyncCommits = new AtomicInteger();
+        this.asyncCommitFenced = new AtomicBoolean(false);
 
         if (autoCommitEnabled)
             this.nextAutoCommitTimer = time.timer(autoCommitIntervalMs);
@@ -167,10 +175,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected JoinGroupRequestData.JoinGroupRequestProtocolSet metadata() {
+    protected JoinGroupRequestData.JoinGroupRequestProtocolCollection metadata() {
         log.debug("Joining group with current subscription: {}", subscriptions.subscription());
         this.joinedSubscription = subscriptions.subscription();
-        JoinGroupRequestData.JoinGroupRequestProtocolSet protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolSet();
+        JoinGroupRequestData.JoinGroupRequestProtocolCollection protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolCollection();
 
         for (PartitionAssignor assignor : assignors) {
             Subscription subscription = assignor.subscription(joinedSubscription);
@@ -178,7 +186,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             protocolSet.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName(assignor.name())
-                    .setMetadata(metadata.array()));
+                    .setMetadata(Utils.toArray(metadata)));
         }
         return protocolSet;
     }
@@ -262,7 +270,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         maybeUpdateJoinedSubscription(assignedPartitions);
 
         // give the assignor a chance to update internal state based on the received assignment
-        assignor.onAssignment(assignment);
+        assignor.onAssignment(assignment, generation);
 
         // reschedule the auto commit starting from now
         if (autoCommitEnabled)
@@ -507,10 +515,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
             final TopicPartition tp = entry.getKey();
-            final long offset = entry.getValue().offset();
-            log.info("Setting offset for partition {} to the committed offset {}", tp, offset);
+            final OffsetAndMetadata offsetAndMetadata = entry.getValue();
+            final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(tp);
+            final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
+                    offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
+                    new ConsumerMetadata.LeaderAndEpoch(leaderAndEpoch.leader, Optional.empty()));
+
+            log.info("Setting offset for partition {} to the committed offset {}", tp, position);
             entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
-            this.subscriptions.seek(tp, offset);
+            this.subscriptions.seekAndValidate(tp, position);
         }
         return true;
     }
@@ -579,10 +592,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
     // visible for testing
     void invokeCompletedOffsetCommitCallbacks() {
+        if (asyncCommitFenced.get()) {
+            throw new FencedInstanceIdException("Get fenced exception for group.instance.id " + groupInstanceId.orElse("unset_instance_id"));
+        }
         while (true) {
             OffsetCommitCompletion completion = completedOffsetCommits.poll();
-            if (completion == null)
+            if (completion == null) {
                 break;
+            }
             completion.invoke();
         }
     }
@@ -638,9 +655,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             public void onFailure(RuntimeException e) {
                 Exception commitException = e;
 
-                if (e instanceof RetriableException)
+                if (e instanceof RetriableException) {
                     commitException = new RetriableCommitFailedException(e);
+                }
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, commitException));
+                if (commitException instanceof FencedInstanceIdException) {
+                    asyncCommitFenced.set(true);
+                }
             }
         });
     }
@@ -652,6 +673,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
      * @throws org.apache.kafka.common.errors.AuthorizationException if the consumer is not authorized to the group
      *             or to any of the specified partitions. See the exception for more details
      * @throws CommitFailedException if an unrecoverable error occurs before the commit can be completed
+     * @throws FencedInstanceIdException if a static member gets fenced
      * @return If the offset commit was successfully sent and a successful response was received from
      *         the coordinator
      */
@@ -764,14 +786,27 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return RequestFuture.coordinatorNotAvailable();
 
         // create the offset commit request
-        Map<TopicPartition, OffsetCommitRequest.PartitionData> offsetData = new HashMap<>(offsets.size());
+        Map<String, OffsetCommitRequestData.OffsetCommitRequestTopic> requestTopicDataMap = new HashMap<>();
         for (Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+            TopicPartition topicPartition = entry.getKey();
             OffsetAndMetadata offsetAndMetadata = entry.getValue();
             if (offsetAndMetadata.offset() < 0) {
                 return RequestFuture.failure(new IllegalArgumentException("Invalid offset: " + offsetAndMetadata.offset()));
             }
-            offsetData.put(entry.getKey(), new OffsetCommitRequest.PartitionData(offsetAndMetadata.offset(),
-                    offsetAndMetadata.leaderEpoch(), offsetAndMetadata.metadata()));
+
+            OffsetCommitRequestData.OffsetCommitRequestTopic topic = requestTopicDataMap
+                    .getOrDefault(topicPartition.topic(),
+                            new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                                    .setName(topicPartition.topic())
+                    );
+
+            topic.partitions().add(new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                    .setPartitionIndex(topicPartition.partition())
+                    .setCommittedOffset(offsetAndMetadata.offset())
+                    .setCommittedLeaderEpoch(offsetAndMetadata.leaderEpoch().orElse(RecordBatch.NO_PARTITION_LEADER_EPOCH))
+                    .setCommittedMetadata(offsetAndMetadata.metadata())
+            );
+            requestTopicDataMap.put(topicPartition.topic(), topic);
         }
 
         final Generation generation;
@@ -785,9 +820,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (generation == null)
             return RequestFuture.failure(new CommitFailedException());
 
-        OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(this.groupId, offsetData).
-                setGenerationId(generation.generationId).
-                setMemberId(generation.memberId);
+        OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
+                new OffsetCommitRequestData()
+                        .setGroupId(this.groupId)
+                        .setGenerationId(generation.generationId)
+                        .setMemberId(generation.memberId)
+                        .setGroupInstanceId(groupInstanceId.orElse(null))
+                        .setTopics(new ArrayList<>(requestTopicDataMap.values()))
+        );
 
         log.trace("Sending OffsetCommit request with {} to coordinator {}", offsets, coordinator);
 
@@ -808,48 +848,59 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             sensors.commitLatency.record(response.requestLatencyMs());
             Set<String> unauthorizedTopics = new HashSet<>();
 
-            for (Map.Entry<TopicPartition, Errors> entry : commitResponse.responseData().entrySet()) {
-                TopicPartition tp = entry.getKey();
-                OffsetAndMetadata offsetAndMetadata = this.offsets.get(tp);
-                long offset = offsetAndMetadata.offset();
+            for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
+                for (OffsetCommitResponseData.OffsetCommitResponsePartition partition : topic.partitions()) {
+                    TopicPartition tp = new TopicPartition(topic.name(), partition.partitionIndex());
+                    OffsetAndMetadata offsetAndMetadata = this.offsets.get(tp);
 
-                Errors error = entry.getValue();
-                if (error == Errors.NONE) {
-                    log.debug("Committed offset {} for partition {}", offset, tp);
-                } else {
-                    log.error("Offset commit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                    long offset = offsetAndMetadata.offset();
 
-                    if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
-                        future.raise(new GroupAuthorizationException(groupId));
-                        return;
-                    } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
-                        unauthorizedTopics.add(tp.topic());
-                    } else if (error == Errors.OFFSET_METADATA_TOO_LARGE
-                            || error == Errors.INVALID_COMMIT_OFFSET_SIZE) {
-                        // raise the error to the user
-                        future.raise(error);
-                        return;
-                    } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS
-                            || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
-                        // just retry
-                        future.raise(error);
-                        return;
-                    } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
-                            || error == Errors.NOT_COORDINATOR
-                            || error == Errors.REQUEST_TIMED_OUT) {
-                        markCoordinatorUnknown();
-                        future.raise(error);
-                        return;
-                    } else if (error == Errors.UNKNOWN_MEMBER_ID
-                            || error == Errors.ILLEGAL_GENERATION
-                            || error == Errors.REBALANCE_IN_PROGRESS) {
-                        // need to re-join group
-                        resetGeneration();
-                        future.raise(new CommitFailedException());
-                        return;
+                    Errors error = Errors.forCode(partition.errorCode());
+                    if (error == Errors.NONE) {
+                        log.debug("Committed offset {} for partition {}", offset, tp);
                     } else {
-                        future.raise(new KafkaException("Unexpected error in commit: " + error.message()));
-                        return;
+                        if (error.exception() instanceof RetriableException) {
+                            log.warn("Offset commit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                        } else {
+                            log.error("Offset commit failed on partition {} at offset {}: {}", tp, offset, error.message());
+                        }
+
+                        if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                            future.raise(new GroupAuthorizationException(groupId));
+                            return;
+                        } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
+                            unauthorizedTopics.add(tp.topic());
+                        } else if (error == Errors.OFFSET_METADATA_TOO_LARGE
+                                || error == Errors.INVALID_COMMIT_OFFSET_SIZE) {
+                            // raise the error to the user
+                            future.raise(error);
+                            return;
+                        } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS
+                                || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                            // just retry
+                            future.raise(error);
+                            return;
+                        } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
+                                || error == Errors.NOT_COORDINATOR
+                                || error == Errors.REQUEST_TIMED_OUT) {
+                            markCoordinatorUnknown();
+                            future.raise(error);
+                            return;
+                        } else if (error == Errors.FENCED_INSTANCE_ID) {
+                            log.error("Received fatal exception: group.instance.id gets fenced");
+                            future.raise(error);
+                            return;
+                        } else if (error == Errors.UNKNOWN_MEMBER_ID
+                                || error == Errors.ILLEGAL_GENERATION
+                                || error == Errors.REBALANCE_IN_PROGRESS) {
+                            // need to re-join group
+                            resetGeneration();
+                            future.raise(new CommitFailedException());
+                            return;
+                        } else {
+                            future.raise(new KafkaException("Unexpected error in commit: " + error.message()));
+                            return;
+                        }
                     }
                 }
             }

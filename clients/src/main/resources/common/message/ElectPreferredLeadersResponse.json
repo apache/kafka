@@ -23,7 +23,7 @@
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
     { "name": "ReplicaElectionResults", "type": "[]ReplicaElectionResult", "versions": "0+",
       "about": "The election results, or an empty array if the requester did not have permission and the request asks for all partitions.", "fields": [
-      { "name": "Topic", "type": "string", "versions": "0+",
+      { "name": "Topic", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name" },
       { "name": "PartitionResult", "type": "[]PartitionResult", "versions": "0+",
         "about": "The results for each partition", "fields": [

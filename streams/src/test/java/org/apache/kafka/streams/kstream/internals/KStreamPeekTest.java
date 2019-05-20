@@ -75,11 +75,6 @@ public class KStreamPeekTest {
     }
 
     private static <K, V> ForeachAction<K, V> collect(final List<KeyValue<K, V>> into) {
-        return new ForeachAction<K, V>() {
-            @Override
-            public void apply(final K key, final V value) {
-                into.add(new KeyValue<>(key, value));
-            }
-        };
+        return (key, value) -> into.add(new KeyValue<>(key, value));
     }
 }

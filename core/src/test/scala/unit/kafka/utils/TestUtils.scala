@@ -58,6 +58,7 @@ import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
 import org.junit.Assert._
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, mutable}
@@ -375,11 +376,6 @@ object TestUtils extends Logging {
       servers,
       server.groupCoordinator.offsetsTopicConfigs)
   }
-
-  /**
-   * Fail a test case explicitly. Return Nothing so that we are not constrained by the return type.
-   */
-  def fail(msg: String): Nothing = throw new AssertionError(msg)
 
   /**
    * Wrap a single record log buffer.

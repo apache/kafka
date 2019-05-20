@@ -160,12 +160,17 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                                final V value,
                                final To to) {
         final ProcessorNode previousNode = currentNode();
-        final long currentTimestamp = recordContext.timestamp;
+        final ProcessorRecordContext previousContext = recordContext;
 
         try {
             toInternal.update(to);
             if (toInternal.hasTimestamp()) {
-                recordContext.setTimestamp(toInternal.timestamp());
+                recordContext = new ProcessorRecordContext(
+                    toInternal.timestamp(),
+                    recordContext.offset(),
+                    recordContext.partition(),
+                    recordContext.topic(),
+                    recordContext.headers());
             }
 
             final String sendTo = toInternal.child();
@@ -185,7 +190,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
                 forward(child, key, value);
             }
         } finally {
-            recordContext.timestamp = currentTimestamp;
+            recordContext = previousContext;
             setCurrentNode(previousNode);
         }
     }
@@ -500,11 +505,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private static class TimestampedKeyValueStoreReadWriteDecorator<K, V>
+    static class TimestampedKeyValueStoreReadWriteDecorator<K, V>
         extends KeyValueStoreReadWriteDecorator<K, ValueAndTimestamp<V>>
         implements TimestampedKeyValueStore<K, V> {
 
-        private TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner) {
+        TimestampedKeyValueStoreReadWriteDecorator(final TimestampedKeyValueStore<K, V> inner) {
             super(inner);
         }
     }
@@ -566,7 +571,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    private static class TimestampedWindowStoreReadWriteDecorator<K, V>
+    static class TimestampedWindowStoreReadWriteDecorator<K, V>
         extends WindowStoreReadWriteDecorator<K, ValueAndTimestamp<V>>
         implements TimestampedWindowStore<K, V> {
 

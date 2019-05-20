@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -38,6 +40,10 @@ public class JoinGroupRequest extends AbstractRequest {
 
         @Override
         public JoinGroupRequest build(short version) {
+            if (data.groupInstanceId() != null && version < 5) {
+                throw new UnsupportedVersionException("The broker join group protocol version " +
+                        version + " does not support usage of config group.instance.id.");
+            }
             return new JoinGroupRequest(data, version);
         }
 
@@ -51,6 +57,40 @@ public class JoinGroupRequest extends AbstractRequest {
     private final short version;
 
     public static final String UNKNOWN_MEMBER_ID = "";
+
+    private static final int MAX_GROUP_INSTANCE_ID_LENGTH = 249;
+
+    /**
+     * Ported from class Topic in {@link org.apache.kafka.common.internals} to restrict the charset for
+     * static member id.
+     */
+    public static void validateGroupInstanceId(String id) {
+        if (id.equals(""))
+            throw new InvalidConfigurationException("Group instance id must be non-empty string");
+        if (id.equals(".") || id.equals(".."))
+            throw new InvalidConfigurationException("Group instance id cannot be \".\" or \"..\"");
+        if (id.length() > MAX_GROUP_INSTANCE_ID_LENGTH)
+            throw new InvalidConfigurationException("Group instance id can't be longer than " + MAX_GROUP_INSTANCE_ID_LENGTH +
+                    " characters: " + id);
+        if (!containsValidPattern(id))
+            throw new InvalidConfigurationException("Group instance id \"" + id + "\" is illegal, it contains a character other than " +
+                    "ASCII alphanumerics, '.', '_' and '-'");
+    }
+
+    /**
+     * Valid characters for Consumer group.instance.id are the ASCII alphanumerics, '.', '_', and '-'
+     */
+    static boolean containsValidPattern(String topic) {
+        for (int i = 0; i < topic.length(); ++i) {
+            char c = topic.charAt(i);
+
+            boolean validChar = (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || (c >= 'A' && c <= 'Z') || c == '.' ||
+                    c == '_' || c == '-';
+            if (!validChar)
+                return false;
+        }
+        return true;
+    }
 
     public JoinGroupRequest(JoinGroupRequestData data, short version) {
         super(ApiKeys.JOIN_GROUP, version);
@@ -86,6 +126,7 @@ public class JoinGroupRequest extends AbstractRequest {
             case 2:
             case 3:
             case 4:
+            case 5:
                 return new JoinGroupResponse(
                         new JoinGroupResponseData()
                                 .setThrottleTimeMs(throttleTimeMs)
