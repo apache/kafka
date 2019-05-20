@@ -17,13 +17,12 @@
 
 package org.apache.kafka.common;
 
-import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
- * Options for {@link AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
+ * Options for {@link org.apache.kafka.clients.admin.AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
+ * The API of this class is evolving, see {@link org.apache.kafka.clients.admin.AdminClient} for details.
  */
 @InterfaceStability.Evolving
 public enum ElectionType {

@@ -2453,7 +2453,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val electionRequest = request.body[ElectLeadersRequest]
 
     def sendResponseCallback(
-      error: ApiError,
+      error: ApiError
     )(
       results: Map[TopicPartition, ApiError]
     ): Unit = {

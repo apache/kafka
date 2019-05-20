@@ -19,8 +19,6 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collection;
-
 /**
  * Options for {@link AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  *
