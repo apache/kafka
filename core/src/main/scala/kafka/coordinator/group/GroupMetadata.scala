@@ -564,10 +564,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
             }
           }
 
-          if (onlyCheckOffsetsFromNonSubscribedPartition)
-            !isSubscribedTopicPartition(topicPartition) && isNonPendingAndExpired
-          else
-            isNonPendingAndExpired
+          isNonPendingAndExpired && (!onlyCheckOffsetsFromNonSubscribedPartition || !isSubscribedTopicPartition(topicPartition))
       }.map {
         case (topicPartition, commitRecordOffsetAndMetadata) =>
           (topicPartition, commitRecordOffsetAndMetadata.offsetAndMetadata)
@@ -605,12 +602,9 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
 
   private def isSubscribedTopicPartition(topicPartition: TopicPartition): Boolean = {
     val topic = topicPartition.topic
-    members.values.foreach { member =>
-      val found = ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment)).partitions.asScala.exists(_.topic == topic)
-      if (found)
-        return true
+    members.values.exists { member =>
+      ConsumerProtocol.deserializeAssignment(ByteBuffer.wrap(member.assignment)).partitions.asScala.exists(_.topic == topic)
     }
-    false
   }
 
   def allOffsets = offsets.map { case (topicPartition, commitRecordMetadataAndOffset) =>

@@ -308,6 +308,29 @@ class GroupMetadataTest {
   }
 
   @Test
+  def testStableGroupChooseExpiredOffsets(): Unit = {
+    val tp1 = new TopicPartition("foo", 0)
+    val tp2 = new TopicPartition("bar", 0)
+    val now = Time.SYSTEM.milliseconds
+    val retentionMs = 10000
+    val offset1 = OffsetAndMetadata(37, "", now - retentionMs - 1000)
+    val offset2 = OffsetAndMetadata(37, "", now)
+    group.prepareOffsetCommit(Map(tp1 -> offset1, tp2 -> offset2))
+    group.onOffsetCommitAppend(tp1, CommitRecordMetadataAndOffset(Some(3), offset1))
+    group.onOffsetCommitAppend(tp2, CommitRecordMetadataAndOffset(Some(3), offset2))
+
+    // Set group state to Stable to see whether any expired offsets could be retrieved via `removeExpiredOffsets`
+    group.transitionTo(PreparingRebalance)
+    group.transitionTo(CompletingRebalance)
+    group.transitionTo(Stable)
+
+    assert(Time.SYSTEM.milliseconds - now < retentionMs)
+    val expiredOffsets = group.removeExpiredOffsets(now, retentionMs)
+    assertTrue(expiredOffsets.size == 1)
+    assertTrue(expiredOffsets.keys.iterator.next == tp1)
+  }
+
+  @Test
   def testOffsetCommitFailure(): Unit = {
     val partition = new TopicPartition("foo", 0)
     val offset = offsetAndMetadata(37)
