@@ -463,7 +463,7 @@ public class TopologyTestDriverTest {
         assertEquals(1, processedRecords.size());
 
         final String record = processedRecords.get(0);
-        String expectedResult = MockProcessor.makeRecord(consumerRecord1.key(), consumerRecord1.value(), consumerRecord1.timestamp());
+        final String expectedResult = MockProcessor.makeRecord(consumerRecord1.key(), consumerRecord1.value(), consumerRecord1.timestamp());
         assertThat(record, equalTo(expectedResult));
     }
 
