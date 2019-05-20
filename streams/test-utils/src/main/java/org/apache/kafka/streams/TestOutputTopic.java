@@ -132,6 +132,23 @@ public class TestOutputTopic<K, V> {
     }
 
     /**
+     * Read output to List.
+     * If the existing key is modified, it can appear twice in output, but replaced in map
+     *
+     * @return Map of output by key
+     */
+    @SuppressWarnings({"WeakerAccess", "unused"})
+    public List<ClientRecord<K, V>> readRecordsToList() {
+        List<ClientRecord<K, V>> output = new LinkedList<>();
+        ClientRecord<K, V> outputRow;
+        while (!isEmpty()) {
+            output.add(readRecord());
+        }
+        return output;
+    }
+
+
+    /**
      * Read output to map.
      * If the existing key is modified, it can appear twice in output, but replaced in map
      *
