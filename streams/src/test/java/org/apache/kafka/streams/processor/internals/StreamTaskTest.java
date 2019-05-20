@@ -1093,6 +1093,19 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldOnlyCloseFencedProducerOnUncleanClosedWithEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+        producer.fenceProducer();
+
+        task.close(false, true);
+        task = null;
+
+        assertFalse(producer.transactionAborted());
+        assertTrue(producer.closed());
+    }
+
+    @Test
     public void shouldAbortTransactionButNotCloseProducerIfFencedOnCloseDuringUncleanCloseWithEosEnabled() {
         task = createStatelessTask(createConfig(true));
         task.initializeTopology();
@@ -1147,7 +1160,7 @@ public class StreamTaskTest {
     public void shouldNotThrowOnCloseIfTaskWasNotInitializedWithEosEnabled() {
         task = createStatelessTask(createConfig(true));
 
-        assertTrue(!producer.transactionInFlight());
+        assertFalse(producer.transactionInFlight());
         task.close(false, false);
     }
 
@@ -1299,6 +1312,26 @@ public class StreamTaskTest {
         task = createStatelessTask(createConfig(true));
         task.initializeTopology();
         task.close(true, false);
+        task = null;
+
+        assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldCloseProducerOnUncleanCloseNotZombieWhenEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+        task.close(false, false);
+        task = null;
+
+        assertTrue(producer.closed());
+    }
+
+    @Test
+    public void shouldCloseProducerOnUncleanCloseIsZombieWhenEosEnabled() {
+        task = createStatelessTask(createConfig(true));
+        task.initializeTopology();
+        task.close(false, true);
         task = null;
 
         assertTrue(producer.closed());
