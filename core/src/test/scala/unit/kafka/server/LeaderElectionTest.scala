@@ -88,7 +88,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     assertEquals("Leader must move to broker 1", 1, leader2)
     // new leaderEpoch will be leaderEpoch1+2, one increment during ReplicaStateMachine.startup()-> handleStateChanges
     // for offline replica and one increment during PartitionStateMachine.triggerOnlinePartitionStateChange()
-    assertEquals("Second epoch value should be %d".format(leaderEpoch1+2) , leaderEpoch1+2, leaderEpoch2)
+    assertEquals("Second epoch value should be %d".format(leaderEpoch1 + 2) , leaderEpoch1 + 2, leaderEpoch2)
 
     servers.head.startup()
     //make sure second server joins the ISR
@@ -107,7 +107,7 @@ class LeaderElectionTest extends ZooKeeperTestHarness {
     val leader3 = waitUntilLeaderIsElectedOrChanged(zkClient, topic, partitionId, oldLeaderOpt = Some(leader2))
     val leaderEpoch3 = zkClient.getEpochForPartition(new TopicPartition(topic, partitionId)).get
     assertEquals("Leader must return to 0", 0, leader3)
-    assertEquals("Second epoch value should be %d".format(leaderEpoch2+2) , leaderEpoch2+2, leaderEpoch3)
+    assertEquals("Second epoch value should be %d".format(leaderEpoch2 + 2) , leaderEpoch2 + 2, leaderEpoch3)
   }
 
   @Test
