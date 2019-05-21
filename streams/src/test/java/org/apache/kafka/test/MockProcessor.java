@@ -17,7 +17,6 @@
 package org.apache.kafka.test;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Cancellable;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -31,13 +30,9 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
-@SuppressWarnings("WeakerAccess")
 public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
     public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<K> processedKeys = new ArrayList<>();
-    public final ArrayList<V> processedValues = new ArrayList<>();
-    public final ArrayList<KeyValueTimestamp> processedWithTimestamps = new ArrayList<>();
     public final Map<K, ValueAndTimestamp<V>> lastValueAndTimestampPerKey = new HashMap<>();
 
     public final ArrayList<Long> punctuatedStreamTime = new ArrayList<>();
@@ -107,9 +102,6 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
 
     @Override
     public void process(final K key, final V value) {
-        processedKeys.add(key);
-        processedValues.add(value);
-        processedWithTimestamps.add(new KeyValueTimestamp<>(key, value, context().timestamp()));
         if (value != null) {
             lastValueAndTimestampPerKey.put(key, ValueAndTimestamp.make(value, context().timestamp()));
         } else {
@@ -159,17 +151,6 @@ public class MockProcessor<K, V> extends AbstractProcessor<K, V> {
         }
 
         processed.clear();
-        processedWithTimestamps.clear();
-    }
-
-    public void checkAndClearProcessResult(final KeyValueTimestamp... expected) {
-        assertEquals("the number of outputs:" + processed, expected.length, processed.size());
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals("output[" + i + "]:", expected[i], processedWithTimestamps.get(i));
-        }
-
-        processed.clear();
-        processedWithTimestamps.clear();
     }
 
     public void requestCommit() {
