@@ -314,7 +314,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     throw e;
                 } catch (Exception e) {
                     log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
-                    throw e;
                 }
                 break;
 
@@ -589,7 +588,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         switch (protocol) {
             case EAGER:
+                // clear the assigned partitions since all have been revoked
                 Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
+                subscriptions.assignFromSubscribed(Collections.emptySet());
+
                 log.info("Revoking previously assigned partitions {}", revoked);
                 try {
                     listener.onPartitionsRevoked(revoked);
@@ -597,11 +599,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     throw e;
                 } catch (Exception e) {
                     log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
-                    throw e;
                 }
-
-                // also clear the assigned partitions since all have been revoked
-                subscriptions.assignFromSubscribed(Collections.emptySet());
 
                 break;
 

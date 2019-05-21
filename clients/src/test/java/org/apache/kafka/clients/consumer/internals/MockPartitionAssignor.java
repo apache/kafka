@@ -18,12 +18,19 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
 public class MockPartitionAssignor extends AbstractPartitionAssignor {
 
+    private final RebalanceProtocol supportedProtocol;
+
     private Map<String, List<TopicPartition>> result = null;
+
+    public MockPartitionAssignor(final RebalanceProtocol supportedProtocol) {
+        this.supportedProtocol = supportedProtocol;
+    }
 
     @Override
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
@@ -36,6 +43,11 @@ public class MockPartitionAssignor extends AbstractPartitionAssignor {
     @Override
     public String name() {
         return "consumer-mock-assignor";
+    }
+
+    @Override
+    public List<RebalanceProtocol> supportedProtocols() {
+        return Collections.singletonList(supportedProtocol);
     }
 
     public void clear() {

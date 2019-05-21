@@ -124,8 +124,9 @@ public class ConsumerCoordinatorTest {
     private final Heartbeat heartbeat = new Heartbeat(time, sessionTimeoutMs, heartbeatIntervalMs,
             rebalanceTimeoutMs, retryBackoffMs);
 
-    private MockPartitionAssignor partitionAssignor = new MockPartitionAssignor();
-    private List<PartitionAssignor> assignors = Collections.singletonList(partitionAssignor);
+    private final PartitionAssignor.RebalanceProtocol protocol;
+    private final MockPartitionAssignor partitionAssignor;
+    private final List<PartitionAssignor> assignors;
     private MockClient client;
     private MetadataResponse metadataResponse = TestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
         {
@@ -142,14 +143,16 @@ public class ConsumerCoordinatorTest {
     private MockCommitCallback mockOffsetCommitCallback;
     private ConsumerCoordinator coordinator;
 
-    public ConsumerCoordinatorTest(final ConsumerCoordinator.RebalanceProtocol protocol) {
+    public ConsumerCoordinatorTest(final PartitionAssignor.RebalanceProtocol protocol) {
         this.protocol = protocol;
+        this.partitionAssignor =  new MockPartitionAssignor(protocol);
+        this.assignors = Collections.singletonList(partitionAssignor);
     }
 
     @Parameterized.Parameters(name = "rebalance protocol = {0}")
     public static Collection<Object[]> data() {
         final List<Object[]> values = new ArrayList<>();
-        for (final ConsumerCoordinator.RebalanceProtocol protocol: ConsumerCoordinator.RebalanceProtocol.values()) {
+        for (final PartitionAssignor.RebalanceProtocol protocol: PartitionAssignor.RebalanceProtocol.values()) {
             values.add(new Object[]{protocol});
         }
         return values;
@@ -517,7 +520,7 @@ public class ConsumerCoordinatorTest {
         final int addCount = 1;
 
         // with eager protocol we will call revoke on the old assignment as well
-        if (protocol == ConsumerCoordinator.RebalanceProtocol.EAGER) {
+        if (protocol == PartitionAssignor.RebalanceProtocol.EAGER) {
             revokeCount += 1;
         }
 
@@ -2105,8 +2108,11 @@ public class ConsumerCoordinatorTest {
         closeVerifyTimeout(coordinator, Long.MAX_VALUE, requestTimeoutMs, requestTimeoutMs);
         Thread[] threads = new Thread[Thread.activeCount()];
         int threadCount = Thread.enumerate(threads);
-        for (int i = 0; i < threadCount; i++)
+        for (int i = 0; i < threadCount; i++) {
+            System.out.println(threads[i].getName());
+
             assertFalse("Heartbeat thread active after close", threads[i].getName().contains(groupId));
+        }
     }
 
     @Test
