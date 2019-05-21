@@ -20,7 +20,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import org.apache.kafka.clients.producer.Partitioner;
@@ -67,14 +66,9 @@ public class RoundRobinPartitioner implements Partitioner {
     }
 
     private int nextValue(String topic) {
-        AtomicInteger counter = topicCounterMap.get(topic);
-        if (null == counter) {
-            counter = new AtomicInteger(ThreadLocalRandom.current().nextInt());
-            AtomicInteger currentCounter = topicCounterMap.putIfAbsent(topic, counter);
-            if (currentCounter != null) {
-                counter = currentCounter;
-            }
-        }
+        AtomicInteger counter = topicCounterMap.computeIfAbsent(topic, k -> {
+            return new AtomicInteger(0);
+        });
         return counter.getAndIncrement();
     }
 
