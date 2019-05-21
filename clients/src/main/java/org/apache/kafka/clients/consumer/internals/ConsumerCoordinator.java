@@ -259,7 +259,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
         if (!subscriptions.assignFromSubscribed(assignment.partitions())) {
-            handleAssignmentMismatch(assignment);
+            log.warn("We received an assignment {} that doesn't match our current subscription {}; it is likely " +
+                "that the subscription has changed since we joined the group. Will try re-join the group with current subscription",
+                assignment.partitions(), subscriptions);
+
+            requestRejoin();
+
             return;
         }
 

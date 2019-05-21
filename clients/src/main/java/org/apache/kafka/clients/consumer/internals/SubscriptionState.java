@@ -101,6 +101,11 @@ public class SubscriptionState {
 
     private int assignmentId = 0;
 
+    @Override
+    public String toString() {
+        return subscribedPattern != null ? subscribedPattern.toString() : String.join(",", subscription);
+    }
+
     public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
