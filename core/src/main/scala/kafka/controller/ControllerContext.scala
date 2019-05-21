@@ -175,6 +175,28 @@ class ControllerContext {
     }
   }
 
+  /**
+    * Get all online and offline replicas.
+    *
+    * @return a tuple consisting of first the online replicas and followed by the offline replicas
+    */
+  def onlineAndOfflineReplicas: (Set[PartitionAndReplica], Set[PartitionAndReplica]) = {
+    val onlineReplicas = mutable.Set.empty[PartitionAndReplica]
+    val offlineReplicas = mutable.Set.empty[PartitionAndReplica]
+    for ((topic, partitionReplicas) <- partitionAssignments;
+         (partitionId, replicas) <- partitionReplicas) {
+      val partition = new TopicPartition(topic, partitionId)
+      for (replica <- replicas) {
+        val partitionAndReplica = PartitionAndReplica(partition, replica)
+        if (isReplicaOnline(replica, partition))
+          onlineReplicas.add(partitionAndReplica)
+        else
+          offlineReplicas.add(partitionAndReplica)
+      }
+    }
+    (onlineReplicas, offlineReplicas)
+  }
+
   def replicasForPartition(partitions: collection.Set[TopicPartition]): collection.Set[PartitionAndReplica] = {
     partitions.flatMap { p =>
       val replicas = partitionReplicaAssignment(p)
