@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
+import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
@@ -141,11 +142,12 @@ public class KTableSuppressProcessorMetricsTest {
             .withLoggingDisabled()
             .build();
 
-        final KTableSuppressProcessor<String, Long> processor =
-            new KTableSuppressProcessor<>(
+        final Processor<String, Change<Long>> processor =
+            new KTableSuppressProcessorSupplier<String, Long>(
                 (SuppressedInternal<String>) Suppressed.<String>untilTimeLimit(Duration.ofDays(100), maxRecords(1)),
-                storeName
-            );
+                storeName,
+                null
+            ).get();
 
         final MockInternalProcessorContext context = new MockInternalProcessorContext();
         context.setCurrentNode(new ProcessorNode("testNode"));

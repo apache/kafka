@@ -43,6 +43,10 @@ public final class FullChangeSerde<T> implements Serde<Change<T>> {
         this.inner = requireNonNull(inner);
     }
 
+    public Serde<T> innerSerde() {
+        return inner;
+    }
+
     @Override
     public void configure(final Map<String, ?> configs, final boolean isKey) {
         inner.configure(configs, isKey);
