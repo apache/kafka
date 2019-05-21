@@ -89,9 +89,13 @@
     <p>
         To improve operator semantics, new store types are added that allow storing an additional timestamp per key-value pair or window.
         Some DSL operators (for example KTables) are using those new stores.
-        Hence, you can now receive the last update timestamp via Interactive Queries if you change the <code>QueryableStoreType</code>.
-        While this change is mainly transparent to the user, there are some corner cases that may require code changes:
-        <strong>Caution: If you receive an untyped store and use a cast, you might need to update your code to cast to the correct type.</strong>
+        Hence, you can now retrieve the last update timestamp via Interactive Queries if you specify
+        <code>TimestampedKeyValueStoreType</code> or <code>TimestampedWindowStoreType</code> as your <code>QueryableStoreType</code>.
+        While this change is mainly transparent, there are some corner cases that may require code changes:
+        <strong>Caution: If you receive an untyped store and use a cast, you might need to update your code to cast to the correct type.
+        Otherwise, you might get an exception similar to
+        <code>java.lang.ClassCastException: class org.apache.kafka.streams.state.ValueAndTimestamp cannot be cast to class YOUR-VALUE-TYPE</code>
+        upon getting a value from the store.</strong>
         Additionally, <code>TopologyTestDriver#getStateStore()</code> only returns non-built-in stores and throws an exception if a built-in store is accessed.
         For more details please read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-258%3A+Allow+to+Store+Record+Timestamps+in+RocksDB">KIP-258</a>.
     </p>
