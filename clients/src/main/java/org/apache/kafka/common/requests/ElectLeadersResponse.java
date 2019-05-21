@@ -129,7 +129,6 @@ public class ElectLeadersResponse extends AbstractResponse {
                 Optional<Throwable> value = Optional.empty();
                 Errors error = Errors.forCode(partitionResult.errorCode());
                 if (error != Errors.NONE) {
-
                     value = Optional.of(error.exception(partitionResult.errorMessage()));
                 }
 

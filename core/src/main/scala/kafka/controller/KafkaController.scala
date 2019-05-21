@@ -1561,7 +1561,7 @@ class KafkaController(val config: KafkaConfig,
           _ -> Left(new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is being deleted"))
         ) ++
         invalidPartitions.map(
-          _ -> Left(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, s"The partition does not exist."))
+          _ -> Left(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The partition does not exist."))
         )
 
         debug(s"ReplicaLeaderElection waiting: $results")
