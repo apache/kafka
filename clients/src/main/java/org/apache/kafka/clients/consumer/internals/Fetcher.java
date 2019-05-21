@@ -308,6 +308,8 @@ public class Fetcher<K, V> implements Closeable {
                             }
                         }
                     });
+
+            this.nodesWithPendingFetchRequests.add(entry.getKey().id());
         }
         return fetchRequestMap.size();
     }
@@ -1097,7 +1099,6 @@ public class Fetcher<K, V> implements Closeable {
         Map<Node, FetchSessionHandler.FetchRequestData> reqs = new LinkedHashMap<>();
         for (Map.Entry<Node, FetchSessionHandler.Builder> entry : fetchable.entrySet()) {
             reqs.put(entry.getKey(), entry.getValue().build());
-            this.nodesWithPendingFetchRequests.add(entry.getKey().id());
         }
         return reqs;
     }
