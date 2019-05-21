@@ -78,7 +78,10 @@ class LeaderEpochFileCache(topicPartition: TopicPartition,
 
     if (removedEpochs.isEmpty) {
       debug(s"Appended new epoch entry $entryToAppend. Cache now contains ${epochs.size} entries.")
-    } else {
+    } else if (removedEpochs.size > 1 || removedEpochs.head.startOffset != entryToAppend.startOffset) {
+      // Only log a warning if there were non-trivial removals. If the start offset of the new entry
+      // matches the start offfset of the removed epoch, then no data has been written and the truncation
+      // is expected.
       warn(s"New epoch entry $entryToAppend caused truncation of conflicting entries $removedEpochs. " +
         s"Cache now contains ${epochs.size} entries.")
     }
