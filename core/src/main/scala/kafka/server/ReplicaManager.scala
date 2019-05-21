@@ -1084,13 +1084,18 @@ class ReplicaManager(val config: KafkaConfig,
                 s"in assigned replica list ${stateInfo.basePartitionState.replicas.asScala.mkString(",")}")
               responseMap.put(topicPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
             }
-          } else {
-            // Otherwise record the error code in response
+          } else if (requestLeaderEpoch < currentLeaderEpoch) {
             stateChangeLogger.warn(s"Ignoring LeaderAndIsr request from " +
               s"controller $controllerId with correlation id $correlationId " +
               s"epoch $controllerEpoch for partition $topicPartition since its associated " +
-              s"leader epoch $requestLeaderEpoch is not higher than the current " +
+              s"leader epoch $requestLeaderEpoch is smaller than the current " +
               s"leader epoch $currentLeaderEpoch")
+            responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
+          } else {
+            stateChangeLogger.debug(s"Ignoring LeaderAndIsr request from " +
+              s"controller $controllerId with correlation id $correlationId " +
+              s"epoch $controllerEpoch for partition $topicPartition since its associated " +
+              s"leader epoch $requestLeaderEpoch matches the current leader epoch")
             responseMap.put(topicPartition, Errors.STALE_CONTROLLER_EPOCH)
           }
         }
