@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicPartition;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -28,7 +27,7 @@ public class MockPartitionAssignor extends AbstractPartitionAssignor {
 
     private Map<String, List<TopicPartition>> result = null;
 
-    public MockPartitionAssignor(final List<RebalanceProtocol> supportedProtocols) {
+    MockPartitionAssignor(final List<RebalanceProtocol> supportedProtocols) {
         this.supportedProtocols = supportedProtocols;
     }
 
