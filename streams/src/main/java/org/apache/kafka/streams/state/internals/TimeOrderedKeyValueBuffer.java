@@ -78,7 +78,7 @@ public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
 
     boolean hasKey(K key);
 
-    ValueAndTimestamp<V> priorValueIfBuffered(K key);
+    ValueAndTimestamp<V> priorValueForBuffered(K key);
 
     void put(long time, K key, Change<V> value, ProcessorRecordContext recordContext);
 

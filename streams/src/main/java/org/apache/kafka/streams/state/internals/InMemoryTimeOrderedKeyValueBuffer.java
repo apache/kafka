@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.function.Consumer;
@@ -406,11 +407,11 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     }
 
     @Override
-    public ValueAndTimestamp<V> priorValueIfBuffered(final K key) {
+    public ValueAndTimestamp<V> priorValueForBuffered(final K key) {
         final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
         final BufferKey bufferKey = index.get(serializedKey);
         if (bufferKey == null) {
-            return null;
+            throw new NoSuchElementException("Key [" + key + "] is not in the buffer.");
         } else {
             final BufferValue bufferValue = sortedMap.get(bufferKey);
             final byte[] bytes = bufferValue.priorValue();
