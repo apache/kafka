@@ -303,7 +303,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         switch (protocol) {
             case EAGER:
                 if (!ownedPartitions.isEmpty()) {
-                    log.warn("Some partitions are not revoked with EAGER rebalance protocol, " +
+                    log.warn("Some partitions are not revoked with " + protocol + " protocol, " +
                         "it is likely that the previous rebalance did not complete due to some errors");
                 }
 
@@ -314,6 +314,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     throw e;
                 } catch (Exception e) {
                     log.error("User provided listener {} failed on partition assignment", listener.getClass().getName(), e);
+                    throw e;
                 }
                 break;
 
@@ -596,6 +597,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     throw e;
                 } catch (Exception e) {
                     log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
+                    throw e;
                 }
 
                 // also clear the assigned partitions since all have been revoked
@@ -604,6 +606,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 break;
 
             case COOPERATIVE:
+                log.info("Not revoking any previously assigned partitions before joining group");
+
                 break;
         }
 
