@@ -53,7 +53,7 @@ public class OffsetsForLeaderEpochClient extends AsyncClient<
             fetchEpoch -> partitionData.put(topicPartition,
                 new OffsetsForLeaderEpochRequest.PartitionData(fetchPosition.currentLeader.epoch, fetchEpoch))));
 
-        return new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), partitionData);
+        return OffsetsForLeaderEpochRequest.Builder.forConsumer(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), partitionData);
     }
 
     @Override
