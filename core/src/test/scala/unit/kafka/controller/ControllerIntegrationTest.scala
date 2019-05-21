@@ -165,6 +165,58 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
   }
 
   @Test
+  def testMetadataPropagationForOfflineReplicas(): Unit = {
+    servers = makeServers(3)
+    TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+
+    //get brokerId for topic creation with single partition and RF =1
+    val replicaBroker = servers.filter(e => e.config.brokerId != controllerId).head
+
+    val controllerBroker = servers.filter(e => e.config.brokerId == controllerId).head
+    val otherBroker = servers.filter(e => e.config.brokerId != controllerId &&
+      e.config.brokerId != replicaBroker.config.brokerId).head
+
+    val topic = "topic1"
+    val assignment = Map(0 -> Seq(replicaBroker.config.brokerId))
+
+    // Create topic
+    TestUtils.createTopic(zkClient, topic, assignment, servers)
+
+    // Shutdown the other broker
+    otherBroker.shutdown()
+    otherBroker.awaitShutdown()
+
+    // Shutdown the broker with replica
+    replicaBroker.shutdown()
+    replicaBroker.awaitShutdown()
+
+    //Shutdown controller broker
+    controllerBroker.shutdown()
+    controllerBroker.awaitShutdown()
+
+    def verifyMetadata(broker: KafkaServer): Unit = {
+      broker.startup()
+      TestUtils.waitUntilTrue(() => {
+        val partitionInfoOpt = broker.metadataCache.getPartitionInfo(topic, 0)
+        if (partitionInfoOpt.isDefined) {
+          val partitionInfo = partitionInfoOpt.get
+          (!partitionInfo.offlineReplicas.isEmpty && partitionInfo.basePartitionState.leader == -1
+            && !partitionInfo.basePartitionState.replicas.isEmpty && !partitionInfo.basePartitionState.isr.isEmpty)
+        } else {
+          false
+        }
+      }, "Inconsistent metadata after broker startup")
+    }
+
+    //Start controller broker and check metadata
+    verifyMetadata(controllerBroker)
+
+    //Start other broker and check metadata
+    verifyMetadata(otherBroker)
+  }
+
+  @Test
   def testTopicCreation(): Unit = {
     servers = makeServers(1)
     val tp = new TopicPartition("t", 0)
