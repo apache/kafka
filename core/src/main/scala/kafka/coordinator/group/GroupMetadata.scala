@@ -553,7 +553,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
                           onlyCheckOffsetsFromNonSubscribedPartition: Boolean = false): Map[TopicPartition, OffsetAndMetadata] = {
       offsets.filter {
         case (topicPartition, commitRecordMetadataAndOffset) =>
-          def isNonPendingAndExpired = !pendingOffsetCommits.contains(topicPartition) && {
+          val isNonPendingAndExpired = !pendingOffsetCommits.contains(topicPartition) && {
             commitRecordMetadataAndOffset.offsetAndMetadata.expireTimestamp match {
               case None =>
                 // current version with no per partition retention
@@ -564,7 +564,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
             }
           }
 
-          isNonPendingAndExpired && (!onlyCheckOffsetsFromNonSubscribedPartition || !isSubscribedTopicPartition(topicPartition))
+          isNonPendingAndExpired && !(onlyCheckOffsetsFromNonSubscribedPartition && isSubscribedTopicPartition(topicPartition))
       }.map {
         case (topicPartition, commitRecordOffsetAndMetadata) =>
           (topicPartition, commitRecordOffsetAndMetadata.offsetAndMetadata)
@@ -581,7 +581,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
         getExpiredOffsets(commitRecordMetadataAndOffset =>
           currentStateTimestamp.getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp))
       case Some(_) if is(Stable) =>
-        // even when the group is in Stable state, we still check whether there exist expired offsets from any non-subscribed partitions
+        // even when the group is in Stable state, we still check whether there exists expired offsets from any non-subscribed partitions
         getExpiredOffsets(commitRecordMetadataAndOffset =>
           currentStateTimestamp.getOrElse(commitRecordMetadataAndOffset.offsetAndMetadata.commitTimestamp), true)
       case None =>

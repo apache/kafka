@@ -20,9 +20,9 @@ package kafka.coordinator.group
 import java.util
 
 import kafka.common.OffsetAndMetadata
+import kafka.utils.timer.MockTimer
 import org.apache.kafka.clients.consumer.internals.{ConsumerProtocol, PartitionAssignor}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{Before, Test}
 
@@ -39,10 +39,12 @@ class GroupMetadataTest {
   private val sessionTimeoutMs = 10000
 
   private var group: GroupMetadata = null
+  private var timer: MockTimer = null
 
   @Before
   def setUp() {
-    group = new GroupMetadata("groupId", Empty, Time.SYSTEM)
+    timer = new MockTimer
+    group = new GroupMetadata("groupId", Empty, timer.time)
   }
 
   @Test
@@ -311,20 +313,15 @@ class GroupMetadataTest {
   }
 
   @Test
-  def testStableGroupChooseExpiredOffsets(): Unit = {
+  def testStableGroupOnlyChooseUnsubscribedExpiredOffsets(): Unit = {
     val tp1 = new TopicPartition("unsubscribed_and_expired", 0)
     val tp2 = new TopicPartition("unsubscribed_and_unexpired", 0)
     val tp3 = new TopicPartition("subscribed_and_expired", 0)
     val tp4 = new TopicPartition("subscribed_and_unexpired", 0)
-    val now = Time.SYSTEM.milliseconds
     val retentionMs = 10000
-    val expiredOffset = OffsetAndMetadata(37, "", now - retentionMs - 1000)
-    val unexpiredOffset = OffsetAndMetadata(37, "", now)
-    group.prepareOffsetCommit(Map(tp1 -> expiredOffset, tp2 -> unexpiredOffset, tp3 -> expiredOffset, tp4 -> unexpiredOffset))
-    group.onOffsetCommitAppend(tp1, CommitRecordMetadataAndOffset(Some(3), expiredOffset))
-    group.onOffsetCommitAppend(tp2, CommitRecordMetadataAndOffset(Some(3), unexpiredOffset))
-    group.onOffsetCommitAppend(tp3, CommitRecordMetadataAndOffset(Some(3), expiredOffset))
-    group.onOffsetCommitAppend(tp4, CommitRecordMetadataAndOffset(Some(3), unexpiredOffset))
+    val firstCommitTimestamp = timer.time.milliseconds
+    var offsetAndMetadata = OffsetAndMetadata(37, "", firstCommitTimestamp)
+    val commitRecordOffset = Some(3L)
 
     // Set group state to Stable to see whether any expired offsets could be retrieved via `removeExpiredOffsets`
     group.transitionTo(PreparingRebalance)
@@ -333,16 +330,26 @@ class GroupMetadataTest {
 
     val member = new MemberMetadata("memberId", groupId, groupInstanceId, clientId, clientHost,
       rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+      protocolType, List(("range", Array.empty[Byte]), ("range", Array.empty[Byte])))
     member.assignment = ConsumerProtocol.serializeAssignment(
       new PartitionAssignor.Assignment(util.Arrays.asList(tp3, tp4), null)).array
     group.add(member)
     group.currentStateTimestamp = None // Use the given timestamp instead
 
-    assert(Time.SYSTEM.milliseconds - now < retentionMs)
-    val expiredOffsets = group.removeExpiredOffsets(now, retentionMs)
-    assertTrue(s"Should expire the offset for partition $tp1.", expiredOffsets.size == 1)
-    assertTrue(s"Should expire the offset for partition $tp1.", expiredOffsets.keys.head == tp1)
+    group.prepareOffsetCommit(Map(tp1 -> offsetAndMetadata, tp3 -> offsetAndMetadata))
+    group.onOffsetCommitAppend(tp1, CommitRecordMetadataAndOffset(commitRecordOffset, offsetAndMetadata))
+    group.onOffsetCommitAppend(tp3, CommitRecordMetadataAndOffset(commitRecordOffset, offsetAndMetadata))
+
+    timer.advanceClock(retentionMs + 1000)
+    offsetAndMetadata = OffsetAndMetadata(37, "", timer.time.milliseconds)
+    group.prepareOffsetCommit(Map(tp2 -> offsetAndMetadata, tp4 -> offsetAndMetadata))
+    group.onOffsetCommitAppend(tp2, CommitRecordMetadataAndOffset(commitRecordOffset, offsetAndMetadata))
+    group.onOffsetCommitAppend(tp4, CommitRecordMetadataAndOffset(commitRecordOffset, offsetAndMetadata))
+    timer.advanceClock(1)
+
+    val expectedOffsets = Map(tp1 -> OffsetAndMetadata(37, "", firstCommitTimestamp))
+    val expiredOffsets = group.removeExpiredOffsets(timer.time.milliseconds, retentionMs)
+    assertEquals(expectedOffsets, expiredOffsets)
   }
 
   @Test
@@ -513,7 +520,7 @@ class GroupMetadataTest {
   }
 
   private def offsetAndMetadata(offset: Long): OffsetAndMetadata = {
-    OffsetAndMetadata(offset, "", Time.SYSTEM.milliseconds())
+    OffsetAndMetadata(offset, "", timer.time.milliseconds)
   }
 
 }
