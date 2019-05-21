@@ -460,7 +460,7 @@ public class SubscriptionState {
      * @param preferredReadReplicaId The preferred read replica
      * @param timeMs The time at which this preferred replica is no longer valid
      */
-    public void updatePreferredReadReplica(TopicPartition tp, int preferredReadReplicaId, Supplier<Long> timeMs) {
+    public synchronized void updatePreferredReadReplica(TopicPartition tp, int preferredReadReplicaId, Supplier<Long> timeMs) {
         assignedState(tp).updatePreferredReadReplica(preferredReadReplicaId, timeMs);
     }
 
@@ -471,7 +471,7 @@ public class SubscriptionState {
      * @param timeMs The current time
      * @return Returns the current preferred read replica, if it has been set and if it has not expired.
      */
-    public Optional<Integer> preferredReadReplica(TopicPartition tp, long timeMs) {
+    public synchronized Optional<Integer> preferredReadReplica(TopicPartition tp, long timeMs) {
         return assignedState(tp).preferredReadReplica(timeMs);
     }
 
@@ -481,7 +481,7 @@ public class SubscriptionState {
      * @param tp The topic partition
      * @return true if the preferred read replica was set, false otherwise.
      */
-    public Optional<Integer> clearPreferredReadReplica(TopicPartition tp) {
+    public synchronized Optional<Integer> clearPreferredReadReplica(TopicPartition tp) {
         return assignedState(tp).clearPreferredReadReplica();
     }
 
