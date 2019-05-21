@@ -147,9 +147,8 @@ if (file('.git').exists()) {
 def shouldFilterFlakyTests = gradle.startParameter.taskNames.any{it.contains("FlakyRetry")}
 if (shouldFilterFlakyTests) {
   logger.warn('''************************************************************************
-  a FlakyRetry task was included in task list ->
-  Failing tests will not cause a build failure. Test classes with failures will be run again to
-  filter out flaky tests. Failures in this second run will cause build failure.
+  a FlakyRetry task was included in task list. Therefore failing tests will be retried once 
+  in order to test whether they are flaky.
 ************************************************************************''')
 } else {
   logger.info("unitTestWithFlakyRetry was not included in task list, no anti-flaky steps are done, proceeding as normal upstream build")
@@ -297,7 +296,7 @@ subprojects {
     logTestStdout.rehydrate(delegate, owner, this)()
 
     afterTest { TestDescriptor desc , TestResult result ->
-      if (TestResult.ResultType.FAILURE == result.resultType) {
+      if (shouldFilterFlakyTests && TestResult.ResultType.FAILURE == result.resultType) {
         logger.warn("Found failing test $desc.parent - $desc.name, trying again in next turn of test execution")
         failedTestsInFirstTestRun << desc
       }
@@ -319,7 +318,7 @@ subprojects {
       exceptionFormat = testExceptionFormat
     }
 
-    def oldResultsToOverwite = []
+    def oldResultsToOverwrite = []
 
     doFirst {
       if (!failedTestsInFirstTestRun.isEmpty()) {
@@ -331,7 +330,7 @@ subprojects {
           it.className.replaceAll('\\.', '/') + ".*"
         } as Set
         // re-running complete classes to keep the integrity of the test results
-        logger.warn("Re-running $failedTestClasses")
+        logger.warn("Re-running ${failedTestClasses.size()} failing test classes")
         setIncludes(failedTestClasses)
       } else {
         logger.info("Yay, no failing tests, no need for a second run!")
@@ -350,16 +349,16 @@ subprojects {
         // no need to overwrite anything in this case
         if (testClassName != null) {
           logger.info("Second execution of $testClassName was successful, previous failures seem to be flaky. Marking test result to be overwritten.")
-          oldResultsToOverwite << testClassName
+          oldResultsToOverwrite << testClassName
         }
       }
     }
 
     doLast {
-      if (oldResultsToOverwite.isEmpty()) {
+      if (oldResultsToOverwrite.isEmpty()) {
         logger.info("No flaky tests were detected, no need to overwrite previous test results")
       } else {
-        oldResultsToOverwite.each { testClassName ->
+        oldResultsToOverwrite.each { testClassName ->
           def oldReportFile = "$testResultsDir/TEST-${testClassName}.xml"
           def newReportsFile = "$reports.junitXml.destination/TEST-${testClassName}.xml"
           logger.warn("Overwriting old test result at $oldReportFile with $newReportsFile")
