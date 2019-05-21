@@ -39,7 +39,7 @@ buildscript {
     classpath "gradle.plugin.com.github.spotbugs.snom:spotbugs-gradle-plugin:$versions.spotbugsPlugin"
     classpath "org.gradle:test-retry-gradle-plugin:$versions.testRetryPlugin"
     // For the japicmp lib, required here for intellij
-    classpath "com.github.siom79.japicmp:japicmp:0.13.0"
+    classpath "com.github.siom79.japicmp:japicmp:$versions.japicmp"
   }
 }
 
