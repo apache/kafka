@@ -51,19 +51,19 @@ public final class MessageTest {
 
     @Test
     public void testAddOffsetsToTxnVersions() throws Exception {
-        testMessageRoundTrips(new AddOffsetsToTxnRequestData().
+        testAllMessageRoundTrips(new AddOffsetsToTxnRequestData().
                 setTransactionalId("foobar").
                 setProducerId(0xbadcafebadcafeL).
                 setProducerEpoch((short) 123).
                 setGroupId("baaz"));
-        testMessageRoundTrips(new AddOffsetsToTxnResponseData().
+        testAllMessageRoundTrips(new AddOffsetsToTxnResponseData().
                 setThrottleTimeMs(42).
                 setErrorCode((short) 0));
     }
 
     @Test
     public void testAddPartitionsToTxnVersions() throws Exception {
-        testMessageRoundTrips(new AddPartitionsToTxnRequestData().
+        testAllMessageRoundTrips(new AddPartitionsToTxnRequestData().
                 setTransactionalId("blah").
                 setProducerId(0xbadcafebadcafeL).
                 setProducerEpoch((short) 30000).
@@ -75,13 +75,13 @@ public final class MessageTest {
 
     @Test
     public void testCreateTopicsVersions() throws Exception {
-        testMessageRoundTrips(new CreateTopicsRequestData().
+        testAllMessageRoundTrips(new CreateTopicsRequestData().
                 setTimeoutMs(1000).setTopics(new CreateTopicsRequestData.CreatableTopicCollection()));
     }
 
     @Test
     public void testDescribeAclsRequest() throws Exception {
-        testMessageRoundTrips(new DescribeAclsRequestData().
+        testAllMessageRoundTrips(new DescribeAclsRequestData().
                 setResourceType((byte) 42).
                 setResourceNameFilter(null).
                 setResourcePatternType((byte) 3).
@@ -93,16 +93,16 @@ public final class MessageTest {
 
     @Test
     public void testMetadataVersions() throws Exception {
-        testMessageRoundTrips(new MetadataRequestData().setTopics(
+        testAllMessageRoundTrips(new MetadataRequestData().setTopics(
                 Arrays.asList(new MetadataRequestData.MetadataRequestTopic().setName("foo"),
                         new MetadataRequestData.MetadataRequestTopic().setName("bar")
                 )));
-        testMessageRoundTripsFromVersion(new MetadataRequestData().
+        testAllMessageRoundTripsFromVersion(new MetadataRequestData().
                 setTopics(null).
                 setAllowAutoTopicCreation(true).
                 setIncludeClusterAuthorizedOperations(false).
                 setIncludeTopicAuthorizedOperations(false), (short) 1);
-        testMessageRoundTripsFromVersion(new MetadataRequestData().
+        testAllMessageRoundTripsFromVersion(new MetadataRequestData().
                 setTopics(null).
                 setAllowAutoTopicCreation(false).
                 setIncludeClusterAuthorizedOperations(false).
@@ -115,9 +115,9 @@ public final class MessageTest {
                 .setGroupId("groupId")
                 .setMemberId("memberId")
                 .setGenerationId(15);
-        testMessageRoundTrips(newRequest.get());
-        testMessageRoundTrips(newRequest.get().setGroupInstanceId(null));
-        testMessageRoundTripsFromVersion(newRequest.get().setGroupInstanceId("instanceId"), (short) 3);
+        testAllMessageRoundTrips(newRequest.get());
+        testAllMessageRoundTrips(newRequest.get().setGroupInstanceId(null));
+        testAllMessageRoundTripsFromVersion(newRequest.get().setGroupInstanceId("instanceId"), (short) 3);
     }
 
     @Test
@@ -128,10 +128,10 @@ public final class MessageTest {
                 .setProtocolType("consumer")
                 .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection())
                 .setSessionTimeoutMs(10000);
-        testMessageRoundTrips(newRequest.get());
-        testMessageRoundTripsFromVersion(newRequest.get().setRebalanceTimeoutMs(20000), (short) 1);
-        testMessageRoundTrips(newRequest.get().setGroupInstanceId(null));
-        testMessageRoundTripsFromVersion(newRequest.get().setGroupInstanceId("instanceId"), (short) 5);
+        testAllMessageRoundTrips(newRequest.get());
+        testAllMessageRoundTripsFromVersion(newRequest.get().setRebalanceTimeoutMs(20000), (short) 1);
+        testAllMessageRoundTrips(newRequest.get().setGroupInstanceId(null));
+        testAllMessageRoundTripsFromVersion(newRequest.get().setGroupInstanceId("instanceId"), (short) 5);
     }
 
     @Test
@@ -141,32 +141,32 @@ public final class MessageTest {
                 .setMemberId("memberId")
                 .setGenerationId(15)
                 .setAssignments(new ArrayList<>());
-        testMessageRoundTrips(request.get());
-        testMessageRoundTrips(request.get().setGroupInstanceId(null));
-        testMessageRoundTripsFromVersion(request.get().setGroupInstanceId("instanceId"), (short) 3);
+        testAllMessageRoundTrips(request.get());
+        testAllMessageRoundTrips(request.get().setGroupInstanceId(null));
+        testAllMessageRoundTripsFromVersion(request.get().setGroupInstanceId("instanceId"), (short) 3);
     }
 
     @Test
     public void testOffsetCommitDefaultGroupInstanceId() throws Exception {
-        testMessageRoundTrips(new OffsetCommitRequestData()
+        testAllMessageRoundTrips(new OffsetCommitRequestData()
                 .setTopics(new ArrayList<>())
-                .setGroupId("groupId"), (short) 0);
+                .setGroupId("groupId"));
 
         Supplier<OffsetCommitRequestData> request = () -> new OffsetCommitRequestData()
                 .setGroupId("groupId")
                 .setMemberId("memberId")
                 .setTopics(new ArrayList<>())
                 .setGenerationId(15);
-        testMessageRoundTripsFromVersion(request.get(), (short) 1);
-        testMessageRoundTripsFromVersion(request.get().setGroupInstanceId(null), (short) 1);
-        testMessageRoundTripsFromVersion(request.get().setGroupInstanceId("instanceId"), (short) 7);
+        testAllMessageRoundTripsFromVersion(request.get(), (short) 1);
+        testAllMessageRoundTripsFromVersion(request.get().setGroupInstanceId(null), (short) 1);
+        testAllMessageRoundTripsFromVersion(request.get().setGroupInstanceId("instanceId"), (short) 7);
     }
 
-    private void testMessageRoundTrips(Message message) throws Exception {
-        testMessageRoundTripsFromVersion(message, message.lowestSupportedVersion());
+    private void testAllMessageRoundTrips(Message message) throws Exception {
+        testAllMessageRoundTripsFromVersion(message, message.lowestSupportedVersion());
     }
 
-    private void testMessageRoundTripsFromVersion(Message message, short fromVersion) throws Exception {
+    private void testAllMessageRoundTripsFromVersion(Message message, short fromVersion) throws Exception {
         for (short version = fromVersion; version < message.highestSupportedVersion(); version++) {
             testMessageRoundTrips(message, version);
         }
