@@ -207,19 +207,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
-    private void handleAssignmentMismatch(Assignment assignment) {
-        // We received an assignment that doesn't match our current subscription. If the subscription changed,
-        // we can ignore the assignment and rebalance. Otherwise we raise an error.
-        Set<TopicPartition> invalidAssignments = assignment.partitions().stream().filter(topicPartition ->
-                !joinedSubscription.contains(topicPartition.topic())).collect(Collectors.toSet());
-        if (invalidAssignments.size() > 0) {
-            throw new IllegalStateException("Consumer was assigned partitions " + invalidAssignments +
-                    " which didn't correspond to subscription request " + joinedSubscription);
-        }
-
-        requestRejoin();
-    }
-
     private void maybeUpdateJoinedSubscription(Set<TopicPartition> assignedPartitions) {
         // Check if the assignment contains some topics that were not in the original
         // subscription, if yes we will obey what leader has decided and add these topics
