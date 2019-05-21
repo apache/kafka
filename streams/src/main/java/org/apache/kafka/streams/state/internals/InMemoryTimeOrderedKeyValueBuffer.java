@@ -400,6 +400,12 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     }
 
     @Override
+    public boolean hasKey(final K key) {
+        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
+        return index.containsKey(serializedKey);
+    }
+
+    @Override
     public ValueAndTimestamp<V> priorValueIfBuffered(final K key) {
         final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
         final BufferKey bufferKey = index.get(serializedKey);

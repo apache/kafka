@@ -663,7 +663,7 @@ public class SuppressScenarioTest {
 
 
             driver.pipeInput(recordFactory.create("right", "A", "a", 12L));
-            // should join with previously emitted right side
+            // should join with previously emitted left side
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
                 singletonList(new KeyValueTimestamp<>("A", "(1,a)", 12L))
@@ -671,7 +671,7 @@ public class SuppressScenarioTest {
 
 
             driver.pipeInput(recordFactory.create("right", "A", "b", 13L));
-            // should join with previously emitted right side
+            // should join with previously emitted left side
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
                 singletonList(new KeyValueTimestamp<>("A", "(1,b)", 13L))

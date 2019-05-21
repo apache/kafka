@@ -27,6 +27,7 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
+
     final class Eviction<K, V> {
         private final K key;
         private final Change<V> value;
@@ -74,6 +75,8 @@ public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
     void setSerdesIfNull(final Serde<K> keySerde, final Serde<V> valueSerde);
 
     void evictWhile(final Supplier<Boolean> predicate, final Consumer<Eviction<K, V>> callback);
+
+    boolean hasKey(K key);
 
     ValueAndTimestamp<V> priorValueIfBuffered(K key);
 

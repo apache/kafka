@@ -77,12 +77,11 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
                     @Override
                     public ValueAndTimestamp<V> get(final K key) {
-                        final ValueAndTimestamp<V> v = buffer.priorValueIfBuffered(key);
-                        if (v == null) {
+                        if (buffer.hasKey(key)) {
+                            return buffer.priorValueIfBuffered(key);
+                        } else {
                             // not buffered, so the suppressed view is equal to the parent view
                             return parentGetter.get(key);
-                        } else {
-                            return v;
                         }
                     }
 
