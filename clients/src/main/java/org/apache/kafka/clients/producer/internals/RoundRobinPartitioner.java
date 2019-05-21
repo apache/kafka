@@ -56,7 +56,7 @@ public class RoundRobinPartitioner implements Partitioner {
         int numPartitions = partitions.size();
         int nextValue = nextValue(topic);
         List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
-        if (availablePartitions.size() > 0) {
+        if (!availablePartitions.isEmpty()) {
             int part = Utils.toPositive(nextValue) % availablePartitions.size();
             return availablePartitions.get(part).partition();
         } else {
