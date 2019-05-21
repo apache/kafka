@@ -24,12 +24,12 @@ import java.util.Map;
 
 public class MockPartitionAssignor extends AbstractPartitionAssignor {
 
-    private final RebalanceProtocol supportedProtocol;
+    private final List<RebalanceProtocol> supportedProtocols;
 
     private Map<String, List<TopicPartition>> result = null;
 
-    public MockPartitionAssignor(final RebalanceProtocol supportedProtocol) {
-        this.supportedProtocol = supportedProtocol;
+    public MockPartitionAssignor(final List<RebalanceProtocol> supportedProtocols) {
+        this.supportedProtocols = supportedProtocols;
     }
 
     @Override
@@ -47,7 +47,7 @@ public class MockPartitionAssignor extends AbstractPartitionAssignor {
 
     @Override
     public List<RebalanceProtocol> supportedProtocols() {
-        return Collections.singletonList(supportedProtocol);
+        return supportedProtocols;
     }
 
     public void clear() {

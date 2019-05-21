@@ -181,6 +181,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             supportedProtocols.retainAll(assignor.supportedProtocols());
         }
 
+        if (supportedProtocols.isEmpty()) {
+            throw new IllegalArgumentException("Specified assignors do not have commonly supported rebalance protocol");
+        }
+
         Collections.sort(supportedProtocols);
 
         protocol = supportedProtocols.get(supportedProtocols.size() - 1);
@@ -1177,4 +1181,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
+    /* test-only classes below */
+    RebalanceProtocol getProtocol() {
+        return protocol;
+    }
 }

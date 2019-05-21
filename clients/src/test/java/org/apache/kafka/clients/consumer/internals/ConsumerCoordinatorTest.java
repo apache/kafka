@@ -145,7 +145,7 @@ public class ConsumerCoordinatorTest {
 
     public ConsumerCoordinatorTest(final PartitionAssignor.RebalanceProtocol protocol) {
         this.protocol = protocol;
-        this.partitionAssignor =  new MockPartitionAssignor(protocol);
+        this.partitionAssignor = new MockPartitionAssignor(Collections.singletonList(protocol));
         this.assignors = Collections.singletonList(partitionAssignor);
     }
 
@@ -178,21 +178,26 @@ public class ConsumerCoordinatorTest {
 
     @After
     public void teardown() {
-
-        Thread[] threads = new Thread[Thread.activeCount()];
-        int threadCount = Thread.enumerate(threads);
-        for (int i = 0; i < threadCount; i++) {
-            System.out.println(threads[i].getName());
-        }
-
         this.metrics.close();
         this.coordinator.close(time.timer(0));
+    }
 
-        System.out.println("-----------------------------------");
-        threads = new Thread[Thread.activeCount()];
-        threadCount = Thread.enumerate(threads);
-        for (int i = 0; i < threadCount; i++) {
-            System.out.println(threads[i].getName());
+    @Test
+    public void testSelectRebalanceProtcol() {
+        List<PartitionAssignor> assignors = new ArrayList<>();
+        assignors.add(new MockPartitionAssignor(Collections.singletonList(PartitionAssignor.RebalanceProtocol.EAGER)));
+        assignors.add(new MockPartitionAssignor(Collections.singletonList(PartitionAssignor.RebalanceProtocol.COOPERATIVE)));
+
+        // no commonly supported protocols
+        assertThrows(IllegalArgumentException.class, () -> buildCoordinator(new Metrics(), assignors, false, Optional.empty()));
+
+        assignors.clear();
+        assignors.add(new MockPartitionAssignor(Arrays.asList(PartitionAssignor.RebalanceProtocol.EAGER, PartitionAssignor.RebalanceProtocol.COOPERATIVE)));
+        assignors.add(new MockPartitionAssignor(Arrays.asList(PartitionAssignor.RebalanceProtocol.EAGER, PartitionAssignor.RebalanceProtocol.COOPERATIVE)));
+
+        // select higher indexed (more advanced) protocols
+        try (ConsumerCoordinator coordinator = buildCoordinator(new Metrics(), assignors, false, Optional.empty())) {
+            assertEquals(PartitionAssignor.RebalanceProtocol.COOPERATIVE, coordinator.getProtocol());
         }
     }
 
@@ -2050,7 +2055,7 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCloseManualAssignment() throws Exception {
-        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(true, true, Optional.empty())) {
+        try (ConsumerCoordinator coordinator = prepareCoordinatorForCloseTest(false, true, Optional.empty())) {
             gracefulCloseTest(coordinator, false);
         }
     }
