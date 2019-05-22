@@ -20,7 +20,7 @@ import java.io.File
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.cluster.{Partition, Replica}
+import kafka.cluster.{LocalReplica, LogInfo, Partition, RemoteReplica, Replica}
 import kafka.log.{Log, LogManager}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -228,7 +228,8 @@ class IsrExpirationTest {
     val leaderId = config.brokerId
     val tp = new TopicPartition(topic, partitionId)
     val partition = replicaManager.createPartition(tp)
-    val leaderReplica = new Replica(leaderId, tp, time, 0, Some(localLog))
+    val logInfo = LogInfo(leaderId, tp, initialHighWatermarkValue = 0L, localLog);
+    val leaderReplica = new LocalReplica(leaderId, tp, logInfo)
 
     val allReplicas = getFollowerReplicas(partition, leaderId, time) :+ leaderReplica
     allReplicas.foreach(r => partition.addReplicaIfNotExists(r))
@@ -260,7 +261,7 @@ class IsrExpirationTest {
 
   private def getFollowerReplicas(partition: Partition, leaderId: Int, time: Time): Seq[Replica] = {
     configs.filter(_.brokerId != leaderId).map { config =>
-      new Replica(config.brokerId, partition.topicPartition, time)
+      new RemoteReplica(config.brokerId, partition.topicPartition)
     }
   }
 }

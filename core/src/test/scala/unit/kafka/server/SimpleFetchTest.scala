@@ -20,7 +20,7 @@ import java.io.File
 
 import kafka.api._
 import kafka.utils._
-import kafka.cluster.Replica
+import kafka.cluster.{LocalReplica, LogInfo, RemoteReplica}
 import kafka.log.{Log, LogManager}
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.zk.KafkaZkClient
@@ -120,12 +120,13 @@ class SimpleFetchTest {
     val partition = replicaManager.createPartition(new TopicPartition(topic, partitionId))
 
     // create the leader replica with the local log
-    val leaderReplica = new Replica(configs.head.brokerId, partition.topicPartition, time, 0, Some(log))
-    leaderReplica.highWatermark = new LogOffsetMetadata(partitionHW)
+    val logInfo = LogInfo(configs.head.brokerId, partition.topicPartition, initialHighWatermarkValue = 0L, log)
+    val leaderReplica = new LocalReplica(configs.head.brokerId, partition.topicPartition, logInfo)
+    logInfo.highWatermark = new LogOffsetMetadata(partitionHW)
     partition.leaderReplicaIdOpt = Some(leaderReplica.brokerId)
 
     // create the follower replica with defined log end offset
-    val followerReplica= new Replica(configs(1).brokerId, partition.topicPartition, time)
+    val followerReplica= new RemoteReplica(configs(1).brokerId, partition.topicPartition)
     val leo = new LogOffsetMetadata(followerLEO, 0L, followerLEO.toInt)
     followerReplica.updateLogReadResult(new LogReadResult(info = FetchDataInfo(leo, MemoryRecords.EMPTY),
                                                           highWatermark = leo.messageOffset,

@@ -35,6 +35,7 @@ class ReplicaTest {
   val brokerTopicStats = new BrokerTopicStats
   var log: Log = _
   var replica: Replica = _
+  var logInfo: LogInfo = _
 
   @Before
   def setup(): Unit = {
@@ -54,10 +55,11 @@ class ReplicaTest {
       producerIdExpirationCheckIntervalMs = LogManager.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10))
 
-    replica = new Replica(brokerId = 0,
-      topicPartition = new TopicPartition("foo", 0),
-      time = time,
-      log = Some(log))
+    val topicPartition = new TopicPartition("foo", 0);
+    logInfo = LogInfo(brokerId = 0, topicPartition, initialHighWatermarkValue = 0L, log)
+    replica = new LocalReplica(brokerId = 0,
+      topicPartition,
+      logInfo)
   }
 
   @After
@@ -70,13 +72,12 @@ class ReplicaTest {
   @Test
   def testSegmentDeletionWithHighWatermarkInitialization(): Unit = {
     val initialHighWatermark = 25L
-    replica = new Replica(brokerId = 0,
-      topicPartition = new TopicPartition("foo", 0),
-      time = time,
-      initialHighWatermarkValue = initialHighWatermark,
-      log = Some(log))
+    val topicPartition = new TopicPartition("foo", 0)
+    val logInfo = LogInfo(0, topicPartition, initialHighWatermark, log)
 
-    assertEquals(initialHighWatermark, replica.highWatermark.messageOffset)
+    replica = new LocalReplica(brokerId = 0, topicPartition, logInfo)
+
+    assertEquals(initialHighWatermark, logInfo.highWatermark.messageOffset)
 
     val expiredTimestamp = time.milliseconds() - 1000
     for (i <- 0 until 100) {
@@ -100,13 +101,13 @@ class ReplicaTest {
 
     // ensure we have at least a few segments so the test case is not trivial
     assertTrue(log.numberOfSegments > 5)
-    assertEquals(0L, replica.highWatermark.messageOffset)
+    assertEquals(0L, logInfo.highWatermark.messageOffset)
     assertEquals(0L, replica.logStartOffset)
     assertEquals(100L, replica.logEndOffset)
 
     for (hw <- 0 to 100) {
-      replica.highWatermark = new LogOffsetMetadata(hw)
-      assertEquals(hw, replica.highWatermark.messageOffset)
+      logInfo.highWatermark = new LogOffsetMetadata(hw)
+      assertEquals(hw, logInfo.highWatermark.messageOffset)
       log.deleteOldSegments()
       assertTrue(replica.logStartOffset <= hw)
 
@@ -134,8 +135,8 @@ class ReplicaTest {
       log.appendAsLeader(records, leaderEpoch = 0)
     }
 
-    replica.highWatermark = new LogOffsetMetadata(25L)
-    replica.maybeIncrementLogStartOffset(26L)
+    logInfo.highWatermark = new LogOffsetMetadata(25L)
+    logInfo.maybeIncrementLogStartOffset(26L)
   }
 
 }

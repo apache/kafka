@@ -20,7 +20,7 @@ import java.io.File
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.cluster.Replica
+import kafka.cluster.{LocalReplica, LogInfo}
 import kafka.log.{Log, LogManager}
 import kafka.server._
 import kafka.utils.{MockTime, TestUtils}
@@ -58,7 +58,8 @@ class OffsetsForLeaderEpochTest {
       QuotaFactory.instantiate(config, metrics, time, ""), new BrokerTopicStats,
       new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size))
     val partition = replicaManager.createPartition(tp)
-    val leaderReplica = new Replica(config.brokerId, partition.topicPartition, time, 0, Some(mockLog))
+    val logInfo = LogInfo(config.brokerId, partition.topicPartition, 0L, mockLog)
+    val leaderReplica = new LocalReplica(config.brokerId, partition.topicPartition, logInfo)
     partition.addReplicaIfNotExists(leaderReplica)
     partition.leaderReplicaIdOpt = Some(config.brokerId)
 

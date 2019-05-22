@@ -20,7 +20,7 @@ import java.io.File
 import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.cluster.{Partition, Replica}
+import kafka.cluster.{LocalReplica, LogInfo, Partition, Replica}
 import kafka.log.{Log, LogManager, LogOffsetSnapshot}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
@@ -238,18 +238,20 @@ class ReplicaManagerQuotasTest {
     //create the two replicas
     for ((p, _) <- fetchInfo) {
       val partition = replicaManager.createPartition(p)
-      val leaderReplica = new Replica(configs.head.brokerId, p, time, 0, Some(log))
-      leaderReplica.highWatermark = new LogOffsetMetadata(5)
+      val logInfo = LogInfo(configs.head.brokerId, p, initialHighWatermarkValue = 0L, log)
+      val leaderReplica = new LocalReplica(configs.head.brokerId, p, logInfo)
+      logInfo.highWatermark = new LogOffsetMetadata(5)
       partition.leaderReplicaIdOpt = Some(leaderReplica.brokerId)
-      val followerReplica = new Replica(configs.last.brokerId, p, time, 0, Some(log))
-      val allReplicas = Set(leaderReplica, followerReplica)
+      val followerLogInfo = LogInfo(configs.head.brokerId, p, initialHighWatermarkValue = 0L, log)
+      val followerReplica = new LocalReplica(configs.last.brokerId, p, followerLogInfo)
+      val allReplicas : Set[Replica] = Set(leaderReplica, followerReplica)
       allReplicas.foreach(partition.addReplicaIfNotExists)
       if (bothReplicasInSync) {
         partition.inSyncReplicas = allReplicas
-        followerReplica.highWatermark = new LogOffsetMetadata(5)
+        followerLogInfo.highWatermark = new LogOffsetMetadata(5)
       } else {
         partition.inSyncReplicas = Set(leaderReplica)
-        followerReplica.highWatermark = new LogOffsetMetadata(0)
+        followerLogInfo.highWatermark = new LogOffsetMetadata(0)
       }
     }
   }

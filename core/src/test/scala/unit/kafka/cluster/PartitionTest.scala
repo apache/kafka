@@ -41,8 +41,6 @@ import org.junit.{After, Before, Test}
 import org.junit.Assert._
 import org.mockito.Mockito.{doNothing, mock, when}
 import org.scalatest.Assertions.assertThrows
-import org.mockito.invocation.InvocationOnMock
-import org.mockito.stubbing.Answer
 import org.mockito.ArgumentMatchers
 
 import scala.collection.JavaConverters._
@@ -125,7 +123,7 @@ class PartitionTest {
     assertEquals(4, log.logEndOffset)
 
     val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
-    assertEquals(Some(4), partition.leaderReplicaIfLocal.map(_.logEndOffset))
+    assertEquals(Some(4), partition.leaderLogIfLocal.map(_.logEndOffset))
 
     val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of[Integer](leaderEpoch),
       leaderEpoch = leaderEpoch, fetchOnlyFromLeader = true)
@@ -153,7 +151,7 @@ class PartitionTest {
     assertEquals(4, log.logEndOffset)
 
     val partition = setupPartitionWithMocks(leaderEpoch = leaderEpoch, isLeader = true, log = log)
-    assertEquals(Some(4), partition.leaderReplicaIfLocal.map(_.logEndOffset))
+    assertEquals(Some(4), partition.leaderLogIfLocal.map(_.logEndOffset))
     assertEquals(None, log.latestEpoch)
 
     val epochEndOffset = partition.lastOffsetForLeaderEpoch(currentLeaderEpoch = Optional.of[Integer](leaderEpoch),
@@ -192,7 +190,7 @@ class PartitionTest {
     latch.countDown()
     thread1.join()
     thread2.join()
-    assertEquals(None, partition.futureLocalReplica)
+    assertEquals(None, partition.futureLog)
   }
 
   @Test
@@ -200,13 +198,12 @@ class PartitionTest {
   // active segment
   def testMaybeReplaceCurrentWithFutureReplicaDifferentBaseOffsets(): Unit = {
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir1.getAbsolutePath)
-    val currentReplica = partition.getOrCreateReplica(brokerId, isNew = true, offsetCheckpoints)
+    partition.getOrCreateReplica(brokerId, isNew = true, offsetCheckpoints)
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir2.getAbsolutePath)
     partition.maybeCreateFutureReplica(logDir2.getAbsolutePath, offsetCheckpoints)
-    val futureReplica = partition.futureLocalReplicaOrException
 
     // Write records with duplicate keys to current replica and roll at offset 6
-    val currentLog = currentReplica.log.get
+    val currentLog = partition.log.get.log
     currentLog.appendAsLeader(MemoryRecords.withRecords(0L, CompressionType.NONE, 0,
       new SimpleRecord("k1".getBytes, "v1".getBytes),
       new SimpleRecord("k1".getBytes, "v2".getBytes),
@@ -231,7 +228,8 @@ class PartitionTest {
     builder.appendWithOffset(6L, new SimpleRecord("k3".getBytes, "v7".getBytes))
     builder.appendWithOffset(7L, new SimpleRecord("k4".getBytes, "v8".getBytes))
 
-    futureReplica.log.get.appendAsFollower(builder.build())
+    val futureLog = partition.futureLocalLogOrException
+    futureLog.log.appendAsFollower(builder.build())
 
     assertTrue(partition.maybeReplaceCurrentWithFutureReplica())
   }
@@ -493,12 +491,13 @@ class PartitionTest {
     // append records with initial leader epoch
     partition.appendRecordsToLeader(batch1, isFromClient = true)
     partition.appendRecordsToLeader(batch2, isFromClient = true)
-    assertEquals("Expected leader's HW not move", leaderReplica.logStartOffset, leaderReplica.highWatermark.messageOffset)
+    assertEquals("Expected leader's HW not move", leaderReplica.logStartOffset,
+      partition.leaderLogIfLocal.get.highWatermark.messageOffset)
 
     // let the follower in ISR move leader's HW to move further but below LEO
     def readResult(fetchInfo: FetchDataInfo, leaderReplica: Replica): LogReadResult = {
       LogReadResult(info = fetchInfo,
-        highWatermark = leaderReplica.highWatermark.messageOffset,
+        highWatermark = partition.leaderLogIfLocal.get.highWatermark.messageOffset,
         leaderLogStartOffset = leaderReplica.logStartOffset,
         leaderLogEndOffset = leaderReplica.logEndOffset,
         followerLogStartOffset = 0,
@@ -536,7 +535,7 @@ class PartitionTest {
       follower2Replica, readResult(FetchDataInfo(LogOffsetMetadata(2), batch2), leaderReplica))
 
     // At this point, the leader has gotten 5 writes, but followers have only fetched two
-    assertEquals(2, partition.localReplica.get.highWatermark.messageOffset)
+    assertEquals(2, partition.localLogOrException.highWatermark.messageOffset)
 
     // Get the LEO
     fetchOffsetsForTimestamp(ListOffsetRequest.LATEST_TIMESTAMP, None) match {
@@ -640,13 +639,13 @@ class PartitionTest {
         partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
           leaderEpoch, isr, 1, replicas, true), 0, offsetCheckpoints))
       assertEquals(leaderEpoch, partition.getLeaderEpoch)
-      assertEquals(Some(replica), partition.leaderReplicaIfLocal)
+      assertEquals(Some(replica.asInstanceOf[LocalReplica].logInfo), partition.leaderLogIfLocal)
     } else {
       assertTrue("Expected become follower transition to succeed",
         partition.makeFollower(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId + 1,
           leaderEpoch, isr, 1, replicas, true), 0, offsetCheckpoints))
       assertEquals(leaderEpoch, partition.getLeaderEpoch)
-      assertEquals(None, partition.leaderReplicaIfLocal)
+      assertEquals(None, partition.leaderLogIfLocal)
     }
 
     partition
@@ -716,7 +715,7 @@ class PartitionTest {
       partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
         leaderEpoch, isr, 1, replicas, true), 0, offsetCheckpoints))
     assertEquals(leaderEpoch, partition.getLeaderEpoch)
-    assertEquals(Some(replica), partition.leaderReplicaIfLocal)
+    assertEquals(Some(replica.asInstanceOf[LocalReplica].logInfo), partition.leaderLogIfLocal)
 
     val records = createTransactionalRecords(List(
       new SimpleRecord("k1".getBytes, "v1".getBytes),
@@ -747,7 +746,7 @@ class PartitionTest {
     assertEquals(0L, fetchLatestOffset(isolationLevel = Some(IsolationLevel.READ_UNCOMMITTED)).offset)
     assertEquals(0L, fetchLatestOffset(isolationLevel = Some(IsolationLevel.READ_COMMITTED)).offset)
 
-    replica.highWatermark = LogOffsetMetadata(1L)
+    partition.log.get.highWatermark = LogOffsetMetadata(1L)
 
     assertEquals(3L, fetchLatestOffset(isolationLevel = None).offset)
     assertEquals(1L, fetchLatestOffset(isolationLevel = Some(IsolationLevel.READ_UNCOMMITTED)).offset)
@@ -760,14 +759,14 @@ class PartitionTest {
 
   @Test
   def testGetReplica(): Unit = {
-    assertEquals(None, partition.localReplica)
+    assertEquals(None, partition.log)
     assertThrows[ReplicaNotAvailableException] {
-      partition.localReplicaOrException
+      partition.localLogOrException
     }
 
-    val replica = partition.getOrCreateReplica(brokerId, isNew = false, offsetCheckpoints)
-    assertEquals(Some(replica), partition.localReplica)
-    assertEquals(replica, partition.localReplicaOrException)
+    val replica = partition.getOrCreateReplica(brokerId, isNew = false, offsetCheckpoints).asInstanceOf[LocalReplica]
+    assertEquals(replica.logInfo, partition.log)
+    assertEquals(replica.logInfo, partition.localLogOrException)
   }
 
   @Test
@@ -828,12 +827,12 @@ class PartitionTest {
     // append records with initial leader epoch
     val lastOffsetOfFirstBatch = partition.appendRecordsToLeader(batch1, isFromClient = true).lastOffset
     partition.appendRecordsToLeader(batch2, isFromClient = true)
-    assertEquals("Expected leader's HW not move", leaderReplica.logStartOffset, leaderReplica.highWatermark.messageOffset)
+    assertEquals("Expected leader's HW not move", leaderReplica.logStartOffset, partition.log.get.highWatermark.messageOffset)
 
     // let the follower in ISR move leader's HW to move further but below LEO
     def readResult(fetchInfo: FetchDataInfo, leaderReplica: Replica): LogReadResult = {
       LogReadResult(info = fetchInfo,
-                    highWatermark = leaderReplica.highWatermark.messageOffset,
+                    highWatermark = partition.log.get.highWatermark.messageOffset,
                     leaderLogStartOffset = leaderReplica.logStartOffset,
                     leaderLogEndOffset = leaderReplica.logEndOffset,
                     followerLogStartOffset = 0,
@@ -845,7 +844,7 @@ class PartitionTest {
       follower2Replica, readResult(FetchDataInfo(LogOffsetMetadata(0), batch1), leaderReplica))
     partition.updateReplicaLogReadResult(
       follower2Replica, readResult(FetchDataInfo(LogOffsetMetadata(lastOffsetOfFirstBatch), batch2), leaderReplica))
-    assertEquals("Expected leader's HW", lastOffsetOfFirstBatch, leaderReplica.highWatermark.messageOffset)
+    assertEquals("Expected leader's HW", lastOffsetOfFirstBatch, partition.log.get.highWatermark.messageOffset)
 
     // current leader becomes follower and then leader again (without any new records appended)
     val followerState = new LeaderAndIsrRequest.PartitionState(controllerEpoch, follower2, leaderEpoch + 1, isr, 1,
@@ -895,7 +894,11 @@ class PartitionTest {
 
     val topicPartitions = (0 until 5).map { i => new TopicPartition("test-topic", i) }
     val logs = topicPartitions.map { tp => logManager.getOrCreateLog(tp, logConfig) }
-    val replicas = logs.map { log => new Replica(brokerId, log.topicPartition, time, log = Some(log)) }
+    val replicas = logs.map { log => {
+        val logInfo = LogInfo(brokerId, log.topicPartition, 0L, log)
+        new LocalReplica(brokerId, log.topicPartition, logInfo)
+      }
+    }
     val partitions = ListBuffer.empty[Partition]
 
     replicas.foreach { replica =>
@@ -912,13 +915,11 @@ class PartitionTest {
         logManager)
 
       when(delayedOperations.checkAndCompleteFetch())
-        .thenAnswer(new Answer[Unit] {
-          override def answer(invocation: InvocationOnMock): Unit = {
-            // Acquire leaderIsrUpdate read lock of a different partition when completing delayed fetch
-            val anotherPartition = (tp.partition + 1) % topicPartitions.size
-            val partition = partitions(anotherPartition)
-            partition.fetchOffsetSnapshot(Optional.of(leaderEpoch), fetchOnlyFromLeader = true)
-          }
+        .thenAnswer(_ => {
+          // Acquire leaderIsrUpdate read lock of a different partition when completing delayed fetch
+          val anotherPartition = (tp.partition + 1) % topicPartitions.size
+          val partition = partitions(anotherPartition)
+          partition.fetchOffsetSnapshot(Optional.of(leaderEpoch), fetchOnlyFromLeader = true)
         })
 
       partition.addReplicaIfNotExists(replica)
@@ -1035,7 +1036,7 @@ class PartitionTest {
     val leaderState = new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
       6, replicas, 1, replicas, false)
     partition.makeLeader(controllerId, leaderState, 0, offsetCheckpoints)
-    assertEquals(4, partition.localReplicaOrException.highWatermark.messageOffset)
+    assertEquals(4, partition.localLogOrException.highWatermark.messageOffset)
   }
 
   @Test
