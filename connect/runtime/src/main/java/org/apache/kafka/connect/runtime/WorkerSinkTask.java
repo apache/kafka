@@ -206,9 +206,7 @@ class WorkerSinkTask extends WorkerTask {
             // Maybe commit
             if (!committing && (context.isCommitRequested() || now >= nextCommit)) {
                 commitOffsets(now, false);
-                if (now >= nextCommit) {
-                    nextCommit += offsetCommitIntervalMs;
-                }
+                nextCommit = now + offsetCommitIntervalMs;
                 context.clearCommitRequest();
             }
 
