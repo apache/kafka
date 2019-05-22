@@ -266,7 +266,8 @@ private[kafka] object LogValidator extends Logging {
         if (sourceCodec == NoCompressionCodec && batch.isControlBatch)
           inPlaceAssignment = true
 
-        for (record <- batch.asScala) {
+        val records = batch.skipKeyValueIterator()
+        for (record <- records.asScala) {
           if (sourceCodec != NoCompressionCodec && record.isCompressed)
             throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
               s"compression attribute set: $record")
