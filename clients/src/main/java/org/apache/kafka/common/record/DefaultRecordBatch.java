@@ -251,46 +251,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return buffer.getInt(PARTITION_LEADER_EPOCH_OFFSET);
     }
 
-    private CloseableIterator<Record> compressedSkipKeyValueIterator(BufferSupplier bufferSupplier) {
-        final ByteBuffer buffer = this.buffer.duplicate();
-        buffer.position(RECORDS_OFFSET);
-        final DataInputStream inputStream = new DataInputStream(compressionType().wrapForInput(buffer, magic(),
-                bufferSupplier));
-
-        return new RecordIterator() {
-
-            @Override
-            protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
-                try {
-                    return DefaultRecord.readFromSkipKeyValue(inputStream, baseOffset, firstTimestamp, baseSequence, logAppendTime);
-                } catch (EOFException e) {
-                    throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
-                } catch (IOException e) {
-                    throw new KafkaException("Failed to decompress record stream", e);
-                }
-            }
-
-            @Override
-            protected boolean ensureNoneRemaining() {
-                try {
-                    return inputStream.read() == -1;
-                } catch (IOException e) {
-                    throw new KafkaException("Error checking for remaining bytes after reading batch", e);
-                }
-            }
-
-            @Override
-            public void close() {
-                try {
-                    inputStream.close();
-                } catch (IOException e) {
-                    throw new KafkaException("Failed to close record stream", e);
-                }
-            }
-        };
-    }
-
-    private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier) {
+    private CloseableIterator<Record> compressedIterator(BufferSupplier bufferSupplier, boolean skipKeyValue) {
         final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
         final DataInputStream inputStream = new DataInputStream(compressionType().wrapForInput(buffer, magic(),
@@ -300,7 +261,11 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             @Override
             protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
                 try {
-                    return DefaultRecord.readFrom(inputStream, baseOffset, firstTimestamp, baseSequence, logAppendTime);
+                    if (skipKeyValue) {
+                        return DefaultRecord.readFromSkipKeyValue(inputStream, baseOffset, firstTimestamp, baseSequence, logAppendTime);
+                    } else {
+                        return DefaultRecord.readFrom(inputStream, baseOffset, firstTimestamp, baseSequence, logAppendTime);
+                    }
                 } catch (EOFException e) {
                     throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
                 } catch (IOException e) {
@@ -328,7 +293,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         };
     }
 
-    private CloseableIterator<Record> uncompressedIterator(final boolean skipKeyValue) {
+    private CloseableIterator<Record> uncompressedIterator(boolean skipKeyValue) {
         final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
         return new RecordIterator() {
@@ -364,7 +329,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
         // so we decompress the full record set here. Use cases which call for a lower memory footprint
         // can use `streamingIterator` at the cost of additional complexity
-        try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING)) {
+        try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING, false)) {
             List<Record> records = new ArrayList<>(count());
             while (iterator.hasNext())
                 records.add(iterator.next());
@@ -380,7 +345,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (!isCompressed())
             return uncompressedIterator(true);
 
-        try (CloseableIterator<Record> iterator = compressedSkipKeyValueIterator(BufferSupplier.NO_CACHING)) {
+        try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING, true)) {
             List<Record> records = new ArrayList<>(count());
             while (iterator.hasNext())
                 records.add(iterator.next());
@@ -391,7 +356,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public CloseableIterator<Record> streamingIterator(BufferSupplier bufferSupplier) {
         if (isCompressed())
-            return compressedIterator(bufferSupplier);
+            return compressedIterator(bufferSupplier, false);
         else
             return uncompressedIterator(false);
     }
