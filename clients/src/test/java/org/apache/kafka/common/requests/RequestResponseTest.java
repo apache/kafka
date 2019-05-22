@@ -290,9 +290,10 @@ public class RequestResponseTest {
         checkRequest(createListOffsetRequest(0), true);
         checkErrorResponse(createListOffsetRequest(0), new UnknownServerException(), true);
         checkResponse(createListOffsetResponse(0), 0, true);
-        checkRequest(createLeaderEpochRequest(), true);
+        checkRequest(createLeaderEpochRequest(0), true);
+        checkRequest(createLeaderEpochRequest(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion()), true);
         checkResponse(createLeaderEpochResponse(), 0, true);
-        checkErrorResponse(createLeaderEpochRequest(), new UnknownServerException(), true);
+        checkErrorResponse(createLeaderEpochRequest(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion()), new UnknownServerException(), true);
         checkRequest(createAddPartitionsToTxnRequest(), true);
         checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException(), true);
         checkResponse(createAddPartitionsToTxnResponse(), 0, true);
@@ -1250,7 +1251,7 @@ public class RequestResponseTest {
         return new InitProducerIdResponse(responseData);
     }
 
-    private OffsetsForLeaderEpochRequest createLeaderEpochRequest() {
+    private OffsetsForLeaderEpochRequest createLeaderEpochRequest(int version) {
         Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = new HashMap<>();
 
         epochs.put(new TopicPartition("topic1", 0),
@@ -1260,7 +1261,7 @@ public class RequestResponseTest {
         epochs.put(new TopicPartition("topic2", 2),
                 new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), 3));
 
-        return OffsetsForLeaderEpochRequest.Builder.forConsumer(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(), epochs).build();
+        return OffsetsForLeaderEpochRequest.Builder.forConsumer((short) version, epochs).build();
     }
 
     private OffsetsForLeaderEpochResponse createLeaderEpochResponse() {

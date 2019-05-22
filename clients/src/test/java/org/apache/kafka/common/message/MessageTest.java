@@ -18,6 +18,8 @@
 package org.apache.kafka.common.message;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
+import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
@@ -25,21 +27,19 @@ import org.apache.kafka.common.protocol.types.ArrayOf;
 import org.apache.kafka.common.protocol.types.BoundField;
 import org.apache.kafka.common.protocol.types.Schema;
 import org.apache.kafka.common.protocol.types.Struct;
+import org.apache.kafka.common.protocol.types.Type;
+import org.apache.kafka.common.utils.Utils;
+import org.junit.Assert;
+import org.junit.Rule;
+import org.junit.Test;
+import org.junit.rules.Timeout;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-
-import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
-import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
-import org.junit.Assert;
-import org.junit.Rule;
-import org.junit.Test;
-import org.junit.rules.Timeout;
+import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -49,50 +49,127 @@ public final class MessageTest {
     @Rule
     final public Timeout globalTimeout = Timeout.millis(120000);
 
-    /**
-     * Test serializing and deserializing some messages.
-     */
     @Test
-    public void testRoundTrips() throws Exception {
-        testMessageRoundTrips(new MetadataRequestData().setTopics(
-            Arrays.asList(new MetadataRequestData.MetadataRequestTopic().setName("foo"),
-                new MetadataRequestData.MetadataRequestTopic().setName("bar")
-            )), (short) 6);
-        testMessageRoundTrips(new AddOffsetsToTxnRequestData().
-            setTransactionalId("foobar").
-            setProducerId(0xbadcafebadcafeL).
-            setProducerEpoch((short) 123).
-            setGroupId("baaz"), (short) 1);
-        testMessageRoundTrips(new AddOffsetsToTxnResponseData().
-            setThrottleTimeMs(42).
-            setErrorCode((short) 0), (short) 0);
-        testMessageRoundTrips(new AddPartitionsToTxnRequestData().
-            setTransactionalId("blah").
-            setProducerId(0xbadcafebadcafeL).
-            setProducerEpoch((short) 30000).
-            setTopics(new AddPartitionsToTxnTopicCollection(Collections.singletonList(
-                new AddPartitionsToTxnTopic().
-                    setName("Topic").
-                    setPartitions(Collections.singletonList(1))).iterator())));
-        testMessageRoundTrips(new CreateTopicsRequestData().
-            setTimeoutMs(1000).setTopics(new CreateTopicsRequestData.CreatableTopicCollection()));
-        testMessageRoundTrips(new DescribeAclsRequestData().
-            setResourceType((byte) 42).
-            setResourceNameFilter(null).
-            setResourcePatternType((byte) 3).
-            setPrincipalFilter("abc").
-            setHostFilter(null).
-            setOperation((byte) 0).
-            setPermissionType((byte) 0), (short) 0);
-        testMessageRoundTrips(new MetadataRequestData().
-            setTopics(null).
-            setAllowAutoTopicCreation(false).
-            setIncludeClusterAuthorizedOperations(false).
-            setIncludeTopicAuthorizedOperations(false));
+    public void testAddOffsetsToTxnVersions() throws Exception {
+        testAllMessageRoundTrips(new AddOffsetsToTxnRequestData().
+                setTransactionalId("foobar").
+                setProducerId(0xbadcafebadcafeL).
+                setProducerEpoch((short) 123).
+                setGroupId("baaz"));
+        testAllMessageRoundTrips(new AddOffsetsToTxnResponseData().
+                setThrottleTimeMs(42).
+                setErrorCode((short) 0));
     }
 
-    private void testMessageRoundTrips(Message message) throws Exception {
-        testMessageRoundTrips(message, message.highestSupportedVersion());
+    @Test
+    public void testAddPartitionsToTxnVersions() throws Exception {
+        testAllMessageRoundTrips(new AddPartitionsToTxnRequestData().
+                setTransactionalId("blah").
+                setProducerId(0xbadcafebadcafeL).
+                setProducerEpoch((short) 30000).
+                setTopics(new AddPartitionsToTxnTopicCollection(Collections.singletonList(
+                        new AddPartitionsToTxnTopic().
+                                setName("Topic").
+                                setPartitions(Collections.singletonList(1))).iterator())));
+    }
+
+    @Test
+    public void testCreateTopicsVersions() throws Exception {
+        testAllMessageRoundTrips(new CreateTopicsRequestData().
+                setTimeoutMs(1000).setTopics(new CreateTopicsRequestData.CreatableTopicCollection()));
+    }
+
+    @Test
+    public void testDescribeAclsRequest() throws Exception {
+        testAllMessageRoundTrips(new DescribeAclsRequestData().
+                setResourceType((byte) 42).
+                setResourceNameFilter(null).
+                setResourcePatternType((byte) 3).
+                setPrincipalFilter("abc").
+                setHostFilter(null).
+                setOperation((byte) 0).
+                setPermissionType((byte) 0));
+    }
+
+    @Test
+    public void testMetadataVersions() throws Exception {
+        testAllMessageRoundTrips(new MetadataRequestData().setTopics(
+                Arrays.asList(new MetadataRequestData.MetadataRequestTopic().setName("foo"),
+                        new MetadataRequestData.MetadataRequestTopic().setName("bar")
+                )));
+        testAllMessageRoundTripsFromVersion(new MetadataRequestData().
+                setTopics(null).
+                setAllowAutoTopicCreation(true).
+                setIncludeClusterAuthorizedOperations(false).
+                setIncludeTopicAuthorizedOperations(false), (short) 1);
+        testAllMessageRoundTripsFromVersion(new MetadataRequestData().
+                setTopics(null).
+                setAllowAutoTopicCreation(false).
+                setIncludeClusterAuthorizedOperations(false).
+                setIncludeTopicAuthorizedOperations(false), (short) 4);
+    }
+
+    @Test
+    public void testHeartbeatVersions() throws Exception {
+        Supplier<HeartbeatRequestData> newRequest = () -> new HeartbeatRequestData()
+                .setGroupId("groupId")
+                .setMemberId("memberId")
+                .setGenerationId(15);
+        testAllMessageRoundTrips(newRequest.get());
+        testAllMessageRoundTrips(newRequest.get().setGroupInstanceId(null));
+        testAllMessageRoundTripsFromVersion(newRequest.get().setGroupInstanceId("instanceId"), (short) 3);
+    }
+
+    @Test
+    public void testJoinGroupVersions() throws Exception {
+        Supplier<JoinGroupRequestData> newRequest = () -> new JoinGroupRequestData()
+                .setGroupId("groupId")
+                .setMemberId("memberId")
+                .setProtocolType("consumer")
+                .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection())
+                .setSessionTimeoutMs(10000);
+        testAllMessageRoundTrips(newRequest.get());
+        testAllMessageRoundTripsFromVersion(newRequest.get().setRebalanceTimeoutMs(20000), (short) 1);
+        testAllMessageRoundTrips(newRequest.get().setGroupInstanceId(null));
+        testAllMessageRoundTripsFromVersion(newRequest.get().setGroupInstanceId("instanceId"), (short) 5);
+    }
+
+    @Test
+    public void testSyncGroupDefaultGroupInstanceId() throws Exception {
+        Supplier<SyncGroupRequestData> request = () -> new SyncGroupRequestData()
+                .setGroupId("groupId")
+                .setMemberId("memberId")
+                .setGenerationId(15)
+                .setAssignments(new ArrayList<>());
+        testAllMessageRoundTrips(request.get());
+        testAllMessageRoundTrips(request.get().setGroupInstanceId(null));
+        testAllMessageRoundTripsFromVersion(request.get().setGroupInstanceId("instanceId"), (short) 3);
+    }
+
+    @Test
+    public void testOffsetCommitDefaultGroupInstanceId() throws Exception {
+        testAllMessageRoundTrips(new OffsetCommitRequestData()
+                .setTopics(new ArrayList<>())
+                .setGroupId("groupId"));
+
+        Supplier<OffsetCommitRequestData> request = () -> new OffsetCommitRequestData()
+                .setGroupId("groupId")
+                .setMemberId("memberId")
+                .setTopics(new ArrayList<>())
+                .setGenerationId(15);
+        testAllMessageRoundTripsFromVersion(request.get(), (short) 1);
+        testAllMessageRoundTripsFromVersion(request.get().setGroupInstanceId(null), (short) 1);
+        testAllMessageRoundTripsFromVersion(request.get().setGroupInstanceId("instanceId"), (short) 7);
+    }
+
+    private void testAllMessageRoundTrips(Message message) throws Exception {
+        testAllMessageRoundTripsFromVersion(message, message.lowestSupportedVersion());
+    }
+
+    private void testAllMessageRoundTripsFromVersion(Message message, short fromVersion) throws Exception {
+        for (short version = fromVersion; version < message.highestSupportedVersion(); version++) {
+            testMessageRoundTrips(message, version);
+        }
     }
 
     private void testMessageRoundTrips(Message message, short version) throws Exception {
@@ -292,6 +369,25 @@ public final class MessageTest {
         verifySizeRaisesUve((short) 5, "forgotten",
             new FetchRequestData().setForgotten(Collections.singletonList(
                 new FetchRequestData.ForgottenTopic().setName("foo"))));
+    }
+
+    @Test
+    public void testNonIgnorableFieldWithDefaultNull() throws Exception {
+        // Test non-ignorable string field `groupInstanceId` with default null
+        verifySizeRaisesUve((short) 0, "groupInstanceId", new HeartbeatRequestData()
+                .setGroupId("groupId")
+                .setGenerationId(15)
+                .setMemberId("memberId")
+                .setGroupInstanceId("instanceId"));
+        verifySizeSucceeds((short) 0, new HeartbeatRequestData()
+                .setGroupId("groupId")
+                .setGenerationId(15)
+                .setMemberId("memberId")
+                .setGroupInstanceId(null));
+        verifySizeSucceeds((short) 0, new HeartbeatRequestData()
+                .setGroupId("groupId")
+                .setGenerationId(15)
+                .setMemberId("memberId"));
     }
 
     private void verifySizeRaisesUve(short version, String problemFieldName,
