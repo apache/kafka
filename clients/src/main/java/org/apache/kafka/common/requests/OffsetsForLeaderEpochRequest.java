@@ -166,7 +166,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         Struct requestStruct = new Struct(ApiKeys.OFFSET_FOR_LEADER_EPOCH.requestSchema(version()));
-        requestStruct.set(REPLICA_ID, replicaId);
+        requestStruct.setIfExists(REPLICA_ID, replicaId);
 
         Map<String, Map<Integer, PartitionData>> topicsToPartitionEpochs = CollectionUtils.groupPartitionDataByTopic(epochsByPartition);
 
