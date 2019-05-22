@@ -351,7 +351,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                 serializedValue
             );
             priorValue = valueSerde.innerSerde().serializer().serialize(
-                changelogTopic + "-prior",
+                changelogTopic,
                 change.oldValue
             );
         }
@@ -421,7 +421,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         final byte[] serializedValue = internalPriorValueForBuffered(serializedKey);
 
         final V deserialize = valueSerde.innerSerde().deserializer().deserialize(
-            changelogTopic + "-prior",
+            changelogTopic,
             serializedValue
         );
 
@@ -456,7 +456,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         final byte[] serializedPriorValue;
         if (buffered == null) {
             final V priorValue = value.oldValue;
-            serializedPriorValue = valueSerde.innerSerde().serializer().serialize(changelogTopic + "-prior", priorValue);
+            serializedPriorValue = valueSerde.innerSerde().serializer().serialize(changelogTopic, priorValue);
         } else {
             serializedPriorValue = buffered.priorValue();
         }
