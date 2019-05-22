@@ -389,7 +389,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         final byte[] doomedValue = serializer.serialize(null, new Change<>("doomed", null));
         final byte[] qwerValue = serializer.serialize(null, new Change<>("qwer", null));
-        final byte[] eo4imValue = serializer.serialize(null, new Change<>("eo4im", null));
+        final byte[] eo4imValue1 = serializer.serialize(null, new Change<>("eo4im", "previous"));
+        final byte[] eo4imValue2 = serializer.serialize(null, new Change<>("next", "eo4im"));
         stateRestoreCallback.restoreBatch(asList(
             new ConsumerRecord<>("changelog-topic",
                 0,
@@ -420,12 +421,22 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                 -1,
                 -1,
                 "zxcv".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + eo4imValue.length).putLong(1L).put(eo4imValue).array())
+                ByteBuffer.allocate(Long.BYTES + eo4imValue1.length).putLong(1L).put(eo4imValue1).array()),
+            new ConsumerRecord<>("changelog-topic",
+                0,
+                3,
+                3,
+                TimestampType.CREATE_TIME,
+                -1,
+                -1,
+                -1,
+                "zxcv".getBytes(UTF_8),
+                ByteBuffer.allocate(Long.BYTES + eo4imValue2.length).putLong(1L).put(eo4imValue2).array())
         ));
 
         assertThat(buffer.numRecords(), is(3));
         assertThat(buffer.minTimestamp(), is(0L));
-        assertThat(buffer.bufferSize(), is(184L));
+        assertThat(buffer.bufferSize(), is(196L));
 
         stateRestoreCallback.restoreBatch(singletonList(
             new ConsumerRecord<>("changelog-topic",
@@ -442,7 +453,11 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.numRecords(), is(2));
         assertThat(buffer.minTimestamp(), is(1L));
-        assertThat(buffer.bufferSize(), is(119L));
+        assertThat(buffer.bufferSize(), is(131L));
+
+        assertThat(buffer.hasKey("todelete"), is(false));
+        assertThat(buffer.priorValueForBuffered("asdf"), nullValue());
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(ValueAndTimestamp.make("previous", -1)));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -460,8 +475,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertThat(evicted, is(asList(
             new Eviction<>(
                 "zxcv",
-                new Change<>("eo4im", null),
-                new ProcessorRecordContext(2L, 2, 0, "changelog-topic", new RecordHeaders())),
+                new Change<>("next", "eo4im"),
+                new ProcessorRecordContext(3L, 3, 0, "changelog-topic", new RecordHeaders())),
             new Eviction<>(
                 "asdf",
                 new Change<>("qwer", null),
@@ -486,7 +501,16 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         final byte[] todeleteValue = getContextualRecord("doomed", 0).serialize();
         final byte[] asdfValue = getContextualRecord("qwer", 1).serialize();
-        final byte[] zxcvValue = getContextualRecord("3o4im", 2).serialize();
+        final FullChangeSerde<String> fullChangeSerde = FullChangeSerde.castOrWrap(Serdes.String());
+        final byte[] zxcvValue1 = new ContextualRecord(
+            fullChangeSerde.serializer().serialize(null, new Change<>("3o4im", "previous")),
+            getContext(2L)
+        ).serialize();
+        final FullChangeSerde<String> fullChangeSerde1 = FullChangeSerde.castOrWrap(Serdes.String());
+        final byte[] zxcvValue2 = new ContextualRecord(
+            fullChangeSerde1.serializer().serialize(null, new Change<>("next", "3o4im")),
+            getContext(3L)
+        ).serialize();
         stateRestoreCallback.restoreBatch(asList(
             new ConsumerRecord<>("changelog-topic",
                 0,
@@ -519,13 +543,24 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                 -1,
                 -1,
                 "zxcv".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + zxcvValue.length).putLong(1L).put(zxcvValue).array(),
+                ByteBuffer.allocate(Long.BYTES + zxcvValue1.length).putLong(1L).put(zxcvValue1).array(),
+                v1FlagHeaders),
+            new ConsumerRecord<>("changelog-topic",
+                0,
+                3,
+                100,
+                TimestampType.CREATE_TIME,
+                -1L,
+                -1,
+                -1,
+                "zxcv".getBytes(UTF_8),
+                ByteBuffer.allocate(Long.BYTES + zxcvValue2.length).putLong(1L).put(zxcvValue2).array(),
                 v1FlagHeaders)
         ));
 
         assertThat(buffer.numRecords(), is(3));
         assertThat(buffer.minTimestamp(), is(0L));
-        assertThat(buffer.bufferSize(), is(154L));
+        assertThat(buffer.bufferSize(), is(166L));
 
         stateRestoreCallback.restoreBatch(singletonList(
             new ConsumerRecord<>("changelog-topic",
@@ -542,7 +577,11 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.numRecords(), is(2));
         assertThat(buffer.minTimestamp(), is(1L));
-        assertThat(buffer.bufferSize(), is(99L));
+        assertThat(buffer.bufferSize(), is(111L));
+
+        assertThat(buffer.hasKey("todelete"), is(false));
+        assertThat(buffer.priorValueForBuffered("asdf"), nullValue());
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(ValueAndTimestamp.make("previous", -1)));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -560,8 +599,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertThat(evicted, is(asList(
             new Eviction<>(
                 "zxcv",
-                new Change<>("3o4im", null),
-                getContext(2L)),
+                new Change<>("next", "3o4im"),
+                getContext(3L)),
             new Eviction<>(
                 "asdf",
                 new Change<>("qwer", null),
@@ -586,7 +625,24 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         final byte[] todeleteValue = getBufferValue("doomed", 0).serialize();
         final byte[] asdfValue = getBufferValue("qwer", 1).serialize();
-        final byte[] zxcvValue = getBufferValue("3o4im", 2).serialize();
+        final FullChangeSerde<String> fullChangeSerde = FullChangeSerde.castOrWrap(Serdes.String());
+        final byte[] zxcvValue1 =
+            new BufferValue(
+                new ContextualRecord(
+                    fullChangeSerde.serializer().serialize(null, new Change<>("3o4im", "IGNORED")),
+                    getContext(2L)
+                ),
+                Serdes.String().serializer().serialize(null, "previous")
+            ).serialize();
+        final FullChangeSerde<String> fullChangeSerde1 = FullChangeSerde.castOrWrap(Serdes.String());
+        final byte[] zxcvValue2 =
+            new BufferValue(
+                new ContextualRecord(
+                    fullChangeSerde1.serializer().serialize(null, new Change<>("next", "3o4im")),
+                    getContext(3L)
+                ),
+                Serdes.String().serializer().serialize(null, "previous")
+            ).serialize();
         stateRestoreCallback.restoreBatch(asList(
             new ConsumerRecord<>("changelog-topic",
                 0,
@@ -619,13 +675,24 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                 -1,
                 -1,
                 "zxcv".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + zxcvValue.length).putLong(1L).put(zxcvValue).array(),
+                ByteBuffer.allocate(Long.BYTES + zxcvValue1.length).putLong(1L).put(zxcvValue1).array(),
+                v2FlagHeaders),
+            new ConsumerRecord<>("changelog-topic",
+                0,
+                2,
+                100,
+                TimestampType.CREATE_TIME,
+                -1L,
+                -1,
+                -1,
+                "zxcv".getBytes(UTF_8),
+                ByteBuffer.allocate(Long.BYTES + zxcvValue2.length).putLong(1L).put(zxcvValue2).array(),
                 v2FlagHeaders)
         ));
 
         assertThat(buffer.numRecords(), is(3));
         assertThat(buffer.minTimestamp(), is(0L));
-        assertThat(buffer.bufferSize(), is(154L));
+        assertThat(buffer.bufferSize(), is(166L));
 
         stateRestoreCallback.restoreBatch(singletonList(
             new ConsumerRecord<>("changelog-topic",
@@ -642,7 +709,11 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         assertThat(buffer.numRecords(), is(2));
         assertThat(buffer.minTimestamp(), is(1L));
-        assertThat(buffer.bufferSize(), is(99L));
+        assertThat(buffer.bufferSize(), is(111L));
+
+        assertThat(buffer.hasKey("todelete"), is(false));
+        assertThat(buffer.priorValueForBuffered("asdf"), nullValue());
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(ValueAndTimestamp.make("previous", -1)));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -660,8 +731,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertThat(evicted, is(asList(
             new Eviction<>(
                 "zxcv",
-                new Change<>("3o4im", null),
-                getContext(2L)),
+                new Change<>("next", "3o4im"),
+                getContext(3L)),
             new Eviction<>(
                 "asdf",
                 new Change<>("qwer", null),
