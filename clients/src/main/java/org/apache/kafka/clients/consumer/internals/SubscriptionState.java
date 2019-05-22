@@ -103,13 +103,19 @@ public class SubscriptionState {
 
     @Override
     public String toString() {
+        return "{type=" + subscriptionType +
+            ", subscription=" + (subscribedPattern != null ? subscribedPattern.toString() : String.join(",", subscription)) +
+            "}";
+    }
+
+    public String prettyString() {
         return "SubscriptionState{" +
             "type=" + subscriptionType +
             ", subscribedPattern=" + subscribedPattern +
             ", subscription=" + String.join(",", subscription) +
             ", groupSubscription=" + String.join(",", groupSubscription) +
             ", defaultResetStrategy=" + defaultResetStrategy +
-            ", assignment=" + assignment.partitionStateValues() + " (id=" + assignmentId + ")";
+            ", assignment=" + assignment.partitionStateValues() + " (id=" + assignmentId + ")}";
     }
 
     public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
