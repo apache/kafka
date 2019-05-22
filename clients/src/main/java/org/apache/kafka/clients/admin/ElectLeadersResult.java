@@ -46,4 +46,31 @@ final public class ElectLeadersResult {
     public KafkaFuture<Map<TopicPartition, Optional<Throwable>>> partitions() {
         return electionFuture;
     }
+
+    /**
+     * Return a future which succeeds if all the topic elections succeed.
+     */
+    public KafkaFuture<Void> all() {
+        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
+
+        partitions().whenComplete(
+                new KafkaFuture.BiConsumer<Map<TopicPartition, Optional<Throwable>>, Throwable>() {
+                    @Override
+                    public void accept(Map<TopicPartition, Optional<Throwable>> topicPartitions, Throwable throwable) {
+                        if (throwable != null) {
+                            result.completeExceptionally(throwable);
+                        } else {
+                            for (Optional<Throwable> exception : topicPartitions.values()) {
+                                if (exception.isPresent()) {
+                                    result.completeExceptionally(exception.get());
+                                    return;
+                                }
+                            }
+                            result.complete(null);
+                        }
+                    }
+                });
+
+        return result;
+    }
 }
