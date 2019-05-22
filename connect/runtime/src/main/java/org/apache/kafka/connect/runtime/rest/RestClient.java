@@ -85,6 +85,7 @@ public class RestClient {
             req.accept("application/json");
             req.agent("kafka-connect");
             addHeadersToRequest(headers, req);
+
             if (serializedBody != null) {
                 req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
             }
@@ -133,7 +134,7 @@ public class RestClient {
             }
         }
 
-    }
+
 
 
     /**
