@@ -37,6 +37,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
+import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
@@ -46,8 +47,6 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.streams.test.OutputVerifier;
-import org.apache.kafka.test.MockProcessor;
-import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Assert;
@@ -60,10 +59,12 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -111,7 +112,6 @@ public class TopologyTestDriverTest {
         mkEntry(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath())
     ));
     private KeyValueStore<String, Long> store;
-    private MockProcessorSupplier<String, Object> supplier;
 
     private final StringDeserializer stringDeserializer = new StringDeserializer();
     private final LongDeserializer longDeserializer = new LongDeserializer();
@@ -131,6 +131,143 @@ public class TopologyTestDriverTest {
     public TopologyTestDriverTest(final boolean eosEnabled) {
         if (eosEnabled) {
             config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE);
+        }
+    }
+
+    private final static class Record {
+        private final Object key;
+        private final Object value;
+        private final long timestamp;
+        private final long offset;
+        private final String topic;
+        private final Headers headers;
+
+        Record(final ConsumerRecord consumerRecord,
+               final long newOffset) {
+            key = consumerRecord.key();
+            value = consumerRecord.value();
+            timestamp = consumerRecord.timestamp();
+            offset = newOffset;
+            topic = consumerRecord.topic();
+            headers = consumerRecord.headers();
+        }
+
+        Record(final Object key,
+               final Object value,
+               final Headers headers,
+               final long timestamp,
+               final long offset,
+               final String topic) {
+            this.key = key;
+            this.value = value;
+            this.headers = headers;
+            this.timestamp = timestamp;
+            this.offset = offset;
+            this.topic = topic;
+        }
+
+        @Override
+        public String toString() {
+            return "key: " + key + ", value: " + value + ", timestamp: " + timestamp + ", offset: " + offset + ", topic: " + topic;
+        }
+
+        @Override
+        public boolean equals(final Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (o == null || getClass() != o.getClass()) {
+                return false;
+            }
+            final Record record = (Record) o;
+            return timestamp == record.timestamp &&
+                offset == record.offset &&
+                Objects.equals(key, record.key) &&
+                Objects.equals(value, record.value) &&
+                Objects.equals(topic, record.topic) &&
+                Objects.equals(headers, record.headers);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(key, value, headers, timestamp, offset, topic);
+        }
+    }
+
+    private final static class Punctuation {
+        private final long intervalMs;
+        private final PunctuationType punctuationType;
+        private final Punctuator callback;
+
+        Punctuation(final long intervalMs,
+                    final PunctuationType punctuationType,
+                    final Punctuator callback) {
+            this.intervalMs = intervalMs;
+            this.punctuationType = punctuationType;
+            this.callback = callback;
+        }
+    }
+
+    private final class MockPunctuator implements Punctuator {
+        private final List<Long> punctuatedAt = new LinkedList<>();
+
+        @Override
+        public void punctuate(final long timestamp) {
+            punctuatedAt.add(timestamp);
+        }
+    }
+
+    private final class MockProcessor implements Processor {
+        private final Collection<Punctuation> punctuations;
+        private ProcessorContext context;
+
+        private boolean initialized = false;
+        private boolean closed = false;
+        private final List<Record> processedRecords = new ArrayList<>();
+
+        MockProcessor(final Collection<Punctuation> punctuations) {
+            this.punctuations = punctuations;
+        }
+
+        @Override
+        public void init(final ProcessorContext context) {
+            initialized = true;
+            this.context = context;
+            for (final Punctuation punctuation : punctuations) {
+                this.context.schedule(Duration.ofMillis(punctuation.intervalMs), punctuation.punctuationType, punctuation.callback);
+            }
+        }
+
+        @Override
+        public void process(final Object key, final Object value) {
+            processedRecords.add(new Record(key, value, context.headers(), context.timestamp(), context.offset(), context.topic()));
+            context.forward(key, value);
+        }
+
+        @Override
+        public void close() {
+            closed = true;
+        }
+    }
+
+    private final List<MockProcessor> mockProcessors = new ArrayList<>();
+
+    private final class MockProcessorSupplier implements ProcessorSupplier {
+        private final Collection<Punctuation> punctuations;
+
+        private MockProcessorSupplier() {
+            this(Collections.emptySet());
+        }
+
+        private MockProcessorSupplier(final Collection<Punctuation> punctuations) {
+            this.punctuations = punctuations;
+        }
+
+        @Override
+        public Processor get() {
+            final MockProcessor mockProcessor = new MockProcessor(punctuations);
+            mockProcessors.add(mockProcessor);
+            return mockProcessor;
         }
     }
 
@@ -168,20 +305,25 @@ public class TopologyTestDriverTest {
 
 
     private Topology setupSingleProcessorTopology() {
-        return setupSingleProcessorTopology(-1, null);
+        return setupSingleProcessorTopology(-1, null, null);
     }
 
     private Topology setupSingleProcessorTopology(final long punctuationIntervalMs,
-                                                  final PunctuationType punctuationType) {
+                                                  final PunctuationType punctuationType,
+                                                  final Punctuator callback) {
+        final Collection<Punctuation> punctuations;
+        if (punctuationIntervalMs > 0 && punctuationType != null && callback != null) {
+            punctuations = Collections.singleton(new Punctuation(punctuationIntervalMs, punctuationType, callback));
+        } else {
+            punctuations = Collections.emptySet();
+        }
 
         final Topology topology = new Topology();
 
         final String sourceName = "source";
 
-        supplier = new MockProcessorSupplier<>(punctuationIntervalMs, punctuationType, true);
-
         topology.addSource(sourceName, SOURCE_TOPIC_1);
-        topology.addProcessor("processor", supplier, sourceName);
+        topology.addProcessor("processor", new MockProcessorSupplier(punctuations), sourceName);
 
         return topology;
     }
@@ -189,7 +331,6 @@ public class TopologyTestDriverTest {
     private Topology setupMultipleSourceTopology(final String... sourceTopicNames) {
         final Topology topology = new Topology();
 
-        supplier = new MockProcessorSupplier<>(true);
         final String[] processorNames = new String[sourceTopicNames.length];
         int i = 0;
         for (final String sourceTopicName : sourceTopicNames) {
@@ -197,7 +338,7 @@ public class TopologyTestDriverTest {
             final String processorName = sourceTopicName + "-processor";
             topology.addSource(sourceName, sourceTopicName);
             processorNames[i++] = processorName;
-            topology.addProcessor(processorName, supplier, sourceName);
+            topology.addProcessor(processorName, new MockProcessorSupplier(), sourceName);
         }
         topology.addSink("sink-topic", SINK_TOPIC_1, processorNames);
 
@@ -210,7 +351,6 @@ public class TopologyTestDriverTest {
         }
         final Topology topology = new Topology();
 
-        supplier = new MockProcessorSupplier<>(true);
         for (final String sourceTopicName : sourceTopicNames) {
             topology.addGlobalStore(
                 Stores.<Bytes, byte[]>keyValueStoreBuilder(Stores.inMemoryKeyValueStore(sourceTopicName + "-globalStore"), null, null).withLoggingDisabled(),
@@ -219,7 +359,7 @@ public class TopologyTestDriverTest {
                 null,
                 sourceTopicName,
                 sourceTopicName + "-processor",
-                supplier
+                new MockProcessorSupplier()
             );
         }
 
@@ -229,7 +369,7 @@ public class TopologyTestDriverTest {
     @Test
     public void shouldInitProcessor() {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
-        assertTrue(supplier.theCapturedProcessor().isInitialized());
+        assertTrue(mockProcessors.get(0).initialized);
     }
 
     @Test
@@ -237,7 +377,7 @@ public class TopologyTestDriverTest {
         testDriver = new TopologyTestDriver(setupSingleProcessorTopology(), config);
 
         testDriver.close();
-        assertTrue(supplier.theCapturedProcessor().isClosed());
+        assertTrue(mockProcessors.get(0).closed);
         // As testDriver is already closed, bypassing @After tearDown testDriver.close().
         testDriver = null;
     }
@@ -277,11 +417,11 @@ public class TopologyTestDriverTest {
 
         testDriver.pipeInput(consumerRecord1);
 
-        final List<String> processedRecords = supplier.theCapturedProcessor().processed;
+        final List<Record> processedRecords = mockProcessors.get(0).processedRecords;
         assertEquals(1, processedRecords.size());
 
-        final String record = processedRecords.get(0);
-        final String expectedResult = MockProcessor.makeRecord(consumerRecord1);
+        final Record record = processedRecords.get(0);
+        final Record expectedResult = new Record(consumerRecord1, 0L);
 
         assertThat(record, equalTo(expectedResult));
     }
@@ -290,16 +430,16 @@ public class TopologyTestDriverTest {
     public void shouldSendRecordViaCorrectSourceTopic() {
         testDriver = new TopologyTestDriver(setupMultipleSourceTopology(SOURCE_TOPIC_1, SOURCE_TOPIC_2), config);
 
-        final List<String> processedRecords1 =  supplier.capturedProcessors(2).get(0).processed;
-        final List<String> processedRecords2 =  supplier.capturedProcessors(2).get(1).processed;
+        final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
+        final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
 
         testDriver.pipeInput(consumerRecord1);
 
         assertEquals(1, processedRecords1.size());
         assertEquals(0, processedRecords2.size());
 
-        String record = processedRecords1.get(0);
-        String expectedResult = MockProcessor.makeRecord(consumerRecord1);
+        Record record = processedRecords1.get(0);
+        Record expectedResult = new Record(consumerRecord1, 0L);
         assertThat(record, equalTo(expectedResult));
 
         testDriver.pipeInput(consumerRecord2);
@@ -308,7 +448,7 @@ public class TopologyTestDriverTest {
         assertEquals(1, processedRecords2.size());
 
         record = processedRecords2.get(0);
-        expectedResult = MockProcessor.makeRecord(consumerRecord2);
+        expectedResult = new Record(consumerRecord2, 0L);
         assertThat(record, equalTo(expectedResult));
     }
 
@@ -320,10 +460,25 @@ public class TopologyTestDriverTest {
         final String sourceName2 = "source-2";
         final String processor = "processor";
 
-        supplier = new MockProcessorSupplier<>(true);
         topology.addSource(sourceName1, Serdes.Long().deserializer(), Serdes.String().deserializer(), SOURCE_TOPIC_1);
         topology.addSource(sourceName2, Serdes.Integer().deserializer(), Serdes.Double().deserializer(), SOURCE_TOPIC_2);
-        topology.addProcessor(processor, supplier, sourceName1, sourceName2);
+        topology.addProcessor(processor, new MockProcessorSupplier(), sourceName1, sourceName2);
+        topology.addSink(
+            "sink",
+            SINK_TOPIC_1,
+            (topic, data) -> {
+                if (data instanceof Long) {
+                    return Serdes.Long().serializer().serialize(topic, (Long) data);
+                }
+                return Serdes.Integer().serializer().serialize(topic, (Integer) data);
+            },
+            (topic, data) -> {
+                if (data instanceof String) {
+                    return Serdes.String().serializer().serialize(topic, (String) data);
+                }
+                return Serdes.Double().serializer().serialize(topic, (Double) data);
+            },
+            processor);
 
         testDriver = new TopologyTestDriver(topology, config);
 
@@ -344,21 +499,17 @@ public class TopologyTestDriverTest {
         final ConsumerRecord<byte[], byte[]> consumerRecord1 = source1Factory.create(source1Key, source1Value);
         final ConsumerRecord<byte[], byte[]> consumerRecord2 = source2Factory.create(source2Key, source2Value);
 
-        final List<String> processedRecords = supplier.theCapturedProcessor().processed;
-
         testDriver.pipeInput(consumerRecord1);
-        assertEquals(1, processedRecords.size());
-
-        final String record1 = processedRecords.get(0);
-        final String expectedResult1 = MockProcessor.makeRecord(source1Key, source1Value, consumerRecord1.timestamp(), 0, SOURCE_TOPIC_1);
-        assertThat(record1, equalTo(expectedResult1));
+        OutputVerifier.compareKeyValue(
+            testDriver.readOutput(SINK_TOPIC_1, Serdes.Long().deserializer(), Serdes.String().deserializer()),
+            source1Key,
+            source1Value);
 
         testDriver.pipeInput(consumerRecord2);
-        assertEquals(2, processedRecords.size());
-
-        final String record2 = processedRecords.get(1);
-        final String expectedResult2 = MockProcessor.makeRecord(source2Key, source2Value, consumerRecord2.timestamp(), 0, SOURCE_TOPIC_2);
-        assertThat(record2, equalTo(expectedResult2));
+        OutputVerifier.compareKeyValue(
+            testDriver.readOutput(SINK_TOPIC_1, Serdes.Integer().deserializer(), Serdes.Double().deserializer()),
+            source2Key,
+            source2Value);
     }
 
     @Test
@@ -409,8 +560,8 @@ public class TopologyTestDriverTest {
     public void shouldProcessConsumerRecordList() {
         testDriver = new TopologyTestDriver(setupMultipleSourceTopology(SOURCE_TOPIC_1, SOURCE_TOPIC_2), config);
 
-        final List<String> processedRecords1 =  supplier.capturedProcessors(2).get(0).processed;
-        final List<String> processedRecords2 =  supplier.capturedProcessors(2).get(1).processed;
+        final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
+        final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
 
         final List<ConsumerRecord<byte[], byte[]>> testRecords = new ArrayList<>(2);
         testRecords.add(consumerRecord1);
@@ -421,14 +572,12 @@ public class TopologyTestDriverTest {
         assertEquals(1, processedRecords1.size());
         assertEquals(1, processedRecords2.size());
 
-        String record = processedRecords1.get(0);
-        String expectedResult = MockProcessor.makeRecord(consumerRecord1);
-
+        Record record = processedRecords1.get(0);
+        Record expectedResult = new Record(consumerRecord1, 0L);
         assertThat(record, equalTo(expectedResult));
 
         record = processedRecords2.get(0);
-        expectedResult = MockProcessor.makeRecord(consumerRecord2);
-
+        expectedResult = new Record(consumerRecord2, 0L);
         assertThat(record, equalTo(expectedResult));
     }
 
@@ -459,91 +608,90 @@ public class TopologyTestDriverTest {
 
         testDriver.pipeInput(consumerRecord1);
 
-        final List<String> processedRecords = supplier.theCapturedProcessor().processed;
+        final List<Record> processedRecords = mockProcessors.get(0).processedRecords;
         assertEquals(1, processedRecords.size());
 
-        final String record = processedRecords.get(0);
-        final String expectedResult = MockProcessor.makeRecord(consumerRecord1);
+        final Record record = processedRecords.get(0);
+        final Record expectedResult = new Record(consumerRecord1, 0L);
         assertThat(record, equalTo(expectedResult));
     }
 
     @Test
     public void shouldPunctuateOnStreamsTime() {
+        final MockPunctuator mockPunctuator = new MockPunctuator();
         testDriver = new TopologyTestDriver(
-            setupSingleProcessorTopology(10L, PunctuationType.STREAM_TIME),
+            setupSingleProcessorTopology(10L, PunctuationType.STREAM_TIME, mockPunctuator),
             config);
 
         final List<Long> expectedPunctuations = new LinkedList<>();
-        final List<Long> punctuatedAt = supplier.theCapturedProcessor().punctuatedStreamTime;
 
         expectedPunctuations.add(42L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 42L));
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 42L));
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(51L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 51L));
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 52L));
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(61L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 61L));
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 65L));
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(71L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 71L));
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 72L));
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(95L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 95L));
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(101L);
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 101L));
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         testDriver.pipeInput(consumerRecordFactory.create(SOURCE_TOPIC_1, key1, value1, 102L));
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
     }
 
     @Test
     public void shouldPunctuateOnWallClockTime() {
+        final MockPunctuator mockPunctuator = new MockPunctuator();
         testDriver = new TopologyTestDriver(
-            setupSingleProcessorTopology(10L, PunctuationType.WALL_CLOCK_TIME),
+            setupSingleProcessorTopology(10L, PunctuationType.WALL_CLOCK_TIME, mockPunctuator),
             config,
             0);
 
         final List<Long> expectedPunctuations = new LinkedList<>();
-        final List<Long> punctuatedAt = supplier.theCapturedProcessor().punctuatedSystemTime;
-
 
         testDriver.advanceWallClockTime(5L);
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(14L);
         testDriver.advanceWallClockTime(9L);
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         testDriver.advanceWallClockTime(1L);
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(35L);
         testDriver.advanceWallClockTime(20L);
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
 
         expectedPunctuations.add(40L);
         testDriver.advanceWallClockTime(5L);
-        assertThat(punctuatedAt, equalTo(expectedPunctuations));
+        assertThat(mockPunctuator.punctuatedAt, equalTo(expectedPunctuations));
     }
 
     @Test
@@ -1100,7 +1248,6 @@ public class TopologyTestDriverTest {
     private Topology setupMultipleSourcesPatternTopology(final Pattern... sourceTopicPatternNames) {
         final Topology topology = new Topology();
 
-        supplier = new MockProcessorSupplier<>(true);
         final String[] processorNames = new String[sourceTopicPatternNames.length];
         int i = 0;
         for (final Pattern sourceTopicPatternName : sourceTopicPatternNames) {
@@ -1108,7 +1255,7 @@ public class TopologyTestDriverTest {
             final String processorName = sourceTopicPatternName + "-processor";
             topology.addSource(sourceName, sourceTopicPatternName);
             processorNames[i++] = processorName;
-            topology.addProcessor(processorName, supplier, sourceName);
+            topology.addProcessor(processorName, new MockProcessorSupplier(), sourceName);
         }
         topology.addSink("sink-topic", SINK_TOPIC_1, processorNames);
         return topology;
@@ -1125,16 +1272,16 @@ public class TopologyTestDriverTest {
 
         testDriver = new TopologyTestDriver(setupMultipleSourcesPatternTopology(pattern2Source1, pattern2Source2), config);
 
-        final List<String> processedRecords1 =  supplier.capturedProcessors(2).get(0).processed;
-        final List<String> processedRecords2 =  supplier.capturedProcessors(2).get(1).processed;
+        final List<Record> processedRecords1 = mockProcessors.get(0).processedRecords;
+        final List<Record> processedRecords2 = mockProcessors.get(1).processedRecords;
 
         testDriver.pipeInput(consumerRecord1);
 
         assertEquals(1, processedRecords1.size());
         assertEquals(0, processedRecords2.size());
 
-        final String record1 = processedRecords1.get(0);
-        final String expectedResult1 = MockProcessor.makeRecord(consumerRecord1);
+        final Record record1 = processedRecords1.get(0);
+        final Record expectedResult1 = new Record(consumerRecord1, 0L);
         assertThat(record1, equalTo(expectedResult1));
 
         testDriver.pipeInput(consumerRecord2);
@@ -1142,8 +1289,8 @@ public class TopologyTestDriverTest {
         assertEquals(1, processedRecords1.size());
         assertEquals(1, processedRecords2.size());
 
-        final String record2 = processedRecords1.get(0);
-        final String expectedResult2 = MockProcessor.makeRecord(consumerRecord1);
+        final Record record2 = processedRecords2.get(0);
+        final Record expectedResult2 = new Record(consumerRecord2, 0L);
         assertThat(record2, equalTo(expectedResult2));
     }
 

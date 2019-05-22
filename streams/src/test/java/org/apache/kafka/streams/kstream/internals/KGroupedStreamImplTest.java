@@ -583,11 +583,11 @@ public class KGroupedStreamImplTest {
             MockProcessor.makeRecord(new Windowed<>("2", new TimeWindow(0L, 500L)), 2L, 100L),
             MockProcessor.makeRecord(new Windowed<>("2", new TimeWindow(0L, 500L)), 3L, 200L),
             MockProcessor.makeRecord(new Windowed<>("3", new TimeWindow(0L, 500L)), 1L, 1L),
-            MockProcessor.makeRecord(new Windowed<>("1", new TimeWindow(500L, 500L)), 1L, 500L),
-            MockProcessor.makeRecord(new Windowed<>("1", new TimeWindow(500L, 500L)), 2L, 500L),
             MockProcessor.makeRecord(new Windowed<>("1", new TimeWindow(500L, 1000L)), 1L, 500L),
             MockProcessor.makeRecord(new Windowed<>("1", new TimeWindow(500L, 1000L)), 2L, 500L),
-            MockProcessor.makeRecord(new Windowed<>("1", new TimeWindow(0L, 500L)), 2L, 100L)
+            MockProcessor.makeRecord(new Windowed<>("2", new TimeWindow(500L, 1000L)), 1L, 500L),
+            MockProcessor.makeRecord(new Windowed<>("2", new TimeWindow(500L, 1000L)), 2L, 500L),
+            MockProcessor.makeRecord(new Windowed<>("3", new TimeWindow(0L, 500L)), 2L, 100L)
         )));
     }
 
