@@ -1311,14 +1311,15 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     // Noop election
     var electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition1).asJava)
-    assertFalse(electResult.partitions.get.get(partition1).isPresent)
+    var exception = electResult.partitions.get.get(partition1).get
+    assertEquals(classOf[ElectionNotNeededException], exception.getClass)
+    assertEquals("Leader election not needed for topic partition", exception.getMessage)
     assertEquals(0, currentLeader(partition1))
 
     // Noop election with null partitions
     electResult = client.electLeaders(ElectionType.PREFERRED, null)
-    assertFalse(electResult.partitions.get.get(partition1).isPresent)
+    assertTrue(electResult.partitions.get.isEmpty)
     assertEquals(0, currentLeader(partition1))
-    assertFalse(electResult.partitions.get.get(partition2).isPresent)
     assertEquals(0, currentLeader(partition2))
 
     // Now change the preferred leader to 1
@@ -1336,9 +1337,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     // meaningful election with null partitions
     electResult = client.electLeaders(ElectionType.PREFERRED, null)
-    assertEquals(Set(partition1, partition2), electResult.partitions.get.keySet.asScala.filterNot(_.topic == "__consumer_offsets"))
-    assertFalse(electResult.partitions.get.get(partition1).isPresent)
-    waitForLeaderToBecome(partition1, 1)
+    assertEquals(Set(partition2), electResult.partitions.get.keySet.asScala)
     assertFalse(electResult.partitions.get.get(partition2).isPresent)
     waitForLeaderToBecome(partition2, 1)
 
@@ -1346,7 +1345,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val unknownPartition = new TopicPartition("topic-does-not-exist", 0)
     electResult = client.electLeaders(ElectionType.PREFERRED, Set(unknownPartition).asJava)
     assertEquals(Set(unknownPartition).asJava, electResult.partitions.get.keySet)
-    var exception = electResult.partitions.get.get(unknownPartition).get
+    exception = electResult.partitions.get.get(unknownPartition).get
     assertEquals(classOf[UnknownTopicOrPartitionException], exception.getClass)
     assertEquals("The partition does not exist.", exception.getMessage)
     assertEquals(1, currentLeader(partition1))

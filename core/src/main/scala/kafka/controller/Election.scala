@@ -33,8 +33,8 @@ object Election {
     leaderIsrAndControllerEpochOpt match {
       case Some(leaderIsrAndControllerEpoch) =>
         val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr
-        val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment, isr,
-          liveReplicas.toSet, uncleanLeaderElectionEnabled, controllerContext)
+        val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(
+          assignment, isr, liveReplicas.toSet, uncleanLeaderElectionEnabled, controllerContext)
         val newLeaderAndIsrOpt = leaderOpt.map { leader =>
           val newIsr = if (isr.contains(leader)) isr.filter(replica => controllerContext.isReplicaOnline(replica, partition))
           else List(leader)

@@ -30,9 +30,11 @@ import org.apache.kafka.clients.admin.{AdminClient => JAdminClient}
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ClusterAuthorizationException
+import org.apache.kafka.common.errors.ElectionNotNeededException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.utils.Utils
 import scala.collection.JavaConverters._
+import scala.collection.mutable
 import scala.concurrent.duration._
 
 final object LeaderElectionCommand extends Logging {
@@ -138,17 +140,33 @@ final object LeaderElectionCommand extends Logging {
         return
     }
 
-    val succeeded = electionResults.flatMap { case (topicPartition, error) =>
-      if (error.isPresent) None else Option(topicPartition)
-    }
+    val succeeded = mutable.Set.empty[TopicPartition]
+    val noop = mutable.Set.empty[TopicPartition]
+    val failed = mutable.Map.empty[TopicPartition, Throwable]
 
-    val failed = electionResults.flatMap { case (topicPartition, error) =>
-      if (error.isPresent) Option(topicPartition -> error.get()) else  None
+    electionResults.foreach { case (topicPartition, error) =>
+      if (error.isPresent) {
+        if (error.get.isInstanceOf[ElectionNotNeededException]) {
+          noop += topicPartition
+        } else {
+          failed += topicPartition -> error.get
+        }
+      } else {
+        succeeded += topicPartition
+      }
+
+      // Return unit. The scalac compiler throws an error because the expression above doesn't return Unit.
+      ()
     }
 
     if (!succeeded.isEmpty) {
       val partitions = succeeded.mkString(", ")
       println(s"Successfully completed leader election ($electionType) for partitions $partitions")
+    }
+
+    if (!noop.isEmpty) {
+      val partitions = succeeded.mkString(", ")
+      println(s"Valid replica already elected for partitions $partitions")
     }
 
     if (!failed.isEmpty) {

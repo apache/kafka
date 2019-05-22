@@ -62,6 +62,8 @@ import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.LogDirNotFoundException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.MemberIdRequiredException;
+import org.apache.kafka.common.errors.ElectionNotNeededException;
+import org.apache.kafka.common.errors.EligibleLeadersNotAvailableException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
@@ -73,7 +75,6 @@ import org.apache.kafka.common.errors.OffsetNotAvailableException;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.OperationNotAttemptedException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
-import org.apache.kafka.common.errors.EligibleLeadersNotAvailableException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException;
 import org.apache.kafka.common.errors.ProducerFencedException;
@@ -309,7 +310,8 @@ public enum Errors {
             "another consumer with the same group.instance.id has registered with a different member.id.",
             FencedInstanceIdException::new),
     ELIGIBLE_LEADERS_NOT_AVAILABLE(83, "Eligible topic partition leaders are not available",
-            EligibleLeadersNotAvailableException::new);
+            EligibleLeadersNotAvailableException::new),
+    ELECTION_NOT_NEEDED(84, "Leader election not needed for topic partition", ElectionNotNeededException::new);
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 

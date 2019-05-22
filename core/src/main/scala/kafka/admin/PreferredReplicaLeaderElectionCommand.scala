@@ -28,6 +28,7 @@ import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ClusterAuthorizationException
+import org.apache.kafka.common.errors.ElectionNotNeededException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.utils.Time
@@ -37,12 +38,12 @@ import org.apache.zookeeper.KeeperException.NodeExistsException
 object PreferredReplicaLeaderElectionCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
-
     val timeout = 30000
     run(args, timeout)
   }
+
   def run(args: Array[String], timeout: Int = 30000): Unit = {
-    println("This tool is deprecated. Please use kafka-leader-election tool. Tracking issue at: TBD")
+    println("This tool is deprecated. Please use kafka-leader-election tool. Tracking issue: KAFKA-8405")
     val commandOpts = new PreferredReplicaLeaderElectionCommandOptions(args)
     CommandLineUtils.printHelpAndExitIfNeeded(commandOpts, "This tool helps to causes leadership for each partition to be transferred back to the 'preferred replica'," +
       " it can be used to balance leadership among the servers.")
@@ -238,17 +239,33 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
           return
       }
 
-      val succeeded = electionResults.flatMap { case (topicPartition, error) =>
-        if (error.isPresent) None else Option(topicPartition)
-      }
+      val succeeded = mutable.Set.empty[TopicPartition]
+      val noop = mutable.Set.empty[TopicPartition]
+      val failed = mutable.Map.empty[TopicPartition, Throwable]
 
-      val failed = electionResults.flatMap { case (topicPartition, error) =>
-        if (error.isPresent) Option(topicPartition -> error.get()) else  None
+      electionResults.foreach { case (topicPartition, error) =>
+        if (error.isPresent) {
+          if (error.get.isInstanceOf[ElectionNotNeededException]) {
+            noop += topicPartition
+          } else {
+            failed += topicPartition -> error.get
+          }
+        } else {
+          succeeded += topicPartition
+        }
+
+        // Return unit. The scalac compiler throws an error because the expression above doesn't return Unit.
+        ()
       }
 
       if (!succeeded.isEmpty) {
         val partitions = succeeded.mkString(", ")
         println(s"Successfully completed preferred leader election for partitions $partitions")
+      }
+
+      if (!noop.isEmpty) {
+        val partitions = succeeded.mkString(", ")
+        println(s"Preferred replica already elected for partitions $partitions")
       }
 
       if (!failed.isEmpty) {

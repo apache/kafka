@@ -2458,7 +2458,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       results: Map[TopicPartition, ApiError]
     ): Unit = {
       sendResponseMaybeThrottle(request, requestThrottleMs => {
-        val electionResults = results
+        val adjustedResults = if (electionRequest.data().topicPartitions() == null) {
+          results.filter { case (_, error) =>
+            error.error != Errors.ELECTION_NOT_NEEDED
+          }
+        } else results
+
+        val electionResults = adjustedResults
           .groupBy { case (tp, _) => tp.topic }
           .map { case (topic, ps) =>
             (

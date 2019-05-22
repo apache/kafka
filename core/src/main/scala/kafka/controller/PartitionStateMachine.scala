@@ -324,7 +324,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     var finishedElections = Map.empty[TopicPartition, Either[Throwable, LeaderAndIsr]]
 
     while (remaining.nonEmpty) {
-      val (finished, updatesToRetry) = doElectLeaderForPartitions(partitions, partitionLeaderElectionStrategy)
+      val (finished, updatesToRetry) = doElectLeaderForPartitions(remaining, partitionLeaderElectionStrategy)
       remaining = updatesToRetry
 
       finished.foreach {
@@ -430,6 +430,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
 
     (finishedUpdates ++ failedElections, updatesToRetry)
   }
+
   /* For the provided set of topic partition and partition sync state it attempts to determine if unclean
    * leader election should be performed. Unclean election should be performed if there are no live
    * replica which are in sync and unclean leader election is allowed (allowUnclean parameter is true or

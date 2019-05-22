@@ -1556,7 +1556,7 @@ class KafkaController(val config: KafkaConfig,
             }
           case Right(leaderAndIsr) => Right(leaderAndIsr.leader)
         } ++
-        alreadyPreferred.map(_ -> Left(ApiError.NONE)) ++
+        alreadyPreferred.map(_ -> Left(new ApiError(Errors.ELECTION_NOT_NEEDED))) ++
         partitionsBeingDeleted.map(
           _ -> Left(new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is being deleted"))
         ) ++
