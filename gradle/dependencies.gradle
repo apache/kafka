@@ -51,12 +51,16 @@ versions += [
   apacheda: "1.0.2",
   apacheds: "2.0.0-M24",
   argparse4j: "0.7.0",
+  avro: "1.8.1",
+  avroPlugin: "0.10.0",
   bcpkix: "1.61",
   checkstyle: "8.20",
   gradle: "5.4.1",
   gradleVersionsPlugin: "0.21.0",
   grgit: "3.1.1",
+  httpcomponents: "4.5.7",
   httpclient: "4.5.8",
+  httpmime: "4.5.2",
   easymock: "4.0.2",
   jackson: "2.9.8",
   jacoco: "0.8.3",
@@ -114,6 +118,7 @@ libs += [
   apachedsMavibotPartition: "org.apache.directory.server:apacheds-mavibot-partition:$versions.apacheds",
   apachedsJdbmPartition: "org.apache.directory.server:apacheds-jdbm-partition:$versions.apacheds",
   argparse4j: "net.sourceforge.argparse4j:argparse4j:$versions.argparse4j",
+  avro: "org.apache.avro:avro:$versions.avro",
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
   easymock: "org.easymock:easymock:$versions.easymock",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
@@ -165,5 +170,6 @@ libs += [
   jfreechart: "jfreechart:jfreechart:$versions.jfreechart",
   mavenArtifact: "org.apache.maven:maven-artifact:$versions.mavenArtifact",
   zstd: "com.github.luben:zstd-jni:$versions.zstd",
-  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpclient"
+  httpclient: "org.apache.httpcomponents:httpclient:$versions.httpcomponents",
+  httpmime: "org.apache.httpcomponents:httpmime:$versions.httpcomponents"
 ]
