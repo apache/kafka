@@ -87,6 +87,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
                     @Override
                     public void close() {
+                        parentGetter.close();
                         // the main processor is responsible for the buffer's lifecycle
                     }
                 };

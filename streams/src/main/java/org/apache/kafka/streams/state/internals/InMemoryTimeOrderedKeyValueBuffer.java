@@ -296,15 +296,16 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             } else {
                 final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
                 final long time = timeAndValue.getLong();
-                final byte[] value = new byte[record.value().length - 8];
-                timeAndValue.get(value);
+                final byte[] changelogValue = new byte[record.value().length - 8];
+                timeAndValue.get(changelogValue);
                 if (record.headers().lastHeader("v") == null) {
+                    // in this case, the changelog value is just the serialized record value
                     cleanPut(
                         time,
                         key,
                         new BufferValue(
                             new ContextualRecord(
-                                value,
+                                changelogValue,
                                 new ProcessorRecordContext(
                                     record.timestamp(),
                                     record.offset(),
@@ -313,25 +314,16 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                                     record.headers()
                                 )
                             ),
-                            null
+                            inferPriorValue(key, changelogValue)
                         )
                     );
                 } else if (V_1_CHANGELOG_HEADERS.lastHeader("v").equals(record.headers().lastHeader("v"))) {
-                    final ContextualRecord contextualRecord = ContextualRecord.deserialize(ByteBuffer.wrap(value));
-
-                    cleanPut(
-                        time,
-                        key,
-                        new BufferValue(contextualRecord, null)
-                    );
+                    // in this case, the changelog value is a serialized ContextualRecord
+                    final ContextualRecord contextualRecord = ContextualRecord.deserialize(ByteBuffer.wrap(changelogValue));
+                    cleanPut(time, key, new BufferValue(contextualRecord, inferPriorValue(key, contextualRecord.value())));
                 } else if (V_2_CHANGELOG_HEADERS.lastHeader("v").equals(record.headers().lastHeader("v"))) {
-                    final BufferValue bufferValue = BufferValue.deserialize(ByteBuffer.wrap(value));
-
-                    cleanPut(
-                        time,
-                        key,
-                        bufferValue
-                    );
+                    // in this case, the changelog value is a serialized BufferValue
+                    cleanPut(time, key, BufferValue.deserialize(ByteBuffer.wrap(changelogValue)));
                 } else {
                     throw new IllegalArgumentException("Restoring apparently invalid changelog record: " + record);
                 }
@@ -347,6 +339,23 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             }
         }
         updateBufferMetrics();
+    }
+
+    private byte[] inferPriorValue(final Bytes key, final byte[] serializedValue) {
+        final byte[] priorValue;
+        if (index.containsKey(key)) {
+            priorValue = internalPriorValueForBuffered(key);
+        } else {
+            final Change<V> change = valueSerde.deserializer().deserialize(
+                changelogTopic,
+                serializedValue
+            );
+            priorValue = valueSerde.innerSerde().serializer().serialize(
+                changelogTopic + "-prior",
+                change.oldValue
+            );
+        }
+        return priorValue;
     }
 
 
@@ -409,17 +418,26 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     @Override
     public ValueAndTimestamp<V> priorValueForBuffered(final K key) {
         final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
-        final BufferKey bufferKey = index.get(serializedKey);
+        final byte[] serializedValue = internalPriorValueForBuffered(serializedKey);
+
+        final V deserialize = valueSerde.innerSerde().deserializer().deserialize(
+            changelogTopic + "-prior",
+            serializedValue
+        );
+
+        // it's unfortunately not possible to know this, unless we materialize the suppressed result, since our only
+        // knowledge of the prior value is what the upstream processor sends us as the "old value" when we first
+        // buffer something.
+        return ValueAndTimestamp.make(deserialize, RecordQueue.UNKNOWN);
+    }
+
+    private byte[] internalPriorValueForBuffered(final Bytes key) {
+        final BufferKey bufferKey = index.get(key);
         if (bufferKey == null) {
             throw new NoSuchElementException("Key [" + key + "] is not in the buffer.");
         } else {
             final BufferValue bufferValue = sortedMap.get(bufferKey);
-            final byte[] bytes = bufferValue.priorValue();
-            final V deserialize = valueSerde.innerSerde().deserializer().deserialize(changelogTopic + "-prior", bytes);
-            // it's unfortunately not possible to know this, unless we materialize the suppressed result, since our only
-            // knowledge of the prior value is what the upstream processor sends us as the "old value" when we first
-            // buffer something.
-            return ValueAndTimestamp.make(deserialize, RecordQueue.UNKNOWN);
+            return bufferValue.priorValue();
         }
     }
 
