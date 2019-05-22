@@ -113,9 +113,18 @@ public class SubscriptionState {
     }
 
     public String prettyString() {
-        return "{type=" + subscriptionType +
-            ", subscription=" + (subscribedPattern != null ? subscribedPattern.toString() : String.join(",", subscription)) +
-            "}";
+        switch (subscriptionType) {
+            case NONE:
+                return "None";
+            case AUTO_TOPICS:
+                return "Subscribe(" + String.join(",", subscription) + ")";
+            case AUTO_PATTERN:
+                return "Subscribe(" + subscribedPattern + ")";
+            case USER_ASSIGNED:
+                return "Assign(" + assignment.partitionStateValues() + " , id=" + assignmentId + ")";
+            default:
+                throw new IllegalStateException("Un-recognized subscription type: " + subscriptionType);
+        }
     }
 
     public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
