@@ -563,6 +563,7 @@ public class SuppressScenarioTest {
             final ConsumerRecordFactory<String, String> recordFactory =
                 new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
 
+            driver.pipeInput(recordFactory.create("right", "B", "1", 0L));
             driver.pipeInput(recordFactory.create("right", "A", "1", 0L));
             // buffered, no output
             verify(
@@ -572,10 +573,13 @@ public class SuppressScenarioTest {
 
 
             driver.pipeInput(recordFactory.create("right", "tick", "tick", 10L));
-            // flush buffer -> (null, 1)
+            // flush buffer
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
-                singletonList(new KeyValueTimestamp<>("A", "(null,1)", 0L))
+                asList(
+                    new KeyValueTimestamp<>("A", "(null,1)", 0L),
+                    new KeyValueTimestamp<>("B", "(null,1)", 0L)
+                )
             );
 
 
@@ -592,6 +596,14 @@ public class SuppressScenarioTest {
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
                 singletonList(new KeyValueTimestamp<>("A", "(a,1)", 12L))
+            );
+
+
+            driver.pipeInput(recordFactory.create("left", "B", "b", 12L));
+            // should view through to the parent KTable, since B is no longer buffered
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                singletonList(new KeyValueTimestamp<>("B", "(b,1)", 12L))
             );
 
 
@@ -638,6 +650,7 @@ public class SuppressScenarioTest {
             final ConsumerRecordFactory<String, String> recordFactory =
                 new ConsumerRecordFactory<>(STRING_SERIALIZER, STRING_SERIALIZER);
 
+            driver.pipeInput(recordFactory.create("left", "B", "1", 0L));
             driver.pipeInput(recordFactory.create("left", "A", "1", 0L));
             // buffered, no output
             verify(
@@ -647,10 +660,13 @@ public class SuppressScenarioTest {
 
 
             driver.pipeInput(recordFactory.create("left", "tick", "tick", 10L));
-            // flush buffer -> (null, 1)
+            // flush buffer
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
-                singletonList(new KeyValueTimestamp<>("A", "(1,null)", 0L))
+                asList(
+                    new KeyValueTimestamp<>("A", "(1,null)", 0L),
+                    new KeyValueTimestamp<>("B", "(1,null)", 0L)
+                )
             );
 
 
@@ -667,6 +683,14 @@ public class SuppressScenarioTest {
             verify(
                 drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
                 singletonList(new KeyValueTimestamp<>("A", "(1,a)", 12L))
+            );
+
+
+            driver.pipeInput(recordFactory.create("right", "B", "b", 12L));
+            // should view through to the parent KTable, since B is no longer buffered
+            verify(
+                drainProducerRecords(driver, "output", STRING_DESERIALIZER, STRING_DESERIALIZER),
+                singletonList(new KeyValueTimestamp<>("B", "(1,b)", 12L))
             );
 
 
