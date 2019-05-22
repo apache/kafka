@@ -65,7 +65,7 @@ import static org.junit.Assert.fail;
 @RunWith(Parameterized.class)
 public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<String, String>> {
     private static final RecordHeaders V_2_CHANGELOG_HEADERS =
-        new RecordHeaders(new Header[]{new RecordHeader("v", new byte[]{(byte) 2})});
+        new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 2})});
 
     private static final String APP_ID = "test-app";
     private final Function<String, B> bufferSupplier;
@@ -75,7 +75,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     @Parameterized.Parameters(name = "{index}: test={0}")
     public static Collection<Object[]> parameters() {
         return singletonList(
-            new Object[]{
+            new Object[] {
                 "in-memory buffer",
                 (Function<String, InMemoryTimeOrderedKeyValueBuffer<String, String>>) name ->
                     new InMemoryTimeOrderedKeyValueBuffer
@@ -136,10 +136,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
         try {
-            buffer.put(0, "asdf",
-                null,
-                getContext(0)
-            );
+            buffer.put(0, "asdf", null, getContext(0));
             fail("expected an exception");
         } catch (final NullPointerException expected) {
             // expected
@@ -154,8 +151,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         buffer.init(context, buffer);
         putRecord(buffer, context, 0L, 0L, "asdf", "qwer");
         assertThat(buffer.numRecords(), is(1));
-        buffer.evictWhile(() -> true, kv -> {
-        });
+        buffer.evictWhile(() -> true, kv -> { });
         assertThat(buffer.numRecords(), is(0));
         cleanup(context, buffer);
     }
@@ -312,8 +308,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         putRecord(buffer, context, 0L, 2L, "deleteme", "deadbeef");
 
         // replace "deleteme" with a tombstone
-        buffer.evictWhile(() -> buffer.minTimestamp() < 1, kv -> {
-        });
+        buffer.evictWhile(() -> buffer.minTimestamp() < 1, kv -> { });
 
         // flush everything to the changelog
         buffer.flush();
@@ -339,35 +334,35 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
                     }
 
                     return new ProducerRecord<>(pr.topic(),
-                        pr.partition(),
-                        pr.timestamp(),
-                        new String(pr.key(), UTF_8),
-                        niceValue,
-                        pr.headers());
+                                                pr.partition(),
+                                                pr.timestamp(),
+                                                new String(pr.key(), UTF_8),
+                                                niceValue,
+                                                pr.headers());
                 })
                 .collect(Collectors.toList());
 
         assertThat(collected, is(asList(
             new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
-                0,   // Producer will assign
-                null,
-                "deleteme",
-                null,
-                new RecordHeaders()
+                                 0,   // Producer will assign
+                                 null,
+                                 "deleteme",
+                                 null,
+                                 new RecordHeaders()
             ),
             new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
-                0,
-                null,
-                "zxcv",
-                new KeyValue<>(1L, getBufferValue("3gon4i", 1)),
-                V_2_CHANGELOG_HEADERS
+                                 0,
+                                 null,
+                                 "zxcv",
+                                 new KeyValue<>(1L, getBufferValue("3gon4i", 1)),
+                                 V_2_CHANGELOG_HEADERS
             ),
             new ProducerRecord<>(APP_ID + "-" + testName + "-changelog",
-                0,
-                null,
-                "asdf",
-                new KeyValue<>(2L, getBufferValue("2093j", 0)),
-                V_2_CHANGELOG_HEADERS
+                                 0,
+                                 null,
+                                 "asdf",
+                                 new KeyValue<>(2L, getBufferValue("2093j", 0)),
+                                 V_2_CHANGELOG_HEADERS
             )
         )));
 
@@ -387,51 +382,51 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         final Serializer<Change<String>> serializer = FullChangeSerde.castOrWrap(Serdes.String()).serializer();
 
-        final byte[] doomedValue = serializer.serialize(null, new Change<>("doomed", null));
-        final byte[] qwerValue = serializer.serialize(null, new Change<>("qwer", null));
-        final byte[] eo4imValue1 = serializer.serialize(null, new Change<>("eo4im", "previous"));
-        final byte[] eo4imValue2 = serializer.serialize(null, new Change<>("next", "eo4im"));
+        final byte[] todeleteValue = serializer.serialize(null, new Change<>("doomed", null));
+        final byte[] asdfValue = serializer.serialize(null, new Change<>("qwer", null));
+        final byte[] zxcvValue1 = serializer.serialize(null, new Change<>("eo4im", "previous"));
+        final byte[] zxcvValue2 = serializer.serialize(null, new Change<>("next", "eo4im"));
         stateRestoreCallback.restoreBatch(asList(
             new ConsumerRecord<>("changelog-topic",
-                0,
-                0,
-                0,
-                TimestampType.CREATE_TIME,
-                -1,
-                -1,
-                -1,
-                "todelete".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + doomedValue.length).putLong(0L).put(doomedValue).array()),
+                                 0,
+                                 0,
+                                 0,
+                                 TimestampType.CREATE_TIME,
+                                 -1,
+                                 -1,
+                                 -1,
+                                 "todelete".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array()),
             new ConsumerRecord<>("changelog-topic",
-                0,
-                1,
-                1,
-                TimestampType.CREATE_TIME,
-                -1,
-                -1,
-                -1,
-                "asdf".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + qwerValue.length).putLong(2L).put(qwerValue).array()),
+                                 0,
+                                 1,
+                                 1,
+                                 TimestampType.CREATE_TIME,
+                                 -1,
+                                 -1,
+                                 -1,
+                                 "asdf".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + asdfValue.length).putLong(2L).put(asdfValue).array()),
             new ConsumerRecord<>("changelog-topic",
-                0,
-                2,
-                2,
-                TimestampType.CREATE_TIME,
-                -1,
-                -1,
-                -1,
-                "zxcv".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + eo4imValue1.length).putLong(1L).put(eo4imValue1).array()),
+                                 0,
+                                 2,
+                                 2,
+                                 TimestampType.CREATE_TIME,
+                                 -1,
+                                 -1,
+                                 -1,
+                                 "zxcv".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + zxcvValue1.length).putLong(1L).put(zxcvValue1).array()),
             new ConsumerRecord<>("changelog-topic",
-                0,
-                3,
-                3,
-                TimestampType.CREATE_TIME,
-                -1,
-                -1,
-                -1,
-                "zxcv".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + eo4imValue2.length).putLong(1L).put(eo4imValue2).array())
+                                 0,
+                                 3,
+                                 3,
+                                 TimestampType.CREATE_TIME,
+                                 -1,
+                                 -1,
+                                 -1,
+                                 "zxcv".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + zxcvValue2.length).putLong(1L).put(zxcvValue2).array())
         ));
 
         assertThat(buffer.numRecords(), is(3));
@@ -440,15 +435,15 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         stateRestoreCallback.restoreBatch(singletonList(
             new ConsumerRecord<>("changelog-topic",
-                0,
-                3,
-                3,
-                TimestampType.CREATE_TIME,
-                -1,
-                -1,
-                -1,
-                "todelete".getBytes(UTF_8),
-                null)
+                                 0,
+                                 3,
+                                 3,
+                                 TimestampType.CREATE_TIME,
+                                 -1,
+                                 -1,
+                                 -1,
+                                 "todelete".getBytes(UTF_8),
+                                 null)
         ));
 
         assertThat(buffer.numRecords(), is(2));
@@ -497,7 +492,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
 
-        final RecordHeaders v1FlagHeaders = new RecordHeaders(new Header[]{new RecordHeader("v", new byte[]{(byte) 1})});
+        final RecordHeaders v1FlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
 
         final byte[] todeleteValue = getContextualRecord("doomed", 0).serialize();
         final byte[] asdfValue = getContextualRecord("qwer", 1).serialize();
@@ -513,49 +508,49 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         ).serialize();
         stateRestoreCallback.restoreBatch(asList(
             new ConsumerRecord<>("changelog-topic",
-                0,
-                0,
-                999,
-                TimestampType.CREATE_TIME,
-                -1L,
-                -1,
-                -1,
-                "todelete".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
-                v1FlagHeaders),
+                                 0,
+                                 0,
+                                 999,
+                                 TimestampType.CREATE_TIME,
+                                 -1L,
+                                 -1,
+                                 -1,
+                                 "todelete".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
+                                 v1FlagHeaders),
             new ConsumerRecord<>("changelog-topic",
-                0,
-                1,
-                9999,
-                TimestampType.CREATE_TIME,
-                -1L,
-                -1,
-                -1,
-                "asdf".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + asdfValue.length).putLong(2L).put(asdfValue).array(),
-                v1FlagHeaders),
+                                 0,
+                                 1,
+                                 9999,
+                                 TimestampType.CREATE_TIME,
+                                 -1L,
+                                 -1,
+                                 -1,
+                                 "asdf".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + asdfValue.length).putLong(2L).put(asdfValue).array(),
+                                 v1FlagHeaders),
             new ConsumerRecord<>("changelog-topic",
-                0,
-                2,
-                99,
-                TimestampType.CREATE_TIME,
-                -1L,
-                -1,
-                -1,
-                "zxcv".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + zxcvValue1.length).putLong(1L).put(zxcvValue1).array(),
-                v1FlagHeaders),
+                                 0,
+                                 2,
+                                 99,
+                                 TimestampType.CREATE_TIME,
+                                 -1L,
+                                 -1,
+                                 -1,
+                                 "zxcv".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + zxcvValue1.length).putLong(1L).put(zxcvValue1).array(),
+                                 v1FlagHeaders),
             new ConsumerRecord<>("changelog-topic",
-                0,
-                3,
-                100,
-                TimestampType.CREATE_TIME,
-                -1L,
-                -1,
-                -1,
-                "zxcv".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + zxcvValue2.length).putLong(1L).put(zxcvValue2).array(),
-                v1FlagHeaders)
+                                 0,
+                                 3,
+                                 100,
+                                 TimestampType.CREATE_TIME,
+                                 -1L,
+                                 -1,
+                                 -1,
+                                 "zxcv".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + zxcvValue2.length).putLong(1L).put(zxcvValue2).array(),
+                                 v1FlagHeaders)
         ));
 
         assertThat(buffer.numRecords(), is(3));
@@ -564,15 +559,15 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         stateRestoreCallback.restoreBatch(singletonList(
             new ConsumerRecord<>("changelog-topic",
-                0,
-                3,
-                3,
-                TimestampType.CREATE_TIME,
-                -1L,
-                -1,
-                -1,
-                "todelete".getBytes(UTF_8),
-                null)
+                                 0,
+                                 3,
+                                 3,
+                                 TimestampType.CREATE_TIME,
+                                 -1L,
+                                 -1,
+                                 -1,
+                                 "todelete".getBytes(UTF_8),
+                                 null)
         ));
 
         assertThat(buffer.numRecords(), is(2));
@@ -621,7 +616,7 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
 
-        final RecordHeaders v2FlagHeaders = new RecordHeaders(new Header[]{new RecordHeader("v", new byte[]{(byte) 2})});
+        final RecordHeaders v2FlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 2})});
 
         final byte[] todeleteValue = getBufferValue("doomed", 0).serialize();
         final byte[] asdfValue = getBufferValue("qwer", 1).serialize();
@@ -645,49 +640,49 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
             ).serialize();
         stateRestoreCallback.restoreBatch(asList(
             new ConsumerRecord<>("changelog-topic",
-                0,
-                0,
-                999,
-                TimestampType.CREATE_TIME,
-                -1L,
-                -1,
-                -1,
-                "todelete".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
-                v2FlagHeaders),
+                                 0,
+                                 0,
+                                 999,
+                                 TimestampType.CREATE_TIME,
+                                 -1L,
+                                 -1,
+                                 -1,
+                                 "todelete".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
+                                 v2FlagHeaders),
             new ConsumerRecord<>("changelog-topic",
-                0,
-                1,
-                9999,
-                TimestampType.CREATE_TIME,
-                -1L,
-                -1,
-                -1,
-                "asdf".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + asdfValue.length).putLong(2L).put(asdfValue).array(),
-                v2FlagHeaders),
+                                 0,
+                                 1,
+                                 9999,
+                                 TimestampType.CREATE_TIME,
+                                 -1L,
+                                 -1,
+                                 -1,
+                                 "asdf".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + asdfValue.length).putLong(2L).put(asdfValue).array(),
+                                 v2FlagHeaders),
             new ConsumerRecord<>("changelog-topic",
-                0,
-                2,
-                99,
-                TimestampType.CREATE_TIME,
-                -1L,
-                -1,
-                -1,
-                "zxcv".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + zxcvValue1.length).putLong(1L).put(zxcvValue1).array(),
-                v2FlagHeaders),
+                                 0,
+                                 2,
+                                 99,
+                                 TimestampType.CREATE_TIME,
+                                 -1L,
+                                 -1,
+                                 -1,
+                                 "zxcv".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + zxcvValue1.length).putLong(1L).put(zxcvValue1).array(),
+                                 v2FlagHeaders),
             new ConsumerRecord<>("changelog-topic",
-                0,
-                2,
-                100,
-                TimestampType.CREATE_TIME,
-                -1L,
-                -1,
-                -1,
-                "zxcv".getBytes(UTF_8),
-                ByteBuffer.allocate(Long.BYTES + zxcvValue2.length).putLong(1L).put(zxcvValue2).array(),
-                v2FlagHeaders)
+                                 0,
+                                 2,
+                                 100,
+                                 TimestampType.CREATE_TIME,
+                                 -1L,
+                                 -1,
+                                 -1,
+                                 "zxcv".getBytes(UTF_8),
+                                 ByteBuffer.allocate(Long.BYTES + zxcvValue2.length).putLong(1L).put(zxcvValue2).array(),
+                                 v2FlagHeaders)
         ));
 
         assertThat(buffer.numRecords(), is(3));
@@ -696,15 +691,15 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         stateRestoreCallback.restoreBatch(singletonList(
             new ConsumerRecord<>("changelog-topic",
-                0,
-                3,
-                3,
-                TimestampType.CREATE_TIME,
-                -1L,
-                -1,
-                -1,
-                "todelete".getBytes(UTF_8),
-                null)
+                                 0,
+                                 3,
+                                 3,
+                                 TimestampType.CREATE_TIME,
+                                 -1L,
+                                 -1,
+                                 -1,
+                                 "todelete".getBytes(UTF_8),
+                                 null)
         ));
 
         assertThat(buffer.numRecords(), is(2));
@@ -753,22 +748,22 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         context.setRecordContext(new ProcessorRecordContext(0, 0, 0, "", null));
 
-        final RecordHeaders unknownFlagHeaders = new RecordHeaders(new Header[]{new RecordHeader("v", new byte[]{(byte) -1})});
+        final RecordHeaders unknownFlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) -1})});
 
         final byte[] todeleteValue = getBufferValue("doomed", 0).serialize();
         try {
             stateRestoreCallback.restoreBatch(singletonList(
                 new ConsumerRecord<>("changelog-topic",
-                    0,
-                    0,
-                    999,
-                    TimestampType.CREATE_TIME,
-                    -1L,
-                    -1,
-                    -1,
-                    "todelete".getBytes(UTF_8),
-                    ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
-                    unknownFlagHeaders)
+                                     0,
+                                     0,
+                                     999,
+                                     TimestampType.CREATE_TIME,
+                                     -1L,
+                                     -1,
+                                     -1,
+                                     "todelete".getBytes(UTF_8),
+                                     ByteBuffer.allocate(Long.BYTES + todeleteValue.length).putLong(0L).put(todeleteValue).array(),
+                                     unknownFlagHeaders)
             ));
             fail("expected an exception");
         } catch (final IllegalArgumentException expected) {
