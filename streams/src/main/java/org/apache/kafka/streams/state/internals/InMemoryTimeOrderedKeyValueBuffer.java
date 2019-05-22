@@ -341,14 +341,14 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         updateBufferMetrics();
     }
 
-    private byte[] inferPriorValue(final Bytes key, final byte[] serializedValue) {
+    private byte[] inferPriorValue(final Bytes key, final byte[] serializedChange) {
         final byte[] priorValue;
         if (index.containsKey(key)) {
             priorValue = internalPriorValueForBuffered(key);
         } else {
             final Change<V> change = valueSerde.deserializer().deserialize(
                 changelogTopic,
-                serializedValue
+                serializedChange
             );
             priorValue = valueSerde.innerSerde().serializer().serialize(
                 changelogTopic,
