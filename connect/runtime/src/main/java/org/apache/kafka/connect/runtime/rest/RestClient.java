@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import javax.ws.rs.core.HttpHeaders;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -55,7 +56,7 @@ public class RestClient {
      * @param <T>             The type of the deserialized response to the HTTP request.
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
-    public static <T> HttpResponse<T> httpRequest(String url, String method, Object requestBodyData,
+    public static <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
                                                   TypeReference<T> responseFormat, WorkerConfig config) {
         HttpClient client;
 
@@ -82,6 +83,7 @@ public class RestClient {
             req.method(method);
             req.accept("application/json");
             req.agent("kafka-connect");
+            getHeaders(headers, req);
             if (serializedBody != null) {
                 req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
             }
@@ -115,6 +117,20 @@ public class RestClient {
                 }
         }
     }
+
+
+    /**
+     * Extract headers from REST call and add to client request
+     * @param headers
+     * @param req
+     */
+    private static void getHeaders(HttpHeaders headers, Request req) {
+        String credentialAuthorization = (headers != null) ? headers.getHeaderString("Authorization") : null;
+        if (credentialAuthorization != null) {
+            req.header("Authorization", credentialAuthorization);
+        }
+    }
+
 
     /**
      * Convert response parameters from Jetty format (HttpFields)
