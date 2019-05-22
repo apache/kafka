@@ -402,7 +402,9 @@ class GroupCoordinator(val brokerId: Int,
             responseCallback(memberMetadata.assignment, Errors.NONE)
             completeAndScheduleNextHeartbeatExpiration(group, group.get(memberId))
 
-          case _ =>
+          case Dead =>
+            // this case is already handled, so raise exception
+            throw new IllegalStateException("can't reach this line")
         }
       }
     }
@@ -536,7 +538,9 @@ class GroupCoordinator(val brokerId: Int,
                 completeAndScheduleNextHeartbeatExpiration(group, member)
                 responseCallback(Errors.NONE)
 
-            case _ =>
+            case Dead =>
+              // this case is already handled, so raise exception
+              throw new IllegalStateException("can't reach this line")
           }
         }
       }
