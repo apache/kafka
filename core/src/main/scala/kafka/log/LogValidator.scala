@@ -266,7 +266,6 @@ private[kafka] object LogValidator extends Logging {
         if (sourceCodec == NoCompressionCodec && batch.isControlBatch)
           inPlaceAssignment = true
 
-        batch.setSimplified(true)
         for (record <- batch.asScala) {
           if (sourceCodec != NoCompressionCodec && record.isCompressed)
             throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
@@ -291,7 +290,6 @@ private[kafka] object LogValidator extends Logging {
 
           validatedRecords += record
         }
-        batch.setSimplified(false)
       }
 
       if (!inPlaceAssignment) {

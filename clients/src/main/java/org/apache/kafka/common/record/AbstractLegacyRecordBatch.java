@@ -503,6 +503,16 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
             ByteUtils.writeUnsignedInt(buffer, LOG_OVERHEAD + LegacyRecord.CRC_OFFSET, crc);
         }
 
+        /**
+         * LegacyRecordBatch does not implement this iterator and would hence fallback into the normal iterator.
+         *
+         * @return An iterator over the records contained within this batch
+         */
+        @Override
+        public Iterator<Record> skipKeyValueIterator() {
+            return iterator();
+        }
+
         @Override
         public void writeTo(ByteBufferOutputStream outputStream) {
             outputStream.write(buffer.duplicate());

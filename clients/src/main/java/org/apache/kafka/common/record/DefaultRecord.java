@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInput;
+import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
@@ -32,6 +33,7 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.zip.Checksum;
 
+import static org.apache.kafka.common.record.BufferSupplier.NO_CACHING;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 
 /**
@@ -78,14 +80,14 @@ public class DefaultRecord implements Record {
     private final ByteBuffer value;
     private final Header[] headers;
 
-    private DefaultRecord(int sizeInBytes,
-                          byte attributes,
-                          long offset,
-                          long timestamp,
-                          int sequence,
-                          ByteBuffer key,
-                          ByteBuffer value,
-                          Header[] headers) {
+    protected DefaultRecord(int sizeInBytes,
+                            byte attributes,
+                            long offset,
+                            long timestamp,
+                            int sequence,
+                            ByteBuffer key,
+                            ByteBuffer value,
+                            Header[] headers) {
         this.sizeInBytes = sizeInBytes;
         this.attributes = attributes;
         this.offset = offset;
@@ -370,35 +372,41 @@ public class DefaultRecord implements Record {
         }
     }
 
-    /**
-     * Reading data from DataInput whithout create a new ByteBuffer.
-     *
-     * @param input
-     * @param baseOffset
-     * @param baseTimestamp
-     * @param baseSequence
-     * @param logAppendTime
-     * @return
-     * @throws IOException
-     */
-    public static SimplifiedDefaultRecord simplifiedreadFrom(DataInput input,
-                                                             long baseOffset,
-                                                             long baseTimestamp,
-                                                             int baseSequence,
-                                                             Long logAppendTime) throws IOException {
+    public static DefaultRecord readFromSkipKeyValue(ByteBuffer buffer,
+                                                     long baseOffset,
+                                                     long baseTimestamp,
+                                                     int baseSequence,
+                                                     Long logAppendTime) {
+        int sizeOfBodyInBytes = ByteUtils.readVarint(buffer);
+        if (buffer.remaining() < sizeOfBodyInBytes)
+            return null;
+
+        int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
+        final DataInputStream inputStream = new DataInputStream(CompressionType.NONE.wrapForInput(buffer,
+            (byte) 0 /* for uncompressed bytes magic byte does not matter */,
+            NO_CACHING));
+        return readFromSkipKeyValue(inputStream, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
+            baseSequence, logAppendTime);
+    }
+
+    public static SkipKeyValueDefaultRecord readFromSkipKeyValue(DataInput input,
+                                                                 long baseOffset,
+                                                                 long baseTimestamp,
+                                                                 int baseSequence,
+                                                                 Long logAppendTime) throws IOException {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
-        return simplifiedreadFrom(input, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
+        return readFromSkipKeyValue(input, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
                 baseSequence, logAppendTime);
     }
 
-    private static SimplifiedDefaultRecord simplifiedreadFrom(DataInput input,
-                                                              int sizeInBytes,
-                                                              int sizeOfBodyInBytes,
-                                                              long baseOffset,
-                                                              long baseTimestamp,
-                                                              int baseSequence,
-                                                              Long logAppendTime) throws IOException {
+    private static SkipKeyValueDefaultRecord readFromSkipKeyValue(DataInput input,
+                                                                  int sizeInBytes,
+                                                                  int sizeOfBodyInBytes,
+                                                                  long baseOffset,
+                                                                  long baseTimestamp,
+                                                                  int baseSequence,
+                                                                  Long logAppendTime) {
         try {
             byte attributes = input.readByte();
             int skipBytes = 1;
@@ -429,8 +437,8 @@ public class DefaultRecord implements Record {
                     throw new InvalidRecordException("Found invalid record structure , skipBytes expected is " + skipBytes + ", actually is " + currentSkipBytes);
             }
 
-            return new SimplifiedDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, hasKey);
-        } catch (BufferUnderflowException | IllegalArgumentException e) {
+            return new SkipKeyValueDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, keySize, hasKey);
+        } catch (BufferUnderflowException | IllegalArgumentException | IOException e) {
             throw new InvalidRecordException("Found invalid record structure", e);
         }
     }
