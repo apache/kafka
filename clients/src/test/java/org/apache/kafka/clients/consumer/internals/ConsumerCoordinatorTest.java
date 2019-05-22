@@ -2193,7 +2193,8 @@ public class ConsumerCoordinatorTest {
                 retryBackoffMs,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-                null
+                null,
+                !groupInstanceId.isPresent()
         );
     }
 
