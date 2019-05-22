@@ -21,11 +21,11 @@ import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicInteger
 
 import com.yammer.metrics.Metrics
-import com.yammer.metrics.core.{Histogram, Timer}
+import com.yammer.metrics.core.{Histogram, MetricName, Timer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.MockTime
+import org.junit.Assert.{assertEquals, assertTrue, fail}
 import org.junit.{After, Test}
-import org.junit.Assert.{assertEquals, fail}
 
 import scala.collection.JavaConverters._
 
@@ -40,7 +40,32 @@ class ControllerEventManagerTest {
   }
 
   @Test
+  def testMetricsCleanedOnClose(): Unit = {
+    val time = new MockTime()
+    val controllerStats = new ControllerStats
+    val eventProcessor = new ControllerEventProcessor {
+      override def process(event: ControllerEvent): Unit = {}
+      override def preempt(event: ControllerEvent): Unit = {}
+    }
+
+    def allEventManagerMetrics: Set[MetricName] = {
+      Metrics.defaultRegistry.allMetrics.asScala.keySet
+        .filter(_.getMBeanName.startsWith("kafka.controller:type=ControllerEventManager"))
+        .toSet
+    }
+
+    controllerEventManager = new ControllerEventManager(0, eventProcessor,
+      time, controllerStats.rateAndTimeMetrics)
+    controllerEventManager.start()
+    assertTrue(allEventManagerMetrics.nonEmpty)
+
+    controllerEventManager.close()
+    assertTrue(allEventManagerMetrics.isEmpty)
+  }
+
+  @Test
   def testEventQueueTime(): Unit = {
+    val metricName = "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs"
     val controllerStats = new ControllerStats
     val time = new MockTime()
     val latch = new CountDownLatch(1)
@@ -53,6 +78,9 @@ class ControllerEventManagerTest {
       override def preempt(event: ControllerEvent): Unit = {}
     }
 
+    // The metric should not already exist
+    assertTrue(Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.isEmpty)
+
     controllerEventManager = new ControllerEventManager(0, eventProcessor,
       time, controllerStats.rateAndTimeMetrics)
     controllerEventManager.start()
@@ -61,7 +89,6 @@ class ControllerEventManagerTest {
     controllerEventManager.put(TopicChange)
     latch.countDown()
 
-    val metricName = "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs"
     val queueTimeHistogram = Metrics.defaultRegistry.allMetrics.asScala.filterKeys(_.getMBeanName == metricName).values.headOption
       .getOrElse(fail(s"Unable to find metric $metricName")).asInstanceOf[Histogram]
 
