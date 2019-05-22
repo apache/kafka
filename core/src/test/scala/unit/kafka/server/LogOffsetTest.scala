@@ -79,6 +79,7 @@ class LogOffsetTest extends BaseRequestTest {
     log.flush()
 
     log.onHighWatermarkIncremented(log.logEndOffset)
+    log.highWatermark = log.logEndOffset
     log.maybeIncrementLogStartOffset(3)
     log.deleteOldSegments()
 

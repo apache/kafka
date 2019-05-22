@@ -20,7 +20,7 @@ import java.io.File
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.cluster.{Partition, Replica}
+import kafka.cluster.{LocalReplica, Partition, RemoteReplica, Replica}
 import kafka.log.{Log, LogManager}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -82,7 +82,7 @@ class IsrExpirationTest {
     // let the follower catch up to the Leader logEndOffset - 1
     for (replica <- partition0.assignedReplicas - leaderReplica)
       replica.updateFetchState(
-        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset - 1),
+        followerFetchOffsetMetadata = LogOffsetMetadata(leaderLogEndOffset - 1),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = leaderLogEndOffset)
@@ -134,7 +134,7 @@ class IsrExpirationTest {
     // Make the remote replica not read to the end of log. It should be not be out of sync for at least 100 ms
     for (replica <- partition0.assignedReplicas - leaderReplica)
       replica.updateFetchState(
-        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset - 2),
+        followerFetchOffsetMetadata = LogOffsetMetadata(leaderLogEndOffset - 2),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = leaderLogEndOffset)
@@ -148,7 +148,7 @@ class IsrExpirationTest {
 
     (partition0.assignedReplicas - leaderReplica).foreach { r =>
       r.updateFetchState(
-        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset - 1),
+        followerFetchOffsetMetadata = LogOffsetMetadata(leaderLogEndOffset - 1),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = leaderLogEndOffset)
@@ -165,7 +165,7 @@ class IsrExpirationTest {
     // Now actually make a fetch to the end of the log. The replicas should be back in ISR
     (partition0.assignedReplicas - leaderReplica).foreach { r =>
       r.updateFetchState(
-        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset),
+        followerFetchOffsetMetadata = LogOffsetMetadata(leaderLogEndOffset),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = leaderLogEndOffset)
@@ -191,7 +191,7 @@ class IsrExpirationTest {
     // let the follower catch up to the Leader logEndOffset
     for (replica <- partition0.assignedReplicas - leaderReplica)
       replica.updateFetchState(
-        followerFetchOffsetMetadata = new LogOffsetMetadata(leaderLogEndOffset),
+        followerFetchOffsetMetadata = LogOffsetMetadata(leaderLogEndOffset),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = leaderLogEndOffset)
@@ -213,7 +213,7 @@ class IsrExpirationTest {
     val leaderId = config.brokerId
     val tp = new TopicPartition(topic, partitionId)
     val partition = replicaManager.createPartition(tp)
-    val leaderReplica = new Replica(leaderId, tp, time, 0, Some(localLog))
+    val leaderReplica = new LocalReplica(leaderId, tp, localLog)
 
     val allReplicas = getFollowerReplicas(partition, leaderId, time) :+ leaderReplica
     allReplicas.foreach(r => partition.addReplicaIfNotExists(r))
@@ -222,7 +222,7 @@ class IsrExpirationTest {
     // set lastCaughtUpTime to current time
     for (replica <- partition.assignedReplicas - leaderReplica)
       replica.updateFetchState(
-        followerFetchOffsetMetadata = new LogOffsetMetadata(0L),
+        followerFetchOffsetMetadata = LogOffsetMetadata(0L),
         followerStartOffset = 0L,
         followerFetchTimeMs= time.milliseconds,
         leaderEndOffset = 0L)
@@ -235,7 +235,6 @@ class IsrExpirationTest {
   private def logMock: Log = {
     val log: Log = EasyMock.createMock(classOf[Log])
     EasyMock.expect(log.dir).andReturn(TestUtils.tempDir()).anyTimes()
-    EasyMock.expect(log.onHighWatermarkIncremented(0L))
     EasyMock.expect(log.logEndOffsetMetadata).andReturn(LogOffsetMetadata(leaderLogEndOffset)).anyTimes()
     EasyMock.replay(log)
     log
@@ -243,7 +242,7 @@ class IsrExpirationTest {
 
   private def getFollowerReplicas(partition: Partition, leaderId: Int, time: Time): Seq[Replica] = {
     configs.filter(_.brokerId != leaderId).map { config =>
-      new Replica(config.brokerId, partition.topicPartition, time)
+      new RemoteReplica(config.brokerId, partition.topicPartition)
     }
   }
 }

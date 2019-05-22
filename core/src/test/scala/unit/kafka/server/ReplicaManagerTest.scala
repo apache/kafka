@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import TestUtils.createBroker
-import kafka.cluster.BrokerEndPoint
+import kafka.cluster.{BrokerEndPoint, RemoteReplica}
 import kafka.server.checkpoints.LazyOffsetCheckpoints
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
 import kafka.utils.timer.MockTimer
@@ -168,7 +168,7 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       rm.getPartitionOrException(new TopicPartition(topic, 0), expectLeader = true)
-          .localReplicaOrException
+          .localLogOrException
 
       val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("first message".getBytes()))
       val appendResult = appendRecords(rm, new TopicPartition(topic, 0), records).onFire { response =>
@@ -213,7 +213,7 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0), expectLeader = true)
-        .localReplicaOrException
+        .localLogOrException
 
       val producerId = 234L
       val epoch = 5.toShort
@@ -264,7 +264,7 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0), expectLeader = true)
-        .localReplicaOrException
+        .localLogOrException
 
       val producerId = 234L
       val epoch = 5.toShort
@@ -360,7 +360,7 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0), expectLeader = true)
-        .localReplicaOrException
+        .localLogOrException
 
       val producerId = 234L
       val epoch = 5.toShort
@@ -426,7 +426,7 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1), new Node(2, "host2", 2)).asJava).build()
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       rm.getPartitionOrException(new TopicPartition(topic, 0), expectLeader = true)
-        .localReplicaOrException
+        .localLogOrException
 
       // Append a couple of messages.
       for(i <- 1 to 2) {
@@ -479,7 +479,7 @@ class ReplicaManagerTest {
 
       assertTrue(partition.getReplica(1).isDefined)
       val followerReplica = partition.getReplica(1).get
-      assertEquals(None, followerReplica.log)
+      assertTrue(followerReplica.isInstanceOf[RemoteReplica])
       assertEquals(-1L, followerReplica.logStartOffset)
       assertEquals(-1L, followerReplica.logEndOffset)
 
@@ -609,12 +609,12 @@ class ReplicaManagerTest {
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED
       )
-      val tp0Replica = replicaManager.localReplica(tp0)
-      assertTrue(tp0Replica.isDefined)
-      assertEquals("hw should be incremented", 1, tp0Replica.get.highWatermark)
+      val tp0Log = replicaManager.localLog(tp0)
+      assertTrue(tp0Log.isDefined)
+      assertEquals("hw should be incremented", 1, tp0Log.get.highWatermark)
 
-      replicaManager.localReplica(tp1)
-      val tp1Replica = replicaManager.localReplica(tp1)
+      replicaManager.localLog(tp1)
+      val tp1Replica = replicaManager.localLog(tp1)
       assertTrue(tp1Replica.isDefined)
       assertEquals("hw should not be incremented", 0, tp1Replica.get.highWatermark)
 
@@ -713,6 +713,8 @@ class ReplicaManagerTest {
       override def latestEpoch: Option[Int] = Some(leaderEpochFromLeader)
 
       override def logEndOffsetMetadata = LogOffsetMetadata(localLogOffset)
+
+      override def logEndOffset: Long = localLogOffset
     }
 
     // Expect to call LogManager.truncateTo exactly once

@@ -20,7 +20,7 @@ package kafka.log
 import java.io._
 import java.util.{Collections, Properties}
 
-import kafka.server.FetchDataInfo
+import kafka.server.{FetchDataInfo}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
@@ -120,6 +120,7 @@ class LogManagerTest {
     }
     assertTrue("There should be more than one segment now.", log.numberOfSegments > 1)
     log.onHighWatermarkIncremented(log.logEndOffset)
+    log.highWatermark = log.logEndOffset
 
     log.logSegments.foreach(_.log.file.setLastModified(time.milliseconds))
 
@@ -174,6 +175,7 @@ class LogManagerTest {
     }
 
     log.onHighWatermarkIncremented(log.logEndOffset)
+    log.highWatermark = log.logEndOffset
     assertEquals("Check we have the expected number of segments.", numMessages * setSize / config.segmentSize, log.numberOfSegments)
 
     // this cleanup shouldn't find any expired segments but should delete some to reduce size

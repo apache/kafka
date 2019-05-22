@@ -21,7 +21,7 @@ import kafka.log.Log
 import org.apache.kafka.common.KafkaException
 
 object LogOffsetMetadata {
-  val UnknownOffsetMetadata = new LogOffsetMetadata(-1, 0, 0)
+  val UnknownOffsetMetadata = LogOffsetMetadata(-1, 0, 0)
   val UnknownFilePosition = -1
 
   class OffsetOrdering extends Ordering[LogOffsetMetadata] {
@@ -39,8 +39,8 @@ object LogOffsetMetadata {
  *  3. the physical position on the located segment
  */
 case class LogOffsetMetadata(messageOffset: Long,
-                             segmentBaseOffset: Long = Log.UnknownOffset,
-                             relativePositionInSegment: Int = LogOffsetMetadata.UnknownFilePosition) {
+                             val segmentBaseOffset: Long = Log.UnknownOffset,
+                             val relativePositionInSegment: Int = LogOffsetMetadata.UnknownFilePosition) {
 
   // check if this offset is already on an older segment compared with the given offset
   def onOlderSegment(that: LogOffsetMetadata): Boolean = {

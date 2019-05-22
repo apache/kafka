@@ -126,6 +126,7 @@ class LogCleanerTest {
     val t = new Thread() {
       override def run(): Unit = {
         deleteStartLatch.await(5000, TimeUnit.MILLISECONDS)
+        log.highWatermark = log.activeSegment.baseOffset
         log.maybeIncrementLogStartOffset(log.activeSegment.baseOffset)
         log.onHighWatermarkIncremented(log.activeSegment.baseOffset)
         log.deleteOldSegments()
