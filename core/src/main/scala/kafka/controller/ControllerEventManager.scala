@@ -93,9 +93,14 @@ class ControllerEventManager(controllerId: Int,
   def start(): Unit = thread.start()
 
   def close(): Unit = {
-    thread.initiateShutdown()
-    clearAndPut(ShutdownEventThread)
-    thread.awaitShutdown()
+    try {
+      thread.initiateShutdown()
+      clearAndPut(ShutdownEventThread)
+      thread.awaitShutdown()
+    } finally {
+      removeMetric("EventQueueSize")
+      removeMetric("EventQueueTimeMs")
+    }
   }
 
   def put(event: ControllerEvent): QueuedEvent = inLock(putLock) {
