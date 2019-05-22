@@ -17,6 +17,7 @@
 
 package org.apache.kafka.common;
 
+import java.util.Arrays;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
@@ -32,5 +33,16 @@ public enum ElectionType {
 
     ElectionType(byte value) {
         this.value = value;
+    }
+
+    public static ElectionType valueOf(byte value) {
+        if (value == PREFERRED.value) {
+            return PREFERRED;
+        } else if (value == UNCLEAN.value) {
+            return UNCLEAN;
+        } else {
+            throw new IllegalArgumentException(
+                    String.format("Value %s must be one of %s", value, Arrays.asList(ElectionType.values())));
+        }
     }
 }

@@ -40,18 +40,7 @@ package object api {
       if (self.version == 0) {
         ElectionType.PREFERRED
       } else {
-        byteToElectionType(self.data.electionType)
-      }
-    }
-
-    private[this] def byteToElectionType(value: Byte): ElectionType = {
-      value match {
-        case ElectionType.PREFERRED.value => ElectionType.PREFERRED
-        case ElectionType.UNCLEAN.value => ElectionType.UNCLEAN
-        case _ =>
-          throw new IllegalArgumentException(
-            s"Value $value must be one of ${ElectionType.values().toList}"
-          )
+        ElectionType.valueOf(self.data.electionType)
       }
     }
   }

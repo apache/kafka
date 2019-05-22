@@ -639,7 +639,7 @@ class KafkaController(val config: KafkaConfig,
 
   /**
     * Attempt to elect a replica as leader for each of the given partitions.
-    * @param partitions The partitions to have their preferred leader elected
+    * @param partitions The partitions to have a new leader elected
     * @param electionType The type of election to perform
     * @param electionTrigger The reason for tigger this election
     * @return A map of failed and successful elections. The keys are the topic partitions and the corresponding values are
@@ -1525,14 +1525,14 @@ class KafkaController(val config: KafkaConfig,
 
         val (validPartitions, invalidPartitions) = partitions.partition(tp => controllerContext.allPartitions.contains(tp))
         invalidPartitions.foreach { p =>
-          info(s"Skipping preferred replica leader election for partition ${p} since it doesn't exist.")
+          info(s"Skipping replica leader election ($electionType) for partition ${p} by $electionTrigger since it doesn't exist.")
         }
 
         val (partitionsBeingDeleted, livePartitions) = validPartitions.partition(partition =>
             topicDeletionManager.isTopicQueuedUpForDeletion(partition.topic))
         if (partitionsBeingDeleted.nonEmpty) {
-          warn(s"Skipping preferred replica election for partitions $partitionsBeingDeleted " +
-            s"since the respective topics are being deleted")
+          warn(s"Skipping replica leader election ($electionType) for partitions $partitionsBeingDeleted " +
+            s"by $electionTrigger since the respective topics are being deleted")
         }
         // partition those where preferred is already leader
         val (electablePartitions, alreadyPreferred) = livePartitions.partition { partition =>
@@ -1597,15 +1597,16 @@ class KafkaController(val config: KafkaConfig,
         case event: MockEvent =>
           event.process()
         case ShutdownEventThread =>
-          /* This event is suppose to be handled by the ControllerEventThread. In the future we change the ControllerEventThread to handle:
+          /* See: KAFKA-8409
+           * This event is suppose to be handled by the ControllerEventThread. In the future we change the ControllerEventThread to handle:
            *
            * sealed trait ControllerThreadEvent
            * final case object ShutdownEventThread extends ControllerThreadEvent
            * final case class ControllerEvent(event: ControllerEvent) extends ControllerThreadEvent
            *
-           * and remove ShutdownEventThread from the ControlleveEvent enum.
+           * and remove ShutdownEventThread from the ControllerEvent enum.
            */
-          error("Received a ShutdownEventThread event. This type of event is suppose to be handle by ControllerEventThread")
+          error("Received a ShutdownEventThread event. This type of event is supposed to be handle by ControllerEventThread")
         case AutoPreferredReplicaLeaderElection =>
           processAutoPreferredReplicaLeaderElection()
         case ReplicaLeaderElection(partitions, electionType, electionTrigger, callback) =>
