@@ -17,7 +17,7 @@
 package org.apache.kafka.common.record;
 
 abstract class AbstractRecordBatch implements RecordBatch {
-
+    public boolean isSimplified = false;
     @Override
     public boolean hasProducerId() {
         return RecordBatch.NO_PRODUCER_ID < producerId();
@@ -33,4 +33,13 @@ abstract class AbstractRecordBatch implements RecordBatch {
         return compressionType() != CompressionType.NONE;
     }
 
+    @Override
+    public void setSimplified(boolean isSimplified) {
+        this.isSimplified = isSimplified;
+    }
+
+    @Override
+    public  boolean isSimplified() {
+        return isSimplified;
+    }
 }
