@@ -103,12 +103,6 @@ public class SubscriptionState {
 
     @Override
     public String toString() {
-        return "{type=" + subscriptionType +
-            ", subscription=" + (subscribedPattern != null ? subscribedPattern.toString() : String.join(",", subscription)) +
-            "}";
-    }
-
-    public String prettyString() {
         return "SubscriptionState{" +
             "type=" + subscriptionType +
             ", subscribedPattern=" + subscribedPattern +
@@ -116,6 +110,12 @@ public class SubscriptionState {
             ", groupSubscription=" + String.join(",", groupSubscription) +
             ", defaultResetStrategy=" + defaultResetStrategy +
             ", assignment=" + assignment.partitionStateValues() + " (id=" + assignmentId + ")}";
+    }
+
+    public String prettyString() {
+        return "{type=" + subscriptionType +
+            ", subscription=" + (subscribedPattern != null ? subscribedPattern.toString() : String.join(",", subscription)) +
+            "}";
     }
 
     public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {

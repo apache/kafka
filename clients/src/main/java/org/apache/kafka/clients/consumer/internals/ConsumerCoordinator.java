@@ -39,7 +39,6 @@ import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.metrics.Measurable;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -248,7 +247,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         if (!subscriptions.assignFromSubscribed(assignment.partitions())) {
             log.warn("We received an assignment {} that doesn't match our current subscription {}; it is likely " +
                 "that the subscription has changed since we joined the group. Will try re-join the group with current subscription",
-                assignment.partitions(), subscriptions);
+                assignment.partitions(), subscriptions.prettyString());
 
             requestRejoin();
 
@@ -717,20 +716,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
         log.debug("Sending asynchronous auto-commit of offsets {}", allConsumedOffsets);
 
-        commitOffsetsAsync(allConsumedOffsets, new OffsetCommitCallback() {
-            @Override
-            public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
-                if (exception != null) {
-                    if (exception instanceof RetriableException) {
-                        log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
-                                exception);
-                        nextAutoCommitTimer.updateAndReset(retryBackoffMs);
-                    } else {
-                        log.warn("Asynchronous auto-commit of offsets {} failed: {}", offsets, exception.getMessage());
-                    }
+        commitOffsetsAsync(allConsumedOffsets, (offsets, exception) -> {
+            if (exception != null) {
+                if (exception instanceof RetriableException) {
+                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
+                        exception);
+                    nextAutoCommitTimer.updateAndReset(retryBackoffMs);
                 } else {
-                    log.debug("Completed asynchronous auto-commit of offsets {}", offsets);
+                    log.warn("Asynchronous auto-commit of offsets {} failed: {}", offsets, exception.getMessage());
                 }
+            } else {
+                log.debug("Completed asynchronous auto-commit of offsets {}", offsets);
             }
         });
     }
@@ -994,13 +990,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 "The max time taken for a commit request"), new Max());
             this.commitLatency.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
 
-            Measurable numParts =
-                new Measurable() {
-                    public double measure(MetricConfig config, long now) {
-                        // Get the number of assigned partitions in a thread safe manner
-                        return subscriptions.numAssignedPartitions();
-                    }
-                };
+            Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
             metrics.addMetric(metrics.metricName("assigned-partitions",
                 this.metricGrpName,
                 "The number of partitions currently assigned to this consumer"), numParts);
