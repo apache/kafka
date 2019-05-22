@@ -372,23 +372,6 @@ public class DefaultRecord implements Record {
         }
     }
 
-    public static DefaultRecord readFromSkipKeyValue(ByteBuffer buffer,
-                                                     long baseOffset,
-                                                     long baseTimestamp,
-                                                     int baseSequence,
-                                                     Long logAppendTime) {
-        int sizeOfBodyInBytes = ByteUtils.readVarint(buffer);
-        if (buffer.remaining() < sizeOfBodyInBytes)
-            return null;
-
-        int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
-        final DataInputStream inputStream = new DataInputStream(CompressionType.NONE.wrapForInput(buffer,
-            (byte) 0 /* for uncompressed bytes magic byte does not matter */,
-            NO_CACHING));
-        return readFromSkipKeyValue(inputStream, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
-            baseSequence, logAppendTime);
-    }
-
     public static SkipKeyValueDefaultRecord readFromSkipKeyValue(DataInput input,
                                                                  long baseOffset,
                                                                  long baseTimestamp,
@@ -406,7 +389,7 @@ public class DefaultRecord implements Record {
                                                                   long baseOffset,
                                                                   long baseTimestamp,
                                                                   int baseSequence,
-                                                                  Long logAppendTime) {
+                                                                  Long logAppendTime) throws IOException {
         try {
             byte attributes = input.readByte();
             int skipBytes = 1;
@@ -438,7 +421,7 @@ public class DefaultRecord implements Record {
             }
 
             return new SkipKeyValueDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, keySize, hasKey);
-        } catch (BufferUnderflowException | IllegalArgumentException | IOException e) {
+        } catch (BufferUnderflowException | IllegalArgumentException e) {
             throw new InvalidRecordException("Found invalid record structure", e);
         }
     }

@@ -293,18 +293,19 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         };
     }
 
-    private CloseableIterator<Record> uncompressedIterator(boolean skipKeyValue) {
+    /**
+     * For uncompressed iterator, it is actually not worth skipping key / value / headers at all since
+     * its ByteBufferInputStream's skip() function is less efficient compared with just reading it actually
+     * as it will allocate new byte array.
+     */
+    private CloseableIterator<Record> uncompressedIterator() {
         final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
         return new RecordIterator() {
             @Override
             protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
                 try {
-                    if (skipKeyValue) {
-                        return DefaultRecord.readFromSkipKeyValue(buffer, baseOffset, firstTimestamp, baseSequence, logAppendTime);
-                    } else {
-                        return DefaultRecord.readFrom(buffer, baseOffset, firstTimestamp, baseSequence, logAppendTime);
-                    }
+                    return DefaultRecord.readFrom(buffer, baseOffset, firstTimestamp, baseSequence, logAppendTime);
                 } catch (BufferUnderflowException e) {
                     throw new InvalidRecordException("Incorrect declared batch size, premature EOF reached");
                 }
@@ -324,7 +325,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             return Collections.emptyIterator();
 
         if (!isCompressed())
-            return uncompressedIterator(false);
+            return uncompressedIterator();
 
         // for a normal iterator, we cannot ensure that the underlying compression stream is closed,
         // so we decompress the full record set here. Use cases which call for a lower memory footprint
@@ -343,7 +344,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             return Collections.emptyIterator();
 
         if (!isCompressed())
-            return uncompressedIterator(true);
+            return uncompressedIterator();
 
         try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING, true)) {
             List<Record> records = new ArrayList<>(count());
@@ -358,7 +359,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         if (isCompressed())
             return compressedIterator(bufferSupplier, false);
         else
-            return uncompressedIterator(false);
+            return uncompressedIterator();
     }
 
     @Override
