@@ -403,7 +403,16 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
         List<ConfigInfo> configInfoList = new LinkedList<>();
         Map<String, ConfigKey> configKeys = configDef.configKeys();
         Set<String> groups = new LinkedHashSet<>();
-        Map<String, Object> clientConfigs = connectorConfig.originalsWithPrefix(prefix);
+        Map<String, Object> clientConfigs = new HashMap<>();
+        for (Map.Entry<String, Object> rawClientConfig : connectorConfig.originalsWithPrefix(prefix).entrySet()) {
+            String configName = rawClientConfig.getKey();
+            Object rawConfigValue = rawClientConfig.getValue();
+            ConfigKey configKey = configDef.configKeys().get(configName);
+            Object parsedConfigValue = configKey != null
+                ? ConfigDef.parseType(configName, rawConfigValue, configKey.type)
+                : rawConfigValue;
+            clientConfigs.put(configName, parsedConfigValue);
+        }
         ConnectorClientConfigRequest connectorClientConfigRequest = new ConnectorClientConfigRequest(
             connName, connectorType, connectorClass, clientConfigs, clientType);
         List<ConfigValue> configValues = connectorClientConfigOverridePolicy.validate(connectorClientConfigRequest);

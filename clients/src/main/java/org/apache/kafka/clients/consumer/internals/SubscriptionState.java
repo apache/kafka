@@ -101,6 +101,32 @@ public class SubscriptionState {
 
     private int assignmentId = 0;
 
+    @Override
+    public String toString() {
+        return "SubscriptionState{" +
+            "type=" + subscriptionType +
+            ", subscribedPattern=" + subscribedPattern +
+            ", subscription=" + String.join(",", subscription) +
+            ", groupSubscription=" + String.join(",", groupSubscription) +
+            ", defaultResetStrategy=" + defaultResetStrategy +
+            ", assignment=" + assignment.partitionStateValues() + " (id=" + assignmentId + ")}";
+    }
+
+    public String prettyString() {
+        switch (subscriptionType) {
+            case NONE:
+                return "None";
+            case AUTO_TOPICS:
+                return "Subscribe(" + String.join(",", subscription) + ")";
+            case AUTO_PATTERN:
+                return "Subscribe(" + subscribedPattern + ")";
+            case USER_ASSIGNED:
+                return "Assign(" + assignedPartitions() + " , id=" + assignmentId + ")";
+            default:
+                throw new IllegalStateException("Unrecognized subscription type: " + subscriptionType);
+        }
+    }
+
     public SubscriptionState(LogContext logContext, OffsetResetStrategy defaultResetStrategy) {
         this.log = logContext.logger(this.getClass());
         this.defaultResetStrategy = defaultResetStrategy;
