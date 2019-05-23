@@ -20,8 +20,6 @@ import org.apache.kafka.common.header.Header;
 
 import java.nio.ByteBuffer;
 
-import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
-
 public class SkipKeyValueDefaultRecord extends DefaultRecord {
 
     private final boolean hasKey;

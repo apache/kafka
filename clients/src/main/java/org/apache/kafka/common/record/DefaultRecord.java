@@ -24,7 +24,6 @@ import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.DataInput;
-import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
@@ -33,7 +32,6 @@ import java.util.Arrays;
 import java.util.Objects;
 import java.util.zip.Checksum;
 
-import static org.apache.kafka.common.record.BufferSupplier.NO_CACHING;
 import static org.apache.kafka.common.record.RecordBatch.MAGIC_VALUE_V2;
 
 /**
