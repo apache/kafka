@@ -508,7 +508,7 @@ class ReplicaManager(val config: KafkaConfig,
         val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
 
         // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
-        val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
+        val producerRequestKeys = entriesPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
 
         // try to complete the request immediately, otherwise put it into the purgatory
         // this is because while the delayed produce operation is being created, new
@@ -705,7 +705,7 @@ class ReplicaManager(val config: KafkaConfig,
       val delayedDeleteRecords = new DelayedDeleteRecords(timeout, deleteRecordsStatus, this, responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed delete records operation
-      val deleteRecordsRequestKeys = offsetPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
+      val deleteRecordsRequestKeys = offsetPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
 
       // try to complete the request immediately, otherwise put it into the purgatory
       // this is because while the delayed delete records operation is being created, new
@@ -886,7 +886,7 @@ class ReplicaManager(val config: KafkaConfig,
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
-      val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => new TopicPartitionOperationKey(tp) }
+      val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => TopicPartitionOperationKey(tp) }
 
       // try to complete the request immediately, otherwise put it into the purgatory;
       // this is because while the delayed fetch operation is being created, new requests
@@ -1314,7 +1314,7 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       partitionsToMakeFollower.foreach { partition =>
-        val topicPartitionOperationKey = new TopicPartitionOperationKey(partition.topicPartition)
+        val topicPartitionOperationKey = TopicPartitionOperationKey(partition.topicPartition)
         tryCompleteDelayedProduce(topicPartitionOperationKey)
         tryCompleteDelayedFetch(topicPartitionOperationKey)
       }
@@ -1542,7 +1542,7 @@ class ReplicaManager(val config: KafkaConfig,
     partitions: Set[TopicPartition],
     electionType: ElectionType,
     responseCallback: Map[TopicPartition, ApiError] => Unit,
-    requestTimeout: Long
+    requestTimeout: Int
   ): Unit = {
 
     val deadline = time.milliseconds() + requestTimeout
@@ -1557,12 +1557,18 @@ class ReplicaManager(val config: KafkaConfig,
 
       if (expectedLeaders.nonEmpty) {
         val watchKeys: Seq[TopicPartitionOperationKey] = expectedLeaders.map{
-          case (tp, leader) => new TopicPartitionOperationKey(tp.topic, tp.partition)
+          case (tp, leader) => TopicPartitionOperationKey(tp.topic, tp.partition)
         }(breakOut)
         delayedElectLeaderPurgatory.tryCompleteElseWatch(
-          new DelayedElectLeader(deadline - time.milliseconds(), expectedLeaders, failures,
-            this, responseCallback),
-          watchKeys)
+          new DelayedElectLeader(
+            math.max(0, deadline - time.milliseconds()),
+            expectedLeaders,
+            failures,
+            this,
+            responseCallback
+          ),
+          watchKeys
+        )
       } else {
           // There are no partitions actually being elected, so return immediately
           responseCallback(failures)

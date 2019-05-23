@@ -19,6 +19,7 @@ package org.apache.kafka.common.requests;
 
 import java.nio.ByteBuffer;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.common.TopicPartition;
@@ -46,14 +47,14 @@ public class ElectLeadersResponse extends AbstractResponse {
     public ElectLeadersResponse(
             int throttleTimeMs,
             short errorCode,
-            Map<String, Map<Integer, ApiError>> electionResults) {
+            List<ReplicaElectionResult> electionResults) {
         this(throttleTimeMs, errorCode, electionResults, ApiKeys.ELECT_LEADERS.latestVersion());
     }
 
     public ElectLeadersResponse(
             int throttleTimeMs,
             short errorCode,
-            Map<String, Map<Integer, ApiError>> electionResults,
+            List<ReplicaElectionResult> electionResults,
             short version) {
 
         this.version = version;
@@ -65,21 +66,7 @@ public class ElectLeadersResponse extends AbstractResponse {
             data.setErrorCode(errorCode);
         }
 
-        for (Map.Entry<String, Map<Integer, ApiError>> topicEntry : electionResults.entrySet()) {
-            ReplicaElectionResult replicaElectionResult = new ReplicaElectionResult();
-            replicaElectionResult.setTopic(topicEntry.getKey());
-
-            for (Map.Entry<Integer, ApiError> partitionEntry : topicEntry.getValue().entrySet()) {
-                PartitionResult partitionResult = new PartitionResult();
-                partitionResult.setPartitionId(partitionEntry.getKey());
-                partitionResult.setErrorCode(partitionEntry.getValue().error().code());
-                partitionResult.setErrorMessage(partitionEntry.getValue().message());
-
-                replicaElectionResult.partitionResult().add(partitionResult);
-            }
-
-            data.replicaElectionResults().add(replicaElectionResult);
-        }
+        data.setReplicaElectionResults(electionResults);
     }
 
     public ElectLeadersResponseData data() {

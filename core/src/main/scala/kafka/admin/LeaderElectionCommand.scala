@@ -37,7 +37,7 @@ import scala.collection.JavaConverters._
 import scala.collection.mutable
 import scala.concurrent.duration._
 
-final object LeaderElectionCommand extends Logging {
+object LeaderElectionCommand extends Logging {
   def main(args: Array[String]): Unit = {
     run(args, 30.second)
   }
@@ -118,10 +118,9 @@ final object LeaderElectionCommand extends Logging {
     electionType: ElectionType,
     topicPartitions: Option[Set[TopicPartition]]
   ): Unit = {
-    val partitions = topicPartitions.map(_.asJava).getOrElse(null)
-    debug(s"Calling AdminClient.electLeaders($electionType, $partitions)")
-
     val electionResults = try {
+      val partitions = topicPartitions.map(_.asJava).orNull
+      debug(s"Calling AdminClient.electLeaders($electionType, $partitions)")
       client.electLeaders(electionType, partitions).partitions.get.asScala
     } catch {
       case e: ExecutionException =>
@@ -159,17 +158,17 @@ final object LeaderElectionCommand extends Logging {
       ()
     }
 
-    if (!succeeded.isEmpty) {
+    if (succeeded.nonEmpty) {
       val partitions = succeeded.mkString(", ")
       println(s"Successfully completed leader election ($electionType) for partitions $partitions")
     }
 
-    if (!noop.isEmpty) {
+    if (noop.nonEmpty) {
       val partitions = succeeded.mkString(", ")
       println(s"Valid replica already elected for partitions $partitions")
     }
 
-    if (!failed.isEmpty) {
+    if (failed.nonEmpty) {
       val rootException = new AdminCommandFailedException(s"${failed.size} replica(s) could not be elected")
       failed.foreach { case (topicPartition, exception) =>
         println(s"Error completing leader election ($electionType) for partition: $topicPartition: $exception")

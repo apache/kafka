@@ -2960,12 +2960,11 @@ public class KafkaAdminClient extends AdminClient {
                 ElectLeadersResponse response = (ElectLeadersResponse) abstractResponse;
                 Map<TopicPartition, Optional<Throwable>> result = ElectLeadersResponse.electLeadersResult(response.data());
 
-                if (response.version() > 0) {
-                    Errors error = Errors.forCode(response.data().errorCode());
-                    if (error != Errors.NONE) {
-                        electionFuture.completeExceptionally(error.exception());
-                        return;
-                    }
+                // For version == 0 then errorCode would be 0 which maps to Errors.NONE
+                Errors error = Errors.forCode(response.data().errorCode());
+                if (error != Errors.NONE) {
+                    electionFuture.completeExceptionally(error.exception());
+                    return;
                 }
 
                 electionFuture.complete(result);

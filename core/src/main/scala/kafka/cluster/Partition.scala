@@ -643,7 +643,7 @@ class Partition(val topicPartition: TopicPartition,
    * Try to complete any pending requests. This should be called without holding the leaderIsrUpdateLock.
    */
   private def tryCompleteDelayedRequests() {
-    val requestKey = new TopicPartitionOperationKey(topicPartition)
+    val requestKey = TopicPartitionOperationKey(topicPartition)
     replicaManager.tryCompleteDelayedFetch(requestKey)
     replicaManager.tryCompleteDelayedProduce(requestKey)
     replicaManager.tryCompleteDelayedDeleteRecords(requestKey)
@@ -785,7 +785,7 @@ class Partition(val topicPartition: TopicPartition,
       tryCompleteDelayedRequests()
     else {
       // probably unblock some follower fetch requests since log end offset has been updated
-      replicaManager.tryCompleteDelayedFetch(new TopicPartitionOperationKey(topicPartition))
+      replicaManager.tryCompleteDelayedFetch(TopicPartitionOperationKey(topicPartition))
     }
 
     info
