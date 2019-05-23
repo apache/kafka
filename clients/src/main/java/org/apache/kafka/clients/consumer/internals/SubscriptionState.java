@@ -121,9 +121,9 @@ public class SubscriptionState {
             case AUTO_PATTERN:
                 return "Subscribe(" + subscribedPattern + ")";
             case USER_ASSIGNED:
-                return "Assign(" + assignment.partitionStateValues() + " , id=" + assignmentId + ")";
+                return "Assign(" + assignedPartitions() + " , id=" + assignmentId + ")";
             default:
-                throw new IllegalStateException("Un-recognized subscription type: " + subscriptionType);
+                throw new IllegalStateException("Unrecognized subscription type: " + subscriptionType);
         }
     }
 
