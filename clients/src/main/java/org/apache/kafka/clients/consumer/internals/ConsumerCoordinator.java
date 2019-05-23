@@ -137,7 +137,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                long retryBackoffMs,
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
-                               ConsumerInterceptors<?, ?> interceptors) {
+                               ConsumerInterceptors<?, ?> interceptors,
+                               boolean leaveGroupOnClose) {
         super(logContext,
               client,
               groupId,
@@ -148,7 +149,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
               metrics,
               metricGrpPrefix,
               time,
-              retryBackoffMs);
+              retryBackoffMs,
+              leaveGroupOnClose);
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
         this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.updateVersion());
@@ -810,15 +812,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         final Generation generation;
-        if (subscriptions.partitionsAutoAssigned())
+        if (subscriptions.partitionsAutoAssigned()) {
             generation = generation();
-        else
+            // if the generation is null, we are not part of an active group (and we expect to be).
+            // the only thing we can do is fail the commit and let the user rejoin the group in poll()
+            if (generation == null) {
+                log.info("Failing OffsetCommit request since the consumer is not part of an active group");
+                return RequestFuture.failure(new CommitFailedException());
+            }
+        } else
             generation = Generation.NO_GENERATION;
-
-        // if the generation is null, we are not part of an active group (and we expect to be).
-        // the only thing we can do is fail the commit and let the user rejoin the group in poll()
-        if (generation == null)
-            return RequestFuture.failure(new CommitFailedException());
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
                 new OffsetCommitRequestData()

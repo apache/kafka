@@ -101,10 +101,19 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         private final Map<TopicPartition, PartitionData> epochsByPartition;
         private final int replicaId;
 
-        public Builder(short version, Map<TopicPartition, PartitionData> epochsByPartition) {
+        Builder(short version, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
             super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
             this.epochsByPartition = epochsByPartition;
-            this.replicaId = CONSUMER_REPLICA_ID;
+            this.replicaId = replicaId;
+        }
+
+        public static Builder forConsumer(short version, Map<TopicPartition, PartitionData> epochsByPartition) {
+            return new Builder(version, epochsByPartition, CONSUMER_REPLICA_ID);
+        }
+
+        public static Builder forFollower(short version, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
+            return new Builder(version, epochsByPartition, replicaId);
+
         }
 
         @Override
@@ -157,7 +166,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
     @Override
     protected Struct toStruct() {
         Struct requestStruct = new Struct(ApiKeys.OFFSET_FOR_LEADER_EPOCH.requestSchema(version()));
-        requestStruct.set(REPLICA_ID, replicaId);
+        requestStruct.setIfExists(REPLICA_ID, replicaId);
 
         Map<String, Map<Integer, PartitionData>> topicsToPartitionEpochs = CollectionUtils.groupPartitionDataByTopic(epochsByPartition);
 

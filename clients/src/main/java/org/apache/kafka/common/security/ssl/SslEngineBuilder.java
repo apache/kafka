@@ -57,7 +57,6 @@ public class SslEngineBuilder {
     private final SecurityStore truststore;
     private final String[] cipherSuites;
     private final String[] enabledProtocols;
-    private final String endpointIdentification;
     private final SecureRandom secureRandomImplementation;
     private final SSLContext sslContext;
     private final SslClientAuth sslClientAuth;
@@ -81,8 +80,6 @@ public class SslEngineBuilder {
         } else {
             this.enabledProtocols = null;
         }
-
-        this.endpointIdentification = (String) configs.get(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG);
 
         this.secureRandomImplementation = createSecureRandom((String)
                 configs.get(SslConfigs.SSL_SECURE_RANDOM_IMPLEMENTATION_CONFIG));
@@ -201,11 +198,12 @@ public class SslEngineBuilder {
      * Create a new SSLEngine object.
      *
      * @param mode      Whether to use client or server mode.
-     * @param peerHost  The peer host to use.
-     * @param peerPort  The peer port to use.
+     * @param peerHost  The peer host to use. This is used in client mode if endpoint validation is enabled.
+     * @param peerPort  The peer port to use. This is a hint and not used for validation.
+     * @param endpointIdentification Endpoint identification algorithm for client mode.
      * @return          The new SSLEngine.
      */
-    public SSLEngine createSslEngine(Mode mode, String peerHost, int peerPort) {
+    public SSLEngine createSslEngine(Mode mode, String peerHost, int peerPort, String endpointIdentification) {
         SSLEngine sslEngine = sslContext.createSSLEngine(peerHost, peerPort);
         if (cipherSuites != null) sslEngine.setEnabledCipherSuites(cipherSuites);
         if (enabledProtocols != null) sslEngine.setEnabledProtocols(enabledProtocols);
