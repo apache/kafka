@@ -459,6 +459,9 @@ public class AbstractConfig {
     private  Map<String, ?> resolveConfigVariables(Map<String, ?> configProviderProps, Map<String, Object> originals) {
         Map<String, String> providerConfigString;
         Map<String, ?> configProperties;
+        Map<String, Object> originalsMutable = new HashMap<>();
+
+        originalsMutable.putAll(originals);
 
         // As variable configs are strings, parse the originals and obtain the potential variable configs.
         Map<String, String> indirectVariables = extractPotentialVariables(originals);
@@ -475,10 +478,10 @@ public class AbstractConfig {
         if (!providers.isEmpty()) {
             ConfigTransformer configTransformer = new ConfigTransformer(providers);
             ConfigTransformerResult result = configTransformer.transform(indirectVariables);
-            originals.putAll(result.data());
+            originalsMutable.putAll(result.data());
         }
 
-        return originals;
+        return originalsMutable;
     }
 
     private Map<String, Object> configProviderProperties(String configProviderPrefix, Map<String, ?> providerConfigProperties) {
