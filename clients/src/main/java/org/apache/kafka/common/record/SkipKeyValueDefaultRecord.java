@@ -19,7 +19,6 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.header.Header;
 
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 
 public class SkipKeyValueDefaultRecord extends DefaultRecord {
 
