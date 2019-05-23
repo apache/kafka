@@ -58,4 +58,10 @@
     </subpackage>
   </subpackage>
 
+  <subpackage name="server">
+    <subpackage name="checkpoints">
+      <allow class="kafka.server.LogDirFailureChannel"/>
+    </subpackage>
+  </subpackage>
+
 </import-control>
