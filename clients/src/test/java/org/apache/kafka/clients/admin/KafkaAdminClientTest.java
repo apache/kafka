@@ -1150,18 +1150,6 @@ public class KafkaAdminClientTest {
                     ),
                     Collections.emptySet()));
 
-            data.groups().add(DescribeGroupsResponse.groupMetadata(
-                    "group-connect-0",
-                    Errors.NONE,
-                    "",
-                    "connect",
-                    "",
-                    asList(
-                        DescribeGroupsResponse.groupMember("0", "clientId0", "clientHost", memberAssignmentBytes, null),
-                        DescribeGroupsResponse.groupMember("1", "clientId1", "clientHost", memberAssignmentBytes, null)
-                    ),
-                    Collections.emptySet()));
-
             env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
 
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
@@ -1170,6 +1158,75 @@ public class KafkaAdminClientTest {
             assertEquals(1, result.describedGroups().size());
             assertEquals("group-0", groupDescription.groupId());
             assertEquals(2, groupDescription.members().size());
+        }
+    }
+
+    @Test
+    public void testDescribeMultipleConsumerGroups() throws Exception {
+        final HashMap<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+                new Cluster(
+                        "mockClusterId",
+                        nodes.values(),
+                        Collections.<PartitionInfo>emptyList(),
+                        Collections.<String>emptySet(),
+                        Collections.<String>emptySet(), nodes.get(0));
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            TopicPartition myTopicPartition0 = new TopicPartition("my_topic", 0);
+            TopicPartition myTopicPartition1 = new TopicPartition("my_topic", 1);
+            TopicPartition myTopicPartition2 = new TopicPartition("my_topic", 2);
+
+            final List<TopicPartition> topicPartitions = new ArrayList<>();
+            topicPartitions.add(0, myTopicPartition0);
+            topicPartitions.add(1, myTopicPartition1);
+            topicPartitions.add(2, myTopicPartition2);
+
+            final ByteBuffer memberAssignment = ConsumerProtocol.serializeAssignment(new PartitionAssignor.Assignment(topicPartitions));
+            byte[] memberAssignmentBytes = new byte[memberAssignment.remaining()];
+            memberAssignment.get(memberAssignmentBytes);
+
+            DescribeGroupsResponseData group0Data = new DescribeGroupsResponseData();
+            group0Data.groups().add(DescribeGroupsResponse.groupMetadata(
+                    "group-0",
+                    Errors.NONE,
+                    "",
+                    ConsumerProtocol.PROTOCOL_TYPE,
+                    "",
+                    asList(
+                            DescribeGroupsResponse.groupMember("0", "clientId0", "clientHost", memberAssignmentBytes, null),
+                            DescribeGroupsResponse.groupMember("1", "clientId1", "clientHost", memberAssignmentBytes, null)
+                    ),
+                    Collections.emptySet()));
+
+            DescribeGroupsResponseData groupConnectData = new DescribeGroupsResponseData();
+            group0Data.groups().add(DescribeGroupsResponse.groupMetadata(
+                    "group-connect-0",
+                    Errors.NONE,
+                    "",
+                    "connect",
+                    "",
+                    asList(
+                            DescribeGroupsResponse.groupMember("0", "clientId0", "clientHost", memberAssignmentBytes, null),
+                            DescribeGroupsResponse.groupMember("1", "clientId1", "clientHost", memberAssignmentBytes, null)
+                    ),
+                    Collections.emptySet()));
+
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(group0Data));
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(groupConnectData));
+
+            Collection<String> groups = new HashSet<>();
+            groups.add("group-0");
+            groups.add("group-connect-0");
+            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(groups);
+            assertEquals(2, result.describedGroups().size());
+            assertEquals(groups, result.describedGroups().keySet());
         }
     }
 

@@ -2625,6 +2625,9 @@ public class KafkaAdminClient extends AdminClient {
      * parameter to schedule action that need to be taken using the coordinator. The param is a Supplier
      * so that it can be lazily created, so that it can use the results of find coordinator call in its
      * construction.
+     *
+     * @param <T> The type of return value of the KafkaFuture, like ConsumerGroupDescription, Void etc.
+     * @param <O> The type of configuration option, like DescribeConsumerGroupsOptions, ListConsumerGroupsOptions etc
      */
     private <T, O extends AbstractOptions<O>> Call getFindCoordinatorCall(ConsumerGroupOperationContext<T, O> context,
                                                Supplier<Call> nextCall) {
@@ -2673,11 +2676,22 @@ public class KafkaAdminClient extends AdminClient {
             void handleResponse(AbstractResponse abstractResponse) {
                 final DescribeGroupsResponse response = (DescribeGroupsResponse) abstractResponse;
 
-                final DescribedGroup describedGroup = response.data()
-                    .groups()
-                    .stream()
-                    .filter(group -> context.getGroupId().equals(group.groupId()))
-                    .findFirst().get();
+                List<DescribedGroup> describedGroups = response.data().groups();
+                if (describedGroups.isEmpty()) {
+                    context.getFuture().completeExceptionally(
+                            new InvalidGroupIdException("No consumer group found for GroupId: " + context.getGroupId()));
+                    return;
+                }
+
+                if (describedGroups.size() > 1 ||
+                        !describedGroups.get(0).groupId().equals(context.getGroupId())) {
+                    String ids = Arrays.toString(describedGroups.stream().map(DescribedGroup::groupId).toArray());
+                    context.getFuture().completeExceptionally(new InvalidGroupIdException(
+                            "DescribeConsumerGroup request for GroupId: " + context.getGroupId() + " returned " + ids));
+                    return;
+                }
+
+                final DescribedGroup describedGroup = describedGroups.get(0);
 
                 // If coordinator changed since we fetched it, retry
                 if (context.hasCoordinatorMoved(response)) {
