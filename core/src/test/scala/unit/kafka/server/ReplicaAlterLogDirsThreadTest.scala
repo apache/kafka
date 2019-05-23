@@ -614,12 +614,12 @@ class ReplicaAlterLogDirsThreadTest {
     expect(replicaManager.futureLocalReplica(t1p0)).andReturn(Some(futureReplica)).anyTimes()
     expect(replicaManager.localReplicaOrException(t1p0)).andReturn(replicaT1p0).anyTimes()
     expect(replicaManager.futureLocalReplicaOrException(t1p0)).andReturn(futureReplica).anyTimes()
-    expect(replicaManager.getPartition(t1p0)).andReturn(Some(partition)).anyTimes()
+    expect(replicaManager.nonOfflinePartition(t1p0)).andReturn(Some(partition)).anyTimes()
     expect(replicaManager.localReplica(t1p1)).andReturn(Some(replicaT1p1)).anyTimes()
     expect(replicaManager.futureLocalReplica(t1p1)).andReturn(Some(futureReplica)).anyTimes()
     expect(replicaManager.localReplicaOrException(t1p1)).andReturn(replicaT1p1).anyTimes()
     expect(replicaManager.futureLocalReplicaOrException(t1p1)).andReturn(futureReplica).anyTimes()
-    expect(replicaManager.getPartition(t1p1)).andReturn(Some(partition)).anyTimes()
+    expect(replicaManager.nonOfflinePartition(t1p1)).andReturn(Some(partition)).anyTimes()
   }
 
   def stubWithFetchMessages(replicaT1p0: Replica, replicaT1p1: Replica, futureReplica: Replica,
