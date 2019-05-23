@@ -74,12 +74,16 @@
 <h5><a id="upgrade_230_notable" href="#upgrade_230_notable">Notable changes in 2.3.0</a></h5>
 <ul>
     <li>
-        We are introducing static membership towards consumer users. This feature reduces unnecessary rebalances during normal application upgrades or rolling bounces.
-        If you want to use static membership, first thing is to upgrade both broker cluster and consumers apps to 2.3.0. This involves a necessity to change <code>inter.broker.protocol.version</code>
-        to 2.3 as well. Then you need to set the config <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> to a universally unique value for individual consumer instance.
-        If your broker is on older version, but you choose to set <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> on the client side, consumer app will crash.
-        If you accidentally configure duplicate ids for different consumer instances, a fencing mechanism will inform your duplicate client to shutdown by
-        triggering a <code>org.apache.kafka.common.errors.FencedInstanceIdException</code>.
+        We are introducing static membership towards consumer user. This feature reduces unnecessary rebalances during normal application upgrades or rolling bounces.
+        If you want to use static membership,
+        <ul>
+            <li>Upgrade both broker cluster and consumer apps to 2.3 or beyond, and also make sure the upgraded brokers are using <code>inter.broker.protocol.version</code>
+                of 2.3 or beyond as well.</li>
+            <li>Set the config <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> to a universally unique value for each stream instance.</li>
+        </ul>
+        If your broker is on older version, but you choose to set <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> on the client side, stream app will detect the broker version and
+        then throws an UnsupportedException and shutdown. If you accidentally configure duplicate ids for different stream instances,
+        a fencing mechanism will inform your duplicate client to shutdown by triggering a <code>org.apache.kafka.common.errors.FencedInstanceIdException</code>.
         For more details, see
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-345%3A+Introduce+static+membership+protocol+to+reduce+consumer+rebalances">KIP-345</a>
     </li>
