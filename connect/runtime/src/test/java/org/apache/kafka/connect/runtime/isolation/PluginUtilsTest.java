@@ -186,6 +186,25 @@ public class PluginUtilsTest {
     }
 
     @Test
+    public void testConnectorClientConfigOverridePolicy() {
+        assertFalse(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.connector.policy.AbstractConnectorClientConfigOverridePolicy")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.connector.policy.NoneConnectorClientConfigOverridePolicy")
+        );
+        assertTrue(PluginUtils.shouldLoadInIsolation(
+                "org.apache.kafka.connect.connector.policy.PrincipalConnectorClientConfigOverridePolicy")
+        );
+    }
+
+    @Test
     public void testEmptyPluginUrls() throws Exception {
         assertEquals(Collections.<Path>emptyList(), PluginUtils.pluginUrls(pluginPath));
     }

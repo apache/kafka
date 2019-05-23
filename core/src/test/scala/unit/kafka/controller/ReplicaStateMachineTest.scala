@@ -17,12 +17,15 @@
 package kafka.controller
 
 import kafka.api.LeaderAndIsr
+import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
 import kafka.zookeeper.{GetDataResponse, ResponseMetadata}
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.easymock.EasyMock
@@ -55,6 +58,40 @@ class ReplicaStateMachineTest {
 
   private def replicaState(replica: PartitionAndReplica): ReplicaState = {
     controllerContext.replicaState(replica)
+  }
+
+  @Test
+  def testStartupOnlinePartition(): Unit = {
+    val endpoint1 = new EndPoint("localhost", 9997, new ListenerName("blah"),
+      SecurityProtocol.PLAINTEXT)
+    val liveBrokerEpochs = Map(Broker(brokerId, Seq(endpoint1), rack = None) -> 1L)
+    controllerContext.setLiveBrokerAndEpochs(liveBrokerEpochs)
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    assertEquals(None, controllerContext.replicaStates.get(replica))
+    replicaStateMachine.startup()
+    assertEquals(OnlineReplica, replicaState(replica))
+  }
+
+  @Test
+  def testStartupOfflinePartition(): Unit = {
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(brokerId))
+    assertEquals(None, controllerContext.replicaStates.get(replica))
+    replicaStateMachine.startup()
+    assertEquals(OfflineReplica, replicaState(replica))
+  }
+
+  @Test
+  def testStartupWithReplicaWithoutLeader(): Unit = {
+    val shutdownBrokerId = 100
+    val offlineReplica = PartitionAndReplica(partition, shutdownBrokerId)
+    val endpoint1 = new EndPoint("localhost", 9997, new ListenerName("blah"),
+      SecurityProtocol.PLAINTEXT)
+    val liveBrokerEpochs = Map(Broker(brokerId, Seq(endpoint1), rack = None) -> 1L)
+    controllerContext.setLiveBrokerAndEpochs(liveBrokerEpochs)
+    controllerContext.updatePartitionReplicaAssignment(partition, Seq(shutdownBrokerId))
+    assertEquals(None, controllerContext.replicaStates.get(offlineReplica))
+    replicaStateMachine.startup()
+    assertEquals(OfflineReplica, replicaState(offlineReplica))
   }
 
   @Test
@@ -108,10 +145,16 @@ class ReplicaStateMachineTest {
 
   @Test
   def testNewReplicaToOfflineReplicaTransition(): Unit = {
+    val endpoint1 = new EndPoint("localhost", 9997, new ListenerName("blah"),
+      SecurityProtocol.PLAINTEXT)
+    val liveBrokerEpochs = Map(Broker(brokerId, Seq(endpoint1), rack = None) -> 1L)
+    controllerContext.setLiveBrokerAndEpochs(liveBrokerEpochs)
     controllerContext.putReplicaState(replica, NewReplica)
     EasyMock.expect(mockControllerBrokerRequestBatch.newBatch())
     EasyMock.expect(mockControllerBrokerRequestBatch.addStopReplicaRequestForBrokers(EasyMock.eq(Seq(brokerId)), EasyMock.eq(partition), EasyMock.eq(false)))
+    EasyMock.expect(mockControllerBrokerRequestBatch.addUpdateMetadataRequestForBrokers(EasyMock.eq(Seq(brokerId)),  EasyMock.eq(Set(partition))))
     EasyMock.expect(mockControllerBrokerRequestBatch.sendRequestsToBrokers(controllerEpoch))
+
     EasyMock.replay(mockControllerBrokerRequestBatch)
     replicaStateMachine.handleStateChanges(replicas, OfflineReplica)
     EasyMock.verify(mockControllerBrokerRequestBatch)

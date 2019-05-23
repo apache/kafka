@@ -230,13 +230,6 @@ class Log(@volatile var dir: File,
   }
 
   def updateConfig(updatedKeys: Set[String], newConfig: LogConfig): Unit = {
-    if ((updatedKeys.contains(LogConfig.RetentionMsProp)
-      || updatedKeys.contains(LogConfig.MessageTimestampDifferenceMaxMsProp))
-      && topicPartition.partition == 0  // generate warnings only for one partition of each topic
-      && newConfig.retentionMs < newConfig.messageTimestampDifferenceMaxMs)
-      warn(s"${LogConfig.RetentionMsProp} for topic ${topicPartition.topic} is set to ${newConfig.retentionMs}. It is smaller than " +
-        s"${LogConfig.MessageTimestampDifferenceMaxMsProp}'s value ${newConfig.messageTimestampDifferenceMaxMs}. " +
-        s"This may result in frequent log rolling.")
     val oldConfig = this.config
     this.config = newConfig
     if (updatedKeys.contains(LogConfig.MessageFormatVersionProp)) {

@@ -278,8 +278,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
       if (replicaManager.hasDelayedElectionOperations) {
-        updateMetadataRequest.partitionStates.asScala.foreach { case (tp, ps) =>
-          replicaManager.tryCompleteElection(new TopicPartitionOperationKey(tp.topic(), tp.partition()))
+        updateMetadataRequest.partitionStates.asScala.foreach { case (tp, _) =>
+          replicaManager.tryCompleteElection(TopicPartitionOperationKey(tp))
         }
       }
       sendResponseExemptThrottle(request, new UpdateMetadataResponse(Errors.NONE))
