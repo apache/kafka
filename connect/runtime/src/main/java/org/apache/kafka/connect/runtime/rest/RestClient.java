@@ -83,7 +83,7 @@ public class RestClient {
             req.method(method);
             req.accept("application/json");
             req.agent("kafka-connect");
-            getHeaders(headers, req);
+            addHeadersToRequest(headers, req);
             if (serializedBody != null) {
                 req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
             }
@@ -124,8 +124,8 @@ public class RestClient {
      * @param headers
      * @param req
      */
-    private static void getHeaders(HttpHeaders headers, Request req) {
-        String credentialAuthorization = (headers != null) ? headers.getHeaderString("Authorization") : null;
+    private static void addHeadersToRequest(HttpHeaders headers, Request req) {
+        String credentialAuthorization = headers != null ? headers.getHeaderString("Authorization") : null;
         if (credentialAuthorization != null) {
             req.header("Authorization", credentialAuthorization);
         }
