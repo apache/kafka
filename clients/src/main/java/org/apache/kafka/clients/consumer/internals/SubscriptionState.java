@@ -60,8 +60,7 @@ import java.util.stream.Collectors;
  * Note that pause state as well as fetch/consumed positions are not preserved when partition
  * assignment is changed whether directly by the user or through a group rebalance.
  *
- * Thread Safety: this class is generally thread-safe. The only exception is the consumer rebalance
- * listener which is guaranteed to be executed without holding any locks.
+ * Thread Safety: this class is thread-safe.
  */
 public class SubscriptionState {
     private static final String SUBSCRIPTION_EXCEPTION_MESSAGE =
@@ -242,25 +241,24 @@ public class SubscriptionState {
         if (!this.partitionsAutoAssigned())
             throw new IllegalArgumentException("Attempt to dynamically assign partitions while manual assignment in use");
 
-        Predicate<TopicPartition> predicate = topicPartition -> {
+        boolean assignmentMatchedSubscription = true;
+        for (TopicPartition topicPartition : assignments) {
             if (this.subscribedPattern != null) {
-                boolean match = this.subscribedPattern.matcher(topicPartition.topic()).matches();
-                if (!match) {
+                assignmentMatchedSubscription = this.subscribedPattern.matcher(topicPartition.topic()).matches();
+                if (!assignmentMatchedSubscription) {
                     log.info("Assigned partition {} for non-subscribed topic regex pattern; subscription pattern is {}",
                             topicPartition,
                             this.subscribedPattern);
+                    break;
                 }
-                return match;
             } else {
-                boolean match = this.subscription.contains(topicPartition.topic());
-                if (!match) {
+                assignmentMatchedSubscription = this.subscription.contains(topicPartition.topic());
+                if (!assignmentMatchedSubscription) {
                     log.info("Assigned partition {} for non-subscribed topic; subscription is {}", topicPartition, this.subscription);
+                    break;
                 }
-                return match;
             }
-        };
-
-        boolean assignmentMatchedSubscription = assignments.stream().allMatch(predicate);
+        }
 
         if (assignmentMatchedSubscription) {
             Map<TopicPartition, TopicPartitionState> assignedPartitionStates = partitionToStateMap(

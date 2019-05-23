@@ -676,7 +676,6 @@ public class Fetcher<K, V> implements Closeable {
     private void resetOffsetIfNeeded(TopicPartition partition, OffsetResetStrategy requestedResetStrategy, ListOffsetData offsetData) {
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
                 offsetData.offset, offsetData.leaderEpoch, metadata.leaderAndEpoch(partition));
-        log.info("Resetting offset for partition {} to offset {}.", partition, position);
         offsetData.leaderEpoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(partition, epoch));
         subscriptions.maybeSeek(partition, position.offset, requestedResetStrategy);
     }

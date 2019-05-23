@@ -43,11 +43,11 @@ import java.util.stream.Stream;
  */
 public class PartitionStates<S> {
 
-    private final Map<TopicPartition, S> map = new LinkedHashMap<>();
+    private final LinkedHashMap<TopicPartition, S> map = new LinkedHashMap<>();
     private final Set<TopicPartition> partitionSetView = Collections.unmodifiableSet(map.keySet());
 
     /* the number of partitions that are currently assigned available in a thread safe manner */
-    private int size = 0;
+    private volatile int size = 0;
 
     public PartitionStates() {}
 
