@@ -112,9 +112,6 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         return map.remove(key);
     }
     
-    /*
-    * Add compute() of the SkipListMap
-    */
     public byte[] compute(final Bytes key, final BiFunction<Bytes, byte[], byte[]> remappingFunction) {
         return map.compute(key, remappingFunction);
     }
