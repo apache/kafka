@@ -19,6 +19,7 @@ package org.apache.kafka.common.record;
 import org.apache.kafka.common.header.Header;
 
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 
 public class SkipKeyValueDefaultRecord extends DefaultRecord {
 
@@ -36,6 +37,21 @@ public class SkipKeyValueDefaultRecord extends DefaultRecord {
 
         this.hasKey = hasKey;
         this.keySize = keySize;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        return super.equals(o) &&
+            this.keySize == ((SkipKeyValueDefaultRecord) o).keySize &&
+            this.hasKey == ((SkipKeyValueDefaultRecord) o).hasKey;
+    }
+
+    @Override
+    public int hashCode() {
+        int result = super.hashCode();
+        result = 31 * result + keySize;
+        result = 31 * result + (hasKey ? 0 : 1);
+        return result;
     }
 
     @Override
