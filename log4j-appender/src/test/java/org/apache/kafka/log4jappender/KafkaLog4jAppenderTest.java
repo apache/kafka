@@ -124,6 +124,24 @@ public class KafkaLog4jAppenderTest {
     }
 
     @Test
+    public void testSetSaslCallbackConfig() {
+        Properties props = getLog4jConfig(false);
+        props.put("log4j.appender.KAFKA.saslClientCallbackHandler", "callbackHandlerClassName");
+        PropertyConfigurator.configure(props);
+
+        MockKafkaLog4jAppender mockKafkaLog4jAppender = getMockKafkaLog4jAppender();
+        assertThat(
+                mockKafkaLog4jAppender.getProducerProperties().getProperty(
+                        SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS),
+                equalTo("callbackHandlerClassName"));
+    }
+
+    @Test
+    public void testSaslCallbackNotSet() {
+        testProducerPropertyNotSet(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS);
+    }
+
+    @Test
     public void testLog4jAppends() {
         PropertyConfigurator.configure(getLog4jConfig(false));
 
