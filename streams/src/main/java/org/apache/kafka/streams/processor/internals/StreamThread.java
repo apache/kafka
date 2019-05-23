@@ -29,6 +29,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Count;
@@ -773,6 +774,10 @@ public class StreamThread extends Thread {
         try {
             runLoop();
             cleanRun = true;
+        } catch (final TimeoutException e) {
+
+            throw new TimeoutException("The thread-consumer : " + threadMetadata.consumerClientId() + " and restore-consumer : " + threadMetadata.restoreConsumerClientId() + "has happened TimeoutExceptio" +
+                    " Try tuning 'default.api.timeout.ms' option", e);
         } catch (final KafkaException e) {
             log.error("Encountered the following unexpected Kafka exception during processing, " +
                 "this usually indicate Streams internal errors:", e);
