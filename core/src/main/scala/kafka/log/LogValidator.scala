@@ -291,6 +291,7 @@ private[kafka] object LogValidator extends Logging {
 
           validatedRecords += record
         }
+        records.close()
       }
 
       if (!inPlaceAssignment) {

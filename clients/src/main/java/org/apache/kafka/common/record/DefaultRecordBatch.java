@@ -339,19 +339,61 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     }
 
     @Override
-    public Iterator<Record> skipKeyValueIterator() {
-        if (count() == 0)
-            return Collections.emptyIterator();
+    public CloseableIterator<Record> skipKeyValueIterator() {
+        if (count() == 0) {
+            Iterator<Record> inner = Collections.emptyIterator();
+            return new CloseableIterator<Record>() {
+                @Override
+                public void close() {}
+
+                @Override
+                public boolean hasNext() {
+                    return inner.hasNext();
+                }
+
+                @Override
+                public Record next() {
+                    return inner.next();
+                }
+
+                @Override
+                public void remove() {
+                    inner.remove();
+                }
+            };
+        }
 
         if (!isCompressed())
             return uncompressedIterator();
 
-        try (CloseableIterator<Record> iterator = compressedIterator(BufferSupplier.NO_CACHING, true)) {
-            List<Record> records = new ArrayList<>(count());
-            while (iterator.hasNext())
-                records.add(iterator.next());
-            return records.iterator();
-        }
+        // we define this to be a closable iterator so that caller (i.e. the log validator) needs to close it
+        // while we can save memory footprint of not decompressing the full record set ahead of time;
+        // also try to reuse the decompression buffer
+        final BufferSupplier decompressionBufferSupplier = BufferSupplier.create();
+        final CloseableIterator<Record> inner = compressedIterator(decompressionBufferSupplier, true);
+
+        return new CloseableIterator<Record>() {
+            @Override
+            public void close() {
+                inner.close();
+                decompressionBufferSupplier.close();
+            }
+
+            @Override
+            public boolean hasNext() {
+                return inner.hasNext();
+            }
+
+            @Override
+            public Record next() {
+                return inner.next();
+            }
+
+            @Override
+            public void remove() {
+                inner.remove();
+            }
+        };
     }
 
     @Override

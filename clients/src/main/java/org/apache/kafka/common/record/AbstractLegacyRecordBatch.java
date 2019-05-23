@@ -509,8 +509,28 @@ public abstract class AbstractLegacyRecordBatch extends AbstractRecordBatch impl
          * @return An iterator over the records contained within this batch
          */
         @Override
-        public Iterator<Record> skipKeyValueIterator() {
-            return iterator();
+        public CloseableIterator<Record> skipKeyValueIterator() {
+            final Iterator<Record> inner = iterator();
+
+            return new CloseableIterator<Record>() {
+                @Override
+                public void close() {}
+
+                @Override
+                public boolean hasNext() {
+                    return inner.hasNext();
+                }
+
+                @Override
+                public Record next() {
+                    return inner.next();
+                }
+
+                @Override
+                public void remove() {
+                    inner.remove();
+                }
+            };
         }
 
         @Override

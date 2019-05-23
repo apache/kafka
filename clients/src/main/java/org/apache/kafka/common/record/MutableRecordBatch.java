@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
+import org.apache.kafka.common.utils.CloseableIterator;
 
 import java.util.Iterator;
 
@@ -64,6 +65,5 @@ public interface MutableRecordBatch extends RecordBatch {
      *
      * @return The closeable iterator
      */
-    Iterator<Record> skipKeyValueIterator();
-
+    CloseableIterator<Record> skipKeyValueIterator();
 }
