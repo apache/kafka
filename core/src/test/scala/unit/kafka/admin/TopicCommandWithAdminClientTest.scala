@@ -34,6 +34,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
 import org.junit.{After, Before, Rule, Test}
 import org.junit.rules.TestName
+import org.scalatest.Assertions.{fail, intercept}
 
 import scala.collection.JavaConverters._
 import scala.concurrent.ExecutionException
@@ -468,7 +469,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val deletePath = DeleteTopicsTopicZNode.path(testTopicName)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deletePath))
     topicService.deleteTopic(deleteOpts)
-    assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deletePath))
+    TestUtils.verifyTopicDeletion(zkClient, testTopicName, 1, servers)
   }
 
   @Test
@@ -486,7 +487,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
     val deleteOffsetTopicPath = DeleteTopicsTopicZNode.path(Topic.GROUP_METADATA_TOPIC_NAME)
     assertFalse("Delete path for topic shouldn't exist before deletion.", zkClient.pathExists(deleteOffsetTopicPath))
     topicService.deleteTopic(deleteOffsetTopicOpts)
-    assertTrue("Delete path for topic should exist after deletion.", zkClient.pathExists(deleteOffsetTopicPath))
+    TestUtils.verifyTopicDeletion(zkClient, Topic.GROUP_METADATA_TOPIC_NAME, 1, servers)
   }
 
   @Test

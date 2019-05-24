@@ -206,7 +206,7 @@ class WorkerSinkTask extends WorkerTask {
             // Maybe commit
             if (!committing && (context.isCommitRequested() || now >= nextCommit)) {
                 commitOffsets(now, false);
-                nextCommit += offsetCommitIntervalMs;
+                nextCommit = now + offsetCommitIntervalMs;
                 context.clearCommitRequest();
             }
 
@@ -610,6 +610,11 @@ class WorkerSinkTask extends WorkerTask {
 
     SinkTaskMetricsGroup sinkTaskMetricsGroup() {
         return sinkTaskMetricsGroup;
+    }
+
+    // Visible for testing
+    long getNextCommit() {
+        return nextCommit;
     }
 
     private class HandleRebalance implements ConsumerRebalanceListener {

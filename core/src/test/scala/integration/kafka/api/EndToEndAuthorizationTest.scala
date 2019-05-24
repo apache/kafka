@@ -36,6 +36,7 @@ import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.junit.Assert._
 import org.junit.{After, Before, Test}
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 

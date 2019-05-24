@@ -91,11 +91,16 @@ public class KStreamWindowAggregateTest {
             driver.pipeInput(recordFactory.create(topic1, "D", "4", 7L));
             driver.pipeInput(recordFactory.create(topic1, "B", "2", 8L));
             driver.pipeInput(recordFactory.create(topic1, "C", "3", 9L));
+
             driver.pipeInput(recordFactory.create(topic1, "A", "1", 10L));
             driver.pipeInput(recordFactory.create(topic1, "B", "2", 11L));
             driver.pipeInput(recordFactory.create(topic1, "D", "4", 12L));
             driver.pipeInput(recordFactory.create(topic1, "B", "2", 13L));
             driver.pipeInput(recordFactory.create(topic1, "C", "3", 14L));
+
+            driver.pipeInput(recordFactory.create(topic1, "B", "1", 3L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "2", 2L));
+            driver.pipeInput(recordFactory.create(topic1, "B", "3", 9L));
         }
 
         assertEquals(
@@ -116,8 +121,14 @@ public class KStreamWindowAggregateTest {
                 "[B@5/15]:0+2+2+2 (ts: 11)", "[B@10/20]:0+2 (ts: 11)",
                 "[D@5/15]:0+4+4 (ts: 12)", "[D@10/20]:0+4 (ts: 12)",
                 "[B@5/15]:0+2+2+2+2 (ts: 13)", "[B@10/20]:0+2+2 (ts: 13)",
-                "[C@5/15]:0+3+3 (ts: 14)", "[C@10/20]:0+3 (ts: 14)"
-            ),
+                "[C@5/15]:0+3+3 (ts: 14)", "[C@10/20]:0+3 (ts: 14)",
+
+                "[B@0/10]:0+2+2+2+1 (ts: 8)",
+                "[B@0/10]:0+2+2+2+1+2 (ts: 8)",
+                "[B@0/10]:0+2+2+2+1+2+3 (ts: 9)",
+                "[B@5/15]:0+2+2+2+2+3 (ts: 13)"
+
+                ),
             supplier.theCapturedProcessor().processed
         );
     }
@@ -151,7 +162,7 @@ public class KStreamWindowAggregateTest {
             driver.pipeInput(recordFactory.create(topic1, "B", "2", 1L));
             driver.pipeInput(recordFactory.create(topic1, "C", "3", 2L));
             driver.pipeInput(recordFactory.create(topic1, "D", "4", 3L));
-            driver.pipeInput(recordFactory.create(topic1, "A", "1", 4L));
+            driver.pipeInput(recordFactory.create(topic1, "A", "1", 9L));
 
             final List<MockProcessor<Windowed<String>, String>> processors = supplier.capturedProcessors(3);
 
@@ -160,10 +171,11 @@ public class KStreamWindowAggregateTest {
                 "[B@0/10]:0+2 (ts: 1)",
                 "[C@0/10]:0+3 (ts: 2)",
                 "[D@0/10]:0+4 (ts: 3)",
-                "[A@0/10]:0+1+1 (ts: 4)"
+                "[A@0/10]:0+1+1 (ts: 9)",
+                "[A@5/15]:0+1 (ts: 9)"
             );
-            processors.get(1).checkAndClearProcessResult();
-            processors.get(2).checkAndClearProcessResult();
+            processors.get(1).checkAndClearProcessResult(new String[0]);
+            processors.get(2).checkAndClearProcessResult(new String[0]);
 
             driver.pipeInput(recordFactory.create(topic1, "A", "1", 5L));
             driver.pipeInput(recordFactory.create(topic1, "B", "2", 6L));
@@ -172,56 +184,54 @@ public class KStreamWindowAggregateTest {
             driver.pipeInput(recordFactory.create(topic1, "C", "3", 9L));
 
             processors.get(0).checkAndClearProcessResult(
-                "[A@0/10]:0+1+1+1 (ts: 5)", "[A@5/15]:0+1 (ts: 5)",
+                "[A@0/10]:0+1+1+1 (ts: 9)", "[A@5/15]:0+1+1 (ts: 9)",
                 "[B@0/10]:0+2+2 (ts: 6)", "[B@5/15]:0+2 (ts: 6)",
                 "[D@0/10]:0+4+4 (ts: 7)", "[D@5/15]:0+4 (ts: 7)",
                 "[B@0/10]:0+2+2+2 (ts: 8)", "[B@5/15]:0+2+2 (ts: 8)",
                 "[C@0/10]:0+3+3 (ts: 9)", "[C@5/15]:0+3 (ts: 9)"
             );
-            processors.get(1).checkAndClearProcessResult();
-            processors.get(2).checkAndClearProcessResult();
+            processors.get(1).checkAndClearProcessResult(new String[0]);
+            processors.get(2).checkAndClearProcessResult(new String[0]);
 
             driver.pipeInput(recordFactory.create(topic2, "A", "a", 0L));
             driver.pipeInput(recordFactory.create(topic2, "B", "b", 1L));
             driver.pipeInput(recordFactory.create(topic2, "C", "c", 2L));
-            driver.pipeInput(recordFactory.create(topic2, "D", "d", 3L));
-            driver.pipeInput(recordFactory.create(topic2, "A", "a", 4L));
+            driver.pipeInput(recordFactory.create(topic2, "D", "d", 20L));
+            driver.pipeInput(recordFactory.create(topic2, "A", "a", 20L));
 
-            processors.get(0).checkAndClearProcessResult();
+            processors.get(0).checkAndClearProcessResult(new String[0]);
             processors.get(1).checkAndClearProcessResult(
                 "[A@0/10]:0+a (ts: 0)",
                 "[B@0/10]:0+b (ts: 1)",
                 "[C@0/10]:0+c (ts: 2)",
-                "[D@0/10]:0+d (ts: 3)",
-                "[A@0/10]:0+a+a (ts: 4)"
+                "[D@15/25]:0+d (ts: 20)",
+                "[D@20/30]:0+d (ts: 20)",
+                "[A@15/25]:0+a (ts: 20)",
+                "[A@20/30]:0+a (ts: 20)"
             );
             processors.get(2).checkAndClearProcessResult(
-                "[A@0/10]:0+1+1+1%0+a (ts: 0)",
-                "[B@0/10]:0+2+2+2%0+b (ts: 1)",
-                "[C@0/10]:0+3+3%0+c (ts: 2)",
-                "[D@0/10]:0+4+4%0+d (ts: 3)",
-                "[A@0/10]:0+1+1+1%0+a+a (ts: 4)");
+                "[A@0/10]:0+1+1+1%0+a (ts: 9)",
+                "[B@0/10]:0+2+2+2%0+b (ts: 8)",
+                "[C@0/10]:0+3+3%0+c (ts: 9)");
 
             driver.pipeInput(recordFactory.create(topic2, "A", "a", 5L));
             driver.pipeInput(recordFactory.create(topic2, "B", "b", 6L));
             driver.pipeInput(recordFactory.create(topic2, "D", "d", 7L));
-            driver.pipeInput(recordFactory.create(topic2, "B", "b", 8L));
-            driver.pipeInput(recordFactory.create(topic2, "C", "c", 9L));
+            driver.pipeInput(recordFactory.create(topic2, "D", "d", 18L));
+            driver.pipeInput(recordFactory.create(topic2, "A", "a", 21L));
 
-            processors.get(0).checkAndClearProcessResult();
+            processors.get(0).checkAndClearProcessResult(new String[0]);
             processors.get(1).checkAndClearProcessResult(
-                "[A@0/10]:0+a+a+a (ts: 5)", "[A@5/15]:0+a (ts: 5)",
+                "[A@0/10]:0+a+a (ts: 5)", "[A@5/15]:0+a (ts: 5)",
                 "[B@0/10]:0+b+b (ts: 6)", "[B@5/15]:0+b (ts: 6)",
-                "[D@0/10]:0+d+d (ts: 7)", "[D@5/15]:0+d (ts: 7)",
-                "[B@0/10]:0+b+b+b (ts: 8)", "[B@5/15]:0+b+b (ts: 8)",
-                "[C@0/10]:0+c+c (ts: 9)", "[C@5/15]:0+c (ts: 9)"
+                "[D@0/10]:0+d (ts: 7)", "[D@5/15]:0+d (ts: 7)",
+                "[D@10/20]:0+d (ts: 18)", "[D@15/25]:0+d+d (ts: 20)",
+                "[A@15/25]:0+a+a (ts: 21)", "[A@20/30]:0+a+a (ts: 21)"
             );
             processors.get(2).checkAndClearProcessResult(
-                "[A@0/10]:0+1+1+1%0+a+a+a (ts: 5)", "[A@5/15]:0+1%0+a (ts: 5)",
-                "[B@0/10]:0+2+2+2%0+b+b (ts: 6)", "[B@5/15]:0+2+2%0+b (ts: 6)",
-                "[D@0/10]:0+4+4%0+d+d (ts: 7)", "[D@5/15]:0+4%0+d (ts: 7)",
-                "[B@0/10]:0+2+2+2%0+b+b+b (ts: 8)", "[B@5/15]:0+2+2%0+b+b (ts: 8)",
-                "[C@0/10]:0+3+3%0+c+c (ts: 9)", "[C@5/15]:0+3%0+c (ts: 9)"
+                "[A@0/10]:0+1+1+1%0+a+a (ts: 9)", "[A@5/15]:0+1+1%0+a (ts: 9)",
+                "[B@0/10]:0+2+2+2%0+b+b (ts: 8)", "[B@5/15]:0+2+2%0+b (ts: 8)",
+                "[D@0/10]:0+4+4%0+d (ts: 7)", "[D@5/15]:0+4%0+d (ts: 7)"
             );
         }
     }
@@ -290,13 +300,13 @@ public class KStreamWindowAggregateTest {
             );
 
             assertThat(appender.getMessages(), hasItems(
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[0] window=[0,10) expiration=[10]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[1] window=[0,10) expiration=[10]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[3] timestamp=[2] window=[0,10) expiration=[10]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[4] timestamp=[3] window=[0,10) expiration=[10]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[5] timestamp=[4] window=[0,10) expiration=[10]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[6] timestamp=[5] window=[0,10) expiration=[10]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[10]"
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[0] window=[0,10) expiration=[10] streamTime=[100]",
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[1] window=[0,10) expiration=[10] streamTime=[100]",
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[3] timestamp=[2] window=[0,10) expiration=[10] streamTime=[100]",
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[4] timestamp=[3] window=[0,10) expiration=[10] streamTime=[100]",
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[5] timestamp=[4] window=[0,10) expiration=[10] streamTime=[100]",
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[6] timestamp=[5] window=[0,10) expiration=[10] streamTime=[100]",
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[10] streamTime=[100]"
             ));
 
             OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@95/105]", "+100", 100);
@@ -340,13 +350,13 @@ public class KStreamWindowAggregateTest {
             assertLatenessMetrics(driver, is(7.0), is(194.0), is(97.375));
 
             assertThat(appender.getMessages(), hasItems(
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[100] window=[100,110) expiration=[110]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[101] window=[100,110) expiration=[110]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[3] timestamp=[102] window=[100,110) expiration=[110]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[4] timestamp=[103] window=[100,110) expiration=[110]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[5] timestamp=[104] window=[100,110) expiration=[110]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[6] timestamp=[105] window=[100,110) expiration=[110]",
-                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[110]"
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[1] timestamp=[100] window=[100,110) expiration=[110] streamTime=[200]",
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[2] timestamp=[101] window=[100,110) expiration=[110] streamTime=[200]",
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[3] timestamp=[102] window=[100,110) expiration=[110] streamTime=[200]",
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[4] timestamp=[103] window=[100,110) expiration=[110] streamTime=[200]",
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[5] timestamp=[104] window=[100,110) expiration=[110] streamTime=[200]",
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[6] timestamp=[105] window=[100,110) expiration=[110] streamTime=[200]",
+                "Skipping record for expired window. key=[k] topic=[topic] partition=[0] offset=[7] timestamp=[6] window=[0,10) expiration=[110] streamTime=[200]"
             ));
 
             OutputVerifier.compareKeyValueTimestamp(getOutput(driver), "[k@200/210]", "+100", 200);

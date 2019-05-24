@@ -412,7 +412,7 @@ public abstract class AbstractKeyValueStoreTest {
         LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
 
-        final KeyValueIterator iterator = store.range(-1, 1);
+        final KeyValueIterator<Integer, String> iterator = store.range(-1, 1);
         assertFalse(iterator.hasNext());
 
         final List<String> messages = appender.getMessages();

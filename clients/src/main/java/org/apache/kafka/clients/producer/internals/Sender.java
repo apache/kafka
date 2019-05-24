@@ -224,6 +224,10 @@ public class Sender implements Runnable {
         }
     }
 
+    private boolean hasPendingTransactionalRequests() {
+        return transactionManager != null && transactionManager.hasPendingRequests() && transactionManager.hasOngoingTransaction();
+    }
+
     /**
      * The main run loop for the sender thread
      */
@@ -233,7 +237,7 @@ public class Sender implements Runnable {
         // main loop, runs until close is called
         while (running) {
             try {
-                run(time.milliseconds());
+                runOnce();
             } catch (Exception e) {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
@@ -242,18 +246,36 @@ public class Sender implements Runnable {
         log.debug("Beginning shutdown of Kafka producer I/O thread, sending remaining records.");
 
         // okay we stopped accepting requests but there may still be
-        // requests in the accumulator or waiting for acknowledgment,
+        // requests in the transaction manager, accumulator or waiting for acknowledgment,
         // wait until these are completed.
-        while (!forceClose && (this.accumulator.hasUndrained() || this.client.inFlightRequestCount() > 0)) {
+        while (!forceClose && ((this.accumulator.hasUndrained() || this.client.inFlightRequestCount() > 0) || hasPendingTransactionalRequests())) {
             try {
-                run(time.milliseconds());
+                runOnce();
             } catch (Exception e) {
                 log.error("Uncaught error in kafka producer I/O thread: ", e);
             }
         }
+
+        // Abort the transaction if any commit or abort didn't go through the transaction manager's queue
+        while (!forceClose && transactionManager != null && transactionManager.hasOngoingTransaction()) {
+            if (!transactionManager.isCompleting()) {
+                log.info("Aborting incomplete transaction due to shutdown");
+                transactionManager.beginAbort();
+            }
+            try {
+                runOnce();
+            } catch (Exception e) {
+                log.error("Uncaught error in kafka producer I/O thread: ", e);
+            }
+        }
+
         if (forceClose) {
-            // We need to fail all the incomplete batches and wake up the threads waiting on
+            // We need to fail all the incomplete transactional requests and batches and wake up the threads waiting on
             // the futures.
+            if (transactionManager != null) {
+                log.debug("Aborting incomplete transactional requests due to forced shutdown");
+                transactionManager.close();
+            }
             log.debug("Aborting incomplete batches due to forced shutdown");
             this.accumulator.abortIncompleteBatches();
         }
@@ -269,14 +291,14 @@ public class Sender implements Runnable {
     /**
      * Run a single iteration of sending
      *
-     * @param now The current POSIX time in milliseconds
      */
-    void run(long now) {
+    void runOnce() {
         if (transactionManager != null) {
             try {
                 if (transactionManager.shouldResetProducerStateAfterResolvingSequences())
                     // Check if the previous run expired batches which requires a reset of the producer state.
                     transactionManager.resetProducerId();
+
                 if (!transactionManager.isTransactional()) {
                     // this is an idempotent producer, so make sure we have a producer id
                     maybeWaitForProducerId();
@@ -284,9 +306,9 @@ public class Sender implements Runnable {
                     transactionManager.transitionToFatalError(
                         new KafkaException("The client hasn't received acknowledgment for " +
                             "some previously sent messages and can no longer retry them. It isn't safe to continue."));
-                } else if (transactionManager.hasInFlightTransactionalRequest() || maybeSendTransactionalRequest(now)) {
+                } else if (transactionManager.hasInFlightTransactionalRequest() || maybeSendTransactionalRequest()) {
                     // as long as there are outstanding transactional requests, we simply wait for them to return
-                    client.poll(retryBackoffMs, now);
+                    client.poll(retryBackoffMs, time.milliseconds());
                     return;
                 }
 
@@ -296,7 +318,7 @@ public class Sender implements Runnable {
                     RuntimeException lastError = transactionManager.lastError();
                     if (lastError != null)
                         maybeAbortBatches(lastError);
-                    client.poll(retryBackoffMs, now);
+                    client.poll(retryBackoffMs, time.milliseconds());
                     return;
                 } else if (transactionManager.hasAbortableError()) {
                     accumulator.abortUndrainedBatches(transactionManager.lastError());
@@ -308,8 +330,9 @@ public class Sender implements Runnable {
             }
         }
 
-        long pollTimeout = sendProducerData(now);
-        client.poll(pollTimeout, now);
+        long currentTimeMs = time.milliseconds();
+        long pollTimeout = sendProducerData(currentTimeMs);
+        client.poll(pollTimeout, currentTimeMs);
     }
 
     private long sendProducerData(long now) {
@@ -393,7 +416,7 @@ public class Sender implements Runnable {
         return pollTimeout;
     }
 
-    private boolean maybeSendTransactionalRequest(long now) {
+    private boolean maybeSendTransactionalRequest() {
         if (transactionManager.isCompleting() && accumulator.hasIncomplete()) {
             if (transactionManager.isAborting())
                 accumulator.abortUndrainedBatches(new KafkaException("Failing batch since transaction was aborted"));
@@ -430,11 +453,12 @@ public class Sender implements Runnable {
                 if (targetNode != null) {
                     if (nextRequestHandler.isRetry())
                         time.sleep(nextRequestHandler.retryBackoffMs());
+                    long currentTimeMs = time.milliseconds();
                     ClientRequest clientRequest = client.newClientRequest(
-                        targetNode.idString(), requestBuilder, now, true, requestTimeoutMs, nextRequestHandler);
-                    transactionManager.setInFlightTransactionalRequestCorrelationId(clientRequest.correlationId());
+                        targetNode.idString(), requestBuilder, currentTimeMs, true, requestTimeoutMs, nextRequestHandler);
                     log.debug("Sending transactional request {} to node {}", requestBuilder, targetNode);
-                    client.send(clientRequest, now);
+                    client.send(clientRequest, currentTimeMs);
+                    transactionManager.setInFlightCorrelationId(clientRequest.correlationId());
                     return true;
                 }
             } catch (IOException e) {
@@ -477,6 +501,10 @@ public class Sender implements Runnable {
     public void forceClose() {
         this.forceClose = true;
         initiateClose();
+    }
+
+    public boolean isRunning() {
+        return running;
     }
 
     private ClientResponse sendAndAwaitInitProducerIdRequest(Node node) throws IOException {

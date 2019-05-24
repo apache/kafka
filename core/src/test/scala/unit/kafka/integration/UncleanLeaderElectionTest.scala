@@ -37,6 +37,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
 import org.junit.Assert._
+import org.scalatest.Assertions.intercept
 
 class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   val brokerId1 = 0
@@ -112,7 +113,6 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  @Ignore // Should be re-enabled after KAFKA-3096 is fixed
   def testUncleanLeaderElectionDisabled(): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
@@ -139,8 +139,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  @Ignore // Should be re-enabled after KAFKA-3096 is fixed
-  def testCleanLeaderElectionDisabledByTopicOverride(): Unit = {
+  def testUncleanLeaderElectionDisabledByTopicOverride(): Unit = {
     // enable unclean leader election globally, but disable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")

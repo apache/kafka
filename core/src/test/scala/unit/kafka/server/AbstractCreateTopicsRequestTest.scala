@@ -41,7 +41,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
                 validateOnly: Boolean = false) = {
     val req = new CreateTopicsRequestData()
     req.setTimeoutMs(timeout)
-    req.setTopics(new CreatableTopicSet(topics.asJava.iterator()))
+    req.setTopics(new CreatableTopicCollection(topics.asJava.iterator()))
     req.setValidateOnly(validateOnly)
     new CreateTopicsRequest.Builder(req).build()
   }
@@ -68,7 +68,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       topic.setReplicationFactor(1.toShort)
     }
     if (config != null) {
-      val effectiveConfigs = new CreateableTopicConfigSet()
+      val effectiveConfigs = new CreateableTopicConfigCollection()
       config.foreach {
         case (name, value) => {
           effectiveConfigs.add(new CreateableTopicConfig().setName(name).setValue(value))
@@ -77,7 +77,7 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
       topic.setConfigs(effectiveConfigs)
     }
     if (assignment != null) {
-      val effectiveAssignments = new CreatableReplicaAssignmentSet()
+      val effectiveAssignments = new CreatableReplicaAssignmentCollection()
       assignment.foreach {
         case (partitionIndex, brokerIdList) => {
           val effectiveAssignment = new CreatableReplicaAssignment()

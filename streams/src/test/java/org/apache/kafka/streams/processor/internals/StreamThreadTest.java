@@ -104,6 +104,7 @@ public class StreamThreadTest {
 
     private final String clientId = "clientId";
     private final String applicationId = "stream-thread-test";
+    private final int threadIdx = 1;
     private final MockTime mockTime = new MockTime();
     private final Metrics metrics = new Metrics();
     private final MockClientSupplier clientSupplier = new MockClientSupplier();
@@ -244,7 +245,8 @@ public class StreamThreadTest {
             streamsMetadataState,
             0,
             stateDirectory,
-            new MockStateRestoreListener());
+            new MockStateRestoreListener(),
+            threadIdx);
     }
 
     @Test
@@ -278,6 +280,7 @@ public class StreamThreadTest {
 
         final JmxReporter reporter = new JmxReporter("kafka.streams");
         metrics.addReporter(reporter);
+        assertEquals(clientId + "-StreamThread-1", thread.getName());
         assertTrue(reporter.containsMbean(String.format("kafka.streams:type=%s,client-id=%s",
                 defaultGroupName, thread.getName())));
     }

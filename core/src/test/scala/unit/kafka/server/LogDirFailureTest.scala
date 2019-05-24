@@ -22,6 +22,7 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import kafka.server.LogDirFailureTest._
 import kafka.api.IntegrationTestHarness
+import kafka.cluster.Partition
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.{CoreUtils, Exit, TestUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
@@ -31,6 +32,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderForPartitionException}
 import org.junit.{Before, Test}
 import org.junit.Assert.{assertEquals, assertFalse, assertTrue}
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 
@@ -111,14 +113,16 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // Send a message to another partition whose leader is the same as partition 0
     // so that ReplicaFetcherThread on the follower will get response from leader immediately
     val anotherPartitionWithTheSameLeader = (1 until partitionNum).find { i =>
-      leaderServer.replicaManager.getPartition(new TopicPartition(topic, i)).flatMap(_.leaderReplicaIfLocal).isDefined
+      leaderServer.replicaManager.nonOfflinePartition(new TopicPartition(topic, i))
+        .flatMap(_.leaderReplicaIfLocal).isDefined
     }.get
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, anotherPartitionWithTheSameLeader, topic.getBytes, "message".getBytes)
     // When producer.send(...).get returns, it is guaranteed that ReplicaFetcherThread on the follower
     // has fetched from the leader and attempts to append to the offline replica.
     producer.send(record).get
 
-    assertEquals(brokerCount, leaderServer.replicaManager.getPartition(new TopicPartition(topic, anotherPartitionWithTheSameLeader)).get.inSyncReplicas.size)
+    assertEquals(brokerCount, leaderServer.replicaManager.nonOfflinePartition(new TopicPartition(topic, anotherPartitionWithTheSameLeader))
+      .get.inSyncReplicas.size)
     followerServer.replicaManager.replicaFetcherManager.fetcherThreadMap.values.foreach { thread =>
       assertFalse("ReplicaFetcherThread should still be working if its partition count > 0", thread.isShutdownComplete)
     }
@@ -193,7 +197,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     // The controller should have marked the replica on the original leader as offline
     val controllerServer = servers.find(_.kafkaController.isActive).get
-    val offlineReplicas = controllerServer.kafkaController.replicaStateMachine.replicasInState(topic, OfflineReplica)
+    val offlineReplicas = controllerServer.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
     assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), leaderServerId)))
   }
 

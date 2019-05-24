@@ -50,7 +50,7 @@ public interface KafkaClientSupplier {
     /**
      * Create a {@link Consumer} which is used to read records of source topics.
      *
-     * @param config {@link StreamsConfig#getMainConsumerConfigs(String, String) consumer config} which is
+     * @param config {@link StreamsConfig#getMainConsumerConfigs(String, String, int) consumer config} which is
      *               supplied by the {@link java.util.Properties} given to the {@link KafkaStreams} instance
      * @return an instance of Kafka consumer
      */
