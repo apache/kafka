@@ -70,6 +70,7 @@ which are outlined here:
 
 """
 
+
 class StreamsUpgradeTest(Test):
     """
     Test upgrading Kafka Streams (all version combination)
@@ -348,7 +349,7 @@ class StreamsUpgradeTest(Test):
         while retries > 0:
             for p in self.processors:
                 found = list(p.node.account.ssh_capture("grep \"Finished assignment for group\" %s" % p.LOG_FILE, allow_fail=True))
-                if len(found) == self.leader_counter[p] + 1:
+                if len(found) >= self.leader_counter[p] + 1:
                     if self.leader is not None:
                         raise Exception("Could not uniquely identify leader")
                     self.leader = p
@@ -403,8 +404,7 @@ class StreamsUpgradeTest(Test):
                                               timeout_sec=60,
                                               err_msg="Never saw output '%s' on " % self.processed_msg + str(node2.account))
 
-
-                    # start third with <version>
+        # start third with <version>
         self.prepare_for(self.processor3, version)
         node3 = self.processor3.node
         with node1.account.monitor_log(self.processor1.STDOUT_FILE) as first_monitor:
@@ -424,7 +424,6 @@ class StreamsUpgradeTest(Test):
                         third_monitor.wait_until(self.processed_msg,
                                                  timeout_sec=60,
                                                  err_msg="Never saw output '%s' on " % self.processed_msg + str(node3.account))
-
 
     @staticmethod
     def prepare_for(processor, version):

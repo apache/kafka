@@ -71,14 +71,64 @@
     </p>
 
     <h3><a id="streams_api_changes_230" href="#streams_api_changes_230">Streams API changes in 2.3.0</a></h3>
+
     <p>Version 2.3.0 adds the Suppress operator to the <code>kafka-streams-scala</code> Ktable API.</p>
+
     <p>
-        As of 2.3.0 Streams now offers an in-memory version of the window and the session store, in addition to the persistent ones based on RocksDB. The new public interfaces <code>inMemoryWindowStore()</code> and <code>inMemorySessionStore()</code> are added to Stores and provide the built-in in-memory window or session store.
+        As of 2.3.0 Streams now offers an in-memory version of the window (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-428%3A+Add+in-memory+window+store">KIP-428</a>)
+        and the session (<a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-445%3A+In-memory+Session+Store">KIP-445</a>) store, in addition to the persistent ones based on RocksDB.
+        The new public interfaces <code>inMemoryWindowStore()</code> and <code>inMemorySessionStore()</code> are added to <code>Stores</code> and provide the built-in in-memory window or session store.
     </p>
 
     <p>
-        In 2.3.0 we have added default implementation to close() and configure() for <code>Serializer</code>, <code>Deserializer</code> and <code>Serde</code> so that they can be
-        implemented by lambda expression. For more details please read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-331+Add+default+implementation+to+close%28%29+and+configure%28%29+for+Serializer%2C+Deserializer+and+Serde">KIP-331</a>.
+        In 2.3.0 we have added default implementation to <code>close()</code> and <code>configure()</code> for <code>Serializer</code>,
+        <code>Deserializer</code> and <code>Serde</code> so that they can be implemented by lambda expression.
+        For more details please read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-331+Add+default+implementation+to+close%28%29+and+configure%28%29+for+Serializer%2C+Deserializer+and+Serde">KIP-331</a>.
+    </p>
+
+    <p>
+        To improve operator semantics, new store types are added that allow storing an additional timestamp per key-value pair or window.
+        Some DSL operators (for example KTables) are using those new stores.
+        Hence, you can now retrieve the last update timestamp via Interactive Queries if you specify
+        <code>TimestampedKeyValueStoreType</code> or <code>TimestampedWindowStoreType</code> as your <code>QueryableStoreType</code>.
+        While this change is mainly transparent, there are some corner cases that may require code changes:
+        <strong>Caution: If you receive an untyped store and use a cast, you might need to update your code to cast to the correct type.
+        Otherwise, you might get an exception similar to
+        <code>java.lang.ClassCastException: class org.apache.kafka.streams.state.ValueAndTimestamp cannot be cast to class YOUR-VALUE-TYPE</code>
+        upon getting a value from the store.</strong>
+        Additionally, <code>TopologyTestDriver#getStateStore()</code> only returns non-built-in stores and throws an exception if a built-in store is accessed.
+        For more details please read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-258%3A+Allow+to+Store+Record+Timestamps+in+RocksDB">KIP-258</a>.
+    </p>
+
+    <p>
+        To improve type safety, a new operator <code>KStream#flatTransformValues</code> is added.
+        For more details please read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-313%3A+Add+KStream.flatTransform+and+KStream.flatTransformValues">KIP-313</a>.
+    </p>
+
+    <p>
+        Kafka Streams used to set the configuration parameter <code>max.poll.interval.ms</code> to <code>Integer.MAX_VALUE</code>.
+        This default value is removed and Kafka Streams uses the consumer default value now.
+        For more details please read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-442%3A+Return+to+default+max+poll+interval+in+Streams">KIP-442</a>.
+    </p>
+
+    <p>
+        Default configuration for repartition topic was changed:
+        The segment size for index files (<code>segment.index.bytes</code>) is no longer 50MB, but uses the cluster default.
+        Similarly, the configuration <code>segment.ms</code> in no longer 10 minutes, but uses the cluster default configuration.
+        Lastly, the retention period (<code>retention.ms</code>) is changed from <code>Long.MAX_VALUE</code> to <code>-1</code> (infinite).
+        For more details please read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-443%3A+Return+to+default+segment.ms+and+segment.index.bytes+in+Streams+repartition+topics">KIP-443</a>.
+    </p>
+
+    <p>
+        To avoid memory leaks, <code>RocksDBConfigSetter</code> has a new <code>close()</code> method that is called on shutdown.
+        Users should implement this method to release any memory used by RocksDB config objects, by closing those objects.
+        For more details please read <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-453%3A+Add+close%28%29+method+to+RocksDBConfigSetter">KIP-453</a>.
+    </p>
+
+    <p>
+        RocksDB dependency was updated to version <code>5.18.3</code>.
+        The new version allows to specify more RocksDB configurations, including <code>WriteBufferManager</code> that help to limit RocksDB off-head memory usage.
+        For more details please read <a href="https://issues.apache.org/jira/browse/KAFKA-8215">KAFKA-8215</a>.
     </p>
 
     <h3><a id="streams_api_changes_220" href="#streams_api_changes_220">Streams API changes in 2.2.0</a></h3>
