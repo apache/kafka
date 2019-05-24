@@ -112,6 +112,7 @@ public class MeteredTimestampWindowStoreTest {
             if (exception.getCause() instanceof ClassCastException) {
                 fail("Serdes are not correctly set from processor context.");
             }
+            throw exception;
         }
     }
 
@@ -135,6 +136,7 @@ public class MeteredTimestampWindowStoreTest {
             if (exception.getCause() instanceof ClassCastException) {
                 fail("Serdes are not correctly set from constructor parameters.");
             }
+            throw exception;
         }
     }
 }
