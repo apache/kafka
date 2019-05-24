@@ -24,31 +24,37 @@ import org.junit.Test;
 import static org.junit.Assert.assertTrue;
 
 public class TableProcessorNodeTest {
-  private static class TestProcessor extends AbstractProcessor<String, String> {
-    @Override
-    public void init(final ProcessorContext context) {}
+    private static class TestProcessor extends AbstractProcessor<String, String> {
+        @Override
+        public void init(final ProcessorContext context) {
+        }
 
-    @Override
-    public void process(final String key, final String value) {}
+        @Override
+        public void process(final String key, final String value) {
+        }
 
-    @Override
-    public void close() {}
-  }
+        @Override
+        public void close() {
+        }
+    }
 
-  @Test
-  public void shouldConvertToStringWithNullStoreBuilder() {
-    final TableProcessorNode<String, String> node = new TableProcessorNode<>(
-        "name",
-        new ProcessorParameters<>(TestProcessor::new, "processor"),
-        null,
-        new String[]{"store1", "store2"}
-    );
+    @Test
+    public void shouldConvertToStringWithNullStoreBuilder() {
+        final TableProcessorNode<String, String> node = new TableProcessorNode<>(
+            "name",
+            new ProcessorParameters<>(TestProcessor::new, "processor"),
+            null,
+            new String[]{"store1", "store2"}
+        );
 
-    final String asString = node.toString();
-    final String expected = "storeBuilder=null";
-    assertTrue(
-        String.format("Expected toString to return string with \"%s\", received: %s", asString, asString),
-        asString.contains(expected)
-    );
-  }
+        final String asString = node.toString();
+        final String expected = "storeBuilder=null";
+        assertTrue(
+            String.format(
+                "Expected toString to return string with \"%s\", received: %s",
+                expected,
+                asString),
+            asString.contains(expected)
+        );
+    }
 }
