@@ -1602,7 +1602,8 @@ class KafkaController(val config: KafkaConfig,
           processIsrChangeNotification()
         case Startup =>
           processStartup()
-        case _ =>
+        case ShutdownEventThread =>
+          // not handled here
       }
     } catch {
       case e: ControllerMovedException =>
