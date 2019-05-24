@@ -14,7 +14,6 @@
 
 package kafka.server
 
-import java.nio.ByteBuffer
 import java.util.{Collections, LinkedHashMap, Optional, Properties}
 import java.util.concurrent.{Executors, Future, TimeUnit}
 
