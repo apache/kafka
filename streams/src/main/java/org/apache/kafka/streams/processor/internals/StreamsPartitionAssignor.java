@@ -406,7 +406,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
             final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
             final int usedVersion = info.version();
-            log.info(" mjsax used Version " + usedVersion + " supported version: " + info.latestSupportedVersion());
             supportedVersions.add(info.latestSupportedVersion());
             if (usedVersion > SubscriptionInfo.LATEST_SUPPORTED_VERSION) {
                 futureMetadataVersion = usedVersion;
@@ -428,7 +427,6 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
             // add the consumer to the client
             clientMetadata.addConsumer(consumerId, info);
         }
-        log.info(" mjsax futureMetadataVersion: " + futureMetadataVersion + " minReceivedMetadataVersion: " + minReceivedMetadataVersion);
 
         final boolean versionProbing;
         if (futureMetadataVersion != UNKNOWN) {

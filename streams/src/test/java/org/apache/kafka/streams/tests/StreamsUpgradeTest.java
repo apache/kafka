@@ -25,7 +25,6 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
@@ -40,7 +39,6 @@ import org.apache.kafka.streams.processor.internals.TaskManager;
 import org.apache.kafka.streams.processor.internals.assignment.AssignmentInfo;
 import org.apache.kafka.streams.processor.internals.assignment.SubscriptionInfo;
 import org.apache.kafka.streams.state.HostInfo;
-import org.slf4j.Logger;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
@@ -109,7 +107,6 @@ public class StreamsUpgradeTest {
     }
 
     public static class FutureStreamsPartitionAssignor extends StreamsPartitionAssignor {
-        private static final Logger log = new LogContext("mjsax ").logger(FutureStreamsPartitionAssignor.class);
 
         public FutureStreamsPartitionAssignor() {
             usedSubscriptionMetadataVersion = SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1;
@@ -191,12 +188,9 @@ public class StreamsUpgradeTest {
             Map<String, Assignment> assignment = null;
 
             final Map<String, Subscription> downgradedSubscriptions = new HashMap<>();
-            log.info("Latest support Subscription version: " + (SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1));
             for (final Subscription subscription : subscriptions.values()) {
                 final SubscriptionInfo info = SubscriptionInfo.decode(subscription.userData());
-                log.info("Subscription version: " + info.version());
                 if (info.version() < SubscriptionInfo.LATEST_SUPPORTED_VERSION + 1) {
-                    log.info("Future assignor calling super.assign() with original subscription");
                     assignment = super.assign(metadata, subscriptions);
                     break;
                 }
@@ -225,7 +219,6 @@ public class StreamsUpgradeTest {
                                 info.userEndPoint())
                                 .encode()));
                 }
-                log.info("Future assignor calling super.assign() with downgraded subscription");
                 assignment = super.assign(metadata, downgradedSubscriptions);
                 bumpUsedVersion = true;
                 bumpSupportedVersion = true;
