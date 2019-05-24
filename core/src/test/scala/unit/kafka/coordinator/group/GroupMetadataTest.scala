@@ -323,11 +323,7 @@ class GroupMetadataTest {
     var offsetAndMetadata = OffsetAndMetadata(37, "", firstCommitTimestamp)
     val commitRecordOffset = Some(3L)
 
-    // Set group state to Stable to see whether any expired offsets could be retrieved via `removeExpiredOffsets`
-    group.transitionTo(PreparingRebalance)
-    group.transitionTo(CompletingRebalance)
-    group.transitionTo(Stable)
-
+    val group = new GroupMetadata("groupId", Stable, timer.time)
     val member = new MemberMetadata("memberId", groupId, groupInstanceId, clientId, clientHost,
       rebalanceTimeoutMs, sessionTimeoutMs,
       protocolType, List(("range", Array.empty[Byte]), ("range", Array.empty[Byte])))
