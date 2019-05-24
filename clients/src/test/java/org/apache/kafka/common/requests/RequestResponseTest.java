@@ -67,6 +67,8 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.ListGroupsRequestData;
+import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -874,12 +876,18 @@ public class RequestResponseTest {
     }
 
     private ListGroupsRequest createListGroupsRequest() {
-        return new ListGroupsRequest.Builder().build();
+        return new ListGroupsRequest.Builder(new ListGroupsRequestData()).build();
     }
 
     private ListGroupsResponse createListGroupsResponse() {
-        List<ListGroupsResponse.Group> groups = Collections.singletonList(new ListGroupsResponse.Group("test-group", "consumer"));
-        return new ListGroupsResponse(Errors.NONE, groups);
+        return new ListGroupsResponse(
+                new ListGroupsResponseData()
+                        .setErrorCode(Errors.NONE.code())
+                        .setGroups(Collections.singletonList(
+                                new ListGroupsResponseData.ListedGroup()
+                                        .setGroupId("test-group")
+                                        .setProtocolType("consumer")
+                )));
     }
 
     private DescribeGroupsRequest createDescribeGroupRequest() {
