@@ -507,7 +507,7 @@ public class StreamsBuilder {
      * of the input topic.
      * <p>
      * The provided {@link ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
-     * records forwarded from the {@link SourceNode}. NOTE: you should not use this to insert transformed records into
+     * records forwarded from the {@link SourceNode}. NOTE: you should not use the {@code Processor} to insert transformed records into
      * the global state store. This store uses the source topic as changelog and during restore will insert records directly
      * from the source.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
