@@ -114,9 +114,10 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         }
 
         public static Builder forConsumer(Map<TopicPartition, PartitionData> epochsByPartition) {
-            // Old versions of this API may require CLUSTER authorization which is not typically granted
-            // to clients. We therefore require the latest version in order to be sure that we are not
-            // assuming incompatible permissions.
+            // Old versions of this API require CLUSTER permission which is not typically granted
+            // to clients. Beginning with version 3, the broker requires only TOPIC Describe
+            // permission for the topic of each requested partition. In order to ensure client
+            // compatibility, we only send this request when we can guarantee the relaxed permissions.
             return new Builder((short) 3, ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(),
                     epochsByPartition, CONSUMER_REPLICA_ID);
         }
@@ -233,4 +234,13 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
             return bld.toString();
         }
     }
+
+    /**
+     * Check whether a broker allows Topic-level permissions in order to use the
+     * OffsetForLeaderEpoch API. Old versions require Cluster permission.
+     */
+    public static boolean supportsTopicPermission(short latestUsableVersion) {
+        return latestUsableVersion >= 3;
+    }
+
 }
