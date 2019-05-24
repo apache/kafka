@@ -32,7 +32,7 @@ public class ListSerializer<T> implements Serializer<List<T>> {
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
-        // Do nothing
+        serializer.configure(configs, isKey);
     }
 
     @Override

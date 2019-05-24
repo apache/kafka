@@ -33,7 +33,7 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
 
     @Override
     public void configure(Map<String, ?> configs, boolean isKey) {
-        // Do nothing
+        deserializer.configure(configs, isKey);
     }
 
     @Override
@@ -57,7 +57,7 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
 
     @Override
     public void close() {
-        // Do nothing
+        deserializer.close();
     }
 
 }
