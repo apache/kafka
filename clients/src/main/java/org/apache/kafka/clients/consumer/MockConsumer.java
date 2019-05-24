@@ -219,7 +219,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
      */
     @Deprecated
     public synchronized void setException(KafkaException exception) {
-        this.pollException = exception;
+        setPollException(exception);
     }
 
     public synchronized void setPollException(KafkaException exception) {
