@@ -42,8 +42,8 @@ public class ListDeserializer<T> implements Deserializer<List<T>> {
             return null;
         }
         try (final DataInputStream dis = new DataInputStream(new ByteArrayInputStream(data))) {
-            List<T> deserializedList = new ArrayList<>();
             final int size = dis.readInt();
+            List<T> deserializedList = new ArrayList<>(size);
             for (int i = 0; i < size; i++) {
                 byte[] payload = new byte[dis.readInt()];
                 dis.read(payload);
