@@ -812,7 +812,8 @@ public class StreamThread extends Thread {
                         "This implies that this thread missed a rebalance and dropped out of the consumer group. " +
                         "Will try to rejoin the consumer group. Below is the detailed description of the task:\n{}",
                     ignoreAndRejoinGroup.migratedTask().id(), ignoreAndRejoinGroup.migratedTask().toString(">"));
-
+                log.info("Resetting numIterations from {} to 1", numIterations);
+                numIterations = 1;
                 enforceRebalance();
             }
         }
