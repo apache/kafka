@@ -543,6 +543,8 @@ private[log] class Cleaner(val id: Int,
    * @param map The offset map to use for cleaning segments
    * @param deleteHorizonMs The time to retain delete tombstones
    * @param stats Collector for cleaning statistics
+   * @param transactionMetadata State of ongoing transactions which is carried between the cleaning
+   *                            of the grouped segments
    */
   private[log] def cleanSegments(log: Log,
                                  segments: Seq[LogSegment],
@@ -567,7 +569,7 @@ private[log] class Cleaner(val id: Int,
         val startOffset = currentSegment.baseOffset
         val upperBoundOffset = nextSegmentOpt.map(_.baseOffset).getOrElse(map.latestOffset + 1)
         val abortedTransactions = log.collectAbortedTransactions(startOffset, upperBoundOffset)
-        transactionMetadata.loadAbortedTransactions(abortedTransactions)
+        transactionMetadata.addAbortedTransactions(abortedTransactions)
 
         val retainDeletes = currentSegment.lastModified > deleteHorizonMs
         info(s"Cleaning segment $startOffset in log ${log.name} (largest timestamp ${new Date(currentSegment.largestTimestamp)}) " +
@@ -878,7 +880,7 @@ private[log] class Cleaner(val id: Int,
 
     val transactionMetadata = new CleanedTransactionMetadata
     val abortedTransactions = log.collectAbortedTransactions(start, end)
-    transactionMetadata.loadAbortedTransactions(abortedTransactions)
+    transactionMetadata.addAbortedTransactions(abortedTransactions)
 
     // Add all the cleanable dirty segments. We must take at least map.slots * load_factor,
     // but we may be able to fit more (if there is lots of duplication in the dirty section of the log)
@@ -1066,7 +1068,7 @@ private[log] class CleanedTransactionMetadata {
   // Output cleaned index to write retained aborted transactions
   var cleanedIndex: Option[TransactionIndex] = None
 
-  def loadAbortedTransactions(abortedTransactions: List[AbortedTxn]): Unit = {
+  def addAbortedTransactions(abortedTransactions: List[AbortedTxn]): Unit = {
     this.abortedTransactions ++= abortedTransactions
   }
 
