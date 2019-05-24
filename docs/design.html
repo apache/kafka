@@ -221,17 +221,19 @@
     The rebalance protocol relies on the group coordinator to allocate entity ids to group members. These generated ids are ephemeral and will change when members restart and rejoin.
     For consumer based apps, this "dynamic membership" can cause a large percentage of tasks re-assigned to different instances during administrative operations
     such as code deploys, configuration updates and periodic restarts. For large state applications, shuffled tasks need a long time to recover their local states before processing
-    and cause applications to be partially or entirely unavailable. Motivated by this observation, new Kafka’s group management protocol allows group members to provide persistent entity ids.
+    and cause applications to be partially or entirely unavailable. Motivated by this observation, Kafka’s group management protocol allows group members to provide persistent entity ids.
     Group membership remains unchanged based on those ids, thus no rebalance will be triggered.
     <p>
     If you want to use static membership,
     <ul>
-        <li>Upgrade both broker cluster and stream apps to 2.3 or beyond, and also make sure the upgraded brokers are using <code>inter.broker.protocol.version</code>
+        <li>Upgrade both broker cluster and client apps to 2.3 or beyond, and also make sure the upgraded brokers are using <code>inter.broker.protocol.version</code>
             of 2.3 or beyond as well.</li>
         <li>Set the config <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> to a unique value for each consumer instance under one group.</li>
+        <li>For Kafka Streams applications, it is sufficient to set a unique <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> per KafkaStreams instance,
+            independent of the number of used threads for an instance.</li>
     </ul>
-    If your broker is on older version, but you choose to set <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> on the client side, stream app will detect the broker version and
-    then throws an UnsupportedException and shutdown. If you accidentally configure duplicate ids for different stream instances,
+    If your broker is on an older version than 2.3, but you choose to set <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> on the client side, the application will detect
+    the broker version and then throws an UnsupportedException. If you accidentally configure duplicate ids for different instances,
     a fencing mechanism on broker side will inform your duplicate client to shutdown immediately by triggering a <code>org.apache.kafka.common.errors.FencedInstanceIdException</code>.
     For more details, see
     <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-345%3A+Introduce+static+membership+protocol+to+reduce+consumer+rebalances">KIP-345</a>
