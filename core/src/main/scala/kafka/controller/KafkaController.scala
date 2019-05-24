@@ -1534,12 +1534,20 @@ class KafkaController(val config: KafkaConfig,
           warn(s"Skipping replica leader election ($electionType) for partitions $partitionsBeingDeleted " +
             s"by $electionTrigger since the respective topics are being deleted")
         }
-        // partition those where preferred is already leader
-        val (electablePartitions, alreadyPreferred) = livePartitions.partition { partition =>
-          val assignedReplicas = controllerContext.partitionReplicaAssignment(partition)
-          val preferredReplica = assignedReplicas.head
-          val currentLeader = controllerContext.partitionLeadershipInfo(partition).leaderAndIsr.leader
-          currentLeader != preferredReplica
+
+        // partition those that have a valid leader
+        val (electablePartitions, alreadyValidLeader) = livePartitions.partition { partition =>
+          electionType match {
+            case ElectionType.PREFERRED =>
+              val assignedReplicas = controllerContext.partitionReplicaAssignment(partition)
+              val preferredReplica = assignedReplicas.head
+              val currentLeader = controllerContext.partitionLeadershipInfo(partition).leaderAndIsr.leader
+              currentLeader != preferredReplica
+
+            case ElectionType.UNCLEAN =>
+              val currentLeader = controllerContext.partitionLeadershipInfo(partition).leaderAndIsr.leader
+              currentLeader == LeaderAndIsr.NoLeader || !controllerContext.liveBrokerIds.contains(currentLeader)
+          }
         }
 
         val results = onReplicaElection(electablePartitions, electionType, electionTrigger).mapValues {
@@ -1556,7 +1564,7 @@ class KafkaController(val config: KafkaConfig,
             }
           case Right(leaderAndIsr) => Right(leaderAndIsr.leader)
         } ++
-        alreadyPreferred.map(_ -> Left(new ApiError(Errors.ELECTION_NOT_NEEDED))) ++
+        alreadyValidLeader.map(_ -> Left(new ApiError(Errors.ELECTION_NOT_NEEDED))) ++
         partitionsBeingDeleted.map(
           _ -> Left(new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is being deleted"))
         ) ++
