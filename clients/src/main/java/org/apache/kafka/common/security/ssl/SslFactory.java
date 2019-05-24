@@ -169,7 +169,7 @@ public class SslFactory implements Reconfigurable {
         return sslEngineBuilder.createSslEngine(mode, peerHost, peerPort, endpointIdentification);
     }
 
-    // Keep this for backward compatibility
+    // Retain this while non-AK users migrate away from reusing this non-public API class
     public SSLContext sslContext() {
         return sslEngineBuilder.sslContext();
     }
