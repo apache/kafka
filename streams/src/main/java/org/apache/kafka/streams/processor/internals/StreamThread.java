@@ -775,9 +775,8 @@ public class StreamThread extends Thread {
             runLoop();
             cleanRun = true;
         } catch (final TimeoutException e) {
-
-            throw new TimeoutException("The thread-consumer : " + threadMetadata.consumerClientId() + " and restore-consumer : " + threadMetadata.restoreConsumerClientId() + "has happened TimeoutExceptio" +
-                    " Try tuning 'default.api.timeout.ms' option", e);
+            throw new TimeoutException("The thread-consumer : " + threadMetadata.consumerClientId() + " and restore-consumer : " + threadMetadata.restoreConsumerClientId() + "has happened TimeoutException" +
+                    " Try increasing 'default.api.timeout.ms' option", e);
         } catch (final KafkaException e) {
             log.error("Encountered the following unexpected Kafka exception during processing, " +
                 "this usually indicate Streams internal errors:", e);

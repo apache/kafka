@@ -387,7 +387,7 @@ public class Fetcher<K, V> implements Closeable {
             timer.sleep(retryBackoffMs);
         } while (timer.notExpired());
 
-        throw new TimeoutException("Timeout expired while fetching topic metadata, Try tuning 'default.api.timeout.ms' option");
+        throw new TimeoutException("Timeout expired while fetching topic metadata, Try increasing 'default.api.timeout.ms' option");
     }
 
     /**
@@ -519,7 +519,7 @@ public class Fetcher<K, V> implements Closeable {
                 timer.sleep(retryBackoffMs);
         } while (timer.notExpired());
 
-        throw new TimeoutException("Failed to get offsets by times in " + timer.elapsedMs() + "ms, Try tuning 'default.api.timeout.ms' option");
+        throw new TimeoutException("Failed to get offsets by times in " + timer.elapsedMs() + "Try increasing 'default.api.timeout.ms' option");
     }
 
     public Map<TopicPartition, Long> beginningOffsets(Collection<TopicPartition> partitions, Timer timer) {
