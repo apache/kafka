@@ -23,6 +23,7 @@ import TestUtils._
 import kafka.zk.ZooKeeperTestHarness
 import java.io.File
 
+import kafka.cluster.Partition
 import kafka.server.checkpoints.OffsetCheckpointFile
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
@@ -147,7 +148,7 @@ class LogRecoveryTest extends ZooKeeperTestHarness {
       * is that server1 has caught up on the topicPartition, and has joined the ISR.
       * In the line below, we wait until the condition is met before shutting down server2
       */
-    waitUntilTrue(() => server2.replicaManager.getPartition(topicPartition).get.inSyncReplicas.size == 2,
+    waitUntilTrue(() => server2.replicaManager.nonOfflinePartition(topicPartition).get.inSyncReplicas.size == 2,
       "Server 1 is not able to join the ISR after restart")
 
 

@@ -98,9 +98,9 @@ class ReplicaFetcherThreadTest {
     stub(replica, partition, replicaManager)
 
     //Expectations
-    expect(partition.truncateTo(anyLong(), anyBoolean())).once
+    expect(partition.truncateTo(anyLong(), anyBoolean())).times(3)
 
-    replay(replicaManager, logManager, quota, replica)
+    replay(replicaManager, logManager, quota, replica, partition)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsets = Map(t1p0 -> new EpochEndOffset(leaderEpoch, 1),
@@ -227,9 +227,9 @@ class ReplicaFetcherThreadTest {
     stub(replica, partition, replicaManager)
 
     //Expectations
-    expect(partition.truncateTo(anyLong(), anyBoolean())).once
+    expect(partition.truncateTo(anyLong(), anyBoolean())).times(2)
 
-    replay(replicaManager, logManager, replica)
+    replay(replicaManager, logManager, replica, partition)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsets = Map(t1p0 -> new EpochEndOffset(leaderEpoch, 1), t1p1 -> new EpochEndOffset(leaderEpoch, 1)).asJava
@@ -609,6 +609,7 @@ class ReplicaFetcherThreadTest {
     val leaderEpoch = 4
 
     //Stub return values
+    expect(partition.truncateTo(0L, false)).times(2)
     expect(replica.logEndOffset).andReturn(0).anyTimes()
     expect(replica.highWatermark).andReturn(new LogOffsetMetadata(0)).anyTimes()
     expect(replica.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
@@ -618,7 +619,7 @@ class ReplicaFetcherThreadTest {
     expect(replicaManager.replicaAlterLogDirsManager).andReturn(replicaAlterLogDirsManager).anyTimes()
     stub(replica, partition, replicaManager)
 
-    replay(replicaManager, logManager, quota, replica)
+    replay(replicaManager, logManager, quota, replica, partition)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
     val offsetsReply = Map(
@@ -727,15 +728,13 @@ class ReplicaFetcherThreadTest {
     verify(mockBlockingSend)
   }
 
-  def stub(replica: Replica, partition: Partition, replicaManager: ReplicaManager) = {
-    expect(replicaManager.localReplica(t1p0)).andReturn(Some(replica)).anyTimes()
+  def stub(replica: Replica, partition: Partition, replicaManager: ReplicaManager): Unit = {
     expect(replicaManager.localReplicaOrException(t1p0)).andReturn(replica).anyTimes()
-    expect(replicaManager.getPartition(t1p0)).andReturn(Some(partition)).anyTimes()
-    expect(replicaManager.localReplica(t1p1)).andReturn(Some(replica)).anyTimes()
+    expect(replicaManager.nonOfflinePartition(t1p0)).andReturn(Some(partition)).anyTimes()
     expect(replicaManager.localReplicaOrException(t1p1)).andReturn(replica).anyTimes()
-    expect(replicaManager.getPartition(t1p1)).andReturn(Some(partition)).anyTimes()
-    expect(replicaManager.localReplica(t2p1)).andReturn(Some(replica)).anyTimes()
+    expect(replicaManager.nonOfflinePartition(t1p1)).andReturn(Some(partition)).anyTimes()
     expect(replicaManager.localReplicaOrException(t2p1)).andReturn(replica).anyTimes()
-    expect(replicaManager.getPartition(t2p1)).andReturn(Some(partition)).anyTimes()
+    expect(replicaManager.nonOfflinePartition(t2p1)).andReturn(Some(partition)).anyTimes()
+    expect(partition.localReplicaOrException).andReturn(replica).anyTimes()
   }
 }
