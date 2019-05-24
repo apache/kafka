@@ -340,6 +340,118 @@ public class SubscriptionStateTest {
         assertFalse(state.preferredReadReplica(tp0, 31L).isPresent());
     }
 
+    @Test
+    public void testSeekUnvalidatedWithNoOffsetEpoch() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        state.assignFromUser(Collections.singleton(tp0));
+
+        // Seek with no offset epoch requires no validation no matter what the current leader is
+        state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0L, Optional.empty(),
+                new Metadata.LeaderAndEpoch(broker1, Optional.of(5))));
+        assertTrue(state.hasValidPosition(tp0));
+        assertFalse(state.awaitingValidation(tp0));
+
+        assertFalse(state.maybeValidatePositionForCurrentLeader(tp0, new Metadata.LeaderAndEpoch(broker1, Optional.empty())));
+        assertTrue(state.hasValidPosition(tp0));
+        assertFalse(state.awaitingValidation(tp0));
+
+        assertFalse(state.maybeValidatePositionForCurrentLeader(tp0, new Metadata.LeaderAndEpoch(broker1, Optional.of(10))));
+        assertTrue(state.hasValidPosition(tp0));
+        assertFalse(state.awaitingValidation(tp0));
+    }
+
+    @Test
+    public void testSeekUnvalidatedWithNoEpochClearsAwaitingValidation() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        state.assignFromUser(Collections.singleton(tp0));
+
+        // Seek with no offset epoch requires no validation no matter what the current leader is
+        state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0L, Optional.of(2),
+                new Metadata.LeaderAndEpoch(broker1, Optional.of(5))));
+        assertFalse(state.hasValidPosition(tp0));
+        assertTrue(state.awaitingValidation(tp0));
+
+        state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0L, Optional.empty(),
+                new Metadata.LeaderAndEpoch(broker1, Optional.of(5))));
+        assertTrue(state.hasValidPosition(tp0));
+        assertFalse(state.awaitingValidation(tp0));
+    }
+
+    @Test
+    public void testSeekUnvalidatedWithOffsetEpoch() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        state.assignFromUser(Collections.singleton(tp0));
+
+        state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(0L, Optional.of(2),
+                new Metadata.LeaderAndEpoch(broker1, Optional.of(5))));
+        assertFalse(state.hasValidPosition(tp0));
+        assertTrue(state.awaitingValidation(tp0));
+
+        // Update using the current leader and epoch
+        assertTrue(state.maybeValidatePositionForCurrentLeader(tp0, new Metadata.LeaderAndEpoch(broker1, Optional.of(5))));
+        assertFalse(state.hasValidPosition(tp0));
+        assertTrue(state.awaitingValidation(tp0));
+
+        // Update with a newer leader and epoch
+        assertTrue(state.maybeValidatePositionForCurrentLeader(tp0, new Metadata.LeaderAndEpoch(broker1, Optional.of(15))));
+        assertFalse(state.hasValidPosition(tp0));
+        assertTrue(state.awaitingValidation(tp0));
+
+        // If the updated leader has no epoch information, then skip validation and begin fetching
+        assertFalse(state.maybeValidatePositionForCurrentLeader(tp0, new Metadata.LeaderAndEpoch(broker1, Optional.empty())));
+        assertTrue(state.hasValidPosition(tp0));
+        assertFalse(state.awaitingValidation(tp0));
+    }
+
+    @Test
+    public void testSeekValidatedShouldClearAwaitingValidation() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        state.assignFromUser(Collections.singleton(tp0));
+
+        state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(5),
+                new Metadata.LeaderAndEpoch(broker1, Optional.of(10))));
+        assertFalse(state.hasValidPosition(tp0));
+        assertTrue(state.awaitingValidation(tp0));
+        assertEquals(10L, state.position(tp0).offset);
+
+        state.seekValidated(tp0, new SubscriptionState.FetchPosition(8L, Optional.of(4),
+                new Metadata.LeaderAndEpoch(broker1, Optional.of(10))));
+        assertTrue(state.hasValidPosition(tp0));
+        assertFalse(state.awaitingValidation(tp0));
+        assertEquals(8L, state.position(tp0).offset);
+    }
+
+    @Test
+    public void testCompleteValidationShouldClearAwaitingValidation() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        state.assignFromUser(Collections.singleton(tp0));
+
+        state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(5),
+                new Metadata.LeaderAndEpoch(broker1, Optional.of(10))));
+        assertFalse(state.hasValidPosition(tp0));
+        assertTrue(state.awaitingValidation(tp0));
+        assertEquals(10L, state.position(tp0).offset);
+
+        state.completeValidation(tp0);
+        assertTrue(state.hasValidPosition(tp0));
+        assertFalse(state.awaitingValidation(tp0));
+        assertEquals(10L, state.position(tp0).offset);
+    }
+
+    @Test
+    public void testOffsetResetWhileAwaitingValidation() {
+        Node broker1 = new Node(1, "localhost", 9092);
+        state.assignFromUser(Collections.singleton(tp0));
+
+        state.seekUnvalidated(tp0, new SubscriptionState.FetchPosition(10L, Optional.of(5),
+                new Metadata.LeaderAndEpoch(broker1, Optional.of(10))));
+        assertTrue(state.awaitingValidation(tp0));
+
+        state.requestOffsetReset(tp0, OffsetResetStrategy.EARLIEST);
+        assertFalse(state.awaitingValidation(tp0));
+        assertTrue(state.isOffsetResetNeeded(tp0));
+    }
+
     private static class MockRebalanceListener implements ConsumerRebalanceListener {
         public Collection<TopicPartition> revoked;
         public Collection<TopicPartition> assigned;

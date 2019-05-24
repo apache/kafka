@@ -466,7 +466,7 @@ public class Fetcher<K, V> implements Closeable {
         // Validate each partition against the current leader and epoch
         subscriptions.assignedPartitions().forEach(topicPartition -> {
             ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(topicPartition);
-            subscriptions.maybeValidatePosition(topicPartition, leaderAndEpoch);
+            subscriptions.maybeValidatePositionForCurrentLeader(topicPartition, leaderAndEpoch);
         });
 
         // Collect positions needing validation, with backoff
@@ -677,7 +677,7 @@ public class Fetcher<K, V> implements Closeable {
         SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
                 offsetData.offset, offsetData.leaderEpoch, metadata.leaderAndEpoch(partition));
         offsetData.leaderEpoch.ifPresent(epoch -> metadata.updateLastSeenEpochIfNewer(partition, epoch));
-        subscriptions.maybeSeek(partition, position.offset, requestedResetStrategy);
+        subscriptions.maybeSeekUnvalidated(partition, position.offset, requestedResetStrategy);
     }
 
     private void resetOffsetsAsync(Map<TopicPartition, Long> partitionResetTimestamps) {
@@ -793,8 +793,9 @@ public class Fetcher<K, V> implements Closeable {
                                 if (subscriptions.hasDefaultOffsetResetPolicy()) {
                                     SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
                                             respEndOffset.endOffset(), Optional.of(respEndOffset.leaderEpoch()), currentLeader);
-                                    log.info("Truncation detected for partition {}, resetting offset to {}", respTopicPartition, newPosition);
-                                    subscriptions.seek(respTopicPartition, newPosition);
+                                    log.info("Truncation detected for partition {} at offset {}, resetting offset to " +
+                                            "the first offset known to diverge {}", respTopicPartition, currentPosition, newPosition);
+                                    subscriptions.seekValidated(respTopicPartition, newPosition);
                                 } else {
                                     log.warn("Truncation detected for partition {}, but no reset policy is set", respTopicPartition);
                                     truncationWithoutResetPolicy.put(respTopicPartition, new OffsetAndMetadata(
@@ -1084,7 +1085,7 @@ public class Fetcher<K, V> implements Closeable {
 
         // Ensure the position has an up-to-date leader
         subscriptions.assignedPartitions().forEach(
-            tp -> subscriptions.maybeValidatePosition(tp, metadata.leaderAndEpoch(tp)));
+            tp -> subscriptions.maybeValidatePositionForCurrentLeader(tp, metadata.leaderAndEpoch(tp)));
 
         long currentTimeMs = time.milliseconds();
 

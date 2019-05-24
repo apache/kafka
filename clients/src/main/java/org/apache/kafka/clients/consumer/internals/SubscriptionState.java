@@ -50,7 +50,7 @@ import java.util.stream.Collectors;
  * or with {@link #assignFromSubscribed(Collection)} (automatic assignment from subscription).
  *
  * Once assigned, the partition is not considered "fetchable" until its initial position has
- * been set with {@link #seek(TopicPartition, FetchPosition)}. Fetchable partitions track a fetch
+ * been set with {@link #seekValidated(TopicPartition, FetchPosition)}. Fetchable partitions track a fetch
  * position which is used to set the offset of the next fetch, and a consumed position
  * which is the last offset that has been returned to the user. You can suspend fetching
  * from a partition through {@link #pause(TopicPartition)} without affecting the fetched/consumed
@@ -349,19 +349,19 @@ public class SubscriptionState {
         return this.assignment.stateValue(tp);
     }
 
-    public synchronized void seek(TopicPartition tp, FetchPosition position) {
-        assignedState(tp).seek(position);
-    }
-
-    public synchronized void seekAndValidate(TopicPartition tp, FetchPosition position) {
-        assignedState(tp).seekAndValidate(position);
+    public synchronized void seekValidated(TopicPartition tp, FetchPosition position) {
+        assignedState(tp).seekValidated(position);
     }
 
     public void seek(TopicPartition tp, long offset) {
-        seek(tp, new FetchPosition(offset));
+        seekValidated(tp, new FetchPosition(offset));
     }
 
-    synchronized void maybeSeek(TopicPartition tp, long offset, OffsetResetStrategy requestedResetStrategy) {
+    public void seekUnvalidated(TopicPartition tp, FetchPosition position) {
+        assignedState(tp).seekUnvalidated(position);
+    }
+
+    synchronized void maybeSeekUnvalidated(TopicPartition tp, long offset, OffsetResetStrategy requestedResetStrategy) {
         TopicPartitionState state = assignedStateOrNull(tp);
         if (state == null) {
             log.debug("Skipping reset of partition {} since it is no longer assigned", tp);
@@ -371,7 +371,7 @@ public class SubscriptionState {
             log.debug("Skipping reset of partition {} since an alternative reset has been requested", tp);
         } else {
             log.info("Resetting offset for partition {} to offset {}.", tp, offset);
-            state.seek(new FetchPosition(offset));
+            state.seekUnvalidated(new FetchPosition(offset));
         }
     }
 
@@ -405,7 +405,7 @@ public class SubscriptionState {
         assignedState(tp).position(position);
     }
 
-    synchronized boolean maybeValidatePosition(TopicPartition tp, Metadata.LeaderAndEpoch leaderAndEpoch) {
+    public synchronized boolean maybeValidatePositionForCurrentLeader(TopicPartition tp, Metadata.LeaderAndEpoch leaderAndEpoch) {
         return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
     }
 
@@ -414,7 +414,7 @@ public class SubscriptionState {
     }
 
     public synchronized void completeValidation(TopicPartition tp) {
-        assignedState(tp).validate();
+        assignedState(tp).completeValidation();
     }
 
     public synchronized FetchPosition validPosition(TopicPartition tp) {
@@ -695,7 +695,7 @@ public class SubscriptionState {
                 return false;
             }
 
-            if (position != null && !position.safeToFetchFrom(currentLeaderAndEpoch)) {
+            if (position != null && !position.currentLeader.equals(currentLeaderAndEpoch)) {
                 FetchPosition newPosition = new FetchPosition(position.offset, position.offsetEpoch, currentLeaderAndEpoch);
                 validatePosition(newPosition);
                 preferredReadReplica = null;
@@ -704,7 +704,7 @@ public class SubscriptionState {
         }
 
         private void validatePosition(FetchPosition position) {
-            if (position.offsetEpoch.isPresent()) {
+            if (position.offsetEpoch.isPresent() && position.currentLeader.epoch.isPresent()) {
                 transitionState(FetchStates.AWAIT_VALIDATION, () -> {
                     this.position = position;
                     this.nextRetryTimeMs = null;
@@ -721,7 +721,7 @@ public class SubscriptionState {
         /**
          * Clear the awaiting validation state and enter fetching.
          */
-        private void validate() {
+        private void completeValidation() {
             if (hasPosition()) {
                 transitionState(FetchStates.FETCHING, () -> {
                     this.nextRetryTimeMs = null;
@@ -761,7 +761,7 @@ public class SubscriptionState {
             return paused;
         }
 
-        private void seek(FetchPosition position) {
+        private void seekValidated(FetchPosition position) {
             transitionState(FetchStates.FETCHING, () -> {
                 this.position = position;
                 this.resetStrategy = null;
@@ -769,8 +769,8 @@ public class SubscriptionState {
             });
         }
 
-        private void seekAndValidate(FetchPosition fetchPosition) {
-            seek(fetchPosition);
+        private void seekUnvalidated(FetchPosition fetchPosition) {
+            seekValidated(fetchPosition);
             validatePosition(fetchPosition);
         }
 
@@ -932,14 +932,6 @@ public class SubscriptionState {
             this.offset = offset;
             this.offsetEpoch = Objects.requireNonNull(offsetEpoch);
             this.currentLeader = Objects.requireNonNull(currentLeader);
-        }
-
-        /**
-         * Test if it is "safe" to fetch from a given leader and epoch. This effectively is testing if
-         * {@link Metadata.LeaderAndEpoch} known to the subscription is equal to the one supplied by the caller.
-         */
-        boolean safeToFetchFrom(Metadata.LeaderAndEpoch leaderAndEpoch) {
-            return !currentLeader.leader.isEmpty() && currentLeader.equals(leaderAndEpoch);
         }
 
         @Override
