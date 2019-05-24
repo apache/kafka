@@ -367,33 +367,8 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             return uncompressedIterator();
 
         // we define this to be a closable iterator so that caller (i.e. the log validator) needs to close it
-        // while we can save memory footprint of not decompressing the full record set ahead of time;
-        // also try to reuse the decompression buffer
-        final BufferSupplier decompressionBufferSupplier = BufferSupplier.create();
-        final CloseableIterator<Record> inner = compressedIterator(decompressionBufferSupplier, true);
-
-        return new CloseableIterator<Record>() {
-            @Override
-            public void close() {
-                inner.close();
-                decompressionBufferSupplier.close();
-            }
-
-            @Override
-            public boolean hasNext() {
-                return inner.hasNext();
-            }
-
-            @Override
-            public Record next() {
-                return inner.next();
-            }
-
-            @Override
-            public void remove() {
-                inner.remove();
-            }
-        };
+        // while we can save memory footprint of not decompressing the full record set ahead of time
+        return compressedIterator(BufferSupplier.NO_CACHING, true);
     }
 
     @Override
