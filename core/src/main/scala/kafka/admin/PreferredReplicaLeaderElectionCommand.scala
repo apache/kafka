@@ -244,7 +244,7 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
       val failed = mutable.Map.empty[TopicPartition, Throwable]
 
       electionResults.foreach { case (topicPartition, error) =>
-        if (error.isPresent) {
+        val _: Unit = if (error.isPresent) {
           if (error.get.isInstanceOf[ElectionNotNeededException]) {
             noop += topicPartition
           } else {
@@ -253,9 +253,6 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
         } else {
           succeeded += topicPartition
         }
-
-        // Return unit. The scalac compiler throws an error because the expression above doesn't return Unit.
-        ()
       }
 
       if (!succeeded.isEmpty) {

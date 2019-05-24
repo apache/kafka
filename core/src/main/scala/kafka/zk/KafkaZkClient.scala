@@ -293,8 +293,10 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    *         1. The successfully gathered log configs
    *         2. Exceptions corresponding to failed log config lookups.
    */
-  def getLogConfigs(topics: Seq[String], config: java.util.Map[String, AnyRef]):
-  (Map[String, LogConfig], Map[String, Exception]) = {
+  def getLogConfigs(
+    topics: Set[String],
+    config: java.util.Map[String, AnyRef]
+  ): (Map[String, LogConfig], Map[String, Exception]) = {
     val logConfigs = mutable.Map.empty[String, LogConfig]
     val failed = mutable.Map.empty[String, Exception]
     val configResponses = try {
@@ -460,11 +462,11 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Gets all topics in the cluster.
    * @return sequence of topics in the cluster.
    */
-  def getAllTopicsInCluster: Seq[String] = {
+  def getAllTopicsInCluster: Set[String] = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(TopicsZNode.path))
     getChildrenResponse.resultCode match {
-      case Code.OK => getChildrenResponse.children
-      case Code.NONODE => Seq.empty
+      case Code.OK => getChildrenResponse.children.toSet
+      case Code.NONODE => Set.empty
       case _ => throw getChildrenResponse.resultException.get
     }
 
@@ -1634,10 +1636,11 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     retryRequestsUntilConnected(createRequests, expectedControllerEpochZkVersion)
   }
 
-  private def getTopicConfigs(topics: Seq[String]): Seq[GetDataResponse] = {
-    val getDataRequests = topics.map { topic =>
+  private def getTopicConfigs(topics: Set[String]): Seq[GetDataResponse] = {
+    val getDataRequests: Seq[GetDataRequest] = topics.map { topic =>
       GetDataRequest(ConfigEntityZNode.path(ConfigType.Topic, topic), ctx = Some(topic))
-    }
+    }(breakOut)
+
     retryRequestsUntilConnected(getDataRequests)
   }
 

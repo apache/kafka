@@ -320,6 +320,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
         leaderAndIsr.isr.contains(replicaId)
       }.right.getOrElse(false)
     }
+
     val adjustedLeaderAndIsrs: Map[TopicPartition, LeaderAndIsr] = leaderAndIsrsWithReplica.flatMap {
       case (partition, result) =>
         result.right.toOption.map { leaderAndIsr =>
@@ -346,16 +347,17 @@ class ZkReplicaStateMachine(config: KafkaConfig,
         } else None
       }(breakOut)
 
-    val leaderIsrAndControllerEpochs = (leaderAndIsrsWithoutReplica ++ finishedPartitions).map { case (partition, result) =>
-      (
-        partition,
-        result.right.map { leaderAndIsr =>
-          val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
-          controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
-          leaderIsrAndControllerEpoch
-        }
-      )
-    }
+    val leaderIsrAndControllerEpochs: Map[TopicPartition, Either[Exception, LeaderIsrAndControllerEpoch]] =
+      (leaderAndIsrsWithoutReplica ++ finishedPartitions).map { case (partition, result: Either[Exception, LeaderAndIsr]) =>
+        (
+          partition,
+          result.right.map { leaderAndIsr =>
+            val leaderIsrAndControllerEpoch = LeaderIsrAndControllerEpoch(leaderAndIsr, controllerContext.epoch)
+            controllerContext.partitionLeadershipInfo.put(partition, leaderIsrAndControllerEpoch)
+            leaderIsrAndControllerEpoch
+          }
+          )
+      }
 
     (
       leaderIsrAndControllerEpochs ++ exceptionsForPartitionsWithNoLeaderAndIsrInZk,
@@ -383,36 +385,35 @@ class ZkReplicaStateMachine(config: KafkaConfig,
     }
 
     val partitionsWithNoLeaderAndIsrInZk = mutable.Buffer.empty[TopicPartition]
+    val result = mutable.Map.empty[TopicPartition, Either[Exception, LeaderAndIsr]]
 
-    val result: Map[TopicPartition, Either[Exception, LeaderAndIsr]] = getDataResponses.flatMap { getDataResponse =>
+    getDataResponses.foreach { getDataResponse =>
       val partition = getDataResponse.ctx.get.asInstanceOf[TopicPartition]
-      if (getDataResponse.resultCode == Code.OK) {
+      val _: Unit = if (getDataResponse.resultCode == Code.OK) {
         TopicPartitionStateZNode.decode(getDataResponse.data, getDataResponse.stat) match {
           case None =>
             partitionsWithNoLeaderAndIsrInZk += partition
-            None
           case Some(leaderIsrAndControllerEpoch) =>
             if (leaderIsrAndControllerEpoch.controllerEpoch > controllerContext.epoch) {
               val exception = new StateChangeFailedException(
-                "Leader and isr path written by another controller. This probably" +
+                "Leader and isr path written by another controller. This probably " +
                 s"means the current controller with epoch ${controllerContext.epoch} went through a soft failure and " +
                 s"another controller was elected with epoch ${leaderIsrAndControllerEpoch.controllerEpoch}. Aborting " +
                 "state change by this controller"
               )
-              Some(partition -> Left(exception))
+              result += (partition -> Left(exception))
             } else {
-              Some(partition -> Right(leaderIsrAndControllerEpoch.leaderAndIsr))
+              result += (partition -> Right(leaderIsrAndControllerEpoch.leaderAndIsr))
             }
         }
       } else if (getDataResponse.resultCode == Code.NONODE) {
         partitionsWithNoLeaderAndIsrInZk += partition
-        None
       } else {
-        Some(partition -> Left(getDataResponse.resultException.get))
+        result += (partition -> Left(getDataResponse.resultException.get))
       }
-    }(breakOut)
+    }
 
-    (result, partitionsWithNoLeaderAndIsrInZk)
+    (result.toMap, partitionsWithNoLeaderAndIsrInZk)
   }
 
   private def logSuccessfulTransition(replicaId: Int, partition: TopicPartition, currState: ReplicaState, targetState: ReplicaState): Unit = {

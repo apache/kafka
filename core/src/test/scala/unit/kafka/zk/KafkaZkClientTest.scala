@@ -648,19 +648,19 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val emptyConfig = LogConfig(Collections.emptyMap())
     assertEquals("Non existent config, no defaults",
       (Map(topic1 -> emptyConfig), Map.empty),
-      zkClient.getLogConfigs(Seq(topic1), Collections.emptyMap()))
+      zkClient.getLogConfigs(Set(topic1), Collections.emptyMap()))
 
     val logProps2 = createLogProps(2048)
 
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
     assertEquals("One existing and one non-existent topic",
       (Map(topic1 -> LogConfig(logProps), topic2 -> emptyConfig), Map.empty),
-      zkClient.getLogConfigs(Seq(topic1, topic2), Collections.emptyMap()))
+      zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()))
 
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic2, logProps2)
     assertEquals("Two existing topics",
       (Map(topic1 -> LogConfig(logProps), topic2 -> LogConfig(logProps2)), Map.empty),
-      zkClient.getLogConfigs(Seq(topic1, topic2), Collections.emptyMap()))
+      zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()))
 
     val logProps1WithMoreValues = createLogProps(1024)
     logProps1WithMoreValues.put(LogConfig.SegmentJitterMsProp, "100")
@@ -668,7 +668,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     assertEquals("Config with defaults",
       (Map(topic1 -> LogConfig(logProps1WithMoreValues)), Map.empty),
-      zkClient.getLogConfigs(Seq(topic1),
+      zkClient.getLogConfigs(Set(topic1),
         Map[String, AnyRef](LogConfig.SegmentJitterMsProp -> "100", LogConfig.SegmentBytesProp -> "128").asJava))
   }
 

@@ -152,7 +152,11 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     if (partitions.nonEmpty) {
       try {
         controllerBrokerRequestBatch.newBatch()
-        val result = doHandleStateChanges(partitions, targetState, partitionLeaderElectionStrategyOpt)
+        val result = doHandleStateChanges(
+          partitions,
+          targetState,
+          partitionLeaderElectionStrategyOpt
+        )
         controllerBrokerRequestBatch.sendRequestsToBrokers(controllerContext.epoch)
         result
       } catch {
@@ -227,7 +231,12 @@ class ZkPartitionStateMachine(config: KafkaConfig,
           }
         }
         if (partitionsToElectLeader.nonEmpty) {
-          val electionResults = electLeaderForPartitions(partitionsToElectLeader, partitionLeaderElectionStrategyOpt.get)
+          val electionResults = electLeaderForPartitions(
+            partitionsToElectLeader,
+            partitionLeaderElectionStrategyOpt.getOrElse(
+              throw new IllegalArgumentException("Election strategy is a required field when the target state is OnlinePartition")
+            )
+          )
 
           electionResults.foreach {
             case (partition, Right(leaderAndIsr)) =>
@@ -235,7 +244,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
                 s"Changed partition $partition from ${partitionState(partition)} to $targetState with state $leaderAndIsr"
               )
               controllerContext.putPartitionState(partition, OnlinePartition)
-            case (partition, Left(_)) => // Ignore; no need to update partition state on election error
+            case (_, Left(_)) => // Ignore; no need to update partition state on election error
           }
 
           electionResults
@@ -321,7 +330,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
     partitionLeaderElectionStrategy: PartitionLeaderElectionStrategy
   ): Map[TopicPartition, Either[Throwable, LeaderAndIsr]] = {
     var remaining = partitions
-    var finishedElections = Map.empty[TopicPartition, Either[Throwable, LeaderAndIsr]]
+    val finishedElections = mutable.Map.empty[TopicPartition, Either[Throwable, LeaderAndIsr]]
 
     while (remaining.nonEmpty) {
       val (finished, updatesToRetry) = doElectLeaderForPartitions(remaining, partitionLeaderElectionStrategy)
@@ -336,7 +345,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       finishedElections ++= finished
     }
 
-    finishedElections
+    finishedElections.toMap
   }
 
   /**
@@ -463,7 +472,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       }
     } else {
       val (logConfigs, failed) = zkClient.getLogConfigs(
-        partitionsWithNoLiveInSyncReplicas.map { case (partition, _) => partition.topic },
+        partitionsWithNoLiveInSyncReplicas.map { case (partition, _) => partition.topic }(breakOut),
         config.originals()
       )
 
@@ -481,12 +490,10 @@ class ZkPartitionStateMachine(config: KafkaConfig,
       }
     }
 
-    (
-      electionForPartitionWithoutLiveReplicas ++
-      partitionsWithLiveInSyncReplicas.map { case (partition, leaderIsrAndControllerEpoch) =>
-        (partition, Option(leaderIsrAndControllerEpoch), false)
-      }
-    )
+    electionForPartitionWithoutLiveReplicas ++
+    partitionsWithLiveInSyncReplicas.map { case (partition, leaderIsrAndControllerEpoch) =>
+      (partition, Option(leaderIsrAndControllerEpoch), false)
+    }
   }
 
   private def logInvalidTransition(partition: TopicPartition, targetState: PartitionState): Unit = {

@@ -654,7 +654,11 @@ class KafkaController(val config: KafkaConfig,
     try {
       val strategy = electionType match {
         case ElectionType.PREFERRED => PreferredReplicaPartitionLeaderElectionStrategy
-        case ElectionType.UNCLEAN => OfflinePartitionLeaderElectionStrategy(true)
+        case ElectionType.UNCLEAN =>
+          /* Let's be conservative and only trigger unclean election if the election type is unclean and it was
+           * triggered by the admin client
+           */
+          OfflinePartitionLeaderElectionStrategy(allowUnclean = electionTrigger == AdminClientTriggered)
       }
 
       val results = partitionStateMachine.handleStateChanges(
@@ -1490,7 +1494,7 @@ class KafkaController(val config: KafkaConfig,
   def electLeaders(
     partitions: Set[TopicPartition],
     electionType: ElectionType,
-    callback: ElectLeadersCallback =  _ => {}
+    callback: ElectLeadersCallback
   ): Unit = {
     eventManager.put(ReplicaLeaderElection(Some(partitions), electionType, AdminClientTriggered, callback))
   }
@@ -1499,9 +1503,11 @@ class KafkaController(val config: KafkaConfig,
     partitionsFromAdminClientOpt: Option[Set[TopicPartition]],
     callback: ElectLeadersCallback
   ): Unit = {
-    callback(partitionsFromAdminClientOpt.fold(Map.empty[TopicPartition, Either[ApiError, Int]]) { partitions =>
+    callback(
+      partitionsFromAdminClientOpt.fold(Map.empty[TopicPartition, Either[ApiError, Int]]) { partitions =>
         partitions.map(partition => partition -> Left(new ApiError(Errors.NOT_CONTROLLER, null)))(breakOut)
-    })
+      }
+    )
   }
 
   private def processReplicaLeaderElection(
@@ -1523,12 +1529,12 @@ class KafkaController(val config: KafkaConfig,
           case None => zkClient.getPreferredReplicaElection
         }
 
-        val (validPartitions, invalidPartitions) = partitions.partition(tp => controllerContext.allPartitions.contains(tp))
-        invalidPartitions.foreach { p =>
-          info(s"Skipping replica leader election ($electionType) for partition ${p} by $electionTrigger since it doesn't exist.")
+        val (knownPartitions, unknownPartitions) = partitions.partition(tp => controllerContext.allPartitions.contains(tp))
+        unknownPartitions.foreach { p =>
+          info(s"Skipping replica leader election ($electionType) for partition $p by $electionTrigger since it doesn't exist.")
         }
 
-        val (partitionsBeingDeleted, livePartitions) = validPartitions.partition(partition =>
+        val (partitionsBeingDeleted, livePartitions) = knownPartitions.partition(partition =>
             topicDeletionManager.isTopicQueuedUpForDeletion(partition.topic))
         if (partitionsBeingDeleted.nonEmpty) {
           warn(s"Skipping replica leader election ($electionType) for partitions $partitionsBeingDeleted " +
@@ -1568,11 +1574,11 @@ class KafkaController(val config: KafkaConfig,
         partitionsBeingDeleted.map(
           _ -> Left(new ApiError(Errors.INVALID_TOPIC_EXCEPTION, "The topic is being deleted"))
         ) ++
-        invalidPartitions.map(
+        unknownPartitions.map(
           _ -> Left(new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION, "The partition does not exist."))
         )
 
-        debug(s"ReplicaLeaderElection waiting: $results")
+        debug(s"Waiting for any successful result for election type ($electionType) by $electionTrigger for partitions: $results")
         callback(results)
       }
     }
@@ -1605,15 +1611,6 @@ class KafkaController(val config: KafkaConfig,
         case event: MockEvent =>
           event.process()
         case ShutdownEventThread =>
-          /* See: KAFKA-8409
-           * This event is suppose to be handled by the ControllerEventThread. In the future we change the ControllerEventThread to handle:
-           *
-           * sealed trait ControllerThreadEvent
-           * final case object ShutdownEventThread extends ControllerThreadEvent
-           * final case class ControllerEvent(event: ControllerEvent) extends ControllerThreadEvent
-           *
-           * and remove ShutdownEventThread from the ControllerEvent enum.
-           */
           error("Received a ShutdownEventThread event. This type of event is supposed to be handle by ControllerEventThread")
         case AutoPreferredReplicaLeaderElection =>
           processAutoPreferredReplicaLeaderElection()

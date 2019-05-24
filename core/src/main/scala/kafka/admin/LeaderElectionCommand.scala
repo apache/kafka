@@ -124,19 +124,21 @@ object LeaderElectionCommand extends Logging {
       client.electLeaders(electionType, partitions).partitions.get.asScala
     } catch {
       case e: ExecutionException =>
-        val cause = e.getCause
-        if (cause.isInstanceOf[TimeoutException]) {
-          println("Timeout waiting for election results")
-          throw new AdminCommandFailedException("Timeout waiting for election results", cause)
-        } else if (cause.isInstanceOf[ClusterAuthorizationException]) {
-          println(s"Not authorized to perform leader election")
-          throw new AdminCommandFailedException("Not authorized to perform leader election", cause)
+        e.getCause match {
+          case cause: TimeoutException =>
+            val message = "Timeout waiting for election results"
+            println(message)
+            throw new AdminCommandFailedException(message, cause)
+          case cause: ClusterAuthorizationException =>
+            val message = "Not authorized to perform leader election"
+            println(message)
+            throw new AdminCommandFailedException(message, cause)
+          case _ =>
+            throw e
         }
-        throw e
       case e: Throwable =>
         println("Error while making request")
-        e.printStackTrace()
-        return
+        throw e
     }
 
     val succeeded = mutable.Set.empty[TopicPartition]
@@ -144,18 +146,14 @@ object LeaderElectionCommand extends Logging {
     val failed = mutable.Map.empty[TopicPartition, Throwable]
 
     electionResults.foreach { case (topicPartition, error) =>
-      if (error.isPresent) {
-        if (error.get.isInstanceOf[ElectionNotNeededException]) {
-          noop += topicPartition
-        } else {
-          failed += topicPartition -> error.get
+      val _: Unit = if (error.isPresent) {
+        error.get match {
+          case _: ElectionNotNeededException => noop += topicPartition
+          case _ => failed += topicPartition -> error.get
         }
       } else {
         succeeded += topicPartition
       }
-
-      // Return unit. The scalac compiler throws an error because the expression above doesn't return Unit.
-      ()
     }
 
     if (succeeded.nonEmpty) {
@@ -224,7 +222,7 @@ private final class LeaderElectionCommandOptions(args: Array[String]) extends Co
   val allTopicPartitions = parser
     .accepts(
       "all-topic-partitions",
-      "Perform election on all of the topic partitions. Not allowed if --topic or --path-to-json-file is specified.")
+      "Perform election on all of the eligible topic partitions based on the type of election (see the --election-type flag). Not allowed if --topic or --path-to-json-file is specified.")
     .requiredUnless("path-to-json-file", "topic")
 
   val electionType = parser
