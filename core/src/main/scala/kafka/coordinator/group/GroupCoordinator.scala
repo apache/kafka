@@ -403,8 +403,7 @@ class GroupCoordinator(val brokerId: Int,
             completeAndScheduleNextHeartbeatExpiration(group, group.get(memberId))
 
           case Dead =>
-            // this case is already handled, so raise exception
-            throw new IllegalStateException("can't reach this line")
+            throw new IllegalStateException(s"Reached unexpected condition for Dead group ${group.groupId}")
         }
       }
     }
@@ -539,8 +538,7 @@ class GroupCoordinator(val brokerId: Int,
                 responseCallback(Errors.NONE)
 
             case Dead =>
-              // this case is already handled, so raise exception
-              throw new IllegalStateException("can't reach this line")
+              throw new IllegalStateException(s"Reached unexpected condition for Dead group $groupId")
           }
         }
       }
