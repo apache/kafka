@@ -214,8 +214,16 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         recs.add(record);
     }
 
-    public synchronized void setPollException(KafkaException pollException) {
-        this.pollException = pollException;
+    /**
+     * @deprecated Use {@link #setPollException(KafkaException)} instead
+     */
+    @Deprecated
+    public synchronized void setException(KafkaException exception) {
+        this.pollException = exception;
+    }
+
+    public synchronized void setPollException(KafkaException exception) {
+        this.pollException = exception;
     }
 
     public synchronized void setOffsetsException(KafkaException exception) {
