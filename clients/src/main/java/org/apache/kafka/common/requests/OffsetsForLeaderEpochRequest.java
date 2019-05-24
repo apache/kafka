@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.types.Field;
@@ -44,6 +45,11 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
      */
     public static final int CONSUMER_REPLICA_ID = -1;
 
+    /**
+     * Sentinel replica_id which indicates either a debug consumer or a replica which is using
+     * an old version of the protocol.
+     */
+    public static final int DEBUGGING_REPLICA_ID = -2;
 
     private static final Field.ComplexArray TOPICS = new Field.ComplexArray("topics",
             "An array of topics to get epochs for");
@@ -101,23 +107,28 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
         private final Map<TopicPartition, PartitionData> epochsByPartition;
         private final int replicaId;
 
-        Builder(short version, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
-            super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
+        Builder(short oldestAllowedVersion, short latestAllowedVersion, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
+            super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, oldestAllowedVersion, latestAllowedVersion);
             this.epochsByPartition = epochsByPartition;
             this.replicaId = replicaId;
         }
 
-        public static Builder forConsumer(short version, Map<TopicPartition, PartitionData> epochsByPartition) {
-            return new Builder(version, epochsByPartition, CONSUMER_REPLICA_ID);
+        public static Builder forConsumer(Map<TopicPartition, PartitionData> epochsByPartition) {
+            // Old versions of this API may require CLUSTER authorization which is not typically granted
+            // to clients. We therefore require the latest version in order to be sure that we are not
+            // assuming incompatible permissions.
+            return new Builder((short) 3, ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion(),
+                    epochsByPartition, CONSUMER_REPLICA_ID);
         }
 
         public static Builder forFollower(short version, Map<TopicPartition, PartitionData> epochsByPartition, int replicaId) {
-            return new Builder(version, epochsByPartition, replicaId);
-
+            return new Builder(version, version, epochsByPartition, replicaId);
         }
 
         @Override
         public OffsetsForLeaderEpochRequest build(short version) {
+            if (version < oldestAllowedVersion() || version > latestAllowedVersion())
+                throw new UnsupportedVersionException("Cannot build " + this + " with version " + version);
             return new OffsetsForLeaderEpochRequest(epochsByPartition, replicaId, version);
         }
 
@@ -143,7 +154,7 @@ public class OffsetsForLeaderEpochRequest extends AbstractRequest {
 
     public OffsetsForLeaderEpochRequest(Struct struct, short version) {
         super(ApiKeys.OFFSET_FOR_LEADER_EPOCH, version);
-        replicaId = struct.getOrElse(REPLICA_ID, CONSUMER_REPLICA_ID);
+        replicaId = struct.getOrElse(REPLICA_ID, DEBUGGING_REPLICA_ID);
         epochsByPartition = new HashMap<>();
         for (Object topicAndEpochsObj : struct.get(TOPICS)) {
             Struct topicAndEpochs = (Struct) topicAndEpochsObj;
