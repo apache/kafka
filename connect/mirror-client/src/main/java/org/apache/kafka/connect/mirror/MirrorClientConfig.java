@@ -23,6 +23,8 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.clients.CommonClientConfigs;
 
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class MirrorClientConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_CLASS = "replication.policy.class";
@@ -48,15 +50,23 @@ public class MirrorClientConfig extends AbstractConfig {
     }
 
     public Map<String, Object> adminConfig() {
-        return valuesWithPrefixOverride(ADMIN_CLIENT_PREFIX);
+        return clientConfig(ADMIN_CLIENT_PREFIX);
     }
 
     public Map<String, Object> consumerConfig() {
-        return valuesWithPrefixOverride(CONSUMER_CLIENT_PREFIX);
+        return clientConfig(CONSUMER_CLIENT_PREFIX);
     }
 
     public Map<String, Object> producerConfig() {
-        return valuesWithPrefixOverride(PRODUCER_CLIENT_PREFIX);
+        return clientConfig(PRODUCER_CLIENT_PREFIX);
+    }
+
+    private Map<String, Object> clientConfig(String prefix) {
+        Set<String> names = MirrorMakerConfig.CLIENT_CONFIG_DEF.names();
+        return valuesWithPrefixOverride(prefix).entrySet().stream()
+            .filter(x -> names.contains(x.getKey()))
+            .filter(x -> x.getValue() != null)
+            .collect(Collectors.toMap(x -> x.getKey(), x -> x.getValue()));
     }
 
     private static final ConfigDef CONFIG_DEF = new ConfigDef()
