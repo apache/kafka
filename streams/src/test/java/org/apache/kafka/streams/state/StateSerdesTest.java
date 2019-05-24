@@ -102,7 +102,7 @@ public class StateSerdesTest {
         assertThat(
             e.getMessage(),
             equalTo(
-                "A serializer (value: org.apache.kafka.common.serialization.StringSerializer) " +
+                "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
                 "is not compatible to the actual value type (value type: java.lang.Integer). " +
                 "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
     }
@@ -117,7 +117,7 @@ public class StateSerdesTest {
         assertThat(
             e.getMessage(),
             equalTo(
-                "A serializer (value: org.apache.kafka.common.serialization.StringSerializer) " +
+                "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
                     "is not compatible to the actual value type (value type: java.lang.Integer). " +
                     "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
     }
@@ -131,7 +131,7 @@ public class StateSerdesTest {
         assertThat(
             e.getMessage(),
             equalTo(
-                "A serializer (key: org.apache.kafka.common.serialization.StringSerializer) " +
+                "A serializer (org.apache.kafka.common.serialization.StringSerializer) " +
                     "is not compatible to the actual key type (key type: java.lang.Integer). " +
                     "Change the default Serdes in StreamConfig or provide correct Serdes via method parameters."));
     }
