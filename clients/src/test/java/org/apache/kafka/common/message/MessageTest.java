@@ -37,10 +37,10 @@ import org.junit.rules.Timeout;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
+import static java.util.Collections.singletonList;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -67,10 +67,10 @@ public final class MessageTest {
                 setTransactionalId("blah").
                 setProducerId(0xbadcafebadcafeL).
                 setProducerEpoch((short) 30000).
-                setTopics(new AddPartitionsToTxnTopicCollection(Collections.singletonList(
+                setTopics(new AddPartitionsToTxnTopicCollection(singletonList(
                         new AddPartitionsToTxnTopic().
                                 setName("Topic").
-                                setPartitions(Collections.singletonList(1))).iterator())));
+                                setPartitions(singletonList(1))).iterator())));
     }
 
     @Test
@@ -97,16 +97,16 @@ public final class MessageTest {
                 Arrays.asList(new MetadataRequestData.MetadataRequestTopic().setName("foo"),
                         new MetadataRequestData.MetadataRequestTopic().setName("bar")
                 )));
-        testAllMessageRoundTripsFromVersion(new MetadataRequestData().
+        testAllMessageRoundTripsFromVersion((short) 1, new MetadataRequestData().
                 setTopics(null).
                 setAllowAutoTopicCreation(true).
                 setIncludeClusterAuthorizedOperations(false).
-                setIncludeTopicAuthorizedOperations(false), (short) 1);
-        testAllMessageRoundTripsFromVersion(new MetadataRequestData().
+                setIncludeTopicAuthorizedOperations(false));
+        testAllMessageRoundTripsFromVersion((short) 4, new MetadataRequestData().
                 setTopics(null).
                 setAllowAutoTopicCreation(false).
                 setIncludeClusterAuthorizedOperations(false).
-                setIncludeTopicAuthorizedOperations(false), (short) 4);
+                setIncludeTopicAuthorizedOperations(false));
     }
 
     @Test
@@ -117,7 +117,7 @@ public final class MessageTest {
                 .setGenerationId(15);
         testAllMessageRoundTrips(newRequest.get());
         testAllMessageRoundTrips(newRequest.get().setGroupInstanceId(null));
-        testAllMessageRoundTripsFromVersion(newRequest.get().setGroupInstanceId("instanceId"), (short) 3);
+        testAllMessageRoundTripsFromVersion((short) 3, newRequest.get().setGroupInstanceId("instanceId"));
     }
 
     @Test
@@ -129,9 +129,9 @@ public final class MessageTest {
                 .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection())
                 .setSessionTimeoutMs(10000);
         testAllMessageRoundTrips(newRequest.get());
-        testAllMessageRoundTripsFromVersion(newRequest.get().setRebalanceTimeoutMs(20000), (short) 1);
+        testAllMessageRoundTripsFromVersion((short) 1, newRequest.get().setRebalanceTimeoutMs(20000));
         testAllMessageRoundTrips(newRequest.get().setGroupInstanceId(null));
-        testAllMessageRoundTripsFromVersion(newRequest.get().setGroupInstanceId("instanceId"), (short) 5);
+        testAllMessageRoundTripsFromVersion((short) 5, newRequest.get().setGroupInstanceId("instanceId"));
     }
 
     @Test
@@ -143,7 +143,7 @@ public final class MessageTest {
                 .setAssignments(new ArrayList<>());
         testAllMessageRoundTrips(request.get());
         testAllMessageRoundTrips(request.get().setGroupInstanceId(null));
-        testAllMessageRoundTripsFromVersion(request.get().setGroupInstanceId("instanceId"), (short) 3);
+        testAllMessageRoundTripsFromVersion((short) 3, request.get().setGroupInstanceId("instanceId"));
     }
 
     @Test
@@ -157,27 +157,70 @@ public final class MessageTest {
                 .setMemberId("memberId")
                 .setTopics(new ArrayList<>())
                 .setGenerationId(15);
-        testAllMessageRoundTripsFromVersion(request.get(), (short) 1);
-        testAllMessageRoundTripsFromVersion(request.get().setGroupInstanceId(null), (short) 1);
-        testAllMessageRoundTripsFromVersion(request.get().setGroupInstanceId("instanceId"), (short) 7);
+        testAllMessageRoundTripsFromVersion((short) 1, request.get());
+        testAllMessageRoundTripsFromVersion((short) 1, request.get().setGroupInstanceId(null));
+        testAllMessageRoundTripsFromVersion((short) 7, request.get().setGroupInstanceId("instanceId"));
+    }
+
+    @Test
+    public void testOffsetForLeaderEpochVersions() throws Exception {
+        // Version 2 adds optional current leader epoch
+        OffsetForLeaderEpochRequestData.OffsetForLeaderPartition partitionDataNoCurrentEpoch =
+                new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
+                        .setPartitionIndex(0)
+                        .setLeaderEpoch(3);
+        OffsetForLeaderEpochRequestData.OffsetForLeaderPartition partitionDataWithCurrentEpoch =
+                new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition()
+                        .setPartitionIndex(0)
+                        .setLeaderEpoch(3)
+                        .setCurrentLeaderEpoch(5);
+
+        testAllMessageRoundTrips(new OffsetForLeaderEpochRequestData().setTopics(singletonList(
+                new OffsetForLeaderEpochRequestData.OffsetForLeaderTopic()
+                        .setName("foo")
+                        .setPartitions(singletonList(partitionDataNoCurrentEpoch)))
+        ));
+        testAllMessageRoundTripsBeforeVersion((short) 2, partitionDataWithCurrentEpoch, partitionDataNoCurrentEpoch);
+        testAllMessageRoundTripsFromVersion((short) 2, partitionDataWithCurrentEpoch);
+
+        // Version 3 adds the optional replica Id field
+        testAllMessageRoundTripsFromVersion((short) 3, new OffsetForLeaderEpochRequestData().setReplicaId(5));
+        testAllMessageRoundTripsBeforeVersion((short) 3,
+                new OffsetForLeaderEpochRequestData().setReplicaId(5),
+                new OffsetForLeaderEpochRequestData());
+        testAllMessageRoundTripsBeforeVersion((short) 3,
+                new OffsetForLeaderEpochRequestData().setReplicaId(5),
+                new OffsetForLeaderEpochRequestData().setReplicaId(-2));
+
     }
 
     private void testAllMessageRoundTrips(Message message) throws Exception {
-        testAllMessageRoundTripsFromVersion(message, message.lowestSupportedVersion());
+        testAllMessageRoundTripsFromVersion(message.lowestSupportedVersion(), message);
     }
 
-    private void testAllMessageRoundTripsFromVersion(Message message, short fromVersion) throws Exception {
-        for (short version = fromVersion; version < message.highestSupportedVersion(); version++) {
-            testMessageRoundTrips(message, version);
+    private void testAllMessageRoundTripsBeforeVersion(short beforeVersion, Message message, Message expected) throws Exception {
+        for (short version = 0; version < beforeVersion; version++) {
+            testMessageRoundTrip(version, message, expected);
         }
     }
 
-    private void testMessageRoundTrips(Message message, short version) throws Exception {
-        testStructRoundTrip(message, version);
-        testByteBufferRoundTrip(message, version);
+    private void testAllMessageRoundTripsFromVersion(short fromVersion, Message message) throws Exception {
+        for (short version = fromVersion; version < message.highestSupportedVersion(); version++) {
+            testEquivalentMessageRoundTrip(version, message);
+        }
     }
 
-    private void testByteBufferRoundTrip(Message message, short version) throws Exception {
+    private void testMessageRoundTrip(short version, Message message, Message expected) throws Exception {
+        testByteBufferRoundTrip(version, message, expected);
+        testStructRoundTrip(version, message, expected);
+    }
+
+    private void testEquivalentMessageRoundTrip(short version, Message message) throws Exception {
+        testStructRoundTrip(version, message, message);
+        testByteBufferRoundTrip(version, message, message);
+    }
+
+    private void testByteBufferRoundTrip(short version, Message message, Message expected) throws Exception {
         int size = message.size(version);
         ByteBuffer buf = ByteBuffer.allocate(size);
         ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
@@ -187,18 +230,18 @@ public final class MessageTest {
         buf.flip();
         message2.read(byteBufferAccessor, version);
         assertEquals(size, buf.position());
-        assertEquals(message, message2);
-        assertEquals(message.hashCode(), message2.hashCode());
-        assertEquals(message.toString(), message2.toString());
+        assertEquals(expected, message2);
+        assertEquals(expected.hashCode(), message2.hashCode());
+        assertEquals(expected.toString(), message2.toString());
     }
 
-    private void testStructRoundTrip(Message message, short version) throws Exception {
+    private void testStructRoundTrip(short version, Message message, Message expected) throws Exception {
         Struct struct = message.toStruct(version);
         Message message2 = message.getClass().newInstance();
         message2.fromStruct(struct, version);
-        assertEquals(message, message2);
-        assertEquals(message.hashCode(), message2.hashCode());
-        assertEquals(message.toString(), message2.toString());
+        assertEquals(expected, message2);
+        assertEquals(expected.hashCode(), message2.hashCode());
+        assertEquals(expected.toString(), message2.toString());
     }
 
     /**
@@ -348,7 +391,7 @@ public final class MessageTest {
      */
     private static List<NamedType> flatten(NamedType type) {
         if (!(type.type instanceof Schema)) {
-            return Collections.singletonList(type);
+            return singletonList(type);
         }
         Schema schema = (Schema) type.type;
         ArrayList<NamedType> results = new ArrayList<>();
@@ -367,7 +410,7 @@ public final class MessageTest {
         verifySizeSucceeds((short) 0,
             new OffsetCommitRequestData().setRetentionTimeMs(123));
         verifySizeRaisesUve((short) 5, "forgotten",
-            new FetchRequestData().setForgotten(Collections.singletonList(
+            new FetchRequestData().setForgotten(singletonList(
                 new FetchRequestData.ForgottenTopic().setName("foo"))));
     }
 
