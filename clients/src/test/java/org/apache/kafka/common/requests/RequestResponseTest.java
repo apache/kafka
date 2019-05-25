@@ -290,10 +290,10 @@ public class RequestResponseTest {
         checkRequest(createListOffsetRequest(0), true);
         checkErrorResponse(createListOffsetRequest(0), new UnknownServerException(), true);
         checkResponse(createListOffsetResponse(0), 0, true);
-        checkRequest(createLeaderEpochRequest(0), true);
-        checkRequest(createLeaderEpochRequest(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion()), true);
+        checkRequest(createLeaderEpochRequestForReplica(0, 1), true);
+        checkRequest(createLeaderEpochRequestForConsumer(), true);
         checkResponse(createLeaderEpochResponse(), 0, true);
-        checkErrorResponse(createLeaderEpochRequest(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion()), new UnknownServerException(), true);
+        checkErrorResponse(createLeaderEpochRequestForConsumer(), new UnknownServerException(), true);
         checkRequest(createAddPartitionsToTxnRequest(), true);
         checkErrorResponse(createAddPartitionsToTxnRequest(), new UnknownServerException(), true);
         checkResponse(createAddPartitionsToTxnResponse(), 0, true);
@@ -1251,17 +1251,25 @@ public class RequestResponseTest {
         return new InitProducerIdResponse(responseData);
     }
 
-    private OffsetsForLeaderEpochRequest createLeaderEpochRequest(int version) {
+    private Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> createOffsetForLeaderEpochPartitionData() {
         Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = new HashMap<>();
-
         epochs.put(new TopicPartition("topic1", 0),
                 new OffsetsForLeaderEpochRequest.PartitionData(Optional.of(0), 1));
         epochs.put(new TopicPartition("topic1", 1),
                 new OffsetsForLeaderEpochRequest.PartitionData(Optional.of(0), 1));
         epochs.put(new TopicPartition("topic2", 2),
                 new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), 3));
+        return epochs;
+    }
 
-        return OffsetsForLeaderEpochRequest.Builder.forConsumer((short) version, epochs).build();
+    private OffsetsForLeaderEpochRequest createLeaderEpochRequestForConsumer() {
+        Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = createOffsetForLeaderEpochPartitionData();
+        return OffsetsForLeaderEpochRequest.Builder.forConsumer(epochs).build();
+    }
+
+    private OffsetsForLeaderEpochRequest createLeaderEpochRequestForReplica(int version, int replicaId) {
+        Map<TopicPartition, OffsetsForLeaderEpochRequest.PartitionData> epochs = createOffsetForLeaderEpochPartitionData();
+        return OffsetsForLeaderEpochRequest.Builder.forFollower((short) version, epochs, replicaId).build();
     }
 
     private OffsetsForLeaderEpochResponse createLeaderEpochResponse() {

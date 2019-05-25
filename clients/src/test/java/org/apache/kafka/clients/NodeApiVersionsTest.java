@@ -58,7 +58,7 @@ public class NodeApiVersionsTest {
         List<ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey == ApiKeys.DELETE_TOPICS) {
-                versionList.add(new ApiVersion(apiKey.id, (short) 10000, (short) 10001));
+                versionList.add(new ApiVersion(apiKey, (short) 10000, (short) 10001));
             } else {
                 versionList.add(new ApiVersion(apiKey));
             }
@@ -93,7 +93,7 @@ public class NodeApiVersionsTest {
     @Test
     public void testLatestUsableVersion() {
         NodeApiVersions apiVersions = NodeApiVersions.create(Collections.singleton(
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 1, (short) 3)));
+                new ApiVersion(ApiKeys.PRODUCE, (short) 1, (short) 3)));
         assertEquals(3, apiVersions.latestUsableVersion(ApiKeys.PRODUCE));
         assertEquals(1, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 0, (short) 1));
         assertEquals(1, apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 1, (short) 1));
@@ -108,14 +108,14 @@ public class NodeApiVersionsTest {
     @Test(expected = UnsupportedVersionException.class)
     public void testLatestUsableVersionOutOfRangeLow() {
         NodeApiVersions apiVersions = NodeApiVersions.create(Collections.singleton(
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 1, (short) 2)));
+                new ApiVersion(ApiKeys.PRODUCE, (short) 1, (short) 2)));
         apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 3, (short) 4);
     }
 
     @Test(expected = UnsupportedVersionException.class)
     public void testLatestUsableVersionOutOfRangeHigh() {
         NodeApiVersions apiVersions = NodeApiVersions.create(Collections.singleton(
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 2, (short) 3)));
+                new ApiVersion(ApiKeys.PRODUCE, (short) 2, (short) 3)));
         apiVersions.latestUsableVersion(ApiKeys.PRODUCE, (short) 0, (short) 1);
     }
 
@@ -129,7 +129,7 @@ public class NodeApiVersionsTest {
     @Test(expected = UnsupportedVersionException.class)
     public void testLatestUsableVersionOutOfRange() {
         NodeApiVersions apiVersions = NodeApiVersions.create(Collections.singleton(
-                new ApiVersion(ApiKeys.PRODUCE.id, (short) 300, (short) 300)));
+                new ApiVersion(ApiKeys.PRODUCE, (short) 300, (short) 300)));
         apiVersions.latestUsableVersion(ApiKeys.PRODUCE);
     }
 
