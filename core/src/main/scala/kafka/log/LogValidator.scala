@@ -249,83 +249,91 @@ private[kafka] object LogValidator extends Logging {
                                                  partitionLeaderEpoch: Int,
                                                  isFromClient: Boolean,
                                                  interBrokerProtocolVersion: ApiVersion): ValidationAndOffsetAssignResult = {
-      // No in place assignment situation 1 and 2
-      var inPlaceAssignment = sourceCodec == targetCodec && toMagic > RecordBatch.MAGIC_VALUE_V0
 
-      var maxTimestamp = RecordBatch.NO_TIMESTAMP
-      val expectedInnerOffset = new LongRef(0)
-      val validatedRecords = new mutable.ArrayBuffer[Record]
+    // No in place assignment situation 1 and 2
+    var inPlaceAssignment = sourceCodec == targetCodec && toMagic > RecordBatch.MAGIC_VALUE_V0
 
-      var uncompressedSizeInBytes = 0
+    var maxTimestamp = RecordBatch.NO_TIMESTAMP
+    val expectedInnerOffset = new LongRef(0)
+    val validatedRecords = new mutable.ArrayBuffer[Record]
 
-      for (batch <- records.batches.asScala) {
-        validateBatch(batch, isFromClient, toMagic)
-        uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())
+    var uncompressedSizeInBytes = 0
 
-        // Do not compress control records unless they are written compressed
-        if (sourceCodec == NoCompressionCodec && batch.isControlBatch)
-          inPlaceAssignment = true
+    // Assume there's only one batch with compressed memory records; otherwise, return InvalidRecordException
+    val batchIterator = records.batches.iterator
+    val batch = batchIterator.next()
 
-        for (record <- batch.asScala) {
-          if (sourceCodec != NoCompressionCodec && record.isCompressed)
-            throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
-              s"compression attribute set: $record")
-          if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
-            throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " + "are not allowed to use ZStandard compression")
-          validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
+    if (batchIterator.hasNext) {
+      throw new InvalidRecordException("Compressed outer record should only have a single record batch")
+    }
 
-          uncompressedSizeInBytes += record.sizeInBytes()
-          if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
-            // Check if we need to overwrite offset
-            // No in place assignment situation 3
-            if (record.offset != expectedInnerOffset.getAndIncrement())
-              inPlaceAssignment = false
-            if (record.timestamp > maxTimestamp)
-              maxTimestamp = record.timestamp
-          }
+    validateBatch(batch, isFromClient, toMagic)
+    uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())
 
-          // No in place assignment situation 4
-          if (!record.hasMagic(toMagic))
-            inPlaceAssignment = false
+    // Do not compress control records unless they are written compressed
+    if (sourceCodec == NoCompressionCodec && batch.isControlBatch)
+      inPlaceAssignment = true
 
-          validatedRecords += record
-        }
+    for (record <- batch.asScala) {
+      if (sourceCodec != NoCompressionCodec && record.isCompressed)
+        throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
+          s"compression attribute set: $record")
+      if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
+        throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " + "are not allowed to use ZStandard compression")
+      validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
+
+      uncompressedSizeInBytes += record.sizeInBytes()
+      if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
+        // Check if we need to overwrite offset
+        // No in place assignment situation 3
+        if (record.offset != expectedInnerOffset.getAndIncrement())
+          inPlaceAssignment = false
+        if (record.timestamp > maxTimestamp)
+          maxTimestamp = record.timestamp
       }
 
-      if (!inPlaceAssignment) {
-        val (producerId, producerEpoch, sequence, isTransactional) = {
-          // note that we only reassign offsets for requests coming straight from a producer. For records with magic V2,
-          // there should be exactly one RecordBatch per request, so the following is all we need to do. For Records
-          // with older magic versions, there will never be a producer id, etc.
-          val first = records.batches.asScala.head
-          (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
-        }
-        buildRecordsAndAssignOffsets(toMagic, offsetCounter, time, timestampType, CompressionType.forId(targetCodec.codec), now,
-          validatedRecords, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch, isFromClient,
-          uncompressedSizeInBytes)
-      } else {
-        // we can update the batch only and write the compressed payload as is
-        val batch = records.batches.iterator.next()
-        val lastOffset = offsetCounter.addAndGet(validatedRecords.size) - 1
+      // No in place assignment situation 4
+      if (!record.hasMagic(toMagic))
+        inPlaceAssignment = false
 
-        batch.setLastOffset(lastOffset)
+      validatedRecords += record
+    }
 
-        if (timestampType == TimestampType.LOG_APPEND_TIME)
-          maxTimestamp = now
-
-        if (toMagic >= RecordBatch.MAGIC_VALUE_V1)
-          batch.setMaxTimestamp(timestampType, maxTimestamp)
-
-        if (toMagic >= RecordBatch.MAGIC_VALUE_V2)
-          batch.setPartitionLeaderEpoch(partitionLeaderEpoch)
-
-        val recordConversionStats = new RecordConversionStats(uncompressedSizeInBytes, 0, 0)
-        ValidationAndOffsetAssignResult(validatedRecords = records,
-          maxTimestamp = maxTimestamp,
-          shallowOffsetOfMaxTimestamp = lastOffset,
-          messageSizeMaybeChanged = false,
-          recordConversionStats = recordConversionStats)
+    if (!inPlaceAssignment) {
+      val (producerId, producerEpoch, sequence, isTransactional) = {
+        // note that we only reassign offsets for requests coming straight from a producer. For records with magic V2,
+        // there should be exactly one RecordBatch per request, so the following is all we need to do. For Records
+        // with older magic versions, there will never be a producer id, etc.
+        val first = records.batches.asScala.head
+        (first.producerId, first.producerEpoch, first.baseSequence, first.isTransactional)
       }
+      buildRecordsAndAssignOffsets(toMagic, offsetCounter, time, timestampType, CompressionType.forId(targetCodec.codec), now,
+        validatedRecords, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch, isFromClient,
+        uncompressedSizeInBytes)
+    } else {
+      // we can update the batch only and write the compressed payload as is;
+      // again we assume only one record batch within the compressed set
+      val batch = records.batches.iterator.next()
+      val lastOffset = offsetCounter.addAndGet(validatedRecords.size) - 1
+
+      batch.setLastOffset(lastOffset)
+
+      if (timestampType == TimestampType.LOG_APPEND_TIME)
+        maxTimestamp = now
+
+      if (toMagic >= RecordBatch.MAGIC_VALUE_V1)
+        batch.setMaxTimestamp(timestampType, maxTimestamp)
+
+      if (toMagic >= RecordBatch.MAGIC_VALUE_V2)
+        batch.setPartitionLeaderEpoch(partitionLeaderEpoch)
+
+      val recordConversionStats = new RecordConversionStats(uncompressedSizeInBytes, 0, 0)
+      ValidationAndOffsetAssignResult(validatedRecords = records,
+        maxTimestamp = maxTimestamp,
+        shallowOffsetOfMaxTimestamp = lastOffset,
+        messageSizeMaybeChanged = false,
+        recordConversionStats = recordConversionStats)
+    }
   }
 
   private def buildRecordsAndAssignOffsets(magic: Byte,
