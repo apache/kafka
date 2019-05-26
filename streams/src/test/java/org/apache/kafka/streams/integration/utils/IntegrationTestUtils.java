@@ -272,7 +272,7 @@ public class IntegrationTestUtils {
                                                                          final Long timestamp,
                                                                          final boolean enableTransactions)
         throws ExecutionException, InterruptedException {
-        produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, null, timestamp, enableTransactions, null, null);
+        produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, null, timestamp, enableTransactions);
     }
 
     /**
@@ -393,7 +393,28 @@ public class IntegrationTestUtils {
                                                                                 final Properties producerConfig,
                                                                                 final Long timestamp)
         throws ExecutionException, InterruptedException {
-        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+        produceAbortedKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, timestamp, null, null);
+    }
+
+    /**
+     * Produce data records and send them synchronously in an aborted transaction; that is, a transaction is started for
+     * each data record but not committed.
+     *
+     * @param topic               Kafka topic to write the data records to
+     * @param records             Data records to write to Kafka
+     * @param producerConfig      Kafka producer configuration
+     * @param timestamp           Timestamp of the record
+     * @param <K>                 Key type of the data records
+     * @param <V>                 Value type of the data records
+     */
+    public static <K, V> void produceAbortedKeyValuesSynchronouslyWithTimestamp(final String topic,
+                                                                                final Collection<KeyValue<K, V>> records,
+                                                                                final Properties producerConfig,
+                                                                                final Long timestamp,
+                                                                                final Serializer<K> keySerializer,
+                                                                                final Serializer<V> valueSerializer)
+            throws ExecutionException, InterruptedException {
+        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig, keySerializer, valueSerializer)) {
             producer.initTransactions();
             for (final KeyValue<K, V> record : records) {
                 producer.beginTransaction();
