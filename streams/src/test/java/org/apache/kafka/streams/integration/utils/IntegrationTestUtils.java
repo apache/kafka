@@ -338,7 +338,17 @@ public class IntegrationTestUtils {
                                                    final String topic,
                                                    final Optional<Integer> partition,
                                                    final List<KeyValueTimestamp<K, V>> toProduce) {
-        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+        produceSynchronously(producerConfig, eos, topic, partition, toProduce, null, null);
+    }
+
+    public static <V, K> void produceSynchronously(final Properties producerConfig,
+                                                   final boolean eos,
+                                                   final String topic,
+                                                   final Optional<Integer> partition,
+                                                   final List<KeyValueTimestamp<K, V>> toProduce,
+                                                   final Serializer<K> keySerializer,
+                                                   final Serializer<V> valueSerializer) {
+        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig, keySerializer, valueSerializer)) {
             if (eos) {
                 producer.initTransactions();
                 producer.beginTransaction();
