@@ -205,6 +205,28 @@ public class IntegrationTestUtils {
                                                             final Headers headers,
                                                             final Time time,
                                                             final boolean enableTransactions)
+            throws ExecutionException, InterruptedException {
+        produceKeyValuesSynchronously(topic, records, producerConfig, null, time, enableTransactions, null, null);
+    }
+
+    /**
+     * @param topic               Kafka topic to write the data records to
+     * @param records             Data records to write to Kafka
+     * @param producerConfig      Kafka producer configuration
+     * @param headers             {@link Headers} of the data records
+     * @param time                Timestamp provider
+     * @param enableTransactions  Send messages in a transaction
+     * @param <K>                 Key type of the data records
+     * @param <V>                 Value type of the data records
+     */
+    public static <K, V> void produceKeyValuesSynchronously(final String topic,
+                                                            final Collection<KeyValue<K, V>> records,
+                                                            final Properties producerConfig,
+                                                            final Headers headers,
+                                                            final Time time,
+                                                            final boolean enableTransactions,
+                                                            final Serializer<K> keySerializer,
+                                                            final Serializer<V> valueSerializer)
         throws ExecutionException, InterruptedException {
         for (final KeyValue<K, V> record : records) {
             produceKeyValuesSynchronouslyWithTimestamp(topic,
@@ -212,7 +234,9 @@ public class IntegrationTestUtils {
                 producerConfig,
                 headers,
                 time.milliseconds(),
-                enableTransactions);
+                enableTransactions,
+                keySerializer,
+                valueSerializer);
             time.sleep(1L);
         }
     }
