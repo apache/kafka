@@ -1145,6 +1145,21 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     @Override
+    public void patchConnectorConfig(String connName, Map<String, String> configPatch, Callback<Created<ConnectorInfo>> callback) {
+        log.trace("Submitting connector config patch request {}", connName);
+        addRequest(() -> {
+            ConnectorInfo connectorInfo = connectorInfo(connName);
+            if (connectorInfo == null) {
+                callback.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
+            } else {
+                Map<String, String> patchedConfig = applyConnectorConfigPatch(connectorInfo.config(), configPatch);
+                putConnectorConfig(connName, patchedConfig, true, callback);
+            }
+            return null;
+        }, forwardErrorAndTickThreadStages(callback));
+    }
+
+    @Override
     public void stopConnector(final String connName, final Callback<Void> callback) {
         log.trace("Submitting request to transition connector {} to STOPPED state", connName);
 

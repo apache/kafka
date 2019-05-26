@@ -77,7 +77,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
+import static java.util.Collections.emptyList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
@@ -86,6 +88,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
@@ -749,6 +752,74 @@ public class StandaloneHerderTest {
         assertEquals("bar", capturedConfig.getValue().get("foo"));
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
         verifyNoMoreInteractions(connectorConfigCb);
+    }
+
+    @Test
+    public void testPatchConnectorConfigNotFound() {
+        Map<String, String> connConfigPatch = new HashMap<>();
+        connConfigPatch.put("foo1", "baz1");
+
+        Callback<Herder.Created<ConnectorInfo>> patchCallback = mock(Callback.class);
+        herder.patchConnectorConfig(CONNECTOR_NAME, connConfigPatch, patchCallback);
+
+        ArgumentCaptor<NotFoundException> exceptionCaptor = ArgumentCaptor.forClass(NotFoundException.class);
+        verify(patchCallback).onCompletion(exceptionCaptor.capture(), isNull());
+        assertEquals(exceptionCaptor.getValue().getMessage(), "Connector " + CONNECTOR_NAME + " not found");
+        assertNull(exceptionCaptor.getValue().getCause());
+    }
+
+    @Test
+    public void testPatchConnectorConfig() throws ExecutionException, InterruptedException, TimeoutException {
+        // Create the connector.
+        Map<String, String> originalConnConfig = connectorConfig(SourceSink.SOURCE);
+        originalConnConfig.put("foo1", "bar1");
+        originalConnConfig.put("foo2", "bar2");
+
+        Map<String, String> connConfigPatch = new HashMap<>();
+        connConfigPatch.put("foo1", "changed");
+        connConfigPatch.put("foo2", null);
+        connConfigPatch.put("foo3", "added");
+
+        Map<String, String> patchedConnConfig = new HashMap<>(originalConnConfig);
+        patchedConnConfig.put("foo1", "changed");
+        patchedConnConfig.remove("foo2");
+        patchedConnConfig.put("foo3", "added");
+
+        expectAdd(SourceSink.SOURCE);
+        Connector connectorMock = mock(SourceConnector.class);
+        expectConfigValidation(SourceSink.SOURCE, originalConnConfig, patchedConnConfig);
+
+        expectConnectorStartingWithoutTasks(originalConnConfig);
+
+        herder.putConnectorConfig(CONNECTOR_NAME, originalConnConfig, false, createCallback);
+        createCallback.get(1000L, TimeUnit.SECONDS);
+
+        expectConnectorStartingWithoutTasks(patchedConnConfig);
+
+        FutureCallback<Herder.Created<ConnectorInfo>> patchCallback = new FutureCallback<>();
+        herder.patchConnectorConfig(CONNECTOR_NAME, connConfigPatch, patchCallback);
+
+        Map<String, String> returnedConfig = patchCallback.get(1000L, TimeUnit.SECONDS).result().config();
+        assertEquals(patchedConnConfig, returnedConfig);
+
+        // Also check the returned config when requested.
+        FutureCallback<Map<String, String>> configCallback = new FutureCallback<>();
+        herder.connectorConfig(CONNECTOR_NAME, configCallback);
+
+        Map<String, String> returnedConfig2 = configCallback.get(1000L, TimeUnit.SECONDS);
+        assertEquals(patchedConnConfig, returnedConfig2);
+    }
+
+    private void expectConnectorStartingWithoutTasks(Map<String, String> config) {
+        doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
+        final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            onStart.getValue().onCompletion(null, TargetState.STARTED);
+            return true;
+        }).when(worker).startConnector(eq(CONNECTOR_NAME), any(Map.class), any(),
+                eq(herder), eq(TargetState.STARTED), onStart.capture());
+        when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, config, true)))
+                .thenReturn(emptyList());
     }
 
     @Test

@@ -247,6 +247,31 @@ public class StandaloneHerder extends AbstractHerder {
     }
 
     @Override
+    public void patchConnectorConfig(String connName, Map<String, String> configPatch, Callback<Created<ConnectorInfo>> callback) {
+        try {
+            ConnectorInfo connectorInfo = connectorInfo(connName);
+            if (connectorInfo == null) {
+                callback.onCompletion(new NotFoundException("Connector " + connName + " not found", null), null);
+                return;
+            }
+
+            Map<String, String> patchedConfig = applyConnectorConfigPatch(connectorInfo.config(), configPatch);
+            validateConnectorConfig(patchedConfig, (error, configInfos) -> {
+                if (error != null) {
+                    callback.onCompletion(error, null);
+                    return;
+                }
+
+                requestExecutorService.submit(
+                        () -> putConnectorConfig(connName, patchedConfig, null, true, callback, configInfos)
+                );
+            });
+        } catch (ConnectException e) {
+            callback.onCompletion(e, null);
+        }
+    }
+
+    @Override
     public synchronized void stopConnector(String connName, Callback<Void> callback) {
         try {
             removeConnectorTasks(connName);

@@ -2337,6 +2337,95 @@ public class DistributedHerderTest {
     }
 
     @Test
+    public void testPatchConnectorConfigNotFound() {
+        ClusterConfigState clusterConfigState = new ClusterConfigState(
+                0,
+                null,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
+                Collections.emptySet());
+        expectConfigRefreshAndSnapshot(clusterConfigState);
+
+        Map<String, String> connConfigPatch = new HashMap<>();
+        connConfigPatch.put("foo1", "baz1");
+
+        FutureCallback<Herder.Created<ConnectorInfo>> patchCallback = new FutureCallback<>();
+        herder.patchConnectorConfig(CONN2, connConfigPatch, patchCallback);
+        herder.tick();
+        assertTrue(patchCallback.isDone());
+        ExecutionException exception = assertThrows(ExecutionException.class, patchCallback::get);
+        assertInstanceOf(NotFoundException.class, exception.getCause());
+    }
+
+    @Test
+    public void testPatchConnectorConfig() throws Exception {
+        when(member.memberId()).thenReturn("leader");
+        expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList(), true);
+        when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
+
+        Map<String, String> originalConnConfig = new HashMap<>(CONN1_CONFIG);
+        originalConnConfig.put("foo1", "bar1");
+        originalConnConfig.put("foo2", "bar2");
+
+        // The connector is pre-existing due to the mocks.
+
+        ClusterConfigState originalSnapshot = new ClusterConfigState(
+                1,
+                null,
+                Collections.singletonMap(CONN1, 0),
+                Collections.singletonMap(CONN1, originalConnConfig),
+                Collections.singletonMap(CONN1, TargetState.STARTED),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                Collections.emptySet(),
+                Collections.emptySet());
+        expectConfigRefreshAndSnapshot(originalSnapshot);
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+
+        expectMemberPoll();
+
+        // Patch the connector config.
+        Map<String, String> connConfigPatch = new HashMap<>();
+        connConfigPatch.put("foo1", "changed");
+        connConfigPatch.put("foo2", null);
+        connConfigPatch.put("foo3", "added");
+
+        Map<String, String> patchedConnConfig = new HashMap<>(originalConnConfig);
+        patchedConnConfig.put("foo1", "changed");
+        patchedConnConfig.remove("foo2");
+        patchedConnConfig.put("foo3", "added");
+
+        expectMemberEnsureActive();
+        expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList(), true);
+        when(worker.getPlugins()).thenReturn(plugins);
+
+        ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            validateCallback.getValue().onCompletion(null, CONN1_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(eq(patchedConnConfig), validateCallback.capture());
+
+        // This is effectively the main check of this test:
+        // we validate that what's written in the config storage is the patched config.
+        doNothing().when(configBackingStore).putConnectorConfig(eq(CONN1), eq(patchedConnConfig), isNull());
+
+        FutureCallback<Herder.Created<ConnectorInfo>> patchCallback = new FutureCallback<>();
+        herder.patchConnectorConfig(CONN1, connConfigPatch, patchCallback);
+        herder.tick();
+        assertTrue(patchCallback.isDone());
+        assertEquals(patchedConnConfig, patchCallback.get().result().config());
+
+        // No need to check herder.connectorConfig explicitly:
+        // all the related parts are mocked and that the config is correct is checked by eq()'s in the mocked called above.
+    }
+
+    @Test
     public void testKeyRotationWhenWorkerBecomesLeader() throws Exception {
         long rotationTtlDelay = DistributedConfig.INTER_WORKER_KEY_TTL_MS_MS_DEFAULT;
         when(member.memberId()).thenReturn("member");
