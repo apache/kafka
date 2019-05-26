@@ -85,6 +85,25 @@ public class DescribeGroupsResponse extends AbstractResponse {
         return  groupMetada;
     }
 
+    public static DescribedGroup groupMetadata(
+        final String groupId,
+        final Errors error,
+        final String state,
+        final String protocolType,
+        final String protocol,
+        final List<DescribedGroupMember> members,
+        final int authorizedOperations) {
+        DescribedGroup groupMetada = new DescribedGroup();
+        groupMetada.setGroupId(groupId)
+            .setErrorCode(error.code())
+            .setGroupState(state)
+            .setProtocolType(protocolType)
+            .setProtocolData(protocol)
+            .setMembers(members)
+            .setAuthorizedOperations(authorizedOperations);
+        return  groupMetada;
+    }
+
     public DescribeGroupsResponseData data() {
         return data;
     }

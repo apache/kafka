@@ -948,7 +948,7 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster, AdminClientConfig.RETRIES_CONFIG, "2")) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
 
-            // Pepare the metadata response used for the first describe cluster
+            // Prepare the metadata response used for the first describe cluster
             MetadataResponse response = MetadataResponse.prepareResponse(0,
                     new ArrayList<>(nodes.values()),
                     env.cluster().clusterResource().clusterId(),
@@ -957,7 +957,7 @@ public class KafkaAdminClientTest {
                     MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
             env.kafkaClient().prepareResponse(response);
 
-            // Pepare the metadata response used for the second describe cluster
+            // Prepare the metadata response used for the second describe cluster
             MetadataResponse response2 = MetadataResponse.prepareResponse(0,
                     new ArrayList<>(nodes.values()),
                     env.cluster().clusterResource().clusterId(),
@@ -1210,6 +1210,43 @@ public class KafkaAdminClientTest {
             assertEquals(1, result.describedGroups().size());
             assertEquals("group-0", groupDescription.groupId());
             assertEquals(2, groupDescription.members().size());
+        }
+    }
+
+    @Test
+    public void testDescribeConsumerGroupsWithAuthorizedOperationsOmitted() throws Exception {
+        final HashMap<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, env.cluster().controller()));
+
+            DescribeGroupsResponseData data = new DescribeGroupsResponseData();
+            data.groups().add(DescribeGroupsResponse.groupMetadata(
+                "group-0",
+                Errors.NONE,
+                "",
+                ConsumerProtocol.PROTOCOL_TYPE,
+                "",
+                Collections.emptyList(),
+                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED));
+
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+
+            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
+            final ConsumerGroupDescription groupDescription = result.describedGroups().get("group-0").get();
+
+            assertNull(groupDescription.authorizedOperations());
         }
     }
 
