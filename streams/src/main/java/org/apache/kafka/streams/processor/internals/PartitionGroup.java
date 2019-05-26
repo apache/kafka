@@ -85,7 +85,7 @@ public class PartitionGroup {
     }
 
     long getPartitionTimestamp(final TopicPartition partition) {
-        return partitionQueues.get(partition).timestamp();
+        return partitionQueues.get(partition).partitionTime();
     }
 
     void setPartitionTimestamp(final TopicPartition partition, final long timestamp) {
@@ -109,9 +109,6 @@ public class PartitionGroup {
         if (queue != null) {
             // get the first record from this queue.
             record = queue.poll();
-            if (queue.timestamp() > streamTime) {
-                streamTime = queue.timestamp();
-            }
 
             if (record != null) {
                 --totalBuffered;

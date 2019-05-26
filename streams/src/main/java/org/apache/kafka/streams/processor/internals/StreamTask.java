@@ -251,6 +251,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
+    // used for testing
+    long getStreamTime() {
+        return partitionGroup.timestamp();
+    }
+
+    // used for testing
+    long getPartitionTime(final TopicPartition partition) {
+        return partitionGroup.getPartitionTimestamp(partition);
+    }
+
+    // used for testing
+    void resetTimes() {
+        partitionGroup.clear();
+    }
+
     @Override
     public boolean initializeStateStores() {
         log.trace("Initializing state stores");
@@ -363,7 +378,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
             log.trace("Start processing one record [{}]", record);
 
             updateProcessorContext(record, currNode);
-            currNode.setPartitionTime(partitionGroup.getPartitionTimestamp(partition));
             currNode.process(record.key(), record.value());
 
             log.trace("Completed processing one record [{}]", record);
@@ -445,21 +459,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 record.topic(),
                 record.headers()));
         processorContext.setCurrentNode(currNode);
-    }
-
-    // used for testing
-    long getStreamTime() {
-        return partitionGroup.timestamp();
-    } 
-
-    // used for testing
-    long getPartitionTime(final TopicPartition partition) {
-        return partitionGroup.getPartitionTimestamp(partition);
-    }
-
-    // used for testing
-    void resetTimes() {
-        partitionGroup.clear();
     }
 
     /**
@@ -767,7 +766,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                 //Offset metadata information could not be retrieved when eos is enabled
                 metadata = null;
             }
-            
+
             if (metadata != null) {
                 final long committedTimestamp = Long.parseLong(metadata.metadata());
                 partitionGroup.setPartitionTimestamp(partition, committedTimestamp);
@@ -775,7 +774,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
                           + " to {} in stream task {}", partition, committedTimestamp, this);
             }
         }
-
         final int newQueueSize = partitionGroup.addRawRecords(partition, records);
 
         if (log.isTraceEnabled()) {

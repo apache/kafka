@@ -639,11 +639,9 @@ public class StreamTaskTest {
         assertTrue(task.commitNeeded());
 
         task.commit();
-        assertFalse(task.commitNeeded());
-
-        // confirm that timestamp was correctly committed
+        assertFalse(task.commitNeeded()); // confirm that timestamp was correctly committed
         assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata())
-                   == task.getPartitionTime(partition1));
+                      == task.getPartitionTime(partition1));
     }
 
     @Test
@@ -696,6 +694,7 @@ public class StreamTaskTest {
 
         assertTrue(task.isProcessable(0L));
     }
+
 
     @Test
     public void shouldBeProcessableIfWaitedForTooLong() {

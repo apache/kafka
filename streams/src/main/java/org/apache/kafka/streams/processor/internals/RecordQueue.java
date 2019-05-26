@@ -47,7 +47,7 @@ public class RecordQueue {
     private final ArrayDeque<ConsumerRecord<byte[], byte[]>> fifoQueue;
 
     private StampedRecord headRecord = null;
-    private long partitionTime = RecordQueue.UNKNOWN;
+    private long partitionTime = ConsumerRecord.NO_TIMESTAMP;
 
     RecordQueue(final TopicPartition partition,
                 final SourceNode source,
@@ -68,9 +68,13 @@ public class RecordQueue {
         this.processorContext = processorContext;
         this.log = logContext.logger(RecordQueue.class);
     }
+ 
+    public void setPartitionTime(final long timestamp) {
+        partitionTime = timestamp;
+    }
 
-    public void setPartitionTime(final long partitionTime) {
-        this.partitionTime = partitionTime;
+    public long partitionTime() {
+        return partitionTime;
     }
 
     /**
@@ -155,6 +159,7 @@ public class RecordQueue {
     public void clear() {
         fifoQueue.clear();
         headRecord = null;
+        partitionTime = RecordQueue.UNKNOWN;
     }
 
     private void updateHead() {
@@ -189,17 +194,10 @@ public class RecordQueue {
                 continue;
             }
 
-            headRecord = new StampedRecord(deserialized, timestamp);
-
-            final Long retrievedPartitionTime = headRecord.partitionTime();
-            if (retrievedPartitionTime != null && retrievedPartitionTime > partitionTime) {
-                partitionTime = retrievedPartitionTime;
-            }
-
-            // update the partition timestamp if the current head record's timestamp has exceed its value
             if (timestamp > partitionTime) {
                 partitionTime = timestamp;
             }
+            headRecord = new StampedRecord(deserialized, timestamp);
         }
     }
 }
