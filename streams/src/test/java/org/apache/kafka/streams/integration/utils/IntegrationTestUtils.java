@@ -32,6 +32,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.requests.UpdateMetadataRequest;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
@@ -247,7 +248,7 @@ public class IntegrationTestUtils {
                                                                          final Long timestamp,
                                                                          final boolean enableTransactions)
         throws ExecutionException, InterruptedException {
-        produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, null, timestamp, enableTransactions);
+        produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, null, timestamp, enableTransactions, null, null);
     }
 
     /**
@@ -267,7 +268,31 @@ public class IntegrationTestUtils {
                                                                          final Long timestamp,
                                                                          final boolean enableTransactions)
         throws ExecutionException, InterruptedException {
-        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig)) {
+        produceKeyValuesSynchronouslyWithTimestamp(topic, records, producerConfig, headers, timestamp, enableTransactions, null, null);
+    }
+
+    /**
+     * @param topic               Kafka topic to write the data records to
+     * @param records             Data records to write to Kafka
+     * @param producerConfig      Kafka producer configuration
+     * @param headers             {@link Headers} of the data records
+     * @param timestamp           Timestamp of the record
+     * @param enableTransactions  Send messages in a transaction
+     * @param keySerializer       Producer key serializer
+     * @param valueSerializer     Producer value serializer
+     * @param <K>                 Key type of the data records
+     * @param <V>                 Value type of the data records
+     */
+    public static <K, V> void produceKeyValuesSynchronouslyWithTimestamp(final String topic,
+                                                                         final Collection<KeyValue<K, V>> records,
+                                                                         final Properties producerConfig,
+                                                                         final Headers headers,
+                                                                         final Long timestamp,
+                                                                         final boolean enableTransactions,
+                                                                         final Serializer<K> keySerializer,
+                                                                         final Serializer<V> valueSerializer)
+            throws ExecutionException, InterruptedException {
+        try (final Producer<K, V> producer = new KafkaProducer<>(producerConfig, keySerializer, valueSerializer)) {
             if (enableTransactions) {
                 producer.initTransactions();
                 producer.beginTransaction();
