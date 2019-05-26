@@ -32,6 +32,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.requests.UpdateMetadataRequest;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -216,6 +217,8 @@ public class IntegrationTestUtils {
      * @param headers             {@link Headers} of the data records
      * @param time                Timestamp provider
      * @param enableTransactions  Send messages in a transaction
+     * @param keySerializer       Producer key serializer
+     * @param valueSerializer     Producer value serializer
      * @param <K>                 Key type of the data records
      * @param <V>                 Value type of the data records
      */
@@ -576,11 +579,34 @@ public class IntegrationTestUtils {
                                                                                   final String topic,
                                                                                   final int expectedNumRecords,
                                                                                   final long waitTime) throws InterruptedException {
+        return waitUntilMinKeyValueRecordsReceived(consumerConfig, topic, expectedNumRecords, waitTime, null, null);
+    }
+
+    /**
+     * Wait until enough data (key-value records) has been consumed.
+     *
+     * @param consumerConfig     Kafka Consumer configuration
+     * @param topic              Kafka topic to consume from
+     * @param expectedNumRecords Minimum number of expected records
+     * @param waitTime           Upper bound of waiting time in milliseconds
+     * @param <K>                Key type of the data records
+     * @param <V>                Value type of the data records
+     * @param keyDeserializer    Consumer key deserializer
+     * @param valueDeserializer  Consumer value deserializer
+     * @return All the records consumed, or null if no records are consumed
+     * @throws AssertionError    if the given wait time elapses
+     */
+    public static <K, V> List<KeyValue<K, V>> waitUntilMinKeyValueRecordsReceived(final Properties consumerConfig,
+                                                                                  final String topic,
+                                                                                  final int expectedNumRecords,
+                                                                                  final long waitTime,
+                                                                                  final Deserializer<K> keyDeserializer,
+                                                                                  final Deserializer<V> valueDeserializer) throws InterruptedException {
         final List<KeyValue<K, V>> accumData = new ArrayList<>();
-        try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
+        try (final Consumer<K, V> consumer = createConsumer(consumerConfig, keyDeserializer, valueDeserializer)) {
             final TestCondition valuesRead = () -> {
                 final List<KeyValue<K, V>> readData =
-                    readKeyValues(topic, consumer, waitTime, expectedNumRecords);
+                        readKeyValues(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
                 return accumData.size() >= expectedNumRecords;
             };
@@ -605,11 +631,33 @@ public class IntegrationTestUtils {
                                                                                                                final String topic,
                                                                                                                final int expectedNumRecords,
                                                                                                                final long waitTime) throws InterruptedException {
+        return waitUntilMinKeyValueWithTimestampRecordsReceived(consumerConfig, topic, expectedNumRecords, waitTime, null, null);
+    }
+
+    /**
+     * Wait until enough data (timestamped key-value records) has been consumed.
+     *
+     * @param consumerConfig     Kafka Consumer configuration
+     * @param topic              Kafka topic to consume from
+     * @param expectedNumRecords Minimum number of expected records
+     * @param waitTime           Upper bound of waiting time in milliseconds
+     * @param keyDeserializer    Consumer key deserializer
+     * @param valueDeserializer  Consumer value deserializer
+     * @return All the records consumed, or null if no records are consumed
+     * @param <K>                Key type of the data records
+     * @param <V>                Value type of the data records
+     */
+    public static <K, V> List<KeyValue<K, KeyValue<V, Long>>> waitUntilMinKeyValueWithTimestampRecordsReceived(final Properties consumerConfig,
+                                                                                                               final String topic,
+                                                                                                               final int expectedNumRecords,
+                                                                                                               final long waitTime,
+                                                                                                               final Deserializer<K> keyDeserializer,
+                                                                                                               final Deserializer<V> valueDeserializer) throws InterruptedException {
         final List<KeyValue<K, KeyValue<V, Long>>> accumData = new ArrayList<>();
-        try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
+        try (final Consumer<K, V> consumer = createConsumer(consumerConfig, keyDeserializer, valueDeserializer)) {
             final TestCondition valuesRead = () -> {
                 final List<KeyValue<K, KeyValue<V, Long>>> readData =
-                    readKeyValuesWithTimestamp(topic, consumer, waitTime, expectedNumRecords);
+                        readKeyValuesWithTimestamp(topic, consumer, waitTime, expectedNumRecords);
                 accumData.addAll(readData);
                 return accumData.size() >= expectedNumRecords;
             };
@@ -650,8 +698,30 @@ public class IntegrationTestUtils {
                                                                                     final String topic,
                                                                                     final List<KeyValue<K, V>> expectedRecords,
                                                                                     final long waitTime) throws InterruptedException {
+        return waitUntilFinalKeyValueRecordsReceived(consumerConfig, topic, expectedRecords, waitTime, null, null);
+    }
+
+    /**
+     * Wait until final key-value mappings have been consumed.
+     *
+     * @param consumerConfig     Kafka Consumer configuration
+     * @param topic              Kafka topic to consume from
+     * @param expectedRecords    Expected key-value mappings
+     * @param waitTime           Upper bound of waiting time in milliseconds
+     * @param keyDeserializer    Consumer key deserializer
+     * @param valueDeserializer  Consumer value deserializer
+     * @param <K>                Key type of the data records
+     * @param <V>                Value type of the data records
+     * @return All the mappings consumed, or null if no records are consumed
+     */
+    public static <K, V> List<KeyValue<K, V>> waitUntilFinalKeyValueRecordsReceived(final Properties consumerConfig,
+                                                                                    final String topic,
+                                                                                    final List<KeyValue<K, V>> expectedRecords,
+                                                                                    final long waitTime,
+                                                                                    final Deserializer<K> keyDeserializer,
+                                                                                    final Deserializer<V> valueDeserializer) throws InterruptedException {
         final List<KeyValue<K, V>> accumData = new ArrayList<>();
-        try (final Consumer<K, V> consumer = createConsumer(consumerConfig)) {
+        try (final Consumer<K, V> consumer = createConsumer(consumerConfig, keyDeserializer, valueDeserializer)) {
             final TestCondition valuesRead = () -> {
                 final List<KeyValue<K, V>> readData =
                         readKeyValues(topic, consumer, waitTime, expectedRecords.size());
@@ -990,10 +1060,25 @@ public class IntegrationTestUtils {
      * @return Consumer
      */
     private static <K, V> KafkaConsumer<K, V> createConsumer(final Properties consumerConfig) {
+        return createConsumer(consumerConfig, null, null);
+    }
+
+    /**
+     * Sets up a {@link KafkaConsumer} from a copy of the given configuration that has
+     * {@link ConsumerConfig#AUTO_OFFSET_RESET_CONFIG} set to "earliest" and {@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG}
+     * set to "true" to prevent missing events as well as repeat consumption.
+     * @param consumerConfig Consumer configuration
+     * @param keyDeserializer    Consumer key deserializer
+     * @param valueDeserializer  Consumer value deserializer
+     * @return Consumer
+     */
+    private static <K, V> KafkaConsumer<K, V> createConsumer(final Properties consumerConfig,
+                                                             final Deserializer<K> keyDeserializer,
+                                                             final Deserializer<V> valueDeserializer) {
         final Properties filtered = new Properties();
         filtered.putAll(consumerConfig);
         filtered.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         filtered.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true");
-        return new KafkaConsumer<>(filtered);
+        return new KafkaConsumer<>(filtered, keyDeserializer, valueDeserializer);
     }
 }
