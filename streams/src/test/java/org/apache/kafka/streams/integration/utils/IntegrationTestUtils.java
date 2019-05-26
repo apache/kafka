@@ -404,6 +404,8 @@ public class IntegrationTestUtils {
      * @param records             Data records to write to Kafka
      * @param producerConfig      Kafka producer configuration
      * @param timestamp           Timestamp of the record
+     * @param keySerializer       Producer key serializer
+     * @param valueSerializer     Producer value serializer
      * @param <K>                 Key type of the data records
      * @param <V>                 Value type of the data records
      */
