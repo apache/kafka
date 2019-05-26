@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.StateStore;
 import java.util.Map;
 
 /**
- * Build a {@link StateStore} wrapped with optional caching and logging.
+ * Build a {@link StateStore} wra`pped with optional caching and logging.
  * @param <T>  the type of store to build
  */
 public interface StoreBuilder<T extends StateStore> {

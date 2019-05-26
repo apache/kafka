@@ -32,6 +32,7 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -50,7 +51,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.util.Collections;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -207,6 +210,22 @@ public class ProcessorTopologyTest {
         assertNoOutputRecord(OUTPUT_TOPIC_1);
 
         final KeyValueStore<String, String> store = driver.getKeyValueStore(storeName);
+        assertEquals("value4", store.get("key1"));
+        assertEquals("value2", store.get("key2"));
+        assertEquals("value3", store.get("key3"));
+        assertNull(store.get("key4"));
+    }
+
+    @Test
+    public void testDrivingConnectedStateStoreTopology() {
+        driver = new TopologyTestDriver(createConnectedStateStoreTopology("connectedStore"), props);
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value1"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key2", "value2"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key3", "value3"));
+        driver.pipeInput(recordFactory.create(INPUT_TOPIC_1, "key1", "value4"));
+        assertNoOutputRecord(OUTPUT_TOPIC_1);
+
+        final KeyValueStore<String, String> store = driver.getKeyValueStore("connectedStore");
         assertEquals("value4", store.get("key1"));
         assertEquals("value2", store.get("key2"));
         assertEquals("value3", store.get("key3"));
@@ -549,6 +568,14 @@ public class ProcessorTopologyTest {
             .addSink("counts", OUTPUT_TOPIC_1, "processor");
     }
 
+    private Topology createConnectedStateStoreTopology(final String storeName) {
+        StoreBuilder<KeyValueStore<String, String>> storeBuilder = Stores.keyValueStoreBuilder(Stores.inMemoryKeyValueStore(storeName), Serdes.String(), Serdes.String());
+        return topology
+            .addSource("source", STRING_DESERIALIZER, STRING_DESERIALIZER, INPUT_TOPIC_1)
+            .addProcessor("processor", defineWithStores(new StatefulProcessor(storeName), Collections.singleton(storeBuilder)), "source")
+            .addSink("counts", OUTPUT_TOPIC_1, "processor");
+    }
+
     private Topology createInternalRepartitioningTopology() {
         topology.addSource("source", INPUT_TOPIC_1)
             .addSink("sink0", THROUGH_TOPIC_1, "source")
@@ -721,6 +748,31 @@ public class ProcessorTopologyTest {
 
     private <K, V> ProcessorSupplier<K, V> define(final Processor<K, V> processor) {
         return () -> processor;
+    }
+
+    private class ProcessorSupplierAndConnectedStoreProvider<K, V> implements ProcessorSupplier<K, V>, ConnectedStoreProvider {
+        private final Processor<K, V> processor;
+        private final Set<StoreBuilder> stores;
+
+        ProcessorSupplierAndConnectedStoreProvider(Processor<K, V> processor, Set<StoreBuilder> stores) {
+            this.processor = processor;
+            this.stores = stores;
+        }
+
+        @Override
+        public Set<StoreBuilder> stores() {
+            return stores;
+        }
+
+        @Override
+        public Processor<K, V> get() {
+            return processor;
+        }
+    }
+
+    private <K, V> ProcessorSupplierAndConnectedStoreProvider<K, V> defineWithStores(final Processor<K, V> processor,
+                                                                                     final Set<StoreBuilder> stores) {
+        return new ProcessorSupplierAndConnectedStoreProvider<>(processor, stores);
     }
 
     /**

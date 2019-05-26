@@ -23,10 +23,12 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 
 /**
@@ -585,6 +587,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
+     * TODO
      */
     <K1, V1> KStream<K1, V1> transform(final TransformerSupplier<? super K, ? super V, KeyValue<K1, V1>> transformerSupplier,
                                        final String... stateStoreNames);
@@ -677,6 +680,7 @@ public interface KStream<K, V> {
      * @see #transformValues(ValueTransformerSupplier, String...)
      * @see #transformValues(ValueTransformerWithKeySupplier, String...)
      * @see #process(ProcessorSupplier, String...)
+     * TODO
      */
     <K1, V1> KStream<K1, V1> flatTransform(final TransformerSupplier<? super K, ? super V, Iterable<KeyValue<K1, V1>>> transformerSupplier,
                                            final String... stateStoreNames);
@@ -753,6 +757,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
+     * TODO
      */
     <VR> KStream<K, VR> transformValues(final ValueTransformerSupplier<? super V, ? extends VR> valueTransformerSupplier,
                                         final String... stateStoreNames);
@@ -832,6 +837,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapper)
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
+     * TODO
      */
     <VR> KStream<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> valueTransformerSupplier,
                                         final String... stateStoreNames);
@@ -918,6 +924,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
+     * TODO
      */
     <VR> KStream<K, VR> flatTransformValues(final ValueTransformerSupplier<? super V, Iterable<VR>> valueTransformerSupplier,
                                             final String... stateStoreNames);
@@ -1005,6 +1012,7 @@ public interface KStream<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      * @see #transform(TransformerSupplier, String...)
      * @see #flatTransform(TransformerSupplier, String...)
+     * TODO
      */
     <VR> KStream<K, VR> flatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, Iterable<VR>> valueTransformerSupplier,
                                             final String... stateStoreNames);
@@ -1018,43 +1026,67 @@ public interface KStream<K, V> {
      * can be observed and additional periodic actions can be performed.
      * Note that this is a terminal operation that returns void.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
-     * global state stores; read-only access to global state stores is available by default):
+     * In order for the processor to use state stores, the stores must be added to the topology and connected to the
+     * processor using only one of two strategies (though it's not required to connect global state stores; read-only
+     * access to global state stores is available by default).
+     * <p>
+     * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
+     * and specify the store names via {@code stateStoreNames} so they will be connected to the processor.
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
      *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
      *                 Serdes.String(),
      *                 Serdes.String());
-     * // register store
+     * // add store
      * builder.addStateStore(keyValueStoreBuilder);
      *
-     * inputStream.process(new ProcessorSupplier() { ... }, "myProcessorState");
+     * inputStream.process(new ProcessorSupplier() { public Processor get() { return new MyProcessor(); } }, "myProcessorState");
      * }</pre>
-     * Within the {@link Processor}, the state is obtained via the
+     * The second strategy is for the given {@link ProcessorSupplier} to implement {@link ConnectedStoreProvider}, which
+     * provides the {@link StoreBuilder}s to be automatically added to the topology and connected to the processor.
+     * <pre>{@code
+     * class MyProcessorSupplier implements ProcessorSupplier, ConnectedStoreProvider {
+     *     // supply processor
+     *     Processor get() {
+     *         return new MyProcessor();
+     *     }
+     *
+     *     // provide store(s) that will be added and connected to the associated processor
+     *     Set<StoreBuilder> stores() {
+     *         StoreBuilder<KeyValueStore<String, String>> keyValueStoreBuilder =
+     *                   Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                   Serdes.String(),
+     *                   Serdes.String());
+     *         return Collections.singleton(keyValueStoreBuilder);
+     *     }
+     * }
+     *
+     * ...
+     *
+     * inputStream.process(new MyProcessorSupplier());
+     * }</pre>
+     * <p>
+     * With either strategy, within the {@link Processor}, the state is obtained via the
      * {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * <pre>{@code
-     * new ProcessorSupplier() {
-     *     Processor get() {
-     *         return new Processor() {
-     *             private StateStore state;
+     * class MyProcessor implements Processor {
+     *     private StateStore state;
      *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myProcessorState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
+     *     void init(ProcessorContext context) {
+     *         this.state = context.getStateStore("myProcessorState");
+     *         // punctuate each second, can access this.state
+     *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *     }
      *
-     *             void process(K key, V value) {
-     *                 // can access this.state
-     *             }
+     *     void process(K key, V value) {
+     *         // can access this.state
+     *     }
      *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
+     *     void close() {
+     *         // can access this.state
      *     }
      * }
      * }</pre>
