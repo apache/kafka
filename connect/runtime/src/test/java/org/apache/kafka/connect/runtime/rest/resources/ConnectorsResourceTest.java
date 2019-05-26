@@ -111,6 +111,17 @@ public class ConnectorsResourceTest {
         CONNECTOR_CONFIG.put("sample_config", "test_config");
     }
 
+    private static final Map<String, String> CONNECTOR_CONFIG_PATCH = new HashMap<>();
+    static {
+        CONNECTOR_CONFIG_PATCH.put("sample_config", "test_config_new");
+        CONNECTOR_CONFIG_PATCH.put("sample_config_2", "test_config_2");
+    }
+
+    private static final Map<String, String> CONNECTOR_CONFIG_PATCHED = new HashMap<>(CONNECTOR_CONFIG);
+    static {
+        CONNECTOR_CONFIG_PATCHED.putAll(CONNECTOR_CONFIG_PATCH);
+    }
+
     private static final Map<String, String> CONNECTOR_CONFIG_CONTROL_SEQUENCES = new HashMap<>();
     static {
         CONNECTOR_CONFIG_CONTROL_SEQUENCES.put("name", CONNECTOR_NAME_CONTROL_SEQUENCES1);
@@ -592,6 +603,37 @@ public class ConnectorsResourceTest {
         connConfig.put(ConnectorConfig.NAME_CONFIG, "mismatched-name");
         CreateConnectorRequest request = new CreateConnectorRequest(CONNECTOR_NAME, connConfig, null);
         assertThrows(BadRequestException.class, () -> connectorsResource.createConnector(FORWARD, NULL_HEADERS, request));
+    }
+
+    @Test
+    public void testPatchConnectorConfig() throws Throwable {
+        final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackResult(cb, new Herder.Created<>(true, new ConnectorInfo(CONNECTOR_NAME, CONNECTOR_CONFIG_PATCHED, CONNECTOR_TASK_NAMES,
+                ConnectorType.SINK))
+        ).when(herder).patchConnectorConfig(eq(CONNECTOR_NAME), eq(CONNECTOR_CONFIG_PATCH), cb.capture());
+
+        connectorsResource.patchConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_PATCH);
+    }
+
+    @Test
+    public void testPatchConnectorConfigLeaderRedirect() throws Throwable {
+        final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackNotLeaderException(cb)
+                .when(herder).patchConnectorConfig(eq(CONNECTOR_NAME), eq(CONNECTOR_CONFIG_PATCH), cb.capture());
+        when(restClient.httpRequest(eq(LEADER_URL + "connectors/" + CONNECTOR_NAME + "/config?forward=false"), eq("PATCH"), isNull(), eq(CONNECTOR_CONFIG_PATCH), any()))
+                .thenReturn(new RestClient.HttpResponse<>(200, new HashMap<>(CONNECTOR_CONFIG_PATCHED), null));
+
+        connectorsResource.patchConnectorConfig(CONNECTOR_NAME, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_PATCH);
+    }
+
+    @Test
+    public void testPatchConnectorConfigNotFound() throws Throwable {
+        final ArgumentCaptor<Callback<Herder.Created<ConnectorInfo>>> cb = ArgumentCaptor.forClass(Callback.class);
+        expectAndCallbackException(cb, new NotFoundException("Connector " + CONNECTOR_NAME + " not found"))
+                .when(herder).patchConnectorConfig(eq(CONNECTOR_NAME), eq(CONNECTOR_CONFIG_PATCH), cb.capture());
+
+        assertThrows(NotFoundException.class, () -> connectorsResource.patchConnectorConfig(
+                CONNECTOR_NAME, NULL_HEADERS, FORWARD, CONNECTOR_CONFIG_PATCH));
     }
 
     @Test
