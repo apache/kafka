@@ -98,7 +98,7 @@ public class SubscriptionState {
     private int assignmentId = 0;
 
     @Override
-    public String toString() {
+    public synchronized String toString() {
         return "SubscriptionState{" +
             "type=" + subscriptionType +
             ", subscribedPattern=" + subscribedPattern +
@@ -108,7 +108,7 @@ public class SubscriptionState {
             ", assignment=" + assignment.partitionStateValues() + " (id=" + assignmentId + ")}";
     }
 
-    public String prettyString() {
+    public synchronized String prettyString() {
         switch (subscriptionType) {
             case NONE:
                 return "None";
