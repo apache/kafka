@@ -93,7 +93,7 @@ public class StopReplicaResponse extends AbstractResponse {
         if (error != Errors.NONE)
             // Minor optimization since the top-level error applies to all partitions
             return Collections.singletonMap(error, responses.size());
-        return errorCounts(responses);
+        return errorCounts(responses.values());
     }
 
     public static StopReplicaResponse parse(ByteBuffer buffer, short version) {
