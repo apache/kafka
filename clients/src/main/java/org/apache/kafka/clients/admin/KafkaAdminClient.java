@@ -143,6 +143,8 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
+import org.apache.kafka.common.requests.LeaveGroupRequest;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsRequest;
@@ -2043,9 +2045,9 @@ public class KafkaAdminClient extends AdminClient {
         return futures;
     }
 
-    private  IncrementalAlterConfigsRequestData toIncrementalAlterConfigsRequestData(final Collection<ConfigResource> resources,
-                                                                   final Map<ConfigResource, Collection<AlterConfigOp>> configs,
-                                                                   final boolean validateOnly) {
+    private IncrementalAlterConfigsRequestData toIncrementalAlterConfigsRequestData(final Collection<ConfigResource> resources,
+                                                                                    final Map<ConfigResource, Collection<AlterConfigOp>> configs,
+                                                                                    final boolean validateOnly) {
         IncrementalAlterConfigsRequestData requestData = new IncrementalAlterConfigsRequestData();
         requestData.setValidateOnly(validateOnly);
         for (ConfigResource resource : resources) {
@@ -3337,6 +3339,71 @@ public class KafkaAdminClient extends AdminClient {
      */
     private boolean dependsOnSpecificNode(ConfigResource resource) {
         return (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault())
-                || resource.type() == ConfigResource.Type.BROKER_LOGGER;
+                   || resource.type() == ConfigResource.Type.BROKER_LOGGER;
+    }
+
+    @Override
+    public MembershipChangeResult removeMemberFromGroup(String groupId,
+                                                        RemoveMemberFromGroupOptions options) {
+        final long startFindCoordinatorMs = time.milliseconds();
+        final long deadline = calcDeadlineMs(startFindCoordinatorMs, options.timeoutMs());
+
+        KafkaFutureImpl<RemoveMemberFromGroupResult> future = new KafkaFutureImpl<>();
+
+        ConsumerGroupOperationContext<RemoveMemberFromGroupResult, RemoveMemberFromGroupOptions> context =
+            new ConsumerGroupOperationContext<>(groupId, options, deadline, future);
+
+        Call findCoordinatorCall = getFindCoordinatorCall(context,
+            () -> KafkaAdminClient.this.getRemoveMembersFromGroupCall(context));
+        runnable.call(findCoordinatorCall, startFindCoordinatorMs);
+
+        return new MembershipChangeResult(future);
+    }
+
+    private Call getRemoveMembersFromGroupCall(
+        ConsumerGroupOperationContext<RemoveMemberFromGroupResult, RemoveMemberFromGroupOptions> context) {
+        return new Call("removeMembersFromGroup",
+                        context.getDeadline(),
+                        new ConstantNodeIdProvider(context.getNode().get().id())) {
+            @Override
+            AbstractRequest.Builder createRequest(int timeoutMs) {
+                return new LeaveGroupRequest.Builder(context.getGroupId(),
+                                                     context.getOptions().getMembers());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                final LeaveGroupResponse response = (LeaveGroupResponse) abstractResponse;
+
+                // If coordinator changed since we fetched it, retry
+                if (context.hasCoordinatorMoved(response)) {
+                    rescheduleTask(context, () -> getRemoveMembersFromGroupCall(context));
+                    return;
+                }
+
+                Errors error = response.error();
+
+                // If this is a known top level error, we will throw exception directly. This is
+                // because no member should have been removed successfully.
+                // For transit coordinator error, the whole process will retry.
+                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS
+                        || error == Errors.COORDINATOR_NOT_AVAILABLE
+                        || error == Errors.GROUP_AUTHORIZATION_FAILED
+                        || error == Errors.NOT_COORDINATOR) {
+                    throw error.exception();
+                }
+
+                final RemoveMemberFromGroupResult membershipChangeResult =
+                    new RemoveMemberFromGroupResult(error,
+                                                    context.getOptions().getMembers(),
+                                                    response.memberResponses());
+                context.getFuture().complete(membershipChangeResult);
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                context.getFuture().completeExceptionally(throwable);
+            }
+        };
     }
 }

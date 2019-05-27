@@ -43,6 +43,9 @@ import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.{ConfigResource, LogLevelConfig}
 import org.apache.kafka.common.errors._
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
@@ -1168,10 +1171,12 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       }
       val testGroupId = "test_group_id"
       val testClientId = "test_client_id"
+      val testInstanceId = "test_instance_id"
       val fakeGroupId = "fake_group_id"
       val newConsumerConfig = new Properties(consumerConfig)
       newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, testInstanceId)
       val consumer = createConsumer(configOverrides = newConsumerConfig)
       val latch = new CountDownLatch(1)
       try {
@@ -1201,13 +1206,13 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             !matching.isEmpty
           }, s"Expected to be able to list $testGroupId")
 
-          val result = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
+          val describeWithFakeGroupResult = client.describeConsumerGroups(Seq(testGroupId, fakeGroupId).asJava,
             new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
-          assertEquals(2, result.describedGroups().size())
+          assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
 
           // Test that we can get information about the test consumer group.
-          assertTrue(result.describedGroups().containsKey(testGroupId))
-          val testGroupDescription = result.describedGroups().get(testGroupId).get()
+          assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(testGroupId))
+          var testGroupDescription = describeWithFakeGroupResult.describedGroups().get(testGroupId).get()
 
           assertEquals(testGroupId, testGroupDescription.groupId())
           assertFalse(testGroupDescription.isSimpleConsumerGroup())
@@ -1223,8 +1228,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertEquals(expectedOperations, testGroupDescription.authorizedOperations())
 
           // Test that the fake group is listed as dead.
-          assertTrue(result.describedGroups().containsKey(fakeGroupId))
-          val fakeGroupDescription = result.describedGroups().get(fakeGroupId).get()
+          assertTrue(describeWithFakeGroupResult.describedGroups().containsKey(fakeGroupId))
+          val fakeGroupDescription = describeWithFakeGroupResult.describedGroups().get(fakeGroupId).get()
 
           assertEquals(fakeGroupId, fakeGroupDescription.groupId())
           assertEquals(0, fakeGroupDescription.members().size())
@@ -1233,7 +1238,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertEquals(expectedOperations, fakeGroupDescription.authorizedOperations())
 
           // Test that all() returns 2 results
-          assertEquals(2, result.all().get().size())
+          assertEquals(2, describeWithFakeGroupResult.all().get().size())
 
           // Test listConsumerGroupOffsets
           TestUtils.waitUntilTrue(() => {
@@ -1242,8 +1247,23 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
             parts.containsKey(part) && (parts.get(part).offset() == 1)
           }, s"Expected the offset for partition 0 to eventually become 1.")
 
+          // Test delete non-exist consumer instance
+          val invalidInstanceId = "invalid-instance-id"
+          var removeMemberResult = client.removeMemberFromGroup(testGroupId, new RemoveMemberFromGroupOptions(
+            Collections.singletonList(invalidInstanceId)
+          )).all()
+
+          assertTrue(removeMemberResult.hasError)
+          assertEquals(Errors.UNKNOWN_MEMBER_ID, removeMemberResult.error)
+          assertEquals(Collections.singletonList(new MemberIdentity()
+            .setGroupInstanceId(invalidInstanceId)), removeMemberResult.membersToRemove)
+          assertEquals(Collections.emptyList(), removeMemberResult.succeedMembers())
+          assertEquals(Collections.singletonList(new MemberResponse()
+            .setGroupInstanceId(invalidInstanceId)
+            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())), removeMemberResult.failedMembers())
+
           // Test consumer group deletion
-          val deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
+          var deleteResult = client.deleteConsumerGroups(Seq(testGroupId, fakeGroupId).asJava)
           assertEquals(2, deleteResult.deletedGroups().size())
 
           // Deleting the fake group ID should get GroupIdNotFoundException.
@@ -1255,6 +1275,37 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
           assertFutureExceptionTypeEquals(deleteResult.deletedGroups().get(testGroupId),
             classOf[GroupNotEmptyException])
+
+          // Test delete correct member
+          removeMemberResult = client.removeMemberFromGroup(testGroupId, new RemoveMemberFromGroupOptions(
+            Collections.singletonList(testInstanceId)
+          )).all()
+
+          assertFalse(removeMemberResult.hasError)
+          assertEquals(Errors.NONE, removeMemberResult.error)
+          assertEquals(Collections.singletonList(new MemberIdentity()
+            .setGroupInstanceId(testInstanceId)), removeMemberResult.membersToRemove)
+          assertEquals(Collections.singletonList(new MemberIdentity()
+            .setGroupInstanceId(testInstanceId)), removeMemberResult.succeedMembers())
+          assertEquals(Collections.emptyList(), removeMemberResult.failedMembers())
+
+          // The group should contain no member now.
+          val describeTestGroupResult = client.describeConsumerGroups(Seq(testGroupId).asJava,
+            new DescribeConsumerGroupsOptions().includeAuthorizedOperations(true))
+          assertEquals(1, describeTestGroupResult.describedGroups().size())
+
+          testGroupDescription = describeTestGroupResult.describedGroups().get(testGroupId).get()
+
+          assertEquals(testGroupId, testGroupDescription.groupId)
+          assertFalse(testGroupDescription.isSimpleConsumerGroup)
+          assertTrue(testGroupDescription.members().isEmpty)
+
+          // Consumer group deletion on empty group should succeed
+          deleteResult = client.deleteConsumerGroups(Seq(testGroupId).asJava)
+          assertEquals(1, deleteResult.deletedGroups().size())
+
+          assertTrue(deleteResult.deletedGroups().containsKey(testGroupId))
+          assertNull(deleteResult.deletedGroups().get(testGroupId).get())
         } finally {
           consumerThread.interrupt()
           consumerThread.join()

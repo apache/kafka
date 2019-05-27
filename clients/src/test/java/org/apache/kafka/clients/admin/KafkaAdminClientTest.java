@@ -66,6 +66,9 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
+import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
+import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -89,6 +92,7 @@ import org.apache.kafka.common.requests.DescribeGroupsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
+import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListPartitionReassignmentsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
@@ -224,7 +228,7 @@ public class KafkaAdminClientTest {
 
     private static Cluster mockBootstrapCluster() {
         return Cluster.bootstrap(ClientUtils.parseAndValidateAddresses(
-                Collections.singletonList("localhost:8121"), ClientDnsLookup.DEFAULT));
+                singletonList("localhost:8121"), ClientDnsLookup.DEFAULT));
     }
 
     private static AdminClientUnitTestEnv mockClientEnv(String... configVals) {
@@ -301,7 +305,7 @@ public class KafkaAdminClientTest {
         // This tests the scenario in which the bootstrap server is unreachable for a short while,
         // which prevents AdminClient from being able to send the initial metadata request
 
-        Cluster cluster = Cluster.bootstrap(Collections.singletonList(new InetSocketAddress("localhost", 8121)));
+        Cluster cluster = Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 8121)));
         Map<Node, Long> unreachableNodes = Collections.singletonMap(cluster.nodes().get(0), 200L);
         try (final AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(Time.SYSTEM, cluster,
                 AdminClientUnitTestEnv.clientConfigs(), unreachableNodes)) {
@@ -429,19 +433,19 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(body -> body instanceof DeleteTopicsRequest,
                     prepareDeleteTopicsResponse("myTopic", Errors.NONE));
-            KafkaFuture<Void> future = env.adminClient().deleteTopics(Collections.singletonList("myTopic"),
+            KafkaFuture<Void> future = env.adminClient().deleteTopics(singletonList("myTopic"),
                     new DeleteTopicsOptions()).all();
             future.get();
 
             env.kafkaClient().prepareResponse(body -> body instanceof DeleteTopicsRequest,
                     prepareDeleteTopicsResponse("myTopic", Errors.TOPIC_DELETION_DISABLED));
-            future = env.adminClient().deleteTopics(Collections.singletonList("myTopic"),
+            future = env.adminClient().deleteTopics(singletonList("myTopic"),
                     new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, TopicDeletionDisabledException.class);
 
             env.kafkaClient().prepareResponse(body -> body instanceof DeleteTopicsRequest,
                     prepareDeleteTopicsResponse("myTopic", Errors.UNKNOWN_TOPIC_OR_PARTITION));
-            future = env.adminClient().deleteTopics(Collections.singletonList("myTopic"),
+            future = env.adminClient().deleteTopics(singletonList("myTopic"),
                     new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, UnknownTopicOrPartitionException.class);
         }
@@ -1550,8 +1554,8 @@ public class KafkaAdminClientTest {
                     AlterConfigOp.OpType.APPEND);
 
             final Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
-            configs.put(brokerResource, Collections.singletonList(alterConfigOp1));
-            configs.put(topicResource, Collections.singletonList(alterConfigOp2));
+            configs.put(brokerResource, singletonList(alterConfigOp1));
+            configs.put(topicResource, singletonList(alterConfigOp2));
 
             AlterConfigsResult result = env.adminClient().incrementalAlterConfigs(configs);
             TestUtils.assertFutureError(result.values().get(brokerResource), ClusterAuthorizationException.class);
@@ -1566,7 +1570,108 @@ public class KafkaAdminClientTest {
                     .setErrorMessage(ApiError.NONE.message()));
 
             env.kafkaClient().prepareResponse(new IncrementalAlterConfigsResponse(responseData));
-            env.adminClient().incrementalAlterConfigs(Collections.singletonMap(brokerResource, asList(alterConfigOp1))).all().get();
+            env.adminClient().incrementalAlterConfigs(Collections.singletonMap(brokerResource, singletonList(alterConfigOp1))).all().get();
+        }
+    }
+
+    @Test
+    public void testRemoveMembersFromGroup() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            final String instanceOne = "instance-1";
+            final String instanceTwo = "instance-2";
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            MemberIdentity memberOne = new MemberIdentity().setGroupInstanceId(instanceOne);
+            MemberResponse responseOne = new MemberResponse()
+                                             .setGroupInstanceId(instanceOne)
+                                             .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code());
+
+            MemberIdentity memberTwo = new MemberIdentity().setGroupInstanceId(instanceTwo);
+            MemberResponse responseTwo = new MemberResponse()
+                                             .setGroupInstanceId(instanceTwo)
+                                             .setErrorCode(Errors.NONE.code());
+
+            List<MemberIdentity> memberIdentities = Arrays.asList(memberOne, memberTwo);
+            List<MemberResponse> memberResponses = Arrays.asList(responseOne, responseTwo);
+
+            // Retriable FindCoordinatorResponse errors should be retried
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_LOAD_IN_PROGRESS,  Node.noNode()));
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+
+            // Retriable errors should be retried
+            env.kafkaClient().prepareResponse(null, true);
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
+                                                                         .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
+                                                                         .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())));
+
+            // Inject an unknown error
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
+                                                                      .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())));
+
+            String groupId = "groupId";
+            List<String> membersToRemove = Arrays.asList(instanceOne, instanceTwo);
+            final MembershipChangeResult unknownErrorResult = env.adminClient().removeMemberFromGroup(
+                groupId,
+                new RemoveMemberFromGroupOptions(membersToRemove)
+            );
+
+            RemoveMemberFromGroupResult result = unknownErrorResult.all();
+            assertTrue(result.hasError());
+            assertEquals(Errors.UNKNOWN_SERVER_ERROR, result.error());
+
+            assertEquals(memberIdentities, result.membersToRemove());
+            assertEquals(Collections.emptyList(), result.succeedMembers());
+            assertEquals(Collections.emptyList(), result.failedMembers());
+
+            // Inject a top-level non-retriable error
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
+                                                                         .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())
+                                                                         .setMembers(memberResponses)));
+
+            final MembershipChangeResult topLevelErrorResult = env.adminClient().removeMemberFromGroup(
+                groupId,
+                new RemoveMemberFromGroupOptions(membersToRemove)
+            );
+            TestUtils.assertFutureError(topLevelErrorResult.future(), GroupAuthorizationException.class);
+
+            // Inject one member level error.
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
+                                                                         .setErrorCode(Errors.NONE.code())
+                                                                         .setMembers(memberResponses)));
+
+            final MembershipChangeResult memberLevelErrorResult = env.adminClient().removeMemberFromGroup(
+                groupId,
+                new RemoveMemberFromGroupOptions(membersToRemove)
+            );
+
+            result = memberLevelErrorResult.all();
+            assertTrue(result.hasError());
+            assertEquals(Errors.UNKNOWN_MEMBER_ID, result.error());
+
+            assertEquals(memberIdentities, result.membersToRemove());
+            assertEquals(singletonList(memberTwo), result.succeedMembers());
+            assertEquals(singletonList(responseOne), result.failedMembers());
+
+            // Return success.
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
+            env.kafkaClient().prepareResponse(new LeaveGroupResponse(new LeaveGroupResponseData()
+                                                                         .setErrorCode(Errors.NONE.code())));
+
+            final MembershipChangeResult noErrorResult = env.adminClient().removeMemberFromGroup(
+                groupId,
+                new RemoveMemberFromGroupOptions(membersToRemove)
+            );
+            result = noErrorResult.all();
+            assertFalse(result.hasError());
+            assertEquals(Errors.NONE, result.error());
+
+            assertEquals(memberIdentities, result.membersToRemove());
+            assertEquals(memberIdentities, result.succeedMembers());
+            assertEquals(Collections.emptyList(), result.failedMembers());
         }
     }
 
@@ -1838,7 +1943,5 @@ public class KafkaAdminClientTest {
                 }
             }
         }
-
     }
-
 }
