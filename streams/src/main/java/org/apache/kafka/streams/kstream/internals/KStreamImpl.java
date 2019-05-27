@@ -45,6 +45,7 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamSinkNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
+import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
@@ -465,7 +466,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final StatefulProcessorNode<? super K, ? super V> transformNode = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(new KStreamFlatTransform<>(transformerSupplier), name),
-            stateStoreNames
+            getStoreNamesAndMaybeAddStores(transformerSupplier, stateStoreNames)
         );
 
         transformNode.keyChangingOperation(true);
@@ -512,7 +513,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final StatefulProcessorNode<? super K, ? super V> transformNode = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(new KStreamTransformValues<>(valueTransformerWithKeySupplier), name),
-            stateStoreNames
+            getStoreNamesAndMaybeAddStores(valueTransformerWithKeySupplier, stateStoreNames)
         );
 
         transformNode.setValueChangingOperation(true);
@@ -545,7 +546,7 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final StatefulProcessorNode<? super K, ? super V> transformNode = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(new KStreamFlatTransformValues<>(valueTransformerWithKeySupplier), name),
-            stateStoreNames
+            getStoreNamesAndMaybeAddStores(valueTransformerWithKeySupplier, stateStoreNames)
         );
 
         transformNode.setValueChangingOperation(true);
@@ -565,10 +566,32 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         final StatefulProcessorNode<? super K, ? super V> processNode = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(processorSupplier, name),
-            stateStoreNames
+            getStoreNamesAndMaybeAddStores(processorSupplier, stateStoreNames)
         );
 
         builder.addGraphNode(this.streamsGraphNode, processNode);
+    }
+
+    /**
+     * Provides store names that should be connected to a {@link StatefulProcessorNode}, requiring that *only one* of
+     * the two ways is used:
+     * 1) Store names are provided as arguments to process(...), transform(...), etc.
+     * 2) {@link StoreBuilder}s are provided by the Processor/TransformerSupplier itself, by returning a set from
+     * {@link ConnectedStoreProvider#stores()}.  The {@link StoreBuilder}s will also be added to the topology.
+     */
+    private String[] getStoreNamesAndMaybeAddStores(final ConnectedStoreProvider storeProvider, final String[] varargsStoreNames) {
+        final Set<StoreBuilder> stores = storeProvider.stores();
+        if (stores != null) {
+            if (varargsStoreNames.length != 0) {
+                throw new IllegalArgumentException("If the supplier provides stores via ConnectedStoreProvider#stores(), " +
+                    "stateStoreNames may not be passed to process/transform(). The ConnectedStoreProvider provided " +
+                    stores + ", but " + Arrays.toString(varargsStoreNames) + " were also passed.");
+            }
+            stores.forEach(builder::addStateStore);
+            return stores.stream().map(StoreBuilder::name).toArray(String[]::new);
+        } else {
+            return varargsStoreNames;
+        }
     }
 
     @Override

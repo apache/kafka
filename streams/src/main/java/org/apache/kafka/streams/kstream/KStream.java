@@ -23,11 +23,13 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.processor.ConnectedStoreProvider;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 /**
  * {@code KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
@@ -508,20 +510,47 @@ public interface KStream<K, V> {
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()},
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
-     * global state stores; read-only access to global state stores is available by default):
-     * <pre>{@code
+     * In order for the transformer to use state stores, the stores must be added to the topology and connected to the
+     * transformer using only one of two strategies (though it's not required to connect global state stores; read-only
+     * access to global state stores is available by default).
+     * <p>
+     * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
+     * and specify the store names via {@code stateStoreNames} so they will be connected to the transformer.
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
      *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
      *                 Serdes.String(),
      *                 Serdes.String());
-     * // register store
+     * // add store
      * builder.addStateStore(keyValueStoreBuilder);
      *
-     * KStream outputStream = inputStream.transform(new TransformerSupplier() { ... }, "myTransformState");
+     * KStream outputStream = inputStream.transform(new TransformerSupplier() { public Transformer get() { return new MyTransformer(); } }, "myTransformState");
      * }</pre>
-     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
+     * The second strategy is for the given {@link TransformerSupplier} to implement {@link ConnectedStoreProvider#stores()},
+     * which provides the {@link StoreBuilder}s to be automatically added to the topology and connected to the transformer.
+     * <pre>{@code
+     * class MyTransformerSupplier implements TransformerSupplier {
+     *     // supply transformer
+     *     Transformer get() {
+     *         return new MyTransformer();
+     *     }
+     *
+     *     // provide store(s) that will be added and connected to the associated transformer
+     *     Set<StoreBuilder> stores() {
+     *         StoreBuilder<KeyValueStore<String, String>> keyValueStoreBuilder =
+     *                   Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
+     *                   Serdes.String(),
+     *                   Serdes.String());
+     *         return Collections.singleton(keyValueStoreBuilder);
+     *     }
+     * }
+     *
+     * ...
+     *
+     * KStream outputStream = inputStream.transform(new MyTransformerSupplier());
+     * }</pre>
+     * <p>
+     * With either strategy, within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * The {@link Transformer} must return a {@link KeyValue} type in {@link Transformer#transform(Object, Object)
@@ -529,28 +558,23 @@ public interface KStream<K, V> {
      * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
      * in which case no record is emitted.
      * <pre>{@code
-     * new TransformerSupplier() {
-     *     Transformer get() {
-     *         return new Transformer() {
-     *             private ProcessorContext context;
-     *             private StateStore state;
+     * class MyTransformer implements Transformer {
+     *     private StateStore state;
      *
-     *             void init(ProcessorContext context) {
-     *                 this.context = context;
-     *                 this.state = context.getStateStore("myTransformState");
-     *                 // punctuate each second; can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
+     *     void init(ProcessorContext context) {
+     *         this.context = context;
+     *         this.state = context.getStateStore("myTransformState");
+     *         // punctuate each 1000ms; can access this.state
+     *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *     }
      *
-     *             KeyValue transform(K key, V value) {
-     *                 // can access this.state
-     *                 return new KeyValue(key, value); // can emit a single value via return -- can also be null
-     *             }
+     *     KeyValue transform(K key, V value) {
+     *         // can access this.state
+     *         return new KeyValue(key, value); // can emit a single value via return -- can also be null
+     *     }
      *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
+     *     void close() {
+     *         // can access this.state
      *     }
      * }
      * }</pre>
@@ -576,7 +600,7 @@ public interface KStream<K, V> {
      * flatTransform()}.
      *
      * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
-     * @param stateStoreNames     the names of the state stores used by the processor
+     * @param stateStoreNames     the names of the state stores used by the transformer, passed only if {@link ConnectedStoreProvider#stores()} is null
      * @param <K1>                the key type of the new stream
      * @param <V1>                the value type of the new stream
      * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
@@ -600,20 +624,48 @@ public interface KStream<K, V> {
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
-     * global state stores; read-only access to global state stores is available by default):
+     * In order for the transformer to use state stores, the stores must be added to the topology and connected to the
+     * transformer using only one of two strategies (though it's not required to connect global state stores; read-only
+     * access to global state stores is available by default).
+     * <p>
+     * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
+     * and specify the store names via {@code stateStoreNames} so they will be connected to the transformer.
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
      *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
      *                 Serdes.String(),
      *                 Serdes.String());
-     * // register store
+     * // add store
      * builder.addStateStore(keyValueStoreBuilder);
      *
-     * KStream outputStream = inputStream.flatTransform(new TransformerSupplier() { ... }, "myTransformState");
+     * KStream outputStream = inputStream.flatTransform(new TransformerSupplier() { public Transformer get() { return new MyTransformer(); } }, "myTransformState");
      * }</pre>
-     * Within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
+     * The second strategy is for the given {@link TransformerSupplier} to implement {@link ConnectedStoreProvider#stores()},
+     * which provides the {@link StoreBuilder}s to be automatically added to the topology and connected to the transformer.
+     * <pre>{@code
+     * class MyTransformerSupplier implements TransformerSupplier {
+     *     // supply transformer
+     *     Transformer get() {
+     *         return new MyTransformer();
+     *     }
+     *
+     *     // provide store(s) that will be added and connected to the associated transformer
+     *     Set<StoreBuilder> stores() {
+     *         StoreBuilder<KeyValueStore<String, String>> keyValueStoreBuilder =
+     *                   Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myTransformState"),
+     *                   Serdes.String(),
+     *                   Serdes.String());
+     *         return Collections.singleton(keyValueStoreBuilder);
+     *     }
+     * }
+     *
+     * ...
+     *
+     * inputStream.flatTransform(new MyTransformerSupplier());
+     * }</pre>
+     * <p>
+     * With either strategy, within the {@link Transformer}, the state is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)
      * punctuate()}, a schedule must be registered.
      * The {@link Transformer} must return an {@link java.lang.Iterable} type (e.g., any {@link java.util.Collection}
@@ -621,32 +673,28 @@ public interface KStream<K, V> {
      * The return value of {@link Transformer#transform(Object, Object) Transformer#transform()} may be {@code null},
      * which is equal to returning an empty {@link java.lang.Iterable Iterable}, i.e., no records are emitted.
      * <pre>{@code
-     * new TransformerSupplier() {
-     *     Transformer get() {
-     *         return new Transformer() {
-     *             private ProcessorContext context;
-     *             private StateStore state;
+     * class MyTransformer implements Transformer {
+     *     private ProcessorContext context;
+     *     private StateStore state;
      *
-     *             void init(ProcessorContext context) {
-     *                 this.context = context;
-     *                 this.state = context.getStateStore("myTransformState");
-     *                 // punctuate each second; can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
+     *     void init(ProcessorContext context) {
+     *         this.context = context;
+     *         this.state = context.getStateStore("myTransformState");
+     *         // punctuate each second; can access this.state
+     *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *     }
      *
-     *             Iterable<KeyValue> transform(K key, V value) {
-     *                 // can access this.state
-     *                 List<KeyValue> result = new ArrayList<>();
-     *                 for (int i = 0; i < 3; i++) {
-     *                     result.add(new KeyValue(key, value));
-     *                 }
-     *                 return result; // emits a list of key-value pairs via return
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
+     *     Iterable<KeyValue> transform(K key, V value) {
+     *         // can access this.state
+     *         List<KeyValue> result = new ArrayList<>();
+     *         for (int i = 0; i < 3; i++) {
+     *             result.add(new KeyValue(key, value));
      *         }
+     *         return result; // emits a list of key-value pairs via return
+     *     }
+     *
+     *     void close() {
+     *         // can access this.state
      *     }
      * }
      * }</pre>
@@ -668,7 +716,7 @@ public interface KStream<K, V> {
      * {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}.
      *
      * @param transformerSupplier an instance of {@link TransformerSupplier} that generates a {@link Transformer}
-     * @param stateStoreNames     the names of the state stores used by the processor
+     * @param stateStoreNames     the names of the state stores used by the transformer, passed only if {@link ConnectedStoreProvider#stores()} is null
      * @param <K1>                the key type of the new stream
      * @param <V1>                the value type of the new stream
      * @return a {@code KStream} that contains more or less records with new key and value (possibly of different type)
@@ -690,20 +738,48 @@ public interface KStream<K, V> {
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state store, the state store must be created and registered beforehand (it's not required to
-     * connect global state stores; read-only access to global state stores is available by default):
+     * In order for the transformer to use state stores, the stores must be added to the topology and connected to the
+     * transformer using only one of two strategies (though it's not required to connect global state stores; read-only
+     * access to global state stores is available by default).
+     * <p>
+     * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
+     * and specify the store names via {@code stateStoreNames} so they will be connected to the transformer.
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
      *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
      *                 Serdes.String(),
      *                 Serdes.String());
-     * // register store
+     * // add store
      * builder.addStateStore(keyValueStoreBuilder);
      *
-     * KStream outputStream = inputStream.transformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
+     * KStream outputStream = inputStream.transformValues(new ValueTransformerSupplier() { public ValueTransformer get() { return new MyValueTransformer(); } }, "myValueTransformState");
      * }</pre>
-     * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
+     * The second strategy is for the given {@link ValueTransformerSupplier} to implement {@link ConnectedStoreProvider#stores()},
+     * which provides the {@link StoreBuilder}s to be automatically added to the topology and connected to the transformer.
+     * <pre>{@code
+     * class MyValueTransformerSupplier implements ValueTransformerSupplier {
+     *     // supply transformer
+     *     ValueTransformer get() {
+     *         return new MyValueTransformer();
+     *     }
+     *
+     *     // provide store(s) that will be added and connected to the associated transformer
+     *     Set<StoreBuilder> stores() {
+     *         StoreBuilder<KeyValueStore<String, String>> keyValueStoreBuilder =
+     *                   Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                   Serdes.String(),
+     *                   Serdes.String());
+     *         return Collections.singleton(keyValueStoreBuilder);
+     *     }
+     * }
+     *
+     * ...
+     *
+     * KStream outputStream = inputStream.transformValues(new MyValueTransformerSupplier());
+     * }</pre>
+     * <p>
+     * With either strategy, within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * The {@link ValueTransformer} must return the new value in {@link ValueTransformer#transform(Object) transform()}.
@@ -714,26 +790,22 @@ public interface KStream<K, V> {
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
      * <pre>{@code
-     * new ValueTransformerSupplier() {
-     *     ValueTransformer get() {
-     *         return new ValueTransformer() {
-     *             private StateStore state;
+     * class MyValueTransformer implements ValueTransformer {
+     *     private StateStore state;
      *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
+     *     void init(ProcessorContext context) {
+     *         this.state = context.getStateStore("myValueTransformState");
+     *         // punctuate each second, can access this.state
+     *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *     }
      *
-     *             NewValueType transform(V value) {
-     *                 // can access this.state
-     *                 return new NewValueType(); // or null
-     *             }
+     *     NewValueType transform(V value) {
+     *         // can access this.state
+     *         return new NewValueType(); // or null
+     *     }
      *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
+     *     void close() {
+     *         // can access this.state
      *     }
      * }
      * }</pre>
@@ -747,7 +819,7 @@ public interface KStream<K, V> {
      *
      * @param valueTransformerSupplier a instance of {@link ValueTransformerSupplier} that generates a
      *                                 {@link ValueTransformer}
-     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param stateStoreNames          the names of the state stores used by the transformer, passed only if {@link ConnectedStoreProvider#stores()} is null
      * @param <VR>                     the value type of the result stream
      * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
      * @see #mapValues(ValueMapper)
@@ -766,20 +838,48 @@ public interface KStream<K, V> {
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long)} the processing progress
      * can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state store, the state store must be created and registered beforehand (it's not required to
-     * connect global state stores; read-only access to global state stores is available by default):
+     * In order for the transformer to use state stores, the stores must be added to the topology and connected to the
+     * transformer using only one of two strategies (though it's not required to connect global state stores; read-only
+     * access to global state stores is available by default).
+     * <p>
+     * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
+     * and specify the store names via {@code stateStoreNames} so they will be connected to the transformer.
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
      *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
      *                 Serdes.String(),
      *                 Serdes.String());
-     * // register store
+     * // add store
      * builder.addStateStore(keyValueStoreBuilder);
      *
-     * KStream outputStream = inputStream.transformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
+     * KStream outputStream = inputStream.transformValues(new ValueTransformerWithKeySupplier() { public ValueTransformerWithKey get() { return new MyValueTransformerWithKey(); } }, "myValueTransformState");
      * }</pre>
-     * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
+     * The second strategy is for the given {@link ValueTransformerWithKeySupplier} to implement {@link ConnectedStoreProvider#stores()},
+     * which provides the {@link StoreBuilder}s to be automatically added to the topology and connected to the transformer.
+     * <pre>{@code
+     * class MyValueTransformerWithKeySupplier implements ValueTransformerWithKeySupplier {
+     *     // supply transformer
+     *     ValueTransformerWithKey get() {
+     *         return new MyValueTransformerWithKey();
+     *     }
+     *
+     *     // provide store(s) that will be added and connected to the associated transformer
+     *     Set<StoreBuilder> stores() {
+     *         StoreBuilder<KeyValueStore<String, String>> keyValueStoreBuilder =
+     *                   Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                   Serdes.String(),
+     *                   Serdes.String());
+     *         return Collections.singleton(keyValueStoreBuilder);
+     *     }
+     * }
+     *
+     * ...
+     *
+     * KStream outputStream = inputStream.transformValues(new MyValueTransformerWithKeySupplier());
+     * }</pre>
+     * <p>
+     * With either strategy, within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * The {@link ValueTransformerWithKey} must return the new value in
@@ -792,26 +892,22 @@ public interface KStream<K, V> {
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
      * <pre>{@code
-     * new ValueTransformerWithKeySupplier() {
-     *     ValueTransformerWithKey get() {
-     *         return new ValueTransformerWithKey() {
-     *             private StateStore state;
+     * class MyValueTransformerWithKey implements ValueTransformerWithKey {
+     *     private StateStore state;
      *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
+     *     void init(ProcessorContext context) {
+     *         this.state = context.getStateStore("myValueTransformState");
+     *         // punctuate each second, can access this.state
+     *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *     }
      *
-     *             NewValueType transform(K readOnlyKey, V value) {
-     *                 // can access this.state and use read-only key
-     *                 return new NewValueType(readOnlyKey); // or null
-     *             }
+     *     NewValueType transform(K readOnlyKey, V value) {
+     *         // can access this.state and use read-only key
+     *         return new NewValueType(readOnlyKey); // or null
+     *     }
      *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
+     *     void close() {
+     *         // can access this.state
      *     }
      * }
      * }</pre>
@@ -826,7 +922,7 @@ public interface KStream<K, V> {
      *
      * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
      *                                 {@link ValueTransformerWithKey}
-     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param stateStoreNames          the names of the state stores used by the transformer, passed only if {@link ConnectedStoreProvider#stores()} is null
      * @param <VR>                     the value type of the result stream
      * @return a {@code KStream} that contains records with unmodified key and new values (possibly of different type)
      * @see #mapValues(ValueMapper)
@@ -846,19 +942,48 @@ public interface KStream<K, V> {
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) Punctuator#punctuate()}
      * the processing progress can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state store, the state store must be created and registered beforehand:
+     * In order for the transformer to use state stores, the stores must be added to the topology and connected to the
+     * transformer using only one of two strategies (though it's not required to connect global state stores; read-only
+     * access to global state stores is available by default).
+     * <p>
+     * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
+     * and specify the store names via {@code stateStoreNames} so they will be connected to the transformer.
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
      *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
      *                 Serdes.String(),
      *                 Serdes.String());
-     * // register store
+     * // add store
      * builder.addStateStore(keyValueStoreBuilder);
      *
-     * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerSupplier() { ... }, "myValueTransformState");
+     * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerSupplier() { public ValueTransformer get() { return new MyValueTransformer(); } }, "myValueTransformState");
      * }</pre>
-     * Within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
+     * The second strategy is for the given {@link ValueTransformerSupplier} to implement {@link ConnectedStoreProvider#stores()},
+     * which provides the {@link StoreBuilder}s to be automatically added to the topology and connected to the transformer.
+     * <pre>{@code
+     * class MyValueTransformerSupplier implements ValueTransformerSupplier {
+     *     // supply transformer
+     *     ValueTransformer get() {
+     *         return new MyValueTransformer();
+     *     }
+     *
+     *     // provide store(s) that will be added and connected to the associated transformer
+     *     Set<StoreBuilder> stores() {
+     *         StoreBuilder<KeyValueStore<String, String>> keyValueStoreBuilder =
+     *                   Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                   Serdes.String(),
+     *                   Serdes.String());
+     *         return Collections.singleton(keyValueStoreBuilder);
+     *     }
+     * }
+     *
+     * ...
+     *
+     * KStream outputStream = inputStream.flatTransformValues(new MyValueTransformerSupplier());
+     * }</pre>
+     * <p>
+     * With either strategy, within the {@link ValueTransformer}, the state store is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * The {@link ValueTransformer} must return an {@link java.lang.Iterable} type (e.g., any
@@ -872,30 +997,26 @@ public interface KStream<K, V> {
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformer} tries to
      * emit a {@link KeyValue} pair.
      * <pre>{@code
-     * new ValueTransformerSupplier() {
-     *     ValueTransformer get() {
-     *         return new ValueTransformer() {
-     *             private StateStore state;
+     * class MyValueTransformer implements ValueTransformer {
+     *     private StateStore state;
      *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
+     *     void init(ProcessorContext context) {
+     *         this.state = context.getStateStore("myValueTransformState");
+     *         // punctuate each second, can access this.state
+     *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *     }
      *
-     *             Iterable<NewValueType> transform(V value) {
-     *                 // can access this.state
-     *                 List<NewValueType> result = new ArrayList<>();
-     *                 for (int i = 0; i < 3; i++) {
-     *                     result.add(new NewValueType(value));
-     *                 }
-     *                 return result; // values
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
+     *     Iterable<NewValueType> transform(V value) {
+     *         // can access this.state
+     *         List<NewValueType> result = new ArrayList<>();
+     *         for (int i = 0; i < 3; i++) {
+     *             result.add(new NewValueType(value));
      *         }
+     *         return result; // values
+     *     }
+     *
+     *     void close() {
+     *         // can access this.state
      *     }
      * }
      * }</pre>
@@ -910,7 +1031,7 @@ public interface KStream<K, V> {
      *
      * @param valueTransformerSupplier an instance of {@link ValueTransformerSupplier} that generates a
      *                                 {@link ValueTransformer}
-     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param stateStoreNames          the names of the state stores used by the transformer, passed only if {@link ConnectedStoreProvider#stores()} is null
      * @param <VR>                     the value type of the result stream
      * @return a {@code KStream} that contains more or less records with unmodified key and new values (possibly of
      * different type)
@@ -932,18 +1053,47 @@ public interface KStream<K, V> {
      * Furthermore, via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()} the processing
      * progress can be observed and additional periodic actions can be performed.
      * <p>
-     * In order to assign a state store, the state store must be created and registered beforehand:
+     * In order for the transformer to use state stores, the stores must be added to the topology and connected to the
+     * transformer using only one of two strategies (though it's not required to connect global state stores; read-only
+     * access to global state stores is available by default).
+     * <p>
+     * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
+     * and specify the store names via {@code stateStoreNames} so they will be connected to the transformer.
      * <pre>{@code
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
      *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
      *                 Serdes.String(),
      *                 Serdes.String());
-     * // register store
+     * // add store
      * builder.addStateStore(keyValueStoreBuilder);
      *
-     * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerWithKeySupplier() { ... }, "myValueTransformState");
+     * KStream outputStream = inputStream.flatTransformValues(new ValueTransformerWithKeySupplier() { public ValueTransformerWithKey get() { return new MyValueTransformerWithKey(); } }, "myValueTransformState");
      * }</pre>
+     * The second strategy is for the given {@link ValueTransformerWithKeySupplier} to implement {@link ConnectedStoreProvider#stores()},
+     * which provides the {@link StoreBuilder}s to be automatically added to the topology and connected to the transformer.
+     * <pre>{@code
+     * class MyValueTransformerWithKeySupplier implements ValueTransformerWithKeySupplier {
+     *     // supply transformer
+     *     ValueTransformerWithKey get() {
+     *         return new MyValueTransformerWithKey();
+     *     }
+     *
+     *     // provide store(s) that will be added and connected to the associated transformer
+     *     Set<StoreBuilder> stores() {
+     *         StoreBuilder<KeyValueStore<String, String>> keyValueStoreBuilder =
+     *                   Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myValueTransformState"),
+     *                   Serdes.String(),
+     *                   Serdes.String());
+     *         return Collections.singleton(keyValueStoreBuilder);
+     *     }
+     * }
+     *
+     * ...
+     *
+     * KStream outputStream = inputStream.flatTransformValues(new MyValueTransformerSupplier());
+     * }</pre>
+     * <p>
      * Within the {@link ValueTransformerWithKey}, the state store is obtained via the {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
@@ -958,30 +1108,26 @@ public interface KStream<K, V> {
      * A {@link org.apache.kafka.streams.errors.StreamsException} is thrown if the {@link ValueTransformerWithKey} tries
      * to emit a {@link KeyValue} pair.
      * <pre>{@code
-     * new ValueTransformerWithKeySupplier() {
-     *     ValueTransformerWithKey get() {
-     *         return new ValueTransformerWithKey() {
-     *             private StateStore state;
+     * class MyValueTransformerWithKey implements ValueTransformerWithKey {
+     *     private StateStore state;
      *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myValueTransformState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
+     *     void init(ProcessorContext context) {
+     *         this.state = context.getStateStore("myValueTransformState");
+     *         // punctuate each second, can access this.state
+     *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *     }
      *
-     *             Iterable<NewValueType> transform(K readOnlyKey, V value) {
-     *                 // can access this.state and use read-only key
-     *                 List<NewValueType> result = new ArrayList<>();
-     *                 for (int i = 0; i < 3; i++) {
-     *                     result.add(new NewValueType(readOnlyKey));
-     *                 }
-     *                 return result; // values
-     *             }
-     *
-     *             void close() {
-     *                 // can access this.state
-     *             }
+     *     Iterable<NewValueType> transform(K readOnlyKey, V value) {
+     *         // can access this.state and use read-only key
+     *         List<NewValueType> result = new ArrayList<>();
+     *         for (int i = 0; i < 3; i++) {
+     *             result.add(new NewValueType(readOnlyKey));
      *         }
+     *         return result; // values
+     *     }
+     *
+     *     void close() {
+     *         // can access this.state
      *     }
      * }
      * }</pre>
@@ -997,7 +1143,7 @@ public interface KStream<K, V> {
      *
      * @param valueTransformerSupplier a instance of {@link ValueTransformerWithKeySupplier} that generates a
      *                                 {@link ValueTransformerWithKey}
-     * @param stateStoreNames          the names of the state stores used by the processor
+     * @param stateStoreNames          the names of the state stores used by the transformer, passed only if {@link ConnectedStoreProvider#stores()} is null
      * @param <VR>                     the value type of the result stream
      * @return a {@code KStream} that contains more or less records with unmodified key and new values (possibly of
      * different type)
@@ -1018,43 +1164,66 @@ public interface KStream<K, V> {
      * can be observed and additional periodic actions can be performed.
      * Note that this is a terminal operation that returns void.
      * <p>
-     * In order to assign a state, the state must be created and registered beforehand (it's not required to connect
-     * global state stores; read-only access to global state stores is available by default):
-     * <pre>{@code
+     * In order for the processor to use state stores, the stores must be added to the topology and connected to the
+     * processor using only one of two strategies (though it's not required to connect global state stores; read-only
+     * access to global state stores is available by default).
+     * <p>
+     * The first strategy is to manually add the {@link StoreBuilder}s via {@link Topology#addStateStore(StoreBuilder, String...)},
+     * and specify the store names via {@code stateStoreNames} so they will be connected to the processor.
      * // create store
      * StoreBuilder<KeyValueStore<String,String>> keyValueStoreBuilder =
      *         Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
      *                 Serdes.String(),
      *                 Serdes.String());
-     * // register store
+     * // add store
      * builder.addStateStore(keyValueStoreBuilder);
      *
-     * inputStream.process(new ProcessorSupplier() { ... }, "myProcessorState");
+     * inputStream.process(new ProcessorSupplier() { public Processor get() { return new MyProcessor(); } }, "myProcessorState");
      * }</pre>
-     * Within the {@link Processor}, the state is obtained via the
+     * The second strategy is for the given {@link ProcessorSupplier} to implement {@link ConnectedStoreProvider#stores()},
+     * which provides the {@link StoreBuilder}s to be automatically added to the topology and connected to the processor.
+     * <pre>{@code
+     * class MyProcessorSupplier implements ProcessorSupplier {
+     *     // supply processor
+     *     Processor get() {
+     *         return new MyProcessor();
+     *     }
+     *
+     *     // provide store(s) that will be added and connected to the associated processor
+     *     Set<StoreBuilder> stores() {
+     *         StoreBuilder<KeyValueStore<String, String>> keyValueStoreBuilder =
+     *                   Stores.keyValueStoreBuilder(Stores.persistentKeyValueStore("myProcessorState"),
+     *                   Serdes.String(),
+     *                   Serdes.String());
+     *         return Collections.singleton(keyValueStoreBuilder);
+     *     }
+     * }
+     *
+     * ...
+     *
+     * inputStream.process(new MyProcessorSupplier());
+     * }</pre>
+     * <p>
+     * With either strategy, within the {@link Processor}, the state is obtained via the
      * {@link ProcessorContext}.
      * To trigger periodic actions via {@link org.apache.kafka.streams.processor.Punctuator#punctuate(long) punctuate()},
      * a schedule must be registered.
      * <pre>{@code
-     * new ProcessorSupplier() {
-     *     Processor get() {
-     *         return new Processor() {
-     *             private StateStore state;
+     * class MyProcessor implements Processor {
+     *     private StateStore state;
      *
-     *             void init(ProcessorContext context) {
-     *                 this.state = context.getStateStore("myProcessorState");
-     *                 // punctuate each second, can access this.state
-     *                 context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
-     *             }
+     *     void init(ProcessorContext context) {
+     *         this.state = context.getStateStore("myProcessorState");
+     *         // punctuate each second, can access this.state
+     *         context.schedule(Duration.ofSeconds(1), PunctuationType.WALL_CLOCK_TIME, new Punctuator(..));
+     *     }
      *
-     *             void process(K key, V value) {
-     *                 // can access this.state
-     *             }
+     *     void process(K key, V value) {
+     *         // can access this.state
+     *     }
      *
-     *             void close() {
-     *                 // can access this.state
-     *             }
-     *         }
+     *     void close() {
+     *         // can access this.state
      *     }
      * }
      * }</pre>

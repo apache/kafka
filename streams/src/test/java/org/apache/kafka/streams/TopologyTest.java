@@ -291,13 +291,18 @@ public class TopologyTest {
     }
 
     @Test
-    public void shouldNotAllowToAddStoreWithSameName() {
+    public void shouldNotAllowToAddStoreWithSameNameAndDifferentInstance() {
         mockStoreBuilder();
         EasyMock.replay(storeBuilder);
         topology.addStateStore(storeBuilder);
+
+        final StoreBuilder otherStoreBuilder = EasyMock.createNiceMock(StoreBuilder.class);
+        EasyMock.expect(otherStoreBuilder.name()).andReturn("store").anyTimes();
+        EasyMock.expect(otherStoreBuilder.logConfig()).andReturn(Collections.emptyMap());
+        EasyMock.expect(otherStoreBuilder.loggingEnabled()).andReturn(false);
         try {
-            topology.addStateStore(storeBuilder);
-            fail("Should have thrown TopologyException for duplicate store name");
+            topology.addStateStore(otherStoreBuilder);
+            fail("Should have thrown TopologyException for same store name with different StoreBuilder");
         } catch (final TopologyException expected) { }
     }
 
