@@ -174,7 +174,7 @@ public class RecordQueue {
 
             final long timestamp;
             try {
-                timestamp = timestampExtractor.extract(deserialized, timestamp());
+                timestamp = timestampExtractor.extract(deserialized, partitionTime);
             } catch (final StreamsException internalFatalExtractorException) {
                 throw internalFatalExtractorException;
             } catch (final Exception fatalUserException) {
