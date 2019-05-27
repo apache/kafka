@@ -358,7 +358,7 @@ object KafkaConfig {
 
   // Remote log storage config //
   val RemoteLogStorageEnableProp = "remote.log.storage.enable"
-  val RemoteLogStorageManagerProp = "remote.log.storage.manager.config"
+  val RemoteLogStorageManagerProp = "remote.log.storage.manager.class.name"
   val RemoteLogRetentionMillisProp = "remote.log.retention.ms"
   val RemoteLogRetentionMinutesProp = "remote.log.retention.minutes"
   val RemoteLogRetentionBytesProp = "remote.log.retention.bytes"
@@ -967,10 +967,10 @@ object KafkaConfig {
       .define(AlterConfigPolicyClassNameProp, CLASS, null, LOW, AlterConfigPolicyClassNameDoc)
       .define(LogMessageDownConversionEnableProp, BOOLEAN, Defaults.MessageDownConversionEnable, LOW, LogMessageDownConversionEnableDoc)
       .define(RemoteLogStorageEnableProp, BOOLEAN, Defaults.RemoteLogStorageEnable, LOW, RemoteLogStorageEnableDoc)
-      .define(RemoteLogStorageManagerProp, BOOLEAN, Defaults.RemoteStorageManager, LOW, RemoteStorageManagerDoc)
-      .define(RemoteLogRetentionMillisProp, BOOLEAN, null, LOW, RemoteLogRetentionMillisDoc)
-      .define(RemoteLogRetentionMinutesProp, BOOLEAN, Defaults.RemoteLogRetentionMinutes, LOW, RemoteLogRetentionMinutesDoc)
-      .define(RemoteLogRetentionBytesProp, BOOLEAN, Defaults.RemoteLogRetentionBytes, LOW, RemoteLogRetentionBytesDoc)
+      .define(RemoteLogStorageManagerProp, STRING, Defaults.RemoteStorageManager, LOW, RemoteStorageManagerDoc)
+      .define(RemoteLogRetentionMillisProp, LONG, null, LOW, RemoteLogRetentionMillisDoc)
+      .define(RemoteLogRetentionMinutesProp, LONG, Defaults.RemoteLogRetentionMinutes, LOW, RemoteLogRetentionMinutesDoc)
+      .define(RemoteLogRetentionBytesProp, LONG, Defaults.RemoteLogRetentionBytes, LOW, RemoteLogRetentionBytesDoc)
 
       /** ********* Replication configuration ***********/
       .define(ControllerSocketTimeoutMsProp, INT, Defaults.ControllerSocketTimeoutMs, MEDIUM, ControllerSocketTimeoutMsDoc)
