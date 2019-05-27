@@ -29,7 +29,7 @@ import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig, AlterConf
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.producer._
-import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.ElectionType
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
@@ -37,6 +37,7 @@ import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
 import org.apache.kafka.common.message.ControlledShutdownRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
+import org.apache.kafka.common.message.DeleteGroupsRequestData
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DescribeGroupsRequestData
 import org.apache.kafka.common.message.FindCoordinatorRequestData
@@ -50,7 +51,7 @@ import org.apache.kafka.common.message.OffsetCommitRequestData
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, Records, SimpleRecord}
 import org.apache.kafka.common.requests.CreateAclsRequest.AclCreation
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.PatternType.LITERAL
@@ -401,7 +402,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       .setGroupId(group)
       .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
 
-  private def deleteGroupsRequest = new DeleteGroupsRequest.Builder(Set(group).asJava).build()
+  private def deleteGroupsRequest = new DeleteGroupsRequest.Builder(
+    new DeleteGroupsRequestData()
+      .setGroupsNames(Collections.singletonList(group))
+  ).build()
 
   private def leaderAndIsrRequest = {
     new requests.LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, brokerId, Int.MaxValue, Long.MaxValue,

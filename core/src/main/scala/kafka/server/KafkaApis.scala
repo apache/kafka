@@ -48,9 +48,9 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
-import org.apache.kafka.common.message.CreateTopicsResponseData
+import org.apache.kafka.common.message.{CreateTopicsResponseData, DeleteGroupsResponseData, DeleteTopicsResponseData}
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
-import org.apache.kafka.common.message.DeleteTopicsResponseData
+import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.DescribeGroupsResponseData
 import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult
@@ -1480,7 +1480,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleDeleteGroupsRequest(request: RequestChannel.Request): Unit = {
     val deleteGroupsRequest = request.body[DeleteGroupsRequest]
-    val groups = deleteGroupsRequest.groups.asScala.toSet
+    val groups = deleteGroupsRequest.data.groupsNames.asScala.toSet
 
     val (authorizedGroups, unauthorizedGroups) = groups.partition { group =>
       authorize(request.session, Delete, Resource(Group, group, LITERAL))
@@ -1489,8 +1489,20 @@ class KafkaApis(val requestChannel: RequestChannel,
     val groupDeletionResult = groupCoordinator.handleDeleteGroups(authorizedGroups) ++
       unauthorizedGroups.map(_ -> Errors.GROUP_AUTHORIZATION_FAILED)
 
-    sendResponseMaybeThrottle(request, requestThrottleMs =>
-      new DeleteGroupsResponse(requestThrottleMs, groupDeletionResult.asJava))
+    sendResponseMaybeThrottle(request, requestThrottleMs => {
+      val deletionCollections = new DeletableGroupResultCollection()
+      groupDeletionResult.foreach { case (groupId, error) =>
+        deletionCollections.add(new DeletableGroupResult()
+          .setGroupId(groupId)
+          .setErrorCode(error.code)
+        )
+      }
+
+      new DeleteGroupsResponse(new DeleteGroupsResponseData()
+        .setResults(deletionCollections)
+        .setThrottleTimeMs(requestThrottleMs)
+      )
+    })
   }
 
   def handleHeartbeatRequest(request: RequestChannel.Request) {

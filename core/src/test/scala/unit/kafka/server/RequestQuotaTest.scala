@@ -27,9 +27,10 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.acl.{AccessControlEntry, AccessControlEntryFilter, AclBinding, AclBindingFilter, AclOperation, AclPermissionType}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.ControlledShutdownRequestData
+import org.apache.kafka.common.message.CreateDelegationTokenRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
-import org.apache.kafka.common.message.CreateDelegationTokenRequestData
+import org.apache.kafka.common.message.DeleteGroupsRequestData
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DescribeGroupsRequestData
 import org.apache.kafka.common.message.FindCoordinatorRequestData
@@ -449,7 +450,8 @@ class RequestQuotaTest extends BaseRequestTest {
           new RenewDelegationTokenRequest.Builder("".getBytes, 1000)
 
         case ApiKeys.DELETE_GROUPS =>
-          new DeleteGroupsRequest.Builder(Collections.singleton("test-group"))
+          new DeleteGroupsRequest.Builder(new DeleteGroupsRequestData()
+            .setGroupsNames(Collections.singletonList("test-group")))
 
         case ApiKeys.ELECT_LEADERS =>
           new ElectLeadersRequest.Builder(
