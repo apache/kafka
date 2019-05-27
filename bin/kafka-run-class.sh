@@ -150,6 +150,16 @@ do
   fi
 done
 
+# CONFLUENT: classpath addition for releases with LSB-style layout
+CLASSPATH="$CLASSPATH":"$base_dir/share/java/kafka/*"
+
+# classpath for support-metrics-client jars
+CLASSPATH="$CLASSPATH:$base_dir/support-metrics-client/build/dependant-libs-${SCALA_VERSION}/*"
+CLASSPATH="$CLASSPATH:$base_dir/support-metrics-client/build/libs/*"
+
+# classpath for support jars with LSB-style layout
+CLASSPATH="$CLASSPATH":"/usr/share/java/support-metrics-client/*"
+
 for file in "$base_dir"/core/build/libs/kafka_${SCALA_BINARY_VERSION}*.jar;
 do
   if should_include_file "$file"; then
@@ -175,13 +185,21 @@ fi
 
 # Log directory to use
 if [ "x$LOG_DIR" = "x" ]; then
-  LOG_DIR="$base_dir/logs"
+  LOG_DIR="/var/log/kafka"
 fi
 
 # Log4j settings
 if [ -z "$KAFKA_LOG4J_OPTS" ]; then
   # Log to console. This is a tool.
-  LOG4J_DIR="$base_dir/config/tools-log4j.properties"
+  LOG4J_CONFIG_NORMAL_INSTALL="/etc/kafka/tools-log4j.properties"
+  LOG4J_CONFIG_ZIP_INSTALL="$base_dir/etc/kafka/tools-log4j.properties"
+  if [ -e "$LOG4J_CONFIG_NORMAL_INSTALL" ]; then # Normal install layout
+    LOG4J_DIR="${LOG4J_CONFIG_NORMAL_INSTALL}"
+  elif [ -e "${LOG4J_CONFIG_ZIP_INSTALL}" ]; then # Simple zip file layout
+    LOG4J_DIR="${LOG4J_CONFIG_ZIP_INSTALL}"
+  else # Fallback to normal default
+    LOG4J_DIR="$base_dir/config/tools-log4j.properties"
+  fi
   # If Cygwin is detected, LOG4J_DIR is converted to Windows format.
   (( CYGWIN )) && LOG4J_DIR=$(cygpath --path --mixed "${LOG4J_DIR}")
   KAFKA_LOG4J_OPTS="-Dlog4j.configuration=file:${LOG4J_DIR}"
@@ -291,6 +309,7 @@ CLASSPATH=${CLASSPATH#:}
 
 # If Cygwin is detected, classpath is converted to Windows format.
 (( CYGWIN )) && CLASSPATH=$(cygpath --path --mixed "${CLASSPATH}")
+
 
 # Launch mode
 if [ "x$DAEMON_MODE" = "xtrue" ]; then
