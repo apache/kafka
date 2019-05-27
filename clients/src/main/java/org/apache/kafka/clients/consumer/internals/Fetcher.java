@@ -719,12 +719,7 @@ public class Fetcher<K, V> implements Closeable {
         }
     }
 
-    private boolean hasUsableOffsetForLeaderEpochVersion(Node node) {
-        NodeApiVersions nodeApiVersions = apiVersions.get(node.idString());
-
-        if (nodeApiVersions == null)
-            return false;
-
+    private boolean hasUsableOffsetForLeaderEpochVersion(NodeApiVersions nodeApiVersions) {
         ApiVersionsResponse.ApiVersion apiVersion = nodeApiVersions.apiVersion(ApiKeys.OFFSET_FOR_LEADER_EPOCH);
         if (apiVersion == null)
             return false;
@@ -752,7 +747,13 @@ public class Fetcher<K, V> implements Closeable {
                     .stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, entry -> entry.getValue().currentLeader));
 
-            if (!hasUsableOffsetForLeaderEpochVersion(node)) {
+            NodeApiVersions nodeApiVersions = apiVersions.get(node.idString());
+            if (nodeApiVersions == null) {
+                client.tryConnect(node);
+                return;
+            }
+
+            if (!hasUsableOffsetForLeaderEpochVersion(nodeApiVersions)) {
                 log.debug("Skipping validation of fetch offsets for partitions {} since the broker does not " +
                                 "support the required protocol version (introduced in Kafka 2.3)",
                         cachedLeaderAndEpochs.keySet());
