@@ -84,10 +84,10 @@ public class KStreamTransformValuesTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, 0L));
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, expectedKey / 2L));
             }
         }
-        final String[] expected = {"1:10 (ts: 0)", "10:110 (ts: 0)", "100:1110 (ts: 0)", "1000:11110 (ts: 0)"};
+        final String[] expected = {"1:10 (ts: 0)", "10:110 (ts: 5)", "100:1110 (ts: 50)", "1000:11110 (ts: 500)"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
@@ -121,10 +121,10 @@ public class KStreamTransformValuesTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, 0L));
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, expectedKey * 10, expectedKey / 2L));
             }
         }
-        final String[] expected = {"1:11 (ts: 0)", "10:121 (ts: 0)", "100:1221 (ts: 0)", "1000:12221 (ts: 0)"};
+        final String[] expected = {"1:11 (ts: 0)", "10:121 (ts: 5)", "100:1221 (ts: 50)", "1000:12221 (ts: 500)"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }

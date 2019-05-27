@@ -133,7 +133,7 @@ public class HighwatermarkCheckpointBench {
         this.replicaManager.checkpointHighWatermarks();
         for (TopicPartition topicPartition : topicPartitions) {
             final Partition partition =
-                    this.replicaManager.getOrCreatePartition(topicPartition);
+                    this.replicaManager.createPartition(topicPartition);
             final Log log = this.logManager.getOrCreateLog(topicPartition,
                     LogConfig.apply(), true, false);
             final Replica replica = new Replica(this.brokerProperties.brokerId(),

@@ -36,7 +36,10 @@ abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends
     info("Initializing replica state")
     initializeReplicaState()
     info("Triggering online replica state changes")
-    handleStateChanges(controllerContext.allLiveReplicas().toSeq, OnlineReplica)
+    val (onlineReplicas, offlineReplicas) = controllerContext.onlineAndOfflineReplicas
+    handleStateChanges(onlineReplicas.toSeq, OnlineReplica)
+    info("Triggering offline replica state changes")
+    handleStateChanges(offlineReplicas.toSeq, OfflineReplica)
     debug(s"Started replica state machine with initial state -> ${controllerContext.replicaStates}")
   }
 
@@ -149,7 +152,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
    * -- remove the replica from the in memory partition replica assignment cache
    *
    * @param replicaId The replica for which the state transition is invoked
-   * @param partitions The partitions on this replica for which the state transition is invoked
+   * @param replicas The partitions on this replica for which the state transition is invoked
    * @param targetState The end state that the replica should be moved to
    */
   private def doHandleStateChanges(replicaId: Int, replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
@@ -231,6 +234,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
         replicasWithoutLeadershipInfo.foreach { replica =>
           val currentState = controllerContext.replicaState(replica)
           logSuccessfulTransition(replicaId, replica.topicPartition, currentState, OfflineReplica)
+          controllerBrokerRequestBatch.addUpdateMetadataRequestForBrokers(controllerContext.liveOrShuttingDownBrokerIds.toSeq, Set(replica.topicPartition))
           controllerContext.putReplicaState(replica, OfflineReplica)
         }
       case ReplicaDeletionStarted =>

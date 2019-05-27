@@ -27,6 +27,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
@@ -85,6 +86,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class TransactionManagerTest {
@@ -687,8 +689,8 @@ public class TransactionManagerTest {
         transactionManager.initializeTransactions();
         client.prepareUnsupportedVersionResponse(body -> {
             FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
-            assertEquals(findCoordinatorRequest.coordinatorType(), CoordinatorType.TRANSACTION);
-            assertEquals(findCoordinatorRequest.coordinatorKey(), transactionalId);
+            assertEquals(CoordinatorType.forId(findCoordinatorRequest.data().keyType()), CoordinatorType.TRANSACTION);
+            assertEquals(findCoordinatorRequest.data().key(), transactionalId);
             return true;
         });
 
@@ -1356,8 +1358,8 @@ public class TransactionManagerTest {
         assertTrue(secondResponseFuture.isDone());
     }
 
-    @Test(expected = ExecutionException.class)
-    public void testProducerFencedException() throws InterruptedException, ExecutionException {
+    @Test
+    public void testProducerFencedException() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -1378,7 +1380,20 @@ public class TransactionManagerTest {
 
         assertTrue(responseFuture.isDone());
         assertTrue(transactionManager.hasError());
-        responseFuture.get();
+
+        try {
+            // make sure the produce was expired.
+            responseFuture.get();
+            fail("Expected to get a ExecutionException from the response");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof ProducerFencedException);
+        }
+
+        // make sure the exception was thrown directly from the follow-up calls.
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginTransaction());
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginCommit());
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginAbort());
+        assertThrows(ProducerFencedException.class, () -> transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), "dummyId"));
     }
 
     @Test
@@ -2381,10 +2396,10 @@ public class TransactionManagerTest {
                                                 final String coordinatorKey) {
         client.prepareResponse(body -> {
             FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
-            assertEquals(findCoordinatorRequest.coordinatorType(), coordinatorType);
-            assertEquals(findCoordinatorRequest.coordinatorKey(), coordinatorKey);
+            assertEquals(CoordinatorType.forId(findCoordinatorRequest.data().keyType()), coordinatorType);
+            assertEquals(findCoordinatorRequest.data().key(), coordinatorKey);
             return true;
-        }, new FindCoordinatorResponse(error, brokerNode), shouldDisconnect);
+        }, FindCoordinatorResponse.prepareResponse(error, brokerNode), shouldDisconnect);
     }
 
     private void prepareInitPidResponse(Errors error, boolean shouldDisconnect, long producerId, short producerEpoch) {

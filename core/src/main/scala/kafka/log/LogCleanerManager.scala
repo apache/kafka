@@ -165,7 +165,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     * each time from the full set of logs to allow logs to be dynamically added to the pool of logs
     * the log manager maintains.
     */
-  def grabFilthiestCompactedLog(time: Time): Option[LogToClean] = {
+  def grabFilthiestCompactedLog(time: Time, preCleanStats: PreCleanStats = new PreCleanStats()): Option[LogToClean] = {
     inLock(lock) {
       val now = time.milliseconds
       this.timeOfLastRun = now
@@ -178,17 +178,24 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
           inProgress.contains(topicPartition) || isUncleanablePartition(log, topicPartition)
       }.map {
         case (topicPartition, log) => // create a LogToClean instance for each
-          val (firstDirtyOffset, firstUncleanableDirtyOffset) = LogCleanerManager.cleanableOffsets(log, topicPartition,
-            lastClean, now)
-          LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset)
+          val (firstDirtyOffset, firstUncleanableDirtyOffset) =
+            LogCleanerManager.cleanableOffsets(log, topicPartition, lastClean, now)
+
+          val compactionDelayMs = LogCleanerManager.getMaxCompactionDelay(log, firstDirtyOffset, now)
+          preCleanStats.updateMaxCompactionDelay(compactionDelayMs)
+
+          LogToClean(topicPartition, log, firstDirtyOffset, firstUncleanableDirtyOffset, compactionDelayMs > 0)
       }.filter(ltc => ltc.totalBytes > 0) // skip any empty logs
 
       this.dirtiestLogCleanableRatio = if (dirtyLogs.nonEmpty) dirtyLogs.max.cleanableRatio else 0
-      // and must meet the minimum threshold for dirty byte ratio
-      val cleanableLogs = dirtyLogs.filter(ltc => ltc.cleanableRatio > ltc.log.config.minCleanableRatio)
+      // and must meet the minimum threshold for dirty byte ratio or have some bytes required to be compacted
+      val cleanableLogs = dirtyLogs.filter { ltc =>
+        (ltc.needCompactionNow && ltc.cleanableBytes > 0) || ltc.cleanableRatio > ltc.log.config.minCleanableRatio
+      }
       if(cleanableLogs.isEmpty) {
         None
       } else {
+        preCleanStats.recordCleanablePartitions(cleanableLogs.size)
         val filthiest = cleanableLogs.max
         inProgress.put(filthiest.topicPartition, LogCleaningInProgress)
         Some(filthiest)
@@ -476,6 +483,30 @@ private[log] object LogCleanerManager extends Logging {
     log.config.compact && log.config.delete
   }
 
+  /**
+    * get max delay between the time when log is required to be compacted as determined
+    * by maxCompactionLagMs and the current time.
+    */
+  def getMaxCompactionDelay(log: Log, firstDirtyOffset: Long, now: Long) : Long = {
+
+    val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset)
+
+    val firstBatchTimestamps = log.getFirstBatchTimestampForSegments(dirtyNonActiveSegments).filter(_ > 0)
+
+    val earliestDirtySegmentTimestamp = {
+      if (firstBatchTimestamps.nonEmpty)
+        firstBatchTimestamps.min
+      else Long.MaxValue
+    }
+
+    val maxCompactionLagMs = math.max(log.config.maxCompactionLagMs, 0L)
+    val cleanUntilTime = now - maxCompactionLagMs
+
+    if (earliestDirtySegmentTimestamp < cleanUntilTime)
+      cleanUntilTime - earliestDirtySegmentTimestamp
+    else
+      0L
+  }
 
   /**
     * Returns the range of dirty offsets that can be cleaned.
@@ -505,7 +536,7 @@ private[log] object LogCleanerManager extends Logging {
       }
     }
 
-    val compactionLagMs = math.max(log.config.compactionLagMs, 0L)
+    val minCompactionLagMs = math.max(log.config.compactionLagMs, 0L)
 
     // find first segment that cannot be cleaned
     // neither the active segment, nor segments with any messages closer to the head of the log than the minimum compaction lag time
@@ -519,12 +550,12 @@ private[log] object LogCleanerManager extends Logging {
       Option(log.activeSegment.baseOffset),
 
       // the first segment whose largest message timestamp is within a minimum time lag from now
-      if (compactionLagMs > 0) {
+      if (minCompactionLagMs > 0) {
         // dirty log segments
         val dirtyNonActiveSegments = log.logSegments(firstDirtyOffset, log.activeSegment.baseOffset)
         dirtyNonActiveSegments.find { s =>
-          val isUncleanable = s.largestTimestamp > now - compactionLagMs
-          debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - compactionLagMs}; is uncleanable=$isUncleanable")
+          val isUncleanable = s.largestTimestamp > now - minCompactionLagMs
+          debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - minCompactionLagMs}; is uncleanable=$isUncleanable")
           isUncleanable
         }.map(_.baseOffset)
       } else None

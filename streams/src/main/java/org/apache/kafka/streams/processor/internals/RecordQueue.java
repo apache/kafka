@@ -46,7 +46,6 @@ public class RecordQueue {
     private final RecordDeserializer recordDeserializer;
     private final ArrayDeque<ConsumerRecord<byte[], byte[]>> fifoQueue;
 
-    private long partitionTime = UNKNOWN;
     private StampedRecord headRecord = null;
 
     RecordQueue(final TopicPartition partition,
@@ -98,7 +97,7 @@ public class RecordQueue {
             fifoQueue.addLast(rawRecord);
         }
 
-        maybeUpdateTimestamp();
+        updateHead();
 
         return size();
     }
@@ -112,7 +111,7 @@ public class RecordQueue {
         final StampedRecord recordToReturn = headRecord;
         headRecord = null;
 
-        maybeUpdateTimestamp();
+        updateHead();
 
         return recordToReturn;
     }
@@ -142,7 +141,7 @@ public class RecordQueue {
      * @return timestamp
      */
     public long timestamp() {
-        return partitionTime;
+        return headRecord == null ? UNKNOWN : headRecord.timestamp;
     }
 
     /**
@@ -151,10 +150,9 @@ public class RecordQueue {
     public void clear() {
         fifoQueue.clear();
         headRecord = null;
-        partitionTime = UNKNOWN;
     }
 
-    private void maybeUpdateTimestamp() {
+    private void updateHead() {
         while (headRecord == null && !fifoQueue.isEmpty()) {
             final ConsumerRecord<byte[], byte[]> raw = fifoQueue.pollFirst();
             final ConsumerRecord<Object, Object> deserialized = recordDeserializer.deserialize(processorContext, raw);
@@ -166,7 +164,7 @@ public class RecordQueue {
 
             final long timestamp;
             try {
-                timestamp = timestampExtractor.extract(deserialized, partitionTime);
+                timestamp = timestampExtractor.extract(deserialized, timestamp());
             } catch (final StreamsException internalFatalExtractorException) {
                 throw internalFatalExtractorException;
             } catch (final Exception fatalUserException) {
@@ -187,11 +185,6 @@ public class RecordQueue {
             }
 
             headRecord = new StampedRecord(deserialized, timestamp);
-
-            // update the partition timestamp if the current head record's timestamp has exceed its value
-            if (timestamp > partitionTime) {
-                partitionTime = timestamp;
-            }
         }
     }
 }

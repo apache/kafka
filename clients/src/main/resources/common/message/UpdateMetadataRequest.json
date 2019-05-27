@@ -28,7 +28,7 @@
   // Version 5 adds the broker epoch field and normalizes partitions by topic.
   "validVersions": "0-5",
   "fields": [
-    { "name": "ControllerId", "type": "int32", "versions": "0+",
+    { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
       "about": "The controller epoch." },
@@ -36,7 +36,7 @@
       "about": "The broker epoch." },
     { "name": "TopicStates", "type": "[]UpdateMetadataRequestTopicState", "versions": "5+",
       "about": "Each topic that we would like to update.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+",
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "PartitionStates", "type": "[]UpdateMetadataPartitionState", "versions": "5+",
         "about": "The partition that we would like to update.", "fields": [
@@ -44,15 +44,15 @@
           "about": "The partition index." },
         { "name": "ControllerEpoch", "type": "int32", "versions": "5+",
           "about": "The controller epoch." },
-        { "name": "Leader", "type": "int32", "versions": "5+",
+        { "name": "Leader", "type": "int32", "versions": "5+", "entityType": "brokerId",
           "about": "The ID of the broker which is the current partition leader." },
         { "name": "LeaderEpoch", "type": "int32", "versions": "5+",
           "about": "The leader epoch of this partition." },
-        { "name": "Isr", "type": "[]int32", "versions": "5+",
+        { "name": "Isr", "type": "[]int32", "versions": "5+", "entityType": "brokerId",
           "about": "The brokers which are in the ISR for this partition." },
         { "name": "ZkVersion", "type": "int32", "versions": "5+",
           "about": "The Zookeeper version." },
-        { "name": "Replicas", "type": "[]int32", "versions": "5+",
+        { "name": "Replicas", "type": "[]int32", "versions": "5+", "entityType": "brokerId",
           "about": "All the replicas of this partition." },
         { "name": "OfflineReplicas", "type": "[]int32", "versions": "5+",
           "about": "The replicas of this partition which are offline." }
@@ -60,27 +60,28 @@
     ]},
     { "name": "PartitionStatesV0", "type": "[]UpdateMetadataRequestPartitionStateV0", "versions": "0-4",
       "about": "Each partition that we would like to update.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0-4",
+      { "name": "TopicName", "type": "string", "versions": "0-4", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "PartitionIndex", "type": "int32", "versions": "0-4",
         "about": "The partition index." },
       { "name": "ControllerEpoch", "type": "int32", "versions": "0-4",
         "about": "The controller epoch." },
-      { "name": "Leader", "type": "int32", "versions": "0-4",
+      { "name": "Leader", "type": "int32", "versions": "0-4", "entityType": "brokerId",
         "about": "The ID of the broker which is the current partition leader." },
       { "name": "LeaderEpoch", "type": "int32", "versions": "0-4",
         "about": "The leader epoch of this partition." },
-      { "name": "Isr", "type": "[]int32", "versions": "0-4",
+      { "name": "Isr", "type": "[]int32", "versions": "0-4", "entityType": "brokerId",
         "about": "The brokers which are in the ISR for this partition." },
       { "name": "ZkVersion", "type": "int32", "versions": "0-4",
         "about": "The Zookeeper version." },
-      { "name": "Replicas", "type": "[]int32", "versions": "0-4",
+      { "name": "Replicas", "type": "[]int32", "versions": "0-4", "entityType": "brokerId",
         "about": "All the replicas of this partition." },
-      { "name": "OfflineReplicas", "type": "[]int32", "versions": "4",
+      { "name": "OfflineReplicas", "type": "[]int32", "versions": "4", "entityType": "brokerId",
         "about": "The replicas of this partition which are offline." }
     ]},
     { "name": "Brokers", "type": "[]UpdateMetadataRequestBroker", "versions": "0+", "fields": [
-        { "name": "Id", "type": "int32", "versions": "0+" },
+        { "name": "Id", "type": "int32", "versions": "0+", "entityType": "brokerId",
+          "about": "The broker id." },
         // Version 0 of the protocol only allowed specifying a single host and
         // port per broker, rather than an array of endpoints.
         { "name": "V0Host", "type": "string", "versions": "0", "ignorable": true,

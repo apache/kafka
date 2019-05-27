@@ -177,6 +177,11 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
     /**
+     * <code>client.rack</code>
+     */
+    public static final String CLIENT_RACK_CONFIG = CommonClientConfigs.CLIENT_RACK_CONFIG;
+
+    /**
      * <code>reconnect.backoff.ms</code>
      */
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
@@ -272,6 +277,14 @@ public class ConsumerConfig extends AbstractConfig {
 
     public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT);
 
+    /** <code>allow.auto.create.topics</code> */
+    public static final String ALLOW_AUTO_CREATE_TOPICS_CONFIG = "allow.auto.create.topics";
+    private static final String ALLOW_AUTO_CREATE_TOPICS_DOC = "Allow automatic topic creation on the broker when" +
+            " subscribing to or assigning a topic. A topic being subscribed to will be automatically created only if the" +
+            " broker allows for it using `auto.create.topics.enable` broker configuration. This configuration must" +
+            " be set to `false` when using brokers older than 0.11.0";
+    public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
+    
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -331,6 +344,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         "",
                                         Importance.LOW,
                                         CommonClientConfigs.CLIENT_ID_DOC)
+                                .define(CLIENT_RACK_CONFIG,
+                                        Type.STRING,
+                                        "",
+                                        Importance.LOW,
+                                        CommonClientConfigs.CLIENT_RACK_DOC)
                                 .define(MAX_PARTITION_FETCH_BYTES_CONFIG,
                                         Type.INT,
                                         DEFAULT_MAX_PARTITION_FETCH_BYTES,
@@ -479,6 +497,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         in(IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT), IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT)),
                                         Importance.MEDIUM,
                                         ISOLATION_LEVEL_DOC)
+                                .define(ALLOW_AUTO_CREATE_TOPICS_CONFIG,
+                                        Type.BOOLEAN,
+                                        DEFAULT_ALLOW_AUTO_CREATE_TOPICS,
+                                        Importance.MEDIUM,
+                                        ALLOW_AUTO_CREATE_TOPICS_DOC)
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
@@ -487,7 +510,6 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
-
     }
 
     @Override
@@ -532,6 +554,10 @@ public class ConsumerConfig extends AbstractConfig {
 
     public static Set<String> configNames() {
         return CONFIG.names();
+    }
+
+    public static ConfigDef configDef() {
+        return  new ConfigDef(CONFIG);
     }
 
     public static void main(String[] args) {

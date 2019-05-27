@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockProcessor;
@@ -69,18 +70,18 @@ public class KTableFilterTest {
         table3.toStream().process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
-            driver.pipeInput(recordFactory.create(topic, "A", 1));
-            driver.pipeInput(recordFactory.create(topic, "B", 2));
-            driver.pipeInput(recordFactory.create(topic, "C", 3));
-            driver.pipeInput(recordFactory.create(topic, "D", 4));
-            driver.pipeInput(recordFactory.create(topic, "A", null));
-            driver.pipeInput(recordFactory.create(topic, "B", null));
+            driver.pipeInput(recordFactory.create(topic, "A", 1, 10L));
+            driver.pipeInput(recordFactory.create(topic, "B", 2, 5L));
+            driver.pipeInput(recordFactory.create(topic, "C", 3, 8L));
+            driver.pipeInput(recordFactory.create(topic, "D", 4, 14L));
+            driver.pipeInput(recordFactory.create(topic, "A", null, 18L));
+            driver.pipeInput(recordFactory.create(topic, "B", null, 15L));
         }
 
         final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-        processors.get(0).checkAndClearProcessResult("A:null (ts: 0)", "B:2 (ts: 0)", "C:null (ts: 0)", "D:4 (ts: 0)", "A:null (ts: 0)", "B:null (ts: 0)");
-        processors.get(1).checkAndClearProcessResult("A:1 (ts: 0)", "B:null (ts: 0)", "C:3 (ts: 0)", "D:null (ts: 0)", "A:null (ts: 0)", "B:null (ts: 0)");
+        processors.get(0).checkAndClearProcessResult("A:null (ts: 10)", "B:2 (ts: 5)", "C:null (ts: 8)", "D:4 (ts: 14)", "A:null (ts: 18)", "B:null (ts: 15)");
+        processors.get(1).checkAndClearProcessResult("A:1 (ts: 10)", "B:null (ts: 5)", "C:3 (ts: 8)", "D:null (ts: 14)", "A:null (ts: 18)", "B:null (ts: 15)");
     }
 
     @Test
@@ -136,41 +137,41 @@ public class KTableFilterTest {
             getter2.init(driver.setCurrentNodeForProcessorContext(table2.name));
             getter3.init(driver.setCurrentNodeForProcessorContext(table3.name));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 1));
-            driver.pipeInput(recordFactory.create(topic1, "B", 1));
-            driver.pipeInput(recordFactory.create(topic1, "C", 1));
+            driver.pipeInput(recordFactory.create(topic1, "A", 1, 5L));
+            driver.pipeInput(recordFactory.create(topic1, "B", 1, 10L));
+            driver.pipeInput(recordFactory.create(topic1, "C", 1, 15L));
 
             assertNull(getter2.get("A"));
             assertNull(getter2.get("B"));
             assertNull(getter2.get("C"));
 
-            assertEquals(1, (int) getter3.get("A"));
-            assertEquals(1, (int) getter3.get("B"));
-            assertEquals(1, (int) getter3.get("C"));
+            assertEquals(ValueAndTimestamp.make(1, 5L), getter3.get("A"));
+            assertEquals(ValueAndTimestamp.make(1, 10L), getter3.get("B"));
+            assertEquals(ValueAndTimestamp.make(1, 15L), getter3.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 2));
-            driver.pipeInput(recordFactory.create(topic1, "B", 2));
+            driver.pipeInput(recordFactory.create(topic1, "A", 2, 10L));
+            driver.pipeInput(recordFactory.create(topic1, "B", 2, 5L));
 
-            assertEquals(2, (int) getter2.get("A"));
-            assertEquals(2, (int) getter2.get("B"));
+            assertEquals(ValueAndTimestamp.make(2, 10L), getter2.get("A"));
+            assertEquals(ValueAndTimestamp.make(2, 5L), getter2.get("B"));
             assertNull(getter2.get("C"));
 
             assertNull(getter3.get("A"));
             assertNull(getter3.get("B"));
-            assertEquals(1, (int) getter3.get("C"));
+            assertEquals(ValueAndTimestamp.make(1, 15L), getter3.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 3));
+            driver.pipeInput(recordFactory.create(topic1, "A", 3, 15L));
 
             assertNull(getter2.get("A"));
-            assertEquals(2, (int) getter2.get("B"));
+            assertEquals(ValueAndTimestamp.make(2, 5L), getter2.get("B"));
             assertNull(getter2.get("C"));
 
-            assertEquals(3, (int) getter3.get("A"));
+            assertEquals(ValueAndTimestamp.make(3, 15L), getter3.get("A"));
             assertNull(getter3.get("B"));
-            assertEquals(1, (int) getter3.get("C"));
+            assertEquals(ValueAndTimestamp.make(1, 15L), getter3.get("C"));
 
-            driver.pipeInput(recordFactory.create(topic1, "A", null));
-            driver.pipeInput(recordFactory.create(topic1, "B", null));
+            driver.pipeInput(recordFactory.create(topic1, "A", null, 10L));
+            driver.pipeInput(recordFactory.create(topic1, "B", null, 20L));
 
             assertNull(getter2.get("A"));
             assertNull(getter2.get("B"));
@@ -178,7 +179,7 @@ public class KTableFilterTest {
 
             assertNull(getter3.get("A"));
             assertNull(getter3.get("B"));
-            assertEquals(1, (int) getter3.get("C"));
+            assertEquals(ValueAndTimestamp.make(1, 15L), getter3.get("C"));
         }
     }
 
@@ -215,31 +216,31 @@ public class KTableFilterTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 1));
-            driver.pipeInput(recordFactory.create(topic1, "B", 1));
-            driver.pipeInput(recordFactory.create(topic1, "C", 1));
+            driver.pipeInput(recordFactory.create(topic1, "A", 1, 5L));
+            driver.pipeInput(recordFactory.create(topic1, "B", 1, 10L));
+            driver.pipeInput(recordFactory.create(topic1, "C", 1, 15L));
 
             final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-            processors.get(0).checkAndClearProcessResult("A:(1<-null) (ts: 0)", "B:(1<-null) (ts: 0)", "C:(1<-null) (ts: 0)");
-            processors.get(1).checkAndClearProcessResult("A:(null<-null) (ts: 0)", "B:(null<-null) (ts: 0)", "C:(null<-null) (ts: 0)");
+            processors.get(0).checkAndClearProcessResult("A:(1<-null) (ts: 5)", "B:(1<-null) (ts: 10)", "C:(1<-null) (ts: 15)");
+            processors.get(1).checkAndClearProcessResult("A:(null<-null) (ts: 5)", "B:(null<-null) (ts: 10)", "C:(null<-null) (ts: 15)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 2));
-            driver.pipeInput(recordFactory.create(topic1, "B", 2));
+            driver.pipeInput(recordFactory.create(topic1, "A", 2, 15L));
+            driver.pipeInput(recordFactory.create(topic1, "B", 2, 8L));
 
-            processors.get(0).checkAndClearProcessResult("A:(2<-null) (ts: 0)", "B:(2<-null) (ts: 0)");
-            processors.get(1).checkAndClearProcessResult("A:(2<-null) (ts: 0)", "B:(2<-null) (ts: 0)");
+            processors.get(0).checkAndClearProcessResult("A:(2<-null) (ts: 15)", "B:(2<-null) (ts: 8)");
+            processors.get(1).checkAndClearProcessResult("A:(2<-null) (ts: 15)", "B:(2<-null) (ts: 8)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 3));
+            driver.pipeInput(recordFactory.create(topic1, "A", 3, 20L));
 
-            processors.get(0).checkAndClearProcessResult("A:(3<-null) (ts: 0)");
-            processors.get(1).checkAndClearProcessResult("A:(null<-null) (ts: 0)");
+            processors.get(0).checkAndClearProcessResult("A:(3<-null) (ts: 20)");
+            processors.get(1).checkAndClearProcessResult("A:(null<-null) (ts: 20)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", null));
-            driver.pipeInput(recordFactory.create(topic1, "B", null));
+            driver.pipeInput(recordFactory.create(topic1, "A", null, 10L));
+            driver.pipeInput(recordFactory.create(topic1, "B", null, 20L));
 
-            processors.get(0).checkAndClearProcessResult("A:(null<-null) (ts: 0)", "B:(null<-null) (ts: 0)");
-            processors.get(1).checkAndClearProcessResult("A:(null<-null) (ts: 0)", "B:(null<-null) (ts: 0)");
+            processors.get(0).checkAndClearProcessResult("A:(null<-null) (ts: 10)", "B:(null<-null) (ts: 20)");
+            processors.get(1).checkAndClearProcessResult("A:(null<-null) (ts: 10)", "B:(null<-null) (ts: 20)");
         }
     }
 
@@ -282,31 +283,31 @@ public class KTableFilterTest {
         topology.addProcessor("proc2", supplier, table2.name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
-            driver.pipeInput(recordFactory.create(topic1, "A", 1));
-            driver.pipeInput(recordFactory.create(topic1, "B", 1));
-            driver.pipeInput(recordFactory.create(topic1, "C", 1));
+            driver.pipeInput(recordFactory.create(topic1, "A", 1, 5L));
+            driver.pipeInput(recordFactory.create(topic1, "B", 1, 10L));
+            driver.pipeInput(recordFactory.create(topic1, "C", 1, 15L));
 
             final List<MockProcessor<String, Integer>> processors = supplier.capturedProcessors(2);
 
-            processors.get(0).checkAndClearProcessResult("A:(1<-null) (ts: 0)", "B:(1<-null) (ts: 0)", "C:(1<-null) (ts: 0)");
+            processors.get(0).checkAndClearProcessResult("A:(1<-null) (ts: 5)", "B:(1<-null) (ts: 10)", "C:(1<-null) (ts: 15)");
             processors.get(1).checkEmptyAndClearProcessResult();
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 2));
-            driver.pipeInput(recordFactory.create(topic1, "B", 2));
+            driver.pipeInput(recordFactory.create(topic1, "A", 2, 15L));
+            driver.pipeInput(recordFactory.create(topic1, "B", 2, 8L));
 
-            processors.get(0).checkAndClearProcessResult("A:(2<-1) (ts: 0)", "B:(2<-1) (ts: 0)");
-            processors.get(1).checkAndClearProcessResult("A:(2<-null) (ts: 0)", "B:(2<-null) (ts: 0)");
+            processors.get(0).checkAndClearProcessResult("A:(2<-1) (ts: 15)", "B:(2<-1) (ts: 8)");
+            processors.get(1).checkAndClearProcessResult("A:(2<-null) (ts: 15)", "B:(2<-null) (ts: 8)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", 3));
+            driver.pipeInput(recordFactory.create(topic1, "A", 3, 20L));
 
-            processors.get(0).checkAndClearProcessResult("A:(3<-2) (ts: 0)");
-            processors.get(1).checkAndClearProcessResult("A:(null<-2) (ts: 0)");
+            processors.get(0).checkAndClearProcessResult("A:(3<-2) (ts: 20)");
+            processors.get(1).checkAndClearProcessResult("A:(null<-2) (ts: 20)");
 
-            driver.pipeInput(recordFactory.create(topic1, "A", null));
-            driver.pipeInput(recordFactory.create(topic1, "B", null));
+            driver.pipeInput(recordFactory.create(topic1, "A", null, 10L));
+            driver.pipeInput(recordFactory.create(topic1, "B", null, 20L));
 
-            processors.get(0).checkAndClearProcessResult("A:(null<-3) (ts: 0)", "B:(null<-2) (ts: 0)");
-            processors.get(1).checkAndClearProcessResult("B:(null<-2) (ts: 0)");
+            processors.get(0).checkAndClearProcessResult("A:(null<-3) (ts: 10)", "B:(null<-2) (ts: 20)");
+            processors.get(1).checkAndClearProcessResult("B:(null<-2) (ts: 20)");
         }
     }
 
@@ -350,13 +351,13 @@ public class KTableFilterTest {
             new ConsumerRecordFactory<>(new StringSerializer(), new StringSerializer(), 0L);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
 
-            driver.pipeInput(stringRecordFactory.create(topic1, "A", "reject"));
-            driver.pipeInput(stringRecordFactory.create(topic1, "B", "reject"));
-            driver.pipeInput(stringRecordFactory.create(topic1, "C", "reject"));
+            driver.pipeInput(stringRecordFactory.create(topic1, "A", "reject", 5L));
+            driver.pipeInput(stringRecordFactory.create(topic1, "B", "reject", 10L));
+            driver.pipeInput(stringRecordFactory.create(topic1, "C", "reject", 20L));
         }
 
         final List<MockProcessor<String, String>> processors = supplier.capturedProcessors(2);
-        processors.get(0).checkAndClearProcessResult("A:(reject<-null) (ts: 0)", "B:(reject<-null) (ts: 0)", "C:(reject<-null) (ts: 0)");
+        processors.get(0).checkAndClearProcessResult("A:(reject<-null) (ts: 5)", "B:(reject<-null) (ts: 10)", "C:(reject<-null) (ts: 20)");
         processors.get(1).checkEmptyAndClearProcessResult();
     }
 

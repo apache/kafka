@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
@@ -39,6 +40,10 @@ public class JoinGroupRequest extends AbstractRequest {
 
         @Override
         public JoinGroupRequest build(short version) {
+            if (data.groupInstanceId() != null && version < 5) {
+                throw new UnsupportedVersionException("The broker join group protocol version " +
+                        version + " does not support usage of config group.instance.id.");
+            }
             return new JoinGroupRequest(data, version);
         }
 

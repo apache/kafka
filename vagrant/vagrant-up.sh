@@ -220,7 +220,7 @@ function bring_up_aws {
             # We still have to bring up zookeeper/broker nodes serially
             echo "Bringing up zookeeper/broker machines serially"
             vagrant up --provider=aws --no-parallel --no-provision $zk_broker_machines $debug
-            vagrant hostmanager
+            vagrant hostmanager --provider=aws
             vagrant provision
         fi
 
@@ -231,11 +231,11 @@ function bring_up_aws {
             local vagrant_rsync_temp_dir=$(mktemp -d);
             TMPDIR=$vagrant_rsync_temp_dir vagrant_batch_command "vagrant up $debug --provider=aws" "$worker_machines" "$max_parallel"
             rm -rf $vagrant_rsync_temp_dir
-            vagrant hostmanager
+            vagrant hostmanager --provider=aws
         fi
     else
         vagrant up --provider=aws --no-parallel --no-provision $debug
-        vagrant hostmanager
+        vagrant hostmanager --provider=aws
         vagrant provision
     fi
 

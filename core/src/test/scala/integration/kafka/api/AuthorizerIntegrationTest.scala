@@ -34,8 +34,9 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.GROUP_METADATA_TOPIC_NAME
 import org.apache.kafka.common.message._
-import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicSet}
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigSet}
+import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource, AlterableConfig, AlterableConfigCollection}
+import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Records, RecordBatch, SimpleRecord}
@@ -165,7 +166,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ApiKeys.FIND_COORDINATOR -> ((resp: FindCoordinatorResponse) => resp.error),
     ApiKeys.UPDATE_METADATA -> ((resp: requests.UpdateMetadataResponse) => resp.error),
     ApiKeys.JOIN_GROUP -> ((resp: JoinGroupResponse) => resp.error),
-    ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => resp.error),
+    ApiKeys.SYNC_GROUP -> ((resp: SyncGroupResponse) => Errors.forCode(resp.data.errorCode())),
     ApiKeys.DESCRIBE_GROUPS -> ((resp: DescribeGroupsResponse) => {
       val errorCode = resp.data().groups().asScala.find(g => group.equals(g.groupId())).head.errorCode()
       Errors.forCode(errorCode)
@@ -294,7 +295,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def offsetsForLeaderEpochRequest: OffsetsForLeaderEpochRequest = {
     val epochs = Map(tp -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.of(27), 7))
-    new OffsetsForLeaderEpochRequest.Builder(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, epochs.asJava).build()
+    OffsetsForLeaderEpochRequest.Builder.forConsumer(ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, epochs.asJava).build()
   }
 
   private def createOffsetFetchRequest = {
@@ -302,7 +303,10 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createFindCoordinatorRequest = {
-    new FindCoordinatorRequest.Builder(FindCoordinatorRequest.CoordinatorType.GROUP, group).build()
+    new FindCoordinatorRequest.Builder(
+        new FindCoordinatorRequestData()
+          .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
+          .setKey(group)).build()
   }
 
   private def createUpdateMetadataRequest = {
@@ -317,7 +321,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createJoinGroupRequest = {
-    val protocolSet = new JoinGroupRequestData.JoinGroupRequestProtocolSet(
+    val protocolSet = new JoinGroupRequestProtocolCollection(
       Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
         .setName("consumer-range")
         .setMetadata("test".getBytes())
@@ -336,7 +340,13 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   private def createSyncGroupRequest = {
-    new SyncGroupRequest.Builder(group, 1, "", Map[String, ByteBuffer]().asJava).build()
+    new SyncGroupRequest.Builder(
+      new SyncGroupRequestData()
+        .setGroupId(group)
+        .setGenerationId(1)
+        .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
+        .setAssignments(Collections.emptyList())
+    ).build()
   }
 
   private def createDescribeGroupsRequest = {
@@ -370,9 +380,16 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     ).build()
   }
 
-  private def heartbeatRequest = new HeartbeatRequest.Builder(group, 1, "").build()
+  private def heartbeatRequest = new HeartbeatRequest.Builder(
+    new HeartbeatRequestData()
+      .setGroupId(group)
+      .setGenerationId(1)
+      .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
 
-  private def leaveGroupRequest = new LeaveGroupRequest.Builder(new LeaveGroupRequestData().setGroupId(group).setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
+  private def leaveGroupRequest = new LeaveGroupRequest.Builder(
+    new LeaveGroupRequestData()
+      .setGroupId(group)
+      .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)).build()
 
   private def deleteGroupsRequest = new DeleteGroupsRequest.Builder(Set(group).asJava).build()
 
@@ -392,7 +409,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def createTopicsRequest =
     new CreateTopicsRequest.Builder(new CreateTopicsRequestData().setTopics(
-      new CreatableTopicSet(Collections.singleton(new CreatableTopic().
+      new CreatableTopicCollection(Collections.singleton(new CreatableTopic().
         setName(createTopic).setNumPartitions(1).
           setReplicationFactor(1.toShort)).iterator))).build()
 
@@ -419,7 +436,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val alterableConfig = new AlterableConfig
     alterableConfig.setName(LogConfig.MaxMessageBytesProp).
       setValue("1000000").setConfigOperation(AlterConfigOp.OpType.SET.id())
-    val alterableConfigSet = new AlterableConfigSet
+    val alterableConfigSet = new AlterableConfigCollection
     alterableConfigSet.add(alterableConfig)
     data.resources().add(new AlterConfigsResource().
       setResourceName(tp.topic).setResourceType(ConfigResource.Type.TOPIC.id()).

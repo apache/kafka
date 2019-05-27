@@ -50,3 +50,17 @@ object OffsetCheckpointFile {
     new OffsetCheckpointFile(checkpointFile)
   }
 }
+trait OffsetCheckpoints {
+  def fetch(logDir: String, topicPartition: TopicPartition): Option[Long]
+}
+
+class SimpleOffsetCheckpoints(checkpointFilesByLogDir: Map[String, OffsetCheckpointFile])
+  extends OffsetCheckpoints {
+
+  override def fetch(logDir: String, topicPartition: TopicPartition): Option[Long] = {
+    val checkpoint = checkpointFilesByLogDir(logDir)
+    val offsetMap = checkpoint.read()
+    offsetMap.get(topicPartition)
+  }
+
+}

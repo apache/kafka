@@ -674,15 +674,18 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.clientId = clientId;
             this.groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
 
+            LogContext logContext;
+            // If group.instance.id is set, we will append it to the log context.
             String groupInstanceId = config.getString(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
             if (groupInstanceId != null) {
                 JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
                 this.groupInstanceId = Optional.of(groupInstanceId);
+                logContext = new LogContext("[Consumer instanceId=" + groupInstanceId + ", clientId=" + clientId + ", groupId=" + groupId + "] ");
             } else {
                 this.groupInstanceId = Optional.empty();
+                logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId + "] ");
             }
 
-            LogContext logContext = new LogContext("[Consumer clientId=" + clientId + ", groupId=" + groupId + "] ");
             this.log = logContext.logger(getClass());
             boolean enableAutoCommit = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
             if (groupId == null) { // overwrite in case of default group id where the config is not explicitly provided
@@ -727,6 +730,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.metadata = new ConsumerMetadata(retryBackoffMs,
                     config.getLong(ConsumerConfig.METADATA_MAX_AGE_CONFIG),
                     !config.getBoolean(ConsumerConfig.EXCLUDE_INTERNAL_TOPICS_CONFIG),
+                    config.getBoolean(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG),
                     subscriptions, logContext, clusterResourceListeners);
             List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(
                     config.getList(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG), config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG));
@@ -799,6 +803,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     config.getInt(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG),
                     config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG),
                     config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG),
+                    config.getString(ConsumerConfig.CLIENT_RACK_CONFIG),
                     this.keyDeserializer,
                     this.valueDeserializer,
                     this.metadata,
@@ -1141,7 +1146,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws java.lang.IllegalArgumentException if the timeout value is negative
      * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
      *             partitions to consume from
-     *
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      *
      * @deprecated Since 2.0. Use {@link #poll(Duration)}, which does not block beyond the timeout awaiting partition
      *             assignment. See <a href="https://cwiki.apache.org/confluence/x/5kiHB">KIP-266</a> for more information.
@@ -1187,6 +1192,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws java.lang.ArithmeticException if the timeout is greater than {@link Long#MAX_VALUE} milliseconds.
      * @throws org.apache.kafka.common.errors.InvalidTopicException if the current subscription contains any invalid
      *             topic (per {@link org.apache.kafka.common.internals.Topic#validate(String)})
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
@@ -1315,6 +1321,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             is too large or if the topic does not exist).
      * @throws org.apache.kafka.common.errors.TimeoutException if the timeout specified by {@code default.api.timeout.ms} expires
      *            before successful completion of the offset commit
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      */
     @Override
     public void commitSync() {
@@ -1349,6 +1356,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             is too large or if the topic does not exist).
      * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
      *            of the offset commit
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      */
     @Override
     public void commitSync(Duration timeout) {
@@ -1395,6 +1403,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *             is too large or if the topic does not exist).
      * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
      *            of the offset commit
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets) {
@@ -1432,6 +1441,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     *             is too large or if the topic does not exist).
     * @throws org.apache.kafka.common.errors.TimeoutException if the timeout expires before successful completion
     *            of the offset commit
+    * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
     */
     @Override
     public void commitSync(final Map<TopicPartition, OffsetAndMetadata> offsets, final Duration timeout) {
@@ -1451,6 +1461,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * Commit offsets returned on the last {@link #poll(Duration)} for all the subscribed list of topics and partition.
      * Same as {@link #commitAsync(OffsetCommitCallback) commitAsync(null)}
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      */
     @Override
     public void commitAsync() {
@@ -1473,6 +1484,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * (and variants) returns.
      *
      * @param callback Callback to invoke when the commit completes
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      */
     @Override
     public void commitAsync(OffsetCommitCallback callback) {
@@ -1498,6 +1510,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param offsets A map of offsets by partition with associate metadata. This map will be copied internally, so it
      *                is safe to mutate the map after returning.
      * @param callback Callback to invoke when the commit completes
+     * @throws org.apache.kafka.common.errors.FencedInstanceIdException if this consumer instance gets fenced by broker.
      */
     @Override
     public void commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
@@ -1831,7 +1844,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
             Timer timer = time.timer(timeout);
             Map<String, List<PartitionInfo>> topicMetadata = fetcher.getTopicMetadata(
-                    new MetadataRequest.Builder(Collections.singletonList(topic), true), timer);
+                    new MetadataRequest.Builder(Collections.singletonList(topic), metadata.allowAutoTopicCreation()), timer);
             return topicMetadata.get(topic);
         } finally {
             release();

@@ -32,6 +32,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.RocksDBConfigSetter;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.BloomFilter;
+import org.rocksdb.Cache;
 import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
@@ -40,6 +41,7 @@ import org.rocksdb.CompressionType;
 import org.rocksdb.DBOptions;
 import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
+import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
@@ -86,11 +88,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
     RocksDB db;
     RocksDBAccessor dbAccessor;
 
-    // the following option objects will be created in the constructor and closed in the close() method
+    // the following option objects will be created in openDB and closed in the close() method
     private RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter userSpecifiedOptions;
     WriteOptions wOptions;
     FlushOptions fOptions;
+    private Cache cache;
     private BloomFilter filter;
+
+    private RocksDBConfigSetter configSetter;
 
     private volatile boolean prepareForBulkload = false;
     ProcessorContext internalProcessorContext;
@@ -119,9 +124,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         userSpecifiedOptions = new RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapter(dbOptions, columnFamilyOptions);
 
         final BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
-        tableConfig.setBlockCacheSize(BLOCK_CACHE_SIZE);
+        cache = new LRUCache(BLOCK_CACHE_SIZE);
+        tableConfig.setBlockCache(cache);
         tableConfig.setBlockSize(BLOCK_SIZE);
-        
+
         filter = new BloomFilter();
         tableConfig.setFilter(filter);
 
@@ -154,7 +160,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
             (Class<RocksDBConfigSetter>) configs.get(StreamsConfig.ROCKSDB_CONFIG_SETTER_CLASS_CONFIG);
 
         if (configSetterClass != null) {
-            final RocksDBConfigSetter configSetter = Utils.newInstance(configSetterClass);
+            configSetter = Utils.newInstance(configSetterClass);
             configSetter.setConfig(name, userSpecifiedOptions, configs);
         }
 
@@ -390,18 +396,27 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
 
         open = false;
         closeOpenIterators();
+
+        if (configSetter != null) {
+            configSetter.close(name, userSpecifiedOptions);
+            configSetter = null;
+        }
+
         dbAccessor.close();
         userSpecifiedOptions.close();
         wOptions.close();
         fOptions.close();
         db.close();
         filter.close();
+        cache.close();
 
         dbAccessor = null;
         userSpecifiedOptions = null;
         wOptions = null;
         fOptions = null;
         db = null;
+        filter = null;
+        cache = null;
     }
 
     private void closeOpenIterators() {
@@ -556,6 +571,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BulkLoadingSt
         }
 
         @Override
+        @SuppressWarnings("deprecation")
         public void toggleDbForBulkLoading() {
             try {
                 db.compactRange(columnFamily, true, 1, 0);
