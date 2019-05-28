@@ -22,13 +22,13 @@ import java.util.concurrent.TimeUnit
 import kafka.api.{ApiVersion, KAFKA_2_0_IV1}
 import kafka.common.LongRef
 import kafka.message._
-import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
+import org.apache.kafka.common.errors.{InvalidTimestampException, KafkaStorageException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.test.TestUtils
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.intercept
+import org.scalatest.Assertions.{assertThrows, intercept}
 
 import scala.collection.JavaConverters._
 
@@ -36,26 +36,30 @@ class LogValidatorTest {
 
   val time = Time.SYSTEM
 
-  @Test(expected = classOf[InvalidRecordException])
-  def testOnlyOneBatchCompressedV0(): Unit = {
-    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP)
+  @Test
+  def testOnlyOneBatchV0(): Unit = {
+    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V0)
   }
 
-  @Test(expected = classOf[InvalidRecordException])
-  def testOnlyOneBatchCompressedV1(): Unit = {
-    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V1, CompressionType.SNAPPY)
+  @Test
+  def testOnlyOneBatchV1(): Unit = {
+    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V1)
   }
 
-  @Test(expected = classOf[InvalidRecordException])
-  def testOnlyOneBatchCompressedV2(): Unit = {
-    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V2, CompressionType.LZ4)
+  @Test
+  def testOnlyOneBatchV2(): Unit = {
+    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V2)
   }
 
-  private def checkOnlyOneBatchCompressed(magic: Byte, codec: CompressionType) {
-    val records = createRecords(magic, 0L, codec)
+  private def checkOnlyOneBatchCompressed(magic: Byte) {
+    val records = createRecords(magic, 0L, CompressionType.GZIP)
     val duplicates = MemoryRecords.duplicateRecords(records)
 
-    LogValidator.validateRecords(duplicates)
+    LogValidator.validateRecords(records)
+
+    assertThrows[InvalidRecordException] {
+      LogValidator.validateRecords(duplicates)
+    }
   }
 
   @Test
