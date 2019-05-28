@@ -20,6 +20,7 @@ package org.apache.kafka.common.message;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic;
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopicCollection;
+import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Message;
@@ -37,6 +38,7 @@ import org.junit.rules.Timeout;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
 
@@ -121,7 +123,7 @@ public final class MessageTest {
     }
 
     @Test
-    public void testJoinGroupVersions() throws Exception {
+    public void testJoinGroupRequestVersions() throws Exception {
         Supplier<JoinGroupRequestData> newRequest = () -> new JoinGroupRequestData()
                 .setGroupId("groupId")
                 .setMemberId("memberId")
@@ -132,6 +134,23 @@ public final class MessageTest {
         testAllMessageRoundTripsFromVersion((short) 1, newRequest.get().setRebalanceTimeoutMs(20000));
         testAllMessageRoundTrips(newRequest.get().setGroupInstanceId(null));
         testAllMessageRoundTripsFromVersion((short) 5, newRequest.get().setGroupInstanceId("instanceId"));
+    }
+
+    @Test
+    public void testJoinGroupResponseVersions() throws Exception {
+        String memberId = "memberId";
+        Supplier<JoinGroupResponseData> newResponse = () -> new JoinGroupResponseData()
+                .setMemberId(memberId)
+                .setLeader(memberId)
+                .setGenerationId(1)
+                .setMembers(Collections.singletonList(
+                        new JoinGroupResponseMember()
+                                .setMemberId(memberId)
+                ));
+        testAllMessageRoundTrips(newResponse.get());
+        testAllMessageRoundTripsFromVersion((short) 2, newResponse.get().setThrottleTimeMs(1000));
+        testAllMessageRoundTrips(newResponse.get().members().get(0).setGroupInstanceId(null));
+        testAllMessageRoundTripsFromVersion((short) 5, newResponse.get().members().get(0).setGroupInstanceId("instanceId"));
     }
 
     @Test
