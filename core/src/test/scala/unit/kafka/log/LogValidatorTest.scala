@@ -1167,7 +1167,6 @@ class LogValidatorTest {
     var builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
     builder.append(10L, "1".getBytes(), "a".getBytes())
     builder.close()
-
     builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 1L)
     builder.append(11L, "2".getBytes(), "b".getBytes())
     builder.append(12L, "3".getBytes(), "c".getBytes())
