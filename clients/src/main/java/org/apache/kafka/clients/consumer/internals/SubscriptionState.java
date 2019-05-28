@@ -408,7 +408,7 @@ public class SubscriptionState {
         return assignedState(tp).awaitingValidation();
     }
 
-    public void validate(TopicPartition tp) {
+    public void completeValidation(TopicPartition tp) {
         assignedState(tp).validate();
     }
 

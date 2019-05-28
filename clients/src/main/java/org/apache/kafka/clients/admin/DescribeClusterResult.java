@@ -71,7 +71,8 @@ public class DescribeClusterResult {
     }
 
     /**
-     * Returns a future which yields authorized operations.
+     * Returns a future which yields authorized operations.  The future value will be non-null if the
+     * broker supplied this information, and null otherwise.
      */
     public KafkaFuture<Set<AclOperation>> authorizedOperations() {
         return authorizedOperations;
