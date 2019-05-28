@@ -37,28 +37,25 @@ class LogValidatorTest {
   val time = Time.SYSTEM
 
   @Test
-  def testOnlyOneBatchV0(): Unit = {
+  def testOnlyOneBatchCompressedV0(): Unit = {
     checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V0)
   }
 
   @Test
-  def testOnlyOneBatchV1(): Unit = {
+  def testOnlyOneBatchCompressedV1(): Unit = {
     checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V1)
   }
 
   @Test
-  def testOnlyOneBatchV2(): Unit = {
+  def testOnlyOneBatchCompressedV2(): Unit = {
     checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V2)
   }
 
   private def checkOnlyOneBatchCompressed(magic: Byte) {
-    val records = createRecords(magic, 0L, CompressionType.GZIP)
-    val duplicates = MemoryRecords.duplicateRecords(records)
-
-    LogValidator.validateRecords(records)
+    LogValidator.validateCompressedRecords(createRecords(magic, 0L, CompressionType.GZIP))
 
     assertThrows[InvalidRecordException] {
-      LogValidator.validateRecords(duplicates)
+      LogValidator.validateCompressedRecords(createTwoBatchedRecords(magic, 0L, CompressionType.GZIP))
     }
   }
 
@@ -1161,6 +1158,23 @@ class LogValidatorTest {
     builder.appendWithOffset(1, timestamp, null, "there".getBytes)
     builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes)
     builder.build()
+  }
+
+  def createTwoBatchedRecords(magicValue: Byte,
+                              timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                              codec: CompressionType): MemoryRecords = {
+    val buf = ByteBuffer.allocate(2048)
+    var builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+    builder.append(10L, "1".getBytes(), "a".getBytes())
+    builder.close()
+
+    builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 1L)
+    builder.append(11L, "2".getBytes(), "b".getBytes())
+    builder.append(12L, "3".getBytes(), "c".getBytes())
+    builder.close()
+
+    buf.flip()
+    MemoryRecords.readableRecords(buf.slice())
   }
 
   /* check that offsets are assigned consecutively from the given base offset */

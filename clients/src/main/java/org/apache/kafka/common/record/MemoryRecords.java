@@ -628,24 +628,6 @@ public class MemoryRecords extends AbstractRecords {
         return builder.build();
     }
 
-    // for testing only, create a new memory-records that contains duplicated
-    // bytes (therefore duplicated batches) of the passed in memory records
-    public static MemoryRecords duplicateRecords(MemoryRecords inputRecords) {
-        ByteBuffer inputBuffer = inputRecords.buffer().duplicate ();
-        inputBuffer.limit (inputBuffer.position() + inputBuffer.capacity());
-        ByteBuffer outputBuffer = ByteBuffer.allocate(inputBuffer.capacity() * 2);
-        outputBuffer.put(inputBuffer);
-
-        // write again
-        inputBuffer = inputRecords.buffer().duplicate ();
-        inputBuffer.limit (inputBuffer.position() + inputBuffer.capacity());
-        outputBuffer.put(inputBuffer);
-
-        outputBuffer.flip();
-        outputBuffer.position(0);
-        return MemoryRecords.readableRecords(outputBuffer.slice());
-    }
-
     public static MemoryRecords withEndTransactionMarker(long producerId, short producerEpoch, EndTransactionMarker marker) {
         return withEndTransactionMarker(0L, System.currentTimeMillis(), RecordBatch.NO_PARTITION_LEADER_EPOCH,
                 producerId, producerEpoch, marker);
