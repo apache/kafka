@@ -1580,7 +1580,7 @@ public class KafkaAdminClient extends AdminClient {
                 controllerFuture.complete(controller(response));
                 clusterIdFuture.complete(response.clusterId());
                 authorizedOperationsFuture.complete(
-                    validAclOperations(response.data().clusterAuthorizedOperations()));
+                        validAclOperations(response.data().clusterAuthorizedOperations()));
             }
 
             private Node controller(MetadataResponse response) {
@@ -2741,6 +2741,9 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     private Set<AclOperation> validAclOperations(final int authorizedOperations) {
+        if (authorizedOperations == MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED) {
+            return null;
+        }
         return Utils.from32BitField(authorizedOperations)
             .stream()
             .map(AclOperation::fromCode)
