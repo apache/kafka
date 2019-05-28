@@ -89,7 +89,7 @@ public abstract class AbstractJoinIntegrationTest {
     static final String INPUT_TOPIC_RIGHT = "inputTopicRight";
     static final String INPUT_TOPIC_LEFT = "inputTopicLeft";
     static final String OUTPUT_TOPIC = "outputTopic";
-    final long anyUniqueKey = 0L;
+    static final long ANY_UNIQUE_KEY = 0L;
 
     private final static Properties PRODUCER_CONFIG = new Properties();
     private final static Properties RESULT_CONSUMER_CONFIG = new Properties();
@@ -294,7 +294,7 @@ public abstract class AbstractJoinIntegrationTest {
 
         Input(final String topic, final V value) {
             this.topic = topic;
-            record = KeyValue.pair(anyUniqueKey, value);
+            record = KeyValue.pair(ANY_UNIQUE_KEY, value);
         }
     }
 }

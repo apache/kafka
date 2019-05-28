@@ -60,8 +60,8 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
         rightTable = builder.table(INPUT_TOPIC_RIGHT, Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as("right").withLoggingDisabled());
     }
 
-    final private KeyValueTimestamp<Long, String> expectedFinalJoinResult = new KeyValueTimestamp<>(anyUniqueKey, "D-d", 15L);
-    final private KeyValueTimestamp<Long, String> expectedFinalMultiJoinResult = new KeyValueTimestamp<>(anyUniqueKey, "D-d-d", 15L);
+    final private KeyValueTimestamp<Long, String> expectedFinalJoinResult = new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d", 15L);
+    final private KeyValueTimestamp<Long, String> expectedFinalMultiJoinResult = new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d-d", 15L);
     final private String storeName = appID + "-store";
 
     private Materialized<Long, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(storeName)
@@ -103,18 +103,18 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null,
                 null,
                 null,
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "A-a", 4L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a", 5L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-b", 6L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 7L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a", 4L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a", 5L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b", 6L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 7L)),
                 null,
                 null,
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "C-c", 10L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 11L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c", 10L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 11L)),
                 null,
                 null,
                 null,
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "D-d", 15L))
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d", 15L))
             );
 
             leftTable.join(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
@@ -133,19 +133,19 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             final List<List<KeyValueTimestamp<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "A-null", 3L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "A-a", 4L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a", 5L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-b", 6L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 7L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-null", 3L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a", 4L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a", 5L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b", 6L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 7L)),
                 null,
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "C-null", 9L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "C-c", 10L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "C-null", 11L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 12L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null", 9L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c", 10L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null", 11L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 12L)),
                 null,
                 null,
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "D-d", 15L))
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d", 15L))
             );
 
             leftTable.leftJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
@@ -164,19 +164,19 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
             final List<List<KeyValueTimestamp<Long, String>>> expectedResult = Arrays.asList(
                 null,
                 null,
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "A-null", 3L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "A-a", 4L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a", 5L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-b", 6L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "null-b", 7L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 8L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "C-null", 9L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "C-c", 10L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "C-null", 11L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 12L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-null", 3L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a", 4L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a", 5L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b", 6L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-b", 7L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 8L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null", 9L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c", 10L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null", 11L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 12L)),
                 null,
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "null-d", 14L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "D-d", 15L))
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-d", 14L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d", 15L))
             );
 
             leftTable.outerJoin(rightTable, valueJoiner, materialized).toStream().to(OUTPUT_TOPIC);
@@ -203,24 +203,24 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a-a", 5L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a-a", 5L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 7L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 7L)),
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L)),
-                null, // correct would be -> new KeyValueTimestamp<>(anyUniqueKey, null, 11L)
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L)),
+                null, // correct would be -> new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 11L)
                       // we don't get correct value, because of self-join of `rightTable`
                 null,
                 null,
                 null,
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "D-d-d", 15L))
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d-d", 15L))
             );
 
             leftTable.join(rightTable, valueJoiner)
@@ -248,23 +248,23 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a-a", 5L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a-a", 5L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 7L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 7L)),
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 11L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 11L)),
                 null,
                 null,
                 null,
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "D-d-d", 15L))
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d-d", 15L))
             );
 
             leftTable.join(rightTable, valueJoiner)
@@ -293,28 +293,28 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a-a", 5L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a-a", 5L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "null-b", 7L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 8L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-b", 7L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 8L)),
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, null, 11L),
-                    new KeyValueTimestamp<>(anyUniqueKey, null, 11L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 11L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 11L)),
                 null,
                 null,
                 null,
                 Arrays.asList(
                     // incorrect result `null-d` is caused by self-join of `rightTable`
-                    new KeyValueTimestamp<>(anyUniqueKey, "null-d", 14L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "D-d-d", 15L))
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-d", 14L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d-d", 15L))
             );
 
             leftTable.join(rightTable, valueJoiner)
@@ -342,23 +342,23 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a-a", 5L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a-a", 5L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 7L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 7L)),
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 11L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 11L)),
                 null,
                 null,
                 null,
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "D-d-d", 15L))
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d-d", 15L))
             );
 
             leftTable.leftJoin(rightTable, valueJoiner)
@@ -387,27 +387,27 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-null-null", 3L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a-a", 5L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-null-null", 3L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a-a", 5L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 7L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 7L)),
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-null-null", 9L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null-null", 9L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-null-null", 11L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-null-null", 11L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 12L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null-null", 11L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null-null", 11L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 12L)),
                 null,
                 null,
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "D-d-d", 15L))
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d-d", 15L))
             );
 
             leftTable.leftJoin(rightTable, valueJoiner)
@@ -436,29 +436,29 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-null-null", 3L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a-a", 5L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-null-null", 3L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a-a", 5L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "null-b", 7L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 8L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-b", 7L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 8L)),
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-null-null", 9L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null-null", 9L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-null-null", 11L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-null-null", 11L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 12L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null-null", 11L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null-null", 11L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 12L)),
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "null-d", 14L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "D-d-d", 15L))
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-d", 14L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d-d", 15L))
             );
 
             leftTable.leftJoin(rightTable, valueJoiner)
@@ -486,25 +486,25 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a-a", 5L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a-a", 5L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "null-b-b", 7L)),
-                null,
-                null,
-                Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 11L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-b-b", 7L)),
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "null-d-d", 14L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "null-d-d", 14L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "D-d-d", 15L))
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 11L)),
+                null,
+                null,
+                Arrays.asList(
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-d-d", 14L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-d-d", 14L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d-d", 15L))
             );
 
             leftTable.outerJoin(rightTable, valueJoiner)
@@ -533,29 +533,29 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-null-null", 3L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a-a", 5L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-null-null", 3L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a-a", 5L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "null-b-b", 7L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 8L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-b-b", 7L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 8L)),
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-null-null", 9L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null-null", 9L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-null-null", 11L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-null-null", 11L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 12L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null-null", 11L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null-null", 11L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 12L)),
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "null-d-d", 14L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "null-d-d", 14L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "D-d-d", 15L))
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-d-d", 14L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-d-d", 14L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d-d", 15L))
             );
 
             leftTable.outerJoin(rightTable, valueJoiner)
@@ -584,31 +584,31 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-null-null", 3L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "A-a-a", 4L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a-a", 5L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-null-null", 3L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-a-a", 4L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a-a", 5L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "B-b-b", 6L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "null-b-b", 7L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-b-b", 6L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-b-b", 7L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, null, 8L),
-                    new KeyValueTimestamp<>(anyUniqueKey, null, 8L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "C-null-null", 9L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 8L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 8L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null-null", 9L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-c-c", 10L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-c-c", 10L)),
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-null-null", 11L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "C-null-null", 11L)),
-                Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, null, 12L)),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null-null", 11L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null-null", 11L)),
+                Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, null, 12L)),
                 null,
                 null,
                 Arrays.asList(
-                    new KeyValueTimestamp<>(anyUniqueKey, "null-d-d", 14L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "null-d-d", 14L),
-                    new KeyValueTimestamp<>(anyUniqueKey, "D-d-d", 15L))
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-d-d", 14L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "null-d-d", 14L),
+                    new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d-d", 15L))
             );
 
             leftTable.outerJoin(rightTable, valueJoiner)

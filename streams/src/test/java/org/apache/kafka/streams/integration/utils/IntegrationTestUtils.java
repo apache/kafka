@@ -638,8 +638,6 @@ public class IntegrationTestUtils {
 
                 // returns true only if the remaining records in both lists are the same and in the same order
                 // and the last record received matches the last expected record
-                System.err.println(finalAccumData);
-                System.err.println(finalExpected);
                 return finalAccumData.equals(finalExpected);
 
             };

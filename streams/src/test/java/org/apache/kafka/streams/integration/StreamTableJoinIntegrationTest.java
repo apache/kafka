@@ -95,7 +95,7 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
             null,
             null,
             null,
-            Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a", 5L)),
+            Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a", 5L)),
             null,
             null,
             null,
@@ -105,7 +105,7 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
             null,
             null,
             null,
-            Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "D-d", 15L))
+            Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d", 15L))
         );
 
         leftStream.join(rightTable, valueJoiner).to(OUTPUT_TOPIC);
@@ -120,19 +120,19 @@ public class StreamTableJoinIntegrationTest extends AbstractJoinIntegrationTest 
         final List<List<KeyValueTimestamp<Long, String>>> expectedResult = Arrays.asList(
             null,
             null,
-            Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "A-null", 3L)),
+            Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "A-null", 3L)),
             null,
-            Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "B-a", 5L)),
-            null,
-            null,
-            null,
-            Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "C-null", 9L)),
+            Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "B-a", 5L)),
             null,
             null,
             null,
+            Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "C-null", 9L)),
             null,
             null,
-            Collections.singletonList(new KeyValueTimestamp<>(anyUniqueKey, "D-d", 15L))
+            null,
+            null,
+            null,
+            Collections.singletonList(new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d", 15L))
         );
 
         leftStream.leftJoin(rightTable, valueJoiner).to(OUTPUT_TOPIC);
