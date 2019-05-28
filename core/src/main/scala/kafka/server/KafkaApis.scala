@@ -54,6 +54,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.replica.ReplicaSelector.ClientMetadata
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
@@ -562,6 +563,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       fetchRequest.toForget,
       fetchRequest.isFromFollower)
 
+    val clientMetadata = new ClientMetadata(
+      fetchRequest.rackId(),
+      clientId,
+      request.context.clientAddress,
+      request.context.principal,
+      request.context.listenerName.value())
+
     def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
       new FetchResponse.PartitionData[T](error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
         FetchResponse.INVALID_LOG_START_OFFSET, null, MemoryRecords.EMPTY)
@@ -635,7 +643,8 @@ class KafkaApis(val requestChannel: RequestChannel,
                 // down-conversion always guarantees that at least one batch of messages is down-converted and sent out to the
                 // client.
                 new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-                  partitionData.lastStableOffset, partitionData.logStartOffset, partitionData.abortedTransactions,
+                  partitionData.lastStableOffset, partitionData.logStartOffset,
+                  partitionData.preferredReadReplica, partitionData.abortedTransactions,
                   new LazyDownConversionRecords(tp, unconvertedRecords, magic, fetchContext.getFetchOffset(tp).get, time))
               } catch {
                 case e: UnsupportedCompressionTypeException =>
@@ -644,7 +653,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               }
             }
           case None => new FetchResponse.PartitionData[BaseRecords](partitionData.error, partitionData.highWatermark,
-            partitionData.lastStableOffset, partitionData.logStartOffset, partitionData.abortedTransactions,
+            partitionData.lastStableOffset, partitionData.logStartOffset,
+            partitionData.preferredReadReplica, partitionData.abortedTransactions,
             unconvertedRecords)
         }
       }
@@ -656,8 +666,20 @@ class KafkaApis(val requestChannel: RequestChannel,
       responsePartitionData.foreach { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
-          data.logStartOffset, abortedTransactions, data.records))
+        if (data.preferredReadReplica.isDefined) {
+          // TODO must be a better way...
+          val preferredReadReplicaOptional : Optional[Integer] = if (data.preferredReadReplica.isDefined) {
+            Optional.ofNullable(data.preferredReadReplica.get)
+          } else {
+            Optional.empty()
+          }
+          partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
+            data.logStartOffset, preferredReadReplicaOptional, abortedTransactions, data.records))
+        } else {
+          partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
+            data.logStartOffset, abortedTransactions, data.records))
+        }
+
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
 
@@ -754,7 +776,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         interesting,
         replicationQuota(fetchRequest),
         processResponseCallback,
-        fetchRequest.isolationLevel)
+        fetchRequest.isolationLevel,
+        clientMetadata)
     }
   }
 

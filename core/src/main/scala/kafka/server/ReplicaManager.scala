@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.{Gauge, Meter}
+import kafka.api.Request.{DebuggingConsumerId, FutureLocalReplicaId}
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition, Replica}
 import kafka.controller.{KafkaController, StateChangeLogger}
@@ -35,6 +36,7 @@ import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -44,8 +46,10 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
+import org.apache.kafka.common.replica.ReplicaSelector.ClientMetadata
+import org.apache.kafka.common.replica.{LeaderReplicaSelector, ReplicaSelector}
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -84,6 +88,7 @@ case class LogReadResult(info: FetchDataInfo,
                          fetchTimeMs: Long,
                          readSize: Int,
                          lastStableOffset: Option[Long],
+                         preferredReadReplica: Option[Int] = None,
                          exception: Option[Throwable] = None) {
 
   def error: Errors = exception match {
@@ -105,7 +110,8 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               logStartOffset: Long,
                               records: Records,
                               lastStableOffset: Option[Long],
-                              abortedTransactions: Option[List[AbortedTransaction]])
+                              abortedTransactions: Option[List[AbortedTransaction]],
+                              preferredReadReplica: Option[Int])
 
 object LogReadResult {
   val UnknownLogReadResult = LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
@@ -221,6 +227,8 @@ class ReplicaManager(val config: KafkaConfig,
       handleLogDirFailure(newOfflineLogDir)
     }
   }
+
+  val replicaSelector: ReplicaSelector = createReplicaSelector()
 
   val leaderCount = newGauge(
     "LeaderCount",
@@ -822,9 +830,23 @@ class ReplicaManager(val config: KafkaConfig,
                     fetchInfos: Seq[(TopicPartition, PartitionData)],
                     quota: ReplicaQuota = UnboundedQuota,
                     responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
-                    isolationLevel: IsolationLevel) {
+                    isolationLevel: IsolationLevel,
+                    clientMetadata: ClientMetadata) {
     val isFromFollower = Request.isValidBrokerId(replicaId)
-    val fetchOnlyFromLeader = replicaId != Request.DebuggingConsumerId && replicaId != Request.FutureLocalReplicaId
+
+    val fetchOnlyFromLeader = {
+      if (!clientMetadata.rackId.isEmpty) {
+        // If the client has sent a rack ID, we allow fetch from followers
+        false
+      } else {
+        // Otherwise, check the replica ID
+        replicaId match {
+          case DebuggingConsumerId => false
+          case FutureLocalReplicaId => false
+          case _ => true
+        }
+      }
+    }
 
     val fetchIsolation = if (isFromFollower || replicaId == Request.FutureLocalReplicaId)
       FetchLogEnd
@@ -832,7 +854,6 @@ class ReplicaManager(val config: KafkaConfig,
       FetchTxnCommitted
     else
       FetchHighWatermark
-
 
     def readFromLog(): Seq[(TopicPartition, LogReadResult)] = {
       val result = readFromLocalLog(
@@ -842,7 +863,8 @@ class ReplicaManager(val config: KafkaConfig,
         fetchMaxBytes = fetchMaxBytes,
         hardMaxBytesLimit = hardMaxBytesLimit,
         readPartitionInfo = fetchInfos,
-        quota = quota)
+        quota = quota,
+        clientMetadata = clientMetadata)
       if (isFromFollower) updateFollowerLogReadResults(replicaId, result)
       else result
     }
@@ -866,8 +888,9 @@ class ReplicaManager(val config: KafkaConfig,
     //                        4) some error happens while reading data
     if (timeout <= 0 || fetchInfos.isEmpty || bytesReadable >= fetchMinBytes || errorReadingData) {
       val fetchPartitionData = logReadResults.map { case (tp, result) =>
+
         tp -> FetchPartitionData(result.error, result.highWatermark, result.leaderLogStartOffset, result.info.records,
-          result.lastStableOffset, result.info.abortedTransactions)
+          result.lastStableOffset, result.info.abortedTransactions, result.preferredReadReplica)
       }
       responseCallback(fetchPartitionData)
     } else {
@@ -881,7 +904,7 @@ class ReplicaManager(val config: KafkaConfig,
       }
       val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, fetchOnlyFromLeader,
         fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
-      val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, responseCallback)
+      val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata, responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
       val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => new TopicPartitionOperationKey(tp) }
@@ -902,7 +925,8 @@ class ReplicaManager(val config: KafkaConfig,
                        fetchMaxBytes: Int,
                        hardMaxBytesLimit: Boolean,
                        readPartitionInfo: Seq[(TopicPartition, PartitionData)],
-                       quota: ReplicaQuota): Seq[(TopicPartition, LogReadResult)] = {
+                       quota: ReplicaQuota,
+                       clientMetadata: ClientMetadata): Seq[(TopicPartition, LogReadResult)] = {
 
     def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
       val offset = fetchInfo.fetchOffset
@@ -930,6 +954,10 @@ class ReplicaManager(val config: KafkaConfig,
           fetchOnlyFromLeader = fetchOnlyFromLeader,
           minOneMessage = minOneMessage)
 
+
+        // If we are the leader, determine the preferred read-replica
+        val preferredReadReplica = findPreferredReadReplica(tp, clientMetadata, replicaId)
+
         val fetchDataInfo = if (shouldLeaderThrottle(quota, tp, replicaId)) {
           // If the partition is being throttled, simply return an empty set.
           FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
@@ -949,6 +977,7 @@ class ReplicaManager(val config: KafkaConfig,
                       fetchTimeMs = fetchTimeMs,
                       readSize = adjustedMaxBytes,
                       lastStableOffset = Some(readInfo.lastStableOffset),
+                      preferredReadReplica = preferredReadReplica,
                       exception = None)
       } catch {
         // NOTE: Failed fetch requests metric is not incremented for known exceptions since it
@@ -1002,6 +1031,37 @@ class ReplicaManager(val config: KafkaConfig,
       result += (tp -> readResult)
     }
     result
+  }
+
+  def findPreferredReadReplica(tp: TopicPartition, clientMetadata: ClientMetadata, replicaId: Int): Option[Int] = {
+    val partition = getPartitionOrException(tp, expectLeader = false)
+
+    if (partition.leaderReplicaIfLocal.isDefined) {
+      if (Request.isValidBrokerId(replicaId)) {
+        // Don't look up preferred for follower fetches via normal replication
+        Option.empty
+      } else if (clientMetadata.equals(ClientMetadata.NO_METADATA)) {
+        // Return the leader if no metadata given
+        partition.leaderReplicaIdOpt
+      } else {
+        val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
+        val replicaInfos: Set[ReplicaSelector.ReplicaInfo] = partition.allReplicas.map(
+          replica => new ReplicaSelector.ReplicaInfo() {
+            override def isLeader: Boolean = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId))
+
+            override def getEndpoint: Node = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode())
+
+            override def logOffset(): Long = replica.logEndOffset
+
+            override def lastCaughtUpTimeMs(): Long = replica.lastCaughtUpTimeMs
+          })
+        Option.apply(replicaSelector.select(tp, clientMetadata, replicaInfos.asJava).orElse(null))
+          .filter(!_.getEndpoint.isEmpty)
+          .map(_.getEndpoint.id())
+      }
+    } else {
+      Option.empty
+    }
   }
 
   /**
@@ -1520,6 +1580,9 @@ class ReplicaManager(val config: KafkaConfig,
     delayedElectPreferredLeaderPurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
+    if (replicaSelector != null) {
+      replicaSelector.close()
+    }
     info("Shut down completely")
   }
 
@@ -1529,6 +1592,14 @@ class ReplicaManager(val config: KafkaConfig,
 
   protected def createReplicaAlterLogDirsManager(quotaManager: ReplicationQuotaManager, brokerTopicStats: BrokerTopicStats) = {
     new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats)
+  }
+
+  protected def createReplicaSelector(): ReplicaSelector = {
+    val tmpReplicaSelector: ReplicaSelector = Option(config.replicaSelectorClassName).filter(_.nonEmpty).map { replicaSelectorClassName =>
+      CoreUtils.createObject[ReplicaSelector](replicaSelectorClassName)
+    }.getOrElse(new LeaderReplicaSelector())
+    tmpReplicaSelector.configure(config.originals())
+    tmpReplicaSelector
   }
 
   def lastOffsetForLeaderEpoch(requestedEpochInfo: Map[TopicPartition, OffsetsForLeaderEpochRequest.PartitionData]): Map[TopicPartition, EpochEndOffset] = {

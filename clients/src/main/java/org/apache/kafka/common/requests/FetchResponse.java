@@ -329,7 +329,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             result = 31 * result + Long.hashCode(highWatermark);
             result = 31 * result + Long.hashCode(lastStableOffset);
             result = 31 * result + Long.hashCode(logStartOffset);
-            result = 31 * result + (preferredReadReplica != null ? preferredReadReplica.hashCode() : 0);
+            result = 31 * result + Objects.hashCode(preferredReadReplica);
             result = 31 * result + (abortedTransactions != null ? abortedTransactions.hashCode() : 0);
             result = 31 * result + (records != null ? records.hashCode() : 0);
             return result;

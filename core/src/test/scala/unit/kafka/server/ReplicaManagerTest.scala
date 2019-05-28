@@ -18,26 +18,31 @@
 package kafka.server
 
 import java.io.File
-import java.util.{Optional, Properties}
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.net.InetAddress
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.{Optional, Properties}
 
-import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
-import kafka.utils.{MockScheduler, MockTime, TestUtils}
-import TestUtils.createBroker
+import kafka.api.Request
 import kafka.cluster.BrokerEndPoint
+import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.server.checkpoints.SimpleOffsetCheckpoints
 import kafka.server.epoch.util.ReplicaFetcherMockBlockingSend
+import kafka.utils.TestUtils.createBroker
 import kafka.utils.timer.MockTimer
+import kafka.utils.{MockScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderAndIsrRequest}
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.replica.LeaderReplicaSelector
+import org.apache.kafka.common.replica.ReplicaSelector.ClientMetadata
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
+import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderAndIsrRequest}
+import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.zookeeper.data.Stat
@@ -521,7 +526,8 @@ class ReplicaManagerTest {
           tp0 -> new PartitionData(1, 0, 100000, Optional.empty()),
           tp1 -> new PartitionData(1, 0, 100000, Optional.empty())),
         responseCallback = fetchCallback,
-        isolationLevel = IsolationLevel.READ_UNCOMMITTED
+        isolationLevel = IsolationLevel.READ_UNCOMMITTED,
+        clientMetadata = ClientMetadata.NO_METADATA
       )
       val tp0Replica = replicaManager.localReplica(tp0)
       assertTrue(tp0Replica.isDefined)
@@ -582,6 +588,76 @@ class ReplicaManagerTest {
     EasyMock.verify(mockLogMgr)
   }
 
+  @Test
+  def testReplicaSelector(): Unit = {
+    val topicPartition = 0
+    val followerBrokerId = 0
+    val leaderBrokerId = 1
+    val controllerId = 0
+    val leaderEpoch = 1
+    val leaderEpochIncrement = 2
+    val aliveBrokerIds = Seq[Integer] (followerBrokerId, leaderBrokerId)
+    val countDownLatch = new CountDownLatch(1)
+
+    // Prepare the mocked components for the test
+    val props = new Properties()
+    props.put(KafkaConfig.ReplicaSelectorClassProp, classOf[LeaderReplicaSelector].getCanonicalName)
+    val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(
+      topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
+      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props)
+
+    val partition = replicaManager.createPartition(new TopicPartition(topic, topicPartition))
+
+    val offsetCheckpoints = new SimpleOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+    partition.getOrCreateReplica(leaderBrokerId, isNew = false, offsetCheckpoints)
+    partition.makeLeader(
+      controllerId,
+      leaderAndIsrPartitionState(leaderEpoch, leaderBrokerId, aliveBrokerIds),
+      correlationId,
+      offsetCheckpoints
+    )
+
+    val tp0 = new TopicPartition(topic, 0)
+
+    val metadata: ClientMetadata = new ClientMetadata("rack-a", "client-id",
+      InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
+
+    val preferredReadReplica: Option[Int] = replicaManager.findPreferredReadReplica(tp0, metadata, Request.OrdinaryConsumerId)
+    assertTrue(preferredReadReplica.isDefined)
+    assertEquals(preferredReadReplica, partition.leaderReplicaIdOpt)
+  }
+
+  @Test(expected = classOf[ClassNotFoundException])
+  def testUnknownReplicaSelector(): Unit = {
+    val topicPartition = 0
+    val followerBrokerId = 0
+    val leaderBrokerId = 1
+    val leaderEpoch = 1
+    val leaderEpochIncrement = 2
+    val countDownLatch = new CountDownLatch(1)
+
+    val props = new Properties()
+    props.put(KafkaConfig.ReplicaSelectorClassProp, "non-a-class")
+    val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(
+      topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
+      leaderBrokerId, countDownLatch, expectTruncation = true, extraProps = props)
+  }
+
+  @Test
+  def testDefaultReplicaSelector(): Unit = {
+    val topicPartition = 0
+    val followerBrokerId = 0
+    val leaderBrokerId = 1
+    val leaderEpoch = 1
+    val leaderEpochIncrement = 2
+    val countDownLatch = new CountDownLatch(1)
+
+    val (replicaManager, mockLogMgr) = prepareReplicaManagerAndLogManager(
+      topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
+      leaderBrokerId, countDownLatch, expectTruncation = true)
+    assertEquals(replicaManager.replicaSelector.getClass, classOf[LeaderReplicaSelector])
+  }
+
   /**
    * This method assumes that the test using created ReplicaManager calls
    * ReplicaManager.becomeLeaderOrFollower() once with LeaderAndIsrRequest containing
@@ -592,9 +668,11 @@ class ReplicaManagerTest {
                                                  followerBrokerId: Int,
                                                  leaderBrokerId: Int,
                                                  countDownLatch: CountDownLatch,
-                                                 expectTruncation: Boolean) : (ReplicaManager, LogManager) = {
+                                                 expectTruncation: Boolean,
+                                                 extraProps: Properties = new Properties()) : (ReplicaManager, LogManager) = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect)
     props.put("log.dir", TestUtils.tempRelativeDir("data").getAbsolutePath)
+    props.asScala ++= extraProps.asScala
     val config = KafkaConfig.fromProps(props)
 
     // Setup mock local log to have leader epoch of 3 and offset of 10
@@ -649,8 +727,15 @@ class ReplicaManagerTest {
     aliveBrokerIds.foreach { brokerId =>
       EasyMock.expect(metadataCache.isBrokerAlive(EasyMock.eq(brokerId))).andReturn(true).anyTimes
     }
+    EasyMock
+      .expect(metadataCache.getPartitionReplicaEndpoints(
+        EasyMock.anyObject(), EasyMock.anyObject(), EasyMock.anyObject()))
+      .andReturn(Map(
+        leaderBrokerId -> new Node(leaderBrokerId, "host1", 9092, "rack-a"),
+        followerBrokerId -> new Node(followerBrokerId, "host2", 9092, "rack-b")).toMap
+      )
+      .anyTimes()
     EasyMock.replay(metadataCache)
-
 
     val timer = new MockTimer
     val mockProducePurgatory = new DelayedOperationPurgatory[DelayedProduce](
@@ -794,7 +879,9 @@ class ReplicaManagerTest {
       hardMaxBytesLimit = false,
       fetchInfos = Seq(partition -> partitionData),
       responseCallback = fetchCallback,
-      isolationLevel = isolationLevel)
+      isolationLevel = isolationLevel,
+      clientMetadata = ClientMetadata.NO_METADATA
+    )
 
     result
   }
