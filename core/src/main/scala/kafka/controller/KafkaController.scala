@@ -1607,8 +1607,8 @@ class KafkaController(val config: KafkaConfig,
   override def process(event: ControllerEvent): Unit = {
     try {
       event match {
-        // Used only in test cases
         case event: MockEvent =>
+          // Used only in test cases
           event.process()
         case ShutdownEventThread =>
           error("Received a ShutdownEventThread event. This type of event is supposed to be handle by ControllerEventThread")
@@ -1654,8 +1654,6 @@ class KafkaController(val config: KafkaConfig,
           processIsrChangeNotification()
         case Startup =>
           processStartup()
-        case ShutdownEventThread =>
-          // not handled here
       }
     } catch {
       case e: ControllerMovedException =>
