@@ -834,20 +834,6 @@ class ReplicaManager(val config: KafkaConfig,
                     clientMetadata: ClientMetadata) {
     val isFromFollower = Request.isValidBrokerId(replicaId)
 
-    val fetchOnlyFromLeader = {
-      if (!clientMetadata.rackId.isEmpty) {
-        // If the client has sent a rack ID, we allow fetch from followers
-        false
-      } else {
-        // Otherwise, check the replica ID
-        replicaId match {
-          case DebuggingConsumerId => false
-          case FutureLocalReplicaId => false
-          case _ => true
-        }
-      }
-    }
-
     val fetchIsolation = if (isFromFollower || replicaId == Request.FutureLocalReplicaId)
       FetchLogEnd
     else if (isolationLevel == IsolationLevel.READ_COMMITTED)
@@ -858,7 +844,7 @@ class ReplicaManager(val config: KafkaConfig,
     def readFromLog(): Seq[(TopicPartition, LogReadResult)] = {
       val result = readFromLocalLog(
         replicaId = replicaId,
-        fetchOnlyFromLeader = fetchOnlyFromLeader,
+        fetchOnlyFromLeader = false, // TODO remove this argument
         fetchIsolation = fetchIsolation,
         fetchMaxBytes = fetchMaxBytes,
         hardMaxBytesLimit = hardMaxBytesLimit,
@@ -902,7 +888,7 @@ class ReplicaManager(val config: KafkaConfig,
           fetchPartitionStatus += (topicPartition -> FetchPartitionStatus(logOffsetMetadata, partitionData))
         })
       }
-      val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, fetchOnlyFromLeader,
+      val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, false,
         fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata, responseCallback)
 
