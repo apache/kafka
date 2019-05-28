@@ -71,6 +71,14 @@
     </li>
 </ol>
 
+<h5><a id="upgrade_230_notable" href="#upgrade_230_notable">Notable changes in 2.3.0</a></h5>
+<ul>
+    <li>
+        We are introducing static membership towards consumer user. This feature reduces unnecessary rebalances during normal application upgrades or rolling bounces.
+        For more details on how to use it, checkout <a href="/{{version}}/design/#static_membership">static membership design</a>.
+    </li>
+</ul>
+
 <h5><a id="upgrade_220_notable" href="#upgrade_220_notable">Notable changes in 2.2.0</a></h5>
 <ul>
     <li>The default consumer group id has been changed from the empty string (<code>""</code>) to <code>null</code>. Consumers who use the new default group id will not be able to subscribe to topics,

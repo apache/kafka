@@ -104,6 +104,7 @@ import org.slf4j.LoggerFactory;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -493,11 +494,12 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(MetadataResponse.prepareResponse(initializedCluster.nodes(),
                     initializedCluster.clusterResource().clusterId(), 1,
                     singletonList(new MetadataResponse.TopicMetadata(Errors.NONE, topic, false,
-                            singletonList(partitionMetadata)))));
+                            singletonList(partitionMetadata), MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED))));
 
             DescribeTopicsResult result = env.adminClient().describeTopics(Collections.singleton(topic));
             Map<String, TopicDescription> topicDescriptions = result.all().get();
             assertEquals(leader, topicDescriptions.get(topic).partitions().get(0).leader());
+            assertEquals(null, topicDescriptions.get(topic).authorizedOperations());
         }
     }
 
@@ -925,6 +927,61 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    public void testDescribeCluster() throws Exception {
+        final HashMap<Integer, Node> nodes = new HashMap<>();
+        Node node0 = new Node(0, "localhost", 8121);
+        Node node1 = new Node(1, "localhost", 8122);
+        Node node2 = new Node(2, "localhost", 8123);
+        Node node3 = new Node(3, "localhost", 8124);
+        nodes.put(0, node0);
+        nodes.put(1, node1);
+        nodes.put(2, node2);
+        nodes.put(3, node3);
+
+        final Cluster cluster = new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.emptyList(),
+                Collections.emptySet(),
+                Collections.emptySet(), nodes.get(0));
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster, AdminClientConfig.RETRIES_CONFIG, "2")) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            // Prepare the metadata response used for the first describe cluster
+            MetadataResponse response = MetadataResponse.prepareResponse(0,
+                    new ArrayList<>(nodes.values()),
+                    env.cluster().clusterResource().clusterId(),
+                    2,
+                    Collections.emptyList(),
+                    MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED);
+            env.kafkaClient().prepareResponse(response);
+
+            // Prepare the metadata response used for the second describe cluster
+            MetadataResponse response2 = MetadataResponse.prepareResponse(0,
+                    new ArrayList<>(nodes.values()),
+                    env.cluster().clusterResource().clusterId(),
+                    3,
+                    Collections.emptyList(),
+                    1 << AclOperation.DESCRIBE.code() | 1 << AclOperation.ALTER.code());
+            env.kafkaClient().prepareResponse(response2);
+
+            // Test DescribeCluster with the authorized operations omitted.
+            final DescribeClusterResult result = env.adminClient().describeCluster();
+            assertEquals(env.cluster().clusterResource().clusterId(), result.clusterId().get());
+            assertEquals(2, result.controller().get().id());
+            assertEquals(null, result.authorizedOperations().get());
+
+            // Test DescribeCluster with the authorized operations included.
+            final DescribeClusterResult result2 = env.adminClient().describeCluster();
+            assertEquals(env.cluster().clusterResource().clusterId(), result2.clusterId().get());
+            assertEquals(3, result2.controller().get().id());
+            assertEquals(new HashSet<>(Arrays.asList(AclOperation.DESCRIBE, AclOperation.ALTER)),
+                    result2.authorizedOperations().get());
+        }
+    }
+
+    @Test
     public void testListConsumerGroups() throws Exception {
         final HashMap<Integer, Node> nodes = new HashMap<>();
         Node node0 = new Node(0, "localhost", 8121);
@@ -1227,6 +1284,43 @@ public class KafkaAdminClientTest {
             final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(groups);
             assertEquals(2, result.describedGroups().size());
             assertEquals(groups, result.describedGroups().keySet());
+        }
+    }
+
+    @Test
+    public void testDescribeConsumerGroupsWithAuthorizedOperationsOmitted() throws Exception {
+        final HashMap<Integer, Node> nodes = new HashMap<>();
+        nodes.put(0, new Node(0, "localhost", 8121));
+
+        final Cluster cluster =
+            new Cluster(
+                "mockClusterId",
+                nodes.values(),
+                Collections.<PartitionInfo>emptyList(),
+                Collections.<String>emptySet(),
+                Collections.<String>emptySet(), nodes.get(0));
+
+        try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(cluster)) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+
+            env.kafkaClient().prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, env.cluster().controller()));
+
+            DescribeGroupsResponseData data = new DescribeGroupsResponseData();
+            data.groups().add(DescribeGroupsResponse.groupMetadata(
+                "group-0",
+                Errors.NONE,
+                "",
+                ConsumerProtocol.PROTOCOL_TYPE,
+                "",
+                Collections.emptyList(),
+                MetadataResponse.AUTHORIZED_OPERATIONS_OMITTED));
+
+            env.kafkaClient().prepareResponse(new DescribeGroupsResponse(data));
+
+            final DescribeConsumerGroupsResult result = env.adminClient().describeConsumerGroups(singletonList("group-0"));
+            final ConsumerGroupDescription groupDescription = result.describedGroups().get("group-0").get();
+
+            assertNull(groupDescription.authorizedOperations());
         }
     }
 

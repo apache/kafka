@@ -53,7 +53,7 @@
         { "name": "MemberAssignment", "type": "bytes", "versions": "0+",
           "about": "The current assignment provided by the group leader." }
       ]},
-      { "name": "AuthorizedOperations", "type": "int32", "versions": "3+",
+      { "name": "AuthorizedOperations", "type": "int32", "versions": "3+",  "default": "-2147483648",
         "about": "32-bit bitfield to represent authorized operations for this group." }
     ]}
   ]
