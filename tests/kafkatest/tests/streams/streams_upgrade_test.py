@@ -368,6 +368,8 @@ class StreamsUpgradeTest(Test):
         if version.startswith("0") or version.startswith("1") \
           or version.startswith("2.0") or version.startswith("2.1"):
             return "Kafka version : " + version
+        elif "SNAPSHOT" in version:
+            return "Kafka version : .*-SNAPSHOT"
         else:
             return "Kafka version: " + version
 
@@ -536,7 +538,8 @@ class StreamsUpgradeTest(Test):
                     self.old_processors.remove(processor)
                     self.upgraded_processors.append(processor)
 
-                    log_monitor.wait_until("Kafka version: " + str(DEV_VERSION),
+                    # checking for the dev version which should be the only SNAPSHOT
+                    log_monitor.wait_until("Kafka version: " + ".*-SNAPSHOT",
                                            timeout_sec=60,
                                            err_msg="Could not detect Kafka Streams version " + str(DEV_VERSION) + " in " + str(node.account))
                     log_monitor.offset = 5
