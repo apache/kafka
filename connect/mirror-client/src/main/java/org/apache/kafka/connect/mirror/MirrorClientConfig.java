@@ -28,9 +28,9 @@ import java.util.stream.Collectors;
 
 public class MirrorClientConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_CLASS = "replication.policy.class";
-    private static final String REPLICATION_POLICY_CLASS_DOC = "replication.policy.class";
+    private static final String REPLICATION_POLICY_CLASS_DOC = "Defines how to create and interpret remote topics.";
     public static final String REPLICATION_POLICY_SEPARATOR = "replication.policy.separator";
-    private static final String REPLICATION_POLICY_SEPARATOR_DOC = "replication.policy.separator";
+    private static final String REPLICATION_POLICY_SEPARATOR_DOC = "Separator used to construct remote topics.";
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
         DefaultReplicationPolicy.SEPARATOR_DEFAULT;
     
@@ -81,6 +81,12 @@ public class MirrorClientConfig extends AbstractConfig {
             DefaultReplicationPolicy.class.getName(),
             ConfigDef.Importance.LOW,
             REPLICATION_POLICY_CLASS_DOC)
+        .define(
+            REPLICATION_POLICY_SEPARATOR,
+            ConfigDef.Type.STRING,
+            REPLICATION_POLICY_SEPARATOR_DEFAULT,
+            ConfigDef.Importance.LOW,
+            REPLICATION_POLICY_SEPARATOR_DOC)
         .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                 Type.STRING,
                 CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
