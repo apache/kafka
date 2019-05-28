@@ -744,6 +744,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             Sensor throttleTimeSensor = Fetcher.throttleTimeSensor(metrics, metricsRegistry);
             int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
 
+            ApiVersions apiVersions = new ApiVersions();
             NetworkClient netClient = new NetworkClient(
                     new Selector(config.getLong(ConsumerConfig.CONNECTIONS_MAX_IDLE_MS_CONFIG), metrics, time, metricGrpPrefix, channelBuilder, logContext),
                     this.metadata,
@@ -757,7 +758,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     ClientDnsLookup.forConfig(config.getString(ConsumerConfig.CLIENT_DNS_LOOKUP_CONFIG)),
                     time,
                     true,
-                    new ApiVersions(),
+                    apiVersions,
                     throttleTimeSensor,
                     logContext);
             this.client = new ConsumerNetworkClient(
@@ -813,7 +814,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     this.time,
                     this.retryBackoffMs,
                     this.requestTimeoutMs,
-                    isolationLevel);
+                    isolationLevel,
+                    apiVersions);
 
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());

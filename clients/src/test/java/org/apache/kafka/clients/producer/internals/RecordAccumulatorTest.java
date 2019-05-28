@@ -188,7 +188,7 @@ public class RecordAccumulatorTest {
 
         ApiVersions apiVersions = new ApiVersions();
         apiVersions.update(node1.idString(), NodeApiVersions.create(Collections.singleton(
-                new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id, (short) 0, (short) 2))));
+                new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE, (short) 0, (short) 2))));
 
         RecordAccumulator accum = createTestRecordAccumulator(
                 batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD, 10 * 1024, compressionType, 0);
@@ -705,7 +705,7 @@ public class RecordAccumulatorTest {
         long totalSize = 10 * batchSize;
         String metricGrpName = "producer-metrics";
 
-        apiVersions.update("foobar", NodeApiVersions.create(Arrays.asList(new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE.id,
+        apiVersions.update("foobar", NodeApiVersions.create(Arrays.asList(new ApiVersionsResponse.ApiVersion(ApiKeys.PRODUCE,
                 (short) 0, (short) 2))));
         RecordAccumulator accum = new RecordAccumulator(logContext, batchSize + DefaultRecordBatch.RECORD_BATCH_OVERHEAD,
             CompressionType.NONE, lingerMs, retryBackoffMs, deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, new TransactionManager(),
