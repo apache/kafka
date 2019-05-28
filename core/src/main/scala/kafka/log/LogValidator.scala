@@ -74,6 +74,18 @@ private[kafka] object LogValidator extends Logging {
     }
   }
 
+  private[kafka] def validateRecords(records: MemoryRecords): RecordBatch = {
+    // Assume there's only one batch with compressed memory records; otherwise, return InvalidRecordException
+    val batchIterator = records.batches.iterator
+    val batch = batchIterator.next()
+
+    if (batchIterator.hasNext) {
+      throw new InvalidRecordException("Compressed outer record should only have a single record batch")
+    }
+
+    batch
+  }
+
   private def validateBatch(batch: RecordBatch, isFromClient: Boolean, toMagic: Byte): Unit = {
     if (isFromClient) {
       if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
@@ -259,13 +271,7 @@ private[kafka] object LogValidator extends Logging {
 
     var uncompressedSizeInBytes = 0
 
-    // Assume there's only one batch with compressed memory records; otherwise, return InvalidRecordException
-    val batchIterator = records.batches.iterator
-    val batch = batchIterator.next()
-
-    if (batchIterator.hasNext) {
-      throw new InvalidRecordException("Compressed outer record should only have a single record batch")
-    }
+    val batch = validateRecords(records)
 
     validateBatch(batch, isFromClient, toMagic)
     uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())

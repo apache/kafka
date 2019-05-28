@@ -36,6 +36,28 @@ class LogValidatorTest {
 
   val time = Time.SYSTEM
 
+  @Test(expected = classOf[InvalidRecordException])
+  def testOnlyOneBatchCompressedV0(): Unit = {
+    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testOnlyOneBatchCompressedV1(): Unit = {
+    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V1, CompressionType.SNAPPY)
+  }
+
+  @Test(expected = classOf[InvalidRecordException])
+  def testOnlyOneBatchCompressedV2(): Unit = {
+    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V2, CompressionType.LZ4)
+  }
+
+  private def checkOnlyOneBatchCompressed(magic: Byte, codec: CompressionType) {
+    val records = createRecords(magic, 0L, codec)
+    val duplicates = MemoryRecords.duplicateRecords(records)
+
+    LogValidator.validateRecords(duplicates)
+  }
+
   @Test
   def testLogAppendTimeNonCompressedV1() {
     checkLogAppendTimeNonCompressed(RecordBatch.MAGIC_VALUE_V1)
