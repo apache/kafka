@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 
-class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimestamp<V>> {
+public class ValueAndTimestampSerializer<V> implements Serializer<ValueAndTimestamp<V>> {
     public final Serializer<V> valueSerializer;
     private final Serializer<Long> timestampSerializer;
 
