@@ -89,6 +89,7 @@ class StreamsUpgradeTest(Test):
         self.leader_counter = {}
 
     processed_msg = "processed [0-9]* records"
+    base_version_number = str(DEV_VERSION).split("-")[0]
 
     def perform_broker_upgrade(self, to_version):
         self.logger.info("First pass bounce - rolling broker upgrade")
@@ -368,6 +369,8 @@ class StreamsUpgradeTest(Test):
         if version.startswith("0") or version.startswith("1") \
           or version.startswith("2.0") or version.startswith("2.1"):
             return "Kafka version : " + version
+        elif "SNAPSHOT" in version:
+            return "Kafka version.*" + self.base_version_number + ".*SNAPSHOT"
         else:
             return "Kafka version: " + version
 
@@ -536,7 +539,8 @@ class StreamsUpgradeTest(Test):
                     self.old_processors.remove(processor)
                     self.upgraded_processors.append(processor)
 
-                    log_monitor.wait_until("Kafka version: " + str(DEV_VERSION),
+                    # checking for the dev version which should be the only SNAPSHOT
+                    log_monitor.wait_until("Kafka version.*" + self.base_version_number + ".*SNAPSHOT",
                                            timeout_sec=60,
                                            err_msg="Could not detect Kafka Streams version " + str(DEV_VERSION) + " in " + str(node.account))
                     log_monitor.offset = 5
