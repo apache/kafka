@@ -74,7 +74,7 @@ private[kafka] object LogValidator extends Logging {
     }
   }
 
-  private[kafka] def validateCompressedRecords(records: MemoryRecords): RecordBatch = {
+  private[kafka] def validateOneBatchRecords(records: MemoryRecords): RecordBatch = {
     // Assume there's only one batch with compressed memory records; otherwise, return InvalidRecordException
     val batchIterator = records.batches.iterator
 
@@ -198,6 +198,10 @@ private[kafka] object LogValidator extends Logging {
     val initialOffset = offsetCounter.value
 
     for (batch <- records.batches.asScala) {
+      if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+        validateOneBatchRecords(records)
+      }
+
       validateBatch(batch, isFromClient, magic)
 
       var maxBatchTimestamp = RecordBatch.NO_TIMESTAMP
@@ -276,7 +280,7 @@ private[kafka] object LogValidator extends Logging {
 
     var uncompressedSizeInBytes = 0
 
-    val batch = validateCompressedRecords(records)
+    val batch = validateOneBatchRecords(records)
 
     validateBatch(batch, isFromClient, toMagic)
     uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())
