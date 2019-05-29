@@ -229,8 +229,8 @@ public abstract class AbstractRequest extends AbstractRequestResponse {
                 return new DescribeDelegationTokenRequest(struct, apiVersion);
             case DELETE_GROUPS:
                 return new DeleteGroupsRequest(struct, apiVersion);
-            case ELECT_PREFERRED_LEADERS:
-                return new ElectPreferredLeadersRequest(struct, apiVersion);
+            case ELECT_LEADERS:
+                return new ElectLeadersRequest(struct, apiVersion);
             case INCREMENTAL_ALTER_CONFIGS:
                 return new IncrementalAlterConfigsRequest(struct, apiVersion);
             default:

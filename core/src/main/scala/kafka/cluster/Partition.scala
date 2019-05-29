@@ -92,22 +92,22 @@ class DelayedOperations(topicPartition: TopicPartition,
                         deleteRecords: DelayedOperationPurgatory[DelayedDeleteRecords]) {
 
   def checkAndCompleteAll(): Unit = {
-    val requestKey = new TopicPartitionOperationKey(topicPartition)
+    val requestKey = TopicPartitionOperationKey(topicPartition)
     fetch.checkAndComplete(requestKey)
     produce.checkAndComplete(requestKey)
     deleteRecords.checkAndComplete(requestKey)
   }
 
   def checkAndCompleteFetch(): Unit = {
-    fetch.checkAndComplete(new TopicPartitionOperationKey(topicPartition))
+    fetch.checkAndComplete(TopicPartitionOperationKey(topicPartition))
   }
 
   def checkAndCompleteProduce(): Unit = {
-    produce.checkAndComplete(new TopicPartitionOperationKey(topicPartition))
+    produce.checkAndComplete(TopicPartitionOperationKey(topicPartition))
   }
 
   def checkAndCompleteDeleteRecords(): Unit = {
-    deleteRecords.checkAndComplete(new TopicPartitionOperationKey(topicPartition))
+    deleteRecords.checkAndComplete(TopicPartitionOperationKey(topicPartition))
   }
 
   def numDelayedDelete: Int = deleteRecords.numDelayed

@@ -29,18 +29,18 @@ import kafka.security.auth.{Acl, Resource, ResourceType}
 import kafka.server.ConfigType
 import kafka.utils.Logging
 import kafka.zookeeper._
-import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.kafka.common.resource.PatternType
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
-
-import scala.collection.mutable.ArrayBuffer
-import scala.collection.{Seq, mutable}
+import scala.collection.Seq
+import scala.collection.breakOut
+import scala.collection.mutable
 
 /**
  * Provides higher level Kafka-specific operations on top of the pipelined [[kafka.zookeeper.ZooKeeperClient]].
@@ -250,10 +250,11 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    * @return UpdateLeaderAndIsrResult instance containing per partition results.
    */
-  def updateLeaderAndIsr(leaderAndIsrs: Map[TopicPartition, LeaderAndIsr], controllerEpoch: Int, expectedControllerEpochZkVersion: Int): UpdateLeaderAndIsrResult = {
-    val successfulUpdates = mutable.Map.empty[TopicPartition, LeaderAndIsr]
-    val updatesToRetry = mutable.Buffer.empty[TopicPartition]
-    val failed = mutable.Map.empty[TopicPartition, Exception]
+  def updateLeaderAndIsr(
+    leaderAndIsrs: Map[TopicPartition, LeaderAndIsr],
+    controllerEpoch: Int,
+    expectedControllerEpochZkVersion: Int
+  ): UpdateLeaderAndIsrResult = {
     val leaderIsrAndControllerEpochs = leaderAndIsrs.map { case (partition, leaderAndIsr) =>
       partition -> LeaderIsrAndControllerEpoch(leaderAndIsr, controllerEpoch)
     }
@@ -262,20 +263,26 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     } catch {
       case e: ControllerMovedException => throw e
       case e: Exception =>
-        leaderAndIsrs.keys.foreach(partition => failed.put(partition, e))
-        return UpdateLeaderAndIsrResult(successfulUpdates.toMap, updatesToRetry, failed.toMap)
+        return UpdateLeaderAndIsrResult(leaderAndIsrs.keys.map(_ -> Left(e))(breakOut), Seq.empty)
     }
-    setDataResponses.foreach { setDataResponse =>
+
+    val updatesToRetry = mutable.Buffer.empty[TopicPartition]
+    val finished: Map[TopicPartition, Either[Exception, LeaderAndIsr]] = setDataResponses.flatMap { setDataResponse =>
       val partition = setDataResponse.ctx.get.asInstanceOf[TopicPartition]
       setDataResponse.resultCode match {
         case Code.OK =>
           val updatedLeaderAndIsr = leaderAndIsrs(partition).withZkVersion(setDataResponse.stat.getVersion)
-          successfulUpdates.put(partition, updatedLeaderAndIsr)
-        case Code.BADVERSION => updatesToRetry += partition
-        case _ => failed.put(partition, setDataResponse.resultException.get)
+          Some(partition -> Right(updatedLeaderAndIsr))
+        case Code.BADVERSION =>
+          // Update the buffer for partitions to retry
+          updatesToRetry += partition
+          None
+        case _ =>
+          Some(partition -> Left(setDataResponse.resultException.get))
       }
-    }
-    UpdateLeaderAndIsrResult(successfulUpdates.toMap, updatesToRetry, failed.toMap)
+    }(breakOut)
+
+    UpdateLeaderAndIsrResult(finished, updatesToRetry)
   }
 
   /**
@@ -286,8 +293,10 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    *         1. The successfully gathered log configs
    *         2. Exceptions corresponding to failed log config lookups.
    */
-  def getLogConfigs(topics: Seq[String], config: java.util.Map[String, AnyRef]):
-  (Map[String, LogConfig], Map[String, Exception]) = {
+  def getLogConfigs(
+    topics: Set[String],
+    config: java.util.Map[String, AnyRef]
+  ): (Map[String, LogConfig], Map[String, Exception]) = {
     val logConfigs = mutable.Map.empty[String, LogConfig]
     val failed = mutable.Map.empty[String, Exception]
     val configResponses = try {
@@ -453,11 +462,11 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * Gets all topics in the cluster.
    * @return sequence of topics in the cluster.
    */
-  def getAllTopicsInCluster: Seq[String] = {
+  def getAllTopicsInCluster: Set[String] = {
     val getChildrenResponse = retryRequestUntilConnected(GetChildrenRequest(TopicsZNode.path))
     getChildrenResponse.resultCode match {
-      case Code.OK => getChildrenResponse.children
-      case Code.NONODE => Seq.empty
+      case Code.OK => getChildrenResponse.children.toSet
+      case Code.NONODE => Set.empty
       case _ => throw getChildrenResponse.resultException.get
     }
 
@@ -1627,10 +1636,11 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     retryRequestsUntilConnected(createRequests, expectedControllerEpochZkVersion)
   }
 
-  private def getTopicConfigs(topics: Seq[String]): Seq[GetDataResponse] = {
-    val getDataRequests = topics.map { topic =>
+  private def getTopicConfigs(topics: Set[String]): Seq[GetDataResponse] = {
+    val getDataRequests: Seq[GetDataRequest] = topics.map { topic =>
       GetDataRequest(ConfigEntityZNode.path(ConfigType.Topic, topic), ctx = Some(topic))
-    }
+    }(breakOut)
+
     retryRequestsUntilConnected(getDataRequests)
   }
 
@@ -1654,8 +1664,8 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   private def retryRequestsUntilConnected[Req <: AsyncRequest](requests: Seq[Req]): Seq[Req#Response] = {
-    val remainingRequests = ArrayBuffer(requests: _*)
-    val responses = new ArrayBuffer[Req#Response]
+    val remainingRequests = mutable.ArrayBuffer(requests: _*)
+    val responses = new mutable.ArrayBuffer[Req#Response]
     while (remainingRequests.nonEmpty) {
       val batchResponses = zooKeeperClient.handleRequests(remainingRequests)
 
@@ -1798,15 +1808,16 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 object KafkaZkClient {
 
   /**
-   * @param successfulPartitions The successfully updated partition states with adjusted znode versions.
+   * @param finishedPartitions Partitions that finished either in successfully
+   *                      updated partition states or failed with an exception.
    * @param partitionsToRetry The partitions that we should retry due to a zookeeper BADVERSION conflict. Version conflicts
    *                      can occur if the partition leader updated partition state while the controller attempted to
    *                      update partition state.
-   * @param failedPartitions Exceptions corresponding to failed partition state updates.
    */
-  case class UpdateLeaderAndIsrResult(successfulPartitions: Map[TopicPartition, LeaderAndIsr],
-                                      partitionsToRetry: Seq[TopicPartition],
-                                      failedPartitions: Map[TopicPartition, Exception])
+  case class UpdateLeaderAndIsrResult(
+    finishedPartitions: Map[TopicPartition, Either[Exception, LeaderAndIsr]],
+    partitionsToRetry: Seq[TopicPartition]
+  )
 
   /**
    * Create an instance of this class with the provided parameters.

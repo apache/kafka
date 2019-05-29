@@ -100,8 +100,10 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Add a suppression for the equals() method of NetworkClientBlockingOps. -->
-        <Class name="kafka.utils.NetworkClientBlockingOps"/>
+        <!-- Suppression for the equals() for extensiom methods. -->
+        <Or>
+            <Class name="kafka.api.package$ElectLeadersRequestOps"/>
+        </Or>
         <Bug pattern="EQ_UNUSUAL"/>
     </Match>
 
