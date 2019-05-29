@@ -458,10 +458,11 @@ public class AbstractConfig {
     private  Map<String, ?> resolveConfigVariables(Map<String, ?> configProviderProps, Map<String, Object> originals) {
         Map<String, String> providerConfigString;
         Map<String, ?> configProperties;
-
+        Map<String, Object> resolvedOriginals = new HashMap<>();
         // As variable configs are strings, parse the originals and obtain the potential variable configs.
         Map<String, String> indirectVariables = extractPotentialVariables(originals);
 
+        resolvedOriginals.putAll(originals);
         if (configProviderProps == null || configProviderProps.isEmpty()) {
             providerConfigString = indirectVariables;
             configProperties = originals;
@@ -474,15 +475,12 @@ public class AbstractConfig {
         if (!providers.isEmpty()) {
             ConfigTransformer configTransformer = new ConfigTransformer(providers);
             ConfigTransformerResult result = configTransformer.transform(indirectVariables);
-            if (!result.data().isEmpty() && !(originals instanceof RecordingMap)) {
-                Map<String, Object> resolvedOriginals = new HashMap<>();
-                resolvedOriginals.putAll(originals);
+            if (!result.data().isEmpty()) {
                 resolvedOriginals.putAll(result.data());
-                return Collections.unmodifiableMap(resolvedOriginals);
             }
         }
 
-        return originals;
+        return new ResolvingMap<>(resolvedOriginals, originals);
     }
 
     private Map<String, Object> configProviderProperties(String configProviderPrefix, Map<String, ?> providerConfigProperties) {
@@ -586,6 +584,32 @@ public class AbstractConfig {
                 if (withIgnoreFallback)
                     ignore(stringKey);
             }
+            return super.get(key);
+        }
+    }
+
+    /**
+     * ResolvingMap keeps a track of the original map instance and the resolved configs. It marks keys retrieved via `get`.
+     * `originals map` passed to the AbstractConfig can be an instance of RecordingMap. ResolvingMap ensures all the access to the keys are
+     * recorded by calling a get on the originals Map.
+     *
+     */
+    private class ResolvingMap<V> extends HashMap<String, V> {
+
+        private final Map<String, ?> originals;
+
+        ResolvingMap(Map<String, ? extends V> m, Map<String, ?> originals) {
+            super(m);
+            this.originals = Collections.unmodifiableMap(originals);
+        }
+
+        @Override
+        public V get(Object key) {
+            if (key instanceof String && originals.containsKey(key)) {
+                // Mark the key in the originals as retrieved.
+                originals.get(key);
+            }
+
             return super.get(key);
         }
     }
