@@ -25,12 +25,12 @@ public class MockVaultConfigProvider extends FileConfigProvider {
 
     Map<String, ?> vaultConfigs;
     private boolean configured = false;
-    private final String LOCATION = "location";
+    private static final String LOCATION = "location";
 
     @Override
     protected Reader reader(String path) throws IOException {
-        String vaultLocation = (String)vaultConfigs.get(LOCATION);
-        return new StringReader("truststoreKey=testTruststoreKey\ntruststorePassword=randomtruststorePassword\n" + "truststoreLocation=" + vaultLocation +"\n");
+        String vaultLocation = (String) vaultConfigs.get(LOCATION);
+        return new StringReader("truststoreKey=testTruststoreKey\ntruststorePassword=randomtruststorePassword\n" + "truststoreLocation=" + vaultLocation + "\n");
     }
 
     @Override
