@@ -57,7 +57,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
-import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.fail;
 
 @RunWith(Parameterized.class)
@@ -476,18 +475,18 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
 
         final RecordHeaders v1FlagHeaders = new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
 
-        final byte[] todeleteValue = getContextualRecord("doomed", 0).serialize();
-        final byte[] asdfValue = getContextualRecord("qwer", 1).serialize();
+        final byte[] todeleteValue = getContextualRecord("doomed", 0).serialize(0).array();
+        final byte[] asdfValue = getContextualRecord("qwer", 1).serialize(0).array();
         final FullChangeSerde<String> fullChangeSerde = FullChangeSerde.castOrWrap(Serdes.String());
         final byte[] zxcvValue1 = new ContextualRecord(
             fullChangeSerde.serializer().serialize(null, new Change<>("3o4im", "previous")),
             getContext(2L)
-        ).serialize();
+        ).serialize(0).array();
         final FullChangeSerde<String> fullChangeSerde1 = FullChangeSerde.castOrWrap(Serdes.String());
         final byte[] zxcvValue2 = new ContextualRecord(
             fullChangeSerde1.serializer().serialize(null, new Change<>("next", "3o4im")),
             getContext(3L)
-        ).serialize();
+        ).serialize(0).array();
         stateRestoreCallback.restoreBatch(asList(
             new ConsumerRecord<>("changelog-topic",
                                  0,

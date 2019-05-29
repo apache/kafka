@@ -52,14 +52,12 @@ public final class BufferValue {
     }
 
     byte[] serialize() {
-        final byte[] serializedRecord = record.serialize();
 
-        final int sizeOfRecord = serializedRecord.length;
         final int sizeOfPriorValueLength = Integer.BYTES;
         final int sizeOfPriorValue = priorValue == null ? 0 : priorValue.length;
-        final ByteBuffer buffer = ByteBuffer.allocate(sizeOfRecord + sizeOfPriorValueLength + sizeOfPriorValue);
 
-        buffer.put(serializedRecord);
+        final ByteBuffer buffer = record.serialize(sizeOfPriorValueLength + sizeOfPriorValue);
+
         if (priorValue == null) {
             buffer.putInt(-1);
         } else {
