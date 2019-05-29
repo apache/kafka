@@ -29,7 +29,6 @@ import java.util.Properties;
 
 public class StreamsUpgradeTest {
 
-
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 2) {

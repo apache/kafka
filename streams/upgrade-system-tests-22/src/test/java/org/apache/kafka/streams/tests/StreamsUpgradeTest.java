@@ -29,7 +29,6 @@ import java.util.Properties;
 
 public class StreamsUpgradeTest {
 
-
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 2) {
@@ -72,7 +71,7 @@ public class StreamsUpgradeTest {
 
             @Override
             public void init(final ProcessorContext context) {
-                System.out.println("[2.1] initializing processor: topic=data taskId=" + context.taskId());
+                System.out.println("[2.2] initializing processor: topic=data taskId=" + context.taskId());
                 numRecordsProcessed = 0;
             }
 

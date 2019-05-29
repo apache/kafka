@@ -30,9 +30,6 @@ import java.util.Properties;
 
 public class StreamsUpgradeTest {
 
-    /**
-     * This test cannot be executed, as long as Kafka 1.0.2 is not released
-     */
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {
         if (args.length < 2) {
