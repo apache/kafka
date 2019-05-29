@@ -17,9 +17,11 @@
 package kafka.admin
 
 import kafka.admin.TopicCommand.{TopicCommandOptions, ZookeeperTopicService}
+import kafka.api.LeaderAndIsr
+import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.server.ConfigType
 import kafka.utils.{Logging, TestUtils}
-import kafka.zk.{ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode, ZooKeeperTestHarness}
+import kafka.zk.{BrokerIdZNode, ConfigEntityChangeNotificationZNode, DeleteTopicsTopicZNode, ZkVersion, ZooKeeperTestHarness}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{InvalidPartitionsException, InvalidReplicationFactorException, TopicExistsException}
@@ -591,5 +593,33 @@ class TopicCommandTest extends ZooKeeperTestHarness with Logging with RackAwareT
     }
     expectAlterInternalTopicPartitionCountFailed(Topic.GROUP_METADATA_TOPIC_NAME)
     expectAlterInternalTopicPartitionCountFailed(Topic.TRANSACTION_STATE_TOPIC_NAME)
+  }
+
+  @Test
+  def testDescribeTopicsWithNoLeaders(): Unit = {
+    TestUtils.createBrokersInZk(zkClient, List(0, 1, 2))
+    val topic = "test-topic"
+
+    // create the topics
+    val createOpts = new TopicCommandOptions(Array("--partitions", "1", "--replication-factor", "2", "--topic", topic))
+    topicService.createTopic(createOpts)
+    val leaderIsrAndControllerEpochs = Map(
+      new TopicPartition(topic, 0) -> LeaderIsrAndControllerEpoch(
+        LeaderAndIsr(leader = 0, leaderEpoch = 0, isr = List(0, 1), zkVersion = 0),
+        controllerEpoch = 0)
+    )
+    topicService.zkClient.createTopicPartitionStatesRaw(leaderIsrAndControllerEpochs, ZkVersion.MatchAnyVersion)
+
+    // Stop broker 0 and 1
+    topicService.zkClient.deletePath(BrokerIdZNode.path(0))
+    topicService.zkClient.deletePath(BrokerIdZNode.path(1))
+
+    val describeTopicCommandOpt = new TopicCommandOptions(Array("--topic", topic, "--describe"))
+    val output = TestUtils.grabConsoleOutput(topicService.describeTopic(describeTopicCommandOpt))
+    val rows = output.split("\n")
+    assertEquals(2, rows.size)
+    assertTrue(rows(1).contains("Leader: none"))
+    val isrField = rows(1).split("\\s+").last
+    assertEquals(isrField, "Isr:")
   }
 }

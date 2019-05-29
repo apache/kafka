@@ -380,9 +380,10 @@ object TopicCommand extends Logging {
                 val partitionDesc = PartitionDescription(
                   topic,
                   partitionId,
-                  leader = if (leaderIsrEpoch.isEmpty) None else Option(leaderIsrEpoch.get.leaderAndIsr.leader),
+                  leader = if (leaderIsrEpoch.isEmpty || !liveBrokers.contains(leaderIsrEpoch.get.leaderAndIsr.leader)) None
+                    else Option(leaderIsrEpoch.get.leaderAndIsr.leader),
                   assignedReplicas,
-                  isr = if (leaderIsrEpoch.isEmpty) Seq.empty[Int] else leaderIsrEpoch.get.leaderAndIsr.isr,
+                  isr = if (leaderIsrEpoch.isEmpty) Seq.empty[Int] else leaderIsrEpoch.get.leaderAndIsr.isr.filter(liveBrokers.contains),
                   minIsrCount = 0,
                   markedForDeletion,
                   describeOptions.describeConfigs
