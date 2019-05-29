@@ -181,7 +181,8 @@ public class SubscriptionState {
             return false;
 
         subscription = topicsToSubscribe;
-        groupSubscription = topicsToSubscribe;
+        groupSubscription = new HashSet<>(groupSubscription);
+        groupSubscription.addAll(topicsToSubscribe);
         return true;
     }
 
@@ -201,8 +202,7 @@ public class SubscriptionState {
      * Reset the group's subscription to only contain topics subscribed by this consumer.
      */
     synchronized void resetGroupSubscription() {
-        groupSubscription = new HashSet<>(groupSubscription);
-        groupSubscription.retainAll(subscription);
+        groupSubscription = subscription;
     }
 
     /**
