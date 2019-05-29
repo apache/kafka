@@ -46,7 +46,6 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
-import java.util.NoSuchElementException;
 import java.util.Properties;
 import java.util.Random;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -57,7 +56,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
 import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.nullValue;
 import static org.junit.Assert.fail;
@@ -260,28 +258,12 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
     }
 
     @Test
-    public void shouldCorrectlyAnswerHasKey() {
+    public void shouldReturnUndefinedOnPriorValueForNotBufferedKey() {
         final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
         final MockInternalProcessorContext context = makeContext();
         buffer.init(context, buffer);
 
-        assertThat(buffer.hasKey("A"), is(false));
-        putRecord(buffer, context, 1L, 0L, "A", "o23i4");
-        assertThat(buffer.hasKey("A"), is(true));
-    }
-
-    @Test
-    public void shouldThrowOnPriorValueForNotBufferedKey() {
-        final TimeOrderedKeyValueBuffer<String, String> buffer = bufferSupplier.apply(testName);
-        final MockInternalProcessorContext context = makeContext();
-        buffer.init(context, buffer);
-
-        try {
-            buffer.priorValueForBuffered("ASDF");
-            fail();
-        } catch (final NoSuchElementException e) {
-            assertThat(e.getMessage(), containsString("ASDF"));
-        }
+        assertThat(buffer.priorValueForBuffered("ASDF"), is(Maybe.undefined()));
     }
 
     @Test
@@ -294,8 +276,8 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         context.setRecordContext(recordContext);
         buffer.put(1L, "A", new Change<>("new-value", "old-value"), recordContext);
         buffer.put(1L, "B", new Change<>("new-value", null), recordContext);
-        assertThat(buffer.priorValueForBuffered("A"), is(ValueAndTimestamp.make("old-value", -1)));
-        assertThat(buffer.priorValueForBuffered("B"), nullValue());
+        assertThat(buffer.priorValueForBuffered("A"), is(Maybe.defined(ValueAndTimestamp.make("old-value", -1))));
+        assertThat(buffer.priorValueForBuffered("B"), is(Maybe.defined(null)));
     }
 
     @Test
@@ -450,9 +432,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertThat(buffer.minTimestamp(), is(1L));
         assertThat(buffer.bufferSize(), is(131L));
 
-        assertThat(buffer.hasKey("todelete"), is(false));
-        assertThat(buffer.priorValueForBuffered("asdf"), nullValue());
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(ValueAndTimestamp.make("previous", -1)));
+        assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
+        assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueAndTimestamp.make("previous", -1))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -574,9 +556,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertThat(buffer.minTimestamp(), is(1L));
         assertThat(buffer.bufferSize(), is(111L));
 
-        assertThat(buffer.hasKey("todelete"), is(false));
-        assertThat(buffer.priorValueForBuffered("asdf"), nullValue());
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(ValueAndTimestamp.make("previous", -1)));
+        assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
+        assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueAndTimestamp.make("previous", -1))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 
@@ -706,9 +688,9 @@ public class TimeOrderedKeyValueBufferTest<B extends TimeOrderedKeyValueBuffer<S
         assertThat(buffer.minTimestamp(), is(1L));
         assertThat(buffer.bufferSize(), is(111L));
 
-        assertThat(buffer.hasKey("todelete"), is(false));
-        assertThat(buffer.priorValueForBuffered("asdf"), nullValue());
-        assertThat(buffer.priorValueForBuffered("zxcv"), is(ValueAndTimestamp.make("previous", -1)));
+        assertThat(buffer.priorValueForBuffered("todelete"), is(Maybe.undefined()));
+        assertThat(buffer.priorValueForBuffered("asdf"), is(Maybe.defined(null)));
+        assertThat(buffer.priorValueForBuffered("zxcv"), is(Maybe.defined(ValueAndTimestamp.make("previous", -1))));
 
         // flush the buffer into a list in buffer order so we can make assertions about the contents.
 

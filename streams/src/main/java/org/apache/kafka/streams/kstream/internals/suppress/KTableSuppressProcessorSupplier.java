@@ -32,6 +32,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.Maybe;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import static java.util.Objects.requireNonNull;
@@ -77,8 +78,9 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
                     @Override
                     public ValueAndTimestamp<V> get(final K key) {
-                        if (buffer.hasKey(key)) {
-                            return buffer.priorValueForBuffered(key);
+                        final Maybe<ValueAndTimestamp<V>> maybeValue = buffer.priorValueForBuffered(key);
+                        if (maybeValue.isDefined()) {
+                            return maybeValue.getNullableValue();
                         } else {
                             // not buffered, so the suppressed view is equal to the parent view
                             return parentGetter.get(key);

@@ -410,25 +410,23 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     }
 
     @Override
-    public boolean hasKey(final K key) {
+    public Maybe<ValueAndTimestamp<V>> priorValueForBuffered(final K key) {
         final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
-        return index.containsKey(serializedKey);
-    }
+        if (index.containsKey(serializedKey)) {
+            final byte[] serializedValue = internalPriorValueForBuffered(serializedKey);
 
-    @Override
-    public ValueAndTimestamp<V> priorValueForBuffered(final K key) {
-        final Bytes serializedKey = Bytes.wrap(keySerde.serializer().serialize(changelogTopic, key));
-        final byte[] serializedValue = internalPriorValueForBuffered(serializedKey);
+            final V deserialize = valueSerde.innerSerde().deserializer().deserialize(
+                changelogTopic,
+                serializedValue
+            );
 
-        final V deserialize = valueSerde.innerSerde().deserializer().deserialize(
-            changelogTopic,
-            serializedValue
-        );
-
-        // it's unfortunately not possible to know this, unless we materialize the suppressed result, since our only
-        // knowledge of the prior value is what the upstream processor sends us as the "old value" when we first
-        // buffer something.
-        return ValueAndTimestamp.make(deserialize, RecordQueue.UNKNOWN);
+            // it's unfortunately not possible to know this, unless we materialize the suppressed result, since our only
+            // knowledge of the prior value is what the upstream processor sends us as the "old value" when we first
+            // buffer something.
+            return Maybe.defined(ValueAndTimestamp.make(deserialize, RecordQueue.UNKNOWN));
+        } else {
+            return Maybe.undefined();
+        }
     }
 
     private byte[] internalPriorValueForBuffered(final Bytes key) {

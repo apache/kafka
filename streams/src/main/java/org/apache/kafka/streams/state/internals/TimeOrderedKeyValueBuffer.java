@@ -76,9 +76,7 @@ public interface TimeOrderedKeyValueBuffer<K, V> extends StateStore {
 
     void evictWhile(final Supplier<Boolean> predicate, final Consumer<Eviction<K, V>> callback);
 
-    boolean hasKey(K key);
-
-    ValueAndTimestamp<V> priorValueForBuffered(K key);
+    Maybe<ValueAndTimestamp<V>> priorValueForBuffered(K key);
 
     void put(long time, K key, Change<V> value, ProcessorRecordContext recordContext);
 
