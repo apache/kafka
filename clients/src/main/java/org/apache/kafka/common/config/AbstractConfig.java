@@ -103,7 +103,6 @@ public class AbstractConfig {
                 throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
 
         this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
-
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
         for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
@@ -459,9 +458,6 @@ public class AbstractConfig {
     private  Map<String, ?> resolveConfigVariables(Map<String, ?> configProviderProps, Map<String, Object> originals) {
         Map<String, String> providerConfigString;
         Map<String, ?> configProperties;
-        Map<String, Object> originalsMutable = new HashMap<>();
-
-        originalsMutable.putAll(originals);
 
         // As variable configs are strings, parse the originals and obtain the potential variable configs.
         Map<String, String> indirectVariables = extractPotentialVariables(originals);
@@ -478,10 +474,15 @@ public class AbstractConfig {
         if (!providers.isEmpty()) {
             ConfigTransformer configTransformer = new ConfigTransformer(providers);
             ConfigTransformerResult result = configTransformer.transform(indirectVariables);
-            originalsMutable.putAll(result.data());
+            if (!result.data().isEmpty() && !(originals instanceof RecordingMap)) {
+                Map<String, Object> resolvedOriginals = new HashMap<>();
+                resolvedOriginals.putAll(originals);
+                resolvedOriginals.putAll(result.data());
+                return Collections.unmodifiableMap(resolvedOriginals);
+            }
         }
 
-        return originalsMutable;
+        return originals;
     }
 
     private Map<String, Object> configProviderProperties(String configProviderPrefix, Map<String, ?> providerConfigProperties) {
