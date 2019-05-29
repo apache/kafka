@@ -58,9 +58,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     private static final BytesSerializer KEY_SERIALIZER = new BytesSerializer();
     private static final ByteArraySerializer VALUE_SERIALIZER = new ByteArraySerializer();
     private static final RecordHeaders V_1_CHANGELOG_HEADERS =
-        new RecordHeaders(new Header[]{new RecordHeader("v", new byte[]{(byte) 1})});
+        new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 1})});
     private static final RecordHeaders V_2_CHANGELOG_HEADERS =
-        new RecordHeaders(new Header[]{new RecordHeader("v", new byte[]{(byte) 2})});
+        new RecordHeaders(new Header[] {new RecordHeader("v", new byte[] {(byte) 2})});
 
     private final Map<Bytes, BufferKey> index = new HashMap<>();
     private final TreeMap<BufferKey, BufferValue> sortedMap = new TreeMap<>();
@@ -253,13 +253,13 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
 
     private void logTombstone(final Bytes key) {
         collector.send(changelogTopic,
-            key,
-            null,
-            null,
-            partition,
-            null,
-            KEY_SERIALIZER,
-            VALUE_SERIALIZER
+                       key,
+                       null,
+                       null,
+                       partition,
+                       null,
+                       KEY_SERIALIZER,
+                       VALUE_SERIALIZER
         );
     }
 
@@ -347,20 +347,9 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     }
 
     private byte[] inferPriorValue(final Bytes key, final byte[] serializedChange) {
-        final byte[] priorValue;
-        if (index.containsKey(key)) {
-            priorValue = internalPriorValueForBuffered(key);
-        } else {
-            final Change<V> change = valueSerde.deserializer().deserialize(
-                changelogTopic,
-                serializedChange
-            );
-            priorValue = valueSerde.innerSerde().serializer().serialize(
-                changelogTopic,
-                change.oldValue
-            );
-        }
-        return priorValue;
+        return index.containsKey(key)
+            ? internalPriorValueForBuffered(key)
+            : FullChangeSerde.extractOldValuePart(ByteBuffer.wrap(serializedChange));
     }
 
 
