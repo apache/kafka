@@ -516,6 +516,9 @@ public class StreamThread extends Thread {
         }
     }
 
+
+    private final boolean eosEnabled;
+
     private final Time time;
     private final Logger log;
     private final String logPrefix;
@@ -683,6 +686,8 @@ public class StreamThread extends Thread {
         ThreadMetrics.closeTaskSensor(streamsMetrics);
         ThreadMetrics.skipRecordSensor(streamsMetrics);
         ThreadMetrics.commitOverTasksSensor(streamsMetrics);
+
+        this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
         this.time = time;
         this.builder = builder;
