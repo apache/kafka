@@ -51,12 +51,12 @@ public final class BufferValue {
         }
     }
 
-    byte[] serialize() {
+    ByteBuffer serialize(final int endPadding) {
 
         final int sizeOfPriorValueLength = Integer.BYTES;
         final int sizeOfPriorValue = priorValue == null ? 0 : priorValue.length;
 
-        final ByteBuffer buffer = record.serialize(sizeOfPriorValueLength + sizeOfPriorValue);
+        final ByteBuffer buffer = record.serialize(sizeOfPriorValueLength + sizeOfPriorValue + endPadding);
 
         if (priorValue == null) {
             buffer.putInt(-1);
@@ -65,7 +65,7 @@ public final class BufferValue {
             buffer.put(priorValue);
         }
 
-        return buffer.array();
+        return buffer;
     }
 
     long sizeBytes() {

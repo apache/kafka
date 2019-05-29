@@ -234,20 +234,15 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
     }
 
     private void logValue(final Bytes key, final BufferKey bufferKey, final BufferValue value) {
-        final byte[] serializedBufferValue = value.serialize();
 
         final int sizeOfBufferTime = Long.BYTES;
-        final int sizeOfBufferValue = serializedBufferValue.length;
-
-        final byte[] timeAndBufferValue = ByteBuffer.wrap(new byte[sizeOfBufferTime + sizeOfBufferValue])
-            .putLong(bufferKey.time())
-            .put(serializedBufferValue)
-            .array();
+        final ByteBuffer buffer = value.serialize(sizeOfBufferTime);
+        buffer.putLong(bufferKey.time());
 
         collector.send(
             changelogTopic,
             key,
-            timeAndBufferValue,
+            buffer.array(),
             V_2_CHANGELOG_HEADERS,
             partition,
             null,
@@ -294,12 +289,13 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                     );
                 }
             } else {
-                final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
-                final long time = timeAndValue.getLong();
-                final byte[] changelogValue = new byte[record.value().length - 8];
-                timeAndValue.get(changelogValue);
                 if (record.headers().lastHeader("v") == null) {
                     // in this case, the changelog value is just the serialized record value
+                    final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
+                    final long time = timeAndValue.getLong();
+                    final byte[] changelogValue = new byte[record.value().length - 8];
+                    timeAndValue.get(changelogValue);
+
                     cleanPut(
                         time,
                         key,
@@ -319,11 +315,20 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
                     );
                 } else if (V_1_CHANGELOG_HEADERS.lastHeader("v").equals(record.headers().lastHeader("v"))) {
                     // in this case, the changelog value is a serialized ContextualRecord
+                    final ByteBuffer timeAndValue = ByteBuffer.wrap(record.value());
+                    final long time = timeAndValue.getLong();
+                    final byte[] changelogValue = new byte[record.value().length - 8];
+                    timeAndValue.get(changelogValue);
+
                     final ContextualRecord contextualRecord = ContextualRecord.deserialize(ByteBuffer.wrap(changelogValue));
                     cleanPut(time, key, new BufferValue(contextualRecord, inferPriorValue(key, contextualRecord.value())));
                 } else if (V_2_CHANGELOG_HEADERS.lastHeader("v").equals(record.headers().lastHeader("v"))) {
                     // in this case, the changelog value is a serialized BufferValue
-                    cleanPut(time, key, BufferValue.deserialize(ByteBuffer.wrap(changelogValue)));
+
+                    final ByteBuffer valueAndTime = ByteBuffer.wrap(record.value());
+                    final BufferValue bufferValue = BufferValue.deserialize(valueAndTime);
+                    final long time = valueAndTime.getLong();
+                    cleanPut(time, key, bufferValue);
                 } else {
                     throw new IllegalArgumentException("Restoring apparently invalid changelog record: " + record);
                 }
