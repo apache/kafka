@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
@@ -323,8 +322,6 @@ public class TaskManager {
      * @throws StreamsException if the store's change log does not contain the partition
      */
     boolean updateNewAndRestoringTasks() {
-        // wait for other thread in the same jvm to free the locks of state store
-        Utils.sleep(10);
         active.initializeNewTasks();
         standby.initializeNewTasks();
 
@@ -332,12 +329,12 @@ public class TaskManager {
 
         active.updateRestored(restored);
 
-        if (active.allTasksRunning() && standby.allTasksRunning()) {
+        if (active.allTasksRunning()) {
             final Set<TopicPartition> assignment = consumer.assignment();
             log.trace("Resuming partitions {}", assignment);
             consumer.resume(assignment);
             assignStandbyPartitions();
-            return true;
+            return standby.allTasksRunning();
         }
         return false;
     }
