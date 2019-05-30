@@ -18,11 +18,14 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.EOFException;
 import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStreamWriter;
@@ -52,6 +55,7 @@ import java.util.regex.Pattern;
 public class OffsetCheckpoint {
 
     private static final Pattern WHITESPACE_MINIMUM_ONCE = Pattern.compile("\\s+");
+    private static final Logger LOG = LoggerFactory.getLogger(OffsetCheckpoint.class);
 
     private static final int VERSION = 0;
 
@@ -76,7 +80,23 @@ public class OffsetCheckpoint {
             // write to temp file and then swap with the existing file
             final File temp = new File(file.getAbsolutePath() + ".tmp");
 
-            final FileOutputStream fileOutputStream = new FileOutputStream(temp);
+            FileOutputStream fileOutputStream;
+
+            try {
+                fileOutputStream = new FileOutputStream(temp);
+            } catch (final FileNotFoundException e) {
+                LOG.warn("Checkpoint file doesn't exist will attempt to create [{}]", file, e);
+                final boolean createdParentDirs = temp.getParentFile().mkdirs();
+                final boolean createdNewFile = temp.createNewFile();
+
+                if (!createdParentDirs || !createdNewFile) {
+                    throw new IOException("Could not create the file for writing checkpoints");
+                }
+
+                fileOutputStream = new FileOutputStream(temp);
+                LOG.info("Successfully created checkpoint file [{}]", file);
+            }
+
             try (final BufferedWriter writer = new BufferedWriter(
                     new OutputStreamWriter(fileOutputStream, StandardCharsets.UTF_8))) {
                 writeIntLine(writer, VERSION);

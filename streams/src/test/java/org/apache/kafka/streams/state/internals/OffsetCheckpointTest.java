@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Random;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.test.TestUtils;
@@ -51,6 +52,28 @@ public class OffsetCheckpointTest {
             assertFalse(f.exists());
 
             offsets.put(new TopicPartition(topic, 3), 3L);
+            checkpoint.write(offsets);
+            assertEquals(offsets, checkpoint.read());
+        } finally {
+            checkpoint.delete();
+        }
+    }
+
+    @Test
+    public void shouldCreateCheckpointFileWhenItDoesNotExist() throws IOException {
+        final String tmpdir = System.getProperty("java.io.tmpdir");
+        final int random = new Random().nextInt();
+        final File checkPointThatDoesNotExistYet = new File(tmpdir + "/kafka-streams/my-streams-app/0_" + random + "/.checkpoint.tmp");
+        checkPointThatDoesNotExistYet.deleteOnExit();
+
+        final OffsetCheckpoint checkpoint = new OffsetCheckpoint(checkPointThatDoesNotExistYet);
+
+        try {
+            final Map<TopicPartition, Long> offsets = new HashMap<>();
+            offsets.put(new TopicPartition(topic, 0), 0L);
+            offsets.put(new TopicPartition(topic, 1), 1L);
+            offsets.put(new TopicPartition(topic, 2), 2L);
+
             checkpoint.write(offsets);
             assertEquals(offsets, checkpoint.read());
         } finally {

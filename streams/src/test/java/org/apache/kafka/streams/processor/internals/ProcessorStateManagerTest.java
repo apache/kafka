@@ -656,17 +656,24 @@ public class ProcessorStateManagerTest {
         LogCaptureAppender.unregister(appender);
 
         boolean foundExpectedLogMessage = false;
+        boolean createdFileLogMessage = false;
         for (final LogCaptureAppender.Event event : appender.getEvents()) {
             if ("WARN".equals(event.getLevel())
-                && event.getMessage().startsWith("process-state-manager-test Failed to write offset checkpoint file to [")
-                && event.getMessage().endsWith(".checkpoint]")
+                && event.getMessage().startsWith("Checkpoint file doesn't exist will attempt to create [")
+                && event.getMessage().contains(".checkpoint]")
                 && event.getThrowableInfo().get().startsWith("java.io.FileNotFoundException: ")) {
 
                 foundExpectedLogMessage = true;
-                break;
+            }
+
+            if ("INFO".equals(event.getLevel())
+                && event.getMessage().startsWith("Successfully created checkpoint file")) {
+
+                createdFileLogMessage = true;
             }
         }
         assertTrue(foundExpectedLogMessage);
+        assertTrue(createdFileLogMessage);
     }
 
     @Test
