@@ -130,7 +130,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
                                err_msg="Never saw message indicating Kafka Connect finished startup on node: " +
                                        "%s in condition mode: %s" % (str(node.account), self.startup_mode))
 
-    def start_and_wait_to_load_rest(self, node, worker_type, remote_connector_configs):
+    def start_and_wait_to_start_listening(self, node, worker_type, remote_connector_configs):
         self.start_and_return_immediately(node, worker_type, remote_connector_configs)
         wait_until(lambda: self.listening(node), timeout_sec=self.startup_timeout_sec,
                    err_msg="Kafka Connect failed to start on node: %s in condition mode: %s" %
@@ -309,7 +309,7 @@ class ConnectStandaloneService(ConnectServiceBase):
             self.start_and_return_immediately(node, 'standalone', remote_connector_configs)
         else:
             # The default mode is to wait until the complete startup of the worker
-            self.start_and_wait_to_load_rest(node, 'standalone', remote_connector_configs)
+            self.start_and_wait_to_start_listening(node, 'standalone', remote_connector_configs)
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
@@ -356,7 +356,7 @@ class ConnectDistributedService(ConnectServiceBase):
             self.start_and_return_immediately(node, 'distributed', '')
         else:
             # The default mode is to wait until the complete startup of the worker
-            self.start_and_wait_to_load_rest(node, 'distributed', '')
+            self.start_and_wait_to_start_listening(node, 'distributed', '')
 
         if len(self.pids(node)) == 0:
             raise RuntimeError("No process ids recorded")
