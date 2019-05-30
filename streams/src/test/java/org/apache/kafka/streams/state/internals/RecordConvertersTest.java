@@ -1,0 +1,46 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.streams.state.internals;
+
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.record.TimestampType;
+import org.junit.Assert;
+import org.junit.Test;
+
+import java.nio.ByteBuffer;
+
+import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
+
+public class RecordConvertersTest {
+
+    @Test
+    public void testNullRawValueShouldReturnNullRecordValue() {
+        ConsumerRecord<byte[], byte[]> nullValueRecord = new ConsumerRecord<>("", 0, 0L, new byte[0], null);
+        Assert.assertNull(rawValueToTimestampedValue().convert(nullValueRecord).value());
+    }
+
+    @Test
+    public void testEncodeRecordValue() {
+        long timestamp = 10L;
+        byte[] value = new byte[1];
+        ConsumerRecord<byte[], byte[]> inputRecord = new ConsumerRecord<>(
+                "topic", 1, 0, timestamp, TimestampType.CREATE_TIME, 0L, 0, 0, new byte[0], value);
+        byte[] expectedValue = ByteBuffer.allocate(9).putLong(timestamp).put(value).array();
+        byte[] actualValue = rawValueToTimestampedValue().convert(inputRecord).value();
+        Assert.assertArrayEquals(expectedValue, actualValue);
+    }
+}
