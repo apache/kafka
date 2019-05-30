@@ -409,7 +409,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         if (index.containsKey(serializedKey)) {
             final byte[] serializedValue = internalPriorValueForBuffered(serializedKey);
 
-            final V deserialize = valueSerde.innerSerde().deserializer().deserialize(
+            final V deserializedValue = valueSerde.innerSerde().deserializer().deserialize(
                 changelogTopic,
                 serializedValue
             );
@@ -417,7 +417,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
             // it's unfortunately not possible to know this, unless we materialize the suppressed result, since our only
             // knowledge of the prior value is what the upstream processor sends us as the "old value" when we first
             // buffer something.
-            return Maybe.defined(ValueAndTimestamp.make(deserialize, RecordQueue.UNKNOWN));
+            return Maybe.defined(ValueAndTimestamp.make(deserializedValue, RecordQueue.UNKNOWN));
         } else {
             return Maybe.undefined();
         }
