@@ -341,6 +341,7 @@
       <allow pkg="org.apache.kafka.connect.runtime.distributed" />
       <allow pkg="org.apache.kafka.connect.util" />
       <allow pkg="org.apache.kafka.connect.converters" />
+      <allow pkg="net.sourceforge.argparse4j" />
     </subpackage>
 
     <subpackage name="runtime">

@@ -1724,6 +1724,7 @@ project(':connect:mirror') {
     compile project(':connect:runtime')
     compile project(':connect:mirror-client')
     compile project(':clients')
+    compile libs.argparse4j
     compile libs.slf4jApi
 
     testCompile libs.junit

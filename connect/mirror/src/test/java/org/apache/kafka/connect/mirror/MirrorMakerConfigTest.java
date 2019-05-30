@@ -70,7 +70,9 @@ public class MirrorMakerConfigTest {
 
     @Test
     public void testIncludesConnectorConfigProperties() {
-        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps("tasks.max", "100"));
+        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+            "clusters", "a, b",
+            "tasks.max", "100"));
         SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
         Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
             MirrorSourceConnector.class);
@@ -82,6 +84,7 @@ public class MirrorMakerConfigTest {
     @Test
     public void testIncludesTopicFilterProperties() {
         MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
+            "clusters", "a, b",
             "source->target.topics", "topic1, topic2",
             "source->target.topics.blacklist", "topic3"));
         SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");

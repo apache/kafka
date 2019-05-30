@@ -25,6 +25,8 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import java.util.Map;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.ArrayList;
 import java.util.stream.Collectors;
 
@@ -94,8 +96,8 @@ public class MirrorMakerConfig extends AbstractConfig {
         super(CONFIG_DEF, props, false);
     }
 
-    public List<String> clusters() {
-        return getList(CLUSTERS_CONFIG);
+    public Set<String> clusters() {
+        return new HashSet<>(getList(CLUSTERS_CONFIG));
     }
 
     public List<SourceAndTarget> enabledClusterPairs() {
@@ -106,7 +108,7 @@ public class MirrorMakerConfig extends AbstractConfig {
 
     public List<SourceAndTarget> clusterPairs() {
         List<SourceAndTarget> pairs = new ArrayList<>();
-        List<String> clusters = clusters();
+        Set<String> clusters = clusters();
         for (String source : clusters) {
             for (String target : clusters) {
                 SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
@@ -213,7 +215,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     }
 
     protected static final ConfigDef CONFIG_DEF = new ConfigDef()
-            .define(CLUSTERS_CONFIG, Type.LIST, null, Importance.HIGH, CLUSTERS_DOC);
+            .define(CLUSTERS_CONFIG, Type.LIST, Importance.HIGH, CLUSTERS_DOC);
 
     private static Map<String, String> toStrings(Map<String, ?> props) {
         Map<String, String> copy = new HashMap<>();

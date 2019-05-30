@@ -79,33 +79,67 @@ script:
 
 MM2 supports replication between multiple Kafka clusters, whether in the
 same data center or across multiple data centers. A single MM2 cluster
-can span multiple data centers, but it is recommended to configure MM2
-nodes differently in each data center. For example, if you have 3 data
-centers (west, east, north), each with 2 Kafka clusters (primary, backup),
-you might configure MM2 as follows:
+can span multiple data centers, but it is recommended to keep MM2's producers
+as close as possible to their target clusters. To do so, specify a subset
+of clusters for each MM2 node as follows:
 
-In the north data center:
+    # in west DC:
+    $ ./bin/connect-mirror-maker.sh mm2.properties --clusters west-1 west-2
 
-    west-primary->north-primary.enabled = true
-    east-primary->north-primary.enabled = true
-    north-primary->north-backup.enabled = true
+This signals to the node that the given clusters are nearby, and prevents the
+node from sending records or configuration to clusters in other data centers.
 
-In the west data center:
+### Example
 
-    east-primary->west-primary.enabled = true
-    north-primary->west-primary.enabled = true
-    west-primary->west-backup.enabled = true
+Say there are three data centers (west, east, north) with two Kafka
+clusters in each data center (west-1, west-2 etc). We can configure MM2
+for active/active replication within each data center, as well as cross data
+center replication (XDCR) as follows:
 
-and so on, to ensure that records are only produced to nearby clusters
-(otherwise, MM2's producers will need to wait longer for ACKs from
-far-away clusters).
+    # mm2.properties
+    clusters: west-1, west-2, east-1, east-2, north-1, north-2
 
-If your clusters are all nearby or in the same data center, you can
-configure all MM2 nodes uniformly. For example, if you have two nearby
-clusters (`primary`, `backup`), you can configure all MM2 nodes as follows:
+    west-1.bootstrap.servers = ...
+    ---%<---
 
-    primary->backup.enabled
-    backup->primary.enabled
+    # active/active in west
+    west-1->west-2.enabled = true
+    west-2->west-1.enabled = true
+
+    # active/active in east
+    east-1->east-2.enabled = true
+    east-2->east-1.enabled = true
+
+    # active/active in north
+    north-1->north-2.enabled = true
+    north-2->north-1.enabled = true
+
+    # XDCR via west-1, east-1, north-1
+    west-1->east-1.enabled = true
+    west-1->north-1.enabled = true
+    east-1->west-1.enabled = true
+    east-1->north-1.enabled = true
+    north-1->west-1.enabled = true
+    north-1->east-1.enabled = true
+
+Then, launch MM2 in each data center as follows:
+
+    # in west:
+    $ ./bin/connect-mirror-maker.sh mm2.properties --clusters west-1 west-2
+
+    # in east:
+    $ ./bin/connect-mirror-maker.sh mm2.properties --clusters east-1 east-2
+
+    # in north:
+    $ ./bin/connect-mirror-maker.sh mm2.properties --clusters north-1 north-2
+    
+With this configuration, records produced to any cluster will be replicated
+within the data center, as well as across to other data centers. By providing
+the `--clusters` parameter, we ensure that each node only produces records to
+nearby clusters.
+
+N.B. that the `--clusters` parameter is not technically required here. MM2 will work fine without it; however, throughput may suffer from "producer lag" between
+data centers, and you may incur unnecessary data transfer costs.
 
 ## Shared configuration
 
@@ -124,7 +158,8 @@ In this case, the two processes will share configuration via cluster `B`.
 Depending on which processes is elected "leader", the result will be
 that either `foo` or `bar` is replicated -- but not both. For this reason,
 it is important to keep configuration consistent across flows to the same
-target cluster.
+target cluster. In most cases, your entire organization should use a single
+MM2 configuration file.
 
 ## Remote topics
 

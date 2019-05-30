@@ -118,7 +118,8 @@ public abstract class SourceTask implements Task {
      * @param metadata {@link RecordMetadata} record metadata returned from the broker
      * @throws InterruptedException
      */
-    public void commitRecord(SourceRecord record, RecordMetadata metadata) {
+    public void commitRecord(SourceRecord record, RecordMetadata metadata)
+            throws InterruptedException {
         // This space intentionally left blank.
     }
 }

@@ -37,14 +37,24 @@ import org.apache.kafka.connect.util.ConnectUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import net.sourceforge.argparse4j.impl.Arguments;
+import net.sourceforge.argparse4j.inf.Namespace;
+import net.sourceforge.argparse4j.inf.ArgumentParser;
+import net.sourceforge.argparse4j.inf.ArgumentParserException;
+import net.sourceforge.argparse4j.ArgumentParsers;
+
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.Map;
 import java.util.HashMap;
+import java.util.Set;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Arrays;
-import java.util.Collections;
+import java.util.Properties;
+import java.util.stream.Collectors;
+import java.io.File;
 
 /**
  * A set of Connect Herders for replicating between multiple Kafka clusters.
@@ -69,23 +79,57 @@ public class MirrorMaker {
     private final String advertisedBaseUrl;
     private final Time time;
     private final MirrorMakerConfig config;
+    private final Set<String> clusters;
+    private final Set<SourceAndTarget> herderPairs;
 
-    public MirrorMaker(MirrorMakerConfig config, Time time) {
+    /**
+     * @param config    MM2 configuration from mm2.properties file
+     * @param clusters  target clusters for this node. These must match cluster
+     *                  aliases as defined in the config. If null or empty list,
+     *                  uses all clusters in the config.
+     * @param time      time source
+     */
+    public MirrorMaker(MirrorMakerConfig config, List<String> clusters, Time time) {
         log.debug("Kafka MirrorMaker instance created");
         this.time = time;
-        this.advertisedBaseUrl = "TODO";
+        this.advertisedBaseUrl = "NOTUSED";
         this.config = config;
-        config.clusterPairs().forEach(x -> addHerder(x));
+        if (clusters != null && !clusters.isEmpty()) {
+            this.clusters = new HashSet<>(clusters);
+        } else {
+            // default to all clusters
+            this.clusters = config.clusters();
+        }
+        log.info("Targeting clusters {}", this.clusters);
+        this.herderPairs = config.clusterPairs().stream()
+            .filter(x -> this.clusters.contains(x.target()))
+            .collect(Collectors.toSet());
+        if (herderPairs.isEmpty()) {
+            throw new IllegalArgumentException("No source->target replication flows.");
+        }
+        this.herderPairs.forEach(x -> addHerder(x));
         shutdownHook = new ShutdownHook();
     }
 
-    public MirrorMaker(Map<String, String> props, Time time) {
-        this(new MirrorMakerConfig(props), time);
+    /**
+     * @param config    MM2 configuration from mm2.properties file
+     * @param clusters  target clusters for this node. These must match cluster
+     *                  aliases as defined in the config. If null or empty list,
+     *                  uses all clusters in the config.
+     * @param time      time source
+     */
+    public MirrorMaker(Map<String, String> config, List<String> clusters, Time time) {
+        this(new MirrorMakerConfig(config), clusters, time);
+    }
+
+    public MirrorMaker(Map<String, String> props, List<String> clusters) {
+        this(props, clusters, Time.SYSTEM);
     }
 
     public MirrorMaker(Map<String, String> props) {
-        this(props, Time.SYSTEM);
+        this(props, null);
     }
+
 
     public void start() {
         log.info("Kafka MirrorMaker starting with {} herders.", herders.size());
@@ -103,7 +147,7 @@ public class MirrorMaker {
             }
         }
         log.info("Configuring connectors...");
-        config.clusterPairs().forEach(x -> configureConnectors(x));
+        herderPairs.forEach(x -> configureConnectors(x));
         log.info("Kafka MirrorMaker started");
     }
 
@@ -128,20 +172,6 @@ public class MirrorMaker {
         } catch (InterruptedException e) {
             log.error("Interrupted waiting for MirrorMaker to shutdown");
         }
-    }
-
-    public void pause(String source, String target) {
-        SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
-        checkHerder(sourceAndTarget);
-        Herder herder = herders.get(sourceAndTarget);
-        CONNECTOR_CLASSES.forEach(x -> herder.pauseConnector(x.getSimpleName()));
-    }
-
-    public void resume(String source, String target) {
-        SourceAndTarget sourceAndTarget = new SourceAndTarget(source, target);
-        checkHerder(sourceAndTarget);
-        Herder herder = herders.get(sourceAndTarget);
-        CONNECTOR_CLASSES.forEach(x -> herder.resumeConnector(x.getSimpleName()));
     }
 
     private void configureConnector(SourceAndTarget sourceAndTarget, Class connectorClass) {
@@ -210,19 +240,29 @@ public class MirrorMaker {
     }
 
     public static void main(String[] args) throws Exception {
-        if (args.length < 1) {
-            log.error("Usage: MirrorMaker mirror-maker.properties");
-            Exit.exit(1);
+        ArgumentParser parser = ArgumentParsers.newArgumentParser("connect-mirror-maker");
+        parser.description("MirrorMaker 2.0 driver");
+        parser.addArgument("config").type(Arguments.fileType().verifyCanRead())
+            .metavar("mm2.properties").required(true)
+            .help("MM2 configuration file.");
+        parser.addArgument("--clusters").nargs("+").metavar("CLUSTER").required(false)
+            .help("Target cluster to use for this node.");
+        Namespace ns;
+        try {
+            ns = parser.parseArgs(args);
+        } catch (ArgumentParserException e) {
+            parser.handleError(e);
+            System.exit(-1);
+            return;
         }
-
+        File configFile = (File) ns.get("config");
+        List<String> clusters = ns.getList("clusters");
         try {
             log.info("Kafka MirrorMaker initializing ...");
 
-            String mirrorMakerPropsFile = args[0];
-            Map<String, String> mirrorMakerProps = !mirrorMakerPropsFile.isEmpty() ?
-                    Utils.propsToStringMap(Utils.loadProps(mirrorMakerPropsFile)) : Collections.emptyMap();
-
-            MirrorMaker mirrorMaker = new MirrorMaker(mirrorMakerProps, Time.SYSTEM);
+            Properties props = Utils.loadProps(configFile.getPath());
+            Map<String, String> config = Utils.propsToStringMap(props);
+            MirrorMaker mirrorMaker = new MirrorMaker(config, clusters, Time.SYSTEM);
             
             try {
                 mirrorMaker.start();
