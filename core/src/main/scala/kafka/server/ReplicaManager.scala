@@ -32,20 +32,21 @@ import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{OffsetCheckpointFile, OffsetCheckpoints, SimpleOffsetCheckpoints}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
+import org.apache.kafka.common.ElectionType
+import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.{LogDirInfo, ReplicaInfo}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
+import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 
 import scala.collection.JavaConverters._
 import scala.collection._
@@ -158,7 +159,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val delayedProducePurgatory: DelayedOperationPurgatory[DelayedProduce],
                      val delayedFetchPurgatory: DelayedOperationPurgatory[DelayedFetch],
                      val delayedDeleteRecordsPurgatory: DelayedOperationPurgatory[DelayedDeleteRecords],
-                     val delayedElectPreferredLeaderPurgatory: DelayedOperationPurgatory[DelayedElectPreferredLeader],
+                     val delayedElectLeaderPurgatory: DelayedOperationPurgatory[DelayedElectLeader],
                      threadNamePrefix: Option[String]) extends Logging with KafkaMetricsGroup {
 
   def this(config: KafkaConfig,
@@ -184,8 +185,8 @@ class ReplicaManager(val config: KafkaConfig,
       DelayedOperationPurgatory[DelayedDeleteRecords](
         purgatoryName = "DeleteRecords", brokerId = config.brokerId,
         purgeInterval = config.deleteRecordsPurgatoryPurgeIntervalRequests),
-      DelayedOperationPurgatory[DelayedElectPreferredLeader](
-        purgatoryName = "ElectPreferredLeader", brokerId = config.brokerId),
+      DelayedOperationPurgatory[DelayedElectLeader](
+        purgatoryName = "ElectLeader", brokerId = config.brokerId),
       threadNamePrefix)
   }
 
@@ -305,11 +306,11 @@ class ReplicaManager(val config: KafkaConfig,
 
   def getLog(topicPartition: TopicPartition): Option[Log] = logManager.getLog(topicPartition)
 
-  def hasDelayedElectionOperations: Boolean = delayedElectPreferredLeaderPurgatory.numDelayed != 0
+  def hasDelayedElectionOperations: Boolean = delayedElectLeaderPurgatory.numDelayed != 0
 
   def tryCompleteElection(key: DelayedOperationKey): Unit = {
-    val completed = delayedElectPreferredLeaderPurgatory.checkAndComplete(key)
-    debug("Request key %s unblocked %d ElectPreferredLeader.".format(key.keyLabel, completed))
+    val completed = delayedElectLeaderPurgatory.checkAndComplete(key)
+    debug("Request key %s unblocked %d ElectLeader.".format(key.keyLabel, completed))
   }
 
   def startup() {
@@ -504,7 +505,7 @@ class ReplicaManager(val config: KafkaConfig,
         val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
 
         // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
-        val producerRequestKeys = entriesPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
+        val producerRequestKeys = entriesPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
 
         // try to complete the request immediately, otherwise put it into the purgatory
         // this is because while the delayed produce operation is being created, new
@@ -704,7 +705,7 @@ class ReplicaManager(val config: KafkaConfig,
       val delayedDeleteRecords = new DelayedDeleteRecords(timeout, deleteRecordsStatus, this, responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed delete records operation
-      val deleteRecordsRequestKeys = offsetPerPartition.keys.map(new TopicPartitionOperationKey(_)).toSeq
+      val deleteRecordsRequestKeys = offsetPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
 
       // try to complete the request immediately, otherwise put it into the purgatory
       // this is because while the delayed delete records operation is being created, new
@@ -883,7 +884,7 @@ class ReplicaManager(val config: KafkaConfig,
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, responseCallback)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed fetch operation
-      val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => new TopicPartitionOperationKey(tp) }
+      val delayedFetchKeys = fetchPartitionStatus.map { case (tp, _) => TopicPartitionOperationKey(tp) }
 
       // try to complete the request immediately, otherwise put it into the purgatory;
       // this is because while the delayed fetch operation is being created, new requests
@@ -1326,7 +1327,7 @@ class ReplicaManager(val config: KafkaConfig,
       }
 
       partitionsToMakeFollower.foreach { partition =>
-        val topicPartitionOperationKey = new TopicPartitionOperationKey(partition.topicPartition)
+        val topicPartitionOperationKey = TopicPartitionOperationKey(partition.topicPartition)
         delayedProducePurgatory.checkAndComplete(topicPartitionOperationKey)
         delayedFetchPurgatory.checkAndComplete(topicPartitionOperationKey)
       }
@@ -1512,7 +1513,7 @@ class ReplicaManager(val config: KafkaConfig,
     delayedFetchPurgatory.shutdown()
     delayedProducePurgatory.shutdown()
     delayedDeleteRecordsPurgatory.shutdown()
-    delayedElectPreferredLeaderPurgatory.shutdown()
+    delayedElectLeaderPurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
     info("Shut down completely")
@@ -1546,29 +1547,45 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  def electPreferredLeaders(controller: KafkaController,
-                            partitions: Set[TopicPartition],
-                            responseCallback: Map[TopicPartition, ApiError] => Unit,
-                            requestTimeout: Long): Unit = {
+  def electLeaders(
+    controller: KafkaController,
+    partitions: Set[TopicPartition],
+    electionType: ElectionType,
+    responseCallback: Map[TopicPartition, ApiError] => Unit,
+    requestTimeout: Int
+  ): Unit = {
 
     val deadline = time.milliseconds() + requestTimeout
 
-    def electionCallback(expectedLeaders: Map[TopicPartition, Int],
-                         results: Map[TopicPartition, ApiError]): Unit = {
+    def electionCallback(results: Map[TopicPartition, Either[ApiError, Int]]): Unit = {
+      val expectedLeaders = mutable.Map.empty[TopicPartition, Int]
+      val failures = mutable.Map.empty[TopicPartition, ApiError]
+      results.foreach {
+        case (partition, Right(leader)) => expectedLeaders += partition -> leader
+        case (partition, Left(error)) => failures += partition -> error
+      }
+
       if (expectedLeaders.nonEmpty) {
-        val watchKeys = expectedLeaders.map{
-          case (tp, _) => new TopicPartitionOperationKey(tp)
-        }.toSeq
-        delayedElectPreferredLeaderPurgatory.tryCompleteElseWatch(
-          new DelayedElectPreferredLeader(deadline - time.milliseconds(), expectedLeaders, results,
-            this, responseCallback),
-          watchKeys)
+        val watchKeys: Seq[TopicPartitionOperationKey] = expectedLeaders.map{
+          case (tp, _) => TopicPartitionOperationKey(tp)
+        }(breakOut)
+
+        delayedElectLeaderPurgatory.tryCompleteElseWatch(
+          new DelayedElectLeader(
+            math.max(0, deadline - time.milliseconds()),
+            expectedLeaders,
+            failures,
+            this,
+            responseCallback
+          ),
+          watchKeys
+        )
       } else {
           // There are no partitions actually being elected, so return immediately
-          responseCallback(results)
+          responseCallback(failures)
       }
     }
 
-    controller.electPreferredLeaders(partitions, electionCallback)
+    controller.electLeaders(partitions, electionType, electionCallback)
   }
 }

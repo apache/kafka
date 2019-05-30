@@ -35,6 +35,7 @@ import kafka.security.auth.{Acl, Authorizer, Resource}
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import Implicits._
+import com.yammer.metrics.Metrics
 import kafka.controller.LeaderIsrAndControllerEpoch
 import kafka.zk._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -1483,4 +1484,10 @@ object TestUtils extends Logging {
       .foldLeft(0.0)((total, metric) => total + metric.metricValue.asInstanceOf[Double])
     total.toLong
   }
+
+  def clearYammerMetrics(): Unit = {
+    for (metricName <- Metrics.defaultRegistry.allMetrics.keySet.asScala)
+      Metrics.defaultRegistry.removeMetric(metricName)
+  }
+
 }

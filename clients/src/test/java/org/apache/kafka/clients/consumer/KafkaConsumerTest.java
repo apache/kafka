@@ -211,6 +211,16 @@ public class KafkaConsumerTest {
     }
 
     @Test
+    public void shouldIgnoreGroupInstanceIdForEmptyGroupId() {
+        Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        config.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "instance_id");
+        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(
+                config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        consumer.close();
+    }
+
+    @Test
     public void testSubscription() {
         KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupId);
 

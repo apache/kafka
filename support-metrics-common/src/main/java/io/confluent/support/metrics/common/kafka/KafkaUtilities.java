@@ -79,8 +79,8 @@ public class KafkaUtilities {
     Objects.requireNonNull(zkClient, "zkClient must not be null");
 
     try {
-      Seq<String> topics = zkClient.getAllTopicsInCluster();
-      return topics.length();
+      scala.collection.Set<String> topics = zkClient.getAllTopicsInCluster();
+      return topics.size();
     } catch (Exception e) {
       log.error("Could not retrieve number of topics from ZooKeeper: {}", e.getMessage());
       return -1L;

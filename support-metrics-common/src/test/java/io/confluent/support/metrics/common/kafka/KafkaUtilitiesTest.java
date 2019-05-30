@@ -13,19 +13,18 @@
  */
 package io.confluent.support.metrics.common.kafka;
 
-import kafka.zk.KafkaZkClient;
-
-import org.apache.kafka.common.TopicPartition;
-import org.junit.Test;
-
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Random;
-
+import java.util.Set;
 import kafka.cluster.Broker;
 import kafka.server.KafkaServer;
-import scala.collection.JavaConversions;
-
+import kafka.zk.KafkaZkClient;
+import org.apache.kafka.common.TopicPartition;
+import org.junit.Test;
+import scala.collection.JavaConverters;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
@@ -77,8 +76,8 @@ public class KafkaUtilitiesTest {
     // Given
     KafkaUtilities kUtil = new KafkaUtilities();
     KafkaZkClient zkClient = mock(KafkaZkClient.class);
-    List<String> zeroTopics = new ArrayList<>();
-    when(zkClient.getAllTopicsInCluster()).thenReturn(JavaConversions.asScalaBuffer(zeroTopics).toList());
+    when(zkClient.getAllTopicsInCluster())
+        .thenReturn(JavaConverters.asScalaSetConverter(Collections.emptySet()).asScala().toSet());
 
     // When/Then
     assertEquals(0L, kUtil.getNumTopics(zkClient));
@@ -89,10 +88,10 @@ public class KafkaUtilitiesTest {
     // Given
     KafkaUtilities kUtil = new KafkaUtilities();
     KafkaZkClient zkClient = mock(KafkaZkClient.class);
-    List<String> topics = new ArrayList<>();
+    Set<String> topics = new HashSet<>();
     topics.add("topic1");
     topics.add("topic2");
-    when(zkClient.getAllTopicsInCluster()).thenReturn(JavaConversions.asScalaBuffer(topics).toList());
+    when(zkClient.getAllTopicsInCluster()).thenReturn(JavaConverters.asScalaSetConverter(topics).asScala().toSet());
 
     // When/Then
     assertEquals(topics.size(), kUtil.getNumTopics(zkClient));
@@ -133,7 +132,7 @@ public class KafkaUtilitiesTest {
     KafkaUtilities kUtil = new KafkaUtilities();
     KafkaZkClient zkClient = mock(KafkaZkClient.class);
     List<Broker> empty = new ArrayList<>();
-    when(zkClient.getAllBrokersInCluster()).thenReturn(JavaConversions.asScalaBuffer(empty).toList());
+    when(zkClient.getAllBrokersInCluster()).thenReturn(JavaConverters.asScalaBufferConverter(empty).asScala().toSeq());
 
     // When/Then
     assertTrue(kUtil.getBootstrapServers(zkClient, ANY_MAX_NUM_SERVERS).isEmpty());

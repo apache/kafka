@@ -14,20 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.errors;
 
-package org.apache.kafka.clients.admin;
+public class EligibleLeadersNotAvailableException extends InvalidMetadataException {
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-import java.util.Collection;
+    public EligibleLeadersNotAvailableException(String message) {
+        super(message);
+    }
 
-/**
- * Options for {@link AdminClient#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
- *
- * @deprecated Since 2.4.0. Use {@link AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
- */
-@InterfaceStability.Evolving
-@Deprecated
-public class ElectPreferredLeadersOptions extends AbstractOptions<ElectPreferredLeadersOptions> {
+    public EligibleLeadersNotAvailableException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

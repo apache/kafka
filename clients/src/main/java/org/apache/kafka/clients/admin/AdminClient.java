@@ -17,6 +17,14 @@
 
 package org.apache.kafka.clients.admin;
 
+import java.time.Duration;
+import java.util.Collection;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.TimeUnit;
+import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
@@ -25,12 +33,6 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigResource;
-
-import java.time.Duration;
-import java.util.Collection;
-import java.util.Map;
-import java.util.Properties;
-import java.util.concurrent.TimeUnit;
 
 /**
  * The administrative client for Kafka, which supports managing and inspecting topics, brokers, configurations and ACLs.
@@ -839,35 +841,75 @@ public abstract class AdminClient implements AutoCloseable {
     }
 
     /**
-     * Elect the preferred broker of the given {@code partitions} as leader, or
-     * elect the preferred broker for all partitions as leader if the argument to {@code partitions} is null.
+     * Elect the preferred replica as leader for topic partitions.
      *
-     * This is a convenience method for {@link #electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}
-     * with default options.
-     * See the overload for more details.
+     * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
+     * with preferred election type and default options.
+     *
+     * This operation is supported by brokers with version 2.2.0 or higher.
      *
      * @param partitions      The partitions for which the preferred leader should be elected.
      * @return                The ElectPreferredLeadersResult.
+     * @deprecated            Since 2.4.0. Use {@link #electLeaders(ElectionType, Set)}.
      */
+    @Deprecated
     public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions) {
         return electPreferredLeaders(partitions, new ElectPreferredLeadersOptions());
     }
 
     /**
-     * Elect the preferred broker of the given {@code partitions} as leader, or
-     * elect the preferred broker for all partitions as leader if the argument to {@code partitions} is null.
+     * Elect the preferred replica as leader for topic partitions.
      *
-     * This operation is not transactional so it may succeed for some partitions while fail for others.
-     *
-     * It may take several seconds after this method returns
-     * success for all the brokers in the cluster to become aware that the partitions have new leaders.
-     * During this time, {@link AdminClient#describeTopics(Collection)}
-     * may not return information about the partitions' new leaders.
+     * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
+     * with preferred election type.
      *
      * This operation is supported by brokers with version 2.2.0 or higher.
      *
-     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
-     * the returned {@code ElectPreferredLeadersResult}:</p>
+     * @param partitions      The partitions for which the preferred leader should be elected.
+     * @param options         The options to use when electing the preferred leaders.
+     * @return                The ElectPreferredLeadersResult.
+     * @deprecated            Since 2.4.0. Use {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}.
+     */
+    @Deprecated
+    public ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions,
+                                                             ElectPreferredLeadersOptions options) {
+        final ElectLeadersOptions newOptions = new ElectLeadersOptions();
+        newOptions.timeoutMs(options.timeoutMs());
+        final Set<TopicPartition> topicPartitions = partitions == null ? null : new HashSet<>(partitions);
+
+        return new ElectPreferredLeadersResult(electLeaders(ElectionType.PREFERRED, topicPartitions, newOptions));
+    }
+
+    /**
+     * Elect a replica as leader for topic partitions.
+     *
+     * This is a convenience method for {@link #electLeaders(ElectionType, Set, ElectLeadersOptions)}
+     * with default options.
+     *
+     * @param electionType            The type of election to conduct.
+     * @param partitions              The topics and partitions for which to conduct elections.
+     * @return                        The ElectLeadersResult.
+     */
+    public ElectLeadersResult electLeaders(ElectionType electionType, Set<TopicPartition> partitions) {
+        return electLeaders(electionType, partitions, new ElectLeadersOptions());
+    }
+
+    /**
+     * Elect a replica as leader for the given {@code partitions}, or for all partitions if the argumentl
+     * to {@code partitions} is null.
+     *
+     * This operation is not transactional so it may succeed for some partitions while fail for others.
+     *
+     * It may take several seconds after this method returns success for all the brokers in the cluster
+     * to become aware that the partitions have new leaders. During this time,
+     * {@link AdminClient#describeTopics(Collection)} may not return information about the partitions'
+     * new leaders.
+     *
+     * This operation is supported by brokers with version 2.2.0 or later if preferred eleciton is use;
+     * otherwise the brokers most be 2.4.0 or higher.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the future obtained
+     * from the returned {@code ElectLeadersResult}:</p>
      * <ul>
      *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
      *   if the authenticated user didn't have alter access to the cluster.</li>
@@ -883,12 +925,15 @@ public abstract class AdminClient implements AutoCloseable {
      *   if the preferred leader was not alive or not in the ISR.</li>
      * </ul>
      *
-     * @param partitions      The partitions for which the preferred leader should be elected.
-     * @param options         The options to use when electing the preferred leaders.
-     * @return                The ElectPreferredLeadersResult.
+     * @param electionType            The type of election to conduct.
+     * @param partitions              The topics and partitions for which to conduct elections.
+     * @param options                 The options to use when electing the leaders.
+     * @return                        The ElectLeadersResult.
      */
-    public abstract ElectPreferredLeadersResult electPreferredLeaders(Collection<TopicPartition> partitions,
-                                                                      ElectPreferredLeadersOptions options);
+    public abstract ElectLeadersResult electLeaders(
+            ElectionType electionType,
+            Set<TopicPartition> partitions,
+            ElectLeadersOptions options);
 
     /**
      * Get the metrics kept by the adminClient

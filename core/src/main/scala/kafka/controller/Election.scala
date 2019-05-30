@@ -33,8 +33,8 @@ object Election {
     leaderIsrAndControllerEpochOpt match {
       case Some(leaderIsrAndControllerEpoch) =>
         val isr = leaderIsrAndControllerEpoch.leaderAndIsr.isr
-        val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(assignment, isr,
-          liveReplicas.toSet, uncleanLeaderElectionEnabled, controllerContext)
+        val leaderOpt = PartitionLeaderElectionAlgorithms.offlinePartitionLeaderElection(
+          assignment, isr, liveReplicas.toSet, uncleanLeaderElectionEnabled, controllerContext)
         val newLeaderAndIsrOpt = leaderOpt.map { leader =>
           val newIsr = if (isr.contains(leader)) isr.filter(replica => controllerContext.isReplicaOnline(replica, partition))
           else List(leader)
@@ -57,10 +57,13 @@ object Election {
    *
    * @return The election results
    */
-  def leaderForOffline(controllerContext: ControllerContext,
-                       partitionsWithUncleanLeaderElectionState: Seq[(TopicPartition, Option[LeaderIsrAndControllerEpoch], Boolean)]): Seq[ElectionResult] = {
-    partitionsWithUncleanLeaderElectionState.map { case (partition, leaderIsrAndControllerEpochOpt, uncleanLeaderElectionEnabled) =>
-      leaderForOffline(partition, leaderIsrAndControllerEpochOpt, uncleanLeaderElectionEnabled, controllerContext)
+  def leaderForOffline(
+    controllerContext: ControllerContext,
+    partitionsWithUncleanLeaderElectionState: Seq[(TopicPartition, Option[LeaderIsrAndControllerEpoch], Boolean)]
+  ): Seq[ElectionResult] = {
+    partitionsWithUncleanLeaderElectionState.map {
+      case (partition, leaderIsrAndControllerEpochOpt, uncleanLeaderElectionEnabled) =>
+        leaderForOffline(partition, leaderIsrAndControllerEpochOpt, uncleanLeaderElectionEnabled, controllerContext)
     }
   }
 

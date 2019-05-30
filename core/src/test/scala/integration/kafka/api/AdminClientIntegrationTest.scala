@@ -35,7 +35,10 @@ import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.clients.producer.ProducerRecord
-import org.apache.kafka.common.{ConsumerGroupState, TopicPartition, TopicPartitionReplica}
+import org.apache.kafka.common.ConsumerGroupState
+import org.apache.kafka.common.ElectionType
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.TopicPartitionReplica
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
@@ -1295,7 +1298,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       zkClient.createPartitionReassignment(m)
       TestUtils.waitUntilTrue(
         () => preferredLeader(partition1) == preferred && preferredLeader(partition2) == preferred,
-        s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}", 10000)
+        s"Expected preferred leader to become $preferred, but is ${preferredLeader(partition1)} and ${preferredLeader(partition2)}",
+        10000)
       // Check the leader hasn't moved
       assertEquals(prior1, currentLeader(partition1))
       assertEquals(prior2, currentLeader(partition2))
@@ -1306,48 +1310,44 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(0, currentLeader(partition2))
 
     // Noop election
-    var electResult = client.electPreferredLeaders(asList(partition1))
-    electResult.partitionResult(partition1).get()
+    var electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition1).asJava)
+    var exception = electResult.partitions.get.get(partition1).get
+    assertEquals(classOf[ElectionNotNeededException], exception.getClass)
+    assertEquals("Leader election not needed for topic partition", exception.getMessage)
     assertEquals(0, currentLeader(partition1))
 
     // Noop election with null partitions
-    electResult = client.electPreferredLeaders(null)
-    electResult.partitionResult(partition1).get()
+    electResult = client.electLeaders(ElectionType.PREFERRED, null)
+    assertTrue(electResult.partitions.get.isEmpty)
     assertEquals(0, currentLeader(partition1))
-    electResult.partitionResult(partition2).get()
     assertEquals(0, currentLeader(partition2))
 
     // Now change the preferred leader to 1
     changePreferredLeader(prefer1)
 
     // meaningful election
-    electResult = client.electPreferredLeaders(asList(partition1))
-    assertEquals(Set(partition1).asJava, electResult.partitions.get)
-    electResult.partitionResult(partition1).get()
+    electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition1).asJava)
+    assertEquals(Set(partition1).asJava, electResult.partitions.get.keySet)
+    assertFalse(electResult.partitions.get.get(partition1).isPresent)
     waitForLeaderToBecome(partition1, 1)
 
     // topic 2 unchanged
-    var e = intercept[ExecutionException](electResult.partitionResult(partition2).get()).getCause
-    assertEquals(classOf[UnknownTopicOrPartitionException], e.getClass)
-    assertEquals("Preferred leader election for partition \"elect-preferred-leaders-topic-2-0\" was not attempted",
-      e.getMessage)
+    assertFalse(electResult.partitions.get.containsKey(partition2))
     assertEquals(0, currentLeader(partition2))
 
     // meaningful election with null partitions
-    electResult = client.electPreferredLeaders(null)
-    assertEquals(Set(partition1, partition2), electResult.partitions.get.asScala.filterNot(_.topic == "__consumer_offsets"))
-    electResult.partitionResult(partition1).get()
-    waitForLeaderToBecome(partition1, 1)
-    electResult.partitionResult(partition2).get()
+    electResult = client.electLeaders(ElectionType.PREFERRED, null)
+    assertEquals(Set(partition2), electResult.partitions.get.keySet.asScala)
+    assertFalse(electResult.partitions.get.get(partition2).isPresent)
     waitForLeaderToBecome(partition2, 1)
 
     // unknown topic
     val unknownPartition = new TopicPartition("topic-does-not-exist", 0)
-    electResult = client.electPreferredLeaders(asList(unknownPartition))
-    assertEquals(Set(unknownPartition).asJava, electResult.partitions.get)
-    e = intercept[ExecutionException](electResult.partitionResult(unknownPartition).get()).getCause
-    assertEquals(classOf[UnknownTopicOrPartitionException], e.getClass)
-    assertEquals("The partition does not exist.", e.getMessage)
+    electResult = client.electLeaders(ElectionType.PREFERRED, Set(unknownPartition).asJava)
+    assertEquals(Set(unknownPartition).asJava, electResult.partitions.get.keySet)
+    exception = electResult.partitions.get.get(unknownPartition).get
+    assertEquals(classOf[UnknownTopicOrPartitionException], exception.getClass)
+    assertEquals("The partition does not exist.", exception.getMessage)
     assertEquals(1, currentLeader(partition1))
     assertEquals(1, currentLeader(partition2))
 
@@ -1355,18 +1355,18 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     changePreferredLeader(prefer2)
 
     // mixed results
-    electResult = client.electPreferredLeaders(asList(unknownPartition, partition1))
-    assertEquals(Set(unknownPartition, partition1).asJava, electResult.partitions.get)
+    electResult = client.electLeaders(ElectionType.PREFERRED, Set(unknownPartition, partition1).asJava)
+    assertEquals(Set(unknownPartition, partition1).asJava, electResult.partitions.get.keySet)
     waitForLeaderToBecome(partition1, 2)
     assertEquals(1, currentLeader(partition2))
-    e = intercept[ExecutionException](electResult.partitionResult(unknownPartition).get()).getCause
-    assertEquals(classOf[UnknownTopicOrPartitionException], e.getClass)
-    assertEquals("The partition does not exist.", e.getMessage)
+    exception = electResult.partitions.get.get(unknownPartition).get
+    assertEquals(classOf[UnknownTopicOrPartitionException], exception.getClass)
+    assertEquals("The partition does not exist.", exception.getMessage)
 
-    // dupe partitions
-    electResult = client.electPreferredLeaders(asList(partition2, partition2))
-    assertEquals(Set(partition2).asJava, electResult.partitions.get)
-    electResult.partitionResult(partition2).get()
+    // elect preferred leader for partition 2
+    electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition2).asJava)
+    assertEquals(Set(partition2).asJava, electResult.partitions.get.keySet)
+    assertFalse(electResult.partitions.get.get(partition2).isPresent)
     waitForLeaderToBecome(partition2, 2)
 
     // Now change the preferred leader to 1
@@ -1374,34 +1374,32 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     // but shut it down...
     servers(1).shutdown()
     waitUntilTrue (() => {
-      val description = client.describeTopics(Set(partition1.topic, partition2.topic).asJava).all().get()
+      val description = client.describeTopics(Set(partition1.topic, partition2.topic).asJava).all.get
       val isr = description.asScala.values.flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
       !isr.exists(_.id == 1)
     }, "Expect broker 1 to no longer be in any ISR")
 
     // ... now what happens if we try to elect the preferred leader and it's down?
-    val shortTimeout = new ElectPreferredLeadersOptions().timeoutMs(10000)
-    electResult = client.electPreferredLeaders(asList(partition1), shortTimeout)
-    assertEquals(Set(partition1).asJava, electResult.partitions.get)
-    e = intercept[ExecutionException](electResult.partitionResult(partition1).get()).getCause
-    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
-    assertTrue(s"Wrong message ${e.getMessage}", e.getMessage.contains(
+    val shortTimeout = new ElectLeadersOptions().timeoutMs(10000)
+    electResult = client.electLeaders(ElectionType.PREFERRED, Set(partition1).asJava, shortTimeout)
+    assertEquals(Set(partition1).asJava, electResult.partitions.get.keySet)
+    exception = electResult.partitions.get.get(partition1).get
+    assertEquals(classOf[PreferredLeaderNotAvailableException], exception.getClass)
+    assertTrue(s"Wrong message ${exception.getMessage}", exception.getMessage.contains(
       "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
     assertEquals(2, currentLeader(partition1))
 
     // preferred leader unavailable with null argument
-    electResult = client.electPreferredLeaders(null, shortTimeout)
-    e = intercept[ExecutionException](electResult.partitions.get()).getCause
-    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
+    electResult = client.electLeaders(ElectionType.PREFERRED, null, shortTimeout)
 
-    e = intercept[ExecutionException](electResult.partitionResult(partition1).get()).getCause
-    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
-    assertTrue(s"Wrong message ${e.getMessage}", e.getMessage.contains(
+    exception = electResult.partitions.get.get(partition1).get
+    assertEquals(classOf[PreferredLeaderNotAvailableException], exception.getClass)
+    assertTrue(s"Wrong message ${exception.getMessage}", exception.getMessage.contains(
       "Failed to elect leader for partition elect-preferred-leaders-topic-1-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
 
-    e = intercept[ExecutionException](electResult.partitionResult(partition2).get()).getCause
-    assertEquals(classOf[PreferredLeaderNotAvailableException], e.getClass)
-    assertTrue(s"Wrong message ${e.getMessage}", e.getMessage.contains(
+    exception = electResult.partitions.get.get(partition2).get
+    assertEquals(classOf[PreferredLeaderNotAvailableException], exception.getClass)
+    assertTrue(s"Wrong message ${exception.getMessage}", exception.getMessage.contains(
       "Failed to elect leader for partition elect-preferred-leaders-topic-2-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
 
     assertEquals(2, currentLeader(partition1))
