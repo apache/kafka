@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.integration;
 
 import kafka.utils.MockTime;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
@@ -28,9 +27,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.Transformer;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -90,28 +87,7 @@ public class KStreamRestorationIntegrationTest {
 
     @Test
     public void shouldRestoreNullRecord() throws InterruptedException, ExecutionException {
-        final KStream<Integer, byte[]> sourceStream = builder.stream(INPUT_TOPIC);
-        final KStream<Integer, byte[]> transformedStream =
-                sourceStream.transform(() -> new Transformer<Integer, byte[], KeyValue<Integer, byte[]>>() {
-                    private KeyValueStore<Integer, byte[]> state;
-
-                    @SuppressWarnings("unchecked")
-                    @Override
-                    public void init(final ProcessorContext context) {
-                        state = (KeyValueStore<Integer, byte[]>) context.getStateStore(STATE_STORE_NAME);
-                    }
-
-                    @Override
-                    public KeyValue<Integer, byte[]> transform(final Integer key, final byte[] value) {
-                        state.put(key, value);
-                        return new KeyValue<>(key, value);
-                    }
-
-                    @Override
-                    public void close() {
-                    }
-                }, STATE_STORE_NAME);
-        transformedStream.to(OUTPUT_TOPIC);
+        builder.table(INPUT_TOPIC).toStream().to(OUTPUT_TOPIC);
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), IntegerSerializer.class, ByteArraySerializer.class);
 
