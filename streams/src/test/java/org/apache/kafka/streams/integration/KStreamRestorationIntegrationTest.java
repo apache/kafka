@@ -69,7 +69,6 @@ public class KStreamRestorationIntegrationTest {
     @Before
     public void setUp() throws Exception {
         final Properties props = new Properties();
-        props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
                 APPLICATION_ID,
