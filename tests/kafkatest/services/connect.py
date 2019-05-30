@@ -104,10 +104,11 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
         """
         self.external_config_template_func = external_config_template_func
 
-    def rest_loaded(self, node):
+    def listening(self, node):
         try:
             self.list_connectors(node)
-            self.logger.debug("Checking whether REST resources are loaded...")
+            self.logger.debug("Connect worker started serving REST at: '%s:%s')", node.account.hostname,
+                              self.CONNECT_REST_PORT)
             return True
         except requests.exceptions.ConnectionError:
             self.logger.debug("REST resources are not loaded yet")
@@ -131,7 +132,7 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
 
     def start_and_wait_to_load_rest(self, node, worker_type, remote_connector_configs):
         self.start_and_return_immediately(node, worker_type, remote_connector_configs)
-        wait_until(lambda: self.rest_loaded(node), timeout_sec=self.startup_timeout_sec,
+        wait_until(lambda: self.listening(node), timeout_sec=self.startup_timeout_sec,
                    err_msg="Kafka Connect failed to start on node: %s in condition mode: %s" %
                    (str(node.account), self.startup_mode))
 
