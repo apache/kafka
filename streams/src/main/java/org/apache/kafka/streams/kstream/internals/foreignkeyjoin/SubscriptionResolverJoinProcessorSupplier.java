@@ -19,33 +19,23 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Murmur3;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
+import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.internals.ProcessorContextImpl;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.WindowStore;
-
-import java.security.NoSuchAlgorithmException;
-import java.util.Random;
 
 public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSupplier<K, SubscriptionResponseWrapper<VO>> {
-    private final String stateStoreName;
+    private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
     private final Serializer<V> valueSerializer;
     private final ValueJoiner<V, VO, VR> joiner;
 
-    public SubscriptionResolverJoinProcessorSupplier(final String stateStoreName,
+    public SubscriptionResolverJoinProcessorSupplier(final KTableValueGetterSupplier<K, V> valueGetterSupplier,
                                                      final Serializer<V> valueSerializer,
                                                      final ValueJoiner<V, VO, VR> joiner) {
-        this.stateStoreName = stateStoreName;
+        this.valueGetterSupplier = valueGetterSupplier;
         this.valueSerializer = valueSerializer;
         this.joiner = joiner;
     }
@@ -54,36 +44,18 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
     public Processor<K, SubscriptionResponseWrapper<VO>> get() {
         return new AbstractProcessor<K, SubscriptionResponseWrapper<VO>>() {
 
-            //private KeyValueStore<K, V> originalSource;
-            //TODO - How to handle the other various store types?
-            private TimestampedKeyValueStore<K,V> originalSource;
+            private KTableValueGetter<K,V> valueGetter;
 
             @Override
             public void init(final ProcessorContext context) {
                 super.init(context);
-                originalSource = (TimestampedKeyValueStore<K,V>)context.getStateStore(stateStoreName);
+                valueGetter = valueGetterSupplier.get();
+                valueGetter.init(context);
             }
 
             @Override
             public void process(K key, SubscriptionResponseWrapper<VO> value) {
-
-//                final StateStore store = stateManager.getStore(name);
-//                if (store instanceof TimestampedKeyValueStore) {
-//                    return new ProcessorContextImpl.TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store);
-//                } else if (store instanceof KeyValueStore) {
-//                    return new ProcessorContextImpl.KeyValueStoreReadWriteDecorator((KeyValueStore) store);
-//                } else if (store instanceof TimestampedWindowStore) {
-//                    return new ProcessorContextImpl.TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store);
-//                } else if (store instanceof WindowStore) {
-//                    return new ProcessorContextImpl.WindowStoreReadWriteDecorator((WindowStore) store);
-//                } else if (store instanceof SessionStore) {
-//                    return new ProcessorContextImpl.SessionStoreReadWriteDecorator((SessionStore) store);
-//                }
-//
-//                return store;
-
-
-                final V currentValue = originalSource.get(key).value();
+                final V currentValue = valueGetter.get(key);
                 long[] currentHash = (currentValue == null ?
                         Murmur3.hash128(new byte[]{}):
                         Murmur3.hash128(valueSerializer.serialize(context().topic(), currentValue)));

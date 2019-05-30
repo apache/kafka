@@ -367,8 +367,9 @@ public class KTableKTableForeignKeyInnerJoinIntegrationTest {
             table1Mat.withKeySerde(Serdes.Integer()).withValueSerde(Serdes.Float());
 
         final KTable<Integer, Float> table1 = builder.table(TABLE_1,
-                Consumed.with(Serdes.Integer(), Serdes.Float()),
-                table1Mat);
+                Consumed.with(Serdes.Integer(), Serdes.Float()));
+//                ,
+//                table1Mat);
 
         Materialized<String, Long, KeyValueStore<Bytes, byte[]>> table2Mat = Materialized.as("table-2-test");
         table2Mat.withKeySerde(Serdes.String()).withValueSerde(Serdes.Long());

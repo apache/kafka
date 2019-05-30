@@ -881,19 +881,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final RocksDbKeyValueBytesStoreSupplier thisRocksDBRef = new RocksDbKeyValueBytesStoreSupplier(thisStateStoreName, false); //Dont need timestamped store.
 
-//        final StateStore prefixScannableDBRef = thisRocksDBRef.get();
-        StoreBuilder<KeyValueStore<Bytes, byte[]>> prefixScanStoreBuilder = Stores.keyValueStoreBuilder(thisRocksDBRef,
+        final StoreBuilder<KeyValueStore<Bytes, byte[]>> prefixScanStoreBuilder = Stores.keyValueStoreBuilder(thisRocksDBRef,
                 combinedKeySerde,
                 new SubscriptionWrapperSerde());
-//        myStore.build();
-//        final Materialized<CombinedKey<KO, K>, SubscriptionWrapper, KeyValueStore<Bytes, byte[]>> foreignMaterialized =
-//            Materialized.<CombinedKey<KO, K>, SubscriptionWrapper>as(thisRocksDBRef)
-//                .withKeySerde(combinedKeySerde)
-//                .withValueSerde(new SubscriptionWrapperSerde());
-//        final MaterializedInternal<CombinedKey<KO, K>, SubscriptionWrapper, KeyValueStore<Bytes, byte[]>> repartitionedPrefixScannableStore =
-//                new MaterializedInternal<>(foreignMaterialized);
-
-
 
         //Performs other-table/foreign-key-driven updates
         final ProcessorSupplier<KO, Change<VO>> prefixScanProcessorSupplier =
@@ -907,7 +897,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String finalRepartitionSinkName = builder.newProcessorName(SINK_NAME + finalRepartitionerName);
 
         //Create the processor to resolve the subscription updates.
-        final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessor = new SubscriptionResolverJoinProcessorSupplier<>(queryableStoreName, valueSerde().serializer(), joiner);
+        final KTableValueGetterSupplier<K, V> thisKTableValueGetterSupplier = this.valueGetterSupplier();
+
+        final SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> resolverProcessor = new SubscriptionResolverJoinProcessorSupplier<>(thisKTableValueGetterSupplier, valueSerde().serializer(), joiner);
         final String resolverProcessorName = builder.newProcessorName(KTableImpl.SOURCE_NAME + "resolver");
 
         final KTableSource<K, VR> outputProcessor = new KTableSource<>(materializedInternal.storeName(), materializedInternal.queryableStoreName());
@@ -1005,7 +997,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 outputProcessorParameters.processorName(),
                 outputProcessorParameters,
                 storeBuilder,
-                new String[]{this.queryableStoreName}  //Is this right? The TableProcessorNode will try to do something with this???
+                thisKTableValueGetterSupplier.storeNames()
         );
 
         builder.addGraphNode(streamsGraphNode, repartitionNode);
@@ -1016,19 +1008,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         joinerParentNodes.add(oneToOneNode);
         builder.addGraphNode(joinerParentNodes, fkSinkAndResolveNode);
         builder.addGraphNode(fkSinkAndResolveNode, outputTableNode);
-        /*
-        // we can inherit parent key serde if user do not provide specific overrides
-        return new KTableImpl<K, Change<VR>, VR>(
-            kTableKTableJoinNode.nodeName(),
-            kTableKTableJoinNode.keySerde(),
-            kTableKTableJoinNode.valueSerde(),
-            allSourceNodes,
-            kTableKTableJoinNode.queryableStoreName(),
-            kTableKTableJoinNode.joinMerger(),
-            kTableKTableJoinNode,
-            builder
-        );
-         */
 
         return new KTableImpl<K,V,VR>(
                 outputProcessorName,
