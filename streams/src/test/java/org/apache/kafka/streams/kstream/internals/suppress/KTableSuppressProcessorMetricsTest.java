@@ -22,10 +22,13 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
+import org.apache.kafka.streams.kstream.internals.KTableImpl;
+import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.apache.kafka.test.MockInternalProcessorContext;
+import org.easymock.EasyMock;
 import org.hamcrest.Matcher;
 import org.junit.Test;
 
@@ -141,11 +144,13 @@ public class KTableSuppressProcessorMetricsTest {
             .withLoggingDisabled()
             .build();
 
-        final KTableSuppressProcessor<String, Long> processor =
-            new KTableSuppressProcessor<>(
+        final KTableImpl<String, ?, Long> mock = EasyMock.mock(KTableImpl.class);
+        final Processor<String, Change<Long>> processor =
+            new KTableSuppressProcessorSupplier<>(
                 (SuppressedInternal<String>) Suppressed.<String>untilTimeLimit(Duration.ofDays(100), maxRecords(1)),
-                storeName
-            );
+                storeName,
+                mock
+            ).get();
 
         final MockInternalProcessorContext context = new MockInternalProcessorContext();
         context.setCurrentNode(new ProcessorNode("testNode"));
@@ -164,9 +169,9 @@ public class KTableSuppressProcessorMetricsTest {
 
             verifyMetric(metrics, EVICTION_RATE_METRIC, is(0.0));
             verifyMetric(metrics, EVICTION_TOTAL_METRIC, is(0.0));
-            verifyMetric(metrics, BUFFER_SIZE_AVG_METRIC, is(25.5));
-            verifyMetric(metrics, BUFFER_SIZE_CURRENT_METRIC, is(51.0));
-            verifyMetric(metrics, BUFFER_SIZE_MAX_METRIC, is(51.0));
+            verifyMetric(metrics, BUFFER_SIZE_AVG_METRIC, is(29.5));
+            verifyMetric(metrics, BUFFER_SIZE_CURRENT_METRIC, is(59.0));
+            verifyMetric(metrics, BUFFER_SIZE_MAX_METRIC, is(59.0));
             verifyMetric(metrics, BUFFER_COUNT_AVG_METRIC, is(0.5));
             verifyMetric(metrics, BUFFER_COUNT_CURRENT_METRIC, is(1.0));
             verifyMetric(metrics, BUFFER_COUNT_MAX_METRIC, is(1.0));
@@ -180,9 +185,9 @@ public class KTableSuppressProcessorMetricsTest {
 
             verifyMetric(metrics, EVICTION_RATE_METRIC, greaterThan(0.0));
             verifyMetric(metrics, EVICTION_TOTAL_METRIC, is(1.0));
-            verifyMetric(metrics, BUFFER_SIZE_AVG_METRIC, is(49.0));
-            verifyMetric(metrics, BUFFER_SIZE_CURRENT_METRIC, is(47.0));
-            verifyMetric(metrics, BUFFER_SIZE_MAX_METRIC, is(98.0));
+            verifyMetric(metrics, BUFFER_SIZE_AVG_METRIC, is(57.0));
+            verifyMetric(metrics, BUFFER_SIZE_CURRENT_METRIC, is(55.0));
+            verifyMetric(metrics, BUFFER_SIZE_MAX_METRIC, is(114.0));
             verifyMetric(metrics, BUFFER_COUNT_AVG_METRIC, is(1.0));
             verifyMetric(metrics, BUFFER_COUNT_CURRENT_METRIC, is(1.0));
             verifyMetric(metrics, BUFFER_COUNT_MAX_METRIC, is(2.0));
