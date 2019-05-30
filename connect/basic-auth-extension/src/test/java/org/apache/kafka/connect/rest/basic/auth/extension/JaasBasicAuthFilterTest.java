@@ -147,7 +147,7 @@ public class JaasBasicAuthFilterTest {
     public void testPostWithoutAppropriateCredential() throws IOException {
         EasyMock.expect(requestContext.getMethod()).andReturn(HttpMethod.POST);
         EasyMock.expect(requestContext.getUriInfo()).andReturn(uriInfo);
-        EasyMock.expect(uriInfo.getPath()).andReturn("local:randomport/connectors/connName/tasks");
+        EasyMock.expect(uriInfo.getPath()).andReturn("connectors/connName/tasks");
         PowerMock.replayAll();
         jaasBasicAuthFilter.filter(requestContext);
         EasyMock.verify(requestContext);
