@@ -1,0 +1,5 @@
+{
+    "project_id": "kafka10",
+    "conduit_uri": "https://code.uberinternal.com/",
+        "history.immutable": false
+}
