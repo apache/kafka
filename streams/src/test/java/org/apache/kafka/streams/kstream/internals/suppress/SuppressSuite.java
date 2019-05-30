@@ -26,6 +26,14 @@ import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBufferTest;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 
+/**
+ * This suite runs all the tests related to the Suppression feature.
+ *
+ * It can be used from an IDE to selectively just run these tests when developing code related to Suppress.
+ * 
+ * If desired, it can also be added to a Gradle build task, although this isn't strictly necessary, since all
+ * these tests are already included in the `:streams:test` task.
+ */
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
     KTableSuppressProcessorMetricsTest.class,
