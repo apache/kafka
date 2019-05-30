@@ -283,7 +283,7 @@ public class MirrorSourceConnector extends SourceConnector {
             .filter(x -> shouldReplicateTopicConfigurationProperty(x.getKey()))
             .collect(Collectors.toMap(x ->
                 new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), x -> x.getValue()));
-        log.info("Syncing configs for {} topics.", configs.size());
+        log.trace("Syncing configs for {} topics.", configs.size());
         synchronized (targetAdminClient) {
             targetAdminClient.alterConfigs(configs).values().forEach((k, v) -> v.whenComplete((x, e) -> {
                 if (e != null) {
@@ -295,7 +295,7 @@ public class MirrorSourceConnector extends SourceConnector {
 
     private void updateTopicAcls(List<AclBinding> bindings)
             throws InterruptedException, ExecutionException {
-        log.info("Syncing {} topic ACL bindings.", bindings.size());
+        log.trace("Syncing {} topic ACL bindings.", bindings.size());
         synchronized (targetAdminClient) {
             targetAdminClient.createAcls(bindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
                 if (e != null) {

@@ -107,18 +107,19 @@ public class MirrorSourceTask extends SourceTask {
     }
 
     private void cleanup() {
-        lock.lock();
-        consumer.close();
         try {
+            lock.lock();
+            consumer.close();
             // re-use the poll-timeout to approximate round-trip time
             if (!outstandingOffsetSyncs.tryAcquire(MAX_OUTSTANDING_OFFSET_SYNCS, 2 * pollTimeout.toMillis(),
                     TimeUnit.MILLISECONDS)) {
                 log.warn("Timed out waiting for outstanding offset syncs.");
             }
+            offsetProducer.close();
         } catch (InterruptedException e) {
             log.info("Interrupted waiting for outstanding offset syncs.");
         } finally {
-            offsetProducer.close();
+            lock.unlock();
         }
     }
    
@@ -145,7 +146,7 @@ public class MirrorSourceTask extends SourceTask {
             lock.unlock();
         }
     }
-
+ 
     @Override
     public void commitRecord(SourceRecord record, RecordMetadata metadata) {
         if (!metadata.hasOffset()) {
@@ -185,6 +186,9 @@ public class MirrorSourceTask extends SourceTask {
         offsetProducer.send(record, (x, e) -> {
             if (e != null) {
                 log.error("Failure sending offset sync.", e);
+            } else {
+                log.trace("Sync'd offsets for {}: {}=={}", topicPartition,
+                    upstreamOffset, downstreamOffset);
             }
             outstandingOffsetSyncs.release();
         });
@@ -242,9 +246,9 @@ public class MirrorSourceTask extends SourceTask {
             long upstreamStep = upstreamOffset - lastSyncUpstreamOffset;
             long downstreamTargetOffset = lastSyncDownstreamOffset + upstreamStep;
             if (lastSyncDownstreamOffset == -1L
-                || downstreamOffset - downstreamTargetOffset > maxOffsetLag
-                || upstreamOffset - previousUpstreamOffset != 1L
-                || downstreamOffset < previousDownstreamOffset) {
+                    || downstreamOffset - downstreamTargetOffset > maxOffsetLag
+                    || upstreamOffset - previousUpstreamOffset != 1L
+                    || downstreamOffset < previousDownstreamOffset) {
                 lastSyncUpstreamOffset = upstreamOffset;
                 lastSyncDownstreamOffset = downstreamOffset;
                 shouldSyncOffsets = true;
