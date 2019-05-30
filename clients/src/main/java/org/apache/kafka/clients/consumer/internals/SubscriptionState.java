@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
+import org.apache.kafka.common.requests.EpochEndOffset;
 import org.apache.kafka.common.requests.IsolationLevel;
 import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
@@ -315,7 +316,7 @@ public class SubscriptionState {
         return Collections.emptySet();
     }
 
-    public Set<TopicPartition> pausedPartitions() {
+    public synchronized Set<TopicPartition> pausedPartitions() {
         return collectPartitions(TopicPartitionState::isPaused, Collectors.toSet());
     }
 
@@ -409,7 +410,48 @@ public class SubscriptionState {
         return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
     }
 
-    synchronized boolean awaitingValidation(TopicPartition tp) {
+    /**
+     * Attempt to complete validation with the end offset returned from the OffsetForLeaderEpoch request.
+     * @return The diverging offset if truncation was detected and no reset policy is defined.
+     */
+    public synchronized Optional<OffsetAndMetadata> maybeCompleteValidation(TopicPartition tp,
+                                                                            FetchPosition requestPosition,
+                                                                            EpochEndOffset epochEndOffset) {
+        TopicPartitionState state = assignedStateOrNull(tp);
+        if (state == null) {
+            log.debug("Skipping completed validation for partition {} which is not currently assigned.", tp);
+        } else if (!state.awaitingValidation()) {
+            log.debug("Skipping completed validation for partition {} which is no longer expecting validation.", tp);
+        } else {
+            SubscriptionState.FetchPosition currentPosition = state.position;
+            if (!currentPosition.equals(requestPosition)) {
+                log.debug("Skipping completed validation for partition {} since the current position {} " +
+                                "no longer matches the position {} when the request was sent",
+                        tp, currentPosition, requestPosition);
+            } else if (epochEndOffset.endOffset() < currentPosition.offset) {
+                if (hasDefaultOffsetResetPolicy()) {
+                    SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
+                            epochEndOffset.endOffset(), Optional.of(epochEndOffset.leaderEpoch()),
+                            currentPosition.currentLeader);
+                    log.info("Truncation detected for partition {} at offset {}, resetting offset to " +
+                            "the first offset known to diverge {}", tp, currentPosition, newPosition);
+                    state.seekValidated(newPosition);
+                } else {
+                    log.warn("Truncation detected for partition {} at offset {} (the end offset from the " +
+                                    "broker is {}), but no reset policy is set",
+                            tp, currentPosition, epochEndOffset);
+                    return Optional.of(new OffsetAndMetadata(epochEndOffset.endOffset(),
+                            Optional.of(epochEndOffset.leaderEpoch()), null));
+                }
+            } else {
+                state.completeValidation();
+            }
+        }
+
+        return Optional.empty();
+    }
+
+    public synchronized boolean awaitingValidation(TopicPartition tp) {
         return assignedState(tp).awaitingValidation();
     }
 
@@ -421,7 +463,7 @@ public class SubscriptionState {
         return assignedState(tp).validPosition();
     }
 
-    synchronized public FetchPosition position(TopicPartition tp) {
+    public synchronized FetchPosition position(TopicPartition tp) {
         return assignedState(tp).position;
     }
 
@@ -531,11 +573,11 @@ public class SubscriptionState {
         return assignment.stream().allMatch(state -> state.value().hasValidPosition());
     }
 
-    Set<TopicPartition> missingFetchPositions() {
+    public synchronized Set<TopicPartition> missingFetchPositions() {
         return collectPartitions(state -> !state.hasPosition(), Collectors.toSet());
     }
 
-    private synchronized <T extends Collection<TopicPartition>> T collectPartitions(Predicate<TopicPartitionState> filter, Collector<TopicPartition, ?, T> collector) {
+    private <T extends Collection<TopicPartition>> T collectPartitions(Predicate<TopicPartitionState> filter, Collector<TopicPartition, ?, T> collector) {
         return assignment.stream()
                 .filter(state -> filter.test(state.value()))
                 .map(PartitionStates.PartitionState::topicPartition)
@@ -560,12 +602,12 @@ public class SubscriptionState {
             throw new NoOffsetForPartitionException(partitionsWithNoOffsets);
     }
 
-    Set<TopicPartition> partitionsNeedingReset(long nowMs) {
+    public synchronized Set<TopicPartition> partitionsNeedingReset(long nowMs) {
         return collectPartitions(state -> state.awaitingReset() && !state.awaitingRetryBackoff(nowMs),
                 Collectors.toSet());
     }
 
-    Set<TopicPartition> partitionsNeedingValidation(long nowMs) {
+    public synchronized Set<TopicPartition> partitionsNeedingValidation(long nowMs) {
         return collectPartitions(state -> state.awaitingValidation() && !state.awaitingRetryBackoff(nowMs),
                 Collectors.toSet());
     }

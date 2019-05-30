@@ -772,37 +772,12 @@ public class Fetcher<K, V> implements Closeable {
                     // for the partition. If so, it means we have experienced log truncation and need to reposition
                     // that partition's offset.
                     offsetsResult.endOffsets().forEach((respTopicPartition, respEndOffset) -> {
-                        if (!subscriptions.isAssigned(respTopicPartition)) {
-                            log.debug("Ignoring OffsetsForLeaderEpoch response for partition {} which is not currently assigned.", respTopicPartition);
-                            return;
-                        }
-
-                        if (subscriptions.awaitingValidation(respTopicPartition)) {
-                            SubscriptionState.FetchPosition currentPosition = subscriptions.position(respTopicPartition);
-                            SubscriptionState.FetchPosition requestPosition = fetchPostitions.get(respTopicPartition);
-
-                            if (!currentPosition.equals(requestPosition)) {
-                                log.debug("Ignoring OffsetForLeader response {} since the current position {} " +
-                                        "no longer matches the position {} when the request was sent",
-                                        respEndOffset, currentPosition, requestPosition);
-                            } else if (respEndOffset.endOffset() < currentPosition.offset) {
-                                if (subscriptions.hasDefaultOffsetResetPolicy()) {
-                                    SubscriptionState.FetchPosition newPosition = new SubscriptionState.FetchPosition(
-                                            respEndOffset.endOffset(), Optional.of(respEndOffset.leaderEpoch()),
-                                            currentPosition.currentLeader);
-                                    log.info("Truncation detected for partition {} at offset {}, resetting offset to " +
-                                            "the first offset known to diverge {}", respTopicPartition, currentPosition, newPosition);
-                                    subscriptions.seekValidated(respTopicPartition, newPosition);
-                                } else {
-                                    log.warn("Truncation detected for partition {}, but no reset policy is set", respTopicPartition);
-                                    truncationWithoutResetPolicy.put(respTopicPartition, new OffsetAndMetadata(
-                                            respEndOffset.endOffset(), Optional.of(respEndOffset.leaderEpoch()), null));
-                                }
-                            } else {
-                                // Offset is fine, clear the validation state
-                                subscriptions.completeValidation(respTopicPartition);
-                            }
-                        }
+                        SubscriptionState.FetchPosition requestPosition = fetchPostitions.get(respTopicPartition);
+                        Optional<OffsetAndMetadata> divergentOffsetOpt = subscriptions.maybeCompleteValidation(
+                                respTopicPartition, requestPosition, respEndOffset);
+                        divergentOffsetOpt.ifPresent(divergentOffset -> {
+                            truncationWithoutResetPolicy.put(respTopicPartition, divergentOffset);
+                        });
                     });
 
                     if (!truncationWithoutResetPolicy.isEmpty()) {
