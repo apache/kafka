@@ -17,7 +17,7 @@
 package kafka.utils
 
 import scala.collection.mutable.PriorityQueue
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ScheduledFuture, TimeUnit}
 
 import org.apache.kafka.common.utils.Time
 
@@ -35,47 +35,48 @@ import org.apache.kafka.common.utils.Time
  * Incrementing the time to the exact next execution time of a task will result in that task executing (it as if execution itself takes no time).
  */
 class MockScheduler(val time: Time) extends Scheduler {
-  
+
   /* a priority queue of tasks ordered by next execution time */
   private val tasks = new PriorityQueue[MockTask]()
-  
+
   def isStarted = true
 
   def startup() {}
-  
+
   def shutdown() {
     this synchronized {
       tasks.foreach(_.fun())
       tasks.clear()
     }
   }
-  
+
   /**
-   * Check for any tasks that need to execute. Since this is a mock scheduler this check only occurs
-   * when this method is called and the execution happens synchronously in the calling thread.
-   * If you are using the scheduler associated with a MockTime instance this call be triggered automatically.
-   */
+    * Check for any tasks that need to execute. Since this is a mock scheduler this check only occurs
+    * when this method is called and the execution happens synchronously in the calling thread.
+    * If you are using the scheduler associated with a MockTime instance this call be triggered automatically.
+    */
   def tick() {
     this synchronized {
       val now = time.milliseconds
-      while(tasks.nonEmpty && tasks.head.nextExecution <= now) {
+      while (tasks.nonEmpty && tasks.head.nextExecution <= now) {
         /* pop and execute the task with the lowest next execution time */
         val curr = tasks.dequeue
         curr.fun()
         /* if the task is periodic, reschedule it and re-enqueue */
-        if(curr.periodic) {
+        if (curr.periodic) {
           curr.nextExecution += curr.period
           this.tasks += curr
         }
       }
     }
   }
-  
-  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) {
+
+  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): ScheduledFuture[_] = {
     this synchronized {
       tasks += MockTask(name, fun, time.milliseconds + delay, period = period)
       tick()
     }
+    null
   }
 
   def clear(): Unit = {
@@ -83,7 +84,14 @@ class MockScheduler(val time: Time) extends Scheduler {
       tasks.clear()
     }
   }
-  
+
+  /**
+   * Currently not used, so not fully implemented
+   */
+  def removeTask(task: ScheduledFuture[_]): Boolean = {
+    false
+  }
+
 }
 
 case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long) extends Ordered[MockTask] {
