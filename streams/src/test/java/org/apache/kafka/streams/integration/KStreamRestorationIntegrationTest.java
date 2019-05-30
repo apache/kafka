@@ -39,9 +39,7 @@ import org.junit.experimental.categories.Category;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 import java.util.concurrent.ExecutionException;
 
 
@@ -51,8 +49,6 @@ public class KStreamRestorationIntegrationTest {
     private Logger LOG = LoggerFactory.getLogger(KStreamRestorationIntegrationTest.class);
 
     private StreamsBuilder builder = new StreamsBuilder();
-
-    private KStream<Integer, Integer> transformedStream;
 
     private static final String APPLICATION_ID = "restoration-test-app";
     private static final String STATE_STORE_NAME = "stateStore";
@@ -78,17 +74,17 @@ public class KStreamRestorationIntegrationTest {
                 APPLICATION_ID,
                 CLUSTER.bootstrapServers(),
                 Serdes.Integer().getClass().getName(),
-                Serdes.Integer().getClass().getName(),
+                Serdes.ByteArray().getClass().getName(),
                 props);
 
         CLUSTER.createTopics(INPUT_TOPIC);
         CLUSTER.createTopics("output");
         CLUSTER.createTopics(STATE_STORE_CHANGELOG);
 
-        final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
+        final StoreBuilder<KeyValueStore<Integer, byte[]>> keyValueStoreBuilder =
                 Stores.keyValueStoreBuilder(Stores.persistentTimestampedKeyValueStore(STATE_STORE_NAME),
                         Serdes.Integer(),
-                        Serdes.Integer());
+                        Serdes.ByteArray());
         builder.addStateStore(keyValueStoreBuilder);
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
@@ -96,24 +92,21 @@ public class KStreamRestorationIntegrationTest {
 
     @Test
     public void shouldRestoreNullRecord() throws InterruptedException, ExecutionException {
-        final KStream<Integer, Integer> sourceStream = builder.stream(INPUT_TOPIC);
-        transformedStream = sourceStream.transform(() -> new Transformer<Integer, Integer, KeyValue<Integer, Integer>>() {
-            private KeyValueStore<Integer, Integer> state;
+        final KStream<Integer, byte[]> sourceStream = builder.stream(INPUT_TOPIC);
+        KStream<Integer, byte[]> transformedStream = sourceStream.transform(() -> new Transformer<Integer, byte[], KeyValue<Integer, byte[]>>() {
+            private KeyValueStore<Integer, byte[]> state;
 
             @SuppressWarnings("unchecked")
             @Override
             public void init(final ProcessorContext context) {
-                state = (KeyValueStore<Integer, Integer>) context.getStateStore(STATE_STORE_NAME);
+                state = (KeyValueStore<Integer, byte[]>) context.getStateStore(STATE_STORE_NAME);
             }
 
             @Override
-            public KeyValue<Integer, Integer> transform(final Integer key, final Integer value) {
-                state.putIfAbsent(key, 0);
-                Integer storedValue = state.get(key);
-                final KeyValue<Integer, Integer> result = new KeyValue<>(key, value);
-                state.put(key, storedValue);
+            public KeyValue<Integer, byte[]> transform(final Integer key, final byte[] value) {
+                state.put(key, value);
                 LOG.info("processed record {}", value);
-                return result;
+                return new KeyValue<>(key, value);
             }
 
             @Override
@@ -122,29 +115,29 @@ public class KStreamRestorationIntegrationTest {
         }, STATE_STORE_NAME);
         transformedStream.to(OUTPUT_TOPIC);
 
-        final List<KeyValue<Integer, Integer>> expectedCountKeyValues = Arrays.asList(KeyValue.pair(1, 1), KeyValue.pair(2, 2), KeyValue.pair(3, null));
-        Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), IntegerSerializer.class, IntegerSerializer.class);
+        final List<KeyValue<Integer, byte[]>> expectedCountKeyValues = Arrays.asList(KeyValue.pair(1, new byte[1]), KeyValue.pair(3, null));
+        Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), IntegerSerializer.class, ByteArraySerializer.class);
 
         IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC, expectedCountKeyValues, producerConfig, mockTime);
 
-        KafkaStreams kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
-        kafkaStreams.start();
+        KafkaStreams streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+        streams.start();
 
-        final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), IntegerDeserializer.class, IntegerDeserializer.class);
+        final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), IntegerDeserializer.class, ByteArrayDeserializer.class);
         IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC, expectedCountKeyValues);
 
 
-        kafkaStreams.close();
-        kafkaStreams.cleanUp();
+        streams.close();
+        streams.cleanUp();
 
 //        IntegrationTestUtils.produceKeyValuesSynchronously(STATE_STORE_CHANGELOG, Arrays.asList(KeyValue.pair(3, null)), producerConfig, mockTime);
 
         // Restart the stream instance
-        final List<KeyValue<Integer, Integer>> expectedNewKeyValues = Arrays.asList(KeyValue.pair(1, 1));
+        final List<KeyValue<Integer, byte[]>> expectedNewKeyValues = Collections.singletonList(KeyValue.pair(1, null));
         IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC, expectedNewKeyValues, producerConfig, mockTime);
-        kafkaStreams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
-        kafkaStreams.start();
+        streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
+        streams.start();
         IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC, expectedNewKeyValues);
-        kafkaStreams.close();
+        streams.close();
     }
 }
