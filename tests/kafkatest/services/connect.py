@@ -20,7 +20,6 @@ import signal
 import time
 
 import requests
-from ducktape.cluster.remoteaccount import RemoteCommandError
 from ducktape.errors import DucktapeError
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
@@ -107,12 +106,12 @@ class ConnectServiceBase(KafkaPathResolverMixin, Service):
 
     def listening(self, node):
         try:
-            cmd = "nc -z %s %s" % (node.account.hostname, self.CONNECT_REST_PORT)
-            node.account.ssh_output(cmd, allow_fail=False)
-            self.logger.debug("Connect worker started accepting connections at: '%s:%s')", node.account.hostname,
+            self.list_connectors(node)
+            self.logger.debug("Connect worker started serving REST at: '%s:%s')", node.account.hostname,
                               self.CONNECT_REST_PORT)
             return True
-        except (RemoteCommandError, ValueError) as e:
+        except requests.exceptions.ConnectionError:
+            self.logger.debug("REST resources are not loaded yet")
             return False
 
     def start(self, mode=STARTUP_MODE_LISTEN):
