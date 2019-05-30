@@ -667,14 +667,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         if (data.preferredReadReplica.isDefined) {
-          // TODO must be a better way...
-          val preferredReadReplicaOptional : Optional[Integer] = if (data.preferredReadReplica.isDefined) {
-            Optional.ofNullable(data.preferredReadReplica.get)
-          } else {
-            Optional.empty()
-          }
           partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
-            data.logStartOffset, preferredReadReplicaOptional, abortedTransactions, data.records))
+            data.logStartOffset, Optional.ofNullable(data.preferredReadReplica.map(int2Integer).orNull),
+            abortedTransactions, data.records))
         } else {
           partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
             data.logStartOffset, abortedTransactions, data.records))

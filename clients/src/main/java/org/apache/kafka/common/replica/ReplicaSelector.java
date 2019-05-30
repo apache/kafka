@@ -28,6 +28,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+/**
+ * Pluggable interface to select a preferred read replica given the current set of replicas for a partition
+ * and information from the client.
+ */
 public interface ReplicaSelector extends Configurable, Closeable {
 
     /**
@@ -36,7 +40,7 @@ public interface ReplicaSelector extends Configurable, Closeable {
      */
     Optional<ReplicaInfo> select(TopicPartition topicPartition,
                                  ClientMetadata clientMetadata,
-                                 Set<ReplicaInfo> replicaInfos);
+                                 PartitionInfo partitionInfo);
     @Override
     default void close() throws IOException {
 
@@ -51,8 +55,10 @@ public interface ReplicaSelector extends Configurable, Closeable {
         return replicaInfos.stream().filter(ReplicaInfo::isLeader).findFirst();
     }
 
+    /**
+     * Holder for all the client metadata required to determine a preferred replica.
+     */
     class ClientMetadata {
-
         public static final ClientMetadata NO_METADATA = new ClientMetadata("", "", null, null, null);
 
         public final String rackId;
@@ -70,16 +76,28 @@ public interface ReplicaSelector extends Configurable, Closeable {
         }
     }
 
-    interface ReplicaInfo {
+    /**
+     * View of a partition used by {@link ReplicaSelector} to determine a preferred replica.
+     */
+    interface PartitionInfo {
+        Set<ReplicaInfo> replicas();
 
+        Optional<ReplicaInfo> leader();
+    }
+
+    /**
+     * View of a replica used by {@link ReplicaSelector} to determine a preferred replica.
+     */
+    interface ReplicaInfo {
         boolean isLeader();
 
-        Node getEndpoint();
+        Node endpoint();
 
         long logOffset();
 
         long lastCaughtUpTimeMs();
     }
+
 }
 
 

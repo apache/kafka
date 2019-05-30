@@ -17,13 +17,13 @@
 package kafka.server
 
 import java.io.File
+import java.util
 import java.util.Optional
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong}
 import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.{Gauge, Meter}
-import kafka.api.Request.{DebuggingConsumerId, FutureLocalReplicaId}
 import kafka.api._
 import kafka.cluster.{BrokerEndPoint, Partition, Replica}
 import kafka.controller.{KafkaController, StateChangeLogger}
@@ -1019,6 +1019,14 @@ class ReplicaManager(val config: KafkaConfig,
     result
   }
 
+  case class SomeReplicaInfo(isLeader: Boolean,
+                             endpoint: Node,
+                             logOffset: Long,
+                             lastCaughtUpTimeMs: Long) extends ReplicaSelector.ReplicaInfo
+
+  case class SomePartitionInfo(replicas: util.Set[ReplicaSelector.ReplicaInfo],
+                               leader: util.Optional[ReplicaSelector.ReplicaInfo]) extends ReplicaSelector.PartitionInfo
+
   def findPreferredReadReplica(tp: TopicPartition, clientMetadata: ClientMetadata, replicaId: Int): Option[Int] = {
     val partition = getPartitionOrException(tp, expectLeader = false)
 
@@ -1031,19 +1039,20 @@ class ReplicaManager(val config: KafkaConfig,
         partition.leaderReplicaIdOpt
       } else {
         val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
-        val replicaInfos: Set[ReplicaSelector.ReplicaInfo] = partition.allReplicas.map(
-          replica => new ReplicaSelector.ReplicaInfo() {
-            override def isLeader: Boolean = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId))
-
-            override def getEndpoint: Node = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode())
-
-            override def logOffset(): Long = replica.logEndOffset
-
-            override def lastCaughtUpTimeMs(): Long = replica.lastCaughtUpTimeMs
-          })
-        Option.apply(replicaSelector.select(tp, clientMetadata, replicaInfos.asJava).orElse(null))
-          .filter(!_.getEndpoint.isEmpty)
-          .map(_.getEndpoint.id())
+        val replicaInfoSet: Set[ReplicaSelector.ReplicaInfo] = partition.allReplicas.map(
+          replica => SomeReplicaInfo(
+            isLeader = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId)),
+            endpoint = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
+            logOffset = replica.logEndOffset,
+            lastCaughtUpTimeMs = replica.lastCaughtUpTimeMs
+          ))
+        val partitionInfo = SomePartitionInfo(
+          replicas = replicaInfoSet.asJava,
+          leader = replicaInfoSet.asJava.stream().filter(info => info.isLeader).findFirst()
+        )
+        Option.apply(replicaSelector.select(tp, clientMetadata, partitionInfo).orElse(null))
+          .filter(!_.endpoint.isEmpty)
+          .map(_.endpoint.id())
       }
     } else {
       Option.empty
