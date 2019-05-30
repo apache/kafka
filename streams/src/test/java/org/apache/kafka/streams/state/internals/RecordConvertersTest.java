@@ -29,18 +29,18 @@ public class RecordConvertersTest {
 
     @Test
     public void testNullRawValueShouldReturnNullRecordValue() {
-        ConsumerRecord<byte[], byte[]> nullValueRecord = new ConsumerRecord<>("", 0, 0L, new byte[0], null);
+        final ConsumerRecord<byte[], byte[]> nullValueRecord = new ConsumerRecord<>("", 0, 0L, new byte[0], null);
         Assert.assertNull(rawValueToTimestampedValue().convert(nullValueRecord).value());
     }
 
     @Test
     public void testEncodeRecordValue() {
-        long timestamp = 10L;
-        byte[] value = new byte[1];
-        ConsumerRecord<byte[], byte[]> inputRecord = new ConsumerRecord<>(
+        final long timestamp = 10L;
+        final byte[] value = new byte[1];
+        final ConsumerRecord<byte[], byte[]> inputRecord = new ConsumerRecord<>(
                 "topic", 1, 0, timestamp, TimestampType.CREATE_TIME, 0L, 0, 0, new byte[0], value);
-        byte[] expectedValue = ByteBuffer.allocate(9).putLong(timestamp).put(value).array();
-        byte[] actualValue = rawValueToTimestampedValue().convert(inputRecord).value();
+        final byte[] expectedValue = ByteBuffer.allocate(9).putLong(timestamp).put(value).array();
+        final byte[] actualValue = rawValueToTimestampedValue().convert(inputRecord).value();
         Assert.assertArrayEquals(expectedValue, actualValue);
     }
 }

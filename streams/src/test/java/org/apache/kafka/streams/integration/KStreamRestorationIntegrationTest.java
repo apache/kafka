@@ -18,11 +18,16 @@ package org.apache.kafka.streams.integration;
 
 import kafka.utils.MockTime;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.common.serialization.*;
-import org.apache.kafka.streams.*;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.streams.KafkaStreams;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -36,26 +41,24 @@ import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
 public class KStreamRestorationIntegrationTest {
-
-    private Logger LOG = LoggerFactory.getLogger(KStreamRestorationIntegrationTest.class);
-
     private StreamsBuilder builder = new StreamsBuilder();
 
     private static final String APPLICATION_ID = "restoration-test-app";
     private static final String STATE_STORE_NAME = "stateStore";
     private static final String INPUT_TOPIC = "input";
     private static final String OUTPUT_TOPIC = "output";
-
-    private static final String STATE_STORE_CHANGELOG = APPLICATION_ID + "-" + STATE_STORE_NAME + "-changelog";
 
     private Properties streamsConfiguration;
 
@@ -66,8 +69,6 @@ public class KStreamRestorationIntegrationTest {
     @Before
     public void setUp() throws Exception {
         final Properties props = new Properties();
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 1024 * 10);
-        props.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 5000);
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
@@ -78,8 +79,7 @@ public class KStreamRestorationIntegrationTest {
                 props);
 
         CLUSTER.createTopics(INPUT_TOPIC);
-        CLUSTER.createTopics("output");
-        CLUSTER.createTopics(STATE_STORE_CHANGELOG);
+        CLUSTER.createTopics(OUTPUT_TOPIC);
 
         final StoreBuilder<KeyValueStore<Integer, byte[]>> keyValueStoreBuilder =
                 Stores.keyValueStoreBuilder(Stores.persistentTimestampedKeyValueStore(STATE_STORE_NAME),
@@ -89,50 +89,52 @@ public class KStreamRestorationIntegrationTest {
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
-
     @Test
     public void shouldRestoreNullRecord() throws InterruptedException, ExecutionException {
         final KStream<Integer, byte[]> sourceStream = builder.stream(INPUT_TOPIC);
-        KStream<Integer, byte[]> transformedStream = sourceStream.transform(() -> new Transformer<Integer, byte[], KeyValue<Integer, byte[]>>() {
-            private KeyValueStore<Integer, byte[]> state;
+        final KStream<Integer, byte[]> transformedStream =
+                sourceStream.transform(() -> new Transformer<Integer, byte[], KeyValue<Integer, byte[]>>() {
+                    private KeyValueStore<Integer, byte[]> state;
 
-            @SuppressWarnings("unchecked")
-            @Override
-            public void init(final ProcessorContext context) {
-                state = (KeyValueStore<Integer, byte[]>) context.getStateStore(STATE_STORE_NAME);
-            }
+                    @SuppressWarnings("unchecked")
+                    @Override
+                    public void init(final ProcessorContext context) {
+                        state = (KeyValueStore<Integer, byte[]>) context.getStateStore(STATE_STORE_NAME);
+                    }
 
-            @Override
-            public KeyValue<Integer, byte[]> transform(final Integer key, final byte[] value) {
-                state.put(key, value);
-                LOG.info("processed record {}", value);
-                return new KeyValue<>(key, value);
-            }
+                    @Override
+                    public KeyValue<Integer, byte[]> transform(final Integer key, final byte[] value) {
+                        state.put(key, value);
+                        return new KeyValue<>(key, value);
+                    }
 
-            @Override
-            public void close() {
-            }
-        }, STATE_STORE_NAME);
+                    @Override
+                    public void close() {
+                    }
+                }, STATE_STORE_NAME);
         transformedStream.to(OUTPUT_TOPIC);
 
-        final List<KeyValue<Integer, byte[]>> expectedCountKeyValues = Arrays.asList(KeyValue.pair(1, new byte[1]), KeyValue.pair(3, null));
-        Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), IntegerSerializer.class, ByteArraySerializer.class);
+        final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), IntegerSerializer.class, ByteArraySerializer.class);
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC, expectedCountKeyValues, producerConfig, mockTime);
+        final List<KeyValue<Integer, byte[]>> initialKeyValues = Arrays.asList(KeyValue.pair(3, null), KeyValue.pair(1, new byte[]{5}));
+
+        IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC, initialKeyValues, producerConfig, mockTime);
 
         KafkaStreams streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
         streams.start();
 
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), IntegerDeserializer.class, ByteArrayDeserializer.class);
-        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC, expectedCountKeyValues);
-
+        // We couldn't use a #waitUntilFinalKeyValueRecordsReceived here because the byte array comparison is not triggered correctly.
+        final List<KeyValue<Integer, byte[]>> outputs = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC, initialKeyValues.size());
+        for (int i = 0; i < outputs.size(); i++) {
+            assertEquals(outputs.get(i).key, initialKeyValues.get(i).key);
+            assertArrayEquals(outputs.get(i).value, initialKeyValues.get(i).value);
+        }
 
         streams.close();
         streams.cleanUp();
 
-//        IntegrationTestUtils.produceKeyValuesSynchronously(STATE_STORE_CHANGELOG, Arrays.asList(KeyValue.pair(3, null)), producerConfig, mockTime);
-
-        // Restart the stream instance
+        // Restart the stream instance. There should not be exception handling the null value within changelog topic.
         final List<KeyValue<Integer, byte[]>> expectedNewKeyValues = Collections.singletonList(KeyValue.pair(1, null));
         IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC, expectedNewKeyValues, producerConfig, mockTime);
         streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
