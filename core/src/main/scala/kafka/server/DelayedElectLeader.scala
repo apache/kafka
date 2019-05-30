@@ -23,15 +23,16 @@ import org.apache.kafka.common.requests.ApiError
 
 import scala.collection.{Map, mutable}
 
-/** A delayed elect preferred leader operation that can be created by the replica manager and watched
-  * in the elect preferred leader purgatory
+/** A delayed elect leader operation that can be created by the replica manager and watched
+  * in the elect leader purgatory
   */
-class DelayedElectPreferredLeader(delayMs: Long,
-                                  expectedLeaders: Map[TopicPartition, Int],
-                                  results: Map[TopicPartition, ApiError],
-                                  replicaManager: ReplicaManager,
-                                  responseCallback: Map[TopicPartition, ApiError] => Unit)
-    extends DelayedOperation(delayMs) {
+class DelayedElectLeader(
+  delayMs: Long,
+  expectedLeaders: Map[TopicPartition, Int],
+  results: Map[TopicPartition, ApiError],
+  replicaManager: ReplicaManager,
+  responseCallback: Map[TopicPartition, ApiError] => Unit
+) extends DelayedOperation(delayMs) {
 
   var waitingPartitions = expectedLeaders
   val fullResults = results.to[mutable.Set]

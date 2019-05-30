@@ -39,7 +39,7 @@ import org.junit.Test;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
-public class MeteredTimestampWindowStoreTest {
+public class MeteredTimestampedWindowStoreTest {
     private InternalMockProcessorContext context;
     @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);

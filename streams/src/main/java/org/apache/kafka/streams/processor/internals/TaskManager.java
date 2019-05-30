@@ -334,7 +334,7 @@ public class TaskManager {
             log.trace("Resuming partitions {}", assignment);
             consumer.resume(assignment);
             assignStandbyPartitions();
-            return true;
+            return standby.allTasksRunning();
         }
         return false;
     }

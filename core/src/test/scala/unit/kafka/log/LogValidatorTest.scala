@@ -19,7 +19,7 @@ package kafka.log
 import java.nio.ByteBuffer
 import java.util.concurrent.TimeUnit
 
-import kafka.api.{ApiVersion, KAFKA_2_0_IV1}
+import kafka.api.{ApiVersion, KAFKA_2_0_IV1, KAFKA_2_3_IV1}
 import kafka.common.LongRef
 import kafka.message._
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
@@ -28,13 +28,58 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.test.TestUtils
 import org.junit.Assert._
 import org.junit.Test
-import org.scalatest.Assertions.intercept
+import org.scalatest.Assertions.{assertThrows, intercept}
 
 import scala.collection.JavaConverters._
 
 class LogValidatorTest {
 
   val time = Time.SYSTEM
+
+  @Test
+  def testOnlyOneBatchCompressedV0(): Unit = {
+    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP)
+  }
+
+  @Test
+  def testOnlyOneBatchCompressedV1(): Unit = {
+    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP)
+  }
+
+  @Test
+  def testOnlyOneBatchCompressedV2(): Unit = {
+    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP)
+  }
+
+  @Test
+  def testOnlyOneBatchUncompressedV2(): Unit = {
+    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE)
+  }
+
+  private def checkOnlyOneBatchCompressed(magic: Byte, compressionType: CompressionType) {
+    validateMessages(createRecords(magic, 0L, compressionType), magic, compressionType)
+
+    assertThrows[InvalidRecordException] {
+      validateMessages(createTwoBatchedRecords(magic, 0L, compressionType), magic, compressionType)
+    }
+  }
+
+  private def validateMessages(records: MemoryRecords, magic: Byte, compressionType: CompressionType): Unit = {
+    LogValidator.validateMessagesAndAssignOffsets(records,
+      new LongRef(0L),
+      time,
+      now = 0L,
+      CompressionCodec.getCompressionCodec(compressionType.name),
+      CompressionCodec.getCompressionCodec(compressionType.name),
+      compactedTopic = false,
+      magic,
+      TimestampType.CREATE_TIME,
+      1000L,
+      RecordBatch.NO_PRODUCER_EPOCH,
+      isFromClient = true,
+      KAFKA_2_3_IV1
+    )
+  }
 
   @Test
   def testLogAppendTimeNonCompressedV1() {
@@ -1135,6 +1180,22 @@ class LogValidatorTest {
     builder.appendWithOffset(1, timestamp, null, "there".getBytes)
     builder.appendWithOffset(2, timestamp, null, "beautiful".getBytes)
     builder.build()
+  }
+
+  def createTwoBatchedRecords(magicValue: Byte,
+                              timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                              codec: CompressionType): MemoryRecords = {
+    val buf = ByteBuffer.allocate(2048)
+    var builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+    builder.append(10L, "1".getBytes(), "a".getBytes())
+    builder.close()
+    builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 1L)
+    builder.append(11L, "2".getBytes(), "b".getBytes())
+    builder.append(12L, "3".getBytes(), "c".getBytes())
+    builder.close()
+
+    buf.flip()
+    MemoryRecords.readableRecords(buf.slice())
   }
 
   /* check that offsets are assigned consecutively from the given base offset */

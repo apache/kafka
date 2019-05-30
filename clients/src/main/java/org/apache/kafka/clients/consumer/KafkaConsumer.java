@@ -888,7 +888,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     public Set<TopicPartition> assignment() {
         acquireAndEnsureOpen();
         try {
-            return Collections.unmodifiableSet(new HashSet<>(this.subscriptions.assignedPartitions()));
+            return Collections.unmodifiableSet(this.subscriptions.assignedPartitions());
         } finally {
             release();
         }
@@ -1547,7 +1547,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     offset,
                     Optional.empty(), // This will ensure we skip validation
                     this.metadata.leaderAndEpoch(partition));
-            this.subscriptions.seek(partition, newPosition);
+            this.subscriptions.seekUnvalidated(partition, newPosition);
         } finally {
             release();
         }
@@ -1583,7 +1583,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
                     offsetAndMetadata.leaderEpoch(),
                     currentLeaderAndEpoch);
             this.updateLastSeenEpochIfNewer(partition, offsetAndMetadata);
-            this.subscriptions.seekAndValidate(partition, newPosition);
+            this.subscriptions.seekUnvalidated(partition, newPosition);
         } finally {
             release();
         }
@@ -1605,10 +1605,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
-            for (TopicPartition tp : parts) {
-                log.info("Seeking to beginning of partition {}", tp);
-                subscriptions.requestOffsetReset(tp, OffsetResetStrategy.EARLIEST);
-            }
+            subscriptions.requestOffsetReset(parts, OffsetResetStrategy.EARLIEST);
         } finally {
             release();
         }
@@ -1633,10 +1630,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         acquireAndEnsureOpen();
         try {
             Collection<TopicPartition> parts = partitions.size() == 0 ? this.subscriptions.assignedPartitions() : partitions;
-            for (TopicPartition tp : parts) {
-                log.info("Seeking to end of partition {}", tp);
-                subscriptions.requestOffsetReset(tp, OffsetResetStrategy.LATEST);
-            }
+            subscriptions.requestOffsetReset(parts, OffsetResetStrategy.LATEST);
         } finally {
             release();
         }

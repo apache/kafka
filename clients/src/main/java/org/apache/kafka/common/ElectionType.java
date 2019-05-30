@@ -15,19 +15,34 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.clients.admin;
+package org.apache.kafka.common;
 
+import java.util.Arrays;
 import org.apache.kafka.common.annotation.InterfaceStability;
-import java.util.Collection;
 
 /**
- * Options for {@link AdminClient#electPreferredLeaders(Collection, ElectPreferredLeadersOptions)}.
+ * Options for {@link org.apache.kafka.clients.admin.AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
  *
- * The API of this class is evolving, see {@link AdminClient} for details.
- *
- * @deprecated Since 2.4.0. Use {@link AdminClient#electLeaders(ElectionType, Set, ElectLeadersOptions)}.
+ * The API of this class is evolving, see {@link org.apache.kafka.clients.admin.AdminClient} for details.
  */
 @InterfaceStability.Evolving
-@Deprecated
-public class ElectPreferredLeadersOptions extends AbstractOptions<ElectPreferredLeadersOptions> {
+public enum ElectionType {
+    PREFERRED((byte) 0), UNCLEAN((byte) 1);
+
+    public final byte value;
+
+    ElectionType(byte value) {
+        this.value = value;
+    }
+
+    public static ElectionType valueOf(byte value) {
+        if (value == PREFERRED.value) {
+            return PREFERRED;
+        } else if (value == UNCLEAN.value) {
+            return UNCLEAN;
+        } else {
+            throw new IllegalArgumentException(
+                    String.format("Value %s must be one of %s", value, Arrays.asList(ElectionType.values())));
+        }
+    }
 }
