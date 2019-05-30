@@ -38,21 +38,17 @@ public interface ReplicaSelector extends Configurable, Closeable {
      * Select the preferred replica a client should use for fetching. If no replica is available, this will return an
      * empty optional.
      */
-    Optional<ReplicaInfo> select(TopicPartition topicPartition,
+    Optional<ReplicaView> select(TopicPartition topicPartition,
                                  ClientMetadata clientMetadata,
-                                 PartitionInfo partitionInfo);
+                                 PartitionView partitionView);
     @Override
     default void close() throws IOException {
-
+        // No-op by default
     }
 
     @Override
     default void configure(Map<String, ?> configs) {
-
-    }
-
-    static Optional<ReplicaInfo> selectLeader(Set<ReplicaInfo> replicaInfos) {
-        return replicaInfos.stream().filter(ReplicaInfo::isLeader).findFirst();
+        // No-op by default
     }
 
     /**
@@ -79,16 +75,16 @@ public interface ReplicaSelector extends Configurable, Closeable {
     /**
      * View of a partition used by {@link ReplicaSelector} to determine a preferred replica.
      */
-    interface PartitionInfo {
-        Set<ReplicaInfo> replicas();
+    interface PartitionView {
+        Set<ReplicaView> replicas();
 
-        Optional<ReplicaInfo> leader();
+        Optional<ReplicaView> leader();
     }
 
     /**
      * View of a replica used by {@link ReplicaSelector} to determine a preferred replica.
      */
-    interface ReplicaInfo {
+    interface ReplicaView {
         boolean isLeader();
 
         Node endpoint();

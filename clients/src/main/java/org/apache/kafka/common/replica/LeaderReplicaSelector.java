@@ -22,9 +22,9 @@ import java.util.Optional;
 
 public class LeaderReplicaSelector implements ReplicaSelector {
     @Override
-    public Optional<ReplicaInfo> select(TopicPartition topicPartition,
+    public Optional<ReplicaView> select(TopicPartition topicPartition,
                                         ClientMetadata clientMetadata,
-                                        PartitionInfo partitionInfo) {
-        return partitionInfo.leader();
+                                        PartitionView partitionView) {
+        return partitionView.leader();
     }
 }

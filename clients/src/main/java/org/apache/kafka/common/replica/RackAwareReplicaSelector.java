@@ -27,38 +27,38 @@ public class RackAwareReplicaSelector implements ReplicaSelector {
     private final MostCaughtUpReplicaSelector tieBreaker = new MostCaughtUpReplicaSelector();
 
     @Override
-    public Optional<ReplicaInfo> select(TopicPartition topicPartition,
+    public Optional<ReplicaView> select(TopicPartition topicPartition,
                                         ClientMetadata clientMetadata,
-                                        PartitionInfo partitionInfo) {
+                                        PartitionView partitionView) {
         if (clientMetadata.rackId != null && !clientMetadata.rackId.isEmpty()) {
-            Set<ReplicaInfo> sameRackReplicas = partitionInfo.replicas().stream()
+            Set<ReplicaView> sameRackReplicas = partitionView.replicas().stream()
                     .filter(replicaInfo -> clientMetadata.rackId.equalsIgnoreCase(replicaInfo.endpoint().rack()))
                     .collect(Collectors.toSet());
             if (sameRackReplicas.isEmpty()) {
-                return partitionInfo.leader();
+                return partitionView.leader();
             } else {
-                Optional<ReplicaInfo> leader = partitionInfo.leader().filter(sameRackReplicas::contains);
+                Optional<ReplicaView> leader = partitionView.leader().filter(sameRackReplicas::contains);
                 if (leader.isPresent()) {
                     // Use the leader if it's in this rack
                     return leader;
                 } else {
                     // Otherwise, get the most caught-up replica
-                    PartitionInfo sameRackPartition = new PartitionInfo() {
+                    PartitionView sameRackPartition = new PartitionView() {
                         @Override
-                        public Set<ReplicaInfo> replicas() {
+                        public Set<ReplicaView> replicas() {
                             return sameRackReplicas;
                         }
 
                         @Override
-                        public Optional<ReplicaInfo> leader() {
-                            return partitionInfo.leader();
+                        public Optional<ReplicaView> leader() {
+                            return partitionView.leader();
                         }
                     };
                     return tieBreaker.select(topicPartition, clientMetadata, sameRackPartition);
                 }
             }
         } else {
-            return partitionInfo.leader();
+            return partitionView.leader();
         }
     }
 }

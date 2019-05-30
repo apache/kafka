@@ -23,12 +23,12 @@ import java.util.Optional;
 
 public class MostCaughtUpReplicaSelector implements ReplicaSelector {
     @Override
-    public Optional<ReplicaInfo> select(TopicPartition topicPartition,
+    public Optional<ReplicaView> select(TopicPartition topicPartition,
                                         ClientMetadata clientMetadata,
-                                        PartitionInfo partitionInfo) {
-        return partitionInfo.replicas().stream()
-            .max(Comparator.comparing(ReplicaInfo::logOffset)
-                .thenComparing(ReplicaInfo::lastCaughtUpTimeMs)
+                                        PartitionView partitionView) {
+        return partitionView.replicas().stream()
+            .max(Comparator.comparing(ReplicaView::logOffset)
+                .thenComparing(ReplicaView::lastCaughtUpTimeMs)
                 .thenComparing(replicaInfo -> replicaInfo.endpoint().id()));
     }
 }

@@ -38,13 +38,13 @@ public class ReplicaSelectorTest {
     public void testLeaderSelector() {
         TopicPartition tp = new TopicPartition("test", 0);
 
-        Set<ReplicaSelector.ReplicaInfo> replicaInfoSet = replicaInfoSet();
-        ReplicaSelector.PartitionInfo partitionInfo = partitionInfo(replicaInfoSet);
+        Set<ReplicaSelector.ReplicaView> replicaViewSet = replicaInfoSet();
+        ReplicaSelector.PartitionView partitionView = partitionInfo(replicaViewSet);
 
         ReplicaSelector selector = new LeaderReplicaSelector();
-        Optional<ReplicaSelector.ReplicaInfo> selected;
+        Optional<ReplicaSelector.ReplicaView> selected;
 
-        selected = selector.select(tp, ReplicaSelector.ClientMetadata.NO_METADATA, partitionInfo);
+        selected = selector.select(tp, ReplicaSelector.ClientMetadata.NO_METADATA, partitionView);
         assertOptional(selected, replicaInfo -> {
             assertTrue(replicaInfo.isLeader());
             assertEquals(replicaInfo.endpoint().id(), 0);
@@ -58,23 +58,23 @@ public class ReplicaSelectorTest {
     public void testSameRackSelector() {
         TopicPartition tp = new TopicPartition("test", 0);
 
-        Set<ReplicaSelector.ReplicaInfo> replicaInfoSet = replicaInfoSet();
-        ReplicaSelector.PartitionInfo partitionInfo = partitionInfo(replicaInfoSet);
+        Set<ReplicaSelector.ReplicaView> replicaViewSet = replicaInfoSet();
+        ReplicaSelector.PartitionView partitionView = partitionInfo(replicaViewSet);
 
         ReplicaSelector selector = new RackAwareReplicaSelector();
-        Optional<ReplicaSelector.ReplicaInfo> selected = selector.select(tp, metadata("rack-b"), partitionInfo);
+        Optional<ReplicaSelector.ReplicaView> selected = selector.select(tp, metadata("rack-b"), partitionView);
         assertOptional(selected, replicaInfo -> {
             assertEquals("Expect replica to be in rack-b", replicaInfo.endpoint().rack(), "rack-b");
             assertEquals("Expected replica 3 since it is more caught-up", replicaInfo.endpoint().id(), 3);
         });
 
-        selected = selector.select(tp, metadata("not-a-rack"), partitionInfo);
+        selected = selector.select(tp, metadata("not-a-rack"), partitionView);
         assertOptional(selected, replicaInfo -> {
             assertTrue("Expect leader when we can't find any nodes in given rack", replicaInfo.isLeader());
         });
     }
 
-    static Set<ReplicaSelector.ReplicaInfo> replicaInfoSet() {
+    static Set<ReplicaSelector.ReplicaView> replicaInfoSet() {
         return Stream.of(
                 replicaInfo(new Node(0, "host0", 1234, "rack-a"), true, 4, 10),
                 replicaInfo(new Node(1, "host1", 1234, "rack-a"), false, 2, 5),
@@ -84,8 +84,8 @@ public class ReplicaSelectorTest {
         ).collect(Collectors.toSet());
     }
 
-    static ReplicaSelector.ReplicaInfo replicaInfo(Node node, boolean isLeader, long logOffset, long lastCaughtUpTimeMs) {
-        return new ReplicaSelector.ReplicaInfo() {
+    static ReplicaSelector.ReplicaView replicaInfo(Node node, boolean isLeader, long logOffset, long lastCaughtUpTimeMs) {
+        return new ReplicaSelector.ReplicaView() {
 
             @Override
             public boolean isLeader() {
@@ -109,16 +109,16 @@ public class ReplicaSelectorTest {
         };
     }
 
-    static ReplicaSelector.PartitionInfo partitionInfo(Set<ReplicaSelector.ReplicaInfo> replicaInfoSet) {
-        return new ReplicaSelector.PartitionInfo() {
+    static ReplicaSelector.PartitionView partitionInfo(Set<ReplicaSelector.ReplicaView> replicaViewSet) {
+        return new ReplicaSelector.PartitionView() {
             @Override
-            public Set<ReplicaSelector.ReplicaInfo> replicas() {
-                return replicaInfoSet;
+            public Set<ReplicaSelector.ReplicaView> replicas() {
+                return replicaViewSet;
             }
 
             @Override
-            public Optional<ReplicaSelector.ReplicaInfo> leader() {
-                return replicaInfoSet.stream().filter(ReplicaSelector.ReplicaInfo::isLeader).findFirst();
+            public Optional<ReplicaSelector.ReplicaView> leader() {
+                return replicaViewSet.stream().filter(ReplicaSelector.ReplicaView::isLeader).findFirst();
             }
         };
     }

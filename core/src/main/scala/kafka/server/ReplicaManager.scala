@@ -48,7 +48,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
-import org.apache.kafka.common.replica.ReplicaSelector.ClientMetadata
+import org.apache.kafka.common.replica.ReplicaSelector.{ClientMetadata, PartitionView, ReplicaView}
 import org.apache.kafka.common.replica.{LeaderReplicaSelector, ReplicaSelector}
 
 import scala.collection.JavaConverters._
@@ -1019,13 +1019,13 @@ class ReplicaManager(val config: KafkaConfig,
     result
   }
 
-  case class SomeReplicaInfo(isLeader: Boolean,
+  case class SomeReplicaView(isLeader: Boolean,
                              endpoint: Node,
                              logOffset: Long,
-                             lastCaughtUpTimeMs: Long) extends ReplicaSelector.ReplicaInfo
+                             lastCaughtUpTimeMs: Long) extends ReplicaView
 
-  case class SomePartitionInfo(replicas: util.Set[ReplicaSelector.ReplicaInfo],
-                               leader: util.Optional[ReplicaSelector.ReplicaInfo]) extends ReplicaSelector.PartitionInfo
+  case class SomePartitionView(replicas: util.Set[ReplicaView],
+                               leader: util.Optional[ReplicaView]) extends PartitionView
 
   def findPreferredReadReplica(tp: TopicPartition, clientMetadata: ClientMetadata, replicaId: Int): Option[Int] = {
     val partition = getPartitionOrException(tp, expectLeader = false)
@@ -1039,14 +1039,14 @@ class ReplicaManager(val config: KafkaConfig,
         partition.leaderReplicaIdOpt
       } else {
         val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
-        val replicaInfoSet: Set[ReplicaSelector.ReplicaInfo] = partition.allReplicas.map(
-          replica => SomeReplicaInfo(
+        val replicaInfoSet: Set[ReplicaView] = partition.allReplicas.map(
+          replica => SomeReplicaView(
             isLeader = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId)),
             endpoint = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
             logOffset = replica.logEndOffset,
             lastCaughtUpTimeMs = replica.lastCaughtUpTimeMs
           ))
-        val partitionInfo = SomePartitionInfo(
+        val partitionInfo = SomePartitionView(
           replicas = replicaInfoSet.asJava,
           leader = replicaInfoSet.asJava.stream().filter(info => info.isLeader).findFirst()
         )
