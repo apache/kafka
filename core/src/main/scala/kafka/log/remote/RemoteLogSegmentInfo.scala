@@ -16,6 +16,7 @@
  */
 package kafka.log.remote
 
-class RemoteLogSegmentInfo {
-
+trait RemoteLogSegmentInfo {
+  def baseOffset : Long
+  def endOffset: Long
 }

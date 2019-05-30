@@ -628,7 +628,8 @@ def pkgs = [
     'streams:examples',
     'streams:streams-scala',
     'streams:test-utils',
-    'tools'
+    'tools',
+    'remote-storage-managers:hdfs'
 ] + connectPkgs
 
 /** Create one task per default Scala version */
@@ -1763,6 +1764,22 @@ project(':connect:basic-auth-extension') {
 
   jar {
     dependsOn copyDependantLibs
+  }
+}
+
+project(':remote-storage-managers:hdfs') {
+  archivesBaseName = "kafka-rsm-hdfs"
+
+  dependencies {
+    compile libs.slf4jApi
+    compile project(':core')
+
+    testCompile libs.junit
+    testRuntime libs.slf4jlog4j
+  }
+
+  javadoc {
+    enabled = false
   }
 }
 
