@@ -27,7 +27,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.streams.kstream.Consumed;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -87,7 +87,7 @@ public class KStreamRestorationIntegrationTest {
 
     @Test
     public void shouldRestoreNullRecord() throws InterruptedException, ExecutionException {
-        builder.table(INPUT_TOPIC).toStream().to(OUTPUT_TOPIC);
+        builder.table(INPUT_TOPIC, Materialized.as("ktable")).toStream().to(OUTPUT_TOPIC);
 
         final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), IntegerSerializer.class, ByteArraySerializer.class);
 
@@ -100,10 +100,10 @@ public class KStreamRestorationIntegrationTest {
 
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), IntegerDeserializer.class, ByteArrayDeserializer.class);
         // We couldn't use a #waitUntilFinalKeyValueRecordsReceived here because the byte array comparison is not triggered correctly.
-        final List<KeyValue<Integer, byte[]>> outputs = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC, initialKeyValues.size());
+        final List<KeyValue<Integer, byte[]>> outputs = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC, 1);
         for (int i = 0; i < outputs.size(); i++) {
-            assertEquals(outputs.get(i).key, initialKeyValues.get(i).key);
-            assertArrayEquals(outputs.get(i).value, initialKeyValues.get(i).value);
+            assertEquals(initialKeyValues.get(i).key, outputs.get(i).key);
+            assertArrayEquals(initialKeyValues.get(i).value, outputs.get(i).value);
         }
 
         streams.close();
