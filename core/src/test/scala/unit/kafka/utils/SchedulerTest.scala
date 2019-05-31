@@ -126,9 +126,9 @@ class SchedulerTest {
     val log = new Log(logDir, logConfig, logStartOffset = 0, recoveryPoint = recoveryPoint, scheduler,
       brokerTopicStats, mockTime, maxProducerIdExpirationMs, LogManager.ProducerIdExpirationCheckIntervalMs,
       topicPartition, producerStateManager, new LogDirFailureChannel(10))
-    assertTrue(scheduler.taskRunning(log.task))
+    assertTrue(scheduler.taskRunning(log.producerExpireCheck))
     log.close()
-    assertTrue(!(scheduler.taskRunning(log.task)))
+    assertTrue(!(scheduler.taskRunning(log.producerExpireCheck)))
   }
 
 }

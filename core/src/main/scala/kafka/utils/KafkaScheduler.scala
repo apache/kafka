@@ -51,16 +51,9 @@ trait Scheduler {
    * @param delay The amount of time to wait before the first execution
    * @param period The period with which to execute the task. If < 0 the task will execute only once.
    * @param unit The unit for the preceding times
-   * @return the task scheduled
+   * @return the task scheduled, currently Future due to the MockScheduler, but could be more specific ScheduledFuture
    */
-  def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : ScheduledFuture[_]
-
-  /**
-   * Removes a scheduled task
-   * @param task The task to remove
-   * @return a boolean for if task was sucessfully removed
-   */
-  def removeTask(task: ScheduledFuture[_]) : Boolean
+  def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : Future[_]
 }
 
 /**
@@ -87,6 +80,7 @@ class KafkaScheduler(val threads: Int,
       executor = new ScheduledThreadPoolExecutor(threads)
       executor.setContinueExistingPeriodicTasksAfterShutdownPolicy(false)
       executor.setExecuteExistingDelayedTasksAfterShutdownPolicy(false)
+      executor.setRemoveOnCancelPolicy(true)
       executor.setThreadFactory(new ThreadFactory() {
                                   def newThread(runnable: Runnable): Thread = 
                                     new KafkaThread(threadNamePrefix + schedulerThreadId.getAndIncrement(), runnable, daemon)
@@ -133,15 +127,9 @@ class KafkaScheduler(val threads: Int,
     }
   }
 
-  def taskRunning(task: ScheduledFuture[_]) : Boolean = {
+  def taskRunning(task: Future[_]) : Boolean = {
     this synchronized {
       executor.getQueue().contains(task)
-    }
-  }
-
-  def removeTask(task: ScheduledFuture[_]) : Boolean = {
-    this synchronized {
-      executor.getQueue().remove(task)
     }
   }
 

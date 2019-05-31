@@ -17,7 +17,7 @@
 package kafka.utils
 
 import scala.collection.mutable.PriorityQueue
-import java.util.concurrent.{ScheduledFuture, TimeUnit}
+import java.util.concurrent.{Future, TimeUnit}
 
 import org.apache.kafka.common.utils.Time
 
@@ -51,10 +51,10 @@ class MockScheduler(val time: Time) extends Scheduler {
   }
 
   /**
-    * Check for any tasks that need to execute. Since this is a mock scheduler this check only occurs
-    * when this method is called and the execution happens synchronously in the calling thread.
-    * If you are using the scheduler associated with a MockTime instance this call be triggered automatically.
-    */
+   * Check for any tasks that need to execute. Since this is a mock scheduler this check only occurs
+   * when this method is called and the execution happens synchronously in the calling thread.
+   * If you are using the scheduler associated with a MockTime instance this call be triggered automatically.
+   */
   def tick() {
     this synchronized {
       val now = time.milliseconds
@@ -71,12 +71,13 @@ class MockScheduler(val time: Time) extends Scheduler {
     }
   }
 
-  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): ScheduledFuture[_] = {
+  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): Future[Unit] = {
+    val task = MockTask(name, fun, time.milliseconds + delay, period = period)
     this synchronized {
-      tasks += MockTask(name, fun, time.milliseconds + delay, period = period)
+      tasks += task
       tick()
     }
-    null
+    task
   }
 
   def clear(): Unit = {
@@ -84,17 +85,9 @@ class MockScheduler(val time: Time) extends Scheduler {
       tasks.clear()
     }
   }
-
-  /**
-   * Currently not used, so not fully implemented
-   */
-  def removeTask(task: ScheduledFuture[_]): Boolean = {
-    false
-  }
-
 }
 
-case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long) extends Ordered[MockTask] {
+case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long) extends Ordered[MockTask] with Future[Unit] {
   def periodic = period >= 0
   def compare(t: MockTask): Int = {
     if(t.nextExecution == nextExecution)
@@ -103,5 +96,26 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
       -1
     else
       1
+  }
+
+  /**
+   * Not used, so not not fully implemented
+   */
+  def cancel(mayInterruptIfRunning: Boolean) : Boolean = {
+    false
+  }
+
+  def get() {
+  }
+
+  def get(timeout: Long, unit: TimeUnit){
+  }
+
+  def isCancelled: Boolean = {
+    false
+  }
+
+  def isDone: Boolean = {
+    false
   }
 }
