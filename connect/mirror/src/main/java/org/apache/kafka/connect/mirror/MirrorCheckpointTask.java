@@ -183,7 +183,8 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public void commitRecord(SourceRecord record) {
-        metrics.checkpointLatency(Checkpoint.unwrapGroup(record.sourcePartition()),
+        metrics.checkpointLatency(MirrorUtils.unwrapPartition(record.sourcePartition()),
+            Checkpoint.unwrapGroup(record.sourcePartition()),
             System.currentTimeMillis() - record.timestamp());
     }
 }

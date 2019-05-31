@@ -32,6 +32,7 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.stream.Collectors;
 
@@ -42,7 +43,7 @@ class MirrorMetrics {
     private static final String CHECKPOINT_CONNECTOR_GROUP = MirrorCheckpointConnector.class.getSimpleName();
 
     private static final Set<String> PARTITION_TAGS = new HashSet<>(Arrays.asList("target", "topic", "partition"));
-    private static final Set<String> GROUP_TAGS = new HashSet<>(Arrays.asList("source", "target", "group"));
+    private static final Set<String> GROUP_TAGS = new HashSet<>(Arrays.asList("source", "target", "group", "topic", "partition"));
     
     private static final MetricNameTemplate RECORD_COUNT = new MetricNameTemplate(
             "record-count", SOURCE_CONNECTOR_GROUP,
@@ -91,13 +92,15 @@ class MirrorMetrics {
 
     private final Metrics metrics; 
     private final Map<TopicPartition, PartitionMetrics> partitionMetrics; 
-    private final Map<String, GroupMetrics> groupMetrics; 
+    private final Map<String, GroupMetrics> groupMetrics = new HashMap<>();
     private final String source;
     private final String target;
+    private final Set<String> groups;
 
     MirrorMetrics(MirrorTaskConfig taskConfig) {
         this.target = taskConfig.targetClusterAlias();
         this.source = taskConfig.sourceClusterAlias();
+        this.groups = taskConfig.taskConsumerGroups();
         this.metrics = new Metrics();
 
         // for side-effect
@@ -111,8 +114,6 @@ class MirrorMetrics {
             .map(x -> new TopicPartition(replicationPolicy.formatRemoteTopic(source, x.topic()), x.partition()))
             .collect(Collectors.toMap(x -> x, x -> new PartitionMetrics(x)));
 
-        groupMetrics = taskConfig.taskConsumerGroups().stream()
-            .collect(Collectors.toMap(x -> x, x -> new GroupMetrics(x)));
     }
 
     void countRecord(TopicPartition topicPartition) {
@@ -131,8 +132,13 @@ class MirrorMetrics {
         partitionMetrics.get(topicPartition).byteRateSensor.record((double) bytes);
     }
 
-    void checkpointLatency(String group, long millis) {
-        groupMetrics.get(group).checkpointLatencySensor.record((double) millis);
+    void checkpointLatency(TopicPartition topicPartition, String group, long millis) {
+        group(topicPartition, group).checkpointLatencySensor.record((double) millis);
+    }
+
+    GroupMetrics group(TopicPartition topicPartition, String group) {
+        return groupMetrics.computeIfAbsent(String.join("-", topicPartition.toString(), group),
+            x -> new GroupMetrics(topicPartition, group));
     }
 
     void addReporter(MetricsReporter reporter) {
@@ -144,8 +150,11 @@ class MirrorMetrics {
         private final Sensor byteRateSensor;
         private final Sensor recordAgeSensor;
         private final Sensor replicationLatencySensor;
+        private final TopicPartition topicPartition;
      
         PartitionMetrics(TopicPartition topicPartition) {
+            this.topicPartition = topicPartition;
+
             Map<String, String> tags = new LinkedHashMap<>();
             tags.put("target", target); 
             tags.put("topic", topicPartition.topic());
@@ -169,16 +178,20 @@ class MirrorMetrics {
             replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_MIN, tags), new Min());
             replicationLatencySensor.add(metrics.metricInstance(REPLICATION_LATENCY_AVG, tags), new Avg());
         }
+
+        
     }
 
     private class GroupMetrics {
         private final Sensor checkpointLatencySensor;
 
-        GroupMetrics(String group) {
+        GroupMetrics(TopicPartition topicPartition, String group) {
             Map<String, String> tags = new LinkedHashMap<>();
             tags.put("source", source); 
             tags.put("target", target); 
             tags.put("group", group);
+            tags.put("topic", topicPartition.topic());
+            tags.put("partition", Integer.toString(topicPartition.partition()));
  
             checkpointLatencySensor = metrics.sensor("checkpoint-latency");
             checkpointLatencySensor.add(metrics.metricInstance(CHECKPOINT_LATENCY, tags), new Value());
