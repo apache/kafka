@@ -51,9 +51,9 @@ trait Scheduler {
    * @param delay The amount of time to wait before the first execution
    * @param period The period with which to execute the task. If < 0 the task will execute only once.
    * @param unit The unit for the preceding times
-   * @return the task scheduled, currently Future due to the MockScheduler, but could be more specific ScheduledFuture
+   * @return the task scheduled
    */
-  def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : Future[_]
+  def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : ScheduledFuture[_]
 }
 
 /**
@@ -127,7 +127,7 @@ class KafkaScheduler(val threads: Int,
     }
   }
 
-  def taskRunning(task: Future[_]) : Boolean = {
+  def taskRunning(task: ScheduledFuture[_]) : Boolean = {
     this synchronized {
       executor.getQueue().contains(task)
     }

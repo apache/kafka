@@ -17,7 +17,7 @@
 package kafka.utils
 
 import scala.collection.mutable.PriorityQueue
-import java.util.concurrent.{Future, TimeUnit}
+import java.util.concurrent.{Delayed, ScheduledFuture, TimeUnit}
 
 import org.apache.kafka.common.utils.Time
 
@@ -71,9 +71,10 @@ class MockScheduler(val time: Time) extends Scheduler {
     }
   }
 
-  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): Future[Unit] = {
-    val task = MockTask(name, fun, time.milliseconds + delay, period = period)
+  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): ScheduledFuture[Unit] = {
+    var task : MockTask = null
     this synchronized {
+      task = MockTask(name, fun, time.milliseconds + delay, period = period, time=time)
       tasks += task
       tick()
     }
@@ -87,7 +88,7 @@ class MockScheduler(val time: Time) extends Scheduler {
   }
 }
 
-case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long) extends Ordered[MockTask] with Future[Unit] {
+case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long, time: Time) extends ScheduledFuture[Unit] {
   def periodic = period >= 0
   def compare(t: MockTask): Int = {
     if(t.nextExecution == nextExecution)
@@ -118,4 +119,17 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
   def isDone: Boolean = {
     false
   }
+
+  def getDelay(unit: TimeUnit): Long = {
+    this synchronized {
+      time.milliseconds - nextExecution
+    }
+  }
+
+  def compareTo(o : Delayed) : Int = {
+    this.getDelay(TimeUnit.MILLISECONDS).compareTo(o.getDelay(TimeUnit.MILLISECONDS))
+  }
+}
+object MockTask {
+  implicit def MockTaskOrdering: Ordering[MockTask] = (x: MockTask, y: MockTask) => x.compare(y)
 }
