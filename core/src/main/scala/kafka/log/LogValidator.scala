@@ -296,9 +296,9 @@ private[kafka] object LogValidator extends Logging {
     // if we are on version 2 and beyond, and we know we are going for in place assignment,
     // then we can optimize the iterator to skip key / value / headers since they would not be used at all
     val recordsIterator = if (inPlaceAssignment && batchMagic >= RecordBatch.MAGIC_VALUE_V2)
-      batch.skipKeyValueIterator().asInstanceOf[java.util.Iterator[Record]]
+      batch.skipKeyValueIterator()
     else
-      batch.iterator()
+      batch.streamingIterator(BufferSupplier.NO_CACHING)
 
     for (record <- batch.asScala) {
       if (sourceCodec != NoCompressionCodec && record.isCompressed)
@@ -324,11 +324,7 @@ private[kafka] object LogValidator extends Logging {
 
       validatedRecords += record
     }
-
-    recordsIterator match {
-      case closeableIterator: CloseableIterator[Record] => closeableIterator.close()
-      case _ =>
-    }
+    recordsIterator.close()
 
     if (!inPlaceAssignment) {
       val (producerId, producerEpoch, sequence, isTransactional) = {
