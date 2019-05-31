@@ -56,11 +56,39 @@ class LogValidatorTest {
     checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE)
   }
 
+  @Test
+  def testContinuousOffsetsCompressedV1(): Unit = {
+    checkContinuousOffsetsCompressed(RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP)
+  }
+
+  @Test
+  def testContinuousOffsetsCompressedV2(): Unit = {
+    checkContinuousOffsetsCompressed(RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP)
+  }
+
+  @Test
+  def testMismatchMagicCompressed(): Unit = {
+    checkMismatchMagicCompressed(RecordBatch.MAGIC_VALUE_V0, RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP)
+    checkMismatchMagicCompressed(RecordBatch.MAGIC_VALUE_V1, RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP)
+  }
+
   private def checkOnlyOneBatchCompressed(magic: Byte, compressionType: CompressionType) {
     validateMessages(createRecords(magic, 0L, compressionType), magic, compressionType)
 
     assertThrows[InvalidRecordException] {
       validateMessages(createTwoBatchedRecords(magic, 0L, compressionType), magic, compressionType)
+    }
+  }
+
+  private def checkContinuousOffsetsCompressed(magic: Byte, compressionType: CompressionType) {
+    assertThrows[InvalidRecordException] {
+      validateMessages(createIncontinuousOffsetRecords(magic, compressionType), magic, compressionType)
+    }
+  }
+
+  private def checkMismatchMagicCompressed(batchMagic: Byte, recordMagic: Byte, compressionType: CompressionType) {
+    assertThrows[InvalidRecordException] {
+      validateMessages(createMismatchMagicRecords(batchMagic, recordMagic, compressionType), batchMagic, compressionType)
     }
   }
 
@@ -1182,9 +1210,9 @@ class LogValidatorTest {
     builder.build()
   }
 
-  def createTwoBatchedRecords(magicValue: Byte,
-                              timestamp: Long = RecordBatch.NO_TIMESTAMP,
-                              codec: CompressionType): MemoryRecords = {
+  private def createTwoBatchedRecords(magicValue: Byte,
+                                      timestamp: Long = RecordBatch.NO_TIMESTAMP,
+                                      codec: CompressionType): MemoryRecords = {
     val buf = ByteBuffer.allocate(2048)
     var builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
     builder.append(10L, "1".getBytes(), "a".getBytes())
@@ -1196,6 +1224,27 @@ class LogValidatorTest {
 
     buf.flip()
     MemoryRecords.readableRecords(buf.slice())
+  }
+
+  private def createIncontinuousOffsetRecords(magicValue: Byte,
+                                              codec: CompressionType): MemoryRecords = {
+    val buf = ByteBuffer.allocate(512)
+    val builder = MemoryRecords.builder(buf, magicValue, codec, TimestampType.CREATE_TIME, 0L)
+    builder.appendWithOffset(0, RecordBatch.NO_TIMESTAMP, null, "hello".getBytes)
+    builder.appendWithOffset(2, RecordBatch.NO_TIMESTAMP, null, "there".getBytes)
+    builder.appendWithOffset(3, RecordBatch.NO_TIMESTAMP, null, "beautiful".getBytes)
+    builder.build()
+  }
+
+  private def createMismatchMagicRecords(batchMagicValue: Byte,
+                                         recordMagicValue: Byte,
+                                         codec: CompressionType): MemoryRecords = {
+    val buf = ByteBuffer.allocate(512)
+    val builder = MemoryRecords.builder(buf, batchMagicValue, codec, TimestampType.CREATE_TIME, 0L)
+    builder.appendWithOldFormat(0, RecordBatch.NO_TIMESTAMP, null, null, recordMagicValue)
+    builder.appendWithOldFormat(1, RecordBatch.NO_TIMESTAMP, null, null, recordMagicValue)
+    builder.appendWithOldFormat(2, RecordBatch.NO_TIMESTAMP, null, null, recordMagicValue)
+    builder.build()
   }
 
   /* check that offsets are assigned consecutively from the given base offset */

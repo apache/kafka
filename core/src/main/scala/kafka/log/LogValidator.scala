@@ -310,8 +310,7 @@ private[kafka] object LogValidator extends Logging {
 
       uncompressedSizeInBytes += record.sizeInBytes()
       if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
-        // Check if we need to overwrite offset
-        // No in place assignment situation 3
+        // inner records offset should always be continuous
         val expectedOffset = expectedInnerOffset.getAndIncrement()
         if (record.offset != expectedOffset)
           throw new InvalidRecordException(s"Inner record $record inside the compressed record batch does not have incremental offsets, expected offset is $expectedOffset")
@@ -319,7 +318,7 @@ private[kafka] object LogValidator extends Logging {
           maxTimestamp = record.timestamp
       }
 
-      // No in place assignment situation 4
+      // inner record should have the same magic as the outer record batch
       if (!record.hasMagic(batchMagic))
         throw new InvalidRecordException(s"Inner record $record's magic byte is not the same as the magic byte $batchMagic of the outer batch")
 
