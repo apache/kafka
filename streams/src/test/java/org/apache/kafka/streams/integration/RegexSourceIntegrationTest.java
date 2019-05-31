@@ -90,7 +90,6 @@ public class RegexSourceIntegrationTest {
     private static final String PARTITIONED_TOPIC_1 = "partitioned-1";
     private static final String PARTITIONED_TOPIC_2 = "partitioned-2";
 
-    private static final String DEFAULT_OUTPUT_TOPIC_NAME = "outputTopic";
     private static final String STRING_SERDE_CLASSNAME = Serdes.String().getClass().getName();
     private Properties streamsConfiguration;
     private static final String STREAM_TASKS_NOT_UPDATED = "Stream tasks not updated";
@@ -175,8 +174,8 @@ public class RegexSourceIntegrationTest {
 
     }
 
-    private String createTopic(final String s) throws InterruptedException {
-        final String outputTopic = DEFAULT_OUTPUT_TOPIC_NAME + s;
+    private String createTopic(final String suffix) throws InterruptedException {
+        final String outputTopic = "outputTopic" + suffix;
         CLUSTER.createTopic(outputTopic);
         return outputTopic;
     }
