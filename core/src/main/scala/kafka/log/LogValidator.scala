@@ -24,7 +24,7 @@ import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{CloseableIterator, Time}
 
 import scala.collection.mutable
 import scala.collection.JavaConverters._
@@ -253,9 +253,8 @@ private[kafka] object LogValidator extends Logging {
   /**
    * We cannot do in place assignment in one of the following situations:
    * 1. Source and target compression codec are different
-   * 2. When magic value to use is 0 because offsets need to be overwritten
-   * 3. When magic value to use is above 0, but some fields of inner messages need to be overwritten.
-   * 4. Message format conversion is needed.
+   * 2. When the target magic is not equal to batches' magic, meaning format conversion is needed.
+   * 3. When the target magic is equal to V0, meaning absolute offsets need to be re-assigned.
    */
   def validateMessagesAndAssignOffsetsCompressed(records: MemoryRecords,
                                                  offsetCounter: LongRef,
@@ -271,8 +270,8 @@ private[kafka] object LogValidator extends Logging {
                                                  isFromClient: Boolean,
                                                  interBrokerProtocolVersion: ApiVersion): ValidationAndOffsetAssignResult = {
 
-    // No in place assignment situation 1 and 2
-    var inPlaceAssignment = sourceCodec == targetCodec && toMagic > RecordBatch.MAGIC_VALUE_V0
+    // No in place assignment situation 1
+    var inPlaceAssignment = sourceCodec == targetCodec
 
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     val expectedInnerOffset = new LongRef(0)
@@ -285,11 +284,22 @@ private[kafka] object LogValidator extends Logging {
     validateBatch(batch, isFromClient, toMagic)
     uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())
 
+    // No in place assignment situation 2 and 3
+    val batchMagic = batch.magic()
+    if (toMagic != batchMagic || toMagic == RecordBatch.MAGIC_VALUE_V0)
+      inPlaceAssignment = false
+
     // Do not compress control records unless they are written compressed
     if (sourceCodec == NoCompressionCodec && batch.isControlBatch)
       inPlaceAssignment = true
 
-    val recordsIterator = batch.skipKeyValueIterator()
+    // if we are on version 2 and beyond, and we know we are going for in place assignment,
+    // then we can optimize the iterator to skip key / value / headers since they would not be used at all
+    val recordsIterator = if (inPlaceAssignment && batchMagic >= RecordBatch.MAGIC_VALUE_V2)
+      batch.skipKeyValueIterator().asInstanceOf[java.util.Iterator[Record]]
+    else
+      batch.iterator()
+
     for (record <- batch.asScala) {
       if (sourceCodec != NoCompressionCodec && record.isCompressed)
         throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
@@ -302,19 +312,24 @@ private[kafka] object LogValidator extends Logging {
       if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
         // Check if we need to overwrite offset
         // No in place assignment situation 3
-        if (record.offset != expectedInnerOffset.getAndIncrement())
-          inPlaceAssignment = false
+        val expectedOffset = expectedInnerOffset.getAndIncrement()
+        if (record.offset != expectedOffset)
+          throw new InvalidRecordException(s"Inner record $record inside the compressed record batch does not have incremental offsets, expected offset is $expectedOffset")
         if (record.timestamp > maxTimestamp)
           maxTimestamp = record.timestamp
       }
 
       // No in place assignment situation 4
-      if (!record.hasMagic(toMagic))
-        inPlaceAssignment = false
+      if (!record.hasMagic(batchMagic))
+        throw new InvalidRecordException(s"Inner record $record's magic byte is not the same as the magic byte $batchMagic of the outer batch")
 
       validatedRecords += record
     }
-    recordsIterator.close()
+
+    recordsIterator match {
+      case closeableIterator: CloseableIterator[Record] => closeableIterator.close()
+      case _ =>
+    }
 
     if (!inPlaceAssignment) {
       val (producerId, producerEpoch, sequence, isTransactional) = {
