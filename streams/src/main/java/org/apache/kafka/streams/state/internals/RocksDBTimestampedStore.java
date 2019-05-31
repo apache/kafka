@@ -213,8 +213,13 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
          */
         @Override
         public KeyValueIterator<Bytes, byte[]> prefix(Bytes prefix) {
-            //TODO - Bellemare - How do we support this here?
-            throw new UnsupportedOperationException("prefixScan() not supported in " + getClass().getName());
+            //TODO - Bellemare - Test this to ensure it works
+            return new RocksDBDualCFPrefixIterator(
+                    name,
+                    db.newIterator(newColumnFamily),
+                    db.newIterator(oldColumnFamily),
+                    prefix
+            );
         }
 
         @Override
@@ -409,4 +414,42 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
     }
 
+    private class RocksDBDualCFPrefixIterator extends RocksDBDualCFIterator {
+        // RocksDB's JNI interface does not expose getters/setters that allow the
+        // comparator to be pluggable, and the default is lexicographic, so it's
+        // safe to just force lexicographic comparator here for now.
+        private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
+        private final byte[] rawPrefix;
+
+        RocksDBDualCFPrefixIterator(final String storeName,
+                                    final RocksIterator iterWithTimestamp,
+                                    final RocksIterator iterNoTimestamp,
+                                    final Bytes prefix) {
+            super(storeName, iterWithTimestamp, iterNoTimestamp);
+            rawPrefix = prefix.get();
+            iterWithTimestamp.seek(rawPrefix);
+            iterNoTimestamp.seek(rawPrefix);
+        }
+
+        @Override
+        public KeyValue<Bytes, byte[]> makeNext() {
+            final KeyValue<Bytes, byte[]> next = super.makeNext();
+
+            if (next == null) {
+                return allDone();
+            } else {
+                //TODO - Test this.
+                final byte[] rawNextKey = next.key.get();
+                for (int i = 0; i < rawPrefix.length; i++) {
+                    if (i == rawNextKey.length) {
+                        throw new ArrayIndexOutOfBoundsException("Unexpected RocksDB Key Value. Should have been skipped with seek.");
+                    }
+                    if (rawNextKey[i] != rawPrefix[i]) {
+                        return allDone();
+                    }
+                }
+                return next;
+            }
+        }
+    }
 }
