@@ -521,7 +521,7 @@ public final class InMemoryTimeOrderedKeyValueBuffer<K, V> implements TimeOrdere
         size += 8; // buffer time
         size += key.get().length;
         if (value != null) {
-            size += value.sizeBytes();
+            size += value.residentMemorySizeEstimate();
         }
         return size;
     }

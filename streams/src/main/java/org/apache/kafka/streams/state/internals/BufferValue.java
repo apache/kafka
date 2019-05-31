@@ -97,8 +97,8 @@ public final class BufferValue {
 
         final int sizeOfValueLength = Integer.BYTES;
 
-        final int sizeOfPriorValue = priorValue == null || priorValue == oldValue ? 0 : priorValue.length;
-        final int sizeOfOldValue = oldValue == null ? 0 : oldValue.length;
+        final int sizeOfPriorValue = priorValue == null ? 0 : priorValue.length;
+        final int sizeOfOldValue = oldValue == null || priorValue == oldValue ? 0 : oldValue.length;
         final int sizeOfNewValue = newValue == null ? 0 : newValue.length;
 
         final byte[] serializedContext = recordContext.serialize();
@@ -138,11 +138,11 @@ public final class BufferValue {
         }
     }
 
-    long sizeBytes() {
-        return (priorValue == null || priorValue == oldValue ? 0 : priorValue.length)
-            + (oldValue == null ? 0 : oldValue.length)
+    long residentMemorySizeEstimate() {
+        return (priorValue == null ? 0 : priorValue.length)
+            + (oldValue == null || priorValue == oldValue ? 0 : oldValue.length)
             + (newValue == null ? 0 : newValue.length)
-            + recordContext.sizeBytes();
+            + recordContext.residentMemorySizeEstimate();
     }
 
     @Override
