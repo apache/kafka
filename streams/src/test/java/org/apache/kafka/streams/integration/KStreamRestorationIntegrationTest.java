@@ -28,8 +28,6 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -77,30 +75,34 @@ public class KStreamRestorationIntegrationTest {
         CLUSTER.createTopics(INPUT_TOPIC);
         CLUSTER.createTopics(OUTPUT_TOPIC);
 
-        final StoreBuilder<KeyValueStore<Integer, byte[]>> keyValueStoreBuilder =
-                Stores.keyValueStoreBuilder(Stores.persistentTimestampedKeyValueStore(STATE_STORE_NAME),
-                        Serdes.Integer(),
-                        Serdes.ByteArray());
-        builder.addStateStore(keyValueStoreBuilder);
         IntegrationTestUtils.purgeLocalStreamsState(streamsConfiguration);
     }
 
     @Test
     public void shouldRestoreNullRecord() throws InterruptedException, ExecutionException {
-        builder.table(INPUT_TOPIC, Materialized.as("ktable")).toStream().to(OUTPUT_TOPIC);
+        builder.table(INPUT_TOPIC, Materialized.<Integer, byte[]>as(
+                Stores.persistentTimestampedKeyValueStore(STATE_STORE_NAME))
+                .withKeySerde(Serdes.Integer())
+                .withValueSerde(Serdes.ByteArray())
+                .withCachingDisabled()).toStream().to(OUTPUT_TOPIC);
 
-        final Properties producerConfig = TestUtils.producerConfig(CLUSTER.bootstrapServers(), IntegerSerializer.class, ByteArraySerializer.class);
+        final Properties producerConfig = TestUtils.producerConfig(
+                CLUSTER.bootstrapServers(), IntegerSerializer.class, ByteArraySerializer.class);
 
-        final List<KeyValue<Integer, byte[]>> initialKeyValues = Arrays.asList(KeyValue.pair(3, null), KeyValue.pair(1, new byte[]{5}));
+        final List<KeyValue<Integer, byte[]>> initialKeyValues = Arrays.asList(
+                KeyValue.pair(3, new byte[]{3}), KeyValue.pair(3, null), KeyValue.pair(1, new byte[]{1}));
 
-        IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC, initialKeyValues, producerConfig, mockTime);
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                INPUT_TOPIC, initialKeyValues, producerConfig, mockTime);
 
         KafkaStreams streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
         streams.start();
 
-        final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), IntegerDeserializer.class, ByteArrayDeserializer.class);
+        final Properties consumerConfig = TestUtils.consumerConfig(
+                CLUSTER.bootstrapServers(), IntegerDeserializer.class, ByteArrayDeserializer.class);
         // We couldn't use a #waitUntilFinalKeyValueRecordsReceived here because the byte array comparison is not triggered correctly.
-        final List<KeyValue<Integer, byte[]>> outputs = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC, 1);
+        final List<KeyValue<Integer, byte[]>> outputs = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+                consumerConfig, OUTPUT_TOPIC, 3);
         for (int i = 0; i < outputs.size(); i++) {
             assertEquals(initialKeyValues.get(i).key, outputs.get(i).key);
             assertArrayEquals(initialKeyValues.get(i).value, outputs.get(i).value);
@@ -110,11 +112,11 @@ public class KStreamRestorationIntegrationTest {
         streams.cleanUp();
 
         // Restart the stream instance. There should not be exception handling the null value within changelog topic.
-        final List<KeyValue<Integer, byte[]>> expectedNewKeyValues = Collections.singletonList(KeyValue.pair(1, null));
-        IntegrationTestUtils.produceKeyValuesSynchronously(INPUT_TOPIC, expectedNewKeyValues, producerConfig, mockTime);
+        IntegrationTestUtils.produceKeyValuesSynchronously(
+                INPUT_TOPIC, Collections.singletonList(KeyValue.pair(2, new byte[3])), producerConfig, mockTime);
         streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
         streams.start();
-        IntegrationTestUtils.waitUntilFinalKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC, expectedNewKeyValues);
+        IntegrationTestUtils.waitUntilMinRecordsReceived(consumerConfig, OUTPUT_TOPIC, 1);
         streams.close();
     }
 }

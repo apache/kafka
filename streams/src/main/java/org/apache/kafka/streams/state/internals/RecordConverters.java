@@ -27,16 +27,11 @@ public final class RecordConverters {
     private static final RecordConverter RAW_TO_TIMESTAMED_INSTANCE = record -> {
         final byte[] rawValue = record.value();
         final long timestamp = record.timestamp();
-//        final byte[] recordValue = rawValue == null ? null :
-//            ByteBuffer.allocate(8 + rawValue.length)
-//                .putLong(timestamp)
-//                .put(rawValue)
-//                .array();
-        final byte[] recordValue =
-                ByteBuffer.allocate(8 + rawValue.length)
-                        .putLong(timestamp)
-                        .put(rawValue)
-                        .array();
+        final byte[] recordValue = rawValue == null ? null :
+            ByteBuffer.allocate(8 + rawValue.length)
+                .putLong(timestamp)
+                .put(rawValue)
+                .array();
         return new ConsumerRecord<>(
             record.topic(),
             record.partition(),
