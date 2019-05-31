@@ -1049,7 +1049,7 @@ class ReplicaManager(val config: KafkaConfig,
           ))
         val partitionInfo = SomePartitionView(
           replicas = replicaInfoSet.asJava,
-          leader = replicaInfoSet.asJava.stream().filter(info => info.isLeader).findFirst()
+          leader = CoreUtils.asJavaOptional(replicaInfoSet.find(info => info.isLeader))
         )
         Option.apply(replicaSelector.select(tp, clientMetadata, partitionInfo).orElse(null))
           .filter(!_.endpoint.isEmpty)
