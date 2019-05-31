@@ -120,7 +120,7 @@ public final class BufferValue {
         } else if (priorValue == oldValue) {
             buffer.putInt(OLD_PREV_DUPLICATE_VALUE_SENTINEL);
         } else {
-            buffer.putInt(oldValue.length);
+            buffer.putInt(sizeOfOldValue);
             buffer.put(oldValue);
         }
 
