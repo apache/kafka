@@ -56,9 +56,16 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
             @Override
             public void process(K key, SubscriptionResponseWrapper<VO> value) {
                 final V currentValue = valueGetter.get(key);
+                //We are unable to access the actual source topic name for the valueSerializer at runtime, without
+                //tightly coupling to KTableRepartitionProcessorSupplier.
+                //While we can use the source topic from where the events came from, we shouldn't serialize against it
+                //as it causes problems with the confluent schema registry, which requires each topic have only a single
+                //registered schema.
+                String dummySerializationTopic = context().topic() + "-join-resolver";
                 long[] currentHash = (currentValue == null ?
                         Murmur3.hash128(new byte[]{}):
-                        Murmur3.hash128(valueSerializer.serialize(context().topic(), currentValue)));
+
+                        Murmur3.hash128(valueSerializer.serialize(dummySerializationTopic, currentValue)));
 
                 final long[] messageHash = value.getOriginalValueHash();
 
