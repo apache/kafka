@@ -19,12 +19,14 @@ package org.apache.kafka.streams.examples.wordcount;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.MockProcessorContext;
+import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
 
 import java.util.Iterator;
+import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -47,7 +49,7 @@ public class WordCountProcessorTest {
         context.register(store, null);
 
         // Create and initialize the processor under test
-        final TypedProcessor<String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();
+        final Processor<String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();
         processor.init(context);
 
         // send a record to the processor
@@ -58,7 +60,8 @@ public class WordCountProcessorTest {
         assertTrue(context.forwarded().isEmpty());
 
         // now, we trigger the punctuator, which iterates over the state store and forwards the contents.
-        context.scheduledPunctuators().get(0).getPunctuator().punctuate(0L);
+        final List<MockProcessorContext.CapturedPunctuator> list = context.scheduledPunctuators();
+        list.get(0).getPunctuator().punctuate(0L);
 
         // finally, we can verify the output.
         final Iterator<MockProcessorContext.CapturedForward> capturedForwards = context.forwarded().iterator();
