@@ -22,21 +22,29 @@ import kafka.log.remote.RDI;
 import kafka.log.remote.RemoteLogIndexEntry;
 import kafka.log.remote.RemoteLogSegmentInfo;
 import kafka.log.remote.RemoteStorageManager;
+import org.apache.hadoop.conf.Configuration;
+import org.apache.hadoop.fs.FileSystem;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.Records;
 import scala.Tuple2;
 import scala.collection.Seq;
 
+import java.io.IOException;
+import java.net.URI;
 import java.util.Map;
 
 public class HDFSRemoteStorageManager implements RemoteStorageManager {
+    private URI baseURI = null;
+    private Configuration hadoopConf = null;
+    private FileSystem fs = null;
+
     @Override
-    public Tuple2<RDI, Seq<RemoteLogIndexEntry>> copyLogSegment(LogSegment logSegment) {
+    public Tuple2<RDI, Seq<RemoteLogIndexEntry>> copyLogSegment(TopicPartition topicPartition, LogSegment logSegment) {
         return null;
     }
 
     @Override
-    public boolean cancelCopyingLogSegment(LogSegment logSegment) {
-        return false;
+    public void cancelCopyingLogSegment(TopicPartition topicPartition) {
     }
 
     @Override
@@ -55,7 +63,7 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
     }
 
     @Override
-    public LogReadInfo read(RDI remoteLocation, int maxBytes, long offset) {
+    public Records read(RDI remoteLocation, int maxBytes, long offset) {
         return null;
     }
 
@@ -64,8 +72,20 @@ public class HDFSRemoteStorageManager implements RemoteStorageManager {
 
     }
 
+    /**
+     * Initialize this instance with the given configs
+     *
+     * @param configs Key-Value pairs of configuration parameters
+     */
     @Override
     public void configure(Map<String, ?> configs) {
-
+        baseURI = URI.create("http://localhost:9000/cluster"); // TODO: make this configurable
+        hadoopConf = new Configuration(); // Load configuration from hadoop configuration files in class path
+        try {
+            fs = FileSystem.get(baseURI, hadoopConf);
+        }
+        catch (IOException e) {
+            // TODO:
+        }
     }
 }

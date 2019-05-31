@@ -1772,6 +1772,7 @@ project(':remote-storage-managers:hdfs') {
 
   dependencies {
     compile libs.slf4jApi
+    compile group: 'org.apache.hadoop', name: 'hadoop-client', version: '3.1.2'
     compile project(':core')
 
     testCompile libs.junit

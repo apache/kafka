@@ -45,9 +45,11 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
         try {
           val segment = watchedSegments.take()
 
+          val tp = new TopicPartition("", 0) // TODO: find out the topic-partition that the segment belongs to
+
           //todo-satish Not all LogSegments on different replicas are same. So, we need to avoid duplicating log-segments in remote
           // tier with similar offset ranges.
-          val tuple = remoteStorageManager.copyLogSegment(segment)
+          val tuple = remoteStorageManager.copyLogSegment(tp, segment)
           //todo-satish need to explore whether the above should return RDI as each RemoteLogIndexEntry has RDI. That
           // can be optimized not to have RDI value for each entry.
           val rdi = tuple._1
@@ -130,7 +132,7 @@ class RemoteLogManager(logManager: LogManager) extends Configurable with Closeab
       logManager.getLog(tp).foreach(log => log.logSegments
         .foreach(logSegment => {
           watchedSegments.remove(logSegment)
-          remoteStorageManager.cancelCopyingLogSegment(logSegment)
+          remoteStorageManager.cancelCopyingLogSegment(tp)
         }))
     })
     true

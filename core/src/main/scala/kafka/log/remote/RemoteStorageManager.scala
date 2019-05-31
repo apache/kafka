@@ -16,7 +16,8 @@
  */
 package kafka.log.remote
 
-import kafka.log.{LogReadInfo, LogSegment}
+import kafka.log.LogSegment
+import org.apache.kafka.common.record.Records
 import org.apache.kafka.common.{Configurable, TopicPartition}
 
 // all these APIs are still experimental, in poc mode.
@@ -27,18 +28,18 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * Returns the RDIs of the remote data
    * This method is used by the leader
    *
+   * @param topicPartition The topic-partition this LogSegment belongs to
    * @param logSegment
    * @return
    */
-  def copyLogSegment(logSegment: LogSegment): (RDI, Seq[RemoteLogIndexEntry])
+  def copyLogSegment(topicPartition: TopicPartition, logSegment: LogSegment): (RDI, Seq[RemoteLogIndexEntry])
 
   /**
-   * Cancels the logsegment that is being copied currently to remote storage
+   * Cancels the unfinished LogSegment copying of this given topic-partition
    *
-   * @param logSegment
-   * @return Returns true if it cancels copying else it returns false
+   * @param topicPartition
    */
-  def cancelCopyingLogSegment(logSegment: LogSegment): Boolean
+  def cancelCopyingLogSegment(topicPartition: TopicPartition): Unit
 
   /**
    * List the remote log segment files of the specified topicPartition
@@ -71,7 +72,7 @@ trait RemoteStorageManager extends Configurable with AutoCloseable {
    * @param offset
    * @return
    */
-  def read(remoteLocation: RDI, maxBytes: Int, offset: Long): LogReadInfo
+  def read(remoteLocation: RDI, maxBytes: Int, offset: Long): Records
 
   /**
    * stops all the threads and closes the instance.
