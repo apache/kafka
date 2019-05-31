@@ -90,7 +90,7 @@ public class RegexSourceIntegrationTest {
     private static final String PARTITIONED_TOPIC_1 = "partitioned-1";
     private static final String PARTITIONED_TOPIC_2 = "partitioned-2";
 
-    private static final String DEFAULT_OUTPUT_TOPIC = "outputTopic";
+    private static final String DEFAULT_OUTPUT_TOPIC_NAME = "outputTopic";
     private static final String STRING_SERDE_CLASSNAME = Serdes.String().getClass().getName();
     private Properties streamsConfiguration;
     private static final String STREAM_TASKS_NOT_UPDATED = "Stream tasks not updated";
@@ -107,15 +107,13 @@ public class RegexSourceIntegrationTest {
             TOPIC_Y,
             TOPIC_Z,
             FA_TOPIC,
-            FOO_TOPIC,
-            DEFAULT_OUTPUT_TOPIC);
+            FOO_TOPIC);
         CLUSTER.createTopic(PARTITIONED_TOPIC_1, 2, 1);
         CLUSTER.createTopic(PARTITIONED_TOPIC_2, 2, 1);
     }
 
     @Before
-    public void setUp() throws Exception {
-        CLUSTER.deleteAndRecreateTopics(DEFAULT_OUTPUT_TOPIC);
+    public void setUp() {
 
         final Properties properties = new Properties();
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
@@ -141,6 +139,8 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testRegexMatchesTopicsAWhenCreated() throws Exception {
+        final String outputTopic = createTopic("_1");
+
         final Serde<String> stringSerde = Serdes.String();
         final List<String> expectedFirstAssignment = Collections.singletonList("TEST-TOPIC-1");
         final List<String> expectedSecondAssignment = Arrays.asList("TEST-TOPIC-1", "TEST-TOPIC-2");
@@ -151,7 +151,7 @@ public class RegexSourceIntegrationTest {
 
         final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
 
-        pattern1Stream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
+        pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
         final List<String> assignedTopics = new CopyOnWriteArrayList<>();
         streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
             @Override
@@ -175,8 +175,15 @@ public class RegexSourceIntegrationTest {
 
     }
 
+    private String createTopic(final String s) throws InterruptedException {
+        final String outputTopic = DEFAULT_OUTPUT_TOPIC_NAME + s;
+        CLUSTER.createTopic(outputTopic);
+        return outputTopic;
+    }
+
     @Test
     public void testRegexMatchesTopicsAWhenDeleted() throws Exception {
+        final String outputTopic = createTopic("_2");
 
         final Serde<String> stringSerde = Serdes.String();
         final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-A", "TEST-TOPIC-B");
@@ -188,7 +195,7 @@ public class RegexSourceIntegrationTest {
 
         final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-[A-Z]"));
 
-        pattern1Stream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
+        pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
 
         final List<String> assignedTopics = new CopyOnWriteArrayList<>();
         streams = new KafkaStreams(builder.build(), streamsConfiguration, new DefaultKafkaClientSupplier() {
@@ -245,6 +252,7 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testShouldReadFromRegexAndNamedTopics() throws Exception {
+        final String outputTopic = createTopic("_3");
 
         final String topic1TestMessage = "topic-1 test";
         final String topic2TestMessage = "topic-2 test";
@@ -262,9 +270,9 @@ public class RegexSourceIntegrationTest {
         final KStream<String, String> pattern2Stream = builder.stream(Pattern.compile("topic-[A-D]"));
         final KStream<String, String> namedTopicsStream = builder.stream(Arrays.asList(TOPIC_Y, TOPIC_Z));
 
-        pattern1Stream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
-        pattern2Stream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
-        namedTopicsStream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
+        pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
+        pattern2Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
+        namedTopicsStream.to(outputTopic, Produced.with(stringSerde, stringSerde));
 
         streams = new KafkaStreams(builder.build(), streamsConfiguration);
         streams.start();
@@ -281,7 +289,7 @@ public class RegexSourceIntegrationTest {
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
 
         final List<String> expectedReceivedValues = Arrays.asList(topicATestMessage, topic1TestMessage, topic2TestMessage, topicCTestMessage, topicYTestMessage, topicZTestMessage);
-        final List<KeyValue<String, String>> receivedKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 6);
+        final List<KeyValue<String, String>> receivedKeyValues = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, outputTopic, 6);
         final List<String> actualValues = new ArrayList<>(6);
 
         for (final KeyValue<String, String> receivedKeyValue : receivedKeyValues) {
@@ -295,6 +303,7 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testMultipleConsumersCanReadFromPartitionedTopic() throws Exception {
+        final String outputTopic = createTopic("_4");
 
         KafkaStreams partitionedStreamsLeader = null;
         KafkaStreams partitionedStreamsFollower = null;
@@ -308,8 +317,8 @@ public class RegexSourceIntegrationTest {
             final KStream<String, String> partitionedStreamFollower = builderFollower.stream(Pattern.compile("partitioned-\\d"));
 
 
-            partitionedStreamLeader.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
-            partitionedStreamFollower.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
+            partitionedStreamLeader.to(outputTopic, Produced.with(stringSerde, stringSerde));
+            partitionedStreamFollower.to(outputTopic, Produced.with(stringSerde, stringSerde));
 
             final List<String> leaderAssignment = new ArrayList<>();
             final List<String> followerAssignment = new ArrayList<>();
@@ -355,6 +364,8 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testNoMessagesSentExceptionFromOverlappingPatterns() throws Exception {
+        final String outputTopic = createTopic("_5");
+
         final String fMessage = "fMessage";
         final String fooMessage = "fooMessage";
         final Serde<String> stringSerde = Serdes.String();
@@ -365,8 +376,8 @@ public class RegexSourceIntegrationTest {
         final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("foo.*"));
         final KStream<String, String> pattern2Stream = builder.stream(Pattern.compile("f.*"));
 
-        pattern1Stream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
-        pattern2Stream.to(DEFAULT_OUTPUT_TOPIC, Produced.with(stringSerde, stringSerde));
+        pattern1Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
+        pattern2Stream.to(outputTopic, Produced.with(stringSerde, stringSerde));
 
         final AtomicBoolean expectError = new AtomicBoolean(false);
 
@@ -385,7 +396,7 @@ public class RegexSourceIntegrationTest {
 
         final Properties consumerConfig = TestUtils.consumerConfig(CLUSTER.bootstrapServers(), StringDeserializer.class, StringDeserializer.class);
         try {
-            IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, DEFAULT_OUTPUT_TOPIC, 2, 5000);
+            IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, outputTopic, 2, 5000);
             throw new IllegalStateException("This should not happen: an assertion error should have been thrown before this.");
         } catch (final AssertionError e) {
             // this is fine
