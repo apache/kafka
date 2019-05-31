@@ -18,29 +18,32 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.record.TimestampType;
-import org.junit.Assert;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
 
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
+import static org.junit.Assert.assertArrayEquals;
+import static org.junit.Assert.assertNull;
 
 public class RecordConvertersTest {
 
+    private final RecordConverter timestampedValueConverter = rawValueToTimestampedValue();
+
     @Test
-    public void testNullRawValueShouldReturnNullRecordValue() {
+    public void shouldPreserveNullValueOnConversion() {
         final ConsumerRecord<byte[], byte[]> nullValueRecord = new ConsumerRecord<>("", 0, 0L, new byte[0], null);
-        Assert.assertNull(rawValueToTimestampedValue().convert(nullValueRecord).value());
+        assertNull(timestampedValueConverter.convert(nullValueRecord).value());
     }
 
     @Test
-    public void testEncodeRecordValue() {
+    public void shouldAddTimestampToValueOnConversionWhenValueIsNotNull() {
         final long timestamp = 10L;
         final byte[] value = new byte[1];
         final ConsumerRecord<byte[], byte[]> inputRecord = new ConsumerRecord<>(
                 "topic", 1, 0, timestamp, TimestampType.CREATE_TIME, 0L, 0, 0, new byte[0], value);
         final byte[] expectedValue = ByteBuffer.allocate(9).putLong(timestamp).put(value).array();
-        final byte[] actualValue = rawValueToTimestampedValue().convert(inputRecord).value();
-        Assert.assertArrayEquals(expectedValue, actualValue);
+        final byte[] actualValue = timestampedValueConverter.convert(inputRecord).value();
+        assertArrayEquals(expectedValue, actualValue);
     }
 }

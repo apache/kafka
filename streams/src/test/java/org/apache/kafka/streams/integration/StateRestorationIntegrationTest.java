@@ -47,7 +47,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 
 @Category({IntegrationTest.class})
-public class KStreamRestorationIntegrationTest {
+public class StateRestorationIntegrationTest {
     private StreamsBuilder builder = new StreamsBuilder();
 
     private static final String APPLICATION_ID = "restoration-test-app";
@@ -102,21 +102,30 @@ public class KStreamRestorationIntegrationTest {
                 CLUSTER.bootstrapServers(), IntegerDeserializer.class, ByteArrayDeserializer.class);
         // We couldn't use a #waitUntilFinalKeyValueRecordsReceived here because the byte array comparison is not triggered correctly.
         final List<KeyValue<Integer, byte[]>> outputs = IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-                consumerConfig, OUTPUT_TOPIC, 3);
-        for (int i = 0; i < outputs.size(); i++) {
-            assertEquals(initialKeyValues.get(i).key, outputs.get(i).key);
-            assertArrayEquals(initialKeyValues.get(i).value, outputs.get(i).value);
-        }
+                consumerConfig, OUTPUT_TOPIC, initialKeyValues.size());
+        verifyOutput(initialKeyValues, outputs);
 
+        // wipe out state store to trigger restore process on restart
         streams.close();
         streams.cleanUp();
 
         // Restart the stream instance. There should not be exception handling the null value within changelog topic.
+        final List<KeyValue<Integer, byte[]>> newKeyValues = Collections.singletonList(KeyValue.pair(2, new byte[3]));
         IntegrationTestUtils.produceKeyValuesSynchronously(
-                INPUT_TOPIC, Collections.singletonList(KeyValue.pair(2, new byte[3])), producerConfig, mockTime);
+                INPUT_TOPIC, newKeyValues, producerConfig, mockTime);
         streams = new KafkaStreams(builder.build(streamsConfiguration), streamsConfiguration);
         streams.start();
-        IntegrationTestUtils.waitUntilMinRecordsReceived(consumerConfig, OUTPUT_TOPIC, 1);
+        final List<KeyValue<Integer, byte[]>> newOutputs =
+                IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(consumerConfig, OUTPUT_TOPIC, 1);
+        verifyOutput(newKeyValues, newOutputs);
         streams.close();
+    }
+
+    private void verifyOutput(final List<KeyValue<Integer, byte[]>> expected, final List<KeyValue<Integer, byte[]>> actual) {
+        assertEquals(expected.size(), actual.size());
+        for (int i = 0; i < expected.size(); i++) {
+            assertEquals(expected.get(i).key, actual.get(i).key);
+            assertArrayEquals(expected.get(i).value, actual.get(i).value);
+        }
     }
 }
