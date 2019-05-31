@@ -36,7 +36,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.test.IntegrationTest;
@@ -216,7 +216,7 @@ public class RegexSourceIntegrationTest {
     @Test
     public void shouldAddStateStoreToRegexDefinedSource() throws InterruptedException {
 
-        final ProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final TypedProcessorSupplier<String, String, Void, Void> processorSupplier = new MockProcessorSupplier<>();
         final StoreBuilder storeBuilder = new MockKeyValueStoreBuilder("testStateStore", false);
         final long thirtySecondTimeout = 30 * 1000;
 

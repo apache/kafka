@@ -67,6 +67,7 @@ import static org.hamcrest.Matchers.instanceOf;
 import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class StreamThreadStateStoreProviderTest {
 
     private StreamTask taskOne;

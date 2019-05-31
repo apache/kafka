@@ -17,33 +17,22 @@
 package org.apache.kafka.streams.processor;
 
 /**
- * An abstract implementation of {@link Processor} that manages the {@link ProcessorContext} instance and provides default no-op
+ * An abstract implementation of {@link TypedProcessor} that manages the {@link ProcessorContext} instance and provides default no-op
  * implementation of {@link #close()}.
  *
- * @param <K> the type of keys
- * @param <V> the type of values
+ * @param <KIn> the type of keys
+ * @param <VIn> the type of values
  */
-public abstract class AbstractProcessor<K, V> implements Processor<K, V> {
+public abstract class AbstractProcessor<KIn, VIn, KOut, VOut> implements TypedProcessor<KIn, VIn, KOut, VOut> {
 
-    private ProcessorContext context;
+    private ProcessorContext<KOut, VOut> context;
 
     protected AbstractProcessor() {
     }
 
     @Override
-    public void init(final ProcessorContext context) {
+    public void init(final ProcessorContext<KOut, VOut> context) {
         this.context = context;
-    }
-
-    /**
-     * Close this processor and clean up any resources.
-     * <p>
-     * This method does nothing by default; if desired, subclasses should override it with custom functionality.
-     * </p>
-     */
-    @Override
-    public void close() {
-        // do nothing
     }
 
     /**
@@ -51,7 +40,7 @@ public abstract class AbstractProcessor<K, V> implements Processor<K, V> {
      *
      * @return the processor context; null only when called prior to {@link #init(ProcessorContext) initialization}.
      */
-    protected final ProcessorContext context() {
+    protected final ProcessorContext<KOut, VOut> context() {
         return context;
     }
 }

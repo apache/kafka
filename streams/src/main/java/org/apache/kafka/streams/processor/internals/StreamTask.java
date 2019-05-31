@@ -62,6 +62,7 @@ import static org.apache.kafka.streams.kstream.internals.metrics.Sensors.recordL
 /**
  * A StreamTask is associated with a {@link PartitionGroup}, and is assigned to a StreamThread for processing.
  */
+@SuppressWarnings("rawtypes")
 public class StreamTask extends AbstractTask implements ProcessorNodePunctuator {
 
     private static final ConsumerRecord<Object, Object> DUMMY_RECORD = new ConsumerRecord<>(ProcessorContextImpl.NONEXIST_TOPIC, -1, -1L, null, null);
@@ -220,7 +221,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         final Map<TopicPartition, RecordQueue> partitionQueues = new HashMap<>();
 
         // initialize the topology with its own context
-        final ProcessorContextImpl processorContextImpl = new ProcessorContextImpl(id, this, config, this.recordCollector, stateMgr, metrics, cache);
+        final ProcessorContextImpl processorContextImpl = new ProcessorContextImpl<>(id, this, config, this.recordCollector, stateMgr, metrics, cache);
         processorContext = processorContextImpl;
 
         final TimestampExtractor defaultTimestampExtractor = config.defaultTimestampExtractor();
@@ -412,6 +413,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws IllegalStateException if the current node is not null
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
+    @SuppressWarnings("rawtypes")
     @Override
     public void punctuate(final ProcessorNode node, final long timestamp, final PunctuationType type, final Punctuator punctuator) {
         if (processorContext.currentNode() != null) {
@@ -435,6 +437,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
+    @SuppressWarnings("rawtypes")
     private void updateProcessorContext(final StampedRecord record, final ProcessorNode currNode) {
         processorContext.setRecordContext(
             new ProcessorRecordContext(
@@ -538,6 +541,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         return purgableConsumedOffsets;
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.trace("Initializing processor nodes of the topology");
@@ -657,7 +661,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // make sure close() is called for each node even when there is a RuntimeException
         RuntimeException exception = null;
         if (taskInitialized) {
-            for (final ProcessorNode node : topology.processors()) {
+            for (final ProcessorNode<?, ?, ?, ?> node : topology.processors()) {
                 processorContext.setCurrentNode(node);
                 try {
                     node.close();

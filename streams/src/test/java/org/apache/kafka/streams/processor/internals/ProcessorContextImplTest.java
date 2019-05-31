@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
@@ -54,6 +54,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class ProcessorContextImplTest {
     private ProcessorContextImpl context;
 
@@ -132,7 +133,7 @@ public class ProcessorContextImplTest {
             mock(ThreadCache.class)
         );
 
-        context.setCurrentNode(new ProcessorNode<String, Long>("fake", null,
+        context.setCurrentNode(new ProcessorNode<String, Long, Void, Void>("fake", null,
             new HashSet<>(asList(
                 "LocalKeyValueStore",
                 "LocalTimestampedKeyValueStore",
@@ -520,7 +521,7 @@ public class ProcessorContextImplTest {
     }
 
     private <T extends StateStore> void doTest(final String name, final Consumer<T> checker) {
-        final Processor processor = new Processor<String, Long>() {
+        final TypedProcessor processor = new TypedProcessor<String, Long, Void, Void>() {
             @Override
             @SuppressWarnings("unchecked")
             public void init(final ProcessorContext context) {

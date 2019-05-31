@@ -53,7 +53,7 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.processor.internals.StateRestoreCallbackAdapter.adapt;
 
-public class InternalMockProcessorContext extends AbstractProcessorContext implements RecordCollector.Supplier {
+public class InternalMockProcessorContext<K, V> extends AbstractProcessorContext<K, V> implements RecordCollector.Supplier {
 
     private final File stateDir;
     private final RecordCollector.Supplier recordCollectorSupplier;
@@ -209,36 +209,34 @@ public class InternalMockProcessorContext extends AbstractProcessorContext imple
     @Override
     public void commit() {}
 
-    @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value) {
         forward(key, value, To.all());
     }
 
     @SuppressWarnings("unchecked")
     @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final int childIndex) {
         forward(key, value, To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final String childName) {
         forward(key, value, To.child(childName));
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value, final To to) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final To to) {
         toInternal.update(to);
         if (toInternal.hasTimestamp()) {
             setTime(toInternal.timestamp());
         }
         final ProcessorNode thisNode = currentNode;
         try {
-            for (final ProcessorNode childNode : (List<ProcessorNode<K, V>>) thisNode.children()) {
+            for (final ProcessorNode childNode : (List<ProcessorNode>) thisNode.children()) {
                 if (toInternal.child() == null || toInternal.child().equals(childNode.name())) {
                     currentNode = childNode;
                     childNode.process(key, value);

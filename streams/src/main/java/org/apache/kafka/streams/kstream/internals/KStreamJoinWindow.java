@@ -16,13 +16,12 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
-class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
+class KStreamJoinWindow<K, V> implements TypedProcessorSupplier<K, V, K, V> {
 
     private final String windowName;
 
@@ -31,19 +30,19 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, K, V> get() {
         return new KStreamJoinWindowProcessor();
     }
 
-    private class KStreamJoinWindowProcessor extends AbstractProcessor<K, V> {
+    private class KStreamJoinWindowProcessor implements TypedProcessor<K, V, K, V> {
 
         private WindowStore<K, V> window;
+        private ProcessorContext<K, V> context;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
-
+        public void init(final ProcessorContext<K, V> context) {
+            this.context = context;
             window = (WindowStore<K, V>) context.getStateStore(windowName);
         }
 
@@ -52,11 +51,14 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
             // if the key is null, we do not need to put the record into window store
             // since it will never be considered for join operations
             if (key != null) {
-                context().forward(key, value);
+                context.forward(key, value);
                 // Every record basically starts a new window. We're using a window store mostly for the retention.
-                window.put(key, value, context().timestamp());
+                window.put(key, value, context.timestamp());
             }
         }
+
+        @Override
+        public void close() {}
     }
 
 }

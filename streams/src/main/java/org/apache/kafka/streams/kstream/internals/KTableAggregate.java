@@ -19,15 +19,14 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T> {
+public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, Change<V>, K, T> {
 
     private final String storeName;
     private final Initializer<T> initializer;
@@ -52,18 +51,19 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public TypedProcessor<K, Change<V>, K, Change<T>> get() {
         return new KTableAggregateProcessor();
     }
 
-    private class KTableAggregateProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTableAggregateProcessor implements TypedProcessor<K, Change<V>, K, Change<T>> {
         private TimestampedKeyValueStore<K, T> store;
         private TimestampedTupleForwarder<K, T> tupleForwarder;
+        private ProcessorContext<K, Change<T>> context;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
+        public void init(final ProcessorContext<K, Change<T>> context) {
+            this.context = context;
             store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store,
@@ -85,12 +85,12 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             final ValueAndTimestamp<T> oldAggAndTimestamp = store.get(key);
             final T oldAgg = getValueOrNull(oldAggAndTimestamp);
             final T intermediateAgg;
-            long newTimestamp = context().timestamp();
+            long newTimestamp = context.timestamp();
 
             // first try to remove the old value
             if (value.oldValue != null && oldAgg != null) {
                 intermediateAgg = remove.apply(key, value.oldValue, oldAgg);
-                newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
+                newTimestamp = Math.max(context.timestamp(), oldAggAndTimestamp.timestamp());
             } else {
                 intermediateAgg = oldAgg;
             }
@@ -107,7 +107,7 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
 
                 newAgg = add.apply(key, value.newValue, initializedAgg);
                 if (oldAggAndTimestamp != null) {
-                    newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
+                    newTimestamp = Math.max(context.timestamp(), oldAggAndTimestamp.timestamp());
                 }
             } else {
                 newAgg = intermediateAgg;
@@ -116,6 +116,11 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, V, T
             // update the store with the new value
             store.put(key, ValueAndTimestamp.make(newAgg, newTimestamp));
             tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null, newTimestamp);
+        }
+
+        @Override
+        public void close() {
+
         }
 
     }

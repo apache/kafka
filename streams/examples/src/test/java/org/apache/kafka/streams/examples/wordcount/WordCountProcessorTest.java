@@ -19,7 +19,7 @@ package org.apache.kafka.streams.examples.wordcount;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.Stores;
 import org.junit.Test;
@@ -31,7 +31,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Demonstrate the use of {@link MockProcessorContext} for testing the {@link Processor} in the {@link WordCountProcessorDemo}.
+ * Demonstrate the use of {@link MockProcessorContext} for testing the {@link TypedProcessor} in the {@link WordCountProcessorDemo}.
  */
 public class WordCountProcessorTest {
     @Test
@@ -47,7 +47,7 @@ public class WordCountProcessorTest {
         context.register(store, null);
 
         // Create and initialize the processor under test
-        final Processor<String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();
+        final TypedProcessor<String, String> processor = new WordCountProcessorDemo.MyProcessorSupplier().get();
         processor.init(context);
 
         // send a record to the processor

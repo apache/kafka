@@ -41,7 +41,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressi
 import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -63,7 +63,7 @@ import static org.apache.kafka.streams.kstream.internals.graph.GraphGraceSearchU
  * @param <S> the source's (parent's) value type
  * @param <V> the value type
  */
-public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<K, V> {
+public class KTableImpl<K, V> extends AbstractStream<K, V> implements KTable<K, V> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableImpl.class);
 
     static final String SOURCE_NAME = "KTABLE-SOURCE-";
@@ -88,7 +88,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     private static final String TRANSFORMVALUES_NAME = "KTABLE-TRANSFORMVALUES-";
 
-    private final ProcessorSupplier<?, ?> processorSupplier;
+    private final TypedProcessorSupplier<?, ?, K, Change<V>> processorSupplier;
+
+    private final StreamsGraphNode<?, ?, K, Change<V>> streamsGraphNode;
 
     private final String queryableStoreName;
 
@@ -99,12 +101,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                       final Serde<V> valSerde,
                       final Set<String> sourceNodes,
                       final String queryableStoreName,
-                      final ProcessorSupplier<?, ?> processorSupplier,
-                      final StreamsGraphNode streamsGraphNode,
+                      final TypedProcessorSupplier<?, ?, K, Change<V>> processorSupplier,
+                      final StreamsGraphNode<?, ?, K, Change<V>> streamsGraphNode,
                       final InternalStreamsBuilder builder) {
-        super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
+        super(name, keySerde, valSerde, sourceNodes, builder);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
+        this.streamsGraphNode = streamsGraphNode;
     }
 
     @Override
@@ -143,18 +146,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String name = builder.newProcessorName(FILTER_NAME);
 
-        final KTableProcessorSupplier<K, V, V> processorSupplier =
+        final KTableProcessorSupplier<K, Change<V>, K, V> processorSupplier =
             new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
 
-        final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
-            new ProcessorParameters<>(processorSupplier, name)
-        );
+        final ProcessorParameters<K, Change<V>, K, Change<V>> processorParameters = new ProcessorParameters<>(processorSupplier, name);
 
-        final StreamsGraphNode tableNode = new TableProcessorNode<>(
-            name,
-            processorParameters,
-            storeBuilder
-        );
+        final StreamsGraphNode<K, Change<V>, K, Change<V>> tableNode = new TableProcessorNode<>(name, processorParameters, storeBuilder, null);
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
@@ -227,18 +224,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String name = builder.newProcessorName(MAPVALUES_NAME);
 
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableMapValues<>(this, mapper, queryableStoreName);
+        final KTableProcessorSupplier<K, Change<V>, K, VR> processorSupplier = new KTableMapValues<>(this, mapper, queryableStoreName);
 
         // leaving in calls to ITB until building topology with graph
 
-        final ProcessorParameters<K, VR> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
-            new ProcessorParameters<>(processorSupplier, name)
-        );
-        final StreamsGraphNode tableNode = new TableProcessorNode<>(
-            name,
-            processorParameters,
-            storeBuilder
-        );
+        final ProcessorParameters<K, Change<V>, K, Change<VR>> processorParameters = new ProcessorParameters<>(processorSupplier, name);
+        final StreamsGraphNode<K, Change<V>, K, Change<VR>> tableNode = new TableProcessorNode<>(name, processorParameters, storeBuilder, null);
 
         builder.addGraphNode(this.streamsGraphNode, tableNode);
 
@@ -333,16 +324,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final String name = builder.newProcessorName(TRANSFORMVALUES_NAME);
 
-        final KTableProcessorSupplier<K, V, VR> processorSupplier = new KTableTransformValues<>(
+        final KTableProcessorSupplier<K, Change<V>, K, VR> processorSupplier = new KTableTransformValues<>(
             this,
             transformerSupplier,
             queryableStoreName);
 
-        final ProcessorParameters<K, VR> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
-            new ProcessorParameters<>(processorSupplier, name)
-        );
+        final ProcessorParameters<K, Change<V>, K, Change<VR>> processorParameters = new ProcessorParameters<>(processorSupplier, name);
 
-        final StreamsGraphNode tableNode = new TableProcessorNode<>(
+        final StreamsGraphNode<K, Change<V>, K, Change<VR>> tableNode = new TableProcessorNode<>(
             name,
             processorParameters,
             storeBuilder,
@@ -366,12 +355,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     public KStream<K, V> toStream() {
         final String name = builder.newProcessorName(TOSTREAM_NAME);
 
-        final ProcessorSupplier<K, Change<V>> kStreamMapValues = new KStreamMapValues<>((key, change) -> change.newValue);
-        final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
-            new ProcessorParameters<>(kStreamMapValues, name)
-        );
+        final TypedProcessorSupplier<K, Change<V>, K, V> kStreamMapValues = new KStreamMapValues<>((key, change) -> change.newValue);
+        final ProcessorParameters<K, Change<V>, K, V> processorParameters = new ProcessorParameters<>(kStreamMapValues, name);
 
-        final ProcessorGraphNode<K, V> toStreamNode = new ProcessorGraphNode<>(
+        final ProcessorGraphNode<K, Change<V>, K, V> toStreamNode = new ProcessorGraphNode<>(
             name,
             processorParameters
         );
@@ -402,14 +389,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String storeName =
             suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
 
-        final ProcessorSupplier<K, Change<V>> suppressionSupplier = new KTableSuppressProcessorSupplier<>(
+        final KTableProcessorSupplier<K, Change<V>, K, V> suppressionSupplier = new KTableSuppressProcessorSupplier<>(
             suppressedInternal,
             storeName,
             this
         );
 
-
-        final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
+        final ProcessorGraphNode<K, Change<V>, K, Change<V>> node = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
             new InMemoryTimeOrderedKeyValueBuffer.Builder<>(storeName, keySerde, valSerde)
@@ -417,7 +403,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         builder.addGraphNode(streamsGraphNode, node);
 
-        return new KTableImpl<K, S, V>(
+        return new KTableImpl<>(
             name,
             keySerde,
             valSerde,
@@ -516,28 +502,31 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             enableSendingOldValues();
         }
         if (rightOuter) {
-            ((KTableImpl) other).enableSendingOldValues();
+            ((KTableImpl<K, VO>) other).enableSendingOldValues();
         }
 
-        final KTableKTableAbstractJoin<K, VR, V, VO> joinThis;
-        final KTableKTableAbstractJoin<K, VR, VO, V> joinOther;
+        final KTableProcessorSupplier<K, Change<V>, K, VR> joinThis;
+        final KTableProcessorSupplier<K, Change<VO>, K, VR> joinOther;
 
         if (!leftOuter) { // inner
-            joinThis = new KTableKTableInnerJoin<>(this, (KTableImpl<K, ?, VO>) other, joiner);
-            joinOther = new KTableKTableInnerJoin<>((KTableImpl<K, ?, VO>) other, this, reverseJoiner(joiner));
+            joinThis = new KTableKTableInnerJoin<>(this, (KTableImpl<K, VO>) other, joiner);
+            joinOther = new KTableKTableInnerJoin<>((KTableImpl<K, VO>) other, this, reverseJoiner(joiner));
         } else if (!rightOuter) { // left
-            joinThis = new KTableKTableLeftJoin<>(this, (KTableImpl<K, ?, VO>) other, joiner);
-            joinOther = new KTableKTableRightJoin<>((KTableImpl<K, ?, VO>) other, this, reverseJoiner(joiner));
+            joinThis = new KTableKTableLeftJoin<>(this, (KTableImpl<K, VO>) other, joiner);
+            joinOther = new KTableKTableRightJoin<>((KTableImpl<K, VO>) other, this, reverseJoiner(joiner));
         } else { // outer
-            joinThis = new KTableKTableOuterJoin<>(this, (KTableImpl<K, ?, VO>) other, joiner);
-            joinOther = new KTableKTableOuterJoin<>((KTableImpl<K, ?, VO>) other, this, reverseJoiner(joiner));
+            joinThis = new KTableKTableOuterJoin<>(this, (KTableImpl<K, VO>) other, joiner);
+            joinOther = new KTableKTableOuterJoin<>((KTableImpl<K, VO>) other, this, reverseJoiner(joiner));
         }
 
         final String joinThisName = builder.newProcessorName(JOINTHIS_NAME);
         final String joinOtherName = builder.newProcessorName(JOINOTHER_NAME);
 
-        final ProcessorParameters<K, Change<V>> joinThisProcessorParameters = new ProcessorParameters<>(joinThis, joinThisName);
-        final ProcessorParameters<K, Change<VO>> joinOtherProcessorParameters = new ProcessorParameters<>(joinOther, joinOtherName);
+        final ProcessorParameters<K, Change<V>, K, Change<VR>> joinThisProcessorParameters =
+            new ProcessorParameters<>(joinThis, joinThisName);
+
+        final ProcessorParameters<K, Change<VO>, K, Change<VR>> joinOtherProcessorParameters =
+            new ProcessorParameters<>(joinOther, joinOtherName);
 
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
@@ -562,9 +551,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 .withJoinThisProcessorParameters(joinThisProcessorParameters)
                 .withJoinOtherProcessorParameters(joinOtherProcessorParameters)
                 .withThisJoinSideNodeName(name)
-                .withOtherJoinSideNodeName(((KTableImpl) other).name)
+                .withOtherJoinSideNodeName(((KTableImpl<K, VO>) other).name)
                 .withJoinThisStoreNames(valueGetterSupplier().storeNames())
-                .withJoinOtherStoreNames(((KTableImpl) other).valueGetterSupplier().storeNames())
+                .withJoinOtherStoreNames(((KTableImpl<K, VO>) other).valueGetterSupplier().storeNames())
                 .withKeySerde(keySerde)
                 .withValueSerde(valueSerde)
                 .withQueryableStoreName(queryableStoreName)
@@ -573,7 +562,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         builder.addGraphNode(this.streamsGraphNode, kTableKTableJoinNode);
 
         // we can inherit parent key serde if user do not provide specific overrides
-        return new KTableImpl<K, Change<VR>, VR>(
+        return new KTableImpl<>(
             kTableKTableJoinNode.nodeName(),
             kTableKTableJoinNode.keySerde(),
             kTableKTableJoinNode.valueSerde(),
@@ -607,11 +596,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         Objects.requireNonNull(grouped, "grouped can't be null");
         final String selectName = builder.newProcessorName(SELECT_NAME);
 
-        final KTableProcessorSupplier<K, V, KeyValue<K1, V1>> selectSupplier = new KTableRepartitionMap<>(this, selector);
-        final ProcessorParameters<K, Change<V>> processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
+        final KTableProcessorSupplier<K, Change<V>, K1, V1> selectSupplier = new KTableRepartitionMap<>(this, selector);
+        final ProcessorParameters<K, Change<V>, K1, Change<V1>> processorParameters = new ProcessorParameters<>(selectSupplier, selectName);
 
         // select the aggregate key and values (old and new), it would require parent to send old values
-        final ProcessorGraphNode<K, Change<V>> groupByMapNode = new ProcessorGraphNode<>(selectName, processorParameters);
+        final ProcessorGraphNode<K, Change<V>, K1, Change<V1>> groupByMapNode = new ProcessorGraphNode<>(selectName, processorParameters);
 
         builder.addGraphNode(this.streamsGraphNode, groupByMapNode);
 
@@ -626,30 +615,29 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         );
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public KTableValueGetterSupplier<K, V> valueGetterSupplier() {
         if (processorSupplier instanceof KTableSource) {
-            final KTableSource<K, V> source = (KTableSource<K, V>) processorSupplier;
+            final KTableSource source = (KTableSource) processorSupplier;
             // whenever a source ktable is required for getter, it should be materialized
             source.materialize();
             return new KTableSourceValueGetterSupplier<>(source.queryableName());
         } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
-            return ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).view();
+            return ((KStreamAggProcessorSupplier<?, K, ?, V>) this.processorSupplier).view();
         } else {
-            return ((KTableProcessorSupplier<K, S, V>) processorSupplier).view();
+            return ((KTableProcessorSupplier<K, ?, K, V>) processorSupplier).view();
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     public void enableSendingOldValues() {
         if (!sendOldValues) {
             if (processorSupplier instanceof KTableSource) {
-                final KTableSource<K, ?> source = (KTableSource<K, V>) processorSupplier;
-                source.enableSendingOldValues();
+                ((KTableSource) processorSupplier).enableSendingOldValues();
             } else if (processorSupplier instanceof KStreamAggProcessorSupplier) {
-                ((KStreamAggProcessorSupplier<?, K, S, V>) processorSupplier).enableSendingOldValues();
+                ((KStreamAggProcessorSupplier) processorSupplier).enableSendingOldValues();
             } else {
-                ((KTableProcessorSupplier<K, S, V>) processorSupplier).enableSendingOldValues();
+                ((KTableProcessorSupplier) processorSupplier).enableSendingOldValues();
             }
             sendOldValues = true;
         }
@@ -658,14 +646,4 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     boolean sendingOldValueEnabled() {
         return sendOldValues;
     }
-
-    /**
-     * We conflate V with Change<V> in many places. It might be nice to fix that eventually.
-     * For now, I'm just explicitly lying about the parameterized type.
-     */
-    @SuppressWarnings("unchecked")
-    private <VR> ProcessorParameters<K, VR> unsafeCastProcessorParametersToCompletelyDifferentType(final ProcessorParameters<K, Change<V>> kObjectProcessorParameters) {
-        return (ProcessorParameters<K, VR>) kObjectProcessorParameters;
-    }
-
 }

@@ -28,12 +28,12 @@ import org.apache.kafka.streams.Topology;
  * @param <K> the type of keys
  * @param <V> the type of values
  */
-public interface ProcessorSupplier<K, V> {
+public interface ProcessorSupplier<KIn, VIn> {
 
     /**
      * Return a new {@link Processor} instance.
      *
      * @return  a new {@link Processor} instance
      */
-    Processor<K, V> get();
+    Processor<KIn, VIn> get();
 }

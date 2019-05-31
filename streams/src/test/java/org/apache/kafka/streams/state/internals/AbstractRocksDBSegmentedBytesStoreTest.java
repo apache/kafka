@@ -69,6 +69,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 @RunWith(Parameterized.class)
 public abstract class AbstractRocksDBSegmentedBytesStoreTest<S extends Segment> {
 

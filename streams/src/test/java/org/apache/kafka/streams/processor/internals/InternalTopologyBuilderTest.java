@@ -537,7 +537,8 @@ public class InternalTopologyBuilderTest {
         builder.addStateStore(null);
     }
 
-    private Set<String> nodeNames(final Collection<ProcessorNode> nodes) {
+    @SuppressWarnings("rawtypes")
+    private Set<String> nodeNames(final List<ProcessorNode> nodes) {
         final Set<String> nodeNames = new HashSet<>();
         for (final ProcessorNode node : nodes) {
             nodeNames.add(node.name());

@@ -28,7 +28,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -64,6 +64,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class KStreamSessionWindowAggregateProcessorTest {
 
     private static final long GAP_MS = 5 * 60 * 1000L;
@@ -82,7 +83,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             sessionMerger);
 
     private final List<KeyValueTimestamp> results = new ArrayList<>();
-    private final Processor<String, String> processor = sessionAggregator.get();
+    private final TypedProcessor<String, String, Windowed<String>, Change<Long>> processor = sessionAggregator.get();
     private SessionStore<String, Long> sessionStore;
     private InternalMockProcessorContext context;
     private Metrics metrics;
@@ -102,7 +103,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
             new ThreadCache(new LogContext("testCache "), 100000, metrics)
         ) {
             @Override
-            public <K, V> void forward(final K key, final V value, final To to) {
+            public void forward(final Object key, final Object value, final To to) {
                 toInternal.update(to);
                 results.add(new KeyValueTimestamp<>(key, value, toInternal.timestamp()));
             }
@@ -384,7 +385,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     public void shouldLogAndMeterWhenSkippingLateRecordWithZeroGrace() {
         LogCaptureAppender.setClassLoggerToDebug(KStreamSessionWindowAggregate.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
+        final TypedProcessor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(0L)),
             STORE_NAME,
             initializer,
@@ -448,7 +449,7 @@ public class KStreamSessionWindowAggregateProcessorTest {
     public void shouldLogAndMeterWhenSkippingLateRecordWithNonzeroGrace() {
         LogCaptureAppender.setClassLoggerToDebug(KStreamSessionWindowAggregate.class);
         final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
-        final Processor<String, String> processor = new KStreamSessionWindowAggregate<>(
+        final TypedProcessor<String, String, Windowed<String>, Change<Long>> processor = new KStreamSessionWindowAggregate<>(
             SessionWindows.with(ofMillis(10L)).grace(ofMillis(1L)),
             STORE_NAME,
             initializer,

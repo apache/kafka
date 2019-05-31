@@ -17,12 +17,12 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.To;
 
-class KStreamBranch<K, V> implements ProcessorSupplier<K, V> {
+class KStreamBranch<K, V> implements TypedProcessorSupplier<K, V, K, V> {
 
     private final Predicate<K, V>[] predicates;
     private final String[] childNodes;
@@ -34,21 +34,31 @@ class KStreamBranch<K, V> implements ProcessorSupplier<K, V> {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, K, V> get() {
         return new KStreamBranchProcessor();
     }
 
-    private class KStreamBranchProcessor extends AbstractProcessor<K, V> {
+    private class KStreamBranchProcessor implements TypedProcessor<K, V, K, V> {
+        private ProcessorContext<K, V> context;
+
+        @Override
+        public void init(final ProcessorContext<K, V> context) {
+            this.context = context;
+        }
+
         @Override
         public void process(final K key, final V value) {
             for (int i = 0; i < predicates.length; i++) {
                 if (predicates[i].test(key, value)) {
                     // use forward with child here and then break the loop
                     // so that no record is going to be piped to multiple streams
-                    context().forward(key, value, To.child(childNodes[i]));
+                    context.forward(key, value, To.child(childNodes[i]));
                     break;
                 }
             }
         }
+
+        @Override
+        public void close() {}
     }
 }

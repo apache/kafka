@@ -42,7 +42,7 @@ import java.util.Properties;
 
 import static java.util.Collections.unmodifiableList;
 
-public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
+public class MockInternalProcessorContext<K, V> extends MockProcessorContext<K, V> implements InternalProcessorContext<K, V> {
     public static final class MockRecordCollector implements RecordCollector {
         private final List<ProducerRecord<byte[], byte[]>> collected = new LinkedList<>();
 

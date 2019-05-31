@@ -25,14 +25,14 @@ import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.metrics.Sensors;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -63,7 +63,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
     }
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, Windowed<K>, Change<Agg>> get() {
         return new KStreamSessionWindowAggregateProcessor();
     }
 
@@ -76,25 +76,29 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
         sendOldValues = true;
     }
 
-    private class KStreamSessionWindowAggregateProcessor extends AbstractProcessor<K, V> {
+    private class KStreamSessionWindowAggregateProcessor implements TypedProcessor<K, V, Windowed<K>, Change<Agg>> {
 
         private SessionStore<K, Agg> store;
         private SessionTupleForwarder<K, Agg> tupleForwarder;
         private StreamsMetricsImpl metrics;
-        private InternalProcessorContext internalProcessorContext;
+        private InternalProcessorContext<Windowed<K>, Change<Agg>> context;
         private Sensor lateRecordDropSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
-            internalProcessorContext = (InternalProcessorContext) context;
+        public void init(final ProcessorContext<Windowed<K>, Change<Agg>> context) {
+            this.context = (InternalProcessorContext<Windowed<K>, Change<Agg>>) context;
             metrics = (StreamsMetricsImpl) context.metrics();
-            lateRecordDropSensor = Sensors.lateRecordDropSensor(internalProcessorContext);
+            lateRecordDropSensor = Sensors.lateRecordDropSensor(this.context);
 
             store = (SessionStore<K, Agg>) context.getStateStore(storeName);
-            tupleForwarder = new SessionTupleForwarder<>(store, context, new SessionCacheFlushListener<>(context), sendOldValues);
+            tupleForwarder = new SessionTupleForwarder<>(
+                (WrappedStateStore<?, Windowed<K>, Agg>) store,
+                context,
+                new SessionCacheFlushListener<>(context),
+                sendOldValues
+            );
         }
 
         @Override
@@ -104,13 +108,13 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
             if (key == null) {
                 LOG.warn(
                     "Skipping record due to null key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                    value, context().topic(), context().partition(), context().offset()
+                    value, context.topic(), context.partition(), context.offset()
                 );
                 metrics.skippedRecordsSensor().record();
                 return;
             }
 
-            final long timestamp = context().timestamp();
+            final long timestamp = context.timestamp();
             observedStreamTime = Math.max(observedStreamTime, timestamp);
             final long closeTime = observedStreamTime - windows.gracePeriodMs();
 
@@ -146,9 +150,9 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                         "expiration=[{}] " +
                         "streamTime=[{}]",
                     key,
-                    context().topic(),
-                    context().partition(),
-                    context().offset(),
+                    context.topic(),
+                    context.partition(),
+                    context.offset(),
                     timestamp,
                     mergedWindow.start(),
                     mergedWindow.end(),
@@ -169,6 +173,11 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                 store.put(sessionKey, agg);
                 tupleForwarder.maybeForward(sessionKey, agg, null);
             }
+        }
+
+        @Override
+        public void close() {
+
         }
     }
 
@@ -198,7 +207,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Void, Void> context) {
             store = (SessionStore<K, Agg>) context.getStateStore(storeName);
         }
 

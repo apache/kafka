@@ -43,6 +43,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("unchecked")
 public class CompositeReadOnlyKeyValueStoreTest {
 
     private final String storeName = "my-store";
@@ -63,8 +64,8 @@ public class CompositeReadOnlyKeyValueStoreTest {
         stubProviderOne.addStore("other-store", otherUnderlyingStore);
 
         theStore = new CompositeReadOnlyKeyValueStore<>(
-            new WrappingStoreProvider(Arrays.<StateStoreProvider>asList(stubProviderOne, stubProviderTwo)),
-                                        QueryableStoreTypes.<String, String>keyValueStore(),
+            new WrappingStoreProvider(Arrays.asList(stubProviderOne, stubProviderTwo)),
+                                        QueryableStoreTypes.keyValueStore(),
                                         storeName);
     }
 
@@ -291,7 +292,7 @@ public class CompositeReadOnlyKeyValueStoreTest {
     }
 
     private CompositeReadOnlyKeyValueStore<Object, Object> rebalancing() {
-        return new CompositeReadOnlyKeyValueStore<>(new WrappingStoreProvider(Collections.<StateStoreProvider>singletonList(new StateStoreProviderStub(true))),
+        return new CompositeReadOnlyKeyValueStore<>(new WrappingStoreProvider(Collections.singletonList(new StateStoreProviderStub(true))),
                 QueryableStoreTypes.keyValueStore(), storeName);
     }
 

@@ -69,6 +69,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public abstract class WindowBytesStoreTest {
 
     static final long WINDOW_SIZE = 3L;

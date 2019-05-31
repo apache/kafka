@@ -19,40 +19,37 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
-
-import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
 /**
  * KTable repartition map functions are not exposed to public APIs, but only used for keyed aggregations.
  * <p>
  * Given the input, it can output at most two records (one mapped from old value and one mapped from new value).
  */
-public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSupplier<K, V, KeyValue<K1, V1>> {
+public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSupplier<K, Change<V>, K1, V1> {
 
-    private final KTableImpl<K, ?, V> parent;
+    private final KTableImpl<K, V> parent;
     private final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper;
 
-    KTableRepartitionMap(final KTableImpl<K, ?, V> parent, final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper) {
+    KTableRepartitionMap(final KTableImpl<K, V> parent, final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper) {
         this.parent = parent;
         this.mapper = mapper;
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public TypedProcessor<K, Change<V>, K1, Change<V1>> get() {
         return new KTableMapProcessor();
     }
 
     @Override
-    public KTableValueGetterSupplier<K, KeyValue<K1, V1>> view() {
+    public KTableValueGetterSupplier<K1, V1> view() {
         final KTableValueGetterSupplier<K, V> parentValueGetterSupplier = parent.valueGetterSupplier();
 
-        return new KTableValueGetterSupplier<K, KeyValue<K1, V1>>() {
+        return new KTableValueGetterSupplier<K1, V1>() {
 
-            public KTableValueGetter<K, KeyValue<K1, V1>> get() {
+            public KTableValueGetter<K1, V1> get() {
                 return new KTableMapValueGetter(parentValueGetterSupplier.get());
             }
 
@@ -72,7 +69,13 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
         throw new IllegalStateException("KTableRepartitionMap should always require sending old values.");
     }
 
-    private class KTableMapProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTableMapProcessor implements TypedProcessor<K, Change<V>, K1, Change<V1>> {
+        private ProcessorContext<K1, Change<V1>> context;
+
+        @Override
+        public void init(final ProcessorContext<K1, Change<V1>> context) {
+            this.context = context;
+        }
 
         /**
          * @throws StreamsException if key is null
@@ -91,37 +94,42 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
             // if the selected repartition key or value is null, skip
             // forward oldPair first, to be consistent with reduce and aggregate
             if (oldPair != null && oldPair.key != null && oldPair.value != null) {
-                context().forward(oldPair.key, new Change<>(null, oldPair.value));
+                context.forward(oldPair.key, new Change<>(null, oldPair.value));
             }
 
             if (newPair != null && newPair.key != null && newPair.value != null) {
-                context().forward(newPair.key, new Change<>(newPair.value, null));
+                context.forward(newPair.key, new Change<>(newPair.value, null));
             }
+
+        }
+
+        @Override
+        public void close() {
 
         }
     }
 
-    private class KTableMapValueGetter implements KTableValueGetter<K, KeyValue<K1, V1>> {
+    private class KTableMapValueGetter implements KTableValueGetter<K1, V1> {
 
         private final KTableValueGetter<K, V> parentGetter;
-        private ProcessorContext context;
 
         KTableMapValueGetter(final KTableValueGetter<K, V> parentGetter) {
             this.parentGetter = parentGetter;
         }
 
         @Override
-        public void init(final ProcessorContext context) {
-            this.context = context;
+        public void init(final ProcessorContext<Void, Void> context) {
             parentGetter.init(context);
         }
 
         @Override
-        public ValueAndTimestamp<KeyValue<K1, V1>> get(final K key) {
-            final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);
-            return ValueAndTimestamp.make(
-                mapper.apply(key, getValueOrNull(valueAndTimestamp)),
-                valueAndTimestamp == null ? context.timestamp() : valueAndTimestamp.timestamp());
+        public ValueAndTimestamp<V1> get(final K1 key) {
+            // FIXME: we've been querying the wrong key this whole time.
+//            final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);
+//            return ValueAndTimestamp.make(
+//                mapper.apply(key, getValueOrNull(valueAndTimestamp)),
+//                valueAndTimestamp == null ? context.timestamp() : valueAndTimestamp.timestamp());
+            throw new UnsupportedOperationException("FIXME");
         }
 
         @Override

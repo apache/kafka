@@ -24,25 +24,31 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
-public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> {
+public class OptimizableRepartitionNode<K, V> extends StreamsGraphNode<K, V, K, V> {
+
+    private final ProcessorParameters<K, V, K, V> processorParameters;
+    protected final Serde<K> keySerde;
+    protected final Serde<V> valueSerde;
+    protected final String sinkName;
+    protected final String sourceName;
+    protected final String repartitionTopic;
 
     OptimizableRepartitionNode(final String nodeName,
                                final String sourceName,
-                               final ProcessorParameters processorParameters,
+                               final ProcessorParameters<K, V, K, V> processorParameters,
                                final Serde<K> keySerde,
                                final Serde<V> valueSerde,
                                final String sinkName,
                                final String repartitionTopic) {
 
-        super(
-            nodeName,
-            sourceName,
-            processorParameters,
-            keySerde,
-            valueSerde,
-            sinkName,
-            repartitionTopic
-        );
+        super(nodeName);
+        this.processorParameters = processorParameters;
+
+        this.keySerde = keySerde;
+        this.valueSerde = valueSerde;
+        this.sinkName = sinkName;
+        this.sourceName = sourceName;
+        this.repartitionTopic = repartitionTopic;
 
     }
 
@@ -58,19 +64,23 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
         return repartitionTopic;
     }
 
-    @Override
     Serializer<V> getValueSerializer() {
         return valueSerde != null ? valueSerde.serializer() : null;
     }
 
-    @Override
     Deserializer<V> getValueDeserializer() {
         return  valueSerde != null ? valueSerde.deserializer() : null;
     }
 
     @Override
     public String toString() {
-        return "OptimizableRepartitionNode{ " + super.toString() + " }";
+        return "OptimizableRepartitionNode{" +
+            "keySerde=" + keySerde +
+            ", valueSerde=" + valueSerde +
+            ", sinkName='" + sinkName + '\'' +
+            ", sourceName='" + sourceName + '\'' +
+            ", repartitionTopic='" + repartitionTopic + '\'' +
+            '}';
     }
 
     @Override
@@ -114,7 +124,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
     public static final class OptimizableRepartitionNodeBuilder<K, V> {
 
         private String nodeName;
-        private ProcessorParameters processorParameters;
+        private ProcessorParameters<K, V, K, V> processorParameters;
         private Serde<K> keySerde;
         private Serde<V> valueSerde;
         private String sinkName;
@@ -124,7 +134,7 @@ public class OptimizableRepartitionNode<K, V> extends BaseRepartitionNode<K, V> 
         private OptimizableRepartitionNodeBuilder() {
         }
 
-        public OptimizableRepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters processorParameters) {
+        public OptimizableRepartitionNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V, K, V> processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }

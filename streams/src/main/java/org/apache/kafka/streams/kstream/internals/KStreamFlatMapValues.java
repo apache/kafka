@@ -17,11 +17,11 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 
-class KStreamFlatMapValues<K, V, V1> implements ProcessorSupplier<K, V> {
+class KStreamFlatMapValues<K, V, V1> implements TypedProcessorSupplier<K, V, K, V1> {
 
     private final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends V1>> mapper;
 
@@ -30,17 +30,27 @@ class KStreamFlatMapValues<K, V, V1> implements ProcessorSupplier<K, V> {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, K, V1> get() {
         return new KStreamFlatMapValuesProcessor();
     }
 
-    private class KStreamFlatMapValuesProcessor extends AbstractProcessor<K, V> {
+    private class KStreamFlatMapValuesProcessor implements TypedProcessor<K, V, K, V1> {
+        private ProcessorContext<K, V1> context;
+
+        @Override
+        public void init(final ProcessorContext<K, V1> context) {
+            this.context = context;
+        }
+
         @Override
         public void process(final K key, final V value) {
             final Iterable<? extends V1> newValues = mapper.apply(key, value);
             for (final V1 v : newValues) {
-                context().forward(key, v);
+                context.forward(key, v);
             }
         }
+
+        @Override
+        public void close() {}
     }
 }

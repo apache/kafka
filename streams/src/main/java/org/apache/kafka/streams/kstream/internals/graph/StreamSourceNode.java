@@ -25,7 +25,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.regex.Pattern;
 
-public class StreamSourceNode<K, V> extends StreamsGraphNode {
+public class StreamSourceNode<K, V> extends StreamsGraphNode<Void, Void, K, V> {
 
     private Collection<String> topicNames;
     private Pattern topicPattern;

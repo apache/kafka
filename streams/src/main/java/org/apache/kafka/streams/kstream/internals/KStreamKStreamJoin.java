@@ -18,10 +18,9 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
@@ -30,7 +29,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 
-class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
+class KStreamKStreamJoin<K, R, V1, V2> implements TypedProcessorSupplier<K, V1, K, R> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
     private final String otherWindowName;
@@ -49,19 +48,20 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
     }
 
     @Override
-    public Processor<K, V1> get() {
+    public TypedProcessor<K, V1, K, R> get() {
         return new KStreamKStreamJoinProcessor();
     }
 
-    private class KStreamKStreamJoinProcessor extends AbstractProcessor<K, V1> {
+    private class KStreamKStreamJoinProcessor implements TypedProcessor<K, V1, K, R> {
 
         private WindowStore<K, V2> otherWindow;
         private StreamsMetricsImpl metrics;
+        private ProcessorContext<K, R> context;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
+        public void init(final ProcessorContext<K, R> context) {
+            this.context = context;
             metrics = (StreamsMetricsImpl) context.metrics();
 
             otherWindow = (WindowStore<K, V2>) context.getStateStore(otherWindowName);
@@ -79,7 +79,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
             if (key == null || value == null) {
                 LOG.warn(
                     "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                    key, value, context().topic(), context().partition(), context().offset()
+                    key, value, context.topic(), context.partition(), context.offset()
                 );
                 metrics.skippedRecordsSensor().record();
                 return;
@@ -87,7 +87,7 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
             boolean needOuterJoin = outer;
 
-            final long inputRecordTimestamp = context().timestamp();
+            final long inputRecordTimestamp = context.timestamp();
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
 
@@ -95,16 +95,19 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
                     final KeyValue<Long, V2> otherRecord = iter.next();
-                    context().forward(
+                    context.forward(
                         key,
                         joiner.apply(value, otherRecord.value),
                         To.all().withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));
                 }
 
                 if (needOuterJoin) {
-                    context().forward(key, joiner.apply(value, null));
+                    context.forward(key, joiner.apply(value, null));
                 }
             }
         }
+
+        @Override
+        public void close() {}
     }
 }

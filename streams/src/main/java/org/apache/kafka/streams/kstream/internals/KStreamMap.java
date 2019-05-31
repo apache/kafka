@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 
-class KStreamMap<K, V, K1, V1> implements ProcessorSupplier<K, V> {
+class KStreamMap<K, V, K1, V1> implements TypedProcessorSupplier<K, V, K1, V1> {
 
     private final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> mapper;
 
@@ -31,15 +31,27 @@ class KStreamMap<K, V, K1, V1> implements ProcessorSupplier<K, V> {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, K1, V1> get() {
         return new KStreamMapProcessor();
     }
 
-    private class KStreamMapProcessor extends AbstractProcessor<K, V> {
+    private class KStreamMapProcessor implements TypedProcessor<K, V, K1, V1> {
+        private ProcessorContext<K1, V1> context;
+
+        @Override
+        public void init(final ProcessorContext<K1, V1> context) {
+            this.context = context;
+        }
+
         @Override
         public void process(final K key, final V value) {
             final KeyValue<? extends K1, ? extends V1> newPair = mapper.apply(key, value);
-            context().forward(newPair.key, newPair.value);
+            context.forward(newPair.key, newPair.value);
+        }
+
+        @Override
+        public void close() {
+
         }
     }
 }

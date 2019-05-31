@@ -35,12 +35,12 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * {@code ProcessorContext} implementation that will throw on any forward call.
+ * {@code ProcessorContext} adapter that will throw on any forward call.
  */
-public final class ForwardingDisabledProcessorContext implements ProcessorContext {
-    private final ProcessorContext delegate;
+public final class ForwardingDisabledProcessorContext implements ProcessorContext<Void, Void> {
+    private final ProcessorContext<?, ?> delegate;
 
-    public ForwardingDisabledProcessorContext(final ProcessorContext delegate) {
+    public ForwardingDisabledProcessorContext(final ProcessorContext<?, ?> delegate) {
         this.delegate = Objects.requireNonNull(delegate, "delegate");
     }
 
@@ -101,24 +101,24 @@ public final class ForwardingDisabledProcessorContext implements ProcessorContex
     }
 
     @Override
-    public <K, V> void forward(final K key, final V value) {
+    public void forward(final Void key, final Void value) {
         throw new StreamsException("ProcessorContext#forward() not supported.");
     }
 
     @Override
-    public <K, V> void forward(final K key, final V value, final To to) {
-        throw new StreamsException("ProcessorContext#forward() not supported.");
-    }
-
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
+    public void forward(final Void key, final Void value, final To to) {
         throw new StreamsException("ProcessorContext#forward() not supported.");
     }
 
     @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
+    public void forward(final Void key, final Void value, final int childIndex) {
+        throw new StreamsException("ProcessorContext#forward() not supported.");
+    }
+
+    @Override
+    @Deprecated
+    public void forward(final Void key, final Void value, final String childName) {
         throw new StreamsException("ProcessorContext#forward() not supported.");
     }
 

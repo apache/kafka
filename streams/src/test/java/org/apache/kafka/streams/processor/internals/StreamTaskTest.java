@@ -152,6 +152,7 @@ public class StreamTaskTest {
         }
     };
 
+    @SuppressWarnings("rawtypes")
     static ProcessorTopology withRepartitionTopics(final List<ProcessorNode> processorNodes,
                                                    final Map<String, SourceNode> sourcesByTopic,
                                                    final Set<String> repartitionTopics) {
@@ -164,6 +165,7 @@ public class StreamTaskTest {
                                      repartitionTopics);
     }
 
+    @SuppressWarnings("rawtypes")
     static ProcessorTopology withSources(final List<ProcessorNode> processorNodes,
                                          final Map<String, SourceNode> sourcesByTopic) {
         return new ProcessorTopology(processorNodes,
@@ -220,7 +222,7 @@ public class StreamTaskTest {
 
         final ProcessorTopology topology = withSources(
             asList(source1, source2, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source2))
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
         );
 
         source1.addChild(processorStreamTime);
@@ -270,7 +272,7 @@ public class StreamTaskTest {
 
         final ProcessorTopology topology = withSources(
             asList(source1, source2, processorStreamTime, processorSystemTime),
-            mkMap(mkEntry(topic1, (SourceNode) source1), mkEntry(topic2, (SourceNode) source2))
+            mkMap(mkEntry(topic1, source1), mkEntry(topic2, source2))
         );
 
         source1.addChild(processorStreamTime);
@@ -342,7 +344,6 @@ public class StreamTaskTest {
         assertThat(expectedError, is(singletonList("ERROR")));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testProcessOrder() {
         task = createStatelessTask(createConfig(false));
@@ -418,7 +419,6 @@ public class StreamTaskTest {
         ));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testPauseResume() {
         task = createStatelessTask(createConfig(false));
@@ -473,7 +473,6 @@ public class StreamTaskTest {
         assertEquals(0, consumer.paused().size());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldPunctuateOnceStreamTimeAfterGap() {
         task = createStatelessTask(createConfig(false));
@@ -884,6 +883,7 @@ public class StreamTaskTest {
         assertFalse(checkpointFile.exists());
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowIllegalStateExceptionIfCurrentNodeIsNotNullWhenPunctuateCalled() {
         task = createStatelessTask(createConfig(false));
@@ -915,7 +915,7 @@ public class StreamTaskTest {
         task.initializeStateStores();
         task.initializeTopology();
         task.punctuate(processorStreamTime, 5, PunctuationType.STREAM_TIME, punctuator);
-        assertThat(((ProcessorContextImpl) task.context()).currentNode(), nullValue());
+        assertThat(((ProcessorContextImpl<?, ?>) task.context()).currentNode(), nullValue());
     }
 
     @Test(expected = IllegalStateException.class)
@@ -929,6 +929,7 @@ public class StreamTaskTest {
         });
     }
 
+    @SuppressWarnings("unchecked")
     @Test
     public void shouldNotThrowExceptionOnScheduleIfCurrentNodeIsNotNull() {
         task = createStatelessTask(createConfig(false));

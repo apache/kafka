@@ -33,9 +33,9 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateStore;
@@ -217,7 +217,7 @@ public class TopologyTestDriverTest {
         }
     }
 
-    private final class MockProcessor implements Processor {
+    private final class MockProcessor implements TypedProcessor {
         private final Collection<Punctuation> punctuations;
         private ProcessorContext context;
 
@@ -252,7 +252,7 @@ public class TopologyTestDriverTest {
 
     private final List<MockProcessor> mockProcessors = new ArrayList<>();
 
-    private final class MockProcessorSupplier implements ProcessorSupplier {
+    private final class MockProcessorSupplier implements TypedProcessorSupplier {
         private final Collection<Punctuation> punctuations;
 
         private MockProcessorSupplier() {
@@ -264,7 +264,7 @@ public class TopologyTestDriverTest {
         }
 
         @Override
-        public Processor get() {
+        public TypedProcessor get() {
             final MockProcessor mockProcessor = new MockProcessor(punctuations);
             mockProcessors.add(mockProcessor);
             return mockProcessor;
@@ -1115,14 +1115,14 @@ public class TopologyTestDriverTest {
         assertNull(testDriver.readOutput("result-topic", stringDeserializer, longDeserializer));
     }
 
-    private class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
+    private class CustomMaxAggregatorSupplier implements TypedProcessorSupplier<String, Long> {
         @Override
-        public Processor<String, Long> get() {
+        public TypedProcessor<String, Long> get() {
             return new CustomMaxAggregator();
         }
     }
 
-    private class CustomMaxAggregator implements Processor<String, Long> {
+    private class CustomMaxAggregator implements TypedProcessor<String, Long> {
         ProcessorContext context;
         private KeyValueStore<String, Long> store;
 
@@ -1179,10 +1179,10 @@ public class TopologyTestDriverTest {
         topology.addSource("sourceProcessor", "input-topic");
         topology.addProcessor(
             "storeProcessor",
-            new ProcessorSupplier() {
+            new TypedProcessorSupplier() {
                 @Override
-                public Processor get() {
-                    return new Processor<String, Long>() {
+                public TypedProcessor get() {
+                    return new TypedProcessor<String, Long>() {
                         private KeyValueStore<String, Long> store;
 
                         @SuppressWarnings("unchecked")

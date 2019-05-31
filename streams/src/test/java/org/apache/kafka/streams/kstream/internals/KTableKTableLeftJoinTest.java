@@ -27,9 +27,10 @@ import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
@@ -57,6 +58,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class KTableKTableLeftJoinTest {
     private final String topic1 = "topic1";
     private final String topic2 = "topic2";
@@ -196,14 +198,14 @@ public class KTableKTableLeftJoinTest {
         joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         supplier = new MockProcessorSupplier<>();
-        final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
+        final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?>) joined).name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, props)) {
             final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
-            assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
-            assertFalse(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
-            assertFalse(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
+            assertTrue(((KTableImpl<?, ?>) table1).sendingOldValueEnabled());
+            assertFalse(((KTableImpl<?, ?>) table2).sendingOldValueEnabled());
+            assertFalse(((KTableImpl<?, ?>) joined).sendingOldValueEnabled());
 
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {
@@ -300,17 +302,17 @@ public class KTableKTableLeftJoinTest {
         table2 = builder.table(topic2, consumed);
         joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
-        ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
+        ((KTableImpl<?, ?>) joined).enableSendingOldValues();
 
         supplier = new MockProcessorSupplier<>();
-        final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
+        final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?>) joined).name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriverWrapper(topology, props)) {
             final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
-            assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
-            assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
-            assertTrue(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
+            assertTrue(((KTableImpl<?, ?>) table1).sendingOldValueEnabled());
+            assertTrue(((KTableImpl<?, ?>) table2).sendingOldValueEnabled());
+            assertTrue(((KTableImpl<?, ?>) joined).sendingOldValueEnabled());
 
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {
@@ -482,11 +484,10 @@ public class KTableKTableLeftJoinTest {
     public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        @SuppressWarnings("unchecked")
-        final Processor<String, Change<String>> join = new KTableKTableLeftJoin<>(
-            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
-            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
-            null
+        final TypedProcessor<String, Change<String>, String, Change<Void>> join = new KTableKTableLeftJoin<>(
+            (KTableImpl<String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
+            (KTableImpl<String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
+            (ValueJoiner<String, String, Void>) null
         ).get();
 
         final MockProcessorContext context = new MockProcessorContext();

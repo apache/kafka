@@ -31,7 +31,7 @@ import java.util.Map;
 import java.util.Objects;
 
 
-public abstract class AbstractProcessorContext implements InternalProcessorContext {
+public abstract class AbstractProcessorContext<K, V> implements InternalProcessorContext<K, V> {
 
     public static final String NONEXIST_TOPIC = "__null_topic__";
     private final TaskId taskId;

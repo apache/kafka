@@ -17,20 +17,19 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 
-class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
-    private final KTableImpl<K, ?, V> parent;
+class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, Change<V>, K, V1> {
+    private final KTableImpl<K, V> parent;
     private final ValueMapperWithKey<? super K, ? super V, ? extends V1> mapper;
     private final String queryableName;
     private boolean sendOldValues = false;
 
-    KTableMapValues(final KTableImpl<K, ?, V> parent,
+    KTableMapValues(final KTableImpl<K, V> parent,
                     final ValueMapperWithKey<? super K, ? super V, ? extends V1> mapper,
                     final String queryableName) {
         this.parent = parent;
@@ -39,7 +38,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public TypedProcessor<K, Change<V>, K, Change<V1>> get() {
         return new KTableMapValuesProcessor();
     }
 
@@ -94,20 +93,21 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
     }
 
 
-    private class KTableMapValuesProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTableMapValuesProcessor implements TypedProcessor<K, Change<V>, K, Change<V1>> {
         private TimestampedKeyValueStore<K, V1> store;
         private TimestampedTupleForwarder<K, V1> tupleForwarder;
+        private ProcessorContext<K, Change<V1>> context;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
+        public void init(final ProcessorContext<K, Change<V1>> context) {
+            this.context = context;
             if (queryableName != null) {
                 store = (TimestampedKeyValueStore<K, V1>) context.getStateStore(queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
                     store,
                     context,
-                    new TimestampedCacheFlushListener<K, V1>(context),
+                    new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
             }
         }
@@ -118,11 +118,16 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
             final V1 oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
             if (queryableName != null) {
-                store.put(key, ValueAndTimestamp.make(newValue, context().timestamp()));
+                store.put(key, ValueAndTimestamp.make(newValue, context.timestamp()));
                 tupleForwarder.maybeForward(key, newValue, oldValue);
             } else {
-                context().forward(key, new Change<>(newValue, oldValue));
+                context.forward(key, new Change<>(newValue, oldValue));
             }
+        }
+
+        @Override
+        public void close() {
+
         }
     }
 
@@ -135,7 +140,7 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, V, V1> {
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Void, Void> context) {
             parentGetter.init(context);
         }
 

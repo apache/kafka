@@ -17,13 +17,15 @@
 package org.apache.kafka.streams.kstream;
 
 
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
+
 /**
  * The {@code ForeachAction} interface for performing an action on a {@link org.apache.kafka.streams.KeyValue key-value
  * pair}.
  * This is a stateless record-by-record operation, i.e, {@link #apply(Object, Object)} is invoked individually for each
  * record of a stream.
  * If stateful processing is required, consider using
- * {@link KStream#process(org.apache.kafka.streams.processor.ProcessorSupplier, String...) KStream#process(...)}.
+ * {@link KStream#process(TypedProcessorSupplier, String...) KStream#process(...)}.
  *
  * @param <K> key type
  * @param <V> value type

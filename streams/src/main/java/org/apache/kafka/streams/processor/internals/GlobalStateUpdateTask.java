@@ -30,6 +30,7 @@ import java.util.Set;
 /**
  * Updates the state for all Global State Stores.
  */
+@SuppressWarnings("rawtypes")
 public class GlobalStateUpdateTask implements GlobalStateMaintainer {
 
     private final ProcessorTopology topology;
@@ -108,6 +109,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
         stateMgr.close(true);
     }
 
+    @SuppressWarnings("unchecked")
     private void initTopology() {
         for (final ProcessorNode node : this.topology.processors()) {
             processorContext.setCurrentNode(node);

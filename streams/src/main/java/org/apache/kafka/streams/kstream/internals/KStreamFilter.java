@@ -16,32 +16,44 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 
-class KStreamFilter<K, V> implements ProcessorSupplier<K, V> {
+class KStreamFilter<K, V> implements TypedProcessorSupplier<K, V, K, V> {
 
-    private final Predicate<K, V> predicate;
+    private final Predicate<? super K, ? super V> predicate;
     private final boolean filterNot;
 
-    public KStreamFilter(final Predicate<K, V> predicate, final boolean filterNot) {
+    public KStreamFilter(final Predicate<? super K, ? super V> predicate, final boolean filterNot) {
         this.predicate = predicate;
         this.filterNot = filterNot;
     }
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, K, V> get() {
         return new KStreamFilterProcessor();
     }
 
-    private class KStreamFilterProcessor extends AbstractProcessor<K, V> {
+    private class KStreamFilterProcessor implements TypedProcessor<K, V, K, V> {
+        private ProcessorContext<K, V> context;
+
+        @Override
+        public void init(final ProcessorContext<K, V> context) {
+            this.context = context;
+        }
+
         @Override
         public void process(final K key, final V value) {
             if (filterNot ^ predicate.test(key, value)) {
-                context().forward(key, value);
+                context.forward(key, value);
             }
+        }
+
+        @Override
+        public void close() {
+
         }
     }
 }

@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.test;
 
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.PunctuationType;
 
 import java.util.ArrayList;
@@ -25,7 +25,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
-public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
+public class MockProcessorSupplier<K, V> implements TypedProcessorSupplier<K, V, Void, Void> {
 
     private final long scheduleInterval;
     private final PunctuationType punctuationType;
@@ -45,7 +45,7 @@ public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, Void, Void> get() {
         final MockProcessor<K, V> processor = new MockProcessor<>(punctuationType, scheduleInterval);
         processors.add(processor);
         return processor;

@@ -31,7 +31,7 @@ import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -68,7 +68,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
 
-    protected final StreamsGraphNode root = new StreamsGraphNode(TOPOLOGY_ROOT) {
+    private final StreamsGraphNode<Void, Void, Void, Void> root = new StreamsGraphNode<Void, Void, Void, Void>(TOPOLOGY_ROOT) {
         @Override
         public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
             // no-op for root node
@@ -116,11 +116,11 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                      final ConsumedInternal<K, V> consumed,
                                      final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         final String sourceName = new NamedInternal(consumed.name())
-                .orElseGenerateWithPrefix(this, KStreamImpl.SOURCE_NAME);
+            .orElseGenerateWithPrefix(this, KStreamImpl.SOURCE_NAME);
         final String tableSourceName = new NamedInternal(consumed.name())
-                .suffixWithOrElseGet("-table-source", this, KTableImpl.SOURCE_NAME);
+            .suffixWithOrElseGet("-table-source", this, KTableImpl.SOURCE_NAME);
         final KTableSource<K, V> tableSource = new KTableSource<>(materialized.storeName(), materialized.queryableStoreName());
-        final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(tableSource, tableSourceName);
+        final ProcessorParameters<K, V, K, Change<V>> processorParameters = new ProcessorParameters<>(tableSource, tableSourceName);
 
         final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder()
             .withTopic(topic)
@@ -156,7 +156,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final String storeName = materialized.storeName();
         final KTableSource<K, V> tableSource = new KTableSource<>(storeName, storeName);
 
-        final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(tableSource, processorName);
+        final ProcessorParameters<K, V, K, Change<V>> processorParameters = new ProcessorParameters<>(tableSource, processorName);
 
         final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder()
             .withTopic(topic)
@@ -191,14 +191,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                             final String topic,
                                             final ConsumedInternal consumed,
                                             final String processorName,
-                                            final ProcessorSupplier stateUpdateSupplier) {
+                                            final TypedProcessorSupplier stateUpdateSupplier) {
 
-        final StreamsGraphNode globalStoreNode = new GlobalStoreNode(storeBuilder,
-                                                                     sourceName,
-                                                                     topic,
-                                                                     consumed,
-                                                                     processorName,
-                                                                     stateUpdateSupplier);
+        final StreamsGraphNode<Void, Void, Void, Void> globalStoreNode = new GlobalStoreNode(storeBuilder,
+                                                                                             sourceName,
+                                                                                             topic,
+                                                                                             consumed,
+                                                                                             processorName,
+                                                                                             stateUpdateSupplier);
 
         addGraphNode(root, globalStoreNode);
     }
@@ -206,7 +206,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public synchronized void addGlobalStore(final StoreBuilder<KeyValueStore> storeBuilder,
                                             final String topic,
                                             final ConsumedInternal consumed,
-                                            final ProcessorSupplier stateUpdateSupplier) {
+                                            final TypedProcessorSupplier stateUpdateSupplier) {
         // explicitly disable logging for global stores
         storeBuilder.withLoggingDisabled();
         final String sourceName = newProcessorName(KStreamImpl.SOURCE_NAME);
@@ -219,44 +219,44 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                        stateUpdateSupplier);
     }
 
-    void addGraphNode(final StreamsGraphNode parent,
-                      final StreamsGraphNode child) {
+    <ParentKeyOut, ParentValueOut> void addGraphNode(final StreamsGraphNode<?, ?, ParentKeyOut, ParentValueOut> parent,
+                                                     final StreamsGraphNode<ParentKeyOut, ParentValueOut, ?, ?> child) {
         Objects.requireNonNull(parent, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");
         parent.addChild(child);
         maybeAddNodeForOptimizationMetadata(child);
     }
 
+    @SuppressWarnings("unchecked")
+        // these casts are safe, but Java's type system can't currently prove it
+    <ParentKeyOut, ParentValueOut, Parent1ValueOut extends ParentValueOut, Parent2ValueOut extends ParentValueOut>
+        void addDualParentGraphNode(final StreamsGraphNode<?, ?, ParentKeyOut, Parent1ValueOut> parent1,
+                                    final StreamsGraphNode<?, ?, ParentKeyOut, Parent2ValueOut> parent2,
+                                    final StreamsGraphNode<ParentKeyOut, ParentValueOut, ?, ?> child) {
 
-    void addGraphNode(final Collection<StreamsGraphNode> parents,
-                      final StreamsGraphNode child) {
-        Objects.requireNonNull(parents, "parent node can't be null");
+        Objects.requireNonNull(parent1, "parent node can't be null");
+        Objects.requireNonNull(parent2, "parent node can't be null");
         Objects.requireNonNull(child, "child node can't be null");
-
-        if (parents.isEmpty()) {
-            throw new StreamsException("Parent node collection can't be empty");
-        }
-
-        for (final StreamsGraphNode parent : parents) {
-            addGraphNode(parent, child);
-        }
+        parent1.addChild((StreamsGraphNode<ParentKeyOut, Parent1ValueOut, ?, ?>) child);
+        parent2.addChild((StreamsGraphNode<ParentKeyOut, Parent2ValueOut, ?, ?>) child);
+        maybeAddNodeForOptimizationMetadata(child);
     }
 
-    private void maybeAddNodeForOptimizationMetadata(final StreamsGraphNode node) {
+    private void maybeAddNodeForOptimizationMetadata(final StreamsGraphNode<?, ?, ?, ?> node) {
         node.setBuildPriority(buildPriorityIndex.getAndIncrement());
 
         if (node.parentNodes().isEmpty() && !node.nodeName().equals(TOPOLOGY_ROOT)) {
             throw new IllegalStateException(
                 "Nodes should not have a null parent node.  Name: " + node.nodeName() + " Type: "
-                + node.getClass().getSimpleName());
+                    + node.getClass().getSimpleName());
         }
 
         if (node.isKeyChangingOperation()) {
             keyChangingOperationsToOptimizableRepartitionNodes.put(node, new LinkedHashSet<>());
         } else if (node instanceof OptimizableRepartitionNode) {
-            final StreamsGraphNode parentNode = getKeyChangingParentNode(node);
+            final StreamsGraphNode<?, ?, ?, ?> parentNode = getKeyChangingParentNode(node);
             if (parentNode != null) {
-                keyChangingOperationsToOptimizableRepartitionNodes.get(parentNode).add((OptimizableRepartitionNode) node);
+                keyChangingOperationsToOptimizableRepartitionNodes.get(parentNode).add((OptimizableRepartitionNode<?, ?>) node);
             }
         } else if (node.isMergeNode()) {
             mergeNodes.add(node);
@@ -274,12 +274,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         maybePerformOptimizations(props);
 
-        final PriorityQueue<StreamsGraphNode> graphNodePriorityQueue = new PriorityQueue<>(5, Comparator.comparing(StreamsGraphNode::buildPriority));
+        final PriorityQueue<StreamsGraphNode<?, ?, ?, ?>> graphNodePriorityQueue = new PriorityQueue<>(5, Comparator.comparing(StreamsGraphNode::buildPriority));
 
         graphNodePriorityQueue.offer(root);
 
         while (!graphNodePriorityQueue.isEmpty()) {
-            final StreamsGraphNode streamGraphNode = graphNodePriorityQueue.remove();
+            final StreamsGraphNode<?, ?, ?, ?> streamGraphNode = graphNodePriorityQueue.remove();
 
             if (LOG.isDebugEnabled()) {
                 LOG.debug("Adding nodes to topology {} child nodes {}", streamGraphNode, streamGraphNode.children());
@@ -290,7 +290,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                 streamGraphNode.setHasWrittenToTopology(true);
             }
 
-            for (final StreamsGraphNode graphNode : streamGraphNode.children()) {
+            for (final StreamsGraphNode<?, ?, ?, ?> graphNode : streamGraphNode.children()) {
                 graphNodePriorityQueue.offer(graphNode);
             }
         }
@@ -313,7 +313,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     @SuppressWarnings("unchecked")
     private void maybeOptimizeRepartitionOperations() {
         maybeUpdateKeyChangingRepartitionNodeMap();
-        final Iterator<Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>>> entryIterator =  keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();
+        final Iterator<Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>>> entryIterator = keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();
 
         while (entryIterator.hasNext()) {
             final Map.Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> entry = entryIterator.next();
@@ -459,14 +459,14 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return new GroupedInternal(Grouped.with(keySerde, valueSerde));
     }
 
-    private StreamsGraphNode findParentNodeMatching(final StreamsGraphNode startSeekingNode,
-                                                    final Predicate<StreamsGraphNode> parentNodePredicate) {
+    private StreamsGraphNode<?, ?, ?, ?> findParentNodeMatching(final StreamsGraphNode<?, ?, ?, ?> startSeekingNode,
+                                                                final Predicate<StreamsGraphNode<?, ?, ?, ?>> parentNodePredicate) {
         if (parentNodePredicate.test(startSeekingNode)) {
             return startSeekingNode;
         }
-        StreamsGraphNode foundParentNode = null;
+        StreamsGraphNode<?, ?, ?, ?> foundParentNode = null;
 
-        for (final StreamsGraphNode parentNode : startSeekingNode.parentNodes()) {
+        for (final StreamsGraphNode<?, ?, ?, ?> parentNode : startSeekingNode.parentNodes()) {
             if (parentNodePredicate.test(parentNode)) {
                 return parentNode;
             }
@@ -475,7 +475,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return foundParentNode;
     }
 
-    public StreamsGraphNode root() {
+    public StreamsGraphNode<?, ?, ?, ?> root() {
         return root;
     }
 }

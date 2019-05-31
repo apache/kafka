@@ -17,32 +17,44 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 
-class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
+class KStreamPeek<K, V> implements TypedProcessorSupplier<K, V, K, V> {
 
     private final boolean forwardDownStream;
-    private final ForeachAction<K, V> action;
+    private final ForeachAction<? super K, ? super V> action;
 
-    public KStreamPeek(final ForeachAction<K, V> action, final boolean forwardDownStream) {
+    public KStreamPeek(final ForeachAction<? super K, ? super V> action, final boolean forwardDownStream) {
         this.action = action;
         this.forwardDownStream = forwardDownStream;
     }
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, K, V> get() {
         return new KStreamPeekProcessor();
     }
 
-    private class KStreamPeekProcessor extends AbstractProcessor<K, V> {
+    private class KStreamPeekProcessor implements TypedProcessor<K, V, K, V> {
+        private ProcessorContext<K, V> context;
+
+        @Override
+        public void init(final ProcessorContext<K, V> context) {
+            this.context = context;
+        }
+
         @Override
         public void process(final K key, final V value) {
             action.apply(key, value);
             if (forwardDownStream) {
-                context().forward(key, value);
+                context.forward(key, value);
             }
+        }
+
+        @Override
+        public void close() {
+
         }
     }
 

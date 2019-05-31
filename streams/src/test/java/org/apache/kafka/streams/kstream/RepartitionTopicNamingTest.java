@@ -506,7 +506,7 @@ public class RepartitionTopicNamingTest {
     }
 
 
-    private static class SimpleProcessor extends AbstractProcessor<String, String> {
+    private static class SimpleProcessor extends AbstractProcessor<String, String, Void, Void> {
 
         final List<String> valueList;
 

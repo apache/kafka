@@ -41,6 +41,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
 
     private final InMemoryKeyValueStore root = new InMemoryKeyValueStore("kv");

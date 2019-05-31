@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
@@ -51,6 +51,7 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Pattern;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class InternalTopologyBuilder {
 
     private static final Logger log = LoggerFactory.getLogger(InternalTopologyBuilder.class);
@@ -190,12 +191,12 @@ public class InternalTopologyBuilder {
     }
 
     private static class ProcessorNodeFactory extends NodeFactory {
-        private final ProcessorSupplier<?, ?> supplier;
+        private final TypedProcessorSupplier<?, ?, ?, ?> supplier;
         private final Set<String> stateStoreNames = new HashSet<>();
 
         ProcessorNodeFactory(final String name,
                              final String[] predecessors,
-                             final ProcessorSupplier<?, ?> supplier) {
+                             final TypedProcessorSupplier<?, ?, ?, ?> supplier) {
             super(name, predecessors.clone());
             this.supplier = supplier;
         }
@@ -205,7 +206,7 @@ public class InternalTopologyBuilder {
         }
 
         @Override
-        public ProcessorNode build() {
+        public ProcessorNode<?, ?, ?, ?> build() {
             return new ProcessorNode<>(name, supplier.get(), stateStoreNames);
         }
 
@@ -370,7 +371,7 @@ public class InternalTopologyBuilder {
         }
         Objects.requireNonNull(name, "name must not be null");
         if (nodeFactories.containsKey(name)) {
-            throw new TopologyException("Processor " + name + " is already added.");
+            throw new TopologyException("TypedProcessor " + name + " is already added.");
         }
 
         for (final String topic : topics) {
@@ -396,7 +397,7 @@ public class InternalTopologyBuilder {
         Objects.requireNonNull(name, "name can't be null");
 
         if (nodeFactories.containsKey(name)) {
-            throw new TopologyException("Processor " + name + " is already added.");
+            throw new TopologyException("TypedProcessor " + name + " is already added.");
         }
 
         for (final String sourceTopicName : sourceTopicNames) {
@@ -453,7 +454,7 @@ public class InternalTopologyBuilder {
         Objects.requireNonNull(topicExtractor, "topic extractor must not be null");
         Objects.requireNonNull(predecessorNames, "predecessor names must not be null");
         if (nodeFactories.containsKey(name)) {
-            throw new TopologyException("Processor " + name + " is already added.");
+            throw new TopologyException("TypedProcessor " + name + " is already added.");
         }
         if (predecessorNames.length == 0) {
             throw new TopologyException("Sink " + name + " must have at least one parent");
@@ -462,7 +463,7 @@ public class InternalTopologyBuilder {
         for (final String predecessor : predecessorNames) {
             Objects.requireNonNull(predecessor, "predecessor name can't be null");
             if (predecessor.equals(name)) {
-                throw new TopologyException("Processor " + name + " cannot be a predecessor of itself.");
+                throw new TopologyException("TypedProcessor " + name + " cannot be a predecessor of itself.");
             }
             if (!nodeFactories.containsKey(predecessor)) {
                 throw new TopologyException("Predecessor processor " + predecessor + " is not added yet.");
@@ -479,22 +480,22 @@ public class InternalTopologyBuilder {
     }
 
     public final void addProcessor(final String name,
-                                   final ProcessorSupplier supplier,
+                                   final TypedProcessorSupplier supplier,
                                    final String... predecessorNames) {
         Objects.requireNonNull(name, "name must not be null");
         Objects.requireNonNull(supplier, "supplier must not be null");
         Objects.requireNonNull(predecessorNames, "predecessor names must not be null");
         if (nodeFactories.containsKey(name)) {
-            throw new TopologyException("Processor " + name + " is already added.");
+            throw new TopologyException("TypedProcessor " + name + " is already added.");
         }
         if (predecessorNames.length == 0) {
-            throw new TopologyException("Processor " + name + " must have at least one parent");
+            throw new TopologyException("TypedProcessor " + name + " must have at least one parent");
         }
 
         for (final String predecessor : predecessorNames) {
             Objects.requireNonNull(predecessor, "predecessor name must not be null");
             if (predecessor.equals(name)) {
-                throw new TopologyException("Processor " + name + " cannot be a predecessor of itself.");
+                throw new TopologyException("TypedProcessor " + name + " cannot be a predecessor of itself.");
             }
             if (!nodeFactories.containsKey(predecessor)) {
                 throw new TopologyException("Predecessor processor " + predecessor + " is not added yet for " + name);
@@ -538,7 +539,7 @@ public class InternalTopologyBuilder {
                                      final Deserializer valueDeserializer,
                                      final String topic,
                                      final String processorName,
-                                     final ProcessorSupplier stateUpdateSupplier) {
+                                     final TypedProcessorSupplier stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "store builder must not be null");
         validateGlobalStoreArguments(sourceName,
                                      topic,
@@ -619,7 +620,7 @@ public class InternalTopologyBuilder {
     private void validateGlobalStoreArguments(final String sourceName,
                                               final String topic,
                                               final String processorName,
-                                              final ProcessorSupplier stateUpdateSupplier,
+                                              final TypedProcessorSupplier stateUpdateSupplier,
                                               final String storeName,
                                               final boolean loggingEnabled) {
         Objects.requireNonNull(sourceName, "sourceName must not be null");
@@ -627,10 +628,10 @@ public class InternalTopologyBuilder {
         Objects.requireNonNull(stateUpdateSupplier, "supplier must not be null");
         Objects.requireNonNull(processorName, "processorName must not be null");
         if (nodeFactories.containsKey(sourceName)) {
-            throw new TopologyException("Processor " + sourceName + " is already added.");
+            throw new TopologyException("TypedProcessor " + sourceName + " is already added.");
         }
         if (nodeFactories.containsKey(processorName)) {
-            throw new TopologyException("Processor " + processorName + " is already added.");
+            throw new TopologyException("TypedProcessor " + processorName + " is already added.");
         }
         if (stateFactories.containsKey(storeName) || globalStateBuilders.containsKey(storeName)) {
             throw new TopologyException("StateStore " + storeName + " is already added.");
@@ -647,13 +648,13 @@ public class InternalTopologyBuilder {
                                                final String stateStoreName) {
         if (globalStateBuilders.containsKey(stateStoreName)) {
             throw new TopologyException("Global StateStore " + stateStoreName +
-                    " can be used by a Processor without being specified; it should not be explicitly passed.");
+                    " can be used by a TypedProcessor without being specified; it should not be explicitly passed.");
         }
         if (!stateFactories.containsKey(stateStoreName)) {
             throw new TopologyException("StateStore " + stateStoreName + " is not added yet.");
         }
         if (!nodeFactories.containsKey(processorName)) {
-            throw new TopologyException("Processor " + processorName + " is not added yet.");
+            throw new TopologyException("TypedProcessor " + processorName + " is not added yet.");
         }
 
         final StateStoreFactory stateStoreFactory = stateFactories.get(stateStoreName);
@@ -885,7 +886,6 @@ public class InternalTopologyBuilder {
                                      repartitionTopics);
     }
 
-    @SuppressWarnings("unchecked")
     private void buildSinkNode(final Map<String, ProcessorNode> processorMap,
                                final Map<String, SinkNode> topicSinkMap,
                                final Set<String> repartitionTopics,
@@ -937,7 +937,7 @@ public class InternalTopologyBuilder {
                                     final ProcessorNode node) {
 
         for (final String predecessor : factory.predecessors) {
-            final ProcessorNode<?, ?> predecessorNode = processorMap.get(predecessor);
+            final ProcessorNode predecessorNode = processorMap.get(predecessor);
             predecessorNode.addChild(node);
         }
         for (final String stateStoreName : factory.stateStoreNames) {

@@ -20,7 +20,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.MockProcessorContext;
 import org.apache.kafka.streams.processor.MockProcessorContext.CapturedForward;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -354,7 +354,7 @@ public class MockProcessorContextTest {
 
     @Test
     public void shouldCapturePunctuator() {
-        final Processor<String, Long> processor = new Processor<String, Long>() {
+        final TypedProcessor<String, Long> processor = new TypedProcessor<String, Long>() {
             @Override
             public void init(final ProcessorContext context) {
                 context.schedule(

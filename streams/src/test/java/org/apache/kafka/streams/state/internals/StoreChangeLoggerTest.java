@@ -36,6 +36,7 @@ import java.util.Map;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class StoreChangeLoggerTest {
 
     private final String topic = "topic";

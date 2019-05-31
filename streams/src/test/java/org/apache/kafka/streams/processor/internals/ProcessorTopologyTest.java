@@ -32,12 +32,12 @@ import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -61,6 +61,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class ProcessorTopologyTest {
 
     private static final Serializer<String> STRING_SERIALIZER = new StringSerializer();
@@ -601,7 +602,7 @@ public class ProcessorTopologyTest {
     /**
      * A processor that simply forwards all messages to all children.
      */
-    protected static class ForwardingProcessor extends AbstractProcessor<String, String> {
+    protected static class ForwardingProcessor extends AbstractProcessor<String, String, String, String> {
         @Override
         public void process(final String key, final String value) {
             context().forward(key, value);
@@ -611,14 +612,14 @@ public class ProcessorTopologyTest {
     /**
      * A processor that simply forwards all messages to all children with advanced timestamps.
      */
-    protected static class TimestampProcessor extends AbstractProcessor<String, String> {
+    protected static class TimestampProcessor extends AbstractProcessor<String, String, String, String> {
         @Override
         public void process(final String key, final String value) {
             context().forward(key, value, To.all().withTimestamp(context().timestamp() + 10));
         }
     }
 
-    protected static class FanOutTimestampProcessor extends AbstractProcessor<String, String> {
+    protected static class FanOutTimestampProcessor extends AbstractProcessor<String, String, String, String> {
         private final String firstChild;
         private final String secondChild;
 
@@ -637,7 +638,7 @@ public class ProcessorTopologyTest {
         }
     }
 
-    protected static class AddHeaderProcessor extends AbstractProcessor<String, String> {
+    protected static class AddHeaderProcessor extends AbstractProcessor<String, String, String, String> {
         @Override
         public void process(final String key, final String value) {
             context().headers().add(HEADER);
@@ -649,7 +650,7 @@ public class ProcessorTopologyTest {
      * A processor that removes custom timestamp information from messages and forwards modified messages to each child.
      * A message contains custom timestamp information if the value is in ".*@[0-9]+" format.
      */
-    protected static class ValueTimestampProcessor extends AbstractProcessor<String, String> {
+    protected static class ValueTimestampProcessor extends AbstractProcessor<String, String, String, String> {
         @Override
         public void process(final String key, final String value) {
             context().forward(key, value.split("@")[0]);
@@ -659,7 +660,7 @@ public class ProcessorTopologyTest {
     /**
      * A processor that forwards slightly-modified messages to each child.
      */
-    protected static class MultiplexingProcessor extends AbstractProcessor<String, String> {
+    protected static class MultiplexingProcessor extends AbstractProcessor<String, String, String, String> {
         private final int numChildren;
 
         MultiplexingProcessor(final int numChildren) {
@@ -679,7 +680,7 @@ public class ProcessorTopologyTest {
      * A processor that forwards slightly-modified messages to each named child.
      * Note: the children are assumed to be named "sink{child number}", e.g., sink1, or sink2, etc.
      */
-    protected static class MultiplexByNameProcessor extends AbstractProcessor<String, String> {
+    protected static class MultiplexByNameProcessor extends AbstractProcessor<String, String, String, String> {
         private final int numChildren;
 
         MultiplexByNameProcessor(final int numChildren) {
@@ -698,7 +699,7 @@ public class ProcessorTopologyTest {
     /**
      * A processor that stores each key-value pair in an in-memory key-value store registered with the context.
      */
-    protected static class StatefulProcessor extends AbstractProcessor<String, String> {
+    protected static class StatefulProcessor extends AbstractProcessor<String, String, Void, Void> {
         private KeyValueStore<String, String> store;
         private final String storeName;
 
@@ -719,7 +720,7 @@ public class ProcessorTopologyTest {
         }
     }
 
-    private <K, V> ProcessorSupplier<K, V> define(final Processor<K, V> processor) {
+    private <KIn, VIn, KOut, VOut> TypedProcessorSupplier<KIn, VIn, KOut, VOut> define(final TypedProcessor<KIn, VIn, KOut, VOut> processor) {
         return () -> processor;
     }
 

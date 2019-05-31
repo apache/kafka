@@ -20,7 +20,7 @@ import org.apache.kafka.common.header.Headers;
 
 /**
  * The context associated with the current record being processed by
- * an {@link Processor}
+ * an {@link TypedProcessor}
  */
 public interface RecordContext {
     /**

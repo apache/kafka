@@ -38,7 +38,7 @@ import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
@@ -311,7 +311,7 @@ public class RestoreIntegrationTest {
     }
 
 
-    public static class KeyValueStoreProcessor implements Processor<Integer, Integer> {
+    public static class KeyValueStoreProcessor implements TypedProcessor<Integer, Integer, Void, Void> {
 
         private final String topic;
         private final CountDownLatch processorLatch;
@@ -325,7 +325,7 @@ public class RestoreIntegrationTest {
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Void, Void> context) {
             this.store = (KeyValueStore<Integer, Integer>) context.getStateStore(topic);
         }
 

@@ -41,6 +41,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class KStreamTransformTest {
     private static final String TOPIC_NAME = "topic";
     private final ConsumerRecordFactory<Integer, Integer> recordFactory =

@@ -40,7 +40,7 @@ import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
@@ -88,7 +88,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * sends output to zero, one, or more output topics.
  * <p>
  * The computational logic can be specified either by using the {@link Topology} to define a DAG topology of
- * {@link Processor}s or by using the {@link StreamsBuilder} which provides the high-level DSL to define
+ * {@link TypedProcessor}s or by using the {@link StreamsBuilder} which provides the high-level DSL to define
  * transformations.
  * <p>
  * One {@code KafkaStreams} instance can contain one or more threads specified in the configs for the processing work.

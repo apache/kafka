@@ -16,21 +16,31 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 
-class KStreamPassThrough<K, V> implements ProcessorSupplier<K, V> {
+class KStreamPassThrough<K, V> implements TypedProcessorSupplier<K, V, K, V> {
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, K, V> get() {
         return new KStreamPassThroughProcessor<>();
     }
 
-    private static final class KStreamPassThroughProcessor<K, V> extends AbstractProcessor<K, V> {
+    private static final class KStreamPassThroughProcessor<K, V> implements TypedProcessor<K, V, K, V> {
+        private ProcessorContext<K, V> context;
+
+        @Override
+        public void init(final ProcessorContext<K, V> context) {
+            this.context = context;
+        }
+
         @Override
         public void process(final K key, final V value) {
-            context().forward(key, value);
+            context.forward(key, value);
         }
+
+        @Override
+        public void close() {}
     }
 }

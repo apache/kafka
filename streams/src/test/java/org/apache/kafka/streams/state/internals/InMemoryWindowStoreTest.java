@@ -35,6 +35,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.junit.Test;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class InMemoryWindowStoreTest extends WindowBytesStoreTest {
 
     private final static String STORE_NAME = "InMemoryWindowStore";

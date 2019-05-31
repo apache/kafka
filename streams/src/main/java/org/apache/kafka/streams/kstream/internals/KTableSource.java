@@ -16,10 +16,9 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -28,7 +27,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
 
-public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
+public class KTableSource<K, V> implements TypedProcessorSupplier<K, V, K, Change<V>> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableSource.class);
 
     private final String storeName;
@@ -48,7 +47,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, K, Change<V>> get() {
         return new KTableSourceProcessor();
     }
 
@@ -65,16 +64,17 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
         this.queryableName = storeName;
     }
 
-    private class KTableSourceProcessor extends AbstractProcessor<K, V> {
+    private class KTableSourceProcessor implements TypedProcessor<K, V, K, Change<V>> {
 
         private TimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
         private StreamsMetricsImpl metrics;
+        private ProcessorContext<K, Change<V>> context;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
+        public void init(final ProcessorContext<K, Change<V>> context) {
+            this.context = context;
             metrics = (StreamsMetricsImpl) context.metrics();
             if (queryableName != null) {
                 store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
@@ -92,7 +92,7 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
             if (key == null) {
                 LOG.warn(
                     "Skipping record due to null key. topic=[{}] partition=[{}] offset=[{}]",
-                    context().topic(), context().partition(), context().offset()
+                    context.topic(), context.partition(), context.offset()
                 );
                 metrics.skippedRecordsSensor().record();
                 return;
@@ -103,18 +103,21 @@ public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
                 final V oldValue;
                 if (oldValueAndTimestamp != null) {
                     oldValue = oldValueAndTimestamp.value();
-                    if (context().timestamp() < oldValueAndTimestamp.timestamp()) {
+                    if (context.timestamp() < oldValueAndTimestamp.timestamp()) {
                         LOG.warn("Detected out-of-order KTable update for {} at offset {}, partition {}.",
-                            store.name(), context().offset(), context().partition());
+                            store.name(), context.offset(), context.partition());
                     }
                 } else {
                     oldValue = null;
                 }
-                store.put(key, ValueAndTimestamp.make(value, context().timestamp()));
+                store.put(key, ValueAndTimestamp.make(value, context.timestamp()));
                 tupleForwarder.maybeForward(key, value, oldValue);
             } else {
-                context().forward(key, new Change<>(value, null));
+                context.forward(key, new Change<>(value, null));
             }
         }
+
+        @Override
+        public void close() {}
     }
 }

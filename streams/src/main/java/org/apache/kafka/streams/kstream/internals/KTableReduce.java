@@ -18,15 +18,14 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
+public class KTableReduce<K, V> implements KTableProcessorSupplier<K, Change<V>, K, V> {
 
     private final String storeName;
     private final Reducer<V> addReducer;
@@ -46,19 +45,20 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public TypedProcessor<K, Change<V>, K, Change<V>> get() {
         return new KTableReduceProcessor();
     }
 
-    private class KTableReduceProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTableReduceProcessor implements TypedProcessor<K, Change<V>, K, Change<V>> {
 
         private TimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
+        private ProcessorContext<K, Change<V>> context;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
+        public void init(final ProcessorContext<K, Change<V>> context) {
+            this.context = context;
             store = (TimestampedKeyValueStore<K, V>) context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
                 store,
@@ -85,10 +85,10 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
             // first try to remove the old value
             if (value.oldValue != null && oldAgg != null) {
                 intermediateAgg = removeReducer.apply(oldAgg, value.oldValue);
-                newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
+                newTimestamp = Math.max(context.timestamp(), oldAggAndTimestamp.timestamp());
             } else {
                 intermediateAgg = oldAgg;
-                newTimestamp = context().timestamp();
+                newTimestamp = context.timestamp();
             }
 
             // then try to add the new value
@@ -98,7 +98,7 @@ public class KTableReduce<K, V> implements KTableProcessorSupplier<K, V, V> {
                     newAgg = value.newValue;
                 } else {
                     newAgg = addReducer.apply(intermediateAgg, value.newValue);
-                    newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
+                    newTimestamp = Math.max(context.timestamp(), oldAggAndTimestamp.timestamp());
                 }
             } else {
                 newAgg = intermediateAgg;

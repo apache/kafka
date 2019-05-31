@@ -29,6 +29,7 @@ import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class SessionTupleForwarderTest {
 
     @Test
@@ -74,7 +75,7 @@ public class SessionTupleForwarderTest {
         expectLastCall();
         replay(store, context);
 
-        new SessionTupleForwarder<>(store, context, null, sendOldValued)
+        new SessionTupleForwarder(store, context, null, sendOldValued)
             .maybeForward(new Windowed<>("key", new SessionWindow(21L, 42L)), "value", "oldValue");
 
         verify(store, context);
@@ -88,7 +89,7 @@ public class SessionTupleForwarderTest {
         expect(store.setFlushListener(null, false)).andReturn(true);
         replay(store, context);
 
-        new SessionTupleForwarder<>(store, context, null, false)
+        new SessionTupleForwarder(store, context, null, false)
             .maybeForward(new Windowed<>("key", new SessionWindow(21L, 42L)), "value", "oldValue");
 
         verify(store, context);

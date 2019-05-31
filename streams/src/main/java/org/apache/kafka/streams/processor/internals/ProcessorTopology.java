@@ -24,6 +24,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+@SuppressWarnings("rawtypes")
 public class ProcessorTopology {
 
     private final List<ProcessorNode> processorNodes;
@@ -58,20 +59,14 @@ public class ProcessorTopology {
         return sourcesByTopic.get(topic);
     }
 
+    @SuppressWarnings("rawtypes")
     public Set<SourceNode> sources() {
         return new HashSet<>(sourcesByTopic.values());
     }
 
-    public Set<String> sinkTopics() {
-        return sinksByTopic.keySet();
-    }
-
+    @SuppressWarnings("rawtypes")
     public SinkNode sink(final String topic) {
         return sinksByTopic.get(topic);
-    }
-
-    public Set<SinkNode> sinks() {
-        return new HashSet<>(sinksByTopic.values());
     }
 
     public List<ProcessorNode> processors() {
@@ -112,13 +107,13 @@ public class ProcessorTopology {
         return false;
     }
 
-    private String childrenToString(final String indent, final List<ProcessorNode<?, ?>> children) {
+    private String childrenToString(final String indent, final List<? extends ProcessorNode<?, ?, ?, ?>> children) {
         if (children == null || children.isEmpty()) {
             return "";
         }
 
         final StringBuilder sb = new StringBuilder(indent + "\tchildren:\t[");
-        for (final ProcessorNode child : children) {
+        for (final ProcessorNode<?, ?, ?, ?> child : children) {
             sb.append(child.name());
             sb.append(", ");
         }
@@ -126,7 +121,7 @@ public class ProcessorTopology {
         sb.append("]\n");
 
         // recursively print children
-        for (final ProcessorNode<?, ?> child : children) {
+        for (final ProcessorNode<?, ?, ?, ?> child : children) {
             sb.append(child.toString(indent)).append(childrenToString(indent, child.children()));
         }
         return sb.toString();
@@ -159,7 +154,7 @@ public class ProcessorTopology {
 
     // for testing only
     public Set<String> processorConnectedStateStores(final String processorName) {
-        for (final ProcessorNode<?, ?> node : processorNodes) {
+        for (final ProcessorNode<?, ?, ?, ?> node : processorNodes) {
             if (node.name().equals(processorName)) {
                 return node.stateStores;
             }

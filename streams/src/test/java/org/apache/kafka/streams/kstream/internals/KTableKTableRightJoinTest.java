@@ -19,8 +19,9 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.junit.Test;
 
@@ -29,16 +30,16 @@ import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class KTableKTableRightJoinTest {
     @Test
     public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        @SuppressWarnings("unchecked")
-        final Processor<String, Change<String>> join = new KTableKTableRightJoin<>(
-            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
-            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
-            null
+        final TypedProcessor<String, Change<String>, String, Change<Void>> join = new KTableKTableRightJoin<>(
+            (KTableImpl<String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
+            (KTableImpl<String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
+            (ValueJoiner<String, String, Void>) null
         ).get();
 
         final MockProcessorContext context = new MockProcessorContext();

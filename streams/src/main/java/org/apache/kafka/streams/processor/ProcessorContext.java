@@ -27,11 +27,10 @@ import java.time.Duration;
 import java.util.Map;
 
 /**
- * Processor context interface.
+ * TypedProcessor context interface.
  */
 @InterfaceStability.Evolving
-public interface ProcessorContext {
-
+public interface ProcessorContext<K, V> {
     /**
      * Returns the application id
      *
@@ -96,8 +95,8 @@ public interface ProcessorContext {
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
-     * {@link Processor#init(ProcessorContext) initialization} or
-     * {@link Processor#process(Object, Object) processing} to
+     * {@link TypedProcessor#init(ProcessorContext) initialization} or
+     * {@link TypedProcessor#process(Object, Object) processing} to
      * schedule a periodic callback &mdash; called a punctuation  &mdash; to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>
@@ -133,8 +132,8 @@ public interface ProcessorContext {
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
-     * {@link Processor#init(ProcessorContext) initialization} or
-     * {@link Processor#process(Object, Object) processing} to
+     * {@link TypedProcessor#init(ProcessorContext) initialization} or
+     * {@link TypedProcessor#process(Object, Object) processing} to
      * schedule a periodic callback &mdash; called a punctuation &mdash; to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>
@@ -173,7 +172,7 @@ public interface ProcessorContext {
      * @param key key
      * @param value value
      */
-    <K, V> void forward(final K key, final V value);
+    <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value);
 
     /**
      * Forwards a key/value pair to the specified downstream processors.
@@ -183,7 +182,7 @@ public interface ProcessorContext {
      * @param value value
      * @param to the options to use when forwarding
      */
-    <K, V> void forward(final K key, final V value, final To to);
+    <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final To to);
 
     /**
      * Forwards a key/value pair to one of the downstream processors designated by childIndex
@@ -194,7 +193,7 @@ public interface ProcessorContext {
      */
     // TODO when we remove this method, we can also remove `ProcessorNode#children`
     @Deprecated
-    <K, V> void forward(final K key, final V value, final int childIndex);
+    <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final int childIndex);
 
     /**
      * Forwards a key/value pair to one of the downstream processors designated by the downstream processor name
@@ -204,7 +203,7 @@ public interface ProcessorContext {
      * @deprecated please use {@link #forward(Object, Object, To)} instead
      */
     @Deprecated
-    <K, V> void forward(final K key, final V value, final String childName);
+    <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final String childName);
 
     /**
      * Requests a commit

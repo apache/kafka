@@ -21,16 +21,16 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.KStreamSessionWindowAggregate;
 import org.apache.kafka.streams.kstream.internals.KStreamWindowAggregate;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 
 public final class GraphGraceSearchUtil {
     private GraphGraceSearchUtil() {}
 
-    public static long findAndVerifyWindowGrace(final StreamsGraphNode streamsGraphNode) {
+    public static long findAndVerifyWindowGrace(final StreamsGraphNode<?, ?, ?, ?> streamsGraphNode) {
         return findAndVerifyWindowGrace(streamsGraphNode, "");
     }
 
-    private static long findAndVerifyWindowGrace(final StreamsGraphNode streamsGraphNode, final String chain) {
+    private static long findAndVerifyWindowGrace(final StreamsGraphNode<?, ?, ?, ?> streamsGraphNode, final String chain) {
         // error base case: we traversed off the end of the graph without finding a window definition
         if (streamsGraphNode == null) {
             throw new TopologyException(
@@ -56,7 +56,7 @@ public final class GraphGraceSearchUtil {
 
         // recursive case: all parents must define a grace period, and we use the max of our parents' graces.
         long inheritedGrace = -1;
-        for (final StreamsGraphNode parentNode : streamsGraphNode.parentNodes()) {
+        for (final StreamsGraphNode<?, ?, ?, ?> parentNode : streamsGraphNode.parentNodes()) {
             final long parentGrace = findAndVerifyWindowGrace(parentNode, newChain);
             inheritedGrace = Math.max(inheritedGrace, parentGrace);
         }
@@ -68,9 +68,9 @@ public final class GraphGraceSearchUtil {
         return inheritedGrace;
     }
 
-    private static Long extractGracePeriod(final StreamsGraphNode node) {
+    private static Long extractGracePeriod(final StreamsGraphNode<?, ?, ?, ?> node) {
         if (node instanceof StatefulProcessorNode) {
-            final ProcessorSupplier processorSupplier = ((StatefulProcessorNode) node).processorParameters().processorSupplier();
+            final TypedProcessorSupplier<?, ?, ?, ?> processorSupplier = ((StatefulProcessorNode<?, ?, ?, ?>) node).processorParameters().processorSupplier();
             if (processorSupplier instanceof KStreamWindowAggregate) {
                 final KStreamWindowAggregate kStreamWindowAggregate = (KStreamWindowAggregate) processorSupplier;
                 final Windows windows = kStreamWindowAggregate.windows();

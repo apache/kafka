@@ -18,8 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -44,7 +43,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
     }
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, K, Change<T>> get() {
         return new KStreamAggregateProcessor();
     }
 
@@ -54,15 +53,16 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
     }
 
 
-    private class KStreamAggregateProcessor extends AbstractProcessor<K, V> {
+    private class KStreamAggregateProcessor implements TypedProcessor<K, V, K, Change<T>> {
         private TimestampedKeyValueStore<K, T> store;
         private StreamsMetricsImpl metrics;
         private TimestampedTupleForwarder<K, T> tupleForwarder;
+        private ProcessorContext<K, Change<T>> context;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
+        public void init(final ProcessorContext<K, Change<T>> context) {
+            this.context = context;
             metrics = (StreamsMetricsImpl) context.metrics();
             store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
@@ -78,7 +78,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             if (key == null || value == null) {
                 LOG.warn(
                     "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                    key, value, context().topic(), context().partition(), context().offset()
+                    key, value, context.topic(), context.partition(), context.offset()
                 );
                 metrics.skippedRecordsSensor().record();
                 return;
@@ -92,10 +92,10 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
             if (oldAgg == null) {
                 oldAgg = initializer.apply();
-                newTimestamp = context().timestamp();
+                newTimestamp = context.timestamp();
             } else {
                 oldAgg = oldAggAndTimestamp.value();
-                newTimestamp = Math.max(context().timestamp(), oldAggAndTimestamp.timestamp());
+                newTimestamp = Math.max(context.timestamp(), oldAggAndTimestamp.timestamp());
             }
 
             newAgg = aggregator.apply(key, value, oldAgg);
@@ -103,6 +103,9 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             store.put(key, ValueAndTimestamp.make(newAgg, newTimestamp));
             tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null, newTimestamp);
         }
+
+        @Override
+        public void close() {}
     }
 
     @Override
@@ -126,7 +129,7 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Void, Void> context) {
             store = (TimestampedKeyValueStore<K, T>) context.getStateStore(storeName);
         }
 

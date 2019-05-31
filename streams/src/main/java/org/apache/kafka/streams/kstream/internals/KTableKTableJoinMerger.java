@@ -16,8 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -26,16 +25,16 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, V, V> {
+public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, Change<V>, K, V> {
 
-    private final KTableProcessorSupplier<K, ?, V> parent1;
-    private final KTableProcessorSupplier<K, ?, V> parent2;
+    private final KTableProcessorSupplier<?, ?, K, V> parent1;
+    private final KTableProcessorSupplier<?, ?, K, V> parent2;
     private final String queryableName;
     private boolean sendOldValues = false;
 
-    KTableKTableJoinMerger(final KTableProcessorSupplier<K, ?, V> parent1,
-                           final KTableProcessorSupplier<K, ?, V> parent2,
-                           final String queryableName) {
+    public KTableKTableJoinMerger(final KTableProcessorSupplier<?, ?, K, V> parent1,
+                                  final KTableProcessorSupplier<?, ?, K, V> parent2,
+                                  final String queryableName) {
         this.parent1 = parent1;
         this.parent2 = parent2;
         this.queryableName = queryableName;
@@ -46,7 +45,7 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public TypedProcessor<K, Change<V>, K, Change<V>> get() {
         return new KTableKTableJoinMergeProcessor();
     }
 
@@ -83,25 +82,15 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         sendOldValues = true;
     }
 
-    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, V> parent1,
-                                                         final KTableProcessorSupplier<K, ?, V> parent2) {
-        return of(parent1, parent2, null);
-    }
-
-    public static <K, V> KTableKTableJoinMerger<K, V> of(final KTableProcessorSupplier<K, ?, V> parent1,
-                                                         final KTableProcessorSupplier<K, ?, V> parent2,
-                                                         final String queryableName) {
-        return new KTableKTableJoinMerger<>(parent1, parent2, queryableName);
-    }
-
-    private class KTableKTableJoinMergeProcessor extends AbstractProcessor<K, Change<V>> {
+    private class KTableKTableJoinMergeProcessor implements TypedProcessor<K, Change<V>, K, Change<V>> {
         private TimestampedKeyValueStore<K, V> store;
         private TimestampedTupleForwarder<K, V> tupleForwarder;
+        private ProcessorContext<K, Change<V>> context;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
+        public void init(final ProcessorContext<K, Change<V>> context) {
+            this.context = context;
             if (queryableName != null) {
                 store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
@@ -115,15 +104,18 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
         @Override
         public void process(final K key, final Change<V> value) {
             if (queryableName != null) {
-                store.put(key, ValueAndTimestamp.make(value.newValue, context().timestamp()));
+                store.put(key, ValueAndTimestamp.make(value.newValue, context.timestamp()));
                 tupleForwarder.maybeForward(key, value.newValue, sendOldValues ? value.oldValue : null);
             } else {
                 if (sendOldValues) {
-                    context().forward(key, value);
+                    context.forward(key, value);
                 } else {
-                    context().forward(key, new Change<>(value.newValue, null));
+                    context.forward(key, new Change<>(value.newValue, null));
                 }
             }
         }
+
+        @Override
+        public void close() {}
     }
 }

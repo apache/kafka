@@ -22,7 +22,7 @@ package kstream
 
 import org.apache.kafka.streams.KeyValue
 import org.apache.kafka.streams.kstream.{KStream => KStreamJ, _}
-import org.apache.kafka.streams.processor.{Processor, ProcessorSupplier, TopicNameExtractor}
+import org.apache.kafka.streams.processor.{Processor, ProcessorSupplier, TopicNameExtractor, TypedProcessor, TypedProcessorSupplier}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions._
 import org.apache.kafka.streams.scala.ImplicitConversions._
 
@@ -336,21 +336,21 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
     inner.transformValues[VR](valueTransformerSupplier, stateStoreNames: _*)
 
   /**
-   * Process all records in this stream, one record at a time, by applying a `Processor` (provided by the given
+   * Process all records in this stream, one record at a time, by applying a `TypedProcessor` (provided by the given
    * `processorSupplier`).
    * In order to assign a state, the state must be created and added via `addStateStore` before they can be connected
-   * to the `Processor`.
+   * to the `TypedProcessor`.
    * It's not required to connect global state stores that are added via `addGlobalStore`;
    * read-only access to global state stores is available by default.
    *
-   * @param processorSupplier a function that generates a [[org.apache.kafka.streams.processor.Processor]]
+   * @param processorSupplier a function that generates a [[TypedProcessor]]
    * @param stateStoreNames   the names of the state store used by the processor
    * @see `org.apache.kafka.streams.kstream.KStream#process`
    */
-  def process(processorSupplier: () => Processor[K, V], stateStoreNames: String*): Unit = {
+  def process(processorSupplier: () => TypedProcessor[K, V], stateStoreNames: String*): Unit = {
     //noinspection ConvertExpressionToSAM // because of the 2.11 build
-    val processorSupplierJ: ProcessorSupplier[K, V] = new ProcessorSupplier[K, V] {
-      override def get(): Processor[K, V] = processorSupplier()
+    val processorSupplierJ: TypedProcessorSupplier[K, V] = new TypedProcessorSupplier[K, V] {
+      override def get(): TypedProcessor[K, V] = processorSupplier()
     }
     inner.process(processorSupplierJ, stateStoreNames: _*)
   }

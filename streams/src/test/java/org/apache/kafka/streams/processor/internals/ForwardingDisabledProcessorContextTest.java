@@ -39,23 +39,27 @@ public class ForwardingDisabledProcessorContextTest {
 
     @Test(expected = StreamsException.class)
     public void shouldThrowOnForward() {
-        context.forward("key", "value");
+        // forwarding any non-null arguments is a type error
+        context.forward(null, null);
     }
 
     @Test(expected = StreamsException.class)
     public void shouldThrowOnForwardWithTo() {
-        context.forward("key", "value", To.all());
+        // forwarding any non-null arguments is a type error
+        context.forward(null, null, To.all());
     }
 
     @SuppressWarnings("deprecation") // need to test deprecated code until removed
     @Test(expected = StreamsException.class)
     public void shouldThrowOnForwardWithChildIndex() {
-        context.forward("key", "value", 1);
+        // forwarding any non-null arguments is a type error
+        context.forward(null, null, 1);
     }
 
     @SuppressWarnings("deprecation") // need to test deprecated code until removed
     @Test(expected = StreamsException.class)
     public void shouldThrowOnForwardWithChildName() {
-        context.forward("key", "value", "child1");
+        // forwarding any non-null arguments is a type error
+        context.forward(null, null, "child1");
     }
 }

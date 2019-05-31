@@ -17,7 +17,9 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
@@ -27,31 +29,36 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 
 /**
  * Used to represent either a KTable source or a GlobalKTable source. A boolean flag is used to indicate if this represents a GlobalKTable a {@link
  * org.apache.kafka.streams.kstream.GlobalKTable}
  */
-public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
+public class TableSourceNode<K, V> extends StreamsGraphNode<Void, Void, K, Change<V>> {
 
     private final MaterializedInternal<K, V, ?> materializedInternal;
-    private final ProcessorParameters<K, V> processorParameters;
+    private final ProcessorParameters<K, V, K, Change<V>> processorParameters;
     private final String sourceName;
     private final boolean isGlobalKTable;
+    private final ConsumedInternal<K, V> consumedInternal;
     private boolean shouldReuseSourceTopicForChangelog = false;
+    private final Collection<String> topicNames;
 
     private TableSourceNode(final String nodeName,
                             final String sourceName,
                             final String topic,
                             final ConsumedInternal<K, V> consumedInternal,
                             final MaterializedInternal<K, V, ?> materializedInternal,
-                            final ProcessorParameters<K, V> processorParameters,
+                            final ProcessorParameters<K, V, K, Change<V>> processorParameters,
                             final boolean isGlobalKTable) {
 
-        super(nodeName,
-              Collections.singletonList(topic),
-              consumedInternal);
+        super(nodeName);
+
+        this.topicNames = Collections.singletonList(topic);
+        this.consumedInternal = consumedInternal;
 
         this.sourceName = sourceName;
         this.isGlobalKTable = isGlobalKTable;
@@ -67,11 +74,14 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
     @Override
     public String toString() {
         return "TableSourceNode{" +
-               "materializedInternal=" + materializedInternal +
-               ", processorParameters=" + processorParameters +
-               ", sourceName='" + sourceName + '\'' +
-               ", isGlobalKTable=" + isGlobalKTable +
-               "} " + super.toString();
+            "materializedInternal=" + materializedInternal +
+            ", processorParameters=" + processorParameters +
+            ", sourceName='" + sourceName + '\'' +
+            ", isGlobalKTable=" + isGlobalKTable +
+            ", consumedInternal=" + consumedInternal +
+            ", shouldReuseSourceTopicForChangelog=" + shouldReuseSourceTopicForChangelog +
+            ", topicNames=" + topicNames +
+            '}';
     }
 
     public static <K, V> TableSourceNodeBuilder<K, V> tableSourceNodeBuilder() {
@@ -121,6 +131,22 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
 
     }
 
+    public Collection<String> getTopicNames() {
+        return new ArrayList<>(topicNames);
+    }
+
+    public ConsumedInternal<K, V> consumedInternal() {
+        return consumedInternal;
+    }
+
+    public Serde<K> keySerde() {
+        return consumedInternal.keySerde();
+    }
+
+    public Serde<V> valueSerde() {
+        return consumedInternal.valueSerde();
+    }
+
     public static final class TableSourceNodeBuilder<K, V> {
 
         private String nodeName;
@@ -128,7 +154,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
         private String topic;
         private ConsumedInternal<K, V> consumedInternal;
         private MaterializedInternal<K, V, ?> materializedInternal;
-        private ProcessorParameters<K, V> processorParameters;
+        private ProcessorParameters<K, V, K, Change<V>> processorParameters;
         private boolean isGlobalKTable = false;
 
         private TableSourceNodeBuilder() {
@@ -154,7 +180,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
+        public TableSourceNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V, K, Change<V>> processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }

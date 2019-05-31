@@ -30,8 +30,8 @@ import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.kstream.internals.InternalStreamsBuilder;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -463,7 +463,7 @@ public class StreamsBuilder {
     /**
      * Adds a state store to the underlying {@link Topology}.
      * <p>
-     * It is required to connect state stores to {@link Processor Processors}, {@link Transformer Transformers},
+     * It is required to connect state stores to {@link TypedProcessor Processors}, {@link Transformer Transformers},
      * or {@link ValueTransformer ValueTransformers} before they can be used.
      *
      * @param builder the builder used to obtain this state store {@link StateStore} instance
@@ -477,7 +477,7 @@ public class StreamsBuilder {
     }
 
     /**
-     * @deprecated use {@link #addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)} instead
+     * @deprecated use {@link #addGlobalStore(StoreBuilder, String, Consumed, TypedProcessorSupplier)} instead
      */
     @SuppressWarnings("unchecked")
     @Deprecated
@@ -486,7 +486,7 @@ public class StreamsBuilder {
                                                       final String sourceName,
                                                       final Consumed consumed,
                                                       final String processorName,
-                                                      final ProcessorSupplier stateUpdateSupplier) {
+                                                      final TypedProcessorSupplier stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(storeBuilder,
@@ -513,13 +513,13 @@ public class StreamsBuilder {
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      * <p>
-     * It is not required to connect a global store to {@link Processor Processors}, {@link Transformer Transformers},
+     * It is not required to connect a global store to {@link TypedProcessor Processors}, {@link Transformer Transformers},
      * or {@link ValueTransformer ValueTransformer}; those have read-only access to all global stores by default.
      *
      * @param storeBuilder          user defined {@link StoreBuilder}; can't be {@code null}
      * @param topic                 the topic to source the data from
      * @param consumed              the instance of {@link Consumed} used to define optional parameters; can't be {@code null}
-     * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
+     * @param stateUpdateSupplier   the instance of {@link TypedProcessorSupplier}
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
@@ -527,7 +527,7 @@ public class StreamsBuilder {
     public synchronized StreamsBuilder addGlobalStore(final StoreBuilder storeBuilder,
                                                       final String topic,
                                                       final Consumed consumed,
-                                                      final ProcessorSupplier stateUpdateSupplier) {
+                                                      final TypedProcessorSupplier stateUpdateSupplier) {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(storeBuilder,

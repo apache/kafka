@@ -34,6 +34,7 @@ import java.util.ArrayDeque;
  * partition timestamp defined as the minimum timestamp of records in its queue; in addition, its partition
  * timestamp is monotonically increasing such that once it is advanced, it will not be decremented.
  */
+@SuppressWarnings("rawtypes")
 public class RecordQueue {
 
     public static final long UNKNOWN = ConsumerRecord.NO_TIMESTAMP;

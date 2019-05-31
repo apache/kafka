@@ -18,41 +18,41 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 
-public class KStreamFlatTransformValues<KIn, VIn, VOut> implements ProcessorSupplier<KIn, VIn> {
+public class KStreamFlatTransformValues<K, VIn, VOut> implements TypedProcessorSupplier<K, VIn, K, VOut> {
 
-    private final ValueTransformerWithKeySupplier<KIn, VIn, Iterable<VOut>> valueTransformerSupplier;
+    private final ValueTransformerWithKeySupplier<? super K, ? super VIn, Iterable<VOut>> valueTransformerSupplier;
 
-    public KStreamFlatTransformValues(final ValueTransformerWithKeySupplier<KIn, VIn, Iterable<VOut>> valueTransformerWithKeySupplier) {
+    public KStreamFlatTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super VIn, Iterable<VOut>> valueTransformerWithKeySupplier) {
         this.valueTransformerSupplier = valueTransformerWithKeySupplier;
     }
 
     @Override
-    public Processor<KIn, VIn> get() {
+    public TypedProcessor<K, VIn, K, VOut> get() {
         return new KStreamFlatTransformValuesProcessor<>(valueTransformerSupplier.get());
     }
 
-    public static class KStreamFlatTransformValuesProcessor<KIn, VIn, VOut> implements Processor<KIn, VIn> {
+    public static class KStreamFlatTransformValuesProcessor<K, VIn, VOut> implements TypedProcessor<K, VIn, K, VOut> {
 
-        private final ValueTransformerWithKey<KIn, VIn, Iterable<VOut>> valueTransformer;
-        private ProcessorContext context;
+        private final ValueTransformerWithKey<? super K, ? super VIn, Iterable<VOut>> valueTransformer;
+        private ProcessorContext<K, VOut> context;
 
-        KStreamFlatTransformValuesProcessor(final ValueTransformerWithKey<KIn, VIn, Iterable<VOut>> valueTransformer) {
+        KStreamFlatTransformValuesProcessor(final ValueTransformerWithKey<? super K, ? super VIn, Iterable<VOut>> valueTransformer) {
             this.valueTransformer = valueTransformer;
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<K, VOut> context) {
             valueTransformer.init(new ForwardingDisabledProcessorContext(context));
             this.context = context;
         }
 
         @Override
-        public void process(final KIn key, final VIn value) {
+        public void process(final K key, final VIn value) {
             final Iterable<VOut> transformedValues = valueTransformer.transform(key, value);
             if (transformedValues != null) {
                 for (final VOut transformedValue : transformedValues) {

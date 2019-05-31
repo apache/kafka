@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
 import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
@@ -30,33 +31,40 @@ import java.util.Arrays;
 /**
  * Too much specific information to generalize so the KTable-KTable join requires a specific node.
  */
-public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, Change<V1>, Change<V2>, Change<VR>> {
+public class KTableKTableJoinNode<K, V1, V2, VR> extends StreamsGraphNode<K, Change<V1>, K, Change<VR>> {
 
     private final Serde<K> keySerde;
     private final Serde<VR> valueSerde;
     private final String[] joinThisStoreNames;
     private final String[] joinOtherStoreNames;
     private final StoreBuilder<TimestampedKeyValueStore<K, VR>> storeBuilder;
+    private final ProcessorParameters<K, Change<V1>, K, Change<VR>> joinThisProcessorParameters;
+    private final ProcessorParameters<K, Change<V2>, K, Change<VR>> joinOtherProcessorParameters;
+    private final ProcessorParameters<K, Change<VR>, K, Change<VR>> joinMergeProcessorParameters;
+    private final ValueJoiner<? super Change<V1>, ? super Change<V2>, ? extends Change<VR>> valueJoiner;
+    private final String thisJoinSideNodeName;
+    private final String otherJoinSideNodeName;
 
-    KTableKTableJoinNode(final String nodeName,
-                         final ProcessorParameters<K, Change<V1>> joinThisProcessorParameters,
-                         final ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters,
-                         final ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters,
-                         final String thisJoinSide,
-                         final String otherJoinSide,
-                         final Serde<K> keySerde,
-                         final Serde<VR> valueSerde,
-                         final String[] joinThisStoreNames,
-                         final String[] joinOtherStoreNames,
-                         final StoreBuilder<TimestampedKeyValueStore<K, VR>> storeBuilder) {
+    private KTableKTableJoinNode(final String nodeName,
+                                 final ProcessorParameters<K, Change<V1>, K, Change<VR>> joinThisProcessorParameters,
+                                 final ProcessorParameters<K, Change<V2>, K, Change<VR>> joinOtherProcessorParameters,
+                                 final ProcessorParameters<K, Change<VR>, K, Change<VR>> joinMergeProcessorParameters,
+                                 final String thisJoinSide,
+                                 final String otherJoinSide,
+                                 final Serde<K> keySerde,
+                                 final Serde<VR> valueSerde,
+                                 final String[] joinThisStoreNames,
+                                 final String[] joinOtherStoreNames,
+                                 final StoreBuilder<TimestampedKeyValueStore<K, VR>> storeBuilder) {
 
-        super(nodeName,
-            null,
-            joinThisProcessorParameters,
-            joinOtherProcessorParameters,
-            joinMergeProcessorParameters,
-            thisJoinSide,
-            otherJoinSide);
+        super(nodeName);
+
+        this.valueJoiner = null;
+        this.joinThisProcessorParameters = joinThisProcessorParameters;
+        this.joinOtherProcessorParameters = joinOtherProcessorParameters;
+        this.joinMergeProcessorParameters = joinMergeProcessorParameters;
+        this.thisJoinSideNodeName = thisJoinSide;
+        this.otherJoinSideNodeName = otherJoinSide;
 
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
@@ -73,16 +81,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         return valueSerde;
     }
 
-    public String[] joinThisStoreNames() {
-        return joinThisStoreNames;
-    }
-
-    public String[] joinOtherStoreNames() {
-        return joinOtherStoreNames;
-    }
-
     public String queryableStoreName() {
-        return ((KTableKTableJoinMerger) mergeProcessorParameters().processorSupplier()).getQueryableName();
+        return ((KTableKTableJoinMerger<K, VR>) mergeProcessorParameters().processorSupplier()).getQueryableName();
     }
 
     /**
@@ -125,19 +125,48 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     @Override
     public String toString() {
         return "KTableKTableJoinNode{" +
-            "joinThisStoreNames=" + Arrays.toString(joinThisStoreNames()) +
-            ", joinOtherStoreNames=" + Arrays.toString(joinOtherStoreNames()) +
-            "} " + super.toString();
+            "keySerde=" + keySerde +
+            ", valueSerde=" + valueSerde +
+            ", joinThisStoreNames=" + Arrays.toString(joinThisStoreNames) +
+            ", joinOtherStoreNames=" + Arrays.toString(joinOtherStoreNames) +
+            ", storeBuilder=" + storeBuilder +
+            ", joinThisProcessorParameters=" + joinThisProcessorParameters +
+            ", joinOtherProcessorParameters=" + joinOtherProcessorParameters +
+            ", joinMergeProcessorParameters=" + joinMergeProcessorParameters +
+            ", valueJoiner=" + valueJoiner +
+            ", thisJoinSideNodeName='" + thisJoinSideNodeName + '\'' +
+            ", otherJoinSideNodeName='" + otherJoinSideNodeName + '\'' +
+            '}';
     }
 
     public static <K, V1, V2, VR> KTableKTableJoinNodeBuilder<K, V1, V2, VR> kTableKTableJoinNodeBuilder() {
         return new KTableKTableJoinNodeBuilder<>();
     }
 
+    private ProcessorParameters<K, Change<V1>, K, Change<VR>> thisProcessorParameters() {
+        return joinThisProcessorParameters;
+    }
+
+    private ProcessorParameters<K, Change<V2>, K, Change<VR>> otherProcessorParameters() {
+        return joinOtherProcessorParameters;
+    }
+
+    private ProcessorParameters<K, Change<VR>, K, Change<VR>> mergeProcessorParameters() {
+        return joinMergeProcessorParameters;
+    }
+
+    private String thisJoinSideNodeName() {
+        return thisJoinSideNodeName;
+    }
+
+    private String otherJoinSideNodeName() {
+        return otherJoinSideNodeName;
+    }
+
     public static final class KTableKTableJoinNodeBuilder<K, V1, V2, VR> {
         private String nodeName;
-        private ProcessorParameters<K, Change<V1>> joinThisProcessorParameters;
-        private ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters;
+        private ProcessorParameters<K, Change<V1>, K, Change<VR>> joinThisProcessorParameters;
+        private ProcessorParameters<K, Change<V2>, K, Change<VR>> joinOtherProcessorParameters;
         private String thisJoinSide;
         private String otherJoinSide;
         private Serde<K> keySerde;
@@ -155,12 +184,12 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinThisProcessorParameters(final ProcessorParameters<K, Change<V1>> joinThisProcessorParameters) {
+        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinThisProcessorParameters(final ProcessorParameters<K, Change<V1>, K, Change<VR>> joinThisProcessorParameters) {
             this.joinThisProcessorParameters = joinThisProcessorParameters;
             return this;
         }
 
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinOtherProcessorParameters(final ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters) {
+        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinOtherProcessorParameters(final ProcessorParameters<K, Change<V2>, K, Change<VR>> joinOtherProcessorParameters) {
             this.joinOtherProcessorParameters = joinOtherProcessorParameters;
             return this;
         }
@@ -205,16 +234,16 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        @SuppressWarnings("unchecked")
         public KTableKTableJoinNode<K, V1, V2, VR> build() {
             return new KTableKTableJoinNode<>(nodeName,
                 joinThisProcessorParameters,
                 joinOtherProcessorParameters,
                 new ProcessorParameters<>(
-                    KTableKTableJoinMerger.of(
-                        (KTableProcessorSupplier<K, V1, VR>) (joinThisProcessorParameters.processorSupplier()),
-                        (KTableProcessorSupplier<K, V2, VR>) (joinOtherProcessorParameters.processorSupplier()),
-                        queryableStoreName),
+                    new KTableKTableJoinMerger<>(
+                        (KTableProcessorSupplier<K, Change<V1>, K, VR>) (joinThisProcessorParameters.processorSupplier()),
+                        (KTableProcessorSupplier<K, Change<V2>, K, VR>) (joinOtherProcessorParameters.processorSupplier()),
+                        queryableStoreName
+                    ),
                     nodeName),
                 thisJoinSide,
                 otherJoinSide,

@@ -46,6 +46,7 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class KTableSourceTest {
     private final Consumed<String, String> stringConsumed = Consumed.with(Serdes.String(), Serdes.String());
     private final ConsumerRecordFactory<String, String> recordFactory =
@@ -100,8 +101,8 @@ public class KTableSourceTest {
         final String topic1 = "topic1";
 
         @SuppressWarnings("unchecked")
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed, Materialized.as("store"));
+        final KTableImpl<String, String> table1 =
+            (KTableImpl<String, String>) builder.table(topic1, stringConsumed, Materialized.as("store"));
 
         final Topology topology = builder.build();
         final KTableValueGetterSupplier<String, String> getterSupplier1 = table1.valueGetterSupplier();
@@ -149,7 +150,7 @@ public class KTableSourceTest {
         final String topic1 = "topic1";
 
         @SuppressWarnings("unchecked")
-        final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
+        final KTableImpl<String, String> table1 = (KTableImpl<String, String>) builder.table(topic1, stringConsumed);
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc1", supplier, table1.name);
@@ -181,7 +182,7 @@ public class KTableSourceTest {
         final String topic1 = "topic1";
 
         @SuppressWarnings("unchecked")
-        final KTableImpl<String, String, String> table1 = (KTableImpl<String, String, String>) builder.table(topic1, stringConsumed);
+        final KTableImpl<String, String> table1 = (KTableImpl<String, String>) builder.table(topic1, stringConsumed);
         table1.enableSendingOldValues();
         assertTrue(table1.sendingOldValueEnabled());
 

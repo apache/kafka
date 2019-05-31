@@ -29,8 +29,8 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
@@ -99,21 +99,24 @@ public class AbstractStreamTest {
 
     private class ExtendedKStream<K, V> extends AbstractStream<K, V> {
 
+        private final KStreamImpl<K, V> stream;
+
         ExtendedKStream(final KStream<K, V> stream) {
             super((KStreamImpl<K, V>) stream);
+            this.stream = (KStreamImpl<K, V>) stream;
         }
 
         KStream<K, V> randomFilter() {
             final String name = builder.newProcessorName("RANDOM-FILTER-");
-            final ProcessorGraphNode<K, V> processorNode = new ProcessorGraphNode<>(
+            final ProcessorGraphNode<K, V, K, V> processorNode = new ProcessorGraphNode<>(
                 name,
                 new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name));
-            builder.addGraphNode(this.streamsGraphNode, processorNode);
+            builder.addGraphNode(stream.getStreamsGraphNode(), processorNode);
             return new KStreamImpl<>(name, null, null, sourceNodes, false, processorNode, builder);
         }
     }
 
-    private class ExtendedKStreamDummy<K, V> implements ProcessorSupplier<K, V> {
+    private class ExtendedKStreamDummy<K, V> implements TypedProcessorSupplier<K, V, K, V> {
 
         private final Random rand;
 
@@ -122,11 +125,11 @@ public class AbstractStreamTest {
         }
 
         @Override
-        public Processor<K, V> get() {
+        public TypedProcessor<K, V, K, V> get() {
             return new ExtendedKStreamDummyProcessor();
         }
 
-        private class ExtendedKStreamDummyProcessor extends AbstractProcessor<K, V> {
+        private class ExtendedKStreamDummyProcessor extends AbstractProcessor<K, V, K, V> {
             @Override
             public void process(final K key, final V value) {
                 // flip a coin and filter

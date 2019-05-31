@@ -27,7 +27,7 @@ import java.time.Duration;
  * @param <V> the type of values
  */
 @InterfaceStability.Evolving
-public interface Processor<KIn, VIn> {
+public interface TypedProcessor<KIn, VIn, KOut, VOut> {
 
     /**
      * Initialize this processor with the given context. The framework ensures this is called once per processor when the topology
@@ -40,7 +40,7 @@ public interface Processor<KIn, VIn> {
      *
      * @param context the context; may not be null
      */
-    default void init(ProcessorContext context) {}
+    default void init(ProcessorContext<KOut, VOut> context) {}
 
     /**
      * Process the record with the given key and value.

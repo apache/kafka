@@ -26,6 +26,7 @@ public final class ProcessorTopologyFactories {
     private ProcessorTopologyFactories() {}
 
 
+    @SuppressWarnings("rawtypes")
     public static ProcessorTopology with(final List<ProcessorNode> processorNodes,
                                          final Map<String, SourceNode> sourcesByTopic,
                                          final List<StateStore> stateStoresByName,

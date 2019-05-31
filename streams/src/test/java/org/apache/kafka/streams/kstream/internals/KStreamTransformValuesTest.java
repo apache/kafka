@@ -26,7 +26,7 @@ import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
@@ -134,7 +134,7 @@ public class KStreamTransformValuesTest {
     public void shouldInitializeTransformerWithForwardDisabledProcessorContext() {
         final SingletonNoOpValueTransformer<String, String> transformer = new SingletonNoOpValueTransformer<>();
         final KStreamTransformValues<String, String, String> transformValues = new KStreamTransformValues<>(transformer);
-        final Processor<String, String> processor = transformValues.get();
+        final TypedProcessor<String, String, String, String> processor = transformValues.get();
 
         processor.init(context);
 

@@ -23,8 +23,8 @@ import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.FullChangeSerde;
 import org.apache.kafka.streams.kstream.internals.KTableImpl;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.apache.kafka.test.MockInternalProcessorContext;
@@ -42,6 +42,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.greaterThan;
 import static org.hamcrest.core.Is.is;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class KTableSuppressProcessorMetricsTest {
     private static final long ARBITRARY_LONG = 5L;
 
@@ -144,8 +145,8 @@ public class KTableSuppressProcessorMetricsTest {
             .withLoggingDisabled()
             .build();
 
-        final KTableImpl<String, ?, Long> mock = EasyMock.mock(KTableImpl.class);
-        final Processor<String, Change<Long>> processor =
+        final KTableImpl<String, Long> mock = EasyMock.mock(KTableImpl.class);
+        final TypedProcessor<String, Change<Long>, String, Change<Long>> processor =
             new KTableSuppressProcessorSupplier<>(
                 (SuppressedInternal<String>) Suppressed.<String>untilTimeLimit(Duration.ofDays(100), maxRecords(1)),
                 storeName,

@@ -34,7 +34,8 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -81,7 +82,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@Category({IntegrationTest.class})
+@Category(IntegrationTest.class)
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class KafkaStreamsTest {
 
     private static final int NUM_BROKERS = 1;
@@ -160,7 +162,7 @@ public class KafkaStreamsTest {
             "Streams never started.");
         Assert.assertEquals(KafkaStreams.State.RUNNING, globalStreams.state());
 
-        for (final StreamThread thread: globalStreams.threads) {
+        for (final StreamThread thread : globalStreams.threads) {
             thread.stateListener().onChange(
                 thread,
                 StreamThread.State.PARTITIONS_REVOKED,
@@ -434,7 +436,7 @@ public class KafkaStreamsTest {
 
         globalStreams.close();
         Assert.assertEquals("subsequent close() calls should do nothing",
-            closeCount, MockMetricsReporter.CLOSE_COUNT.get());
+                            closeCount, MockMetricsReporter.CLOSE_COUNT.get());
     }
 
     @Test
@@ -550,26 +552,26 @@ public class KafkaStreamsTest {
             CLUSTER.createTopics(topic);
 
             builder.stream(topic, Consumed.with(Serdes.String(), Serdes.String()))
-                    .foreach((key, value) -> {
-                        try {
-                            latch.countDown();
-                            while (keepRunning.get()) {
-                                Thread.sleep(10);
-                            }
-                        } catch (final InterruptedException e) {
-                            // no-op
+                .foreach((key, value) -> {
+                    try {
+                        latch.countDown();
+                        while (keepRunning.get()) {
+                            Thread.sleep(10);
                         }
-                    });
+                    } catch (final InterruptedException e) {
+                        // no-op
+                    }
+                });
             streams = new KafkaStreams(builder.build(), props);
             streams.start();
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic,
-                Collections.singletonList(new KeyValue<>("A", "A")),
-                TestUtils.producerConfig(
-                    CLUSTER.bootstrapServers(),
-                    StringSerializer.class,
-                    StringSerializer.class,
-                    new Properties()),
-                System.currentTimeMillis());
+                                                                            Collections.singletonList(new KeyValue<>("A", "A")),
+                                                                            TestUtils.producerConfig(
+                                                                                CLUSTER.bootstrapServers(),
+                                                                                StringSerializer.class,
+                                                                                StringSerializer.class,
+                                                                                new Properties()),
+                                                                            System.currentTimeMillis());
 
             assertTrue("Timed out waiting to receive single message", latch.await(30, TimeUnit.SECONDS));
             assertFalse(streams.close(Duration.ofMillis(10)));
@@ -590,7 +592,7 @@ public class KafkaStreamsTest {
         assertEquals(2, threadMetadata.size());
         for (final ThreadMetadata metadata : threadMetadata) {
             assertTrue("#threadState() was: " + metadata.threadState() + "; expected either RUNNING, STARTING, PARTITIONS_REVOKED, PARTITIONS_ASSIGNED, or CREATED",
-                asList("RUNNING", "STARTING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()));
+                       asList("RUNNING", "STARTING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()));
             assertEquals(0, metadata.standbyTasks().size());
             assertEquals(0, metadata.activeTasks().size());
             final String threadName = metadata.threadName();
@@ -682,6 +684,20 @@ public class KafkaStreamsTest {
         }
     }
 
+    @SuppressWarnings("rawtypes")
+    private abstract static class AbstractProcessor<K, V> implements Processor<K, V> {
+        private ProcessorContext context;
+
+        @Override
+        public void init(final ProcessorContext context) {
+            this.context = context;
+        }
+
+        public ProcessorContext context() {
+            return context;
+        }
+    }
+
     @Test
     public void statelessTopologyShouldNotCreateStateDirectory() throws Exception {
         final String inputTopic = testName.getMethodName() + "-input";
@@ -690,15 +706,15 @@ public class KafkaStreamsTest {
 
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
-                .addProcessor("process", () -> new AbstractProcessor<String, String>() {
-                    @Override
-                    public void process(final String key, final String value) {
-                        if (value.length() % 2 == 0) {
-                            context().forward(key, key + value);
-                        }
+            .addProcessor("process", () -> new AbstractProcessor<String, String>() {
+                @Override
+                public void process(final String key, final String value) {
+                    if (value.length() % 2 == 0) {
+                        context().forward(key, key + value);
                     }
-                }, "source")
-                .addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "process");
+                }
+            }, "source")
+            .addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "process");
         startStreamsAndCheckDirExists(topology, Collections.singleton(inputTopic), outputTopic, false);
     }
 
@@ -740,30 +756,30 @@ public class KafkaStreamsTest {
             Serdes.Long());
         final Topology topology = new Topology();
         topology.addSource("source", Serdes.String().deserializer(), Serdes.String().deserializer(), inputTopic)
-                .addProcessor("process", () -> new AbstractProcessor<String, String>() {
-                    @Override
-                    public void process(final String key, final String value) {
-                        final KeyValueStore<String, Long> kvStore =
-                                (KeyValueStore<String, Long>) context().getStateStore(storeName);
-                        kvStore.put(key, 5L);
+            .addProcessor("process", () -> new AbstractProcessor<String, String>() {
+                @Override
+                public void process(final String key, final String value) {
+                    final KeyValueStore<String, Long> kvStore =
+                        (KeyValueStore<String, Long>) context().getStateStore(storeName);
+                    kvStore.put(key, 5L);
 
-                        context().forward(key, "5");
-                        context().commit();
-                    }
-                }, "source")
-                .addStateStore(storeBuilder, "process")
-                .addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "process");
+                    context().forward(key, "5");
+                    context().commit();
+                }
+            }, "source")
+            .addStateStore(storeBuilder, "process")
+            .addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "process");
 
         final StoreBuilder<KeyValueStore<String, String>> globalStoreBuilder = Stores.keyValueStoreBuilder(
-                isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName),
-                Serdes.String(), Serdes.String()).withLoggingDisabled();
+            isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName),
+            Serdes.String(), Serdes.String()).withLoggingDisabled();
         topology.addGlobalStore(globalStoreBuilder,
-                "global",
-                Serdes.String().deserializer(),
-                Serdes.String().deserializer(),
-                globalTopicName,
-                globalTopicName + "-processor",
-                new MockProcessorSupplier());
+                                "global",
+                                Serdes.String().deserializer(),
+                                Serdes.String().deserializer(),
+                                globalTopicName,
+                                globalTopicName + "-processor",
+                                new MockProcessorSupplier());
         return topology;
     }
 
@@ -786,22 +802,22 @@ public class KafkaStreamsTest {
 
         for (final String topic : inputTopics) {
             IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(topic,
-                    Collections.singletonList(new KeyValue<>("A", "A")),
-                    TestUtils.producerConfig(
-                            CLUSTER.bootstrapServers(),
-                            StringSerializer.class,
-                            StringSerializer.class,
-                            new Properties()),
-                    System.currentTimeMillis());
+                                                                            Collections.singletonList(new KeyValue<>("A", "A")),
+                                                                            TestUtils.producerConfig(
+                                                                                CLUSTER.bootstrapServers(),
+                                                                                StringSerializer.class,
+                                                                                StringSerializer.class,
+                                                                                new Properties()),
+                                                                            System.currentTimeMillis());
         }
 
         IntegrationTestUtils.readKeyValues(outputTopic,
-                TestUtils.consumerConfig(
-                        CLUSTER.bootstrapServers(),
-                        outputTopic + "-group",
-                        StringDeserializer.class,
-                        StringDeserializer.class),
-                5000, 1);
+                                           TestUtils.consumerConfig(
+                                               CLUSTER.bootstrapServers(),
+                                               outputTopic + "-group",
+                                               StringDeserializer.class,
+                                               StringDeserializer.class),
+                                           5000, 1);
 
         try {
             final List<Path> files = Files.find(basePath, 999, (p, bfa) -> !p.equals(basePath)).collect(Collectors.toList());

@@ -16,9 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Cancellable;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.test.MockProcessorNode;
@@ -139,18 +137,6 @@ public class PunctuationQueueTest {
 
         queue.mayPunctuate(now + 200L, PunctuationType.STREAM_TIME, processorNodePunctuator);
         assertEquals(1, node.mockProcessor.punctuatedStreamTime.size());
-    }
-
-    private static class TestProcessor extends AbstractProcessor<String, String> {
-
-        @Override
-        public void init(final ProcessorContext context) {}
-
-        @Override
-        public void process(final String key, final String value) {}
-
-        @Override
-        public void close() {}
     }
 
 }
