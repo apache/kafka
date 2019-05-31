@@ -401,6 +401,9 @@ class GroupCoordinator(val brokerId: Int,
             val memberMetadata = group.get(memberId)
             responseCallback(memberMetadata.assignment, Errors.NONE)
             completeAndScheduleNextHeartbeatExpiration(group, group.get(memberId))
+
+          case Dead =>
+            throw new IllegalStateException(s"Reached unexpected condition for Dead group ${group.groupId}")
         }
       }
     }
@@ -533,6 +536,9 @@ class GroupCoordinator(val brokerId: Int,
                 val member = group.get(memberId)
                 completeAndScheduleNextHeartbeatExpiration(group, member)
                 responseCallback(Errors.NONE)
+
+            case Dead =>
+              throw new IllegalStateException(s"Reached unexpected condition for Dead group $groupId")
           }
         }
       }

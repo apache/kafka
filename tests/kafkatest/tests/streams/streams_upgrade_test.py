@@ -70,6 +70,7 @@ which are outlined here:
 
 """
 
+
 class StreamsUpgradeTest(Test):
     """
     Test upgrading Kafka Streams (all version combination)
@@ -88,6 +89,7 @@ class StreamsUpgradeTest(Test):
         self.leader_counter = {}
 
     processed_msg = "processed [0-9]* records"
+    base_version_number = str(DEV_VERSION).split("-")[0]
 
     def perform_broker_upgrade(self, to_version):
         self.logger.info("First pass bounce - rolling broker upgrade")
@@ -348,7 +350,7 @@ class StreamsUpgradeTest(Test):
         while retries > 0:
             for p in self.processors:
                 found = list(p.node.account.ssh_capture("grep \"Finished assignment for group\" %s" % p.LOG_FILE, allow_fail=True))
-                if len(found) == self.leader_counter[p] + 1:
+                if len(found) >= self.leader_counter[p] + 1:
                     if self.leader is not None:
                         raise Exception("Could not uniquely identify leader")
                     self.leader = p
@@ -367,6 +369,8 @@ class StreamsUpgradeTest(Test):
         if version.startswith("0") or version.startswith("1") \
           or version.startswith("2.0") or version.startswith("2.1"):
             return "Kafka version : " + version
+        elif "SNAPSHOT" in version:
+            return "Kafka version.*" + self.base_version_number + ".*SNAPSHOT"
         else:
             return "Kafka version: " + version
 
@@ -403,8 +407,7 @@ class StreamsUpgradeTest(Test):
                                               timeout_sec=60,
                                               err_msg="Never saw output '%s' on " % self.processed_msg + str(node2.account))
 
-
-                    # start third with <version>
+        # start third with <version>
         self.prepare_for(self.processor3, version)
         node3 = self.processor3.node
         with node1.account.monitor_log(self.processor1.STDOUT_FILE) as first_monitor:
@@ -424,7 +427,6 @@ class StreamsUpgradeTest(Test):
                         third_monitor.wait_until(self.processed_msg,
                                                  timeout_sec=60,
                                                  err_msg="Never saw output '%s' on " % self.processed_msg + str(node3.account))
-
 
     @staticmethod
     def prepare_for(processor, version):
@@ -537,7 +539,8 @@ class StreamsUpgradeTest(Test):
                     self.old_processors.remove(processor)
                     self.upgraded_processors.append(processor)
 
-                    log_monitor.wait_until("Kafka version: " + str(DEV_VERSION),
+                    # checking for the dev version which should be the only SNAPSHOT
+                    log_monitor.wait_until("Kafka version.*" + self.base_version_number + ".*SNAPSHOT",
                                            timeout_sec=60,
                                            err_msg="Could not detect Kafka Streams version " + str(DEV_VERSION) + " in " + str(node.account))
                     log_monitor.offset = 5

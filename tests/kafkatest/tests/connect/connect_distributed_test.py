@@ -339,7 +339,7 @@ class ConnectDistributedTest(Test):
             node.account.ssh("echo -e -n " + repr(self.SECOND_INPUTS) + " >> " + self.INPUT_FILE)
         wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=70, err_msg="Sink output file never converged to the same state as the input file")
 
-    @cluster(num_nodes=5)
+    @cluster(num_nodes=6)
     @matrix(clean=[True, False])
     def test_bounce(self, clean):
         """

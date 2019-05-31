@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.state.internals.ValueAndTimestampSerializer;
 
 import java.util.Objects;
 
@@ -171,7 +172,7 @@ public final class StateSerdes<K, V> {
         } catch (final ClassCastException e) {
             final String keyClass = key == null ? "unknown because key is null" : key.getClass().getName();
             throw new StreamsException(
-                    String.format("A serializer (key: %s) is not compatible to the actual key type " +
+                    String.format("A serializer (%s) is not compatible to the actual key type " +
                                     "(key type: %s). Change the default Serdes in StreamConfig or " +
                                     "provide correct Serdes via method parameters.",
                             keySerializer().getClass().getName(),
@@ -190,12 +191,20 @@ public final class StateSerdes<K, V> {
         try {
             return valueSerde.serializer().serialize(topic, value);
         } catch (final ClassCastException e) {
-            final String valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
+            final String valueClass;
+            final Class<? extends Serializer> serializerClass;
+            if (valueSerializer() instanceof ValueAndTimestampSerializer) {
+                serializerClass = ((ValueAndTimestampSerializer) valueSerializer()).valueSerializer.getClass();
+                valueClass = value == null ? "unknown because value is null" : ((ValueAndTimestamp) value).value().getClass().getName();
+            } else {
+                serializerClass = valueSerializer().getClass();
+                valueClass = value == null ? "unknown because value is null" : value.getClass().getName();
+            }
             throw new StreamsException(
-                    String.format("A serializer (value: %s) is not compatible to the actual value type " +
+                    String.format("A serializer (%s) is not compatible to the actual value type " +
                                     "(value type: %s). Change the default Serdes in StreamConfig or " +
                                     "provide correct Serdes via method parameters.",
-                            valueSerializer().getClass().getName(),
+                            serializerClass.getName(),
                             valueClass),
                     e);
         }

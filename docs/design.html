@@ -216,6 +216,28 @@
     In the case of Hadoop we parallelize the data load by splitting the load over individual map tasks, one for each node/topic/partition combination, allowing full parallelism in the loading. Hadoop provides the task
     management, and tasks which fail can restart without danger of duplicate data&mdash;they simply restart from their original position.
 
+    <h4><a id="static_membership" href="#static_membership">Static Membership</a></h4>
+    Static membership aims to improve the availability of stream applications, consumer groups and other applications built on top of the group rebalance protocol.
+    The rebalance protocol relies on the group coordinator to allocate entity ids to group members. These generated ids are ephemeral and will change when members restart and rejoin.
+    For consumer based apps, this "dynamic membership" can cause a large percentage of tasks re-assigned to different instances during administrative operations
+    such as code deploys, configuration updates and periodic restarts. For large state applications, shuffled tasks need a long time to recover their local states before processing
+    and cause applications to be partially or entirely unavailable. Motivated by this observation, Kafka’s group management protocol allows group members to provide persistent entity ids.
+    Group membership remains unchanged based on those ids, thus no rebalance will be triggered.
+    <p>
+    If you want to use static membership,
+    <ul>
+        <li>Upgrade both broker cluster and client apps to 2.3 or beyond, and also make sure the upgraded brokers are using <code>inter.broker.protocol.version</code>
+            of 2.3 or beyond as well.</li>
+        <li>Set the config <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> to a unique value for each consumer instance under one group.</li>
+        <li>For Kafka Streams applications, it is sufficient to set a unique <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> per KafkaStreams instance,
+            independent of the number of used threads for an instance.</li>
+    </ul>
+    If your broker is on an older version than 2.3, but you choose to set <code>ConsumerConfig#GROUP_INSTANCE_ID_CONFIG</code> on the client side, the application will detect
+    the broker version and then throws an UnsupportedException. If you accidentally configure duplicate ids for different instances,
+    a fencing mechanism on broker side will inform your duplicate client to shutdown immediately by triggering a <code>org.apache.kafka.common.errors.FencedInstanceIdException</code>.
+    For more details, see
+    <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-345%3A+Introduce+static+membership+protocol+to+reduce+consumer+rebalances">KIP-345</a>
+
     <h3><a id="semantics" href="#semantics">4.6 Message Delivery Semantics</a></h3>
     <p>
     Now that we understand a little about how producers and consumers work, let's discuss the semantic guarantees Kafka provides between producer and consumer. Clearly there are multiple possible message delivery

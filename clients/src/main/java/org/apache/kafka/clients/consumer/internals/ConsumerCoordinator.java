@@ -256,7 +256,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return;
         }
 
-        Set<TopicPartition> assignedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+        Set<TopicPartition> assignedPartitions = subscriptions.assignedPartitions();
 
         // The leader may have assigned partitions which match our subscription pattern, but which
         // were not explicitly requested, so we update the joined subscription here.
@@ -463,8 +463,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        // copy since about to be handed to user code
-        Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
+        Set<TopicPartition> revoked = subscriptions.assignedPartitions();
         log.info("Revoking previously assigned partitions {}", revoked);
         try {
             listener.onPartitionsRevoked(revoked);
@@ -512,11 +511,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.leaderAndEpoch(tp);
             final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
                     offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
-                    new ConsumerMetadata.LeaderAndEpoch(leaderAndEpoch.leader, Optional.empty()));
+                    leaderAndEpoch);
 
             log.info("Setting offset for partition {} to the committed offset {}", tp, position);
             entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
-            this.subscriptions.seekAndValidate(tp, position);
+            this.subscriptions.seekUnvalidated(tp, position);
         }
         return true;
     }
