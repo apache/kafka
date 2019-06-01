@@ -18,8 +18,13 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.hamcrest.core.IsInstanceOf;
 import org.junit.Before;
 import org.junit.Test;
@@ -32,11 +37,17 @@ import static org.easymock.EasyMock.expectLastCall;
 import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNull;
-import static org.junit.Assert.assertThat;
+import static org.junit.Assert.fail;
 
 public class GlobalProcessorContextImplTest {
     private static final String GLOBAL_STORE_NAME = "global-store";
+    private static final String GLOBAL_KEY_VALUE_STORE_NAME = "global-key-value-store";
+    private static final String GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME = "global-timestamped-key-value-store";
+    private static final String GLOBAL_WINDOW_STORE_NAME = "global-window-store";
+    private static final String GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME = "global-timestamped-window-store";
+    private static final String GLOBAL_SESSION_STORE_NAME = "global-session-store";
     private static final String UNKNOWN_STORE = "unknown-store";
     private static final String CHILD_PROCESSOR = "child";
 
@@ -54,7 +65,12 @@ public class GlobalProcessorContextImplTest {
         replay(streamsConfig);
 
         final StateManager stateManager = mock(StateManager.class);
-        expect(stateManager.getGlobalStore(GLOBAL_STORE_NAME)).andReturn(mock(KeyValueStore.class));
+        expect(stateManager.getGlobalStore(GLOBAL_STORE_NAME)).andReturn(mock(StateStore.class));
+        expect(stateManager.getGlobalStore(GLOBAL_KEY_VALUE_STORE_NAME)).andReturn(mock(KeyValueStore.class));
+        expect(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME)).andReturn(mock(TimestampedKeyValueStore.class));
+        expect(stateManager.getGlobalStore(GLOBAL_WINDOW_STORE_NAME)).andReturn(mock(WindowStore.class));
+        expect(stateManager.getGlobalStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME)).andReturn(mock(TimestampedWindowStore.class));
+        expect(stateManager.getGlobalStore(GLOBAL_SESSION_STORE_NAME)).andReturn(mock(SessionStore.class));
         expect(stateManager.getGlobalStore(UNKNOWN_STORE)).andReturn(null);
         replay(stateManager);
 
@@ -84,7 +100,7 @@ public class GlobalProcessorContextImplTest {
 
     @Test
     public void shouldReturnGlobalOrNullStore() {
-        assertThat(globalContext.getStateStore(GLOBAL_STORE_NAME), new IsInstanceOf(KeyValueStore.class));
+        assertThat(globalContext.getStateStore(GLOBAL_STORE_NAME), new IsInstanceOf(StateStore.class));
         assertNull(globalContext.getStateStore(UNKNOWN_STORE));
     }
 
@@ -104,11 +120,13 @@ public class GlobalProcessorContextImplTest {
         globalContext.forward(null, null, To.all());
     }
 
+    @SuppressWarnings("deprecation") // need to test deprecated code until removed
     @Test(expected = UnsupportedOperationException.class)
     public void shouldNotSupportForwardingViaChildIndex() {
         globalContext.forward(null, null, 0);
     }
 
+    @SuppressWarnings("deprecation") // need to test deprecated code until removed
     @Test(expected = UnsupportedOperationException.class)
     public void shouldNotSupportForwardingViaChildName() {
         globalContext.forward(null, null, "processorName");
@@ -130,8 +148,93 @@ public class GlobalProcessorContextImplTest {
         globalContext.schedule(null, null, null);
     }
 
-    @Test(expected = UnsupportedOperationException.class)
-    public void shouldNotAllowToGetStreamTime() {
-        globalContext.streamTime();
+    @Test
+    public void shouldNotAllowInitForKeyValueStore() {
+        final StateStore store = globalContext.getStateStore(GLOBAL_KEY_VALUE_STORE_NAME);
+        try {
+            store.init(null, null);
+            fail("Should have thrown UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowInitForTimestampedKeyValueStore() {
+        final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME);
+        try {
+            store.init(null, null);
+            fail("Should have thrown UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowInitForWindowStore() {
+        final StateStore store = globalContext.getStateStore(GLOBAL_WINDOW_STORE_NAME);
+        try {
+            store.init(null, null);
+            fail("Should have thrown UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowInitForTimestampedWindowStore() {
+        final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME);
+        try {
+            store.init(null, null);
+            fail("Should have thrown UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowInitForSessionStore() {
+        final StateStore store = globalContext.getStateStore(GLOBAL_SESSION_STORE_NAME);
+        try {
+            store.init(null, null);
+            fail("Should have thrown UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowCloseForKeyValueStore() {
+        final StateStore store = globalContext.getStateStore(GLOBAL_KEY_VALUE_STORE_NAME);
+        try {
+            store.close();
+            fail("Should have thrown UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowCloseForTimestampedKeyValueStore() {
+        final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_KEY_VALUE_STORE_NAME);
+        try {
+            store.close();
+            fail("Should have thrown UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowCloseForWindowStore() {
+        final StateStore store = globalContext.getStateStore(GLOBAL_WINDOW_STORE_NAME);
+        try {
+            store.close();
+            fail("Should have thrown UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowCloseForTimestampedWindowStore() {
+        final StateStore store = globalContext.getStateStore(GLOBAL_TIMESTAMPED_WINDOW_STORE_NAME);
+        try {
+            store.close();
+            fail("Should have thrown UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) { }
+    }
+
+    @Test
+    public void shouldNotAllowCloseForSessionStore() {
+        final StateStore store = globalContext.getStateStore(GLOBAL_SESSION_STORE_NAME);
+        try {
+            store.close();
+            fail("Should have thrown UnsupportedOperationException.");
+        } catch (final UnsupportedOperationException expected) { }
     }
 }

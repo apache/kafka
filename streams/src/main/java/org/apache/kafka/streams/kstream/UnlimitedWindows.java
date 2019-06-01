@@ -84,7 +84,6 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @return a new unlimited window that starts at {@code start}
      * @throws IllegalArgumentException if the start time is negative or can't be represented as {@code long milliseconds}
      */
-    @SuppressWarnings("deprecation")
     public UnlimitedWindows startOn(final Instant start) throws IllegalArgumentException {
         final String msgPrefix = prepareMillisCheckFailMsgPrefix(start, "start");
         return startOn(ApiUtils.validateMillisecondInstant(start, msgPrefix));
@@ -120,7 +119,6 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @throws IllegalArgumentException on every invocation.
      * @deprecated since 2.1.
      */
-    @SuppressWarnings("deprecation")
     @Override
     @Deprecated
     public UnlimitedWindows until(final long durationMs) {
@@ -134,7 +132,6 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
      * @return the window retention time that is {@link Long#MAX_VALUE}
      * @deprecated since 2.1. Use {@link Materialized#retention} instead.
      */
-    @SuppressWarnings("deprecation")
     @Override
     @Deprecated
     public long maintainMs() {
@@ -146,7 +143,7 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
         return 0L;
     }
 
-    @SuppressWarnings({"deprecation", "NonFinalFieldReferenceInEquals"}) // removing segments from Windows will fix this
+    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public boolean equals(final Object o) {
         if (this == o) {
@@ -159,13 +156,13 @@ public final class UnlimitedWindows extends Windows<UnlimitedWindow> {
         return startMs == that.startMs && segments == that.segments;
     }
 
-    @SuppressWarnings({"deprecation", "NonFinalFieldReferencedInHashCode"}) // removing segments from Windows will fix this
+    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public int hashCode() {
         return Objects.hash(startMs, segments);
     }
 
-    @SuppressWarnings({"deprecation"}) // removing segments from Windows will fix this
+    @SuppressWarnings("deprecation") // removing segments from Windows will fix this
     @Override
     public String toString() {
         return "UnlimitedWindows{" +

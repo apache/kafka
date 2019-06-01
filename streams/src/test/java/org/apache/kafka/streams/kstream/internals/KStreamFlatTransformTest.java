@@ -25,9 +25,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.easymock.EasyMock;
 import org.easymock.EasyMockSupport;
 import org.junit.Before;
-import org.junit.Rule;
 import org.junit.Test;
-import org.junit.rules.ExpectedException;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -44,16 +42,13 @@ public class KStreamFlatTransformTest extends EasyMockSupport {
 
     private KStreamFlatTransformProcessor<Number, Number, Integer, Integer> processor;
 
-    @Rule
-    public final ExpectedException exception = ExpectedException.none();
-
     @Before
     public void setUp() {
         inputKey = 1;
         inputValue = 10;
         transformer = mock(Transformer.class);
         context = strictMock(ProcessorContext.class);
-        processor = new KStreamFlatTransformProcessor<Number, Number, Integer, Integer>(transformer);
+        processor = new KStreamFlatTransformProcessor<>(transformer);
     }
 
     @Test

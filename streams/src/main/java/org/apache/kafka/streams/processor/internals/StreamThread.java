@@ -69,8 +69,6 @@ import static java.util.Collections.singleton;
 
 public class StreamThread extends Thread {
 
-    private final static AtomicInteger STREAM_THREAD_ID_SEQUENCE = new AtomicInteger(1);
-
     /**
      * Stream thread states are the possible states that a stream thread can be in.
      * A thread must only be in one state at a time
@@ -267,9 +265,8 @@ public class StreamThread extends Thread {
                 taskManager.suspendedStandbyTaskIds());
 
             if (streamThread.assignmentErrorCode.get() == StreamsPartitionAssignor.Error.INCOMPLETE_SOURCE_TOPIC_METADATA.code()) {
-                log.debug("Received error code {} - shutdown", streamThread.assignmentErrorCode.get());
+                log.error("Received error code {} - shutdown", streamThread.assignmentErrorCode.get());
                 streamThread.shutdown();
-                streamThread.setStateListener(null);
                 return;
             }
             final long start = time.milliseconds();
@@ -451,7 +448,7 @@ public class StreamThread extends Thread {
         private Producer<byte[], byte[]> createProducer(final TaskId id) {
             // eos
             if (threadProducer == null) {
-                final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId + "-" + id);
+                final Map<String, Object> producerConfigs = config.getProducerConfigs(getTaskProducerClientId(threadClientId, id));
                 log.info("Creating producer client for task {}", id);
                 producerConfigs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, applicationId + "-" + id);
                 return clientSupplier.getProducer(producerConfigs);
@@ -601,15 +598,16 @@ public class StreamThread extends Thread {
                                       final StreamsMetadataState streamsMetadataState,
                                       final long cacheSizeBytes,
                                       final StateDirectory stateDirectory,
-                                      final StateRestoreListener userStateRestoreListener) {
-        final String threadClientId = clientId + "-StreamThread-" + STREAM_THREAD_ID_SEQUENCE.getAndIncrement();
+                                      final StateRestoreListener userStateRestoreListener,
+                                      final int threadIdx) {
+        final String threadClientId = clientId + "-StreamThread-" + threadIdx;
 
         final String logPrefix = String.format("stream-thread [%s] ", threadClientId);
         final LogContext logContext = new LogContext(logPrefix);
         final Logger log = logContext.logger(StreamThread.class);
 
         log.info("Creating restore consumer client");
-        final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(threadClientId);
+        final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(getRestoreConsumerClientId(threadClientId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
         final Duration pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         final StoreChangelogReader changelogReader = new StoreChangelogReader(restoreConsumer, pollTime, userStateRestoreListener, logContext);
@@ -617,7 +615,7 @@ public class StreamThread extends Thread {
         Producer<byte[], byte[]> threadProducer = null;
         final boolean eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
         if (!eosEnabled) {
-            final Map<String, Object> producerConfigs = config.getProducerConfigs(threadClientId);
+            final Map<String, Object> producerConfigs = config.getProducerConfigs(getThreadProducerClientId(threadClientId));
             log.info("Creating shared producer client");
             threadProducer = clientSupplier.getProducer(producerConfigs);
         }
@@ -663,7 +661,7 @@ public class StreamThread extends Thread {
 
         log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
-        final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, threadClientId);
+        final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, getConsumerClientId(threadClientId), threadIdx);
         consumerConfigs.put(StreamsConfig.InternalConfig.TASK_MANAGER_FOR_PARTITION_ASSIGNOR, taskManager);
         final AtomicInteger assignmentErrorCode = new AtomicInteger();
         consumerConfigs.put(StreamsConfig.InternalConfig.ASSIGNMENT_ERROR_CODE, assignmentErrorCode);
@@ -672,6 +670,7 @@ public class StreamThread extends Thread {
             originalReset = (String) consumerConfigs.get(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG);
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
+
         final Consumer<byte[], byte[]> consumer = clientSupplier.getConsumer(consumerConfigs);
         taskManager.setConsumer(consumer);
 
@@ -687,7 +686,8 @@ public class StreamThread extends Thread {
             builder,
             threadClientId,
             logContext,
-            assignmentErrorCode);
+            assignmentErrorCode)
+            .updateThreadMetadata(getSharedAdminClientId(clientId));
     }
 
     public StreamThread(final Time time,
@@ -721,19 +721,39 @@ public class StreamThread extends Thread {
         this.assignmentErrorCode = assignmentErrorCode;
 
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
-        this.maxPollTimeMs = new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId"))
+        final int dummyThreadIdx = 1;
+        this.maxPollTimeMs = new InternalConsumerConfig(config.getMainConsumerConfigs("dummyGroupId", "dummyClientId", dummyThreadIdx))
                 .getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
         this.commitTimeMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
 
         this.numIterations = 1;
-
-        updateThreadMetadata(Collections.emptyMap(), Collections.emptyMap());
     }
 
     private static final class InternalConsumerConfig extends ConsumerConfig {
         private InternalConsumerConfig(final Map<String, Object> props) {
             super(ConsumerConfig.addDeserializerToConfig(props, new ByteArrayDeserializer(), new ByteArrayDeserializer()), false);
         }
+    }
+
+    private static String getTaskProducerClientId(final String threadClientId, final TaskId taskId) {
+        return threadClientId + "-" + taskId + "-producer";
+    }
+
+    private static String getThreadProducerClientId(final String threadClientId) {
+        return threadClientId + "-producer";
+    }
+
+    private static String getConsumerClientId(final String threadClientId) {
+        return threadClientId + "-consumer";
+    }
+
+    private static String getRestoreConsumerClientId(final String threadClientId) {
+        return threadClientId + "-restore-consumer";
+    }
+
+    // currently admin client is shared among all threads
+    public static String getSharedAdminClientId(final String clientId) {
+        return clientId + "-admin";
     }
 
     /**
@@ -1219,17 +1239,45 @@ public class StreamThread extends Thread {
         return threadMetadata;
     }
 
-    private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks, final Map<TaskId, StandbyTask> standbyTasks) {
+    // package-private for testing only
+    StreamThread updateThreadMetadata(final String adminClientId) {
+
+        threadMetadata = new ThreadMetadata(
+            this.getName(),
+            this.state().name(),
+            getConsumerClientId(this.getName()),
+            getRestoreConsumerClientId(this.getName()),
+            producer == null ? Collections.emptySet() : Collections.singleton(getThreadProducerClientId(this.getName())),
+            adminClientId,
+            Collections.emptySet(),
+            Collections.emptySet());
+
+        return this;
+    }
+
+    private void updateThreadMetadata(final Map<TaskId, StreamTask> activeTasks,
+                                      final Map<TaskId, StandbyTask> standbyTasks) {
+        final Set<String> producerClientIds = new HashSet<>();
         final Set<TaskMetadata> activeTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, StreamTask> task : activeTasks.entrySet()) {
             activeTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
+            producerClientIds.add(getTaskProducerClientId(getName(), task.getKey()));
         }
         final Set<TaskMetadata> standbyTasksMetadata = new HashSet<>();
         for (final Map.Entry<TaskId, StandbyTask> task : standbyTasks.entrySet()) {
             standbyTasksMetadata.add(new TaskMetadata(task.getKey().toString(), task.getValue().partitions()));
         }
 
-        threadMetadata = new ThreadMetadata(this.getName(), this.state().name(), activeTasksMetadata, standbyTasksMetadata);
+        final String adminClientId = threadMetadata.adminClientId();
+        threadMetadata = new ThreadMetadata(
+            this.getName(),
+            this.state().name(),
+            getConsumerClientId(this.getName()),
+            getRestoreConsumerClientId(this.getName()),
+            producer == null ? producerClientIds : Collections.singleton(getThreadProducerClientId(this.getName())),
+            adminClientId,
+            activeTasksMetadata,
+            standbyTasksMetadata);
     }
 
     public Map<TaskId, StreamTask> tasks() {

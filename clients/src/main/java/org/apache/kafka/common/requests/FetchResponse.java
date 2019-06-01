@@ -37,7 +37,10 @@ import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.Queue;
+import java.util.function.Predicate;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 import static org.apache.kafka.common.protocol.CommonFields.PARTITION_ID;
@@ -77,6 +80,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             "Last committed offset.");
     private static final Field.Int64 LOG_START_OFFSET = new Field.Int64("log_start_offset",
             "Earliest available offset.");
+    private static final Field.Int32 PREFERRED_READ_REPLICA = new Field.Int32("preferred_read_replica",
+            "The ID of the replica that the consumer should prefer.");
 
     private static final String PARTITION_HEADER_KEY_NAME = "partition_header";
     private static final String ABORTED_TRANSACTIONS_KEY_NAME = "aborted_transactions";
@@ -139,12 +144,25 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             LOG_START_OFFSET,
             new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)));
 
+    private static final Schema FETCH_RESPONSE_PARTITION_HEADER_V6 = new Schema(
+            PARTITION_ID,
+            ERROR_CODE,
+            HIGH_WATERMARK,
+            LAST_STABLE_OFFSET,
+            LOG_START_OFFSET,
+            new Field(ABORTED_TRANSACTIONS_KEY_NAME, ArrayOf.nullable(FETCH_RESPONSE_ABORTED_TRANSACTION_V4)),
+            PREFERRED_READ_REPLICA);
+
     private static final Schema FETCH_RESPONSE_PARTITION_V4 = new Schema(
             new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V4),
             new Field(RECORD_SET_KEY_NAME, RECORDS));
 
     private static final Schema FETCH_RESPONSE_PARTITION_V5 = new Schema(
             new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V5),
+            new Field(RECORD_SET_KEY_NAME, RECORDS));
+
+    private static final Schema FETCH_RESPONSE_PARTITION_V6 = new Schema(
+            new Field(PARTITION_HEADER_KEY_NAME, FETCH_RESPONSE_PARTITION_HEADER_V6),
             new Field(RECORD_SET_KEY_NAME, RECORDS));
 
     private static final Schema FETCH_RESPONSE_TOPIC_V4 = new Schema(
@@ -154,6 +172,10 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     private static final Schema FETCH_RESPONSE_TOPIC_V5 = new Schema(
             TOPIC_NAME,
             new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V5)));
+
+    private static final Schema FETCH_RESPONSE_TOPIC_V6 = new Schema(
+            TOPIC_NAME,
+            new Field(PARTITIONS_KEY_NAME, new ArrayOf(FETCH_RESPONSE_PARTITION_V6)));
 
     private static final Schema FETCH_RESPONSE_V4 = new Schema(
             THROTTLE_TIME_MS,
@@ -185,15 +207,24 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
     // V10 bumped up to indicate ZStandard capability. (see KIP-110)
     private static final Schema FETCH_RESPONSE_V10 = FETCH_RESPONSE_V9;
 
+    private static final Schema FETCH_RESPONSE_V11 = new Schema(
+            THROTTLE_TIME_MS,
+            ERROR_CODE,
+            SESSION_ID,
+            new Field(RESPONSES_KEY_NAME, new ArrayOf(FETCH_RESPONSE_TOPIC_V6)));
+
+
     public static Schema[] schemaVersions() {
         return new Schema[] {FETCH_RESPONSE_V0, FETCH_RESPONSE_V1, FETCH_RESPONSE_V2,
             FETCH_RESPONSE_V3, FETCH_RESPONSE_V4, FETCH_RESPONSE_V5, FETCH_RESPONSE_V6,
-            FETCH_RESPONSE_V7, FETCH_RESPONSE_V8, FETCH_RESPONSE_V9, FETCH_RESPONSE_V10};
+            FETCH_RESPONSE_V7, FETCH_RESPONSE_V8, FETCH_RESPONSE_V9, FETCH_RESPONSE_V10,
+            FETCH_RESPONSE_V11};
     }
 
     public static final long INVALID_HIGHWATERMARK = -1L;
     public static final long INVALID_LAST_STABLE_OFFSET = -1L;
     public static final long INVALID_LOG_START_OFFSET = -1L;
+    public static final int INVALID_PREFERRED_REPLICA_ID = -1;
 
     private final int throttleTimeMs;
     private final Errors error;
@@ -223,8 +254,8 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
 
         @Override
         public int hashCode() {
-            int result = (int) (producerId ^ (producerId >>> 32));
-            result = 31 * result + (int) (firstOffset ^ (firstOffset >>> 32));
+            int result = Long.hashCode(producerId);
+            result = 31 * result + Long.hashCode(firstOffset);
             return result;
         }
 
@@ -239,8 +270,25 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
         public final long highWatermark;
         public final long lastStableOffset;
         public final long logStartOffset;
+        public final Optional<Integer> preferredReadReplica;
         public final List<AbortedTransaction> abortedTransactions;
         public final T records;
+
+        public PartitionData(Errors error,
+                             long highWatermark,
+                             long lastStableOffset,
+                             long logStartOffset,
+                             Optional<Integer> preferredReadReplica,
+                             List<AbortedTransaction> abortedTransactions,
+                             T records) {
+            this.error = error;
+            this.highWatermark = highWatermark;
+            this.lastStableOffset = lastStableOffset;
+            this.logStartOffset = logStartOffset;
+            this.preferredReadReplica = preferredReadReplica;
+            this.abortedTransactions = abortedTransactions;
+            this.records = records;
+        }
 
         public PartitionData(Errors error,
                              long highWatermark,
@@ -252,6 +300,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
             this.highWatermark = highWatermark;
             this.lastStableOffset = lastStableOffset;
             this.logStartOffset = logStartOffset;
+            this.preferredReadReplica = Optional.empty();
             this.abortedTransactions = abortedTransactions;
             this.records = records;
         }
@@ -269,16 +318,18 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     highWatermark == that.highWatermark &&
                     lastStableOffset == that.lastStableOffset &&
                     logStartOffset == that.logStartOffset &&
-                    (abortedTransactions == null ? that.abortedTransactions == null : abortedTransactions.equals(that.abortedTransactions)) &&
-                    (records == null ? that.records == null : records.equals(that.records));
+                    Objects.equals(preferredReadReplica, that.preferredReadReplica) &&
+                    Objects.equals(abortedTransactions, that.abortedTransactions) &&
+                    Objects.equals(records, that.records);
         }
 
         @Override
         public int hashCode() {
             int result = error != null ? error.hashCode() : 0;
-            result = 31 * result + (int) (highWatermark ^ (highWatermark >>> 32));
-            result = 31 * result + (int) (lastStableOffset ^ (lastStableOffset >>> 32));
-            result = 31 * result + (int) (logStartOffset ^ (logStartOffset >>> 32));
+            result = 31 * result + Long.hashCode(highWatermark);
+            result = 31 * result + Long.hashCode(lastStableOffset);
+            result = 31 * result + Long.hashCode(logStartOffset);
+            result = 31 * result + (preferredReadReplica != null ? preferredReadReplica.hashCode() : 0);
             result = 31 * result + (abortedTransactions != null ? abortedTransactions.hashCode() : 0);
             result = 31 * result + (records != null ? records.hashCode() : 0);
             return result;
@@ -290,6 +341,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     ", highWaterMark=" + highWatermark +
                     ", lastStableOffset = " + lastStableOffset +
                     ", logStartOffset = " + logStartOffset +
+                    ", preferredReadReplica = " + preferredReadReplica.map(Object::toString).orElse("absent") +
                     ", abortedTransactions = " + abortedTransactions +
                     ", recordsSizeInBytes=" + records.sizeInBytes() + ")";
         }
@@ -328,6 +380,9 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 long highWatermark = partitionResponseHeader.get(HIGH_WATERMARK);
                 long lastStableOffset = partitionResponseHeader.getOrElse(LAST_STABLE_OFFSET, INVALID_LAST_STABLE_OFFSET);
                 long logStartOffset = partitionResponseHeader.getOrElse(LOG_START_OFFSET, INVALID_LOG_START_OFFSET);
+                Optional<Integer> preferredReadReplica = Optional.of(
+                    partitionResponseHeader.getOrElse(PREFERRED_READ_REPLICA, INVALID_PREFERRED_REPLICA_ID)
+                ).filter(Predicate.isEqual(INVALID_PREFERRED_REPLICA_ID).negate());
 
                 BaseRecords baseRecords = partitionResponse.getRecords(RECORD_SET_KEY_NAME);
                 if (!(baseRecords instanceof MemoryRecords))
@@ -349,7 +404,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                 }
 
                 PartitionData<MemoryRecords> partitionData = new PartitionData<>(error, highWatermark, lastStableOffset,
-                        logStartOffset, abortedTransactions, records);
+                        logStartOffset, preferredReadReplica, abortedTransactions, records);
                 responseData.put(new TopicPartition(topic, partition), partitionData);
             }
         }
@@ -512,6 +567,7 @@ public class FetchResponse<T extends BaseRecords> extends AbstractResponse {
                     }
                 }
                 partitionDataHeader.setIfExists(LOG_START_OFFSET, fetchPartitionData.logStartOffset);
+                partitionDataHeader.setIfExists(PREFERRED_READ_REPLICA, fetchPartitionData.preferredReadReplica.orElse(-1));
                 partitionData.set(PARTITION_HEADER_KEY_NAME, partitionDataHeader);
                 partitionData.set(RECORD_SET_KEY_NAME, fetchPartitionData.records);
                 partitionArray.add(partitionData);

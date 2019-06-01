@@ -36,13 +36,13 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
     @Override
     public Bytes upperRangeFixedSize(final Bytes key, final long to) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(to, Long.MAX_VALUE));
-        return Bytes.wrap(SessionKeySchema.toBinary(sessionKey));
+        return SessionKeySchema.toBinary(sessionKey);
     }
 
     @Override
     public Bytes lowerRangeFixedSize(final Bytes key, final long from) {
         final Windowed<Bytes> sessionKey = new Windowed<>(key, new SessionWindow(0, Math.max(0, from)));
-        return Bytes.wrap(SessionKeySchema.toBinary(sessionKey));
+        return SessionKeySchema.toBinary(sessionKey);
     }
 
     @Override
@@ -132,23 +132,32 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         return new Windowed<>(Bytes.wrap(extractKeyBytes(binaryKey)), window);
     }
 
+    public static <K> Windowed<K> from(final Windowed<Bytes> keyBytes,
+                                       final Deserializer<K> keyDeserializer,
+                                       final String topic) {
+        final K key = keyDeserializer.deserialize(topic, keyBytes.key().get());
+        return new Windowed<>(key, keyBytes.window());
+    }
+
     public static <K> byte[] toBinary(final Windowed<K> sessionKey,
                                       final Serializer<K> serializer,
                                       final String topic) {
         final byte[] bytes = serializer.serialize(topic, sessionKey.key());
-        final ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
-        buf.put(bytes);
-        buf.putLong(sessionKey.window().end());
-        buf.putLong(sessionKey.window().start());
-        return buf.array();
+        return toBinary(Bytes.wrap(bytes), sessionKey.window().start(), sessionKey.window().end()).get();
     }
 
-    public static byte[] toBinary(final Windowed<Bytes> sessionKey) {
-        final byte[] bytes = sessionKey.key().get();
+    public static Bytes toBinary(final Windowed<Bytes> sessionKey) {
+        return toBinary(sessionKey.key(), sessionKey.window().start(), sessionKey.window().end());
+    }
+
+    public static Bytes toBinary(final Bytes key,
+                                 final long startTime,
+                                 final long endTime) {
+        final byte[] bytes = key.get();
         final ByteBuffer buf = ByteBuffer.allocate(bytes.length + 2 * TIMESTAMP_SIZE);
         buf.put(bytes);
-        buf.putLong(sessionKey.window().end());
-        buf.putLong(sessionKey.window().start());
-        return buf.array();
+        buf.putLong(endTime);
+        buf.putLong(startTime);
+        return Bytes.wrap(buf.array());
     }
 }

@@ -23,12 +23,12 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.junit.{After, Before, Test}
 import org.junit.Assert.assertEquals
-import org.scalatest.junit.JUnitSuite
+import org.scalatest.Assertions.intercept
 
 /**
  * Unit test for time index.
  */
-class TimeIndexTest extends JUnitSuite {
+class TimeIndexTest {
   var idx: TimeIndex = null
   val maxEntries = 30
   val baseOffset = 45L
@@ -58,6 +58,20 @@ class TimeIndexTest extends JUnitSuite {
     assertEquals(TimestampOffset(20L, 65L), idx.lookup(25))
     // look for timestamp same as the one in the entry
     assertEquals(TimestampOffset(30L, 75L), idx.lookup(30))
+  }
+
+  @Test
+  def testEntry(): Unit = {
+    appendEntries(maxEntries - 1)
+    assertEquals(TimestampOffset(10L, 55L), idx.entry(0))
+    assertEquals(TimestampOffset(20L, 65L), idx.entry(1))
+    assertEquals(TimestampOffset(30L, 75L), idx.entry(2))
+    assertEquals(TimestampOffset(40L, 85L), idx.entry(3))
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testEntryOverflow(): Unit = {
+    idx.entry(0)
   }
 
   @Test

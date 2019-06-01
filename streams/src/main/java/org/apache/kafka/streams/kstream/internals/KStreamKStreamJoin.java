@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
@@ -85,13 +87,18 @@ class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
 
             boolean needOuterJoin = outer;
 
-            final long timeFrom = Math.max(0L, context().timestamp() - joinBeforeMs);
-            final long timeTo = Math.max(0L, context().timestamp() + joinAfterMs);
+            final long inputRecordTimestamp = context().timestamp();
+            final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
+            final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
 
             try (final WindowStoreIterator<V2> iter = otherWindow.fetch(key, timeFrom, timeTo)) {
                 while (iter.hasNext()) {
                     needOuterJoin = false;
-                    context().forward(key, joiner.apply(value, iter.next().value));
+                    final KeyValue<Long, V2> otherRecord = iter.next();
+                    context().forward(
+                        key,
+                        joiner.apply(value, otherRecord.value),
+                        To.all().withTimestamp(Math.max(inputRecordTimestamp, otherRecord.key)));
                 }
 
                 if (needOuterJoin) {

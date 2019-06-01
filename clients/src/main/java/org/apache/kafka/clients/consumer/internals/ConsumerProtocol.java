@@ -45,6 +45,7 @@ import java.util.Map;
  *   TopicPartitions => [Topic Partitions]
  *     Topic         => String
  *     Partitions    => [int32]
+ *   UserData        => Bytes
  * </pre>
  *
  * The current implementation assumes that future versions will not break compatibility. When

@@ -81,7 +81,7 @@ public class ConnectMetrics {
         reporters.add(new JmxReporter(JMX_PREFIX));
         this.metrics = new Metrics(metricConfig, reporters, time);
         LOG.debug("Registering Connect metrics with JMX for worker '{}'", workerId);
-        AppInfoParser.registerAppInfo(JMX_PREFIX, workerId, metrics);
+        AppInfoParser.registerAppInfo(JMX_PREFIX, workerId, metrics, time.milliseconds());
     }
 
     /**

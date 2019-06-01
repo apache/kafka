@@ -101,11 +101,11 @@ public class KafkaStreamsTest {
     public void before() {
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "appId");
+        props.put(StreamsConfig.CLIENT_ID_CONFIG, "clientId");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         props.put(StreamsConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         props.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, NUM_THREADS);
-        props.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
         globalStreams = new KafkaStreams(builder.build(), props);
     }
 
@@ -139,14 +139,14 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void testStateCloseAfterCreate() {
+    public void stateShouldTransitToNotRunningIfCloseRightAfterCreated() {
         globalStreams.close();
 
         Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, globalStreams.state());
     }
 
     @Test
-    public void testStateOneThreadDeadButRebalanceFinish() throws InterruptedException {
+    public void stateShouldTransitToRunningIfNonDeadThreadsBackToRunning() throws InterruptedException {
         final StateListenerStub stateListener = new StateListenerStub();
         globalStreams.setStateListener(stateListener);
 
@@ -170,7 +170,7 @@ public class KafkaStreamsTest {
         Assert.assertEquals(3, stateListener.numChanges);
         Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
 
-        for (final StreamThread thread: globalStreams.threads) {
+        for (final StreamThread thread : globalStreams.threads) {
             thread.stateListener().onChange(
                 thread,
                 StreamThread.State.PARTITIONS_ASSIGNED,
@@ -193,7 +193,7 @@ public class KafkaStreamsTest {
         Assert.assertEquals(3, stateListener.numChanges);
         Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
 
-        for (final StreamThread thread: globalStreams.threads) {
+        for (final StreamThread thread : globalStreams.threads) {
             if (thread != globalStreams.threads[NUM_THREADS - 1]) {
                 thread.stateListener().onChange(
                     thread,
@@ -207,6 +207,70 @@ public class KafkaStreamsTest {
 
         globalStreams.close();
 
+        TestUtils.waitForCondition(
+            () -> stateListener.numChanges == 6,
+            "Streams never closed.");
+        Assert.assertEquals(KafkaStreams.State.NOT_RUNNING, globalStreams.state());
+    }
+
+    @Test
+    public void stateShouldTransitToErrorIfAllThreadsDead() throws InterruptedException {
+        final StateListenerStub stateListener = new StateListenerStub();
+        globalStreams.setStateListener(stateListener);
+
+        Assert.assertEquals(0, stateListener.numChanges);
+        Assert.assertEquals(KafkaStreams.State.CREATED, globalStreams.state());
+
+        globalStreams.start();
+
+        TestUtils.waitForCondition(
+            () -> stateListener.numChanges == 2,
+            "Streams never started.");
+        Assert.assertEquals(KafkaStreams.State.RUNNING, globalStreams.state());
+
+        for (final StreamThread thread : globalStreams.threads) {
+            thread.stateListener().onChange(
+                thread,
+                StreamThread.State.PARTITIONS_REVOKED,
+                StreamThread.State.RUNNING);
+        }
+
+        Assert.assertEquals(3, stateListener.numChanges);
+        Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
+
+        globalStreams.threads[NUM_THREADS - 1].stateListener().onChange(
+            globalStreams.threads[NUM_THREADS - 1],
+            StreamThread.State.PENDING_SHUTDOWN,
+            StreamThread.State.PARTITIONS_REVOKED);
+
+        globalStreams.threads[NUM_THREADS - 1].stateListener().onChange(
+            globalStreams.threads[NUM_THREADS - 1],
+            StreamThread.State.DEAD,
+            StreamThread.State.PENDING_SHUTDOWN);
+
+        Assert.assertEquals(3, stateListener.numChanges);
+        Assert.assertEquals(KafkaStreams.State.REBALANCING, globalStreams.state());
+
+        for (final StreamThread thread : globalStreams.threads) {
+            if (thread != globalStreams.threads[NUM_THREADS - 1]) {
+                thread.stateListener().onChange(
+                    thread,
+                    StreamThread.State.PENDING_SHUTDOWN,
+                    StreamThread.State.PARTITIONS_REVOKED);
+
+                thread.stateListener().onChange(
+                    thread,
+                    StreamThread.State.DEAD,
+                    StreamThread.State.PENDING_SHUTDOWN);
+            }
+        }
+
+        Assert.assertEquals(4, stateListener.numChanges);
+        Assert.assertEquals(KafkaStreams.State.ERROR, globalStreams.state());
+
+        globalStreams.close();
+
+        // the state should not stuck with ERROR, but transit to NOT_RUNNING in the end
         TestUtils.waitForCondition(
             () -> stateListener.numChanges == 6,
             "Streams never closed.");
@@ -529,6 +593,12 @@ public class KafkaStreamsTest {
                 asList("RUNNING", "STARTING", "PARTITIONS_REVOKED", "PARTITIONS_ASSIGNED", "CREATED").contains(metadata.threadState()));
             assertEquals(0, metadata.standbyTasks().size());
             assertEquals(0, metadata.activeTasks().size());
+            final String threadName = metadata.threadName();
+            assertTrue(threadName.startsWith("clientId-StreamThread-"));
+            assertEquals(threadName + "-consumer", metadata.consumerClientId());
+            assertEquals(threadName + "-restore-consumer", metadata.restoreConsumerClientId());
+            assertEquals(Collections.singleton(threadName + "-producer"), metadata.producerClientIds());
+            assertEquals("clientId-admin", metadata.adminClientId());
         }
     }
 
@@ -685,7 +755,7 @@ public class KafkaStreamsTest {
                 .addSink("sink", outputTopic, new StringSerializer(), new StringSerializer(), "process");
 
         final StoreBuilder<KeyValueStore<String, String>> globalStoreBuilder = Stores.keyValueStoreBuilder(
-                isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName), 
+                isPersistentStore ? Stores.persistentKeyValueStore(globalStoreName) : Stores.inMemoryKeyValueStore(globalStoreName),
                 Serdes.String(), Serdes.String()).withLoggingDisabled();
         topology.addGlobalStore(globalStoreBuilder,
                 "global",

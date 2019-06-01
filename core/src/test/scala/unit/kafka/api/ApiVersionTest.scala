@@ -119,4 +119,11 @@ class ApiVersionTest {
     assertEquals("0.11.0", KAFKA_0_11_0_IV0.shortVersion)
   }
 
+  @Test
+  def testApiVersionValidator(): Unit = {
+    val str = ApiVersionValidator.toString
+    val apiVersions = str.slice(1, str.length).split(",")
+    assertEquals(ApiVersion.allVersions.size, apiVersions.length)
+  }
+
 }

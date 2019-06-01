@@ -30,7 +30,7 @@
         "about": "The absolute log directory path." },
       { "name": "Topics", "type": "[]DescribeLogDirsTopic", "versions": "0+",
         "about": "Each topic.", "fields": [
-        { "name": "Name", "type": "string", "versions": "0+",
+        { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
           "about": "The topic name." },
         { "name": "Partitions", "type": "[]DescribeLogDirsPartition", "versions": "0+", "fields": [
           { "name": "PartitionIndex", "type": "int32", "versions": "0+",

@@ -46,6 +46,7 @@ We can run showTask to see what the task's status is:
     Task bar of type org.apache.kafka.trogdor.workload.ProduceBenchSpec is DONE. FINISHED at 2019-01-09T20:38:22.039-08:00 after 6s
 
 To see the results, we use showTask with --show-status:
+
     > ./bin/trogdor.sh client showTask -t localhost:8889 -i produce0 --show-status
     Task bar of type org.apache.kafka.trogdor.workload.ProduceBenchSpec is DONE. FINISHED at 2019-01-09T20:38:22.039-08:00 after 6s
     Status: {
@@ -105,6 +106,7 @@ Trogdor can run several workloads.  Workloads perform operations on the cluster 
 
 ### ProduceBench
 ProduceBench starts a Kafka producer on a single agent node, producing to several partitions.  The workload measures the average produce latency, as well as the median, 95th percentile, and 99th percentile latency.
+It can be configured to use a transactional producer which can commit transactions based on a set time interval or number of messages.
 
 ### RoundTripWorkload
 RoundTripWorkload tests both production and consumption.  The workload starts a Kafka producer and consumer on a single node.  The consumer will read back the messages that were produced by the producer.

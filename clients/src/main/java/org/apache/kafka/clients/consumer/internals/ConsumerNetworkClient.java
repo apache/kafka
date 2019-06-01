@@ -159,11 +159,8 @@ public class ConsumerNetworkClient implements Closeable {
         int version = this.metadata.requestUpdate();
         do {
             poll(timer);
-            AuthenticationException ex = this.metadata.getAndClearAuthenticationException();
-            if (ex != null)
-                throw ex;
-        } while (this.metadata.version() == version && timer.notExpired());
-        return this.metadata.version() > version;
+        } while (this.metadata.updateVersion() == version && timer.notExpired());
+        return this.metadata.updateVersion() > version;
     }
 
     /**
@@ -295,6 +292,8 @@ public class ConsumerNetworkClient implements Closeable {
 
         // called without the lock to avoid deadlock potential if handlers need to acquire locks
         firePendingCompletedRequests();
+
+        metadata.maybeThrowException();
     }
 
     /**
@@ -460,7 +459,8 @@ public class ConsumerNetworkClient implements Closeable {
         }
     }
 
-    private long trySend(long now) {
+    // Visible for testing
+    long trySend(long now) {
         long pollDelayMs = maxPollTimeoutMs;
 
         // send any requests that can be sent now
@@ -474,6 +474,9 @@ public class ConsumerNetworkClient implements Closeable {
                 if (client.ready(node, now)) {
                     client.send(request, now);
                     iterator.remove();
+                } else {
+                    // try next node when current node is not ready
+                    break;
                 }
             }
         }
