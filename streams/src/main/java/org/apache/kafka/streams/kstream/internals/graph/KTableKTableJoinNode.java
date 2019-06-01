@@ -82,35 +82,35 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends StreamsGraphNode<K, Cha
     }
 
     public String queryableStoreName() {
-        return ((KTableKTableJoinMerger<K, VR>) mergeProcessorParameters().processorSupplier()).getQueryableName();
+        return ((KTableKTableJoinMerger<K, VR>) joinMergeProcessorParameters.processorSupplier()).getQueryableName();
     }
 
     /**
      * The supplier which provides processor with KTable-KTable join merge functionality.
      */
     public KTableKTableJoinMerger<K, VR> joinMerger() {
-        return (KTableKTableJoinMerger<K, VR>) mergeProcessorParameters().processorSupplier();
+        return (KTableKTableJoinMerger<K, VR>) joinMergeProcessorParameters.processorSupplier();
     }
 
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final String thisProcessorName = thisProcessorParameters().processorName();
-        final String otherProcessorName = otherProcessorParameters().processorName();
-        final String mergeProcessorName = mergeProcessorParameters().processorName();
+        final String thisProcessorName = joinThisProcessorParameters.processorName();
+        final String otherProcessorName = joinOtherProcessorParameters.processorName();
+        final String mergeProcessorName = joinMergeProcessorParameters.processorName();
 
         topologyBuilder.addProcessor(
             thisProcessorName,
-            thisProcessorParameters().processorSupplier(),
-            thisJoinSideNodeName());
+            joinThisProcessorParameters.processorSupplier(),
+            thisJoinSideNodeName);
 
         topologyBuilder.addProcessor(
             otherProcessorName,
-            otherProcessorParameters().processorSupplier(),
-            otherJoinSideNodeName());
+            joinOtherProcessorParameters.processorSupplier(),
+            otherJoinSideNodeName);
 
         topologyBuilder.addProcessor(
             mergeProcessorName,
-            mergeProcessorParameters().processorSupplier(),
+            joinMergeProcessorParameters.processorSupplier(),
             thisProcessorName,
             otherProcessorName);
 
@@ -141,26 +141,6 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends StreamsGraphNode<K, Cha
 
     public static <K, V1, V2, VR> KTableKTableJoinNodeBuilder<K, V1, V2, VR> kTableKTableJoinNodeBuilder() {
         return new KTableKTableJoinNodeBuilder<>();
-    }
-
-    private ProcessorParameters<K, Change<V1>, K, Change<VR>> thisProcessorParameters() {
-        return joinThisProcessorParameters;
-    }
-
-    private ProcessorParameters<K, Change<V2>, K, Change<VR>> otherProcessorParameters() {
-        return joinOtherProcessorParameters;
-    }
-
-    private ProcessorParameters<K, Change<VR>, K, Change<VR>> mergeProcessorParameters() {
-        return joinMergeProcessorParameters;
-    }
-
-    private String thisJoinSideNodeName() {
-        return thisJoinSideNodeName;
-    }
-
-    private String otherJoinSideNodeName() {
-        return otherJoinSideNodeName;
     }
 
     public static final class KTableKTableJoinNodeBuilder<K, V1, V2, VR> {
