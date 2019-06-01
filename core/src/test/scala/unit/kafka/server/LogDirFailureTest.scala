@@ -22,7 +22,6 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 
 import kafka.server.LogDirFailureTest._
 import kafka.api.IntegrationTestHarness
-import kafka.cluster.Partition
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.{CoreUtils, Exit, TestUtils}
 import org.apache.kafka.clients.consumer.KafkaConsumer
