@@ -17,11 +17,11 @@
 package org.apache.kafka.streams.processor;
 
 /**
- * An abstract implementation of {@link TypedProcessor} that manages the {@link ProcessorContext} instance and provides default no-op
+ * An abstract implementation of {@link Processor} that manages the {@link ProcessorContext} instance and provides default no-op
  * implementation of {@link #close()}.
  *
- * @param <KIn> the type of keys
- * @param <VIn> the type of values
+ * @param <K> the type of keys
+ * @param <V> the type of values
  */
 public abstract class AbstractProcessor<KIn, VIn> implements Processor<KIn, VIn> {
 

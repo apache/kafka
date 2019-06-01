@@ -697,7 +697,7 @@ public class TopologyTestDriverTest {
     @Test
     public void shouldReturnAllStores() {
         final Topology topology = setupSourceSinkTopology();
-        topology.addProcessor("processor", () -> null, "source");
+        topology.addProcessor("processor", () -> (TypedProcessor) null, "source");
         topology.addStateStore(
             new KeyValueStoreBuilder<>(
                 Stores.inMemoryKeyValueStore("store"),
@@ -1182,7 +1182,7 @@ public class TopologyTestDriverTest {
             new TypedProcessorSupplier() {
                 @Override
                 public TypedProcessor get() {
-                    return new TypedProcessor<String, Long>() {
+                    return new TypedProcessor<String, Long, Void, Void>() {
                         private KeyValueStore<String, Long> store;
 
                         @SuppressWarnings("unchecked")
@@ -1195,9 +1195,6 @@ public class TopologyTestDriverTest {
                         public void process(final String key, final Long value) {
                             store.put(key, value);
                         }
-
-                        @Override
-                        public void close() {}
                     };
                 }
             },

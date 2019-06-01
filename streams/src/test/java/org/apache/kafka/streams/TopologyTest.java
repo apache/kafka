@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TypedProcessorSupplier;
@@ -56,7 +57,7 @@ import static org.junit.Assert.fail;
 
 public class TopologyTest {
 
-    private final StoreBuilder<org.apache.kafka.streams.processor.StateStore> storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
+    private final StoreBuilder<StateStore> storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
     private final KeyValueStoreBuilder<?, ?> globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);
     private final Topology topology = new Topology();
     private final InternalTopologyBuilder.TopologyDescription expectedDescription = new InternalTopologyBuilder.TopologyDescription();
@@ -686,7 +687,7 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
                 "      --> KSTREAM-AGGREGATE-0000000002\n" +
-                "    TypedProcessor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -705,7 +706,7 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
                 "      --> KSTREAM-AGGREGATE-0000000001\n" +
-                "    TypedProcessor: KSTREAM-AGGREGATE-0000000001 (stores: [count-store])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000001 (stores: [count-store])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -724,7 +725,7 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
                 "      --> KSTREAM-AGGREGATE-0000000003\n" +
-                "    TypedProcessor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -744,7 +745,7 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
                 "      --> KSTREAM-AGGREGATE-0000000002\n" +
-                "    TypedProcessor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -764,7 +765,7 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
                 "      --> KSTREAM-AGGREGATE-0000000001\n" +
-                "    TypedProcessor: KSTREAM-AGGREGATE-0000000001 (stores: [count-store])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000001 (stores: [count-store])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -784,7 +785,7 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
                 "      --> KSTREAM-AGGREGATE-0000000003\n" +
-                "    TypedProcessor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -804,7 +805,7 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
                 "      --> KSTREAM-AGGREGATE-0000000002\n" +
-                "    TypedProcessor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000002 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000001])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -824,7 +825,7 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
                 "      --> KSTREAM-AGGREGATE-0000000001\n" +
-                "    TypedProcessor: KSTREAM-AGGREGATE-0000000001 (stores: [count-store])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000001 (stores: [count-store])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -844,7 +845,7 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000000 (topics: [input-topic])\n" +
                 "      --> KSTREAM-AGGREGATE-0000000003\n" +
-                "    TypedProcessor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
+                "    Processor: KSTREAM-AGGREGATE-0000000003 (stores: [KSTREAM-AGGREGATE-STATE-STORE-0000000002])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000000\n\n",
             describe.toString()
@@ -864,10 +865,10 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    TypedProcessor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
                 "      --> KTABLE-SELECT-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    TypedProcessor: KTABLE-SELECT-0000000003 (stores: [])\n" +
+                "    Processor: KTABLE-SELECT-0000000003 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000005\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
                 "    Sink: KSTREAM-SINK-0000000005 (topic: KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
@@ -876,7 +877,7 @@ public class TopologyTest {
                 "  Sub-topology: 1\n" +
                 "    Source: KSTREAM-SOURCE-0000000006 (topics: [KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition])\n" +
                 "      --> KTABLE-AGGREGATE-0000000007\n" +
-                "    TypedProcessor: KTABLE-AGGREGATE-0000000007 (stores: [KTABLE-AGGREGATE-STATE-STORE-0000000004])\n" +
+                "    Processor: KTABLE-AGGREGATE-0000000007 (stores: [KTABLE-AGGREGATE-STATE-STORE-0000000004])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000006\n" +
                 "\n",
@@ -896,10 +897,10 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    TypedProcessor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
                 "      --> KTABLE-SELECT-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    TypedProcessor: KTABLE-SELECT-0000000003 (stores: [])\n" +
+                "    Processor: KTABLE-SELECT-0000000003 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000004\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
                 "    Sink: KSTREAM-SINK-0000000004 (topic: count-store-repartition)\n" +
@@ -908,7 +909,7 @@ public class TopologyTest {
                 "  Sub-topology: 1\n" +
                 "    Source: KSTREAM-SOURCE-0000000005 (topics: [count-store-repartition])\n" +
                 "      --> KTABLE-AGGREGATE-0000000006\n" +
-                "    TypedProcessor: KTABLE-AGGREGATE-0000000006 (stores: [count-store])\n" +
+                "    Processor: KTABLE-AGGREGATE-0000000006 (stores: [count-store])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000005\n" +
                 "\n",
@@ -928,10 +929,10 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    TypedProcessor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [input-topic-STATE-STORE-0000000000])\n" +
                 "      --> KTABLE-SELECT-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    TypedProcessor: KTABLE-SELECT-0000000003 (stores: [])\n" +
+                "    Processor: KTABLE-SELECT-0000000003 (stores: [])\n" +
                 "      --> KSTREAM-SINK-0000000005\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
                 "    Sink: KSTREAM-SINK-0000000005 (topic: KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition)\n" +
@@ -940,7 +941,7 @@ public class TopologyTest {
                 "  Sub-topology: 1\n" +
                 "    Source: KSTREAM-SOURCE-0000000006 (topics: [KTABLE-AGGREGATE-STATE-STORE-0000000004-repartition])\n" +
                 "      --> KTABLE-AGGREGATE-0000000007\n" +
-                "    TypedProcessor: KTABLE-AGGREGATE-0000000007 (stores: [KTABLE-AGGREGATE-STATE-STORE-0000000004])\n" +
+                "    Processor: KTABLE-AGGREGATE-0000000007 (stores: [KTABLE-AGGREGATE-STATE-STORE-0000000004])\n" +
                 "      --> none\n" +
                 "      <-- KSTREAM-SOURCE-0000000006\n" +
                 "\n",
@@ -959,10 +960,10 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    TypedProcessor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-MAPVALUES-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    TypedProcessor: KTABLE-MAPVALUES-0000000003 (stores: [])\n" +
+                "    Processor: KTABLE-MAPVALUES-0000000003 (stores: [])\n" +
                 "      --> none\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n\n",
             describe.toString());
@@ -981,13 +982,13 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    TypedProcessor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-MAPVALUES-0000000004\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
                 // previously, this was
-                //   TypedProcessor: KTABLE-MAPVALUES-0000000004 (stores: [KTABLE-MAPVALUES-STATE-STORE-0000000003]
+                //   Processor: KTABLE-MAPVALUES-0000000004 (stores: [KTABLE-MAPVALUES-STATE-STORE-0000000003]
                 // but we added a change not to materialize non-queriable stores. This change shouldn't break compatibility.
-                "    TypedProcessor: KTABLE-MAPVALUES-0000000004 (stores: [])\n" +
+                "    Processor: KTABLE-MAPVALUES-0000000004 (stores: [])\n" +
                 "      --> none\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
                 "\n",
@@ -1007,10 +1008,10 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    TypedProcessor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-MAPVALUES-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    TypedProcessor: KTABLE-MAPVALUES-0000000003 (stores: [store-name])\n" +
+                "    Processor: KTABLE-MAPVALUES-0000000003 (stores: [store-name])\n" +
                 "      --> none\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
                 "\n",
@@ -1028,10 +1029,10 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    TypedProcessor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-FILTER-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    TypedProcessor: KTABLE-FILTER-0000000003 (stores: [])\n" +
+                "    Processor: KTABLE-FILTER-0000000003 (stores: [])\n" +
                 "      --> none\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n\n",
             describe.toString());
@@ -1048,13 +1049,13 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    TypedProcessor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-FILTER-0000000004\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
                 // Previously, this was
-                //   TypedProcessor: KTABLE-FILTER-0000000004 (stores: [KTABLE-FILTER-STATE-STORE-0000000003]
+                //   Processor: KTABLE-FILTER-0000000004 (stores: [KTABLE-FILTER-STATE-STORE-0000000003]
                 // but we added a change not to materialize non-queriable stores. This change shouldn't break compatibility.
-                "    TypedProcessor: KTABLE-FILTER-0000000004 (stores: [])\n" +
+                "    Processor: KTABLE-FILTER-0000000004 (stores: [])\n" +
                 "      --> none\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
                 "\n",
@@ -1073,10 +1074,10 @@ public class TopologyTest {
                 "   Sub-topology: 0\n" +
                 "    Source: KSTREAM-SOURCE-0000000001 (topics: [input-topic])\n" +
                 "      --> KTABLE-SOURCE-0000000002\n" +
-                "    TypedProcessor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
+                "    Processor: KTABLE-SOURCE-0000000002 (stores: [])\n" +
                 "      --> KTABLE-FILTER-0000000003\n" +
                 "      <-- KSTREAM-SOURCE-0000000001\n" +
-                "    TypedProcessor: KTABLE-FILTER-0000000003 (stores: [store-name])\n" +
+                "    Processor: KTABLE-FILTER-0000000003 (stores: [store-name])\n" +
                 "      --> none\n" +
                 "      <-- KTABLE-SOURCE-0000000002\n" +
                 "\n",
@@ -1128,7 +1129,7 @@ public class TopologyTest {
         topology.addProcessor(processorName, new MockProcessorSupplier<>(), parentNames);
         if (newStores) {
             for (final String store : storeNames) {
-                final StoreBuilder<org.apache.kafka.streams.processor.StateStore> storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
+                final StoreBuilder<StateStore> storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
                 EasyMock.expect(storeBuilder.name()).andReturn(store).anyTimes();
                 EasyMock.replay(storeBuilder);
                 topology.addStateStore(storeBuilder, processorName);

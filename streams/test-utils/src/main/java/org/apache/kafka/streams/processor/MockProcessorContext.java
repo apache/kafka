@@ -44,7 +44,7 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their {@link TypedProcessor},
+ * {@link MockProcessorContext} is a mock of {@link ProcessorContext} for users to test their {@link Processor},
  * {@link Transformer}, and {@link ValueTransformer} implementations.
  * <p>
  * The tests for this class (org.apache.kafka.streams.MockProcessorContextTest) include several behavioral
@@ -52,7 +52,7 @@ import java.util.Properties;
  * <p>
  * Note that this class does not take any automated actions (such as firing scheduled punctuators).
  * It simply captures any data it witnesses.
- * If you require more automated tests, we recommend wrapping your {@link TypedProcessor} in a minimal source-processor-sink
+ * If you require more automated tests, we recommend wrapping your {@link Processor} in a minimal source-processor-sink
  * {@link Topology} and using the {@link TopologyTestDriver}.
  */
 @InterfaceStability.Evolving
@@ -91,17 +91,17 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
             this.punctuator = punctuator;
         }
 
-        @SuppressWarnings("unused")
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public long getIntervalMs() {
             return intervalMs;
         }
 
-        @SuppressWarnings("unused")
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public PunctuationType getType() {
             return type;
         }
 
-        @SuppressWarnings("unused")
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public Punctuator getPunctuator() {
             return punctuator;
         }
@@ -111,7 +111,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
             cancelled = true;
         }
 
-        @SuppressWarnings("unused")
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public boolean cancelled() {
             return cancelled;
         }
@@ -138,7 +138,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
          *
          * @return The child name, or {@code null} if it was broadcast.
          */
-        @SuppressWarnings("unused")
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public String childName() {
             return childName;
         }
@@ -148,7 +148,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
          *
          * @return A timestamp, or {@code -1} if none was forwarded.
          */
-        @SuppressWarnings("unused")
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public long timestamp() {
             return timestamp;
         }
@@ -158,7 +158,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
          *
          * @return A key/value pair. Not null.
          */
-        @SuppressWarnings("unused")
+        @SuppressWarnings({"WeakerAccess", "unused"})
         public KeyValue<K, V> keyValue() {
             return keyValue;
         }
@@ -172,8 +172,9 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
      * and most unit tests should be able to get by with the
      * {@link InMemoryKeyValueStore}, so the stateDir won't matter.
      */
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext() {
+        //noinspection DoubleBraceInitialization
         this(
             new Properties() {
                 {
@@ -193,7 +194,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
      *
      * @param config a Properties object, used to configure the context and the processor.
      */
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext(final Properties config) {
         this(config, new TaskId(0, 0), null);
     }
@@ -205,7 +206,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
      * @param taskId   a {@link TaskId}, which the context makes available via {@link MockProcessorContext#taskId()}.
      * @param stateDir a {@link File}, which the context makes available viw {@link MockProcessorContext#stateDir()}.
      */
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public MockProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
         final StreamsConfig streamsConfig = new QuietStreamsConfig(config);
         this.taskId = taskId;
@@ -273,7 +274,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
      * @param offset    A record offset
      * @param timestamp A record timestamp
      */
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setRecordMetadata(final String topic,
                                   final int partition,
                                   final long offset,
@@ -292,7 +293,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
      *
      * @param topic A topic name
      */
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setTopic(final String topic) {
         this.topic = topic;
     }
@@ -303,7 +304,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
      *
      * @param partition A partition number
      */
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setPartition(final int partition) {
         this.partition = partition;
     }
@@ -314,7 +315,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
      *
      * @param offset A record offset
      */
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setOffset(final long offset) {
         this.offset = offset;
     }
@@ -325,7 +326,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
      *
      * @param headers Record headers
      */
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setHeaders(final Headers headers) {
         this.headers = headers;
     }
@@ -336,7 +337,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
      *
      * @param timestamp A record timestamp
      */
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void setTimestamp(final long timestamp) {
         this.timestamp = timestamp;
     }
@@ -416,7 +417,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
      *
      * @return A list of captured punctuators.
      */
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<CapturedPunctuator> scheduledPunctuators() {
         return new LinkedList<>(punctuators);
     }
@@ -487,7 +488,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
     /**
      * Clear the captured forwarded data.
      */
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void resetForwards() {
         capturedForwards.clear();
     }
@@ -502,6 +503,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
      *
      * @return {@code true} iff {@link ProcessorContext#commit()} has been called in this context since construction or reset.
      */
+    @SuppressWarnings("WeakerAccess")
     public boolean committed() {
         return committed;
     }
@@ -509,7 +511,7 @@ public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, Recor
     /**
      * Reset the commit capture to {@code false} (whether or not it was previously {@code true}).
      */
-    @SuppressWarnings("unused")
+    @SuppressWarnings({"WeakerAccess", "unused"})
     public void resetCommit() {
         committed = false;
     }

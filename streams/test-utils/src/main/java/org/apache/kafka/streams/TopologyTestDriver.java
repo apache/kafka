@@ -49,7 +49,6 @@ import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
-import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.internals.GlobalProcessorContextImpl;
 import org.apache.kafka.streams.processor.internals.GlobalStateManager;
 import org.apache.kafka.streams.processor.internals.GlobalStateManagerImpl;
@@ -169,9 +168,9 @@ import java.util.regex.Pattern;
  * trigger manually via {@link #advanceWallClockTime(long)}.
  * <p>
  * Finally, when completed, make sure your tests {@link #close()} the driver to release all resources and
- * {@link TypedProcessor processors}.
+ * {@link org.apache.kafka.streams.processor.Processor processors}.
  *
- * <h2>TypedProcessor state</h2>
+ * <h2>Processor state</h2>
  * <p>
  * Some processors use Kafka {@link StateStore state storage}, so this driver class provides the generic
  * {@link #getStateStore(String)} as well as store-type specific methods so that your tests can check the underlying

@@ -23,7 +23,7 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.TopologyException;
-import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.junit.Test;
 
 import java.time.Duration;
@@ -506,7 +506,7 @@ public class RepartitionTopicNamingTest {
     }
 
 
-    private static class SimpleProcessor extends AbstractProcessor<String, String, Void, Void> {
+    private static class SimpleProcessor implements TypedProcessor<String, String, Void, Void> {
 
         final List<String> valueList;
 

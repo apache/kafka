@@ -29,7 +29,7 @@ import org.junit.runner.RunWith;
 @RunWith(EasyMockRunner.class)
 public class ForwardingDisabledProcessorContextTest {
     @Mock(MockType.NICE)
-    private ProcessorContext delegate;
+    private ProcessorContext<Object, Object> delegate;
     private ForwardingDisabledProcessorContext context;
 
     @Before
@@ -39,27 +39,23 @@ public class ForwardingDisabledProcessorContextTest {
 
     @Test(expected = StreamsException.class)
     public void shouldThrowOnForward() {
-        // forwarding any non-null arguments is a type error
         context.forward(null, null);
     }
 
     @Test(expected = StreamsException.class)
     public void shouldThrowOnForwardWithTo() {
-        // forwarding any non-null arguments is a type error
         context.forward(null, null, To.all());
     }
 
     @SuppressWarnings("deprecation") // need to test deprecated code until removed
     @Test(expected = StreamsException.class)
     public void shouldThrowOnForwardWithChildIndex() {
-        // forwarding any non-null arguments is a type error
         context.forward(null, null, 1);
     }
 
     @SuppressWarnings("deprecation") // need to test deprecated code until removed
     @Test(expected = StreamsException.class)
     public void shouldThrowOnForwardWithChildName() {
-        // forwarding any non-null arguments is a type error
         context.forward(null, null, "child1");
     }
 }

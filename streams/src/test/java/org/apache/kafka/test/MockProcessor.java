@@ -29,7 +29,6 @@ import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 
-@SuppressWarnings("WeakerAccess")
 public class MockProcessor<KIn, VIn> implements TypedProcessor<KIn, VIn, Void, Void> {
 
     public final ArrayList<String> processed = new ArrayList<>();
@@ -83,6 +82,7 @@ public class MockProcessor<KIn, VIn> implements TypedProcessor<KIn, VIn, Void, V
         } else {
             lastValueAndTimestampPerKey.remove(key);
         }
+
         processed.add(makeRecord(key, value, context.timestamp()));
 
         if (commitRequested) {
