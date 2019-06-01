@@ -251,21 +251,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-    // used for testing
-    long getStreamTime() {
-        return partitionGroup.timestamp();
-    }
-
-    // used for testing
-    long getPartitionTime(final TopicPartition partition) {
-        return partitionGroup.getPartitionTimestamp(partition);
-    }
-
-    // used for testing
-    void resetTimes() {
-        partitionGroup.clear();
-    }
-
     @Override
     public boolean initializeStateStores() {
         log.trace("Initializing state stores");
@@ -903,6 +888,21 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
     // visible for testing only
     RecordCollector recordCollector() {
         return recordCollector;
+    }
+
+    // used for testing
+    long getStreamTime() {
+        return partitionGroup.timestamp();
+    }
+
+    // used for testing
+    long getPartitionTime(final TopicPartition partition) {
+        return partitionGroup.getPartitionTimestamp(partition);
+    }
+
+    // used for testing
+    void resetTimes() {
+        partitionGroup.clear();
     }
 
     Producer<byte[], byte[]> getProducer() {

@@ -639,13 +639,11 @@ public class StreamTaskTest {
         assertTrue(task.commitNeeded());
 
         task.commit();
-        assertFalse(task.commitNeeded()); // confirm that timestamp was correctly committed
-        assertTrue(Long.parseLong(task.consumer.committed(partition1).metadata())
-                      == task.getPartitionTime(partition1));
+        assertFalse(task.commitNeeded());
     }
 
     @Test
-    public void shouldUpdateTimestampAfterRestart() {
+    public void shouldRestorePartitionTimeAfterRestart() {
         task = createStatelessTask(createConfig(false));
         task.initializeStateStores();
         task.initializeTopology();
