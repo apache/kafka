@@ -36,7 +36,7 @@ class Replica(val brokerId: Int,
   @volatile private[this] var _logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
   // the log start offset value, kept in all replicas;
   // for local replica it is the log's start offset, for remote replicas its value is only updated by follower fetch
-  @volatile private[this] var _logStartOffset = Log.UnknownLogStartOffset
+  @volatile private[this] var _logStartOffset = Log.UnknownOffset
 
   // The log end offset value at the time the leader received the last FetchRequest from this follower
   // This is used to determine the lastCaughtUpTimeMs of the follower
@@ -199,16 +199,17 @@ class Replica(val brokerId: Int,
    * Convert hw to local offset metadata by reading the log at the hw offset.
    * If the hw offset is out of range, return the first offset of the first log segment as the offset metadata.
    */
-  def convertHWToLocalOffsetMetadata() {
-    if (isLocal) {
-      _highWatermarkMetadata = log.get.convertToOffsetMetadata(_highWatermarkMetadata.messageOffset).getOrElse {
+  def maybeFetchHighWatermarkOffsetMetadata(): Unit = {
+    if (!isLocal)
+      throw new KafkaException(s"Should not construct complete high watermark on partition $topicPartition's non-local replica $brokerId")
+
+    if (highWatermarkMetadata.messageOffsetOnly) {
+      highWatermarkMetadata = log.get.convertToOffsetMetadata(highWatermark).getOrElse {
         log.get.convertToOffsetMetadata(logStartOffset).getOrElse {
           val firstSegmentOffset = log.get.logSegments.head.baseOffset
           new LogOffsetMetadata(firstSegmentOffset, firstSegmentOffset, 0)
         }
       }
-    } else {
-      throw new KafkaException(s"Should not construct complete high watermark on partition $topicPartition's non-local replica $brokerId")
     }
   }
 

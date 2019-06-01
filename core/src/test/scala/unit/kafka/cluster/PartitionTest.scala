@@ -1014,7 +1014,7 @@ class PartitionTest {
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownLogStartOffset, remoteReplica.logStartOffset)
+    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
 
     time.sleep(500)
 
@@ -1063,7 +1063,7 @@ class PartitionTest {
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownLogStartOffset, remoteReplica.logStartOffset)
+    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
 
     partition.updateFollowerFetchState(remoteBrokerId,
       followerFetchOffsetMetadata = LogOffsetMetadata(3),
@@ -1116,7 +1116,7 @@ class PartitionTest {
 
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownLogStartOffset, remoteReplica.logStartOffset)
+    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
 
     // Mock the expected ISR update failure
     val updatedLeaderAndIsr = LeaderAndIsr(
@@ -1163,7 +1163,7 @@ class PartitionTest {
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownLogStartOffset, remoteReplica.logStartOffset)
+    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
 
     // On initialization, the replica is considered caught up and should not be removed
     partition.maybeShrinkIsr(10000)
@@ -1208,7 +1208,7 @@ class PartitionTest {
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownLogStartOffset, remoteReplica.logStartOffset)
+    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
 
     // There is a short delay before the first fetch. The follower is not yet caught up to the log end.
     time.sleep(5000)
@@ -1268,7 +1268,7 @@ class PartitionTest {
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownLogStartOffset, remoteReplica.logStartOffset)
+    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
 
     // The follower catches up to the log end immediately.
     partition.updateFollowerFetchState(remoteBrokerId,
@@ -1314,7 +1314,7 @@ class PartitionTest {
     val remoteReplica = partition.getReplica(remoteBrokerId).get
     assertEquals(initializeTimeMs, remoteReplica.lastCaughtUpTimeMs)
     assertEquals(LogOffsetMetadata.UnknownOffsetMetadata.messageOffset, remoteReplica.logEndOffset)
-    assertEquals(Log.UnknownLogStartOffset, remoteReplica.logStartOffset)
+    assertEquals(Log.UnknownOffset, remoteReplica.logStartOffset)
 
     time.sleep(10001)
 

@@ -527,16 +527,16 @@ class Partition(val topicPartition: TopicPartition,
 
       if (isNewLeader) {
         // construct the high watermark metadata for the new leader replica
-        leaderReplica.convertHWToLocalOffsetMetadata()
+        leaderReplica.maybeFetchHighWatermarkOffsetMetadata()
         // mark local replica as the leader after converting hw
         leaderReplicaIdOpt = Some(localBrokerId)
         // reset log end offset for remote replicas
         assignedReplicas.filter(_.brokerId != localBrokerId).foreach { replica =>
           replica.updateFetchState(
             followerFetchOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata,
-            followerStartOffset = Log.UnknownLogStartOffset,
-            followerFetchTimeMs = -1L,
-            leaderEndOffset = -1L
+            followerStartOffset = Log.UnknownOffset,
+            followerFetchTimeMs = 0L,
+            leaderEndOffset = Log.UnknownOffset
           )
         }
       }
@@ -594,7 +594,7 @@ class Partition(val topicPartition: TopicPartition,
                                followerFetchOffsetMetadata: LogOffsetMetadata,
                                followerStartOffset: Long,
                                followerFetchTimeMs: Long,
-                               leaderEndOffset: Long): Boolean= {
+                               leaderEndOffset: Long): Boolean = {
 
     getReplica(followerId) match {
       case Some(followerReplica) =>

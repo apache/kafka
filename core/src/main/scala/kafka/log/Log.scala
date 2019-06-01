@@ -2183,7 +2183,7 @@ object Log {
   private val DeleteDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$DeleteDirSuffix")
   private val FutureDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$FutureDirSuffix")
 
-  val UnknownLogStartOffset = -1L
+  val UnknownOffset = -1L
 
   def apply(dir: File,
             config: LogConfig,
