@@ -41,8 +41,8 @@ import org.apache.kafka.streams.processor.TypedProcessorSupplier;
  * <p>
  * A {@code KStream} can be transformed record by record, joined with another {@code KStream}, {@link KTable},
  * {@link GlobalKTable}, or can be aggregated into a {@link KTable}.
- * Kafka Streams DSL can be mixed-and-matched with TypedProcessor API (PAPI) (c.f. {@link Topology}) via
- * {@link #process(TypedProcessorSupplier, String...) process(...)},
+ * Kafka Streams DSL can be mixed-and-matched with Processor API (PAPI) (c.f. {@link Topology}) via
+ * {@link #process(ProcessorSupplier, String...) process(...)},
  * {@link #transform(TransformerSupplier, String...) transform(...)}, and
  * {@link #transformValues(ValueTransformerSupplier, String...) transformValues(...)}.
  *
@@ -1965,6 +1965,7 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
+    @Deprecated
     void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
                  final String... stateStoreNames);
 

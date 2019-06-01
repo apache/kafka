@@ -49,8 +49,5 @@ class KStreamFlatMap<K, V, K1, V1> implements TypedProcessorSupplier<K, V, K1, V
                 context.forward(newPair.key, newPair.value);
             }
         }
-
-        @Override
-        public void close() {}
     }
 }

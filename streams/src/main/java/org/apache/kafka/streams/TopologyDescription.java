@@ -17,7 +17,6 @@
 package org.apache.kafka.streams;
 
 import org.apache.kafka.streams.processor.TopicNameExtractor;
-import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 
 import java.util.Set;
@@ -39,7 +38,7 @@ public interface TopologyDescription {
      * A connected sub-graph of a {@link Topology}.
      * <p>
      * Nodes of a {@code Subtopology} are connected {@link Topology#addProcessor(String,
-     * TypedProcessorSupplier, String...) directly} or indirectly via
+     * org.apache.kafka.streams.processor.ProcessorSupplier, String...) directly} or indirectly via
      * {@link Topology#connectProcessorAndStateStores(String, String...) state stores}
      * (i.e., if multiple processors share the same state).
      */
@@ -60,7 +59,7 @@ public interface TopologyDescription {
     /**
      * Represents a {@link Topology#addGlobalStore(org.apache.kafka.streams.state.StoreBuilder, String,
      * org.apache.kafka.common.serialization.Deserializer, org.apache.kafka.common.serialization.Deserializer, String,
-     * String, TypedProcessorSupplier) global store}.
+     * String, org.apache.kafka.streams.processor.ProcessorSupplier) global store}.
      * Adding a global store results in adding a source node and one stateful processor node.
      * Note, that all added global stores form a single unit (similar to a {@link Subtopology}) even if different
      * global stores are not connected to each other.

@@ -94,7 +94,7 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
 
             store = (SessionStore<K, Agg>) context.getStateStore(storeName);
             tupleForwarder = new SessionTupleForwarder<>(
-                (WrappedStateStore<?, Windowed<K>, Agg>) store,
+                store,
                 context,
                 new SessionCacheFlushListener<>(context),
                 sendOldValues
@@ -173,11 +173,6 @@ public class KStreamSessionWindowAggregate<K, V, Agg> implements KStreamAggProce
                 store.put(sessionKey, agg);
                 tupleForwarder.maybeForward(sessionKey, agg, null);
             }
-        }
-
-        @Override
-        public void close() {
-
         }
     }
 

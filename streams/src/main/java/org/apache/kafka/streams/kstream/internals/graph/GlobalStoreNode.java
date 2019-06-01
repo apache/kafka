@@ -23,6 +23,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
+@SuppressWarnings({"unchecked", "rawtypes"})
 public class GlobalStoreNode extends StateStoreNode {
 
 
@@ -50,7 +51,6 @@ public class GlobalStoreNode extends StateStoreNode {
 
 
     @Override
-    @SuppressWarnings("unchecked")
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         storeBuilder.withLoggingDisabled();
         topologyBuilder.addGlobalStore(storeBuilder,

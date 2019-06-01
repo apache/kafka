@@ -228,7 +228,7 @@ public class MetricsIntegrationTest {
         // metric level : Task
         TestUtils.waitForCondition(() -> testTaskMetric(errorMessage), 10000, () -> "testTaskMetric -> " + errorMessage.toString());
 
-        // metric level : TypedProcessor
+        // metric level : Processor
         TestUtils.waitForCondition(() -> testProcessorMetric(errorMessage), 10000, () -> "testProcessorMetric -> " + errorMessage.toString());
 
         // metric level : Store (in-memory-state, in-memory-lru-state, rocksdb-state)

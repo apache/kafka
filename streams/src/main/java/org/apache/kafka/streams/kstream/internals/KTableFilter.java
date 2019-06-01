@@ -109,11 +109,6 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, Change<V>, K, V> 
                 context.forward(key, new Change<>(newValue, oldValue));
             }
         }
-
-        @Override
-        public void close() {
-
-        }
     }
 
     @Override

@@ -27,7 +27,6 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
-import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
@@ -43,7 +42,7 @@ import java.util.regex.Pattern;
  * A topology is an acyclic graph of sources, processors, and sinks.
  * A {@link SourceNode source} is a node in the graph that consumes one or more Kafka topics and forwards them to its
  * successor nodes.
- * A {@link TypedProcessor processor} is a node in the graph that receives input records from upstream nodes, processes the
+ * A {@link Processor processor} is a node in the graph that receives input records from upstream nodes, processes the
  * records, and optionally forwarding new records to one or all of its downstream nodes.
  * Finally, a {@link SinkNode sink} is a node in the graph that receives records from upstream nodes and writes them to
  * a Kafka topic.
@@ -72,7 +71,7 @@ public class Topology {
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      *
      * @param name the unique name of the source used to reference this node when
-     * {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}.
+     * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topics the name of one or more Kafka topics that this source is to consume
      * @return itself
      * @throws TopologyException if processor is already added or if topics have already been registered by another source
@@ -92,7 +91,7 @@ public class Topology {
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      *
      * @param name the unique name of the source used to reference this node when
-     * {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}.
+     * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume
      * @return itself
      * @throws TopologyException if processor is already added or if topics have already been registered by another source
@@ -112,7 +111,7 @@ public class Topology {
      *
      * @param offsetReset the auto offset reset policy to use for this source if no committed offsets found; acceptable values earliest or latest
      * @param name the unique name of the source used to reference this node when
-     * {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}.
+     * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topics the name of one or more Kafka topics that this source is to consume
      * @return itself
      * @throws TopologyException if processor is already added or if topics have already been registered by another source
@@ -134,7 +133,7 @@ public class Topology {
      *
      * @param offsetReset the auto offset reset policy value for this source if no committed offsets found; acceptable values earliest or latest.
      * @param name the unique name of the source used to reference this node when
-     * {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}.
+     * {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topicPattern regular expression pattern to match Kafka topics that this source is to consume
      * @return itself
      * @throws TopologyException if processor is already added or if topics have already been registered by another source
@@ -155,7 +154,7 @@ public class Topology {
      * @param timestampExtractor the stateless timestamp extractor used for this source,
      *                           if not specified the default extractor defined in the configs will be used
      * @param name               the unique name of the source used to reference this node when
-     *                           {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}.
+     *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topics             the name of one or more Kafka topics that this source is to consume
      * @return itself
      * @throws TopologyException if processor is already added or if topics have already been registered by another source
@@ -177,7 +176,7 @@ public class Topology {
      * @param timestampExtractor the stateless timestamp extractor used for this source,
      *                           if not specified the default extractor defined in the configs will be used
      * @param name               the unique name of the source used to reference this node when
-     *                           {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}.
+     *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return itself
      * @throws TopologyException if processor is already added or if topics have already been registered by another source
@@ -200,7 +199,7 @@ public class Topology {
      * @param timestampExtractor the stateless timestamp extractor used for this source,
      *                           if not specified the default extractor defined in the configs will be used
      * @param name               the unique name of the source used to reference this node when
-     *                           {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}.
+     *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topics             the name of one or more Kafka topics that this source is to consume
      * @return itself
      * @throws TopologyException if processor is already added or if topics have already been registered by another source
@@ -225,7 +224,7 @@ public class Topology {
      * @param timestampExtractor the stateless timestamp extractor used for this source,
      *                           if not specified the default extractor defined in the configs will be used
      * @param name               the unique name of the source used to reference this node when
-     *                           {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}.
+     *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param topicPattern       regular expression pattern to match Kafka topics that this source is to consume
      * @return itself
      * @throws TopologyException if processor is already added or if topics have already been registered by another source
@@ -244,7 +243,7 @@ public class Topology {
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      *
      * @param name               the unique name of the source used to reference this node when
-     *                           {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}
+     *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}
      * @param keyDeserializer    key deserializer used to read this source, if not specified the default
      *                           key deserializer defined in the configs will be used
      * @param valueDeserializer  value deserializer used to read this source,
@@ -270,7 +269,7 @@ public class Topology {
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
      *
      * @param name               the unique name of the source used to reference this node when
-     *                           {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}
+     *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}
      * @param keyDeserializer    key deserializer used to read this source, if not specified the default
      *                           key deserializer defined in the configs will be used
      * @param valueDeserializer  value deserializer used to read this source,
@@ -297,7 +296,7 @@ public class Topology {
      * @param offsetReset        the auto offset reset policy to use for this stream if no committed offsets found;
      *                           acceptable values are earliest or latest
      * @param name               the unique name of the source used to reference this node when
-     *                           {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}
+     *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}
      * @param keyDeserializer    key deserializer used to read this source, if not specified the default
      *                           key deserializer defined in the configs will be used
      * @param valueDeserializer  value deserializer used to read this source,
@@ -326,7 +325,7 @@ public class Topology {
      * @param offsetReset        the auto offset reset policy to use for this stream if no committed offsets found;
      *                           acceptable values are earliest or latest
      * @param name               the unique name of the source used to reference this node when
-     *                           {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}
+     *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}
      * @param keyDeserializer    key deserializer used to read this source, if not specified the default
      *                           key deserializer defined in the configs will be used
      * @param valueDeserializer  value deserializer used to read this source,
@@ -351,7 +350,7 @@ public class Topology {
      * @param offsetReset        the auto offset reset policy to use for this stream if no committed offsets found;
      *                           acceptable values are earliest or latest.
      * @param name               the unique name of the source used to reference this node when
-     *                           {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}.
+     *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param timestampExtractor the stateless timestamp extractor used for this source,
      *                           if not specified the default extractor defined in the configs will be used
      * @param keyDeserializer    key deserializer used to read this source, if not specified the default
@@ -383,7 +382,7 @@ public class Topology {
      * @param offsetReset        the auto offset reset policy to use for this stream if no committed offsets found;
      *                           acceptable values are earliest or latest
      * @param name               the unique name of the source used to reference this node when
-     *                           {@link #addProcessor(String, TypedProcessorSupplier, String...) adding processor children}.
+     *                           {@link #addProcessor(String, ProcessorSupplier, String...) adding processor children}.
      * @param timestampExtractor the stateless timestamp extractor used for this source,
      *                           if not specified the default extractor defined in the configs will be used
      * @param keyDeserializer    key deserializer used to read this source, if not specified the default
@@ -647,7 +646,7 @@ public class Topology {
      * Any new record output by this processor will be forwarded to its child processor or sink nodes.
      *
      * @param name the unique name of the processor node
-     * @param supplier the supplier used to obtain this node's {@link TypedProcessor} instance
+     * @param supplier the supplier used to obtain this node's {@link Processor} instance
      * @param parentNames the name of one or more source or processor nodes whose output records this processor should receive
      * and process
      * @return itself
@@ -689,7 +688,7 @@ public class Topology {
      * A {@link SourceNode} with the provided sourceName will be added to consume the data arriving from the partitions
      * of the input topic.
      * <p>
-     * The provided {@link TypedProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
+     * The provided {@link ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
      * records forwarded from the {@link SourceNode}.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      * The default {@link TimestampExtractor} as specified in the {@link StreamsConfig config} is used.
@@ -699,8 +698,8 @@ public class Topology {
      * @param keyDeserializer       the {@link Deserializer} to deserialize keys with
      * @param valueDeserializer     the {@link Deserializer} to deserialize values with
      * @param topic                 the topic to source the data from
-     * @param processorName         the name of the {@link TypedProcessorSupplier}
-     * @param stateUpdateSupplier   the instance of {@link TypedProcessorSupplier}
+     * @param processorName         the name of the {@link ProcessorSupplier}
+     * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */
@@ -725,7 +724,7 @@ public class Topology {
      * A {@link SourceNode} with the provided sourceName will be added to consume the data arriving from the partitions
      * of the input topic.
      * <p>
-     * The provided {@link TypedProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
+     * The provided {@link ProcessorSupplier} will be used to create an {@link ProcessorNode} that will receive all
      * records forwarded from the {@link SourceNode}.
      * This {@link ProcessorNode} should be used to keep the {@link StateStore} up-to-date.
      *
@@ -736,8 +735,8 @@ public class Topology {
      * @param keyDeserializer       the {@link Deserializer} to deserialize keys with
      * @param valueDeserializer     the {@link Deserializer} to deserialize values with
      * @param topic                 the topic to source the data from
-     * @param processorName         the name of the {@link TypedProcessorSupplier}
-     * @param stateUpdateSupplier   the instance of {@link TypedProcessorSupplier}
+     * @param processorName         the name of the {@link ProcessorSupplier}
+     * @param stateUpdateSupplier   the instance of {@link ProcessorSupplier}
      * @return itself
      * @throws TopologyException if the processor of state is already registered
      */

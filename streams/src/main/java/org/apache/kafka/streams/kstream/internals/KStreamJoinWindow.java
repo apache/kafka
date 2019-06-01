@@ -56,9 +56,6 @@ class KStreamJoinWindow<K, V> implements TypedProcessorSupplier<K, V, K, V> {
                 window.put(key, value, context.timestamp());
             }
         }
-
-        @Override
-        public void close() {}
     }
 
 }

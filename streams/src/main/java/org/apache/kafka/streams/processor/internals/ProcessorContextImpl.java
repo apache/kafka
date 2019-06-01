@@ -101,13 +101,13 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
         }
 
         if (!currentNode().stateStores.contains(name)) {
-            throw new StreamsException("TypedProcessor " + currentNode().name() + " has no access to StateStore " + name +
-                                           " as the store is not connected to the processor. If you add stores manually via '.addStateStore()' " +
-                                           "make sure to connect the added store to the processor by providing the processor name to " +
-                                           "'.addStateStore()' or connect them via '.connectProcessorAndStateStores()'. " +
-                                           "DSL users need to provide the store name to '.process()', '.transform()', or '.transformValues()' " +
-                                           "to connect the store to the corresponding operator. If you do not add stores manually, " +
-                                           "please file a bug report at https://issues.apache.org/jira/projects/KAFKA.");
+            throw new StreamsException("Processor " + currentNode().name() + " has no access to StateStore " + name +
+                " as the store is not connected to the processor. If you add stores manually via '.addStateStore()' " +
+                "make sure to connect the added store to the processor by providing the processor name to " +
+                "'.addStateStore()' or connect them via '.connectProcessorAndStateStores()'. " +
+                "DSL users need to provide the store name to '.process()', '.transform()', or '.transformValues()' " +
+                "to connect the store to the corresponding operator. If you do not add stores manually, " +
+                "please file a bug report at https://issues.apache.org/jira/projects/KAFKA.");
         }
 
         final StateStore store = stateManager.getStore(name);
@@ -174,7 +174,7 @@ public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> i
                 final ProcessorNode child = currentNode().getChild(sendTo);
                 if (child == null) {
                     throw new StreamsException("Unknown downstream node: " + sendTo
-                                                   + " either does not exist or is not connected to this processor.");
+                        + " either does not exist or is not connected to this processor.");
                 }
                 forward(child, key, value);
             }

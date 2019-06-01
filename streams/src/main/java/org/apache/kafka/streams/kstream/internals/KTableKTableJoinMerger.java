@@ -114,8 +114,5 @@ public class KTableKTableJoinMerger<K, V> implements KTableProcessorSupplier<K, 
                 }
             }
         }
-
-        @Override
-        public void close() {}
     }
 }

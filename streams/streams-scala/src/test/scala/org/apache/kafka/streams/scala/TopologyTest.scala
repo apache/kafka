@@ -43,7 +43,7 @@ import org.apache.kafka.streams.kstream.{
   KTable => KTableJ,
   Materialized => MaterializedJ
 }
-import org.apache.kafka.streams.processor.{AbstractProcessor, ProcessorContext, TypedProcessorSupplier}
+import org.apache.kafka.streams.processor.{AbstractProcessor, ProcessorContext, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala.kstream._
@@ -362,7 +362,7 @@ class TopologyTest {
         override def apply(v: String): String = v.toUpperCase(Locale.getDefault)
       }
       val processorValueCollector = new util.ArrayList[String]
-      val processorSupplier: TypedProcessorSupplier[String, String] = new TypedProcessorSupplier[String, String] {
+      val processorSupplier: ProcessorSupplier[String, String] = new ProcessorSupplier[String, String] {
         override def get() = new SimpleProcessor(processorValueCollector)
       }
       val valueJoiner2: ValueJoiner[String, Integer, String] = new ValueJoiner[String, Integer, String] {

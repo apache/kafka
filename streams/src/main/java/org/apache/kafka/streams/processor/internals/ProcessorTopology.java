@@ -59,12 +59,10 @@ public class ProcessorTopology {
         return sourcesByTopic.get(topic);
     }
 
-    @SuppressWarnings("rawtypes")
     public Set<SourceNode> sources() {
         return new HashSet<>(sourcesByTopic.values());
     }
 
-    @SuppressWarnings("rawtypes")
     public SinkNode sink(final String topic) {
         return sinksByTopic.get(topic);
     }
@@ -113,7 +111,7 @@ public class ProcessorTopology {
         }
 
         final StringBuilder sb = new StringBuilder(indent + "\tchildren:\t[");
-        for (final ProcessorNode<?, ?, ?, ?> child : children) {
+        for (final ProcessorNode child : children) {
             sb.append(child.name());
             sb.append(", ");
         }

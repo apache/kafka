@@ -124,11 +124,6 @@ class KTableMapValues<K, V, V1> implements KTableProcessorSupplier<K, Change<V>,
                 context.forward(key, new Change<>(newValue, oldValue));
             }
         }
-
-        @Override
-        public void close() {
-
-        }
     }
 
 

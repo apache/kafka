@@ -413,7 +413,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
      * @throws IllegalStateException if the current node is not null
      * @throws TaskMigratedException if the task producer got fenced (EOS only)
      */
-    @SuppressWarnings("rawtypes")
     @Override
     public void punctuate(final ProcessorNode node, final long timestamp, final PunctuationType type, final Punctuator punctuator) {
         if (processorContext.currentNode() != null) {
@@ -437,7 +436,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         }
     }
 
-    @SuppressWarnings("rawtypes")
     private void updateProcessorContext(final StampedRecord record, final ProcessorNode currNode) {
         processorContext.setRecordContext(
             new ProcessorRecordContext(
@@ -541,7 +539,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         return purgableConsumedOffsets;
     }
 
-    @SuppressWarnings({"unchecked", "rawtypes"})
+    @SuppressWarnings("unchecked")
     private void initTopology() {
         // initialize the task by initializing all its processor nodes in the topology
         log.trace("Initializing processor nodes of the topology");
@@ -661,7 +659,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator 
         // make sure close() is called for each node even when there is a RuntimeException
         RuntimeException exception = null;
         if (taskInitialized) {
-            for (final ProcessorNode<?, ?, ?, ?> node : topology.processors()) {
+            for (final ProcessorNode node : topology.processors()) {
                 processorContext.setCurrentNode(node);
                 try {
                     node.close();

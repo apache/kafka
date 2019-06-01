@@ -31,9 +31,9 @@ public class GroupedTableOperationRepartitionNode<K, V> extends StreamsGraphNode
 
     protected final Serde<K> keySerde;
     protected final Serde<V> valueSerde;
-    protected final String sinkName;
+    private final String sinkName;
     protected final String sourceName;
-    protected final String repartitionTopic;
+    private final String repartitionTopic;
 
     private GroupedTableOperationRepartitionNode(final String nodeName,
                                                  final Serde<K> keySerde,

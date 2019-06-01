@@ -57,8 +57,5 @@ class KStreamBranch<K, V> implements TypedProcessorSupplier<K, V, K, V> {
                 }
             }
         }
-
-        @Override
-        public void close() {}
     }
 }

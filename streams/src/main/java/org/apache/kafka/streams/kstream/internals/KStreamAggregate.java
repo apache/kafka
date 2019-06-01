@@ -103,9 +103,6 @@ public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K,
             store.put(key, ValueAndTimestamp.make(newAgg, newTimestamp));
             tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null, newTimestamp);
         }
-
-        @Override
-        public void close() {}
     }
 
     @Override

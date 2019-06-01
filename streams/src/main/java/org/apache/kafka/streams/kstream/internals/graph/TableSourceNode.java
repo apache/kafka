@@ -29,7 +29,6 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 
@@ -91,7 +90,7 @@ public class TableSourceNode<K, V> extends StreamsGraphNode<Void, Void, K, Chang
     @Override
     @SuppressWarnings("unchecked")
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final String topicName = getTopicNames().iterator().next();
+        final String topicName = topicNames.iterator().next();
 
         // TODO: we assume source KTables can only be timestamped-key-value stores for now.
         // should be expanded for other types of stores as well.
@@ -101,18 +100,18 @@ public class TableSourceNode<K, V> extends StreamsGraphNode<Void, Void, K, Chang
         if (isGlobalKTable) {
             topologyBuilder.addGlobalStore(storeBuilder,
                                            sourceName,
-                                           consumedInternal().timestampExtractor(),
-                                           consumedInternal().keyDeserializer(),
-                                           consumedInternal().valueDeserializer(),
+                                           consumedInternal.timestampExtractor(),
+                                           consumedInternal.keyDeserializer(),
+                                           consumedInternal.valueDeserializer(),
                                            topicName,
                                            processorParameters.processorName(),
                                            processorParameters.processorSupplier());
         } else {
-            topologyBuilder.addSource(consumedInternal().offsetResetPolicy(),
+            topologyBuilder.addSource(consumedInternal.offsetResetPolicy(),
                                       sourceName,
-                                      consumedInternal().timestampExtractor(),
-                                      consumedInternal().keyDeserializer(),
-                                      consumedInternal().valueDeserializer(),
+                                      consumedInternal.timestampExtractor(),
+                                      consumedInternal.keyDeserializer(),
+                                      consumedInternal.valueDeserializer(),
                                       topicName);
 
             topologyBuilder.addProcessor(processorParameters.processorName(), processorParameters.processorSupplier(), sourceName);
@@ -129,14 +128,6 @@ public class TableSourceNode<K, V> extends StreamsGraphNode<Void, Void, K, Chang
             }
         }
 
-    }
-
-    public Collection<String> getTopicNames() {
-        return new ArrayList<>(topicNames);
-    }
-
-    public ConsumedInternal<K, V> consumedInternal() {
-        return consumedInternal;
     }
 
     public Serde<K> keySerde() {

@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
@@ -35,14 +36,14 @@ class SessionTupleForwarder<K, V> {
     private final boolean sendOldValues;
     private final boolean cachingEnabled;
 
-    SessionTupleForwarder(final WrappedStateStore<?, Windowed<K>, V> store,
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    SessionTupleForwarder(final StateStore store,
                           final ProcessorContext<Windowed<K>, Change<V>> context,
                           final CacheFlushListener<Windowed<K>, V> flushListener,
                           final boolean sendOldValues) {
         this.context = context;
         this.sendOldValues = sendOldValues;
-
-        cachingEnabled = store.setFlushListener(flushListener, sendOldValues);
+        cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
     }
 
     public void maybeForward(final Windowed<K> key,

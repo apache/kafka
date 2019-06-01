@@ -48,10 +48,5 @@ class KStreamMap<K, V, K1, V1> implements TypedProcessorSupplier<K, V, K1, V1> {
             final KeyValue<? extends K1, ? extends V1> newPair = mapper.apply(key, value);
             context.forward(newPair.key, newPair.value);
         }
-
-        @Override
-        public void close() {
-
-        }
     }
 }

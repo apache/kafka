@@ -106,8 +106,5 @@ class KStreamKStreamJoin<K, R, V1, V2> implements TypedProcessorSupplier<K, V1, 
                 }
             }
         }
-
-        @Override
-        public void close() {}
     }
 }

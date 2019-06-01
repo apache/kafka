@@ -118,11 +118,6 @@ public class KTableAggregate<K, V, T> implements KTableProcessorSupplier<K, Chan
             tupleForwarder.maybeForward(key, newAgg, sendOldValues ? oldAgg : null, newTimestamp);
         }
 
-        @Override
-        public void close() {
-
-        }
-
     }
 
     @Override

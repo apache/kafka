@@ -27,10 +27,11 @@ import java.time.Duration;
 import java.util.Map;
 
 /**
- * TypedProcessor context interface.
+ * Processor context interface.
  */
 @InterfaceStability.Evolving
 public interface ProcessorContext<K, V> {
+
     /**
      * Returns the application id
      *
@@ -95,8 +96,8 @@ public interface ProcessorContext<K, V> {
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
-     * {@link TypedProcessor#init(ProcessorContext) initialization} or
-     * {@link TypedProcessor#process(Object, Object) processing} to
+     * {@link Processor#init(ProcessorContext) initialization} or
+     * {@link Processor#process(Object, Object) processing} to
      * schedule a periodic callback &mdash; called a punctuation  &mdash; to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>
@@ -132,8 +133,8 @@ public interface ProcessorContext<K, V> {
 
     /**
      * Schedules a periodic operation for processors. A processor may call this method during
-     * {@link TypedProcessor#init(ProcessorContext) initialization} or
-     * {@link TypedProcessor#process(Object, Object) processing} to
+     * {@link Processor#init(ProcessorContext) initialization} or
+     * {@link Processor#process(Object, Object) processing} to
      * schedule a periodic callback &mdash; called a punctuation &mdash; to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>

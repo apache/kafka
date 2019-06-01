@@ -29,17 +29,17 @@ public class OptimizableRepartitionNode<K, V> extends StreamsGraphNode<K, V, K, 
     private final ProcessorParameters<K, V, K, V> processorParameters;
     protected final Serde<K> keySerde;
     protected final Serde<V> valueSerde;
-    protected final String sinkName;
+    private final String sinkName;
     protected final String sourceName;
-    protected final String repartitionTopic;
+    private final String repartitionTopic;
 
-    OptimizableRepartitionNode(final String nodeName,
-                               final String sourceName,
-                               final ProcessorParameters<K, V, K, V> processorParameters,
-                               final Serde<K> keySerde,
-                               final Serde<V> valueSerde,
-                               final String sinkName,
-                               final String repartitionTopic) {
+    private OptimizableRepartitionNode(final String nodeName,
+                                       final String sourceName,
+                                       final ProcessorParameters<K, V, K, V> processorParameters,
+                                       final Serde<K> keySerde,
+                                       final Serde<V> valueSerde,
+                                       final String sinkName,
+                                       final String repartitionTopic) {
 
         super(nodeName);
         this.processorParameters = processorParameters;

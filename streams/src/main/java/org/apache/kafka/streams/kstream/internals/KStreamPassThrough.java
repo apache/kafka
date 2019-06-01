@@ -39,8 +39,5 @@ class KStreamPassThrough<K, V> implements TypedProcessorSupplier<K, V, K, V> {
         public void process(final K key, final V value) {
             context.forward(key, value);
         }
-
-        @Override
-        public void close() {}
     }
 }

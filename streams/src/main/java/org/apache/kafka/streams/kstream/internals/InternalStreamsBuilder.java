@@ -116,9 +116,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                      final ConsumedInternal<K, V> consumed,
                                      final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         final String sourceName = new NamedInternal(consumed.name())
-            .orElseGenerateWithPrefix(this, KStreamImpl.SOURCE_NAME);
+                .orElseGenerateWithPrefix(this, KStreamImpl.SOURCE_NAME);
         final String tableSourceName = new NamedInternal(consumed.name())
-            .suffixWithOrElseGet("-table-source", this, KTableImpl.SOURCE_NAME);
+                .suffixWithOrElseGet("-table-source", this, KTableImpl.SOURCE_NAME);
         final KTableSource<K, V> tableSource = new KTableSource<>(materialized.storeName(), materialized.queryableStoreName());
         final ProcessorParameters<K, V, K, Change<V>> processorParameters = new ProcessorParameters<>(tableSource, tableSourceName);
 
@@ -313,7 +313,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     @SuppressWarnings("unchecked")
     private void maybeOptimizeRepartitionOperations() {
         maybeUpdateKeyChangingRepartitionNodeMap();
-        final Iterator<Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>>> entryIterator = keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();
+        final Iterator<Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>>> entryIterator =  keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();
 
         while (entryIterator.hasNext()) {
             final Map.Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> entry = entryIterator.next();

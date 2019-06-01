@@ -45,7 +45,7 @@ public interface Processor<KIn, VIn> {
     /**
      * Process the record with the given key and value.
      *
-     * @param key   the key for the record
+     * @param key the key for the record
      * @param value the value for the record
      */
     void process(KIn key, VIn value);

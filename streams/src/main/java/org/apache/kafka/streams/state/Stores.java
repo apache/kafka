@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.internals.ApiUtils;
-import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemorySessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
@@ -58,8 +57,8 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  *               .withValueSerde(Serdes.String())
  *               .withCachingDisabled());
  * }</pre>
- * When using the TypedProcessor API, i.e., {@link org.apache.kafka.streams.Topology Topology}, users create
- * {@link StoreBuilder}s that can be attached to {@link TypedProcessor TypedProcessor}s.
+ * When using the Processor API, i.e., {@link org.apache.kafka.streams.Topology Topology}, users create
+ * {@link StoreBuilder}s that can be attached to {@link org.apache.kafka.streams.processor.Processor Processor}s.
  * For example, you can create a {@link org.apache.kafka.streams.kstream.Windowed windowed} RocksDB store with custom
  * changelog topic configuration like:
  * <pre>{@code

@@ -102,11 +102,6 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableProcessorSuppli
             }
 
         }
-
-        @Override
-        public void close() {
-
-        }
     }
 
     private class KTableMapValueGetter implements KTableValueGetter<K1, V1> {

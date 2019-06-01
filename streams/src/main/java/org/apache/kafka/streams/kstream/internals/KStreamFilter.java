@@ -50,10 +50,5 @@ class KStreamFilter<K, V> implements TypedProcessorSupplier<K, V, K, V> {
                 context.forward(key, value);
             }
         }
-
-        @Override
-        public void close() {
-
-        }
     }
 }

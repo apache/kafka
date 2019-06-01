@@ -47,10 +47,5 @@ class KStreamMapValues<K, V, V1> implements TypedProcessorSupplier<K, V, K, V1> 
             final V1 newValue = mapper.apply(readOnlyKey, value);
             context.forward(readOnlyKey, newValue);
         }
-
-        @Override
-        public void close() {
-
-        }
     }
 }

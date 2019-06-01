@@ -116,8 +116,5 @@ public class KTableSource<K, V> implements TypedProcessorSupplier<K, V, K, Chang
                 context.forward(key, new Change<>(value, null));
             }
         }
-
-        @Override
-        public void close() {}
     }
 }

@@ -163,9 +163,6 @@ public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStr
                 }
             }
         }
-
-        @Override
-        public void close() {}
     }
 
     @Override

@@ -696,7 +696,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         process(new ProcessorAdapter<>(processorSupplier), stateStoreNames);
     }
 
-    @Deprecated
     @Override
     public void process(final TypedProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
                         final String... stateStoreNames) {
@@ -873,14 +872,14 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
         );
 
         optimizableRepartitionNodeBuilder.withKeySerde(keySerde)
-            .withValueSerde(valSerde)
-            .withSourceName(sourceName)
-            .withRepartitionTopic(repartitionTopic)
-            .withSinkName(sinkName)
-            .withProcessorParameters(processorParameters)
-            // reusing the source name for the graph node name
-            // adding explicit variable as it simplifies logic
-            .withNodeName(sourceName);
+                                         .withValueSerde(valSerde)
+                                         .withSourceName(sourceName)
+                                         .withRepartitionTopic(repartitionTopic)
+                                         .withSinkName(sinkName)
+                                         .withProcessorParameters(processorParameters)
+                                         // reusing the source name for the graph node name
+                                         // adding explicit variable as it simplifies logic
+                                         .withNodeName(sourceName);
 
         return sourceName;
     }
@@ -1177,7 +1176,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
             final StoreBuilder<WindowStore<K1, V1>> thisWindowStore =
                 joinWindowStoreBuilder(joinThisName, windows, joined.keySerde(), joined.valueSerde());
-
             final StoreBuilder<WindowStore<K1, V2>> otherWindowStore =
                 joinWindowStoreBuilder(joinOtherName, windows, joined.keySerde(), joined.otherValueSerde());
 
@@ -1192,7 +1190,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
 
             builder.addGraphNode(thisStreamsGraphNode, thisWindowedStreamsNode);
 
-
             final KStreamJoinWindow<K1, V2> otherWindowedStream = new KStreamJoinWindow<>(otherWindowStore.name());
 
             final ProcessorParameters<K1, V2, K1, V2> otherWindowStreamProcessorParams =
@@ -1202,7 +1199,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
                 new ProcessorGraphNode<>(otherWindowStreamName, otherWindowStreamProcessorParams);
 
             builder.addGraphNode(otherStreamsGraphNode, otherWindowedStreamsNode);
-
 
             final KStreamKStreamJoin<K1, R, V1, V2> joinThis = new KStreamKStreamJoin<>(
                 otherWindowStore.name(),
@@ -1250,7 +1246,6 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
             // also for key serde we do not inherit from either since we cannot tell if these two serdes are different
             return new KStreamImpl<>(joinMergeName, joined.keySerde(), null, allSourceNodes, false, joinGraphNode, builder);
         }
-
     }
 
 }

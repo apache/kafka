@@ -326,7 +326,6 @@ public class GlobalStreamThread extends Thread {
                 stateMgr,
                 streamsMetrics,
                 cache);
-
             stateMgr.setGlobalProcessorContext(globalProcessorContext);
 
             final StateConsumer stateConsumer = new StateConsumer(

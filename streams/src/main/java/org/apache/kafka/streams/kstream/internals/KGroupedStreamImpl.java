@@ -41,7 +41,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
     static final String AGGREGATE_NAME = "KSTREAM-AGGREGATE-";
 
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
-    private final StreamsGraphNode<?, ?, K, V> streamsGraphNode;
 
     KGroupedStreamImpl(final String name,
                        final Set<String> sourceNodes,
@@ -50,7 +49,6 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
                        final StreamsGraphNode<?, ?, K, V> streamsGraphNode,
                        final InternalStreamsBuilder builder) {
         super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), sourceNodes, builder);
-        this.streamsGraphNode = streamsGraphNode;
         this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(
             builder,
             groupedInternal,
