@@ -689,7 +689,7 @@ class LogManager(logDirs: Seq[File],
           if (preferredLogDir != null)
             preferredLogDir
           else
-            nextLogDir().getAbsolutePath
+            nextLogDir(topicPartition).getAbsolutePath
         }
         if (!isLogDirOnline(logDir))
           throw new KafkaStorageException(s"Can not create log for $topicPartition because log directory $logDir is offline")
@@ -866,23 +866,67 @@ class LogManager(logDirs: Seq[File],
     removedLog
   }
 
+  case class AllLogCount(topicCount:Int, dirCount:Int)
+
+  private def nextLogDirByTopic(topicPartition: TopicPartition): File = {
+    val logCountByTopic = mutable.Map[String, Int]()
+    allLogs.map { log =>
+      if (topicPartition.topic.equals(log.topicPartition.topic)) {
+        if (logCountByTopic.contains(log.dir.getParent)) {
+          logCountByTopic.put(log.dir.getParent, logCountByTopic(log.dir.getParent) + 1)
+        } else {
+          logCountByTopic.put(log.dir.getParent, 1)
+        }
+      } else {
+        if (!logCountByTopic.contains(log.dir.getParent)) {
+          logCountByTopic.put(log.dir.getParent, 0)
+        }
+      }
+    }
+
+    val zeros = logDirs.map(dir => (dir.getPath, 0)).toMap
+    val logCounts = allLogs.groupBy(_.dir.getParent).mapValues(_.size)
+    val dirCounts = (zeros ++ logCounts).toBuffer
+
+    val allLogCounts = dirCounts.map { dir =>
+      (dir._1, new AllLogCount(logCountByTopic.getOrElse(dir._1, 0), dir._2))
+    }
+
+    val leastLoaded = allLogCounts.toSeq.sortWith((dir1, dir2) => {
+      if (dir1._2.topicCount < dir2._2.topicCount) true
+      else if (dir1._2.topicCount > dir2._2.topicCount) false
+      else {
+        dir1._2.dirCount < dir2._2.dirCount
+      }
+    })
+
+    info(topicPartition + " logCountByTopic=" + logCountByTopic + " logCounts=" + logCounts + " allLogCounts=" + allLogCounts
+      + " leastLoaded=" + leastLoaded + " head=" + leastLoaded.head._1 + " zeros=" + zeros + " dirCounts=" + dirCounts)
+    new File(leastLoaded.head._1)
+  }
+
   /**
-   * Choose the next directory in which to create a log. Currently this is done
-   * by calculating the number of partitions in each directory and then choosing the
-   * data directory with the fewest partitions.
-   */
-  private def nextLogDir(): File = {
-    if(_liveLogDirs.size == 1) {
+    * Choose the next directory in which to create a log. Currently this is done
+    * by calculating the number of partitions in each directory and then choosing the
+    * data directory with the fewest partitions.
+    */
+  private def nextLogDir(topicPartition: TopicPartition): File = {
+    if (_liveLogDirs.size == 1) {
       _liveLogDirs.peek()
     } else {
-      // count the number of logs in each parent directory (including 0 for empty directories
-      val logCounts = allLogs.groupBy(_.dir.getParent).mapValues(_.size)
-      val zeros = _liveLogDirs.asScala.map(dir => (dir.getPath, 0)).toMap
-      val dirCounts = (zeros ++ logCounts).toBuffer
+      try {
+        nextLogDirByTopic(topicPartition)
+      } catch {
+        case e: Exception =>
+          // count the number of logs in each parent directory (including 0 for empty directories
+          val logCounts = allLogs.groupBy(_.dir.getParent).mapValues(_.size)
+          val zeros = _liveLogDirs.asScala.map(dir => (dir.getPath, 0)).toMap
+          val dirCounts = (zeros ++ logCounts).toBuffer
 
-      // choose the directory with the least logs in it
-      val leastLoaded = dirCounts.sortBy(_._2).head
-      new File(leastLoaded._1)
+          // choose the directory with the least logs in it
+          val leastLoaded = dirCounts.sortBy(_._2).head
+          new File(leastLoaded._1)
+      }
     }
   }
 
