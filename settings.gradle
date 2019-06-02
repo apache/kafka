@@ -37,4 +37,6 @@ include 'clients',
     'streams:upgrade-system-tests-11',
     'streams:upgrade-system-tests-20',
     'streams:upgrade-system-tests-21',
+    'support-metrics-client',
+    'support-metrics-common',
     'tools'
