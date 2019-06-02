@@ -589,27 +589,28 @@ public class AbstractConfig {
     }
 
     /**
-     * ResolvingMap keeps a track of the original map instance and the resolved configs. It marks keys retrieved via `get`.
-     * `originals map` passed to the AbstractConfig can be an instance of RecordingMap. ResolvingMap ensures all the access to the keys are
-     * recorded by calling a get on the originals Map.
-     *
+     * ResolvingMap keeps a track of the original map instance and the resolved configs.
+     * The originals are tracked in a separate nested map and may be a `RecordingMap`; thus
+     * any access to a value for a key needs to be recorded on the originals map.
+     * The resolved configs are kept in the inherited map and are therefore mutable, though any
+     * mutations are not applied to the originals.
      */
-    private class ResolvingMap<V> extends HashMap<String, V> {
+    private static class ResolvingMap<V> extends HashMap<String, V> {
 
         private final Map<String, ?> originals;
 
-        ResolvingMap(Map<String, ? extends V> m, Map<String, ?> originals) {
-            super(m);
+        ResolvingMap(Map<String, ? extends V> resolved, Map<String, ?> originals) {
+            super(resolved);
             this.originals = Collections.unmodifiableMap(originals);
         }
 
         @Override
         public V get(Object key) {
             if (key instanceof String && originals.containsKey(key)) {
-                // Mark the key in the originals as retrieved.
+                // Intentionally ignore the result; call just to mark the original entry as used
                 originals.get(key);
             }
-
+            // But always use the resolved entry
             return super.get(key);
         }
     }
