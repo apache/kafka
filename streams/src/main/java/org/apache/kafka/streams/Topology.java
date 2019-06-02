@@ -21,12 +21,13 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.kstream.internals.ProcessorAdapter;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -651,9 +652,16 @@ public class Topology {
      * @return itself
      * @throws TopologyException if parent processor is not added yet, or if this processor's name is equal to the parent's name
      */
-    public synchronized Topology addProcessor(final String name,
-                                              final ProcessorSupplier supplier,
-                                              final String... parentNames) {
+    public synchronized <KIn, VIn> Topology addProcessor(final String name,
+                                                     final ProcessorSupplier<KIn, VIn> supplier,
+                                                     final String... parentNames) {
+        internalTopologyBuilder.addProcessor(name, new ProcessorAdapter<>(supplier), parentNames);
+        return this;
+    }
+
+    public synchronized <KIn, VIn, KOut, VOut> Topology addProcessor(final String name,
+                                                                     final TypedProcessorSupplier<KIn, VIn, KOut, VOut> supplier,
+                                                                     final String... parentNames) {
         internalTopologyBuilder.addProcessor(name, supplier, parentNames);
         return this;
     }
@@ -702,7 +710,7 @@ public class Topology {
                                                 final Deserializer valueDeserializer,
                                                 final String topic,
                                                 final String processorName,
-                                                final ProcessorSupplier stateUpdateSupplier) {
+                                                final TypedProcessorSupplier stateUpdateSupplier) {
         internalTopologyBuilder.addGlobalStore(storeBuilder, sourceName, null, keyDeserializer,
             valueDeserializer, topic, processorName, stateUpdateSupplier);
         return this;
@@ -740,7 +748,7 @@ public class Topology {
                                                 final Deserializer valueDeserializer,
                                                 final String topic,
                                                 final String processorName,
-                                                final ProcessorSupplier stateUpdateSupplier) {
+                                                final TypedProcessorSupplier stateUpdateSupplier) {
         internalTopologyBuilder.addGlobalStore(storeBuilder, sourceName, timestampExtractor, keyDeserializer,
             valueDeserializer, topic, processorName, stateUpdateSupplier);
         return this;

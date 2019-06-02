@@ -30,8 +30,8 @@ import org.apache.kafka.streams.kstream.internals.KTableImpl;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
 import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.apache.kafka.test.MockInternalProcessorContext;
@@ -59,15 +59,15 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("rawtypes")
 public class KTableSuppressProcessorTest {
     private static final long ARBITRARY_LONG = 5L;
 
     private static final Change<Long> ARBITRARY_CHANGE = new Change<>(7L, 14L);
 
     private static class Harness<K, V> {
-        private final Processor<K, Change<V>> processor;
-        private final MockInternalProcessorContext context;
-
+        private final TypedProcessor<K, Change<V>, K, Change<V>> processor;
+        private final MockInternalProcessorContext<K, Change<V>> context;
 
         Harness(final Suppressed<K> suppressed,
                 final Serde<K> keySerde,
@@ -79,11 +79,11 @@ public class KTableSuppressProcessorTest {
                 .withLoggingDisabled()
                 .build();
 
-            final KTableImpl<K, ?, V> parent = EasyMock.mock(KTableImpl.class);
-            final Processor<K, Change<V>> processor =
+            final KTableImpl<K, V> parent = EasyMock.mock(KTableImpl.class);
+            final TypedProcessor<K, Change<V>, K, Change<V>> processor =
                 new KTableSuppressProcessorSupplier<>((SuppressedInternal<K>) suppressed, storeName, parent).get();
 
-            final MockInternalProcessorContext context = new MockInternalProcessorContext();
+            final MockInternalProcessorContext<K, Change<V>> context = new MockInternalProcessorContext<>();
             context.setCurrentNode(new ProcessorNode("testNode"));
 
             buffer.init(context, buffer);
@@ -98,16 +98,15 @@ public class KTableSuppressProcessorTest {
     public void zeroTimeLimitShouldImmediatelyEmit() {
         final Harness<String, Long> harness =
             new Harness<>(untilTimeLimit(ZERO, unbounded()), String(), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = ARBITRARY_LONG;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
         final String key = "hey";
         final Change<Long> value = ARBITRARY_CHANGE;
         harness.processor.process(key, value);
 
-        assertThat(context.forwarded(), hasSize(1));
-        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(harness.context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward<String, Change<Long>> capturedForward = harness.context.forwarded().get(0);
         assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
@@ -116,16 +115,16 @@ public class KTableSuppressProcessorTest {
     public void windowedZeroTimeLimitShouldImmediatelyEmit() {
         final Harness<Windowed<String>, Long> harness =
             new Harness<>(untilTimeLimit(ZERO, unbounded()), timeWindowedSerdeFrom(String.class, 100L), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = ARBITRARY_LONG;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0L, 100L));
         final Change<Long> value = ARBITRARY_CHANGE;
         harness.processor.process(key, value);
 
-        assertThat(context.forwarded(), hasSize(1));
-        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(harness.context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward<Windowed<String>, Change<Long>> capturedForward =
+            harness.context.forwarded().get(0);
         assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
@@ -134,20 +133,19 @@ public class KTableSuppressProcessorTest {
     public void intermediateSuppressionShouldBufferAndEmitLater() {
         final Harness<String, Long> harness =
             new Harness<>(untilTimeLimit(ofMillis(1), unbounded()), String(), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = 0L;
-        context.setRecordMetadata("topic", 0, 0, null, timestamp);
+        harness.context.setRecordMetadata("topic", 0, 0, null, timestamp);
         final String key = "hey";
         final Change<Long> value = new Change<>(null, 1L);
         harness.processor.process(key, value);
-        assertThat(context.forwarded(), hasSize(0));
+        assertThat(harness.context.forwarded(), hasSize(0));
 
-        context.setRecordMetadata("topic", 0, 1, null, 1L);
+        harness.context.setRecordMetadata("topic", 0, 1, null, 1L);
         harness.processor.process("tick", new Change<>(null, null));
 
-        assertThat(context.forwarded(), hasSize(1));
-        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(harness.context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward capturedForward = harness.context.forwarded().get(0);
         assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
@@ -156,35 +154,34 @@ public class KTableSuppressProcessorTest {
     public void finalResultsSuppressionShouldBufferAndEmitAtGraceExpiration() {
         final Harness<Windowed<String>, Long> harness =
             new Harness<>(finalResults(ofMillis(1L)), timeWindowedSerdeFrom(String.class, 1L), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long windowStart = 99L;
         final long recordTime = 99L;
         final long windowEnd = 100L;
-        context.setRecordMetadata("topic", 0, 0, null, recordTime);
+        harness.context.setRecordMetadata("topic", 0, 0, null, recordTime);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(windowStart, windowEnd));
         final Change<Long> value = ARBITRARY_CHANGE;
         harness.processor.process(key, value);
-        assertThat(context.forwarded(), hasSize(0));
+        assertThat(harness.context.forwarded(), hasSize(0));
 
         // although the stream time is now 100, we have to wait 1 ms after the window *end* before we
         // emit "hey", so we don't emit yet.
         final long windowStart2 = 100L;
         final long recordTime2 = 100L;
         final long windowEnd2 = 101L;
-        context.setRecordMetadata("topic", 0, 1, null, recordTime2);
+        harness.context.setRecordMetadata("topic", 0, 1, null, recordTime2);
         harness.processor.process(new Windowed<>("dummyKey1", new TimeWindow(windowStart2, windowEnd2)), ARBITRARY_CHANGE);
-        assertThat(context.forwarded(), hasSize(0));
+        assertThat(harness.context.forwarded(), hasSize(0));
 
         // ok, now it's time to emit "hey"
         final long windowStart3 = 101L;
         final long recordTime3 = 101L;
         final long windowEnd3 = 102L;
-        context.setRecordMetadata("topic", 0, 1, null, recordTime3);
+        harness.context.setRecordMetadata("topic", 0, 1, null, recordTime3);
         harness.processor.process(new Windowed<>("dummyKey2", new TimeWindow(windowStart3, windowEnd3)), ARBITRARY_CHANGE);
 
-        assertThat(context.forwarded(), hasSize(1));
-        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(harness.context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward capturedForward = harness.context.forwarded().get(0);
         assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
         assertThat(capturedForward.timestamp(), is(recordTime));
     }
@@ -198,23 +195,22 @@ public class KTableSuppressProcessorTest {
     public void finalResultsWithZeroGraceShouldStillBufferUntilTheWindowEnd() {
         final Harness<Windowed<String>, Long> harness =
             new Harness<>(finalResults(ofMillis(0L)), timeWindowedSerdeFrom(String.class, 100L), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         // note the record is in the past, but the window end is in the future, so we still have to buffer,
         // even though the grace period is 0.
         final long timestamp = 5L;
         final long windowEnd = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, windowEnd));
         final Change<Long> value = ARBITRARY_CHANGE;
         harness.processor.process(key, value);
-        assertThat(context.forwarded(), hasSize(0));
+        assertThat(harness.context.forwarded(), hasSize(0));
 
-        context.setRecordMetadata("", 0, 1L, null, windowEnd);
+        harness.context.setRecordMetadata("", 0, 1L, null, windowEnd);
         harness.processor.process(new Windowed<>("dummyKey", new TimeWindow(windowEnd, windowEnd + 100L)), ARBITRARY_CHANGE);
 
-        assertThat(context.forwarded(), hasSize(1));
-        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(harness.context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward capturedForward = harness.context.forwarded().get(0);
         assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
@@ -223,16 +219,15 @@ public class KTableSuppressProcessorTest {
     public void finalResultsWithZeroGraceAtWindowEndShouldImmediatelyEmit() {
         final Harness<Windowed<String>, Long> harness =
             new Harness<>(finalResults(ofMillis(0L)), timeWindowedSerdeFrom(String.class, 100L), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, 100L));
         final Change<Long> value = ARBITRARY_CHANGE;
         harness.processor.process(key, value);
 
-        assertThat(context.forwarded(), hasSize(1));
-        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(harness.context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward capturedForward = harness.context.forwarded().get(0);
         assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
@@ -245,15 +240,14 @@ public class KTableSuppressProcessorTest {
     public void finalResultsShouldDropTombstonesForTimeWindows() {
         final Harness<Windowed<String>, Long> harness =
             new Harness<>(finalResults(ofMillis(0L)), timeWindowedSerdeFrom(String.class, 100L), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0, 100L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
-        assertThat(context.forwarded(), hasSize(0));
+        assertThat(harness.context.forwarded(), hasSize(0));
     }
 
 
@@ -265,15 +259,14 @@ public class KTableSuppressProcessorTest {
     public void finalResultsShouldDropTombstonesForSessionWindows() {
         final Harness<Windowed<String>, Long> harness =
             new Harness<>(finalResults(ofMillis(0L)), sessionWindowedSerdeFrom(String.class), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
         final Windowed<String> key = new Windowed<>("hey", new SessionWindow(0L, 0L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
-        assertThat(context.forwarded(), hasSize(0));
+        assertThat(harness.context.forwarded(), hasSize(0));
     }
 
     /**
@@ -284,16 +277,15 @@ public class KTableSuppressProcessorTest {
     public void suppressShouldNotDropTombstonesForTimeWindows() {
         final Harness<Windowed<String>, Long> harness =
             new Harness<>(untilTimeLimit(ofMillis(0), maxRecords(0)), timeWindowedSerdeFrom(String.class, 100L), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
         final Windowed<String> key = new Windowed<>("hey", new TimeWindow(0L, 100L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
-        assertThat(context.forwarded(), hasSize(1));
-        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(harness.context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward capturedForward = harness.context.forwarded().get(0);
         assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
@@ -307,16 +299,15 @@ public class KTableSuppressProcessorTest {
     public void suppressShouldNotDropTombstonesForSessionWindows() {
         final Harness<Windowed<String>, Long> harness =
             new Harness<>(untilTimeLimit(ofMillis(0), maxRecords(0)), sessionWindowedSerdeFrom(String.class), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
         final Windowed<String> key = new Windowed<>("hey", new SessionWindow(0L, 0L));
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
-        assertThat(context.forwarded(), hasSize(1));
-        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(harness.context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward capturedForward = harness.context.forwarded().get(0);
         assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
@@ -330,16 +321,15 @@ public class KTableSuppressProcessorTest {
     public void suppressShouldNotDropTombstonesForKTable() {
         final Harness<String, Long> harness =
             new Harness<>(untilTimeLimit(ofMillis(0), maxRecords(0)), String(), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
         final String key = "hey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
-        assertThat(context.forwarded(), hasSize(1));
-        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(harness.context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward capturedForward = harness.context.forwarded().get(0);
         assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
@@ -348,19 +338,18 @@ public class KTableSuppressProcessorTest {
     public void suppressShouldEmitWhenOverRecordCapacity() {
         final Harness<String, Long> harness =
             new Harness<>(untilTimeLimit(Duration.ofDays(100), maxRecords(1)), String(), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
         final String key = "hey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
-        context.setRecordMetadata("", 0, 1L, null, timestamp + 1);
+        harness.context.setRecordMetadata("", 0, 1L, null, timestamp + 1);
         harness.processor.process("dummyKey", value);
 
-        assertThat(context.forwarded(), hasSize(1));
-        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(harness.context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward capturedForward = harness.context.forwarded().get(0);
         assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
@@ -369,19 +358,18 @@ public class KTableSuppressProcessorTest {
     public void suppressShouldEmitWhenOverByteCapacity() {
         final Harness<String, Long> harness =
             new Harness<>(untilTimeLimit(Duration.ofDays(100), maxBytes(60L)), String(), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
         final String key = "hey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
-        context.setRecordMetadata("", 0, 1L, null, timestamp + 1);
+        harness.context.setRecordMetadata("", 0, 1L, null, timestamp + 1);
         harness.processor.process("dummyKey", value);
 
-        assertThat(context.forwarded(), hasSize(1));
-        final MockProcessorContext.CapturedForward capturedForward = context.forwarded().get(0);
+        assertThat(harness.context.forwarded(), hasSize(1));
+        final MockProcessorContext.CapturedForward capturedForward = harness.context.forwarded().get(0);
         assertThat(capturedForward.keyValue(), is(new KeyValue<>(key, value)));
         assertThat(capturedForward.timestamp(), is(timestamp));
     }
@@ -390,16 +378,15 @@ public class KTableSuppressProcessorTest {
     public void suppressShouldShutDownWhenOverRecordCapacity() {
         final Harness<String, Long> harness =
             new Harness<>(untilTimeLimit(Duration.ofDays(100), maxRecords(1).shutDownWhenFull()), String(), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
-        context.setCurrentNode(new ProcessorNode("testNode"));
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setCurrentNode(new ProcessorNode("testNode"));
         final String key = "hey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
-        context.setRecordMetadata("", 0, 1L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 1L, null, timestamp);
         try {
             harness.processor.process("dummyKey", value);
             fail("expected an exception");
@@ -412,16 +399,15 @@ public class KTableSuppressProcessorTest {
     public void suppressShouldShutDownWhenOverByteCapacity() {
         final Harness<String, Long> harness =
             new Harness<>(untilTimeLimit(Duration.ofDays(100), maxBytes(60L).shutDownWhenFull()), String(), Long());
-        final MockInternalProcessorContext context = harness.context;
 
         final long timestamp = 100L;
-        context.setRecordMetadata("", 0, 0L, null, timestamp);
-        context.setCurrentNode(new ProcessorNode("testNode"));
+        harness.context.setRecordMetadata("", 0, 0L, null, timestamp);
+        harness.context.setCurrentNode(new ProcessorNode("testNode"));
         final String key = "hey";
         final Change<Long> value = new Change<>(null, ARBITRARY_LONG);
         harness.processor.process(key, value);
 
-        context.setRecordMetadata("", 0, 1L, null, timestamp);
+        harness.context.setRecordMetadata("", 0, 1L, null, timestamp);
         try {
             harness.processor.process("dummyKey", value);
             fail("expected an exception");

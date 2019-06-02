@@ -97,8 +97,8 @@ public class KTableMapValuesTest {
 
     private void doTestValueGetter(final StreamsBuilder builder,
                                    final String topic1,
-                                   final KTableImpl<String, String, Integer> table2,
-                                   final KTableImpl<String, String, Integer> table3) {
+                                   final KTableImpl<String, Integer> table2,
+                                   final KTableImpl<String, Integer> table3) {
 
         final Topology topology = builder.build();
 
@@ -168,20 +168,20 @@ public class KTableMapValuesTest {
         final String storeName2 = "store2";
         final String storeName3 = "store3";
 
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, Integer> table2 =
-            (KTableImpl<String, String, Integer>) table1.mapValues(
+        final KTableImpl<String, String> table1 =
+            (KTableImpl<String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, Integer> table2 =
+            (KTableImpl<String, Integer>) table1.mapValues(
                 Integer::new,
                 Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName2)
                     .withValueSerde(Serdes.Integer()));
-        final KTableImpl<String, String, Integer> table3 =
-            (KTableImpl<String, String, Integer>) table1.mapValues(
+        final KTableImpl<String, Integer> table3 =
+            (KTableImpl<String, Integer>) table1.mapValues(
                 value -> new Integer(value) * (-1),
                 Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName3)
                     .withValueSerde(Serdes.Integer()));
-        final KTableImpl<String, String, Integer> table4 =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+        final KTableImpl<String, Integer> table4 =
+            (KTableImpl<String, Integer>) table1.mapValues(Integer::new);
 
         assertEquals(storeName2, table2.queryableStoreName());
         assertEquals(storeName3, table3.queryableStoreName());
@@ -195,10 +195,10 @@ public class KTableMapValuesTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, Integer> table2 =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+        final KTableImpl<String, String> table1 =
+            (KTableImpl<String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, Integer> table2 =
+            (KTableImpl<String, Integer>) table1.mapValues(Integer::new);
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc", supplier, table2.name);
@@ -231,10 +231,10 @@ public class KTableMapValuesTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, Integer> table2 =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+        final KTableImpl<String, String> table1 =
+            (KTableImpl<String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, Integer> table2 =
+            (KTableImpl<String, Integer>) table1.mapValues(Integer::new);
         table2.enableSendingOldValues();
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();

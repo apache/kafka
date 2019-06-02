@@ -39,9 +39,9 @@ import org.junit.Test;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class MeteredTimestampedWindowStoreTest {
     private InternalMockProcessorContext context;
-    @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
     private final MeteredTimestampedWindowStore<String, String> store = new MeteredTimestampedWindowStore<>(
         innerStoreMock,

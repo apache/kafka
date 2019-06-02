@@ -24,11 +24,12 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.state.internals.CacheFlushListener;
 
 class SessionCacheFlushListener<K, V> implements CacheFlushListener<Windowed<K>, V> {
-    private final InternalProcessorContext context;
+    private final InternalProcessorContext<Windowed<K>, Change<V>> context;
+    @SuppressWarnings("rawtypes")
     private final ProcessorNode myNode;
 
-    SessionCacheFlushListener(final ProcessorContext context) {
-        this.context = (InternalProcessorContext) context;
+    SessionCacheFlushListener(final ProcessorContext<Windowed<K>, Change<V>> context) {
+        this.context = (InternalProcessorContext<Windowed<K>, Change<V>>) context;
         myNode = this.context.currentNode();
     }
 
@@ -37,7 +38,7 @@ class SessionCacheFlushListener<K, V> implements CacheFlushListener<Windowed<K>,
                       final V newValue,
                       final V oldValue,
                       final long timestamp) {
-        final ProcessorNode prev = context.currentNode();
+        @SuppressWarnings("rawtypes") final ProcessorNode prev = context.currentNode();
         context.setCurrentNode(myNode);
         try {
             context.forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(key.window().end()));

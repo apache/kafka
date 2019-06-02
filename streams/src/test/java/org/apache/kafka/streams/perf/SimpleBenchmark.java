@@ -43,7 +43,6 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -104,6 +103,20 @@ public class SimpleBenchmark {
             }
         }
     };
+
+    @SuppressWarnings("rawtypes")
+    private abstract static class AbstractProcessor<KIn, VIn> implements Processor<KIn, VIn> {
+        private ProcessorContext context;
+
+        @Override
+        public void init(final ProcessorContext context) {
+            this.context = context;
+        }
+
+        public ProcessorContext context() {
+            return context;
+        }
+    }
 
     private static final Serde<byte[]> BYTE_SERDE = Serdes.ByteArray();
     private static final Serde<Integer> INTEGER_SERDE = Serdes.Integer();
@@ -425,6 +438,7 @@ public class SimpleBenchmark {
         runGenericBenchmark(streams, "Streams SourceSink Performance [records/latency/rec-sec/MB-sec joined]: ", latch);
     }
 
+    @SuppressWarnings("deprecation")
     private void processStreamWithStateStore(final String topic) {
         final CountDownLatch latch = new CountDownLatch(1);
 
@@ -443,10 +457,9 @@ public class SimpleBenchmark {
                 return new AbstractProcessor<Integer, byte[]>() {
                     KeyValueStore<Integer, byte[]> store;
 
-                    @SuppressWarnings("unchecked")
+                    @SuppressWarnings({"unchecked", "rawtypes"})
                     @Override
                     public void init(final ProcessorContext context) {
-                        super.init(context);
                         store = (KeyValueStore<Integer, byte[]>) context.getStateStore("store");
                     }
 
@@ -463,6 +476,7 @@ public class SimpleBenchmark {
         runGenericBenchmark(streams, "Streams Stateful Performance [records/latency/rec-sec/MB-sec joined]: ", latch);
     }
 
+    @SuppressWarnings("deprecation")
     private void processStreamWithWindowStore(final String topic) {
         final CountDownLatch latch = new CountDownLatch(1);
 
@@ -490,7 +504,7 @@ public class SimpleBenchmark {
                 return new AbstractProcessor<Integer, byte[]>() {
                     WindowStore<Integer, byte[]> store;
 
-                    @SuppressWarnings("unchecked")
+                    @SuppressWarnings({"unchecked", "rawtypes"})
                     @Override
                     public void init(final ProcessorContext context) {
                         super.init(context);

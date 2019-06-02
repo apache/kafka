@@ -18,35 +18,35 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 
-public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> {
+public class KStreamTransformValues<K, V, R> implements TypedProcessorSupplier<K, V, K, R> {
 
-    private final ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier;
+    private final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends R> valueTransformerSupplier;
 
-    KStreamTransformValues(final ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier) {
+    KStreamTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends R> valueTransformerSupplier) {
         this.valueTransformerSupplier = valueTransformerSupplier;
     }
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, K, R> get() {
         return new KStreamTransformValuesProcessor<>(valueTransformerSupplier.get());
     }
 
-    public static class KStreamTransformValuesProcessor<K, V, R> implements Processor<K, V> {
+    public static class KStreamTransformValuesProcessor<K, V, R> implements TypedProcessor<K, V, K, R> {
 
-        private final ValueTransformerWithKey<K, V, R> valueTransformer;
-        private ProcessorContext context;
+        private final ValueTransformerWithKey<? super K, ? super V, ? extends R> valueTransformer;
+        private ProcessorContext<K, R> context;
 
-        KStreamTransformValuesProcessor(final ValueTransformerWithKey<K, V, R> valueTransformer) {
+        KStreamTransformValuesProcessor(final ValueTransformerWithKey<? super K, ? super V, ? extends R> valueTransformer) {
             this.valueTransformer = valueTransformer;
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<K, R> context) {
             valueTransformer.init(new ForwardingDisabledProcessorContext(context));
             this.context = context;
         }

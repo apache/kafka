@@ -321,7 +321,7 @@ public class GlobalStreamThread extends Thread {
                 stateRestoreListener,
                 config);
 
-            final GlobalProcessorContextImpl globalProcessorContext = new GlobalProcessorContextImpl(
+            final GlobalProcessorContextImpl<Object, Object> globalProcessorContext = new GlobalProcessorContextImpl<>(
                 config,
                 stateMgr,
                 streamsMetrics,

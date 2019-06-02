@@ -24,7 +24,7 @@ import java.util.Collections;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.KStreamFlatTransformValues.KStreamFlatTransformValuesProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.easymock.EasyMock;
@@ -32,6 +32,7 @@ import org.easymock.EasyMockSupport;
 import org.junit.Before;
 import org.junit.Test;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class KStreamFlatTransformValuesTest extends EasyMockSupport {
 
     private Integer inputKey;
@@ -127,7 +128,7 @@ public class KStreamFlatTransformValuesTest extends EasyMockSupport {
         EasyMock.expect(valueTransformerSupplier.get()).andReturn(valueTransformer);
         replayAll();
 
-        final Processor<Integer, Integer> processor = processorSupplier.get();
+        final TypedProcessor<Integer, Integer, Integer, String> processor = processorSupplier.get();
 
         verifyAll();
         assertTrue(processor instanceof KStreamFlatTransformValuesProcessor);

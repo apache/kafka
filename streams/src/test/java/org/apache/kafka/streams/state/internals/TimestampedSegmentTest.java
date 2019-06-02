@@ -34,6 +34,7 @@ import static org.hamcrest.Matchers.not;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings("rawtypes")
 public class TimestampedSegmentTest {
 
     @Test

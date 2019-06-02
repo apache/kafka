@@ -117,8 +117,8 @@ public class KTableFilterTest {
     }
 
     private void doTestValueGetter(final StreamsBuilder builder,
-                                   final KTableImpl<String, Integer, Integer> table2,
-                                   final KTableImpl<String, Integer, Integer> table3,
+                                   final KTableImpl<String, Integer> table2,
+                                   final KTableImpl<String, Integer> table3,
                                    final String topic1) {
 
         final Topology topology = builder.build();
@@ -188,14 +188,14 @@ public class KTableFilterTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        final KTableImpl<String, Integer, Integer> table1 =
-            (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        final KTableImpl<String, Integer, Integer> table2 =
-            (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("store2"));
-        final KTableImpl<String, Integer, Integer> table3 =
-            (KTableImpl<String, Integer, Integer>) table1.filterNot(predicate, Materialized.as("store3"));
-        final KTableImpl<String, Integer, Integer> table4 =
-            (KTableImpl<String, Integer, Integer>) table1.filterNot(predicate);
+        final KTableImpl<String, Integer> table1 =
+            (KTableImpl<String, Integer>) builder.table(topic1, consumed);
+        final KTableImpl<String, Integer> table2 =
+            (KTableImpl<String, Integer>) table1.filter(predicate, Materialized.as("store2"));
+        final KTableImpl<String, Integer> table3 =
+            (KTableImpl<String, Integer>) table1.filterNot(predicate, Materialized.as("store3"));
+        final KTableImpl<String, Integer> table4 =
+            (KTableImpl<String, Integer>) table1.filterNot(predicate);
 
         assertNull(table1.queryableStoreName());
         assertEquals("store2", table2.queryableStoreName());
@@ -206,8 +206,8 @@ public class KTableFilterTest {
     }
 
     private void doTestNotSendingOldValue(final StreamsBuilder builder,
-                                          final KTableImpl<String, Integer, Integer> table1,
-                                          final KTableImpl<String, Integer, Integer> table2,
+                                          final KTableImpl<String, Integer> table1,
+                                          final KTableImpl<String, Integer> table2,
                                           final String topic1) {
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
 
@@ -250,9 +250,9 @@ public class KTableFilterTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        final KTableImpl<String, Integer, Integer> table1 =
-                (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        final KTableImpl<String, Integer, Integer> table2 = (KTableImpl<String, Integer, Integer>) table1.filter(predicate);
+        final KTableImpl<String, Integer> table1 =
+                (KTableImpl<String, Integer>) builder.table(topic1, consumed);
+        final KTableImpl<String, Integer> table2 = (KTableImpl<String, Integer>) table1.filter(predicate);
 
         doTestNotSendingOldValue(builder, table1, table2, topic1);
     }
@@ -262,17 +262,17 @@ public class KTableFilterTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        final KTableImpl<String, Integer, Integer> table1 =
-            (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        final KTableImpl<String, Integer, Integer> table2 =
-            (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("store2"));
+        final KTableImpl<String, Integer> table1 =
+            (KTableImpl<String, Integer>) builder.table(topic1, consumed);
+        final KTableImpl<String, Integer> table2 =
+            (KTableImpl<String, Integer>) table1.filter(predicate, Materialized.as("store2"));
 
         doTestNotSendingOldValue(builder, table1, table2, topic1);
     }
 
     private void doTestSendingOldValue(final StreamsBuilder builder,
-                                       final KTableImpl<String, Integer, Integer> table1,
-                                       final KTableImpl<String, Integer, Integer> table2,
+                                       final KTableImpl<String, Integer> table1,
+                                       final KTableImpl<String, Integer> table2,
                                        final String topic1) {
         table2.enableSendingOldValues();
 
@@ -316,10 +316,10 @@ public class KTableFilterTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        final KTableImpl<String, Integer, Integer> table1 =
-                (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        final KTableImpl<String, Integer, Integer> table2 =
-            (KTableImpl<String, Integer, Integer>) table1.filter(predicate);
+        final KTableImpl<String, Integer> table1 =
+                (KTableImpl<String, Integer>) builder.table(topic1, consumed);
+        final KTableImpl<String, Integer> table2 =
+            (KTableImpl<String, Integer>) table1.filter(predicate);
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
@@ -329,17 +329,17 @@ public class KTableFilterTest {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topic1 = "topic1";
 
-        final KTableImpl<String, Integer, Integer> table1 =
-            (KTableImpl<String, Integer, Integer>) builder.table(topic1, consumed);
-        final KTableImpl<String, Integer, Integer> table2 =
-            (KTableImpl<String, Integer, Integer>) table1.filter(predicate, Materialized.as("store2"));
+        final KTableImpl<String, Integer> table1 =
+            (KTableImpl<String, Integer>) builder.table(topic1, consumed);
+        final KTableImpl<String, Integer> table2 =
+            (KTableImpl<String, Integer>) table1.filter(predicate, Materialized.as("store2"));
 
         doTestSendingOldValue(builder, table1, table2, topic1);
     }
 
     private void doTestSkipNullOnMaterialization(final StreamsBuilder builder,
-                                                 final KTableImpl<String, String, String> table1,
-                                                 final KTableImpl<String, String, String> table2,
+                                                 final KTableImpl<String, String> table1,
+                                                 final KTableImpl<String, String> table2,
                                                  final String topic1) {
         final MockProcessorSupplier<String, String> supplier = new MockProcessorSupplier<>();
         final Topology topology = builder.build();
@@ -369,10 +369,10 @@ public class KTableFilterTest {
         final String topic1 = "topic1";
 
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, String> table2 =
-            (KTableImpl<String, String, String>) table1.filter((key, value) -> value.equalsIgnoreCase("accept"))
+        final KTableImpl<String, String> table1 =
+            (KTableImpl<String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, String> table2 =
+            (KTableImpl<String, String>) table1.filter((key, value) -> value.equalsIgnoreCase("accept"))
                 .groupBy(MockMapper.noOpKeyValueMapper())
                 .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER);
 
@@ -387,10 +387,10 @@ public class KTableFilterTest {
         final String topic1 = "topic1";
 
         final Consumed<String, String> consumed = Consumed.with(Serdes.String(), Serdes.String());
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, String> table2 =
-            (KTableImpl<String, String, String>) table1.filter((key, value) -> value.equalsIgnoreCase("accept"), Materialized.as("store2"))
+        final KTableImpl<String, String> table1 =
+            (KTableImpl<String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, String> table2 =
+            (KTableImpl<String, String>) table1.filter((key, value) -> value.equalsIgnoreCase("accept"), Materialized.as("store2"))
                 .groupBy(MockMapper.noOpKeyValueMapper())
                 .reduce(MockReducer.STRING_ADDER, MockReducer.STRING_REMOVER, Materialized.as("mock-result"));
 

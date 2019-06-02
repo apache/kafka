@@ -23,7 +23,7 @@ package org.apache.kafka.streams.processor;
  * @param <K> the type of keys
  * @param <V> the type of values
  */
-public abstract class AbstractProcessor<K, V> implements Processor<K, V> {
+public abstract class AbstractProcessor<KIn, VIn> implements Processor<KIn, VIn> {
 
     private ProcessorContext context;
 
@@ -33,17 +33,6 @@ public abstract class AbstractProcessor<K, V> implements Processor<K, V> {
     @Override
     public void init(final ProcessorContext context) {
         this.context = context;
-    }
-
-    /**
-     * Close this processor and clean up any resources.
-     * <p>
-     * This method does nothing by default; if desired, subclasses should override it with custom functionality.
-     * </p>
-     */
-    @Override
-    public void close() {
-        // do nothing
     }
 
     /**

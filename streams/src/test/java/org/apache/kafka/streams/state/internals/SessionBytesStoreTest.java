@@ -63,6 +63,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public abstract class SessionBytesStoreTest {
 
     protected static final long SEGMENT_INTERVAL = 60_000L;

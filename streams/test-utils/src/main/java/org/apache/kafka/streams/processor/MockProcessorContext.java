@@ -56,7 +56,7 @@ import java.util.Properties;
  * {@link Topology} and using the {@link TopologyTestDriver}.
  */
 @InterfaceStability.Evolving
-public class MockProcessorContext implements ProcessorContext, RecordCollector.Supplier {
+public class MockProcessorContext<K, V> implements ProcessorContext<K, V>, RecordCollector.Supplier {
     // Immutable fields ================================================
     private final StreamsMetricsImpl metrics;
     private final TaskId taskId;
@@ -73,13 +73,13 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     // mocks ================================================
     private final Map<String, StateStore> stateStores = new HashMap<>();
     private final List<CapturedPunctuator> punctuators = new LinkedList<>();
-    private final List<CapturedForward> capturedForwards = new LinkedList<>();
+    private final List<CapturedForward<K, V>> capturedForwards = new LinkedList<>();
     private boolean committed = false;
 
     /**
      * {@link CapturedPunctuator} holds captured punctuators, along with their scheduling information.
      */
-    public static class CapturedPunctuator {
+    public static final class CapturedPunctuator {
         private final long intervalMs;
         private final PunctuationType type;
         private final Punctuator punctuator;
@@ -118,12 +118,12 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
     }
 
 
-    public static class CapturedForward {
+    public static final class CapturedForward<K, V> {
         private final String childName;
         private final long timestamp;
-        private final KeyValue keyValue;
+        private final KeyValue<K, V> keyValue;
 
-        private CapturedForward(final To to, final KeyValue keyValue) {
+        private CapturedForward(final To to, final KeyValue<K, V> keyValue) {
             if (keyValue == null) {
                 throw new IllegalArgumentException();
             }
@@ -159,7 +159,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
          * @return A key/value pair. Not null.
          */
         @SuppressWarnings({"WeakerAccess", "unused"})
-        public KeyValue keyValue() {
+        public KeyValue<K, V> keyValue() {
             return keyValue;
         }
     }
@@ -422,15 +422,14 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return new LinkedList<>(punctuators);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value) {
         forward(key, value, To.all());
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key, final V value, final To to) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final To to) {
         capturedForwards.add(
             new CapturedForward(
                 to.timestamp == -1 ? to.withTimestamp(timestamp == null ? -1 : timestamp) : to,
@@ -439,9 +438,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         );
     }
 
-    @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final int childIndex) {
         throw new UnsupportedOperationException(
             "Forwarding to a child by index is deprecated. " +
                 "Please transition processors to forward using a 'To' object instead."
@@ -450,7 +448,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final String childName) {
         throw new UnsupportedOperationException(
             "Forwarding to a child by name is deprecated. " +
                 "Please transition processors to forward using 'To.child(childName)' instead."
@@ -464,7 +462,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @return A list of key/value pairs that were previously passed to the context.
      */
-    public List<CapturedForward> forwarded() {
+    public List<CapturedForward<K, V>> forwarded() {
         return new LinkedList<>(capturedForwards);
     }
 
@@ -476,10 +474,10 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param childName The child name to retrieve forwards for
      * @return A list of key/value pairs that were previously passed to the context.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
-    public List<CapturedForward> forwarded(final String childName) {
-        final LinkedList<CapturedForward> result = new LinkedList<>();
-        for (final CapturedForward capture : capturedForwards) {
+    @SuppressWarnings("unused")
+    public List<CapturedForward<K, V>> forwarded(final String childName) {
+        final LinkedList<CapturedForward<K, V>> result = new LinkedList<>();
+        for (final CapturedForward<K, V> capture : capturedForwards) {
             if (capture.childName() == null || capture.childName().equals(childName)) {
                 result.add(capture);
             }

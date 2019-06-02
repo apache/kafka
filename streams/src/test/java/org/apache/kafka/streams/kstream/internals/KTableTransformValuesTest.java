@@ -30,7 +30,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -69,6 +69,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
 @RunWith(EasyMockRunner.class)
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class KTableTransformValuesTest {
     private static final String QUERYABLE_NAME = "queryable-store";
     private static final String INPUT_TOPIC = "inputTopic";
@@ -84,7 +85,7 @@ public class KTableTransformValuesTest {
     private MockProcessorSupplier<String, String> capture;
     private StreamsBuilder builder;
     @Mock(MockType.NICE)
-    private KTableImpl<String, String, String> parent;
+    private KTableImpl<String, String> parent;
     @Mock(MockType.NICE)
     private InternalProcessorContext context;
     @Mock(MockType.NICE)
@@ -144,7 +145,7 @@ public class KTableTransformValuesTest {
         final SingletonNoOpValueTransformer<String, String> transformer = new SingletonNoOpValueTransformer<>();
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, transformer, null);
-        final Processor<String, Change<String>> processor = transformValues.get();
+        final TypedProcessor<String, Change<String>, String, Change<String>> processor = transformValues.get();
 
         processor.init(context);
 
@@ -156,7 +157,7 @@ public class KTableTransformValuesTest {
         final KTableTransformValues<String, String, String> transformValues =
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
-        final Processor<String, Change<String>> processor = transformValues.get();
+        final TypedProcessor<String, Change<String>, String, Change<String>> processor = transformValues.get();
         processor.init(context);
 
         context.forward("Key", new Change<>("Key->newValue!", null));
@@ -174,7 +175,7 @@ public class KTableTransformValuesTest {
             new KTableTransformValues<>(parent, new ExclamationValueTransformerSupplier(), null);
 
         transformValues.enableSendingOldValues();
-        final Processor<String, Change<String>> processor = transformValues.get();
+        final TypedProcessor<String, Change<String>, String, Change<String>> processor = transformValues.get();
         processor.init(context);
 
         context.forward("Key", new Change<>("Key->newValue!", "Key->oldValue!"));
@@ -267,7 +268,7 @@ public class KTableTransformValuesTest {
         expectLastCall();
         replay(mockSupplier, transformer);
 
-        final Processor<String, Change<String>> processor = transformValues.get();
+        final TypedProcessor<String, Change<String>, String, Change<String>> processor = transformValues.get();
         processor.close();
 
         verify(transformer);

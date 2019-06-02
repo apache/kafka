@@ -58,7 +58,7 @@ public class RecordQueueTest {
 
     private final Sensor skippedRecordsSensor = new Metrics().sensor("skipped-records");
 
-    final InternalMockProcessorContext context = new InternalMockProcessorContext(
+    final InternalMockProcessorContext<Integer, Integer> context = new InternalMockProcessorContext<>(
         StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class),
         new RecordCollectorImpl(
             null,
@@ -67,7 +67,8 @@ public class RecordQueueTest {
             skippedRecordsSensor
         )
     );
-    private final MockSourceNode mockSourceNodeWithMetrics = new MockSourceNode<>(topics, intDeserializer, intDeserializer);
+    private final MockSourceNode<Integer, Integer> mockSourceNodeWithMetrics =
+        new MockSourceNode<>(topics, intDeserializer, intDeserializer);
     private final RecordQueue queue = new RecordQueue(
         new TopicPartition(topics[0], 1),
         mockSourceNodeWithMetrics,

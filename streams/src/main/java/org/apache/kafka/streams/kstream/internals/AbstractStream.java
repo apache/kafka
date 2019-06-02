@@ -24,7 +24,6 @@ import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerSupplier;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
-import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
@@ -46,7 +45,6 @@ public abstract class AbstractStream<K, V> {
     protected final Serde<K> keySerde;
     protected final Serde<V> valSerde;
     protected final Set<String> sourceNodes;
-    protected final StreamsGraphNode streamsGraphNode;
     protected final InternalStreamsBuilder builder;
 
     // This copy-constructor will allow to extend KStream
@@ -57,14 +55,12 @@ public abstract class AbstractStream<K, V> {
         this.keySerde = stream.keySerde;
         this.valSerde = stream.valSerde;
         this.sourceNodes = stream.sourceNodes;
-        this.streamsGraphNode = stream.streamsGraphNode;
     }
 
     AbstractStream(final String name,
                    final Serde<K> keySerde,
                    final Serde<V> valSerde,
                    final Set<String> sourceNodes,
-                   final StreamsGraphNode streamsGraphNode,
                    final InternalStreamsBuilder builder) {
         if (sourceNodes == null || sourceNodes.isEmpty()) {
             throw new IllegalArgumentException("parameter <sourceNodes> must not be null or empty");
@@ -75,7 +71,6 @@ public abstract class AbstractStream<K, V> {
         this.keySerde = keySerde;
         this.valSerde = valSerde;
         this.sourceNodes = sourceNodes;
-        this.streamsGraphNode = streamsGraphNode;
     }
 
     // This method allows to expose the InternalTopologyBuilder instance

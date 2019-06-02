@@ -22,7 +22,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -41,20 +41,20 @@ public class ProcessorNodeTest {
     @SuppressWarnings("unchecked")
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringInit() {
-        final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
+        final ProcessorNode<Object, Object, Void, Void> node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
         node.init(null);
     }
 
     @SuppressWarnings("unchecked")
     @Test(expected = StreamsException.class)
     public void shouldThrowStreamsExceptionIfExceptionCaughtDuringClose() {
-        final ProcessorNode node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
+        final ProcessorNode<Object, Object, Void, Void> node = new ProcessorNode("name", new ExceptionalProcessor(), Collections.emptySet());
         node.close();
     }
 
-    private static class ExceptionalProcessor implements Processor {
+    private static class ExceptionalProcessor implements TypedProcessor<Object, Object, Void, Void> {
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Void, Void> context) {
             throw new RuntimeException();
         }
 
@@ -69,29 +69,17 @@ public class ProcessorNodeTest {
         }
     }
 
-    private static class NoOpProcessor implements Processor<Object, Object> {
+    private static class NoOpProcessor implements TypedProcessor<Object, Object, Void, Void> {
         @Override
-        public void init(final ProcessorContext context) {
-
-        }
-
-        @Override
-        public void process(final Object key, final Object value) {
-
-        }
-
-        @Override
-        public void close() {
-
-        }
+        public void process(final Object key, final Object value) {}
     }
 
     @Test
     public void testMetrics() {
-        final StateSerdes anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
+        final StateSerdes<Bytes, Bytes> anyStateSerde = StateSerdes.withBuiltinTypes("anyName", Bytes.class, Bytes.class);
 
         final Metrics metrics = new Metrics();
-        final InternalMockProcessorContext context = new InternalMockProcessorContext(
+        final InternalMockProcessorContext<Void, Void> context = new InternalMockProcessorContext<>(
             anyStateSerde,
             new RecordCollectorImpl(
                 null,
@@ -101,7 +89,7 @@ public class ProcessorNodeTest {
             ),
             metrics
         );
-        final ProcessorNode<Object, Object> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.<String>emptySet());
+        final ProcessorNode<Object, Object, Void, Void> node = new ProcessorNode<>("name", new NoOpProcessor(), Collections.emptySet());
         node.init(context);
 
         final String[] latencyOperations = {"process", "punctuate", "create", "destroy"};

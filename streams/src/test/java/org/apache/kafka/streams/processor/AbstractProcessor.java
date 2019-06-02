@@ -16,24 +16,31 @@
  */
 package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.streams.Topology;
-
 /**
- * A processor supplier that can create one or more {@link Processor} instances.
+ * An abstract implementation of {@link TypedProcessor} that manages the {@link ProcessorContext} instance and provides default no-op
+ * implementation of {@link #close()}.
  *
- * It is used in {@link Topology} for adding new processor operators, whose generated
- * topology can then be replicated (and thus creating one or more {@link Processor} instances)
- * and distributed to multiple stream threads.
- *
- * @param <K> the type of keys
- * @param <V> the type of values
+ * @param <KIn> the type of keys
+ * @param <VIn> the type of values
  */
-public interface ProcessorSupplier<KIn, VIn> {
+public abstract class AbstractProcessor<KIn, VIn, KOut, VOut> implements TypedProcessor<KIn, VIn, KOut, VOut> {
+
+    private ProcessorContext<KOut, VOut> context;
+
+    protected AbstractProcessor() {
+    }
+
+    @Override
+    public void init(final ProcessorContext<KOut, VOut> context) {
+        this.context = context;
+    }
 
     /**
-     * Return a new {@link Processor} instance.
+     * Get the processor's context set during {@link #init(ProcessorContext) initialization}.
      *
-     * @return  a new {@link Processor} instance
+     * @return the processor context; null only when called prior to {@link #init(ProcessorContext) initialization}.
      */
-    Processor<KIn, VIn> get();
+    protected final ProcessorContext<KOut, VOut> context() {
+        return context;
+    }
 }

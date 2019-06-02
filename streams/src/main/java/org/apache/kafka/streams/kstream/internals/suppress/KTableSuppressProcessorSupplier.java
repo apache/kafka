@@ -27,8 +27,8 @@ import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.metrics.Sensors;
 import org.apache.kafka.streams.kstream.internals.suppress.TimeDefinitions.TimeDefinition;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -37,14 +37,14 @@ import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
 
 import static java.util.Objects.requireNonNull;
 
-public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSupplier<K, V, V> {
+public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSupplier<K, Change<V>, K, V> {
     private final SuppressedInternal<K> suppress;
     private final String storeName;
-    private final KTableImpl<K, ?, V> parentKTable;
+    private final KTableImpl<K, V> parentKTable;
 
     public KTableSuppressProcessorSupplier(final SuppressedInternal<K> suppress,
                                            final String storeName,
-                                           final KTableImpl<K, ?, V> parentKTable) {
+                                           final KTableImpl<K, V> parentKTable) {
         this.suppress = suppress;
         this.storeName = storeName;
         this.parentKTable = parentKTable;
@@ -53,7 +53,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
+    public TypedProcessor<K, Change<V>, K, Change<V>> get() {
         return new KTableSuppressProcessor<>(suppress, storeName);
     }
 
@@ -70,7 +70,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
                     @SuppressWarnings("unchecked")
                     @Override
-                    public void init(final ProcessorContext context) {
+                    public void init(final ProcessorContext<Void, Void> context) {
                         parentGetter.init(context);
                         // the main processor is responsible for the buffer's lifecycle
                         buffer = requireNonNull((TimeOrderedKeyValueBuffer<K, V>) context.getStateStore(storeName));
@@ -111,7 +111,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         parentKTable.enableSendingOldValues();
     }
 
-    private static final class KTableSuppressProcessor<K, V> implements Processor<K, Change<V>> {
+    private static final class KTableSuppressProcessor<K, V> implements TypedProcessor<K, Change<V>, K, Change<V>> {
         private final long maxRecords;
         private final long maxBytes;
         private final long suppressDurationMillis;
@@ -121,7 +121,7 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
         private final String storeName;
 
         private TimeOrderedKeyValueBuffer<K, V> buffer;
-        private InternalProcessorContext internalProcessorContext;
+        private InternalProcessorContext<K, Change<V>> internalProcessorContext;
         private Sensor suppressionEmitSensor;
         private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
 
@@ -138,8 +138,8 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
-            internalProcessorContext = (InternalProcessorContext) context;
+        public void init(final ProcessorContext<K, Change<V>> context) {
+            internalProcessorContext = (InternalProcessorContext<K, Change<V>>) context;
             suppressionEmitSensor = Sensors.suppressionEmitSensor(internalProcessorContext);
 
             buffer = requireNonNull((TimeOrderedKeyValueBuffer<K, V>) context.getStateStore(storeName));
@@ -205,10 +205,6 @@ public class KTableSuppressProcessorSupplier<K, V> implements KTableProcessorSup
 
         private boolean shouldForward(final Change<V> value) {
             return value.newValue != null || !safeToDropTombstones;
-        }
-
-        @Override
-        public void close() {
         }
     }
 }

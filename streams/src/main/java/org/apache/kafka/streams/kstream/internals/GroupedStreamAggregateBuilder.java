@@ -42,8 +42,8 @@ class GroupedStreamAggregateBuilder<K, V> {
     private final String userProvidedRepartitionTopicName;
     private final Set<String> sourceNodes;
     private final String name;
-    private final StreamsGraphNode streamsGraphNode;
-    private StreamsGraphNode repartitionNode;
+    private final StreamsGraphNode<?, ?, K, V> streamsGraphNode;
+    private StreamsGraphNode<K, V, K, V> repartitionNode;
 
     final Initializer<Long> countInitializer = () -> 0L;
 
@@ -56,7 +56,7 @@ class GroupedStreamAggregateBuilder<K, V> {
                                   final boolean repartitionRequired,
                                   final Set<String> sourceNodes,
                                   final String name,
-                                  final StreamsGraphNode streamsGraphNode) {
+                                  final StreamsGraphNode<?, ?, K, V> streamsGraphNode) {
 
         this.builder = builder;
         this.keySerde = groupedInternal.keySerde();
@@ -79,7 +79,7 @@ class GroupedStreamAggregateBuilder<K, V> {
         final String aggFunctionName = builder.newProcessorName(functionName);
 
         String sourceName = this.name;
-        StreamsGraphNode parentNode = streamsGraphNode;
+        StreamsGraphNode<?, ?, K, V> parentNode = streamsGraphNode;
 
         if (repartitionRequired) {
             final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
@@ -98,7 +98,7 @@ class GroupedStreamAggregateBuilder<K, V> {
             parentNode = repartitionNode;
         }
 
-        final StatefulProcessorNode<K, V> statefulProcessorNode =
+        final StatefulProcessorNode<K, V, KR, Change<VR>> statefulProcessorNode =
             new StatefulProcessorNode<>(
                 aggFunctionName,
                 new ProcessorParameters<>(aggregateSupplier, aggFunctionName),

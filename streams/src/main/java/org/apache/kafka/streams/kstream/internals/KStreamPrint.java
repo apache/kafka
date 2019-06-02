@@ -17,11 +17,11 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.ForeachAction;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 
-public class KStreamPrint<K, V> implements ProcessorSupplier<K, V> {
+public class KStreamPrint<K, V> implements TypedProcessorSupplier<K, V, Void, Void> {
 
     private final ForeachAction<K, V> action;
     
@@ -30,11 +30,13 @@ public class KStreamPrint<K, V> implements ProcessorSupplier<K, V> {
     }
 
     @Override
-    public Processor<K, V> get() {
+    public TypedProcessor<K, V, Void, Void> get() {
         return new KStreamPrintProcessor();
     }
 
-    private class KStreamPrintProcessor extends AbstractProcessor<K, V> {
+    private class KStreamPrintProcessor implements TypedProcessor<K, V, Void, Void> {
+        @Override
+        public void init(final ProcessorContext<Void, Void> context) {}
 
         @Override
         public void process(final K key, final V value) {
@@ -44,7 +46,7 @@ public class KStreamPrint<K, V> implements ProcessorSupplier<K, V> {
         @Override
         public void close() {
             if (action instanceof PrintForeachAction) {
-                ((PrintForeachAction) action).close();
+                ((PrintForeachAction<K, V>) action).close();
             }
         }
     }

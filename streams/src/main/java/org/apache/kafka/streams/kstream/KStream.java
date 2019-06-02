@@ -23,11 +23,11 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 
 /**
  * {@code KStream} is an abstraction of a <i>record stream</i> of {@link KeyValue} pairs, i.e., each record is an
@@ -1965,9 +1965,12 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
+    @Deprecated
     void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
                  final String... stateStoreNames);
 
+    void process(final TypedProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
+                 final String... stateStoreNames);
     /**
      * Process all records in this stream, one record at a time, by applying a {@link Processor} (provided by the given
      * {@link ProcessorSupplier}).
@@ -2025,7 +2028,12 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
+    @Deprecated
     void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
+                 final Named named,
+                 final String... stateStoreNames);
+
+    void process(final TypedProcessorSupplier<? super K, ? super V, Void, Void> processorSupplier,
                  final Named named,
                  final String... stateStoreNames);
 

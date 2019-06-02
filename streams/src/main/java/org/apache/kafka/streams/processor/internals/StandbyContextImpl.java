@@ -36,7 +36,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 
-class StandbyContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
+class StandbyContextImpl extends AbstractProcessorContext<Void, Void> implements RecordCollector.Supplier {
 
     private static final RecordCollector NO_OP_COLLECTOR = new RecordCollector() {
         @Override
@@ -146,7 +146,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public <K, V> void forward(final K key, final V value) {
+    public void forward(final Void key, final Void value) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
@@ -154,16 +154,7 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      * @throws UnsupportedOperationException on every invocation
      */
     @Override
-    public <K, V> void forward(final K key, final V value, final To to) {
-        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
-    }
-
-    /**
-     * @throws UnsupportedOperationException on every invocation
-     */
-    @Override
-    @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
+    public void forward(final Void key, final Void value, final To to) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 
@@ -172,7 +163,16 @@ class StandbyContextImpl extends AbstractProcessorContext implements RecordColle
      */
     @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
+    public void forward(final Void key, final Void value, final int childIndex) {
+        throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
+    }
+
+    /**
+     * @throws UnsupportedOperationException on every invocation
+     */
+    @Override
+    @Deprecated
+    public void forward(final Void key, final Void value, final String childName) {
         throw new UnsupportedOperationException("this should not happen: forward() not supported in standby tasks.");
     }
 

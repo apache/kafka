@@ -45,7 +45,7 @@ import java.util.List;
 
 import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFailMsgPrefix;
 
-public class ProcessorContextImpl extends AbstractProcessorContext implements RecordCollector.Supplier {
+public class ProcessorContextImpl<K, V> extends AbstractProcessorContext<K, V> implements RecordCollector.Supplier {
 
     private final StreamTask task;
     private final RecordCollector collector;
@@ -76,7 +76,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
     /**
      * @throws StreamsException if an attempt is made to access this state store from an unknown node
      */
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @Override
     public StateStore getStateStore(final String name) {
         if (currentNode() == null) {
@@ -126,39 +126,30 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         return store;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public <K, V> void forward(final K key,
-                               final V value) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value) {
         forward(key, value, SEND_TO_ALL);
     }
 
-    @SuppressWarnings("unchecked")
-    @Override
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @Deprecated
-    public <K, V> void forward(final K key,
-                               final V value,
-                               final int childIndex) {
+    @Override
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final int childIndex) {
         forward(
             key,
             value,
             To.child(((List<ProcessorNode>) currentNode().children()).get(childIndex).name()));
     }
 
-    @SuppressWarnings("unchecked")
-    @Override
     @Deprecated
-    public <K, V> void forward(final K key,
-                               final V value,
-                               final String childName) {
+    @Override
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final String childName) {
         forward(key, value, To.child(childName));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Override
-    public <K, V> void forward(final K key,
-                               final V value,
-                               final To to) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final To to) {
         final ProcessorNode previousNode = currentNode();
         final ProcessorRecordContext previousContext = recordContext;
 
@@ -175,7 +166,7 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
             final String sendTo = toInternal.child();
             if (sendTo == null) {
-                final List<ProcessorNode<K, V>> children = (List<ProcessorNode<K, V>>) currentNode().children();
+                final List<ProcessorNode> children = (List<ProcessorNode>) currentNode().children();
                 for (final ProcessorNode child : children) {
                     forward(child, key, value);
                 }
@@ -193,10 +184,10 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private <K, V> void forward(final ProcessorNode child,
-                                final K key,
-                                final V value) {
+    @SuppressWarnings({"unchecked", "rawtypes"})
+    private void forward(final ProcessorNode child,
+                         final K key,
+                         final V value) {
         setCurrentNode(child);
         child.process(key, value);
     }

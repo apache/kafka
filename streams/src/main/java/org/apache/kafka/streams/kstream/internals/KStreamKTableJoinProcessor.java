@@ -18,15 +18,16 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1, V1> {
+class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> implements TypedProcessor<K1, V1, K1, R> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKTableJoinProcessor.class);
 
     private final KTableValueGetter<K2, V2> valueGetter;
@@ -34,6 +35,7 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
     private final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
     private final boolean leftJoin;
     private StreamsMetricsImpl metrics;
+    private ProcessorContext<K1, R> context;
 
     KStreamKTableJoinProcessor(final KTableValueGetter<K2, V2> valueGetter,
                                final KeyValueMapper<? super K1, ? super V1, ? extends K2> keyMapper,
@@ -46,10 +48,10 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
     }
 
     @Override
-    public void init(final ProcessorContext context) {
-        super.init(context);
+    public void init(final ProcessorContext<K1, R> context) {
+        this.context = context;
         metrics = (StreamsMetricsImpl) context.metrics();
-        valueGetter.init(context);
+        valueGetter.init(new ForwardingDisabledProcessorContext(context));
     }
 
     @Override
@@ -65,14 +67,14 @@ class KStreamKTableJoinProcessor<K1, K2, V1, V2, R> extends AbstractProcessor<K1
         if (key == null || value == null) {
             LOG.warn(
                 "Skipping record due to null key or value. key=[{}] value=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                key, value, context().topic(), context().partition(), context().offset()
+                key, value, context.topic(), context.partition(), context.offset()
             );
             metrics.skippedRecordsSensor().record();
         } else {
             final K2 mappedKey = keyMapper.apply(key, value);
             final V2 value2 = mappedKey == null ? null : getValueOrNull(valueGetter.get(mappedKey));
             if (leftJoin || value2 != null) {
-                context().forward(key, joiner.apply(value, value2));
+                context.forward(key, joiner.apply(value, value2));
             }
         }
     }

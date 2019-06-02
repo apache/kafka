@@ -133,6 +133,7 @@ import java.util.Set;
  * @param <K> the type of keys placed in the store
  * @param <V> the type of values placed in the store
  */
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class KeyValueStoreTestDriver<K, V> {
 
     private final Properties props;
@@ -227,7 +228,6 @@ public class KeyValueStoreTestDriver<K, V> {
         recordCollector.init(producer);
 
         final File stateDir = TestUtils.tempDirectory();
-        //noinspection ResultOfMethodCallIgnored
         stateDir.mkdirs();
         stateSerdes = serdes;
 

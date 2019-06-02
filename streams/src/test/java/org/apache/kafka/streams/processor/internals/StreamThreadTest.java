@@ -100,6 +100,7 @@ import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("rawtypes")
 public class StreamThreadTest {
 
     private final String clientId = "clientId";
@@ -321,6 +322,7 @@ public class StreamThreadTest {
         EasyMock.verify(taskManager);
     }
 
+    @SuppressWarnings("rawtypes")
     @Test
     public void shouldRespectNumIterationsInMainLoop() {
         final MockProcessor mockProcessor = new MockProcessor(PunctuationType.WALL_CLOCK_TIME, 10L);
@@ -523,7 +525,7 @@ public class StreamThreadTest {
         thread.rebalanceListener.onPartitionsAssigned(new HashSet<>(assignedPartitions));
 
         assertEquals(1, clientSupplier.producers.size());
-        final Producer globalProducer = clientSupplier.producers.get(0);
+        @SuppressWarnings("rawtypes") final Producer globalProducer = clientSupplier.producers.get(0);
         for (final Task task : thread.tasks().values()) {
             assertSame(globalProducer, ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer());
         }
@@ -598,7 +600,7 @@ public class StreamThreadTest {
         thread.run();
 
         for (final Task task : thread.tasks().values()) {
-            assertTrue(((MockProducer) ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer()).closed());
+            assertTrue(((MockProducer<?, ?>) ((RecordCollectorImpl) ((StreamTask) task).recordCollector()).producer()).closed());
         }
     }
 
@@ -1027,6 +1029,7 @@ public class StreamThreadTest {
         assertEquals(0, thread.standbyRecords().size());
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldPunctuateActiveTask() {
         final List<Long> punctuatedStreamTime = new ArrayList<>();

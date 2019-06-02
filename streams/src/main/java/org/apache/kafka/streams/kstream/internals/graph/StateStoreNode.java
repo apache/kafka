@@ -20,7 +20,8 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 
-public class StateStoreNode extends StreamsGraphNode {
+@SuppressWarnings("rawtypes")
+public class StateStoreNode extends StreamsGraphNode<Void, Void, Void, Void> {
 
     protected final StoreBuilder storeBuilder;
 

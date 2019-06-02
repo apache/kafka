@@ -18,14 +18,14 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Arrays;
 
-public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
+public class StatefulProcessorNode<KIn, VIn, KOut, VOut> extends ProcessorGraphNode<KIn, VIn, KOut, VOut> {
 
     private final String[] storeNames;
     private final StoreBuilder<? extends StateStore> storeBuilder;
@@ -35,7 +35,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
      * Create a node representing a stateful processor, where the named store has already been registered.
      */
     public StatefulProcessorNode(final String nodeName,
-                                 final ProcessorParameters<K, V> processorParameters,
+                                 final ProcessorParameters<KIn, VIn, KOut, VOut> processorParameters,
                                  final String[] storeNames) {
         super(nodeName, processorParameters);
 
@@ -49,7 +49,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
      * where the store needs to be built and registered as part of building this node.
      */
     public StatefulProcessorNode(final String nodeName,
-                                 final ProcessorParameters<K, V> processorParameters,
+                                 final ProcessorParameters<KIn, VIn, KOut, VOut> processorParameters,
                                  final StoreBuilder<? extends StateStore> materializedKTableStoreBuilder) {
         super(nodeName, processorParameters);
 
@@ -69,7 +69,7 @@ public class StatefulProcessorNode<K, V> extends ProcessorGraphNode<K, V> {
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
 
         final String processorName = processorParameters().processorName();
-        final ProcessorSupplier processorSupplier = processorParameters().processorSupplier();
+        final TypedProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier = processorParameters().processorSupplier();
 
         topologyBuilder.addProcessor(processorName, processorSupplier, parentNodeNames());
 

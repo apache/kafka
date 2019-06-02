@@ -24,8 +24,9 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.MockProcessorContext;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.internals.testutil.LogCaptureAppender;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
@@ -111,7 +112,7 @@ public class KTableKTableInnerJoinTest {
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER, materialized);
-        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
+        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?>) joined).name);
 
         doTestNotSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined);
     }
@@ -130,7 +131,7 @@ public class KTableKTableInnerJoinTest {
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
-        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
+        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?>) joined).name);
 
         doTestNotSendingOldValues(builder, expectedKeys, table1, table2, supplier, joined);
     }
@@ -150,16 +151,16 @@ public class KTableKTableInnerJoinTest {
         table2 = builder.table(topic2, consumed);
         joined = table1.join(table2, MockValueJoiner.TOSTRING_JOINER);
 
-        ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
+        ((KTableImpl<?, ?>) joined).enableSendingOldValues();
 
-        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
+        builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?>) joined).name);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
-            assertTrue(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
-            assertTrue(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
-            assertTrue(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
+            assertTrue(((KTableImpl<?, ?>) table1).sendingOldValueEnabled());
+            assertTrue(((KTableImpl<?, ?>) table2).sendingOldValueEnabled());
+            assertTrue(((KTableImpl<?, ?>) joined).sendingOldValueEnabled());
 
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {
@@ -240,10 +241,10 @@ public class KTableKTableInnerJoinTest {
     public void shouldLogAndMeterSkippedRecordsDueToNullLeftKey() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Processor<String, Change<String>> join = new KTableKTableInnerJoin<>(
-            (KTableImpl<String, String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
-            (KTableImpl<String, String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
-            null
+        final TypedProcessor<String, Change<String>, String, Change<Void>> join = new KTableKTableInnerJoin<>(
+            (KTableImpl<String, String>) builder.table("left", Consumed.with(Serdes.String(), Serdes.String())),
+            (KTableImpl<String, String>) builder.table("right", Consumed.with(Serdes.String(), Serdes.String())),
+            (ValueJoiner<String, String, Void>) null
         ).get();
 
         final MockProcessorContext context = new MockProcessorContext();
@@ -267,9 +268,9 @@ public class KTableKTableInnerJoinTest {
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             final MockProcessor<Integer, String> proc = supplier.theCapturedProcessor();
 
-            assertFalse(((KTableImpl<?, ?, ?>) table1).sendingOldValueEnabled());
-            assertFalse(((KTableImpl<?, ?, ?>) table2).sendingOldValueEnabled());
-            assertFalse(((KTableImpl<?, ?, ?>) joined).sendingOldValueEnabled());
+            assertFalse(((KTableImpl<?, ?>) table1).sendingOldValueEnabled());
+            assertFalse(((KTableImpl<?, ?>) table2).sendingOldValueEnabled());
+            assertFalse(((KTableImpl<?, ?>) joined).sendingOldValueEnabled());
 
             // push two items to the primary stream. the other table is empty
             for (int i = 0; i < 2; i++) {

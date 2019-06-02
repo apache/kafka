@@ -24,9 +24,11 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.TimeWindows;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.RecordContext;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -55,8 +57,8 @@ import static org.junit.Assert.fail;
 
 public class TopologyTest {
 
-    private final StoreBuilder storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
-    private final KeyValueStoreBuilder globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);
+    private final StoreBuilder<StateStore> storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
+    private final KeyValueStoreBuilder<?, ?> globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);
     private final Topology topology = new Topology();
     private final InternalTopologyBuilder.TopologyDescription expectedDescription = new InternalTopologyBuilder.TopologyDescription();
 
@@ -87,12 +89,12 @@ public class TopologyTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullNameWhenAddingProcessor() {
-        topology.addProcessor(null, () -> new MockProcessorSupplier().get());
+        topology.addProcessor(null, () -> new MockProcessorSupplier<>().get());
     }
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAllowNullProcessorSupplierWhenAddingProcessor() {
-        topology.addProcessor("name", null);
+        topology.addProcessor("name", (ProcessorSupplier<?, ?>) null);
     }
 
     @Test(expected = NullPointerException.class)
@@ -169,9 +171,9 @@ public class TopologyTest {
     @Test
     public void shouldNotAllowToAddProcessorWithSameName() {
         topology.addSource("source", "topic-1");
-        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        topology.addProcessor("processor", new MockProcessorSupplier<>(), "source");
         try {
-            topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+            topology.addProcessor("processor", new MockProcessorSupplier<>(), "source");
             fail("Should throw TopologyException for duplicate processor name");
         } catch (final TopologyException expected) { }
     }
@@ -180,7 +182,7 @@ public class TopologyTest {
     public void shouldNotAllowToAddProcessorWithEmptyParents() {
         topology.addSource("source", "topic-1");
         try {
-            topology.addProcessor("processor", new MockProcessorSupplier());
+            topology.addProcessor("processor", new MockProcessorSupplier<>());
             fail("Should throw TopologyException for processor without at least one parent node");
         } catch (final TopologyException expected) { }
     }
@@ -189,19 +191,19 @@ public class TopologyTest {
     public void shouldNotAllowToAddProcessorWithNullParents() {
         topology.addSource("source", "topic-1");
         try {
-            topology.addProcessor("processor", new MockProcessorSupplier(), (String) null);
+            topology.addProcessor("processor", new MockProcessorSupplier<>(), (String) null);
             fail("Should throw NullPointerException for processor when null parent names are provided");
         } catch (final NullPointerException expected) { }
     }
 
     @Test(expected = TopologyException.class)
     public void shouldFailOnUnknownSource() {
-        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        topology.addProcessor("processor", new MockProcessorSupplier<>(), "source");
     }
 
     @Test(expected = TopologyException.class)
     public void shouldFailIfNodeIsItsOwnParent() {
-        topology.addProcessor("processor", new MockProcessorSupplier(), "processor");
+        topology.addProcessor("processor", new MockProcessorSupplier<>(), "processor");
     }
 
     @Test
@@ -217,7 +219,7 @@ public class TopologyTest {
     @Test
     public void shouldNotAllowToAddSinkWithEmptyParents() {
         topology.addSource("source", "topic-1");
-        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        topology.addProcessor("processor", new MockProcessorSupplier<>(), "source");
         try {
             topology.addSink("sink", "topic-2");
             fail("Should throw TopologyException for sink without at least one parent node");
@@ -227,7 +229,7 @@ public class TopologyTest {
     @Test
     public void shouldNotAllowToAddSinkWithNullParents() {
         topology.addSource("source", "topic-1");
-        topology.addProcessor("processor", new MockProcessorSupplier(), "source");
+        topology.addProcessor("processor", new MockProcessorSupplier<>(), "source");
         try {
             topology.addSink("sink", "topic-2", (String) null);
             fail("Should throw NullPointerException for sink when null parent names are provided");
@@ -316,11 +318,11 @@ public class TopologyTest {
         EasyMock.replay(storeBuilder);
         topology
             .addSource(sourceNodeName, "topic")
-            .addProcessor(goodNodeName, new LocalMockProcessorSupplier(), sourceNodeName)
+            .addProcessor(goodNodeName, new LocalMockProcessorSupplier<>(), sourceNodeName)
             .addStateStore(
                 storeBuilder,
                 goodNodeName)
-            .addProcessor(badNodeName, new LocalMockProcessorSupplier(), sourceNodeName);
+            .addProcessor(badNodeName, new LocalMockProcessorSupplier<>(), sourceNodeName);
 
         try {
             new TopologyTestDriver(topology, config);
@@ -333,22 +335,19 @@ public class TopologyTest {
         }
     }
 
-    private static class LocalMockProcessorSupplier implements ProcessorSupplier {
+    private static class LocalMockProcessorSupplier<KIn, VIn, KOut, VOut> implements TypedProcessorSupplier<KIn, VIn, KOut, VOut> {
         final static String STORE_NAME = "store";
 
         @Override
-        public Processor get() {
-            return new Processor() {
+        public TypedProcessor<KIn, VIn, KOut, VOut> get() {
+            return new TypedProcessor<KIn, VIn, KOut, VOut>() {
                 @Override
-                public void init(final ProcessorContext context) {
+                public void init(final ProcessorContext<KOut, VOut> context) {
                     context.getStateStore(STORE_NAME);
                 }
 
                 @Override
-                public void process(final Object key, final Object value) { }
-
-                @Override
-                public void close() { }
+                public void process(final KIn key, final VIn value) { }
             };
         }
     }
@@ -382,7 +381,7 @@ public class TopologyTest {
 
     @Test
     public void sinkShouldReturnTopicNameExtractorWithDynamicRouting() {
-        final TopicNameExtractor topicNameExtractor = (key, value, record) -> record.topic() + "-" + key;
+        final TopicNameExtractor<?, ?> topicNameExtractor = (key, value, record) -> record.topic() + "-" + key;
         final TopologyDescription.Sink expectedSinkNode =
             new InternalTopologyBuilder.Sink("sink", topicNameExtractor);
 
@@ -1127,10 +1126,10 @@ public class TopologyTest {
             parentNames[i] = parents[i].name();
         }
 
-        topology.addProcessor(processorName, new MockProcessorSupplier(), parentNames);
+        topology.addProcessor(processorName, new MockProcessorSupplier<>(), parentNames);
         if (newStores) {
             for (final String store : storeNames) {
-                final StoreBuilder storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
+                final StoreBuilder<StateStore> storeBuilder = EasyMock.createNiceMock(StoreBuilder.class);
                 EasyMock.expect(storeBuilder.name()).andReturn(store).anyTimes();
                 EasyMock.replay(storeBuilder);
                 topology.addStateStore(storeBuilder, processorName);
@@ -1174,7 +1173,7 @@ public class TopologyTest {
                                                                 final String globalTopicName,
                                                                 final String processorName,
                                                                 final int id) {
-        final KeyValueStoreBuilder globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);
+        final KeyValueStoreBuilder<?, ?> globalStoreBuilder = EasyMock.createNiceMock(KeyValueStoreBuilder.class);
         EasyMock.expect(globalStoreBuilder.name()).andReturn(globalStoreName).anyTimes();
         EasyMock.replay(globalStoreBuilder);
         topology.addGlobalStore(

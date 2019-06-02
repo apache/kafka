@@ -248,12 +248,12 @@ public class KTableImplTest {
         final String topic1 = "topic1";
         final String topic2 = "topic2";
 
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, String> table1 =
+            (KTableImpl<String, String>) builder.table(topic1, consumed);
         builder.table(topic2, consumed);
 
-        final KTableImpl<String, String, Integer> table1Mapped =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
+        final KTableImpl<String, Integer> table1Mapped =
+            (KTableImpl<String, Integer>) table1.mapValues(Integer::new);
         table1Mapped.filter((key, value) -> (value % 2) == 0);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -267,15 +267,15 @@ public class KTableImplTest {
         final String topic1 = "topic1";
         final String topic2 = "topic2";
 
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, String> table2 =
-            (KTableImpl<String, String, String>) builder.table(topic2, consumed);
+        final KTableImpl<String, String> table1 =
+            (KTableImpl<String, String>) builder.table(topic1, consumed);
+        final KTableImpl<String, String> table2 =
+            (KTableImpl<String, String>) builder.table(topic2, consumed);
 
-        final KTableImpl<String, String, Integer> table1Mapped =
-            (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);
-        final KTableImpl<String, Integer, Integer> table1MappedFiltered =
-            (KTableImpl<String, Integer, Integer>) table1Mapped.filter((key, value) -> (value % 2) == 0);
+        final KTableImpl<String, Integer> table1Mapped =
+            (KTableImpl<String, Integer>) table1.mapValues(Integer::new);
+        final KTableImpl<String, Integer> table1MappedFiltered =
+            (KTableImpl<String, Integer>) table1Mapped.filter((key, value) -> (value % 2) == 0);
         table2.join(table1MappedFiltered, (v1, v2) -> v1 + v2);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -301,8 +301,8 @@ public class KTableImplTest {
         final String topic1 = "topic1";
         final String storeName1 = "storeName1";
 
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(
+        final KTableImpl<String, String> table1 =
+            (KTableImpl<String, String>) builder.table(
                 topic1,
                 consumed,
                 Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(storeName1)

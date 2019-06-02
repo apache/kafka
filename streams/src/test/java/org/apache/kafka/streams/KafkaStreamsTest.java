@@ -34,7 +34,8 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ThreadMetadata;
 import org.apache.kafka.streams.processor.internals.GlobalStreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThread;
@@ -81,7 +82,8 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
-@Category({IntegrationTest.class})
+@Category(IntegrationTest.class)
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class KafkaStreamsTest {
 
     private static final int NUM_BROKERS = 1;
@@ -679,6 +681,20 @@ public class KafkaStreamsTest {
             assertFalse(th.isAlive());
         } finally {
             streams.close();
+        }
+    }
+
+    @SuppressWarnings("rawtypes")
+    private abstract static class AbstractProcessor<K, V> implements Processor<K, V> {
+        private ProcessorContext context;
+
+        @Override
+        public void init(final ProcessorContext context) {
+            this.context = context;
+        }
+
+        public ProcessorContext context() {
+            return context;
         }
     }
 

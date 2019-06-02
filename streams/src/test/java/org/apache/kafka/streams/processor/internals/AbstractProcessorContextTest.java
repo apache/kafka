@@ -184,7 +184,7 @@ public class AbstractProcessorContextTest {
     }
 
 
-    private static class TestProcessorContext extends AbstractProcessorContext {
+    private static class TestProcessorContext<K, V> extends AbstractProcessorContext<K, V> {
         static Properties config;
         static {
             config = getStreamsConfig();
@@ -218,18 +218,18 @@ public class AbstractProcessorContextTest {
         }
 
         @Override
-        public <K, V> void forward(final K key, final V value) {}
+        public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value) {}
 
         @Override
-        public <K, V> void forward(final K key, final V value, final To to) {}
-
-        @Override
-        @Deprecated
-        public <K, V> void forward(final K key, final V value, final int childIndex) {}
+        public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final To to) {}
 
         @Override
         @Deprecated
-        public <K, V> void forward(final K key, final V value, final String childName) {}
+        public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final int childIndex) {}
+
+        @Override
+        @Deprecated
+        public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final String childName) {}
 
         @Override
         public void commit() {}

@@ -41,6 +41,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 @RunWith(EasyMockRunner.class)
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class ChangeLoggingSessionBytesStoreTest {
 
     private final TaskId taskId = new TaskId(0, 0);

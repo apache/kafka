@@ -40,6 +40,7 @@ import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class ChangeLoggingKeyValueBytesStoreTest {
 
     private final InMemoryKeyValueStore inner = new InMemoryKeyValueStore("kv");

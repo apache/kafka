@@ -35,6 +35,7 @@ import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -669,10 +670,11 @@ public class StreamsBuilderTest {
         assertSpecifiedNameForOperation(topology, "KSTREAM-SOURCE-0000000000", "KSTREAM-SOURCE-0000000001", "merge-processor");
     }
 
+    @SuppressWarnings({"unchecked", "rawtypes"})
     @Test
     public void shouldUseSpecifiedNameForProcessOperation() {
         builder.stream(STREAM_TOPIC)
-                .process(() -> null, Named.as("test-processor"));
+                .process(() -> (TypedProcessor) null, Named.as("test-processor"));
 
         builder.build();
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).build();
@@ -705,6 +707,7 @@ public class StreamsBuilderTest {
         assertSpecifiedNameForOperation(topology, "KSTREAM-SOURCE-0000000000", STREAM_OPERATION_NAME);
     }
 
+    @SuppressWarnings("rawtypes")
     private static void assertSpecifiedNameForOperation(final ProcessorTopology topology, final String... expected) {
         final List<ProcessorNode> processors = topology.processors();
         assertEquals("Invalid number of expected processors", expected.length, processors.size());

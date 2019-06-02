@@ -40,7 +40,7 @@ import static java.util.Objects.requireNonNull;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 
-@SuppressWarnings("PointlessArithmeticExpression")
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class RocksDBWindowStoreTest extends WindowBytesStoreTest {
 
     private static final String STORE_NAME = "rocksDB window store";

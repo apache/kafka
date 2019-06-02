@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 
 /**
@@ -30,18 +31,18 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
  * @param <V> the type of the value
  */
 class TimestampedTupleForwarder<K, V> {
-    private final ProcessorContext context;
+    private final ProcessorContext<K, Change<V>> context;
     private final boolean sendOldValues;
     private final boolean cachingEnabled;
 
     @SuppressWarnings("unchecked")
     TimestampedTupleForwarder(final StateStore store,
-                              final ProcessorContext context,
+                              final ProcessorContext<K, Change<V>> context,
                               final TimestampedCacheFlushListener<K, V> flushListener,
                               final boolean sendOldValues) {
         this.context = context;
         this.sendOldValues = sendOldValues;
-        cachingEnabled = ((WrappedStateStore) store).setFlushListener(flushListener, sendOldValues);
+        cachingEnabled = ((WrappedStateStore<?, K, ValueAndTimestamp<V>>) store).setFlushListener(flushListener, sendOldValues);
     }
 
     public void maybeForward(final K key,

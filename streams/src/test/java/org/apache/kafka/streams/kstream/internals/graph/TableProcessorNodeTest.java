@@ -17,32 +17,26 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.kstream.internals.Change;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.junit.Test;
 
 import static org.junit.Assert.assertTrue;
 
 public class TableProcessorNodeTest {
-    private static class TestProcessor extends AbstractProcessor<String, String> {
-        @Override
-        public void init(final ProcessorContext context) {
-        }
-
+    private static class TestProcessor implements TypedProcessor<String, String, String, Change<String>> {
         @Override
         public void process(final String key, final String value) {
-        }
-
-        @Override
-        public void close() {
         }
     }
 
     @Test
     public void shouldConvertToStringWithNullStoreBuilder() {
-        final TableProcessorNode<String, String> node = new TableProcessorNode<>(
+        final ProcessorParameters<String, String, String, Change<String>> processor =
+            new ProcessorParameters<>(TestProcessor::new, "processor");
+        final TableProcessorNode<String, String, String, String> node = new TableProcessorNode<>(
             "name",
-            new ProcessorParameters<>(TestProcessor::new, "processor"),
+            processor,
             null,
             new String[]{"store1", "store2"}
         );

@@ -27,6 +27,7 @@ import static org.easymock.EasyMock.mock;
 import static org.easymock.EasyMock.replay;
 import static org.easymock.EasyMock.verify;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class TimestampedCacheFlushListenerTest {
 
     @Test

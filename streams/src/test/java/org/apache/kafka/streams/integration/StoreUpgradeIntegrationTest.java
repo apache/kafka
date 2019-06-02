@@ -27,7 +27,7 @@ import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.TimeWindow;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -873,12 +873,12 @@ public class StoreUpgradeIntegrationTest {
         }, "Could not get expected result in time.");
     }
 
-    private static class KeyValueProcessor implements Processor<Integer, Integer> {
+    private static class KeyValueProcessor implements TypedProcessor<Integer, Integer, Void, Void> {
         private KeyValueStore<Integer, Long> store;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Void, Void> context) {
             store = (KeyValueStore<Integer, Long>) context.getStateStore(STORE_NAME);
         }
 
@@ -900,13 +900,13 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
-    private static class TimestampedKeyValueProcessor implements Processor<Integer, Integer> {
-        private ProcessorContext context;
+    private static class TimestampedKeyValueProcessor implements TypedProcessor<Integer, Integer, Void, Void> {
+        private ProcessorContext<Void, Void> context;
         private TimestampedKeyValueStore<Integer, Long> store;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Void, Void> context) {
             this.context = context;
             store = (TimestampedKeyValueStore<Integer, Long>) context.getStateStore(STORE_NAME);
         }
@@ -933,12 +933,12 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
-    private static class WindowedProcessor implements Processor<Integer, Integer> {
+    private static class WindowedProcessor implements TypedProcessor<Integer, Integer, Void, Void> {
         private WindowStore<Integer, Long> store;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Void, Void> context) {
             store = (WindowStore<Integer, Long>) context.getStateStore(STORE_NAME);
         }
 
@@ -960,13 +960,13 @@ public class StoreUpgradeIntegrationTest {
         public void close() {}
     }
 
-    private static class TimestampedWindowedProcessor implements Processor<Integer, Integer> {
-        private ProcessorContext context;
+    private static class TimestampedWindowedProcessor implements TypedProcessor<Integer, Integer, Void, Void> {
+        private ProcessorContext<Void, Void> context;
         private TimestampedWindowStore<Integer, Long> store;
 
         @SuppressWarnings("unchecked")
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Void, Void> context) {
             this.context = context;
             store = (TimestampedWindowStore<Integer, Long>) context.getStateStore(STORE_NAME);
         }

@@ -46,9 +46,9 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
                        final Set<String> sourceNodes,
                        final GroupedInternal<K, V> groupedInternal,
                        final boolean repartitionRequired,
-                       final StreamsGraphNode streamsGraphNode,
+                       final StreamsGraphNode<?, ?, K, V> streamsGraphNode,
                        final InternalStreamsBuilder builder) {
-        super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), sourceNodes, streamsGraphNode, builder);
+        super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), sourceNodes, builder);
         this.aggregateBuilder = new GroupedStreamAggregateBuilder<>(
             builder,
             groupedInternal,
@@ -160,8 +160,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             name,
             keySerde,
             valSerde,
-            aggregateBuilder,
-            streamsGraphNode
+            aggregateBuilder
         );
     }
 
@@ -175,8 +174,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             name,
             keySerde,
             valSerde,
-            aggregateBuilder,
-            streamsGraphNode
+            aggregateBuilder
         );
     }
 

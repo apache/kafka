@@ -41,6 +41,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class KeyValueSegmentsTest {
 
     private static final int NUM_SEGMENTS = 5;

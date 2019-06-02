@@ -18,10 +18,10 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 
-class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
+class KStreamKTableJoin<K, R, V1, V2> implements TypedProcessorSupplier<K, V1, K, R> {
 
     private final KeyValueMapper<K, V1, K> keyValueMapper = new KeyValueMapper<K, V1, K>() {
         @Override
@@ -30,17 +30,19 @@ class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
         }
     };
     private final KTableValueGetterSupplier<K, V2> valueGetterSupplier;
-    private final ValueJoiner<? super V1, ? super V2, R> joiner;
+    private final ValueJoiner<? super V1, ? super V2, ? extends R> joiner;
     private final boolean leftJoin;
 
-    KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier, final ValueJoiner<? super V1, ? super V2, R> joiner, final boolean leftJoin) {
+    KStreamKTableJoin(final KTableValueGetterSupplier<K, V2> valueGetterSupplier,
+                      final ValueJoiner<? super V1, ? super V2, ? extends R> joiner,
+                      final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
         this.joiner = joiner;
         this.leftJoin = leftJoin;
     }
 
     @Override
-    public Processor<K, V1> get() {
+    public TypedProcessor<K, V1, K, R> get() {
         return new KStreamKTableJoinProcessor<>(valueGetterSupplier.get(), keyValueMapper, joiner, leftJoin);
     }
 

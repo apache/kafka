@@ -23,7 +23,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import java.util.Collections;
 import java.util.concurrent.atomic.AtomicInteger;
 
-public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
+public class MockProcessorNode<K, V> extends ProcessorNode<K, V, Void, Void> {
 
     private static final String NAME = "MOCK-PROCESS-";
     private static final AtomicInteger INDEX = new AtomicInteger(1);
@@ -38,21 +38,21 @@ public class MockProcessorNode<K, V> extends ProcessorNode<K, V> {
     }
 
     public MockProcessorNode(final long scheduleInterval, final PunctuationType punctuationType) {
-        this(new MockProcessor<K, V>(punctuationType, scheduleInterval));
+        this(new MockProcessor<>(punctuationType, scheduleInterval));
     }
 
     public MockProcessorNode() {
-        this(new MockProcessor<K, V>());
+        this(new MockProcessor<>());
     }
 
     private MockProcessorNode(final MockProcessor<K, V> mockProcessor) {
-        super(NAME + INDEX.getAndIncrement(), mockProcessor, Collections.<String>emptySet());
+        super(NAME + INDEX.getAndIncrement(), mockProcessor, Collections.emptySet());
 
         this.mockProcessor = mockProcessor;
     }
 
     @Override
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<Void, Void> context) {
         super.init(context);
         initialized = true;
     }

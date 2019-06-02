@@ -22,14 +22,14 @@ import org.apache.kafka.streams.kstream.internals.ChangedSerializer;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
 
-public class SinkNode<K, V> extends ProcessorNode<K, V> {
+public class SinkNode<K, V> extends ProcessorNode<K, V, Void, Void> {
 
     private Serializer<K> keySerializer;
     private Serializer<V> valSerializer;
     private final TopicNameExtractor<K, V> topicExtractor;
     private final StreamPartitioner<? super K, ? super V> partitioner;
 
-    private InternalProcessorContext context;
+    private InternalProcessorContext<Void, Void> context;
 
     SinkNode(final String name,
              final TopicNameExtractor<K, V> topicExtractor,
@@ -48,13 +48,13 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
      * @throws UnsupportedOperationException if this method adds a child to a sink node
      */
     @Override
-    public void addChild(final ProcessorNode<?, ?> child) {
+    public void addChild(final ProcessorNode<Void, Void, ?, ?> child) {
         throw new UnsupportedOperationException("sink node does not allow addChild");
     }
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<Void, Void> context) {
         super.init(context);
         this.context = context;
 
@@ -68,8 +68,8 @@ public class SinkNode<K, V> extends ProcessorNode<K, V> {
 
         // if value serializers are for {@code Change} values, set the inner serializer when necessary
         if (valSerializer instanceof ChangedSerializer &&
-                ((ChangedSerializer) valSerializer).inner() == null) {
-            ((ChangedSerializer) valSerializer).setInner(context.valueSerde().serializer());
+                ((ChangedSerializer<V>) valSerializer).inner() == null) {
+            ((ChangedSerializer<V>) valSerializer).setInner((Serializer<V>) context.valueSerde().serializer());
         }
     }
 

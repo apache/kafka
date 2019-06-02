@@ -19,8 +19,8 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.internals.PrintedInternal;
-import org.apache.kafka.streams.processor.Processor;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessor;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
 import org.junit.Before;
@@ -58,10 +58,10 @@ public class PrintedTest {
     @Test
     public void shouldCreateProcessorThatPrintsToFile() throws IOException {
         final File file = TestUtils.tempFile();
-        final ProcessorSupplier<String, Integer> processorSupplier = new PrintedInternal<>(
+        final TypedProcessorSupplier<String, Integer, Void, Void> processorSupplier = new PrintedInternal<>(
                 Printed.<String, Integer>toFile(file.getPath()))
                 .build("processor");
-        final Processor<String, Integer> processor = processorSupplier.get();
+        final TypedProcessor<String, Integer, Void, Void> processor = processorSupplier.get();
         processor.process("hi", 1);
         processor.close();
         try (final InputStream stream = Files.newInputStream(file.toPath())) {
@@ -73,8 +73,8 @@ public class PrintedTest {
 
     @Test
     public void shouldCreateProcessorThatPrintsToStdOut() throws UnsupportedEncodingException {
-        final ProcessorSupplier<String, Integer> supplier = new PrintedInternal<>(sysOutPrinter).build("processor");
-        final Processor<String, Integer> processor = supplier.get();
+        final TypedProcessorSupplier<String, Integer, Void, Void> supplier = new PrintedInternal<>(sysOutPrinter).build("processor");
+        final TypedProcessor<String, Integer, Void, Void> processor = supplier.get();
 
         processor.process("good", 2);
         processor.close();
@@ -83,7 +83,7 @@ public class PrintedTest {
 
     @Test
     public void shouldPrintWithLabel() throws UnsupportedEncodingException {
-        final Processor<String, Integer> processor = new PrintedInternal<>(sysOutPrinter.withLabel("label"))
+        final TypedProcessor<String, Integer, Void, Void> processor = new PrintedInternal<>(sysOutPrinter.withLabel("label"))
                 .build("processor")
                 .get();
 
@@ -94,7 +94,7 @@ public class PrintedTest {
 
     @Test
     public void shouldPrintWithKeyValueMapper() throws UnsupportedEncodingException {
-        final Processor<String, Integer> processor = new PrintedInternal<>(sysOutPrinter.withKeyValueMapper(
+        final TypedProcessor<String, Integer, Void, Void> processor = new PrintedInternal<>(sysOutPrinter.withKeyValueMapper(
                 new KeyValueMapper<String, Integer, String>() {
                     @Override
                     public String apply(final String key, final Integer value) {

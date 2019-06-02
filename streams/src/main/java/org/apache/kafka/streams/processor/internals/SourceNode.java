@@ -24,11 +24,11 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import java.util.List;
 
-public class SourceNode<K, V> extends ProcessorNode<K, V> {
+public class SourceNode<K, V> extends ProcessorNode<K, V, K, V> {
 
     private final List<String> topics;
 
-    private ProcessorContext context;
+    private ProcessorContext<K, V> context;
     private Deserializer<K> keyDeserializer;
     private Deserializer<V> valDeserializer;
     private final TimestampExtractor timestampExtractor;
@@ -62,7 +62,7 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
     @SuppressWarnings("unchecked")
     @Override
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<K, V> context) {
         super.init(context);
         this.context = context;
 
@@ -76,8 +76,8 @@ public class SourceNode<K, V> extends ProcessorNode<K, V> {
 
         // if value deserializers are for {@code Change} values, set the inner deserializer when necessary
         if (this.valDeserializer instanceof ChangedDeserializer &&
-                ((ChangedDeserializer) this.valDeserializer).inner() == null) {
-            ((ChangedDeserializer) this.valDeserializer).setInner(context.valueSerde().deserializer());
+                ((ChangedDeserializer<V>) this.valDeserializer).inner() == null) {
+            ((ChangedDeserializer<V>) this.valDeserializer).setInner((Deserializer<V>) context.valueSerde().deserializer());
         }
     }
 

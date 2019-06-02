@@ -33,7 +33,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-public class NoOpProcessorContext extends AbstractProcessorContext {
+public class NoOpProcessorContext<K, V> extends AbstractProcessorContext<K, V> {
     public boolean initialized;
     @SuppressWarnings("WeakerAccess")
     public Map<Object, Object> forwardedValues = new HashMap<>();
@@ -70,24 +70,24 @@ public class NoOpProcessorContext extends AbstractProcessorContext {
     }
 
     @Override
-    public <K, V> void forward(final K key, final V value) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value) {
         forwardedValues.put(key, value);
     }
 
     @Override
-    public <K, V> void forward(final K key, final V value, final To to) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final To to) {
         forwardedValues.put(key, value);
     }
 
     @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final int childIndex) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final int childIndex) {
         forward(key, value);
     }
 
     @Override
     @Deprecated
-    public <K, V> void forward(final K key, final V value, final String childName) {
+    public <K1 extends K, V1 extends V> void forward(final K1 key, final V1 value, final String childName) {
         forward(key, value);
     }
 

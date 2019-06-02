@@ -18,11 +18,12 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 
+@SuppressWarnings({"unchecked", "rawtypes"})
 public class GlobalStoreNode extends StateStoreNode {
 
 
@@ -30,7 +31,7 @@ public class GlobalStoreNode extends StateStoreNode {
     private final String topic;
     private final ConsumedInternal consumed;
     private final String processorName;
-    private final ProcessorSupplier stateUpdateSupplier;
+    private final TypedProcessorSupplier stateUpdateSupplier;
 
 
     public GlobalStoreNode(final StoreBuilder<KeyValueStore> storeBuilder,
@@ -38,7 +39,7 @@ public class GlobalStoreNode extends StateStoreNode {
                            final String topic,
                            final ConsumedInternal consumed,
                            final String processorName,
-                           final ProcessorSupplier stateUpdateSupplier) {
+                           final TypedProcessorSupplier stateUpdateSupplier) {
 
         super(storeBuilder);
         this.sourceName = sourceName;
@@ -50,7 +51,6 @@ public class GlobalStoreNode extends StateStoreNode {
 
 
     @Override
-    @SuppressWarnings("unchecked")
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         storeBuilder.withLoggingDisabled();
         topologyBuilder.addGlobalStore(storeBuilder,

@@ -61,7 +61,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
-@SuppressWarnings("PointlessArithmeticExpression")
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class CachingSessionStoreTest {
 
     private static final int MAX_CACHE_SIZE_BYTES = 600;

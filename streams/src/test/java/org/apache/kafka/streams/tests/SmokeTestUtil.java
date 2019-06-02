@@ -24,9 +24,9 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 
 import java.io.File;
 import java.time.Instant;
@@ -35,19 +35,19 @@ public class SmokeTestUtil {
 
     final static int END = Integer.MAX_VALUE;
 
-    static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic) {
+    static TypedProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic) {
         return printProcessorSupplier(topic, "");
     }
 
-    static ProcessorSupplier<Object, Object> printProcessorSupplier(final String topic, final String name) {
-        return new ProcessorSupplier<Object, Object>() {
+    static TypedProcessorSupplier<Object, Object, Void, Void> printProcessorSupplier(final String topic, final String name) {
+        return new TypedProcessorSupplier<Object, Object, Void, Void>() {
             @Override
-            public Processor<Object, Object> get() {
-                return new AbstractProcessor<Object, Object>() {
+            public TypedProcessor<Object, Object, Void, Void> get() {
+                return new AbstractProcessor<Object, Object, Void, Void>() {
                     private int numRecordsProcessed = 0;
 
                     @Override
-                    public void init(final ProcessorContext context) {
+                    public void init(final ProcessorContext<Void, Void> context) {
                         super.init(context);
                         System.out.println("[DEV] initializing processor: topic=" + topic + " taskId=" + context.taskId());
                         numRecordsProcessed = 0;

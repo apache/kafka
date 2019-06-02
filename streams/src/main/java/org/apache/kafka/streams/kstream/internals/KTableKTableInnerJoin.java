@@ -18,10 +18,10 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.processor.AbstractProcessor;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
@@ -34,14 +34,14 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
 
     private final KeyValueMapper<K, V1, K> keyValueMapper = (key, value) -> key;
 
-    KTableKTableInnerJoin(final KTableImpl<K, ?, V1> table1,
-                          final KTableImpl<K, ?, V2> table2,
+    KTableKTableInnerJoin(final KTableImpl<K, V1> table1,
+                          final KTableImpl<K, V2> table2,
                           final ValueJoiner<? super V1, ? super V2, ? extends R> joiner) {
         super(table1, table2, joiner);
     }
 
     @Override
-    public Processor<K, Change<V1>> get() {
+    public TypedProcessor<K, Change<V1>, K, Change<R>> get() {
         return new KTableKTableJoinProcessor(valueGetterSupplier2.get());
     }
 
@@ -62,20 +62,21 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         }
     }
 
-    private class KTableKTableJoinProcessor extends AbstractProcessor<K, Change<V1>> {
+    private class KTableKTableJoinProcessor implements TypedProcessor<K, Change<V1>, K, Change<R>> {
 
         private final KTableValueGetter<K, V2> valueGetter;
         private StreamsMetricsImpl metrics;
+        private ProcessorContext<K, Change<R>> context;
 
         KTableKTableJoinProcessor(final KTableValueGetter<K, V2> valueGetter) {
             this.valueGetter = valueGetter;
         }
 
         @Override
-        public void init(final ProcessorContext context) {
-            super.init(context);
+        public void init(final ProcessorContext<K, Change<R>> context) {
+            this.context = context;
             metrics = (StreamsMetricsImpl) context.metrics();
-            valueGetter.init(context);
+            valueGetter.init(new ForwardingDisabledProcessorContext(context));
         }
 
         @Override
@@ -84,7 +85,7 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
             if (key == null) {
                 LOG.warn(
                     "Skipping record due to null key. change=[{}] topic=[{}] partition=[{}] offset=[{}]",
-                    change, context().topic(), context().partition(), context().offset()
+                    change, context.topic(), context.partition(), context.offset()
                 );
                 metrics.skippedRecordsSensor().record();
                 return;
@@ -100,7 +101,7 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
                 return;
             }
 
-            resultTimestamp = Math.max(context().timestamp(), valueAndTimestampRight.timestamp());
+            resultTimestamp = Math.max(context.timestamp(), valueAndTimestampRight.timestamp());
 
             if (change.newValue != null) {
                 newValue = joiner.apply(change.newValue, valueRight);
@@ -110,7 +111,7 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
                 oldValue = joiner.apply(change.oldValue, valueRight);
             }
 
-            context().forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(resultTimestamp));
+            context.forward(key, new Change<>(newValue, oldValue), To.all().withTimestamp(resultTimestamp));
         }
 
         @Override
@@ -131,7 +132,7 @@ class KTableKTableInnerJoin<K, R, V1, V2> extends KTableKTableAbstractJoin<K, R,
         }
 
         @Override
-        public void init(final ProcessorContext context) {
+        public void init(final ProcessorContext<Void, Void> context) {
             valueGetter1.init(context);
             valueGetter2.init(context);
         }

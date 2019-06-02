@@ -43,6 +43,7 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings("unchecked")
 public class CompositeReadOnlyKeyValueStoreTest {
 
     private final String storeName = "my-store";

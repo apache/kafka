@@ -41,6 +41,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.fail;
 
+@SuppressWarnings({"rawtypes", "unchecked"})
 public class GlobalProcessorContextImplTest {
     private static final String GLOBAL_STORE_NAME = "global-store";
     private static final String GLOBAL_KEY_VALUE_STORE_NAME = "global-key-value-store";

@@ -20,7 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.Processor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.Punctuator;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
@@ -36,14 +36,14 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgMaxLatency;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 
-public class ProcessorNode<K, V> {
+public class ProcessorNode<KIn, VIn, KOut, VOut> {
 
     // TODO: 'children' can be removed when #forward() via index is removed
-    private final List<ProcessorNode<?, ?>> children;
-    private final Map<String, ProcessorNode<?, ?>> childByName;
+    private final List<ProcessorNode<KOut, VOut, ?, ?>> children;
+    private final Map<String, ProcessorNode<KOut, VOut, ?, ?>> childByName;
 
     private NodeMetrics nodeMetrics;
-    private final Processor<K, V> processor;
+    private final TypedProcessor<KIn, VIn, KOut, VOut> processor;
     private final String name;
     private final Time time;
 
@@ -54,7 +54,7 @@ public class ProcessorNode<K, V> {
     }
 
 
-    public ProcessorNode(final String name, final Processor<K, V> processor, final Set<String> stateStores) {
+    public ProcessorNode(final String name, final TypedProcessor<KIn, VIn, KOut, VOut> processor, final Set<String> stateStores) {
         this.name = name;
         this.processor = processor;
         this.children = new ArrayList<>();
@@ -68,26 +68,26 @@ public class ProcessorNode<K, V> {
         return name;
     }
 
-    public final Processor<K, V> processor() {
+    public final TypedProcessor<KIn, VIn, KOut, VOut> processor() {
         return processor;
     }
 
-    public List<ProcessorNode<?, ?>> children() {
+    public List<ProcessorNode<KOut, VOut, ?, ?>> children() {
         return children;
     }
 
-    ProcessorNode getChild(final String childName) {
+    ProcessorNode<KOut, VOut, ?, ?> getChild(final String childName) {
         return childByName.get(childName);
     }
 
-    public void addChild(final ProcessorNode<?, ?> child) {
+    public void addChild(final ProcessorNode<KOut, VOut, ?, ?> child) {
         children.add(child);
         childByName.put(child.name, child);
     }
 
-    public void init(final InternalProcessorContext context) {
+    public void init(final InternalProcessorContext<KOut, VOut> context) {
         try {
-            nodeMetrics = new NodeMetrics(context.metrics(), name, context);
+            nodeMetrics = new NodeMetrics(context.metrics(), name, new ForwardingDisabledProcessorContext(context));
             final long startNs = time.nanoseconds();
             if (processor != null) {
                 processor.init(context);
@@ -112,7 +112,7 @@ public class ProcessorNode<K, V> {
     }
 
 
-    public void process(final K key, final V value) {
+    public void process(final KIn key, final VIn value) {
         final long startNs = time.nanoseconds();
         processor.process(key, value);
         nodeMetrics.nodeProcessTimeSensor.record(time.nanoseconds() - startNs);
@@ -164,7 +164,9 @@ public class ProcessorNode<K, V> {
         private final String taskName;
         private final String processorNodeName;
 
-        private NodeMetrics(final StreamsMetricsImpl metrics, final String processorNodeName, final ProcessorContext context) {
+        private NodeMetrics(final StreamsMetricsImpl metrics,
+                            final String processorNodeName,
+                            final ProcessorContext<Void, Void> context) {
             this.metrics = metrics;
 
             final String taskName = context.taskId().toString();

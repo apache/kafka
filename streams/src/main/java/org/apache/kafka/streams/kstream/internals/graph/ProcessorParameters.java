@@ -17,28 +17,28 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.TypedProcessorSupplier;
 
 /**
- * Class used to represent a {@link ProcessorSupplier} and the name
+ * Class used to represent a {@link TypedProcessorSupplier} and the name
  * used to register it with the {@link org.apache.kafka.streams.processor.internals.InternalTopologyBuilder}
  *
  * Used by the Join nodes as there are several parameters, this abstraction helps
  * keep the number of arguments more reasonable.
  */
-public class ProcessorParameters<K, V> {
+public class ProcessorParameters<KIn, VIn, KOut, VOut> {
 
-    private final ProcessorSupplier<K, V> processorSupplier;
+    private final TypedProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier;
     private final String processorName;
 
-    public ProcessorParameters(final ProcessorSupplier<K, V> processorSupplier,
+    public ProcessorParameters(final TypedProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier,
                                final String processorName) {
 
         this.processorSupplier = processorSupplier;
         this.processorName = processorName;
     }
 
-    public ProcessorSupplier<K, V> processorSupplier() {
+    public TypedProcessorSupplier<KIn, VIn, KOut, VOut> processorSupplier() {
         return processorSupplier;
     }
 

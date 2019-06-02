@@ -367,10 +367,6 @@ public class MockProcessorContextTest {
             @Override
             public void process(final String key, final Long value) {
             }
-
-            @Override
-            public void close() {
-            }
         };
 
         final MockProcessorContext context = new MockProcessorContext();

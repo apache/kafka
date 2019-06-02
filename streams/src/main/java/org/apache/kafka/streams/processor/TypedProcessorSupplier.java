@@ -14,16 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.kstream.internals;
+package org.apache.kafka.streams.processor;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.Topology;
 
-public interface KTableValueGetter<K, V> {
+/**
+ * A processor supplier that can create one or more {@link TypedProcessor} instances.
+ *
+ * It is used in {@link Topology} for adding new processor operators, whose generated
+ * topology can then be replicated (and thus creating one or more {@link TypedProcessor} instances)
+ * and distributed to multiple stream threads.
+ *
+ * @param <K> the type of keys
+ * @param <V> the type of values
+ */
+public interface TypedProcessorSupplier<KIn, VIn, KOut, VOut> {
 
-    void init(ProcessorContext<Void, Void> context);
-
-    ValueAndTimestamp<V> get(K key);
-
-    void close();
+    /**
+     * Return a new {@link TypedProcessor} instance.
+     *
+     * @return  a new {@link TypedProcessor} instance
+     */
+    TypedProcessor<KIn, VIn, KOut, VOut> get();
 }

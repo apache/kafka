@@ -17,27 +17,22 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 import java.util.Arrays;
 
-public class TableProcessorNode<K, V> extends StreamsGraphNode {
+public class TableProcessorNode<KIn, VIn, KOut, VOutRaw> extends StreamsGraphNode<KIn, VIn, KOut, Change<VOutRaw>> {
 
-    private final ProcessorParameters<K, V> processorParameters;
-    private final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder;
+    private final ProcessorParameters<KIn, VIn, KOut, Change<VOutRaw>> processorParameters;
+    private final StoreBuilder<TimestampedKeyValueStore<KOut, VOutRaw>> storeBuilder;
     private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
-                              final ProcessorParameters<K, V> processorParameters,
-                              final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder) {
-        this(nodeName, processorParameters, storeBuilder, null);
-    }
-
-    public TableProcessorNode(final String nodeName,
-                              final ProcessorParameters<K, V> processorParameters,
-                              final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder,
+                              final ProcessorParameters<KIn, VIn, KOut, Change<VOutRaw>> processorParameters,
+                              final StoreBuilder<TimestampedKeyValueStore<KOut, VOutRaw>> storeBuilder,
                               final String[] storeNames) {
         super(nodeName);
         this.processorParameters = processorParameters;
@@ -54,7 +49,6 @@ public class TableProcessorNode<K, V> extends StreamsGraphNode {
             "} " + super.toString();
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
         final String processorName = processorParameters.processorName();

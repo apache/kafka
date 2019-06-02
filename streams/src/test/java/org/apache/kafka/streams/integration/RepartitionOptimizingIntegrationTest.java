@@ -40,7 +40,7 @@ import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.Reducer;
-import org.apache.kafka.streams.processor.AbstractProcessor;
+import org.apache.kafka.streams.processor.TypedProcessor;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.apache.kafka.test.TestUtils;
@@ -238,7 +238,7 @@ public class RepartitionOptimizingIntegrationTest {
     }
 
 
-    private static class SimpleProcessor extends AbstractProcessor<String, String> {
+    private static class SimpleProcessor implements TypedProcessor<String, String, Void, Void> {
 
         final List<String> valueList;
 

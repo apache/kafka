@@ -32,13 +32,13 @@ import org.apache.kafka.streams.state.internals.WrappedStateStore;
  * @param <V>
  */
 class SessionTupleForwarder<K, V> {
-    private final ProcessorContext context;
+    private final ProcessorContext<Windowed<K>, Change<V>> context;
     private final boolean sendOldValues;
     private final boolean cachingEnabled;
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     SessionTupleForwarder(final StateStore store,
-                          final ProcessorContext context,
+                          final ProcessorContext<Windowed<K>, Change<V>> context,
                           final CacheFlushListener<Windowed<K>, V> flushListener,
                           final boolean sendOldValues) {
         this.context = context;

@@ -44,7 +44,7 @@ public class SinkNodeTest {
         new Metrics().sensor("skipped-records")
     );
 
-    private final InternalMockProcessorContext context = new InternalMockProcessorContext(
+    private final InternalMockProcessorContext<Void, Void> context = new InternalMockProcessorContext<>(
         anyStateSerde,
         recordCollector
     );
@@ -52,7 +52,7 @@ public class SinkNodeTest {
             new StaticTopicNameExtractor<>("any-output-topic"), anySerializer, anySerializer, null);
 
     // Used to verify that the correct exceptions are thrown if the compiler checks are bypassed
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "rawtypes"})
     private final SinkNode<Object, Object> illTypedSink = (SinkNode) sink;
 
     @Before
