@@ -40,6 +40,8 @@ RUN pip install --upgrade cffi virtualenv pyasn1 boto3 pycrypto pywinrm ipaddres
 COPY ./ssh-config /root/.ssh/config
 # NOTE: The paramiko library supports the PEM-format private key, but does not support the RFC4716 format.
 RUN ssh-keygen -m PEM -q -t rsa -N '' -f /root/.ssh/id_rsa && cp -f /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
+# Recent changes in openjdk:8 base image installs Java at non-standard location, and ENV directive
+# doesn't work for Paramiko SSH client, so we have to set environment variables using ForceCommand.
 RUN echo "ForceCommand JAVA_HOME='$JAVA_HOME' PATH='$PATH' bash -c "'"$SSH_ORIGINAL_COMMAND"' >> /etc/ssh/sshd_config
 
 # Install binary test dependencies.
