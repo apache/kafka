@@ -316,24 +316,38 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         if (member.currentProtocolVersion() == CONNECT_PROTOCOL_V0) {
             shouldReturn = updateConfigsWithEager(connectorConfigUpdatesCopy,
                     connectorTargetStateChangesCopy);
+            // With eager protocol we should return immediately if needsReconfigRebalance has
+            // been set to retain the old workflow
+            if (shouldReturn) {
+                return;
+            }
+
+            if (connectorConfigUpdatesCopy.get() != null) {
+                processConnectorConfigUpdates(connectorConfigUpdatesCopy.get());
+            }
+
+            if (connectorTargetStateChangesCopy.get() != null) {
+                processTargetStateChanges(connectorTargetStateChangesCopy.get());
+            }
         } else {
             shouldReturn = updateConfigsWithIncrementalCooperative(connectorConfigUpdatesCopy,
                     connectorTargetStateChangesCopy, taskConfigUpdatesCopy);
-            if (taskConfigUpdatesCopy.get() != null) {
-                processTaskConfigUpdates(taskConfigUpdatesCopy.get());
+
+            if (connectorConfigUpdatesCopy.get() != null) {
+                processConnectorConfigUpdates(connectorConfigUpdatesCopy.get());
             }
-        }
 
-        if (shouldReturn) {
-            return;
-        }
+            if (connectorTargetStateChangesCopy.get() != null) {
+                processTargetStateChanges(connectorTargetStateChangesCopy.get());
+            }
 
-        if (connectorConfigUpdatesCopy.get() != null) {
-            processConnectorConfigUpdates(connectorConfigUpdatesCopy.get());
-        }
+            if (taskConfigUpdatesCopy.get() != null) {
+                processTaskConfigUpdatesWithIncrementalCooperative(taskConfigUpdatesCopy.get());
+            }
 
-        if (connectorTargetStateChangesCopy.get() != null) {
-            processTargetStateChanges(connectorTargetStateChangesCopy.get());
+            if (shouldReturn) {
+                return;
+            }
         }
 
         // Let the group take any actions it needs to
@@ -365,9 +379,6 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // Any connector config updates or target state changes will be addressed during the rebalance too
                 connectorConfigUpdates.clear();
                 connectorTargetStateChanges.clear();
-                // This set is unused in this policy, but emptied here to avoid branching on
-                // protocol version in the onTaskConfigUpdate callback
-                taskConfigUpdates.clear();
                 log.debug("Requesting rebalance due to reconfiguration of tasks (needsReconfigRebalance: {})",
                         needsReconfigRebalance);
                 needsReconfigRebalance = false;
@@ -411,24 +422,22 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 log.debug("Requesting rebalance due to reconfiguration of tasks (needsReconfigRebalance: {})",
                         needsReconfigRebalance);
                 needsReconfigRebalance = false;
-                connectorConfigUpdates.clear();
-                connectorTargetStateChanges.clear();
                 retValue = true;
-            } else {
-                if (!connectorConfigUpdates.isEmpty()) {
-                    // We can't start/stop while locked since starting connectors can cause task updates that will
-                    // require writing configs, which in turn make callbacks into this class from another thread that
-                    // require acquiring a lock. This leads to deadlock. Instead, just copy the info we need and process
-                    // the updates after unlocking.
-                    connectorConfigUpdatesCopy.set(connectorConfigUpdates);
-                    connectorConfigUpdates = new HashSet<>();
-                }
+            }
 
-                if (!connectorTargetStateChanges.isEmpty()) {
-                    // Similarly for target state changes which can cause connectors to be restarted
-                    connectorTargetStateChangesCopy.set(connectorTargetStateChanges);
-                    connectorTargetStateChanges = new HashSet<>();
-                }
+            if (!connectorConfigUpdates.isEmpty()) {
+                // We can't start/stop while locked since starting connectors can cause task updates that will
+                // require writing configs, which in turn make callbacks into this class from another thread that
+                // require acquiring a lock. This leads to deadlock. Instead, just copy the info we need and process
+                // the updates after unlocking.
+                connectorConfigUpdatesCopy.set(connectorConfigUpdates);
+                connectorConfigUpdates = new HashSet<>();
+            }
+
+            if (!connectorTargetStateChanges.isEmpty()) {
+                // Similarly for target state changes which can cause connectors to be restarted
+                connectorTargetStateChangesCopy.set(connectorTargetStateChanges);
+                connectorTargetStateChanges = new HashSet<>();
             }
 
             if (!taskConfigUpdates.isEmpty()) {
@@ -476,7 +485,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         }
     }
 
-    private void processTaskConfigUpdates(Set<ConnectorTaskId> taskConfigUpdates) {
+    private void processTaskConfigUpdatesWithIncrementalCooperative(Set<ConnectorTaskId> taskConfigUpdates) {
         Set<ConnectorTaskId> localTasks = assignment == null
                                           ? Collections.emptySet()
                                           : new HashSet<>(assignment.tasks());
@@ -1381,7 +1390,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             // catch up (or backoff if we fail) not executed in a callback, and so we'll be able to invoke other
             // group membership actions (e.g., we may need to explicitly leave the group if we cannot handle the
             // assigned tasks).
-            log.info("Joined group and got assignment: {}", assignment);
+            log.info("Joined group at generation {} and got assignment: {}", generation, assignment);
             synchronized (DistributedHerder.this) {
                 DistributedHerder.this.assignment = assignment;
                 DistributedHerder.this.generation = generation;
