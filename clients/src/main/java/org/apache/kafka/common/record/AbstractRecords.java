@@ -43,6 +43,15 @@ public abstract class AbstractRecords implements Records {
         return true;
     }
 
+    public boolean firstBatchHasCompatibleMagic(byte magic) {
+        Iterator<? extends RecordBatch> iterator = batches().iterator();
+
+        if (!iterator.hasNext())
+            return true;
+
+        return iterator.next().magic() <= magic;
+    }
+
     /**
      * Get an iterator over the deep records.
      * @return An iterator over the records

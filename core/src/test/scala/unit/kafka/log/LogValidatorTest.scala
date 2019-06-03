@@ -38,30 +38,44 @@ class LogValidatorTest {
 
   @Test
   def testOnlyOneBatchCompressedV0(): Unit = {
-    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP)
   }
 
   @Test
   def testOnlyOneBatchCompressedV1(): Unit = {
-    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP)
   }
 
   @Test
   def testOnlyOneBatchCompressedV2(): Unit = {
-    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP)
+  }
+
+  @Test
+  def testAllowMultiBatchUncompressedV0(): Unit = {
+    checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V0, CompressionType.NONE)
+  }
+
+  @Test
+  def testAllowMultiBatchUncompressedV1(): Unit = {
+    checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE)
   }
 
   @Test
   def testOnlyOneBatchUncompressedV2(): Unit = {
-    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE)
   }
 
-  private def checkOnlyOneBatchCompressed(magic: Byte, compressionType: CompressionType) {
+  private def checkOnlyOneBatch(magic: Byte, compressionType: CompressionType) {
     validateMessages(createRecords(magic, 0L, compressionType), magic, compressionType)
 
     assertThrows[InvalidRecordException] {
       validateMessages(createTwoBatchedRecords(magic, 0L, compressionType), magic, compressionType)
     }
+  }
+
+  private def checkAllowMultiBatch(magic: Byte, compressionType: CompressionType) {
+    validateMessages(createTwoBatchedRecords(magic, 0L, compressionType), magic, compressionType)
   }
 
   private def validateMessages(records: MemoryRecords, magic: Byte, compressionType: CompressionType): Unit = {

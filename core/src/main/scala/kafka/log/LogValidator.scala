@@ -23,7 +23,7 @@ import kafka.common.LongRef
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record.{AbstractRecords, CompressionType, InvalidRecordException, MemoryRecords, Record, RecordBatch, MutableRecordBatch, RecordConversionStats, TimestampType}
+import org.apache.kafka.common.record.{AbstractRecords, CompressionType, InvalidRecordException, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.mutable
@@ -74,20 +74,18 @@ private[kafka] object LogValidator extends Logging {
     }
   }
 
-  private[kafka] def validateOneBatchRecords(records: MemoryRecords): MutableRecordBatch = {
+  private[kafka] def validateOneBatchRecords(records: MemoryRecords) {
     val batchIterator = records.batches.iterator
 
     if (!batchIterator.hasNext) {
       throw new InvalidRecordException("Compressed outer record has no batches at all")
     }
 
-    val batch = batchIterator.next()
+    batchIterator.next()
 
     if (batchIterator.hasNext) {
       throw new InvalidRecordException("Compressed outer record has more than one batch")
     }
-
-    batch
   }
 
   private def validateBatch(batch: RecordBatch, isFromClient: Boolean, toMagic: Byte): Unit = {
@@ -196,12 +194,12 @@ private[kafka] object LogValidator extends Logging {
     var offsetOfMaxTimestamp = -1L
     val initialOffset = offsetCounter.value
 
-    for (batch <- records.batches.asScala) {
-      if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
-        // note since we only check for v2 and beyond, we should always assume one batch records.
-        validateOneBatchRecords(records)
-      }
+    if (!records.firstBatchHasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1)) {
+      // for v2 and beyond, we should check there's only one batch.
+      validateOneBatchRecords(records)
+    }
 
+    for (batch <- records.batches.asScala) {
       validateBatch(batch, isFromClient, magic)
 
       var maxBatchTimestamp = RecordBatch.NO_TIMESTAMP
@@ -283,12 +281,11 @@ private[kafka] object LogValidator extends Logging {
     // Assume there's only one batch with compressed memory records; otherwise, return InvalidRecordException
     // One exception though is that with format smaller than v2, if sourceCodec is noCompression, then each batch is actually
     // a single record so we'd need to special handle it by creating a single wrapper batch that includes all the records
-    val batches: Iterable[MutableRecordBatch] = if (sourceCodec == NoCompressionCodec && records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1)) {
-      records.batches.asScala
-    } else {
-      val batch = validateOneBatchRecords(records)
-      java.util.Collections.singletonList(batch).asScala
+    if (sourceCodec != NoCompressionCodec || !records.firstBatchHasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1)) {
+      validateOneBatchRecords(records)
     }
+
+    val batches = records.batches.asScala
 
     for (batch <- batches) {
       validateBatch(batch, isFromClient, toMagic)
