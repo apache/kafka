@@ -23,7 +23,7 @@ import kafka.common.LongRef
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record.{AbstractRecords, CompressionType, InvalidRecordException, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType}
+import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.mutable
@@ -74,8 +74,7 @@ private[kafka] object LogValidator extends Logging {
     }
   }
 
-  private[kafka] def validateOneBatchRecords(records: MemoryRecords): RecordBatch = {
-    // Assume there's only one batch with compressed memory records; otherwise, return InvalidRecordException
+  private[kafka] def validateOneBatchRecords(records: MemoryRecords): MutableRecordBatch = {
     val batchIterator = records.batches.iterator
 
     if (!batchIterator.hasNext) {
@@ -199,6 +198,7 @@ private[kafka] object LogValidator extends Logging {
 
     for (batch <- records.batches.asScala) {
       if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2) {
+        // note since we only check for v2 and beyond, we should always assume one batch records.
         validateOneBatchRecords(records)
       }
 
@@ -280,38 +280,48 @@ private[kafka] object LogValidator extends Logging {
 
     var uncompressedSizeInBytes = 0
 
-    val batch = validateOneBatchRecords(records)
+    // Assume there's only one batch with compressed memory records; otherwise, return InvalidRecordException
+    // One exception though is that with format smaller than v2, if sourceCodec is noCompression, then each batch is actually
+    // a single record so we'd need to special handle it by creating a single wrapper batch that includes all the records
+    val batches: Iterable[MutableRecordBatch] = if (sourceCodec == NoCompressionCodec && records.hasCompatibleMagic(RecordBatch.MAGIC_VALUE_V1)) {
+      records.batches.asScala
+    } else {
+      val batch = validateOneBatchRecords(records)
+      java.util.Collections.singletonList(batch).asScala
+    }
 
-    validateBatch(batch, isFromClient, toMagic)
-    uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())
+    for (batch <- batches) {
+      validateBatch(batch, isFromClient, toMagic)
+      uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())
 
-    // Do not compress control records unless they are written compressed
-    if (sourceCodec == NoCompressionCodec && batch.isControlBatch)
-      inPlaceAssignment = true
+      // Do not compress control records unless they are written compressed
+      if (sourceCodec == NoCompressionCodec && batch.isControlBatch)
+        inPlaceAssignment = true
 
-    for (record <- batch.asScala) {
-      if (sourceCodec != NoCompressionCodec && record.isCompressed)
-        throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
-          s"compression attribute set: $record")
-      if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
-        throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " + "are not allowed to use ZStandard compression")
-      validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
+      for (record <- batch.asScala) {
+        if (sourceCodec != NoCompressionCodec && record.isCompressed)
+          throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
+            s"compression attribute set: $record")
+        if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
+          throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " + "are not allowed to use ZStandard compression")
+        validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
 
-      uncompressedSizeInBytes += record.sizeInBytes()
-      if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
-        // Check if we need to overwrite offset
-        // No in place assignment situation 3
-        if (record.offset != expectedInnerOffset.getAndIncrement())
+        uncompressedSizeInBytes += record.sizeInBytes()
+        if (batch.magic > RecordBatch.MAGIC_VALUE_V0 && toMagic > RecordBatch.MAGIC_VALUE_V0) {
+          // Check if we need to overwrite offset
+          // No in place assignment situation 3
+          if (record.offset != expectedInnerOffset.getAndIncrement())
+            inPlaceAssignment = false
+          if (record.timestamp > maxTimestamp)
+            maxTimestamp = record.timestamp
+        }
+
+        // No in place assignment situation 4
+        if (!record.hasMagic(toMagic))
           inPlaceAssignment = false
-        if (record.timestamp > maxTimestamp)
-          maxTimestamp = record.timestamp
+
+        validatedRecords += record
       }
-
-      // No in place assignment situation 4
-      if (!record.hasMagic(toMagic))
-        inPlaceAssignment = false
-
-      validatedRecords += record
     }
 
     if (!inPlaceAssignment) {
