@@ -103,7 +103,6 @@ public class AbstractConfig {
                 throw new ConfigException(entry.getKey().toString(), entry.getValue(), "Key must be a string.");
 
         this.originals = resolveConfigVariables(configProviderProps, (Map<String, Object>) originals);
-
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
         for (Map.Entry<String, Object> update : configUpdates.entrySet()) {
@@ -459,10 +458,11 @@ public class AbstractConfig {
     private  Map<String, ?> resolveConfigVariables(Map<String, ?> configProviderProps, Map<String, Object> originals) {
         Map<String, String> providerConfigString;
         Map<String, ?> configProperties;
-
+        Map<String, Object> resolvedOriginals = new HashMap<>();
         // As variable configs are strings, parse the originals and obtain the potential variable configs.
         Map<String, String> indirectVariables = extractPotentialVariables(originals);
 
+        resolvedOriginals.putAll(originals);
         if (configProviderProps == null || configProviderProps.isEmpty()) {
             providerConfigString = indirectVariables;
             configProperties = originals;
@@ -475,10 +475,12 @@ public class AbstractConfig {
         if (!providers.isEmpty()) {
             ConfigTransformer configTransformer = new ConfigTransformer(providers);
             ConfigTransformerResult result = configTransformer.transform(indirectVariables);
-            originals.putAll(result.data());
+            if (!result.data().isEmpty()) {
+                resolvedOriginals.putAll(result.data());
+            }
         }
 
-        return originals;
+        return new ResolvingMap<>(resolvedOriginals, originals);
     }
 
     private Map<String, Object> configProviderProperties(String configProviderPrefix, Map<String, ?> providerConfigProperties) {
@@ -582,6 +584,33 @@ public class AbstractConfig {
                 if (withIgnoreFallback)
                     ignore(stringKey);
             }
+            return super.get(key);
+        }
+    }
+
+    /**
+     * ResolvingMap keeps a track of the original map instance and the resolved configs.
+     * The originals are tracked in a separate nested map and may be a `RecordingMap`; thus
+     * any access to a value for a key needs to be recorded on the originals map.
+     * The resolved configs are kept in the inherited map and are therefore mutable, though any
+     * mutations are not applied to the originals.
+     */
+    private static class ResolvingMap<V> extends HashMap<String, V> {
+
+        private final Map<String, ?> originals;
+
+        ResolvingMap(Map<String, ? extends V> resolved, Map<String, ?> originals) {
+            super(resolved);
+            this.originals = Collections.unmodifiableMap(originals);
+        }
+
+        @Override
+        public V get(Object key) {
+            if (key instanceof String && originals.containsKey(key)) {
+                // Intentionally ignore the result; call just to mark the original entry as used
+                originals.get(key);
+            }
+            // But always use the resolved entry
             return super.get(key);
         }
     }
