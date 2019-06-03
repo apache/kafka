@@ -58,15 +58,42 @@ public class MirrorSourceTaskTest {
     public void testOffsetSync() {
         MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(50);
 
-        assertTrue(partitionState.update(0, 100));  // always emit offset sync on the first update
-        assertTrue(partitionState.update(2, 102));  // upstream offset skipped -> resync
-        assertFalse(partitionState.update(3, 153));
-        assertFalse(partitionState.update(4, 154));
-        assertFalse(partitionState.update(5, 155));
-        assertTrue(partitionState.update(6, 207));  // one past target offset
-        assertTrue(partitionState.update(2, 208));  // upstream reset
-        assertFalse(partitionState.update(3, 209));
-        assertTrue(partitionState.update(4, 3));    // downstream reset
-        assertFalse(partitionState.update(5, 4));
+        assertTrue("always emit offset sync on first update",
+            partitionState.update(0, 100));
+        assertTrue("upstream offset skipped -> resync",
+            partitionState.update(2, 102));
+        assertFalse("no sync",
+            partitionState.update(3, 152));
+        assertFalse("no sync",
+            partitionState.update(4, 153));
+        assertFalse("no sync",
+            partitionState.update(5, 154));
+        assertTrue("one past target offset",
+            partitionState.update(6, 205));
+        assertTrue("upstream reset",
+            partitionState.update(2, 206));
+        assertFalse("no sync",
+            partitionState.update(3, 207));
+        assertTrue("downstream reset",
+                partitionState.update(4, 3));
+        assertFalse("no sync",
+            partitionState.update(5, 4));
+    }
+
+    @Test
+    public void testZeroOffsetSync() {
+        MirrorSourceTask.PartitionState partitionState = new MirrorSourceTask.PartitionState(0);
+
+        // if max offset lag is zero, should always emit offset syncs
+        assertTrue(partitionState.update(0, 100));
+        assertTrue(partitionState.update(2, 102));
+        assertTrue(partitionState.update(3, 153));
+        assertTrue(partitionState.update(4, 154));
+        assertTrue(partitionState.update(5, 155));
+        assertTrue(partitionState.update(6, 207));
+        assertTrue(partitionState.update(2, 208));
+        assertTrue(partitionState.update(3, 209));
+        assertTrue(partitionState.update(4, 3));
+        assertTrue(partitionState.update(5, 4));
     }
 }

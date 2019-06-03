@@ -246,7 +246,7 @@ public class MirrorSourceTask extends SourceTask {
             long upstreamStep = upstreamOffset - lastSyncUpstreamOffset;
             long downstreamTargetOffset = lastSyncDownstreamOffset + upstreamStep;
             if (lastSyncDownstreamOffset == -1L
-                    || downstreamOffset - downstreamTargetOffset > maxOffsetLag
+                    || downstreamOffset - downstreamTargetOffset >= maxOffsetLag
                     || upstreamOffset - previousUpstreamOffset != 1L
                     || downstreamOffset < previousDownstreamOffset) {
                 lastSyncUpstreamOffset = upstreamOffset;

@@ -121,6 +121,10 @@ public class MirrorConnectorConfig extends AbstractConfig {
         + " properties to replicate.";
     public static final Class CONFIG_PROPERTY_FILTER_CLASS_DEFAULT = DefaultConfigPropertyFilter.class;
 
+    public static final String OFFSET_LAG_MAX = "offset.lag.max";
+    private static final String OFFSET_LAG_MAX_DOC = "How out-of-sync a remote partition can be before it is resynced.";
+    public static final long OFFSET_LAG_MAX_DEFAULT = 100L;
+
     protected static final String SOURCE_CLUSTER_PREFIX = MirrorMakerConfig.SOURCE_CLUSTER_PREFIX;
     protected static final String TARGET_CLUSTER_PREFIX = MirrorMakerConfig.TARGET_CLUSTER_PREFIX;
     protected static final String PRODUCER_CLIENT_PREFIX = "producer.";
@@ -232,8 +236,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     long maxOffsetLag() {
-        // Hard-coded for now, as we don't expose this property yet.
-        return 100;
+        return getLong(OFFSET_LAG_MAX);
     }
 
     Duration emitHeartbeatsInterval() {
@@ -442,6 +445,12 @@ public class MirrorConnectorConfig extends AbstractConfig {
             REPLICATION_FACTOR_DEFAULT,
             ConfigDef.Importance.LOW,
             REPLICATION_FACTOR_DOC)
+        .define(
+            OFFSET_LAG_MAX,
+            ConfigDef.Type.LONG,
+            OFFSET_LAG_MAX_DEFAULT,
+            ConfigDef.Importance.LOW,
+            OFFSET_LAG_MAX_DOC)
         .define(
             CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
             ConfigDef.Type.LIST,
