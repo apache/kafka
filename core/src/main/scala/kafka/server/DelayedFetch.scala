@@ -25,7 +25,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.replica.ReplicaSelector.ClientMetadata
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 
-import scala.collection._
+import scala.collection.{mutable, _}
 
 case class FetchPartitionStatus(startOffsetMetadata: LogOffsetMetadata, fetchInfo: PartitionData) {
 
@@ -65,6 +65,11 @@ class DelayedFetch(delayMs: Long,
   extends DelayedOperation(delayMs) {
 
   /**
+    * Keep track of the first high watermark we encounter during this fetch for each partition
+    */
+  val seenHighWatermarks: mutable.Map[TopicPartition, Long] = mutable.Map()
+
+  /**
    * The operation can be completed if:
    *
    * Case A: This broker is no longer the leader for some partitions it tries to fetch
@@ -73,6 +78,7 @@ class DelayedFetch(delayMs: Long,
    * Case D: The accumulated bytes from all the fetching partitions exceeds the minimum bytes
    * Case E: The partition is in an offline log directory on this broker
    * Case F: This broker is the leader, but the requested epoch is now fenced
+   * Case G: The high watermark on this broker has changed, need to propagate that to followers (KIP-392)
    *
    * Upon completion, should return whatever data is available for each valid partition
    */
@@ -115,6 +121,15 @@ class DelayedFetch(delayMs: Long,
                 if (!replicaManager.shouldLeaderThrottle(quota, topicPartition, fetchMetadata.replicaId))
                   accumulatedSize += bytesAvailable
               }
+            }
+
+            // Case G check if HW has changed
+            seenHighWatermarks.get(topicPartition) match {
+              case Some(offset) => if (fetchMetadata.isFromFollower && offset != offsetSnapshot.highWatermark.messageOffset) {
+                debug(s"Satisfying fetch $fetchMetadata immediately since the high watermark changed.")
+                return forceComplete()
+              }
+              case None => seenHighWatermarks.update(topicPartition, offsetSnapshot.highWatermark.messageOffset)
             }
           }
         } catch {

@@ -29,8 +29,8 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Pluggable interface to select a preferred read replica given the current set of replicas for a partition
- * and information from the client.
+ * Pluggable interface for selecting a preferred read replica given the current set of replicas for a partition
+ * and metadata from the client.
  */
 public interface ReplicaSelector extends Configurable, Closeable {
 
@@ -55,7 +55,8 @@ public interface ReplicaSelector extends Configurable, Closeable {
      * Holder for all the client metadata required to determine a preferred replica.
      */
     class ClientMetadata {
-        public static final ClientMetadata NO_METADATA = new ClientMetadata("", "", null, null, null);
+        public static final ClientMetadata NO_METADATA =
+                new ClientMetadata("", "", null, null, null);
 
         public final String rackId;
         public final String clientId;
@@ -63,7 +64,11 @@ public interface ReplicaSelector extends Configurable, Closeable {
         public final KafkaPrincipal principal;
         public final String listenerName;
 
-        public ClientMetadata(String rackId, String clientId, InetAddress clientAddress, KafkaPrincipal principal, String listenerName) {
+        public ClientMetadata(String rackId,
+                              String clientId,
+                              InetAddress clientAddress,
+                              KafkaPrincipal principal,
+                              String listenerName) {
             this.rackId = rackId;
             this.clientId = clientId;
             this.clientAddress = clientAddress;
@@ -95,5 +100,3 @@ public interface ReplicaSelector extends Configurable, Closeable {
     }
 
 }
-
-
