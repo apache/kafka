@@ -55,6 +55,8 @@ public class AbstractConfig {
 
     private static final String CONFIG_PROVIDERS_CONFIG = "config.providers";
 
+    private static final String CONFIG_PROVIDERS_PARAM = ".param.";
+
     /**
      * Construct a configuration with a ConfigDef and the configuration properties, which can include properties
      * for zero or more {@link ConfigProvider} that will be used to resolve variables in configuration property
@@ -494,6 +496,16 @@ public class AbstractConfig {
         return result;
     }
 
+    /**
+     * Instantiates and configures the ConfigProviders. The config providers configs are defined as follows:
+     * config.providers : A comma-separated list of names for providers.
+     * config.providers.{name}.class : The Java class name for a provider.
+     * config.providers.{name}.param.{param-name} : A parameter to be passed to the above Java class on initialization.
+     * returns a map of config provider name and its instance.
+     * @param indirectConfigs The map of potential variable configs
+     * @param providerConfigProperties The map of config provider configs
+     * @return map map of config provider name and its instance.
+     */
     private Map<String, ConfigProvider> instantiateConfigProviders(Map<String, String> indirectConfigs, Map<String, ?> providerConfigProperties) {
         final String configProviders = indirectConfigs.get(CONFIG_PROVIDERS_CONFIG);
 
@@ -513,7 +525,7 @@ public class AbstractConfig {
         Map<String, ConfigProvider> configProviderInstances = new HashMap<>();
         for (Map.Entry<String, String> entry : providerMap.entrySet()) {
             try {
-                String prefix = CONFIG_PROVIDERS_CONFIG + "." + entry.getKey() + ".";
+                String prefix = CONFIG_PROVIDERS_CONFIG + "." + entry.getKey() + CONFIG_PROVIDERS_PARAM;
                 Map<String, ?> configProperties = configProviderProperties(prefix, providerConfigProperties);
                 ConfigProvider provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
                 provider.configure(configProperties);
