@@ -375,13 +375,13 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 // Task reconfigs require a rebalance. Request the rebalance, clean out state, and then restart
                 // this loop, which will then ensure the rebalance occurs without any other requests being
                 // processed until it completes.
+                log.debug("Requesting rebalance due to reconfiguration of tasks (needsReconfigRebalance: {})",
+                        needsReconfigRebalance);
                 member.requestRejoin();
+                needsReconfigRebalance = false;
                 // Any connector config updates or target state changes will be addressed during the rebalance too
                 connectorConfigUpdates.clear();
                 connectorTargetStateChanges.clear();
-                log.debug("Requesting rebalance due to reconfiguration of tasks (needsReconfigRebalance: {})",
-                        needsReconfigRebalance);
-                needsReconfigRebalance = false;
                 return true;
             } else {
                 if (!connectorConfigUpdates.isEmpty()) {
@@ -418,9 +418,9 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             configState = configBackingStore.snapshot();
 
             if (needsReconfigRebalance) {
-                member.requestRejoin();
                 log.debug("Requesting rebalance due to reconfiguration of tasks (needsReconfigRebalance: {})",
                         needsReconfigRebalance);
+                member.requestRejoin();
                 needsReconfigRebalance = false;
                 retValue = true;
             }
@@ -1004,6 +1004,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             callables.add(getConnectorStartingCallable(connectorName));
         }
 
+        // These tasks have been stopped by this worker due to task reconfiguration. In order to
+        // restart them, they are removed just before the overall task startup from the set of
+        // currently running tasks. Therefore, they'll be restarted only if they are included in
+        // the assignment that was just received after rebalancing.
         runningAssignment.tasks().removeAll(tasksToRestart);
         tasksToRestart.clear();
         for (ConnectorTaskId taskId : assignmentDifference(assignment.tasks(), runningAssignment.tasks())) {
