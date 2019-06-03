@@ -152,6 +152,7 @@ public class StreamsConfigTest {
     public void testGetMainConsumerConfigsWithMainConsumerOverridenPrefix() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "5");
         props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "50");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertEquals("50", returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
     }
@@ -215,24 +216,24 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldSupportPrefixedPropertiesThatAreNotPartOfConsumerConfig() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
         props.put(consumerPrefix("interceptor.statsd.host"), "host");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         assertEquals("host", consumerConfigs.get("interceptor.statsd.host"));
     }
 
     @Test
     public void shouldSupportPrefixedPropertiesThatAreNotPartOfRestoreConsumerConfig() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
         props.put(consumerPrefix("interceptor.statsd.host"), "host");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
         assertEquals("host", consumerConfigs.get("interceptor.statsd.host"));
     }
 
     @Test
     public void shouldSupportPrefixedPropertiesThatAreNotPartOfProducerConfig() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
         props.put(producerPrefix("interceptor.statsd.host"), "host");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
         assertEquals("host", producerConfigs.get("interceptor.statsd.host"));
     }
@@ -277,8 +278,8 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldForwardCustomConfigsWithNoPrefixToAllClients() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
         props.put("custom.property.host", "host");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         final Map<String, Object> restoreConsumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
@@ -291,11 +292,11 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldOverrideNonPrefixedCustomConfigsWithPrefixedConfigs() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
         props.put("custom.property.host", "host0");
         props.put(consumerPrefix("custom.property.host"), "host1");
         props.put(producerPrefix("custom.property.host"), "host2");
         props.put(adminClientPrefix("custom.property.host"), "host3");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getMainConsumerConfigs(groupId, clientId, threadIdx);
         final Map<String, Object> restoreConsumerConfigs = streamsConfig.getRestoreConsumerConfigs(clientId);
         final Map<String, Object> producerConfigs = streamsConfig.getProducerConfigs(clientId);
@@ -374,6 +375,7 @@ public class StreamsConfigTest {
     public void testGetRestoreConsumerConfigsWithRestoreConsumerOverridenPrefix() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "5");
         props.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "50");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getRestoreConsumerConfigs(clientId);
         assertEquals("50", returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
     }
@@ -395,8 +397,8 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldSupportPrefixedPropertiesThatAreNotPartOfGlobalConsumerConfig() {
-        final StreamsConfig streamsConfig = new StreamsConfig(props);
         props.put(consumerPrefix("interceptor.statsd.host"), "host");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> consumerConfigs = streamsConfig.getGlobalConsumerConfigs(clientId);
         assertEquals("host", consumerConfigs.get("interceptor.statsd.host"));
     }
@@ -421,6 +423,7 @@ public class StreamsConfigTest {
     public void testGetGlobalConsumerConfigsWithGlobalConsumerOverridenPrefix() {
         props.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "5");
         props.put(StreamsConfig.globalConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), "50");
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
         final Map<String, Object> returnedProps = streamsConfig.getGlobalConsumerConfigs(clientId);
         assertEquals("50", returnedProps.get(ConsumerConfig.MAX_POLL_RECORDS_CONFIG));
     }

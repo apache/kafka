@@ -19,11 +19,27 @@ package org.apache.kafka.common.config.provider;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
+import java.util.Map;
 
 public class MockVaultConfigProvider extends FileConfigProvider {
 
+    Map<String, ?> vaultConfigs;
+    private boolean configured = false;
+    private static final String LOCATION = "location";
+
     @Override
     protected Reader reader(String path) throws IOException {
-        return new StringReader("truststoreKey=testTruststoreKey\ntruststorePassword=randomtruststorePassword");
+        String vaultLocation = (String) vaultConfigs.get(LOCATION);
+        return new StringReader("truststoreKey=testTruststoreKey\ntruststorePassword=randomtruststorePassword\n" + "truststoreLocation=" + vaultLocation + "\n");
+    }
+
+    @Override
+    public void configure(Map<String, ?> configs) {
+        this.vaultConfigs = configs;
+        configured = true;
+    }
+
+    public boolean configured() {
+        return configured;
     }
 }
