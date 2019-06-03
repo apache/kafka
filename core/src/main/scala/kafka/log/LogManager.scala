@@ -689,7 +689,7 @@ class LogManager(logDirs: Seq[File],
           if (preferredLogDir != null)
             preferredLogDir
           else
-            nextLogDir().getAbsolutePath
+            nextLogDir(topicPartition).getAbsolutePath
         }
         if (!isLogDirOnline(logDir))
           throw new KafkaStorageException(s"Can not create log for $topicPartition because log directory $logDir is offline")
@@ -866,23 +866,41 @@ class LogManager(logDirs: Seq[File],
     removedLog
   }
 
+  case class AllLogCount(topicCount:Int, dirCount:Int)
+
+  private def nextLogDirByTopic(topicPartition: TopicPartition): File = {
+    // count the number of logs in each parent directory (including 0 for empty directories
+    val logCounts = allLogs.groupBy(_.dir.getParent).mapValues(_.size)
+    val zeros = _liveLogDirs.asScala.map(dir => (dir.getPath, 0)).toMap
+    val dirCounts = (zeros ++ logCounts).toBuffer
+
+    // choose the directory with the least logs in it
+    val leastLoaded = dirCounts.sortBy(_._2).head
+    new File(leastLoaded._1)
+  }
+
   /**
-   * Choose the next directory in which to create a log. Currently this is done
-   * by calculating the number of partitions in each directory and then choosing the
-   * data directory with the fewest partitions.
-   */
-  private def nextLogDir(): File = {
-    if(_liveLogDirs.size == 1) {
+    * Choose the next directory in which to create a log. Currently this is done
+    * by calculating the number of partitions in each directory and then choosing the
+    * data directory with the fewest partitions.
+    */
+  private def nextLogDir(topicPartition: TopicPartition): File = {
+    if (_liveLogDirs.size == 1) {
       _liveLogDirs.peek()
     } else {
-      // count the number of logs in each parent directory (including 0 for empty directories
-      val logCounts = allLogs.groupBy(_.dir.getParent).mapValues(_.size)
-      val zeros = _liveLogDirs.asScala.map(dir => (dir.getPath, 0)).toMap
-      val dirCounts = (zeros ++ logCounts).toBuffer
+      try {
+        nextLogDirByTopic(topicPartition)
+      } catch {
+        case e: Exception =>
+          // count the number of logs in each parent directory (including 0 for empty directories
+          val logCounts = allLogs.groupBy(_.dir.getParent).mapValues(_.size)
+          val zeros = _liveLogDirs.asScala.map(dir => (dir.getPath, 0)).toMap
+          val dirCounts = (zeros ++ logCounts).toBuffer
 
-      // choose the directory with the least logs in it
-      val leastLoaded = dirCounts.sortBy(_._2).head
-      new File(leastLoaded._1)
+          // choose the directory with the least logs in it
+          val leastLoaded = dirCounts.sortBy(_._2).head
+          new File(leastLoaded._1)
+      }
     }
   }
 
