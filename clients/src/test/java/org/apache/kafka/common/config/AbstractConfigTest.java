@@ -364,6 +364,20 @@ public class AbstractConfigTest {
     }
 
     @Test
+    public void testImmutableOriginalsWithConfigProvidersProps() {
+        // Test Case: Valid Test Case for ConfigProviders as a separate variable
+        Properties providers = new Properties();
+        providers.put("config.providers", "file");
+        providers.put("config.providers.file.class", "org.apache.kafka.common.config.provider.MockFileConfigProvider");
+        Properties props = new Properties();
+        props.put("sasl.kerberos.key", "${file:/usr/kerberos:key}");
+        Map<?, ?> immutableMap = Collections.unmodifiableMap(props);
+        Map<String, ?> provMap = convertPropertiesToMap(providers);
+        TestIndirectConfigResolution config = new TestIndirectConfigResolution(immutableMap, provMap);
+        assertEquals(config.originals().get("sasl.kerberos.key"), "testKey");
+    }
+
+    @Test
     public void testAutoConfigResolutionWithMultipleConfigProviders() {
         // Test Case: Valid Test Case With Multiple ConfigProviders as a separate variable
         Properties providers = new Properties();
