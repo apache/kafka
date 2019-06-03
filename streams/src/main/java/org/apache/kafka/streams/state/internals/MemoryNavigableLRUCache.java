@@ -60,7 +60,7 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
     @Override
     public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
         final byte[] prefixEnd = Arrays.copyOf(prefix.get(), prefix.get().length + 1);
-        prefixEnd[prefixEnd.length-1] = Byte.MAX_VALUE;
+        prefixEnd[prefixEnd.length-1] = (byte)0xFF;
 
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
         return new DelegatingPeekingKeyValueIterator<>(name(),

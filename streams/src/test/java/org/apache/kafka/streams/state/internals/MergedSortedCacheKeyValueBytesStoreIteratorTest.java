@@ -27,8 +27,10 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.junit.Before;
 import org.junit.Test;
 
-import static org.junit.Assert.assertArrayEquals;
-import static org.junit.Assert.assertFalse;
+import java.util.HashSet;
+import java.util.Set;
+
+import static org.junit.Assert.*;
 
 public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
 
@@ -68,6 +70,38 @@ public class MergedSortedCacheKeyValueBytesStoreIteratorTest {
         iterator.close();
     }
 
+    @Test
+    public void shouldIterateOverPrefix() {
+        final byte[][] storeBytes = {{(byte)0x00, (byte)0xFF}, {(byte)0x00, (byte)0xFE, (byte)0x00}, {(byte)0xAA, (byte)0xFE}};
+        final byte[][] cacheBytes = {{(byte)0x00, (byte)0x90}, {(byte)0x12, (byte)0x34}, {(byte)0x5A, (byte)0x00}};
+
+        for (byte[] sb : storeBytes) {
+            store.put(Bytes.wrap(sb), sb);
+        }
+        for (byte[] cb: cacheBytes) {
+            cache.put(namespace, Bytes.wrap(cb), new LRUCacheEntry(cb));
+        }
+
+        final Bytes prefix = Bytes.wrap(new byte[]{(byte)0x00});
+        final KeyValueIterator<Bytes, byte[]> storeIterator = new DelegatingPeekingKeyValueIterator<>("store", store.prefixScan(prefix));
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.prefix(namespace, prefix);
+
+        final MergedSortedCacheKeyValueBytesStoreIterator iterator = new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
+
+        final Set<Bytes> expected = new HashSet<>();
+        expected.add(Bytes.wrap(new byte[] {(byte)0x00, (byte)0xFF}));
+        expected.add(Bytes.wrap(new byte[] {(byte)0x00, (byte)0xFE, (byte)0x00}));
+        expected.add(Bytes.wrap(new byte[] {(byte)0x00, (byte)0x90}));
+
+        int size = 0;
+        while (iterator.hasNext()) {
+            final Bytes value = Bytes.wrap(iterator.next().value);
+            assertTrue(expected.contains(value));
+            size++;
+        }
+        assertEquals(3, size);
+        iterator.close();
+    }
 
     @Test
     public void shouldSkipLargerDeletedCacheValue() throws Exception {

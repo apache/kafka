@@ -137,7 +137,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     @Override
     public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
         final byte[] prefixEnd = Arrays.copyOf(prefix.get(), prefix.get().length + 1);
-        prefixEnd[prefixEnd.length-1] = Byte.MAX_VALUE;
+        prefixEnd[prefixEnd.length-1] = (byte)0xFF;
 
         return new DelegatingPeekingKeyValueIterator<>(
                 name,

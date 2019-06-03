@@ -277,7 +277,7 @@ class NamedCache {
 
     synchronized Iterator<Map.Entry<Bytes, LRUNode>> subMapPrefixIterator(final Bytes prefix) {
         final byte[] prefixEnd = Arrays.copyOf(prefix.get(), prefix.get().length + 1);
-        prefixEnd[prefixEnd.length-1] = Byte.MAX_VALUE;
+        prefixEnd[prefixEnd.length-1] = (byte)0xFF;
         return cache.subMap(prefix, new Bytes(prefixEnd)).entrySet().iterator();
     }
 
