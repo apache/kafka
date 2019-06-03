@@ -122,7 +122,7 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
 
   def getDelay(unit: TimeUnit): Long = {
     this synchronized {
-      time.milliseconds - nextExecution
+      time.milliseconds - nextExecutionbu
     }
   }
 
@@ -131,5 +131,9 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
   }
 }
 object MockTask {
-  implicit def MockTaskOrdering: Ordering[MockTask] = (x: MockTask, y: MockTask) => x.compare(y)
+  implicit def MockTaskOrdering : Ordering[MockTask] = new Ordering[MockTask] {
+    def compare(x: MockTask, y: MockTask): Int ={
+      x.compare(y)
+    }
+  }
 }
