@@ -105,7 +105,7 @@ class KafkaScheduler(val threads: Int,
     schedule(name, fun, delay = 0L, period = -1L, unit = TimeUnit.MILLISECONDS)
   }
 
-  def schedule(name: String, fun: () => Unit, delay: Long, period: Long, unit: TimeUnit) : ScheduledFuture[_] = {
+  def schedule(name: String, fun: () => Unit, delay: Long, period: Long, unit: TimeUnit): ScheduledFuture[_] = {
     debug("Scheduling task %s with initial delay %d ms and period %d ms."
         .format(name, TimeUnit.MILLISECONDS.convert(delay, unit), TimeUnit.MILLISECONDS.convert(period, unit)))
     this synchronized {
@@ -127,10 +127,11 @@ class KafkaScheduler(val threads: Int,
     }
   }
 
-  def taskRunning(task: ScheduledFuture[_]) : Boolean = {
-    this synchronized {
+  /**
+   * Package private for testing.
+   */
+  private[utils] def taskRunning(task: ScheduledFuture[_]): Boolean = {
       executor.getQueue().contains(task)
-    }
   }
 
   def resizeThreadPool(newSize: Int): Unit = {

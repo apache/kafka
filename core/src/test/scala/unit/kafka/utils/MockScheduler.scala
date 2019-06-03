@@ -122,7 +122,7 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
 
   def getDelay(unit: TimeUnit): Long = {
     this synchronized {
-      time.milliseconds - nextExecutionbu
+      time.milliseconds - nextExecution
     }
   }
 
