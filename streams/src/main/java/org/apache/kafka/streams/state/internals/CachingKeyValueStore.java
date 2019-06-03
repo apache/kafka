@@ -258,7 +258,7 @@ public class CachingKeyValueStore
     public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
         validateStoreOpen();
         final KeyValueIterator<Bytes, byte[]> storeIterator = wrapped().prefixScan(prefix);
-        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.all(cacheName);
+        final ThreadCache.MemoryLRUCacheBytesIterator cacheIterator = cache.prefix(cacheName, prefix);
 
         return new MergedSortedCacheKeyValueBytesStoreIterator(cacheIterator, storeIterator);
     }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.concurrent.ConcurrentNavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
@@ -133,12 +134,14 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
             new InMemoryKeyValueIterator(map.entrySet().iterator()));
     }
 
-    /**
-     * @throws UnsupportedOperationException
-     */
     @Override
     public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
-        throw new UnsupportedOperationException("prefixScan() not supported in " + getClass().getName());
+        final byte[] prefixEnd = Arrays.copyOf(prefix.get(), prefix.get().length + 1);
+        prefixEnd[prefixEnd.length-1] = Byte.MAX_VALUE;
+
+        return new DelegatingPeekingKeyValueIterator<>(
+                name,
+                new InMemoryKeyValueIterator(map.subMap(prefix, true, new Bytes(prefixEnd), true).entrySet().iterator()));
     }
 
     @Override

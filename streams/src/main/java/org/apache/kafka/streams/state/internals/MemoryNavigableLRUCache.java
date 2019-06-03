@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.TreeMap;
@@ -54,6 +55,17 @@ public class MemoryNavigableLRUCache extends MemoryLRUCache {
     public  KeyValueIterator<Bytes, byte[]> all() {
         final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
         return new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet().iterator(), treeMap);
+    }
+
+    @Override
+    public KeyValueIterator<Bytes, byte[]> prefixScan(final Bytes prefix) {
+        final byte[] prefixEnd = Arrays.copyOf(prefix.get(), prefix.get().length + 1);
+        prefixEnd[prefixEnd.length-1] = Byte.MAX_VALUE;
+
+        final TreeMap<Bytes, byte[]> treeMap = toTreeMap();
+        return new DelegatingPeekingKeyValueIterator<>(name(),
+                new MemoryNavigableLRUCache.CacheIterator(treeMap.navigableKeySet()
+                        .subSet(prefix, true, new Bytes(prefixEnd), true).iterator(), treeMap));
     }
 
     private synchronized TreeMap<Bytes, byte[]> toTreeMap() {

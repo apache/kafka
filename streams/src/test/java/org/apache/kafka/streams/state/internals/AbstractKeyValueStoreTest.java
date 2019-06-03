@@ -111,6 +111,34 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
+    public void shouldNotIncludeDeletedFromPrefixResult() {
+        store.close();
+
+        final Serializer<String> serializer = new StringSerializer() {
+            private int numCalls = 0;
+
+            @Override
+            public byte[] serialize(final String topic, final String data) {
+                if (++numCalls > 3) {
+                    fail("Value serializer is called; it should never happen");
+                }
+
+                return super.serialize(topic, data);
+            }
+        };
+
+        context.setValueSerde(Serdes.serdeFrom(serializer, new StringDeserializer()));
+        store = createKeyValueStore(driver.context());
+
+        store.put(0, "zero");
+        store.delete(0);
+
+        // should not include deleted records in iterator
+        final Map<Integer, String> expectedContents = new HashMap<>();
+        assertEquals(expectedContents, getContents(store.prefixScan(0)));
+    }
+
+    @Test
     public void shouldDeleteIfSerializedValueIsNull() {
         store.close();
 
@@ -185,6 +213,10 @@ public abstract class AbstractKeyValueStoreTest {
         expectedContents.put(0, "zero");
         expectedContents.put(1, "one");
         assertEquals(expectedContents, getContents(store.all()));
+
+        final HashMap<Integer, String> expectedPrefixScanContents = new HashMap<>();
+        expectedPrefixScanContents.put(4, "four");
+        assertEquals(expectedPrefixScanContents, getContents(store.prefixScan(4)));
     }
 
     @Test
