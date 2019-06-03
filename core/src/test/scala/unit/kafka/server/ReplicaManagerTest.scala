@@ -38,7 +38,7 @@ import org.apache.kafka.common.requests.{EpochEndOffset, IsolationLevel, LeaderA
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.zookeeper.data.Stat
 import org.easymock.EasyMock
@@ -672,14 +672,14 @@ class ReplicaManagerTest {
       mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, Option(this.getClass.getName)) {
 
       override protected def createReplicaFetcherManager(metrics: Metrics,
-                                                     time: Time,
-                                                     threadNamePrefix: Option[String],
-                                                     quotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
+                                                         time: Time,
+                                                         threadNamePrefix: Option[String],
+                                                         quotaManager: ReplicationQuotaManager): ReplicaFetcherManager = {
         new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager) {
 
           override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
-            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", fetcherId,
-              sourceBroker, config, failedPartitions, replicaManager, metrics, time, quota.follower, Some(blockingSend)) {
+            new ReplicaFetcherThread(s"ReplicaFetcherThread-$fetcherId", sourceBroker, config,
+              failedPartitions, replicaManager, new LogContext(), quota.follower, blockingSend) {
 
               override def doWork() = {
                 // In case the thread starts before the partition is added by AbstractFetcherManager,

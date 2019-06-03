@@ -22,45 +22,80 @@ import java.util.Optional
 import kafka.api._
 import kafka.cluster.BrokerEndPoint
 import kafka.log.LogAppendInfo
-import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import kafka.server.FetcherThread.ResultWithPartitions
+import kafka.utils.Logging
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.LogContext
 
 import scala.collection.JavaConverters._
 import scala.collection.{Map, mutable}
 
 class ReplicaFetcherThread(name: String,
-                           fetcherId: Int,
                            sourceBroker: BrokerEndPoint,
                            brokerConfig: KafkaConfig,
                            failedPartitions: FailedPartitions,
                            replicaMgr: ReplicaManager,
-                           metrics: Metrics,
-                           time: Time,
+                           logContext: LogContext,
                            quota: ReplicaQuota,
-                           leaderEndpointBlockingSend: Option[BlockingSend] = None)
-  extends AbstractFetcherThread(name = name,
-                                clientId = name,
-                                sourceBroker = sourceBroker,
-                                failedPartitions,
-                                fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
-                                isInterruptible = false) {
+                           leaderEndpoint: BlockingSend)
+  extends FetcherThread(
+    name = name,
+    clientId = name,
+    sourceBroker = sourceBroker,
+    failedPartitions,
+    fetchBackOffMs = brokerConfig.replicaFetchBackoffMs,
+    fetcher = new ReplicaFetcher(sourceBroker, brokerConfig, replicaMgr, logContext, quota, leaderEndpoint),
+    isInterruptible = false) {
 
-  private val replicaId = brokerConfig.brokerId
-  private val logContext = new LogContext(s"[ReplicaFetcher replicaId=$replicaId, leaderId=${sourceBroker.id}, " +
-    s"fetcherId=$fetcherId] ")
   this.logIdent = logContext.logPrefix
 
-  private val leaderEndpoint = leaderEndpointBlockingSend.getOrElse(
-    new ReplicaFetcherBlockingSend(sourceBroker, brokerConfig, metrics, time, fetcherId,
-      s"broker-$replicaId-fetcher-$fetcherId", logContext))
+  override def initiateShutdown(): Boolean = {
+    val justShutdown = super.initiateShutdown()
+    if (justShutdown) {
+      // This is thread-safe, so we don't expect any exceptions, but catch and log any errors
+      // to avoid failing the caller, especially during shutdown. We will attempt to close
+      // leaderEndpoint after the thread terminates.
+      try {
+        leaderEndpoint.initiateClose()
+      } catch {
+        case t: Throwable =>
+          error(s"Failed to initiate shutdown of leader endpoint $leaderEndpoint after initiating replica fetcher thread shutdown", t)
+      }
+    }
+    justShutdown
+  }
+
+  override def awaitShutdown(): Unit = {
+    super.awaitShutdown()
+    // We don't expect any exceptions here, but catch and log any errors to avoid failing the caller,
+    // especially during shutdown. It is safe to catch the exception here without causing correctness
+    // issue because we are going to shutdown the thread and will not re-use the leaderEndpoint anyway.
+    try {
+      leaderEndpoint.close()
+    } catch {
+      case t: Throwable =>
+        error(s"Failed to close leader endpoint $leaderEndpoint after shutting down replica fetcher thread", t)
+    }
+  }
+}
+
+
+class ReplicaFetcher(sourceBroker: BrokerEndPoint,
+                     brokerConfig: KafkaConfig,
+                     replicaMgr: ReplicaManager,
+                     logContext: LogContext,
+                     quota: ReplicaQuota,
+                     leaderEndpoint: BlockingSend)
+  extends Fetcher with Logging {
+
+  private val replicaId = brokerConfig.brokerId
+  this.logIdent = logContext.logPrefix
 
   // Visible for testing
   private[server] val fetchRequestVersion: Short =
@@ -98,46 +133,18 @@ class ReplicaFetcherThread(name: String,
   private val brokerSupportsLeaderEpochRequest = brokerConfig.interBrokerProtocolVersion >= KAFKA_0_11_0_IV2
   private val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
 
-  override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
+  override def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
     replicaMgr.localReplicaOrException(topicPartition).latestEpoch
   }
 
-  override protected def logEndOffset(topicPartition: TopicPartition): Long = {
+  override def logEndOffset(topicPartition: TopicPartition): Long = {
     replicaMgr.localReplicaOrException(topicPartition).logEndOffset
   }
 
-  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
+  override def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
     replicaMgr.localReplicaOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
-  override def initiateShutdown(): Boolean = {
-    val justShutdown = super.initiateShutdown()
-    if (justShutdown) {
-      // This is thread-safe, so we don't expect any exceptions, but catch and log any errors
-      // to avoid failing the caller, especially during shutdown. We will attempt to close
-      // leaderEndpoint after the thread terminates.
-      try {
-        leaderEndpoint.initiateClose()
-      } catch {
-        case t: Throwable =>
-          error(s"Failed to initiate shutdown of leader endpoint $leaderEndpoint after initiating replica fetcher thread shutdown", t)
-      }
-    }
-    justShutdown
-  }
-
-  override def awaitShutdown(): Unit = {
-    super.awaitShutdown()
-    // We don't expect any exceptions here, but catch and log any errors to avoid failing the caller,
-    // especially during shutdown. It is safe to catch the exception here without causing correctness
-    // issue because we are going to shutdown the thread and will not re-use the leaderEndpoint anyway.
-    try {
-      leaderEndpoint.close()
-    } catch {
-      case t: Throwable =>
-        error(s"Failed to close leader endpoint $leaderEndpoint after shutting down replica fetcher thread", t)
-    }
-  }
 
   // process fetched data
   override def processPartitionData(topicPartition: TopicPartition,
@@ -192,7 +199,7 @@ class ReplicaFetcherThread(name: String,
   }
 
 
-  override protected def fetchFromLeader(fetchRequest: FetchRequest.Builder): Seq[(TopicPartition, FetchData)] = {
+  override def fetchFromLeader(fetchRequest: FetchRequest.Builder): Seq[(TopicPartition, FetchData)] = {
     try {
       val clientResponse = leaderEndpoint.sendRequest(fetchRequest)
       val fetchResponse = clientResponse.responseBody.asInstanceOf[FetchResponse[Records]]
@@ -208,11 +215,11 @@ class ReplicaFetcherThread(name: String,
     }
   }
 
-  override protected def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
+  override def fetchEarliestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
     fetchOffsetFromLeader(topicPartition, currentLeaderEpoch, ListOffsetRequest.EARLIEST_TIMESTAMP)
   }
 
-  override protected def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
+  override def fetchLatestOffsetFromLeader(topicPartition: TopicPartition, currentLeaderEpoch: Int): Long = {
     fetchOffsetFromLeader(topicPartition, currentLeaderEpoch, ListOffsetRequest.LATEST_TIMESTAMP)
   }
 
@@ -243,7 +250,7 @@ class ReplicaFetcherThread(name: String,
     val builder = fetchSessionHandler.newBuilder()
     partitionMap.foreach { case (topicPartition, fetchState) =>
       // We will not include a replica in the fetch request if it should be throttled.
-      if (fetchState.isReadyForFetch && !shouldFollowerThrottle(quota, topicPartition)) {
+      if (fetchState.isReadyForFetch && !shouldFollowerThrottle(topicPartition, fetchState)) {
         try {
           val logStartOffset = replicaMgr.localReplicaOrException(topicPartition).logStartOffset
           builder.add(topicPartition, new FetchRequest.PartitionData(
@@ -288,11 +295,11 @@ class ReplicaFetcherThread(name: String,
 
     // mark the future replica for truncation only when we do last truncation
     if (offsetTruncationState.truncationCompleted)
-      replicaMgr.replicaAlterLogDirsManager.markPartitionsForTruncation(brokerConfig.brokerId, tp,
+      replicaMgr.logDirFetcherManager.markPartitionsForTruncation(brokerConfig.brokerId, tp,
         offsetTruncationState.offset)
   }
 
-  override protected def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {
+  override def truncateFullyAndStartAt(topicPartition: TopicPartition, offset: Long): Unit = {
     val partition = replicaMgr.nonOfflinePartition(topicPartition).get
     partition.truncateFullyAndStartAt(offset, isFuture = false)
   }
@@ -326,14 +333,12 @@ class ReplicaFetcherThread(name: String,
 
   override def isOffsetForLeaderEpochSupported: Boolean = brokerSupportsLeaderEpochRequest
 
-
   /**
    *  To avoid ISR thrashing, we only throttle a replica on the follower if it's in the throttled replica list,
    *  the quota is exceeded and the replica is not in sync.
    */
-  private def shouldFollowerThrottle(quota: ReplicaQuota, topicPartition: TopicPartition): Boolean = {
-    val isReplicaInSync = fetcherLagStats.isReplicaInSync(topicPartition)
-    !isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
+  private def shouldFollowerThrottle(topicPartition: TopicPartition, fetchState: PartitionFetchState): Boolean = {
+    !fetchState.isInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
 }

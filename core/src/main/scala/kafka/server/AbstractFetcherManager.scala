@@ -27,7 +27,7 @@ import org.apache.kafka.common.utils.Utils
 import scala.collection.mutable
 import scala.collection.{Map, Set}
 
-abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: String, clientId: String, numFetchers: Int)
+abstract class AbstractFetcherManager[T <: FetcherThread](val name: String, clientId: String, numFetchers: Int)
   extends Logging with KafkaMetricsGroup {
   // map of (source broker_id, fetcher_id per source broker) => fetcher.
   // package private for test
@@ -136,7 +136,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         BrokerAndFetcherId(brokerAndInitialFetchOffset.leader, getFetcherId(topicPartition))
       }
 
-      def addAndStartFetcherThread(brokerAndFetcherId: BrokerAndFetcherId, brokerIdAndFetcherId: BrokerIdAndFetcherId): AbstractFetcherThread = {
+      def addAndStartFetcherThread(brokerAndFetcherId: BrokerAndFetcherId, brokerIdAndFetcherId: BrokerIdAndFetcherId): FetcherThread = {
         val fetcherThread = createFetcherThread(brokerAndFetcherId.fetcherId, brokerAndFetcherId.broker)
         fetcherThreadMap.put(brokerIdAndFetcherId, fetcherThread)
         fetcherThread.start()

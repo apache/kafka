@@ -20,7 +20,7 @@ import java.util.Optional
 
 import kafka.cluster.{BrokerEndPoint, Partition, Replica}
 import kafka.log.LogManager
-import kafka.server.AbstractFetcherThread.ResultWithPartitions
+import kafka.server.FetcherThread.ResultWithPartitions
 import kafka.utils.{DelayedItem, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.KafkaStorageException
@@ -35,7 +35,7 @@ import org.junit.Test
 import scala.collection.JavaConverters._
 import scala.collection.{Map, Seq}
 
-class ReplicaAlterLogDirsThreadTest {
+class LogDirFetcherThreadTest {
 
   private val t1p0 = new TopicPartition("topic1", 0)
   private val t1p1 = new TopicPartition("topic1", 1)
@@ -74,17 +74,12 @@ class ReplicaAlterLogDirsThreadTest {
 
     replay(partitionT1p0, partitionT1p1, replicaManager)
 
-    val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val thread = new ReplicaAlterLogDirsThread(
-      "alter-logs-dirs-thread-test1",
-      sourceBroker = endPoint,
+    val fetcher = new LogDirFetcher(
       brokerConfig = config,
-      failedPartitions : FailedPartitions,
       replicaMgr = replicaManager,
-      quota = null,
-      brokerTopicStats = null)
+      quota = null)
 
-    val result = thread.fetchEpochEndOffsets(Map(
+    val result = fetcher.fetchEpochEndOffsets(Map(
       t1p0 -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), leaderEpochT1p0),
       t1p1 -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), leaderEpochT1p1)))
 
@@ -120,17 +115,12 @@ class ReplicaAlterLogDirsThreadTest {
 
     replay(partitionT1p0, replicaManager)
 
-    val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val thread = new ReplicaAlterLogDirsThread(
-      "alter-logs-dirs-thread-test1",
-      sourceBroker = endPoint,
+    val fetcher = new LogDirFetcher(
       brokerConfig = config,
-      failedPartitions: FailedPartitions,
       replicaMgr = replicaManager,
-      quota = null,
-      brokerTopicStats = null)
+      quota = null)
 
-    val result = thread.fetchEpochEndOffsets(Map(
+    val result = fetcher.fetchEpochEndOffsets(Map(
       t1p0 -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), leaderEpoch),
       t1p1 -> new OffsetsForLeaderEpochRequest.PartitionData(Optional.empty(), leaderEpoch)))
 
@@ -187,6 +177,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partitionT1p0.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
       .andReturn(new EpochEndOffset(leaderEpoch, replicaT1p0LEO))
       .anyTimes()
+    expect(partitionT1p0.maybeReplaceCurrentWithFutureReplica()).andStubReturn(false)
 
     expect(futureReplicaT1p1.latestEpoch).andReturn(Some(leaderEpoch)).anyTimes()
     expect(futureReplicaT1p1.endOffsetForEpoch(leaderEpoch)).andReturn(
@@ -194,6 +185,7 @@ class ReplicaAlterLogDirsThreadTest {
     expect(partitionT1p1.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
       .andReturn(new EpochEndOffset(leaderEpoch, replicaT1p1LEO))
       .anyTimes()
+    expect(partitionT1p1.maybeReplaceCurrentWithFutureReplica()).andStubReturn(false)
 
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
     stubWithFetchMessages(replicaT1p0, replicaT1p1, futureReplicaT1p0, partitionT1p0, replicaManager, responseCallback)
@@ -203,14 +195,13 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val thread = new ReplicaAlterLogDirsThread(
+    val thread = new LogDirFetcherThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
       failedPartitions: FailedPartitions,
       replicaMgr = replicaManager,
-      quota = quotaManager,
-      brokerTopicStats = null)
+      quota = quotaManager)
     thread.addPartitions(Map(t1p0 -> offsetAndEpoch(0L), t1p1 -> offsetAndEpoch(0L)))
 
     //Run it
@@ -247,6 +238,9 @@ class ReplicaAlterLogDirsThreadTest {
     //Stubs
     expect(replicaManager.getPartitionOrException(t1p0, expectLeader = false))
       .andStubReturn(partition)
+    expect(replicaManager.nonOfflinePartition(t1p0)).andReturn(Some(partition))
+    expect(partition.maybeReplaceCurrentWithFutureReplica()).andStubReturn(false)
+
     expect(replicaManager.futureLocalReplicaOrException(t1p0)).andStubReturn(futureReplica)
 
     expect(partition.truncateTo(capture(truncateToCapture), EasyMock.eq(true))).anyTimes()
@@ -275,14 +269,13 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val thread = new ReplicaAlterLogDirsThread(
+    val thread = new LogDirFetcherThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
       failedPartitions : FailedPartitions,
       replicaMgr = replicaManager,
-      quota = quotaManager,
-      brokerTopicStats = null)
+      quota = quotaManager)
     thread.addPartitions(Map(t1p0 -> offsetAndEpoch(0L)))
 
     // First run will result in another offset for leader epoch request
@@ -326,19 +319,20 @@ class ReplicaAlterLogDirsThreadTest {
     // pretend this is a completely new future replica, with no leader epochs recorded
     expect(futureReplica.latestEpoch).andReturn(None).anyTimes()
 
+    expect(partition.maybeReplaceCurrentWithFutureReplica()).andStubReturn(false)
+
     stubWithFetchMessages(replica, replica, futureReplica, partition, replicaManager, responseCallback)
     replay(replicaManager, logManager, quotaManager, replica, futureReplica, partition)
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val thread = new ReplicaAlterLogDirsThread(
+    val thread = new LogDirFetcherThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
       failedPartitions: FailedPartitions,
       replicaMgr = replicaManager,
-      quota = quotaManager,
-      brokerTopicStats = null)
+      quota = quotaManager)
     thread.addPartitions(Map(t1p0 -> offsetAndEpoch(initialFetchOffset)))
 
     //Run it
@@ -382,6 +376,8 @@ class ReplicaAlterLogDirsThreadTest {
     expect(replicaManager.localReplica(t1p0)).andReturn(Some(replica)).anyTimes()
     expect(replicaManager.futureLocalReplica(t1p0)).andReturn(Some(futureReplica)).anyTimes()
     expect(replicaManager.futureLocalReplicaOrException(t1p0)).andReturn(futureReplica).anyTimes()
+    expect(replicaManager.nonOfflinePartition(t1p0)).andReturn(Some(partition))
+    expect(partition.maybeReplaceCurrentWithFutureReplica()).andStubReturn(false)
 
     // this will cause fetchEpochsFromLeader return an error with undefined offset
     expect(partition.lastOffsetForLeaderEpoch(Optional.of(1), futureReplicaLeaderEpoch, fetchOnlyFromLeader = false))
@@ -410,14 +406,13 @@ class ReplicaAlterLogDirsThreadTest {
 
     //Create the thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val thread = new ReplicaAlterLogDirsThread(
+    val thread = new LogDirFetcherThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
       failedPartitions: FailedPartitions,
       replicaMgr = replicaManager,
-      quota = quotaManager,
-      brokerTopicStats = null)
+      quota = quotaManager)
     thread.addPartitions(Map(t1p0 -> offsetAndEpoch(0L)))
 
     // Run thread 3 times (exactly number of times we mock exception for getReplicaOrException)
@@ -464,20 +459,20 @@ class ReplicaAlterLogDirsThreadTest {
     expect(futureReplica.endOffsetForEpoch(leaderEpoch)).andReturn(
       Some(OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
     expect(replicaManager.logManager).andReturn(logManager).anyTimes()
+    expect(partition.maybeReplaceCurrentWithFutureReplica()).andStubReturn(false)
     stubWithFetchMessages(replica, replica, futureReplica, partition, replicaManager, responseCallback)
 
     replay(replicaManager, logManager, quotaManager, replica, futureReplica, partition)
 
     //Create the fetcher thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
-    val thread = new ReplicaAlterLogDirsThread(
+    val thread = new LogDirFetcherThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
       failedPartitions: FailedPartitions,
       replicaMgr = replicaManager,
-      quota = quotaManager,
-      brokerTopicStats = null)
+      quota = quotaManager)
     thread.addPartitions(Map(t1p0 -> offsetAndEpoch(0L)))
 
     // loop few times
@@ -511,19 +506,18 @@ class ReplicaAlterLogDirsThreadTest {
     //Create the fetcher thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val leaderEpoch = 1
-    val thread = new ReplicaAlterLogDirsThread(
+    val thread = new LogDirFetcherThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
       failedPartitions: FailedPartitions,
       replicaMgr = replicaManager,
-      quota = quotaManager,
-      brokerTopicStats = null)
+      quota = quotaManager)
     thread.addPartitions(Map(
       t1p0 -> offsetAndEpoch(0L, leaderEpoch),
       t1p1 -> offsetAndEpoch(0L, leaderEpoch)))
 
-    val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.buildFetch(Map(
+    val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.fetcher.buildFetch(Map(
       t1p0 -> PartitionFetchState(150, leaderEpoch, state = Fetching),
       t1p1 -> PartitionFetchState(160, leaderEpoch, state = Fetching)))
 
@@ -561,20 +555,19 @@ class ReplicaAlterLogDirsThreadTest {
     //Create the fetcher thread
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
     val leaderEpoch = 1
-    val thread = new ReplicaAlterLogDirsThread(
+    val thread = new LogDirFetcherThread(
       "alter-logs-dirs-thread-test1",
       sourceBroker = endPoint,
       brokerConfig = config,
       failedPartitions: FailedPartitions,
       replicaMgr = replicaManager,
-      quota = quotaManager,
-      brokerTopicStats = null)
+      quota = quotaManager)
     thread.addPartitions(Map(
       t1p0 -> offsetAndEpoch(0L, leaderEpoch),
       t1p1 -> offsetAndEpoch(0L, leaderEpoch)))
 
     // one partition is ready and one is truncating
-    val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.buildFetch(Map(
+    val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = thread.fetcher.buildFetch(Map(
         t1p0 -> PartitionFetchState(150, leaderEpoch, state = Fetching),
         t1p1 -> PartitionFetchState(160, leaderEpoch, state = Truncating)))
 
@@ -588,9 +581,9 @@ class ReplicaAlterLogDirsThreadTest {
     assertEquals(150, fetchInfos.head._2.fetchOffset)
 
     // one partition is ready and one is delayed
-    val ResultWithPartitions(fetchRequest2Opt, partitionsWithError2) = thread.buildFetch(Map(
+    val ResultWithPartitions(fetchRequest2Opt, partitionsWithError2) = thread.fetcher.buildFetch(Map(
         t1p0 -> PartitionFetchState(140, leaderEpoch, state = Fetching),
-        t1p1 -> PartitionFetchState(160, leaderEpoch, delay = new DelayedItem(5000), state = Fetching)))
+        t1p1 -> PartitionFetchState(160, leaderEpoch, -1L, delay = new DelayedItem(5000), state = Fetching)))
 
     assertTrue(fetchRequest2Opt.isDefined)
     val fetchRequest2 = fetchRequest2Opt.get
@@ -602,9 +595,9 @@ class ReplicaAlterLogDirsThreadTest {
     assertEquals(140, fetchInfos2.head._2.fetchOffset)
 
     // both partitions are delayed
-    val ResultWithPartitions(fetchRequest3Opt, partitionsWithError3) = thread.buildFetch(Map(
-        t1p0 -> PartitionFetchState(140, leaderEpoch, delay = new DelayedItem(5000), state = Fetching),
-        t1p1 -> PartitionFetchState(160, leaderEpoch, delay = new DelayedItem(5000), state = Fetching)))
+    val ResultWithPartitions(fetchRequest3Opt, partitionsWithError3) = thread.fetcher.buildFetch(Map(
+        t1p0 -> PartitionFetchState(140, leaderEpoch, -1L, delay = new DelayedItem(5000), state = Fetching),
+        t1p1 -> PartitionFetchState(160, leaderEpoch, -1L, delay = new DelayedItem(5000), state = Fetching)))
     assertTrue("Expected no fetch requests since all partitions are delayed", fetchRequest3Opt.isEmpty)
     assertFalse(partitionsWithError3.nonEmpty)
   }

@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 
 class ReplicaFetcherManager(brokerConfig: KafkaConfig,
                             protected val replicaManager: ReplicaManager,
@@ -35,8 +35,13 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
     val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
     val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
-    new ReplicaFetcherThread(threadName, fetcherId, sourceBroker, brokerConfig, failedPartitions, replicaManager,
-      metrics, time, quotaManager)
+    val replicaId = brokerConfig.brokerId
+    val logContext = new LogContext(s"[ReplicaFetcher replicaId=$replicaId, leaderId=${sourceBroker.id}, " +
+      s"fetcherId=$fetcherId] ")
+    val leaderEndpoint = new ReplicaFetcherBlockingSend(sourceBroker, brokerConfig, metrics, time, fetcherId,
+        s"broker-$replicaId-fetcher-$fetcherId", logContext)
+    new ReplicaFetcherThread(threadName, sourceBroker, brokerConfig, failedPartitions, replicaManager,
+      logContext, quotaManager, leaderEndpoint)
   }
 
   def shutdown() {
