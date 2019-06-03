@@ -61,6 +61,7 @@ public class MeteredKeyValueStore<K, V>
     private Sensor deleteTime;
     private Sensor putAllTime;
     private Sensor allTime;
+    private Sensor prefixTime;
     private Sensor rangeTime;
     private Sensor flushTime;
     private StreamsMetricsImpl metrics;
@@ -95,6 +96,7 @@ public class MeteredKeyValueStore<K, V>
         putAllTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "put-all", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
         getTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "get", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
         allTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "all", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
+        prefixTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "prefix", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
         rangeTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "range", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
         flushTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "flush", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
         deleteTime = createTaskAndStoreLatencyAndThroughputSensors(DEBUG, "delete", metrics, metricsGroup, taskName, name(), taskTags, storeTags);
@@ -226,7 +228,7 @@ public class MeteredKeyValueStore<K, V>
 
     @Override
     public KeyValueIterator<K, V> prefixScan(final K prefix) {
-        return new MeteredKeyValueIterator(wrapped().prefixScan(Bytes.wrap(serdes.rawKey(prefix))), this.allTime);
+        return new MeteredKeyValueIterator(wrapped().prefixScan(Bytes.wrap(serdes.rawKey(prefix))), prefixTime);
     }
 
     @Override

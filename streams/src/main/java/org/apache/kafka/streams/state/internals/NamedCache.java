@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Arrays;
 import java.util.NavigableMap;
 import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.kafka.common.MetricName;
@@ -275,8 +276,9 @@ class NamedCache {
     }
 
     synchronized Iterator<Map.Entry<Bytes, LRUNode>> subMapPrefixIterator(final Bytes prefix) {
-        //TODO - bellemare - validate that this actually works...
-        return cache.subMap(prefix, prefix).entrySet().iterator();
+        final byte[] prefixEnd = Arrays.copyOf(prefix.get(), prefix.get().length + 1);
+        prefixEnd[prefixEnd.length-1] = Byte.MAX_VALUE;
+        return cache.subMap(prefix, new Bytes(prefixEnd)).entrySet().iterator();
     }
 
     synchronized LRUCacheEntry first() {

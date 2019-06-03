@@ -373,6 +373,11 @@ public abstract class AbstractKeyValueStoreTest {
         store.range(2, null);
     }
 
+    @Test(expected = NullPointerException.class)
+    public void shouldThrowNullPointerExceptionOnPrefixNull() {
+        store.prefixScan(null);
+    }
+
     @Test
     public void testSize() {
         assertEquals("A newly created store should have no entries", 0, store.approximateNumEntries());
@@ -429,10 +434,36 @@ public abstract class AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldNotThrowConcurrentModificationException() {
+    public void shouldReturnSameResultsForGetAndPrefixWithEqualKeys() {
+        final List<KeyValue<Integer, String>> entries = new ArrayList<>();
+        entries.add(new KeyValue<>(1, "one"));
+        entries.add(new KeyValue<>(2, "two"));
+        entries.add(new KeyValue<>(3, "three"));
+
+        store.putAll(entries);
+
+        final Iterator<KeyValue<Integer, String>> iterator = store.prefixScan(2);
+
+        assertEquals(iterator.next().value, store.get(2));
+        assertFalse(iterator.hasNext());
+    }
+
+    @Test
+    public void shouldNotThrowConcurrentModificationExceptionDuringRange() {
         store.put(0, "zero");
 
         final KeyValueIterator<Integer, String> results = store.range(0, 2);
+
+        store.put(1, "one");
+
+        assertEquals(new KeyValue<>(0, "zero"), results.next());
+    }
+
+    @Test
+    public void shouldNotThrowConcurrentModificationExceptionDuringPrefix() {
+        store.put(0, "zero");
+
+        final KeyValueIterator<Integer, String> results = store.prefixScan(0);
 
         store.put(1, "one");
 
@@ -451,5 +482,14 @@ public abstract class AbstractKeyValueStoreTest {
         assertThat(messages, hasItem("Returning empty iterator for fetch with invalid key range: from > to. "
             + "This may be due to serdes that don't preserve ordering when lexicographically comparing the serialized bytes. "
             + "Note that the built-in numerical serdes do not follow this for negative numbers"));
+    }
+
+    @Test
+    public void shouldNotThrowInvalidPrefixExceptionWithNegativePrefix() {
+        LogCaptureAppender.setClassLoggerToDebug(InMemoryWindowStore.class);
+        final LogCaptureAppender appender = LogCaptureAppender.createAndRegister();
+
+        final KeyValueIterator<Integer, String> iterator = store.prefixScan(-1);
+        assertFalse(iterator.hasNext());
     }
 }
