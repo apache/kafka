@@ -400,6 +400,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         }
 
         final SuppressedInternal<K> suppressedInternal = buildSuppress(suppressed, name);
+
         // We need to burn an index for the store name even if provided
         final String generatedSuppressedStoreName = builder.newStoreName(SUPPRESS_NAME);
 
