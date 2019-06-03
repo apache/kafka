@@ -130,6 +130,10 @@ Trogdor supports running arbitrary commands in external processes. This is a gen
 ### ExternalCommandWorker
 ExternalCommandWorker starts an external command defined by the ExternalCommandSpec. It essentially allows you to run any command on any Trogdor agent node.
 The worker communicates with the external process via its stdin, stdout and stderr in a JSON protocol.
+The JSON can contain the following fields:
+- status: If the object contains this field, the status of the worker will be set to the given value.
+- error: If the object contains this field, the error of the worker will be set to the given value. Once an error occurs, the external process will be terminated.
+- log: If the object contains this field, a log message will be issued with this text.
 
 Exec Mode
 ========================================
