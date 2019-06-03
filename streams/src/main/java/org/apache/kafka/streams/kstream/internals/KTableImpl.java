@@ -390,17 +390,21 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     @Override
     public KTable<K, V> suppress(final Suppressed<? super K> suppressed) {
         final String name;
+        // We need to burn an index even if name provided
+        final String generatedSuppressedName = builder.newProcessorName(SUPPRESS_NAME);
         if (suppressed instanceof NamedSuppressed) {
             final String givenName = ((NamedSuppressed<?>) suppressed).name();
-            name = givenName != null ? givenName : builder.newProcessorName(SUPPRESS_NAME);
+            name = givenName != null ? givenName : generatedSuppressedName;
         } else {
             throw new IllegalArgumentException("Custom subclasses of Suppressed are not supported.");
         }
 
         final SuppressedInternal<K> suppressedInternal = buildSuppress(suppressed, name);
+        // We need to burn an index for the store name even if provided
+        final String generatedSuppressedStoreName = builder.newStoreName(SUPPRESS_NAME);
 
         final String storeName =
-            suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : builder.newStoreName(SUPPRESS_NAME);
+            suppressedInternal.name() != null ? suppressedInternal.name() + "-store" : generatedSuppressedStoreName;
 
         final ProcessorSupplier<K, Change<V>> suppressionSupplier = new KTableSuppressProcessorSupplier<>(
             suppressedInternal,

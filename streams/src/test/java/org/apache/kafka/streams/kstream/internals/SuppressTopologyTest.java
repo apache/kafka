@@ -62,16 +62,16 @@ public class SuppressTopologyTest {
         "      --> myname\n" +
         "      <-- KSTREAM-SOURCE-0000000005\n" +
         "    Processor: myname (stores: [myname-store])\n" +
-        "      --> KTABLE-TOSTREAM-0000000006\n" +
+        "      --> KTABLE-TOSTREAM-0000000008\n" +
         "      <-- KSTREAM-AGGREGATE-0000000002\n" +
-        "    Processor: KTABLE-TOSTREAM-0000000006 (stores: [])\n" +
-        "      --> KSTREAM-MAP-0000000007\n" +
+        "    Processor: KTABLE-TOSTREAM-0000000008 (stores: [])\n" +
+        "      --> KSTREAM-MAP-0000000009\n" +
         "      <-- myname\n" +
-        "    Processor: KSTREAM-MAP-0000000007 (stores: [])\n" +
-        "      --> KSTREAM-SINK-0000000008\n" +
-        "      <-- KTABLE-TOSTREAM-0000000006\n" +
-        "    Sink: KSTREAM-SINK-0000000008 (topic: output-suppressed)\n" +
-        "      <-- KSTREAM-MAP-0000000007\n" +
+        "    Processor: KSTREAM-MAP-0000000009 (stores: [])\n" +
+        "      --> KSTREAM-SINK-0000000010\n" +
+        "      <-- KTABLE-TOSTREAM-0000000008\n" +
+        "    Sink: KSTREAM-SINK-0000000010 (topic: output-suppressed)\n" +
+        "      <-- KSTREAM-MAP-0000000009\n" +
         "\n";
 
     private static final String ANONYMOUS_FINAL_TOPOLOGY = "Topologies:\n" +
@@ -114,13 +114,13 @@ public class SuppressTopologyTest {
         "      --> asdf\n" +
         "      <-- KSTREAM-SOURCE-0000000000\n" +
         "    Processor: asdf (stores: [asdf-store])\n" +
-        "      --> KTABLE-TOSTREAM-0000000003\n" +
+        "      --> KTABLE-TOSTREAM-0000000005\n" +
         "      <-- KSTREAM-AGGREGATE-0000000002\n" +
-        "    Processor: KTABLE-TOSTREAM-0000000003 (stores: [])\n" +
-        "      --> KSTREAM-SINK-0000000004\n" +
+        "    Processor: KTABLE-TOSTREAM-0000000005 (stores: [])\n" +
+        "      --> KSTREAM-SINK-0000000006\n" +
         "      <-- asdf\n" +
-        "    Sink: KSTREAM-SINK-0000000004 (topic: output)\n" +
-        "      <-- KTABLE-TOSTREAM-0000000003\n" +
+        "    Sink: KSTREAM-SINK-0000000006 (topic: output)\n" +
+        "      <-- KTABLE-TOSTREAM-0000000005\n" +
         "\n";
 
     private static final String ANONYMOUS_INTERMEDIATE_TOPOLOGY = "Topologies:\n" +
