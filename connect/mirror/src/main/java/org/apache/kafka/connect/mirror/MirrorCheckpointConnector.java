@@ -101,7 +101,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     @Override
     public String version() {
-        return "WIP";
+        return "1";
     }
 
     private void refreshConsumerGroups()

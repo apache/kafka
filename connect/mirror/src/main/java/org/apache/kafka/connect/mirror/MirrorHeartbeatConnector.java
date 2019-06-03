@@ -64,6 +64,6 @@ public class MirrorHeartbeatConnector extends SourceConnector {
 
     @Override
     public String version() {
-        return "WIP";
+        return "1;
     }
 }
