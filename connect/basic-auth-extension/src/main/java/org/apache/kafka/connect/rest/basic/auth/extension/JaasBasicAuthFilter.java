@@ -39,11 +39,7 @@ import javax.ws.rs.core.Response;
 public class JaasBasicAuthFilter implements ContainerRequestFilter {
     private static final String CONNECT_LOGIN_MODULE = "KafkaConnect";
     static final String AUTHORIZATION = "Authorization";
-<<<<<<< HEAD
     private static final String TASK_REQUEST_PATTERN = "\\/?connectors\\/([^\\/]*)\\/tasks\\/?"; //\/?connectors\/([^\/]*)\/tasks\/?
-=======
-    private static final String TASK_REQUEST_PATTERN = ".*\\/connectors\\/([^\\/]*)\\/tasks"; //.*\/connectors\/([^\/]*)\/tasks
->>>>>>> a84580755... KAFKA-8404: Not allow authentication with POST /connectors/{connName}/tasks
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
         try {

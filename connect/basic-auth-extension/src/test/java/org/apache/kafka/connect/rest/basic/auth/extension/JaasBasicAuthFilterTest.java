@@ -147,11 +147,8 @@ public class JaasBasicAuthFilterTest {
     public void testPostWithoutAppropriateCredential() throws IOException {
         EasyMock.expect(requestContext.getMethod()).andReturn(HttpMethod.POST);
         EasyMock.expect(requestContext.getUriInfo()).andReturn(uriInfo);
-<<<<<<< HEAD
         EasyMock.expect(uriInfo.getPath()).andReturn("connectors/connName/tasks");
-=======
-        EasyMock.expect(uriInfo.getPath()).andReturn("local:randomport/connectors/connName/tasks");
->>>>>>> a84580755... KAFKA-8404: Not allow authentication with POST /connectors/{connName}/tasks
+
         PowerMock.replayAll();
         jaasBasicAuthFilter.filter(requestContext);
         EasyMock.verify(requestContext);
@@ -188,7 +185,6 @@ public class JaasBasicAuthFilterTest {
         File jaasConfigFile = File.createTempFile("ks-jaas-", ".conf");
         jaasConfigFile.deleteOnExit();
         previousJaasConfig = System.setProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM, jaasConfigFile.getPath());
-
         List<String> lines;
         lines = new ArrayList<>();
         lines.add(loginModule + " { org.apache.kafka.connect.rest.basic.auth.extension.PropertyFileLoginModule required ");
