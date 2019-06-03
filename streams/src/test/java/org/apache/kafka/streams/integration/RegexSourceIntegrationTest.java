@@ -62,6 +62,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Pattern;
 
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -94,6 +95,7 @@ public class RegexSourceIntegrationTest {
     private Properties streamsConfiguration;
     private static final String STREAM_TASKS_NOT_UPDATED = "Stream tasks not updated";
     private KafkaStreams streams;
+    private static volatile AtomicInteger topicSuffixGenerator = new AtomicInteger(0);
 
 
     @BeforeClass
@@ -113,7 +115,6 @@ public class RegexSourceIntegrationTest {
 
     @Before
     public void setUp() {
-
         final Properties properties = new Properties();
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
@@ -138,7 +139,7 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testRegexMatchesTopicsAWhenCreated() throws Exception {
-        final String outputTopic = createTopic("_1");
+        final String outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
 
         final Serde<String> stringSerde = Serdes.String();
         final List<String> expectedFirstAssignment = Collections.singletonList("TEST-TOPIC-1");
@@ -174,15 +175,15 @@ public class RegexSourceIntegrationTest {
 
     }
 
-    private String createTopic(final String suffix) throws InterruptedException {
-        final String outputTopic = "outputTopic" + suffix;
+    private String createTopic(final int suffix) throws InterruptedException {
+        final String outputTopic = "outputTopic_" + suffix;
         CLUSTER.createTopic(outputTopic);
         return outputTopic;
     }
 
     @Test
     public void testRegexMatchesTopicsAWhenDeleted() throws Exception {
-        final String outputTopic = createTopic("_2");
+        final String outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
 
         final Serde<String> stringSerde = Serdes.String();
         final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-A", "TEST-TOPIC-B");
@@ -251,7 +252,7 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testShouldReadFromRegexAndNamedTopics() throws Exception {
-        final String outputTopic = createTopic("_3");
+        final String outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
 
         final String topic1TestMessage = "topic-1 test";
         final String topic2TestMessage = "topic-2 test";
@@ -302,7 +303,7 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testMultipleConsumersCanReadFromPartitionedTopic() throws Exception {
-        final String outputTopic = createTopic("_4");
+        final String outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
 
         KafkaStreams partitionedStreamsLeader = null;
         KafkaStreams partitionedStreamsFollower = null;
@@ -363,7 +364,7 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testNoMessagesSentExceptionFromOverlappingPatterns() throws Exception {
-        final String outputTopic = createTopic("_5");
+        final String outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
 
         final String fMessage = "fMessage";
         final String fooMessage = "fooMessage";
