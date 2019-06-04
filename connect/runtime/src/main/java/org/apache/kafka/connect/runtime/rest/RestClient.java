@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import javax.ws.rs.core.HttpHeaders;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ErrorMessage;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
@@ -50,12 +51,13 @@ public class RestClient {
      *
      * @param url             HTTP connection will be established with this url.
      * @param method          HTTP method ("GET", "POST", "PUT", etc.)
+     * @param headers         HTTP headers from REST endpoint
      * @param requestBodyData Object to serialize as JSON and send in the request body.
      * @param responseFormat  Expected format of the response to the HTTP request.
      * @param <T>             The type of the deserialized response to the HTTP request.
      * @return The deserialized response to the HTTP request, or null if no data is expected.
      */
-    public static <T> HttpResponse<T> httpRequest(String url, String method, Object requestBodyData,
+    public static <T> HttpResponse<T> httpRequest(String url, String method, HttpHeaders headers, Object requestBodyData,
                                                   TypeReference<T> responseFormat, WorkerConfig config) {
         HttpClient client;
 
@@ -82,6 +84,8 @@ public class RestClient {
             req.method(method);
             req.accept("application/json");
             req.agent("kafka-connect");
+            addHeadersToRequest(headers, req);
+
             if (serializedBody != null) {
                 req.content(new StringContentProvider(serializedBody, StandardCharsets.UTF_8), "application/json");
             }
@@ -113,6 +117,21 @@ public class RestClient {
                 } catch (Exception e) {
                     log.error("Failed to stop HTTP client", e);
                 }
+        }
+    }
+
+
+    /**
+     * Extract headers from REST call and add to client request
+     * @param headers         Headers from REST endpoint
+     * @param req             The client request to modify
+     */
+    private static void addHeadersToRequest(HttpHeaders headers, Request req) {
+        if (headers != null) {
+            String credentialAuthorization = headers.getHeaderString(HttpHeaders.AUTHORIZATION);
+            if (credentialAuthorization != null) {
+                req.header(HttpHeaders.AUTHORIZATION, credentialAuthorization);
+            }
         }
     }
 
