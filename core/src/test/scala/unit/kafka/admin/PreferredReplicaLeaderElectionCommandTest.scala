@@ -152,10 +152,10 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     assertEquals(testPartitionPreferredLeader, getLeader(testPartition))
   }
 
-  private def toJsonFile(partitions: scala.collection.Set[TopicPartition]): File = {
+  private def toJsonFile(partitions: Set[TopicPartition]): File = {
     val jsonFile = File.createTempFile("preferredreplicaelection", ".js")
     jsonFile.deleteOnExit()
-    val jsonString = ZkUtils.preferredReplicaLeaderElectionZkData(partitions.map(new TopicAndPartition(_)))
+    val jsonString = TestUtils.stringifyTopicPartitions(partitions)
     debug("Using json: "+jsonString)
     Files.write(Paths.get(jsonFile.getAbsolutePath), jsonString.getBytes(StandardCharsets.UTF_8))
     jsonFile

@@ -1490,4 +1490,29 @@ object TestUtils extends Logging {
       Metrics.defaultRegistry.removeMetric(metricName)
   }
 
+  def stringifyTopicPartitions(partitions: Set[TopicPartition]): String = {
+    Json.legacyEncodeAsString(
+      Map(
+        "version" -> 1,
+        "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition))
+      )
+    )
+  }
+
+  def resource[R <: AutoCloseable, A](resource: R)(func: R => A): A = {
+    var error: Throwable = null
+
+    try {
+      func(resource)
+    } catch {
+      case e: Throwable =>
+        error = e
+        null.asInstanceOf[A]
+    } finally {
+      resource.close()
+      if (error != null) {
+          throw error
+      }
+    }
+  }
 }
