@@ -370,24 +370,24 @@ public class DefaultRecord implements Record {
         }
     }
 
-    public static SkipKeyValueDefaultRecord readFromSkipKeyValue(DataInput input,
-                                                                 long baseOffset,
-                                                                 long baseTimestamp,
-                                                                 int baseSequence,
-                                                                 Long logAppendTime) throws IOException {
+    public static PartialDefaultRecord readFromSkipKeyValue(DataInput input,
+                                                            long baseOffset,
+                                                            long baseTimestamp,
+                                                            int baseSequence,
+                                                            Long logAppendTime) throws IOException {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
         return readFromSkipKeyValue(input, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
                 baseSequence, logAppendTime);
     }
 
-    private static SkipKeyValueDefaultRecord readFromSkipKeyValue(DataInput input,
-                                                                  int sizeInBytes,
-                                                                  int sizeOfBodyInBytes,
-                                                                  long baseOffset,
-                                                                  long baseTimestamp,
-                                                                  int baseSequence,
-                                                                  Long logAppendTime) throws IOException {
+    private static PartialDefaultRecord readFromSkipKeyValue(DataInput input,
+                                                             int sizeInBytes,
+                                                             int sizeOfBodyInBytes,
+                                                             long baseOffset,
+                                                             long baseTimestamp,
+                                                             int baseSequence,
+                                                             Long logAppendTime) throws IOException {
         try {
             byte attributes = input.readByte();
             int skipBytes = 1;
@@ -418,7 +418,7 @@ public class DefaultRecord implements Record {
                     throw new InvalidRecordException("Found invalid record structure , skipBytes expected is " + skipBytes + ", actually is " + currentSkipBytes);
             }
 
-            return new SkipKeyValueDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, keySize, hasKey);
+            return new PartialDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, keySize, hasKey);
         } catch (BufferUnderflowException | IllegalArgumentException e) {
             throw new InvalidRecordException("Found invalid record structure", e);
         }

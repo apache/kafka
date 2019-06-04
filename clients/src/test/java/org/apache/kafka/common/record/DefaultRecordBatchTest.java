@@ -391,11 +391,11 @@ public class DefaultRecordBatchTest {
         try (CloseableIterator<Record> streamingIterator = batch.skipKeyValueIterator()) {
             assertEquals(Utils.toList(streamingIterator),
                 Arrays.asList(
-                    new SkipKeyValueDefaultRecord(9, (byte) 0, 0L, 1L, -1, 1, true),
-                    new SkipKeyValueDefaultRecord(9, (byte) 0, 1L, 2L, -1, 1, true),
-                    new SkipKeyValueDefaultRecord(9, (byte) 0, 2L, 3L, -1, 1, true),
-                    new SkipKeyValueDefaultRecord(12, (byte) 0, 3L, 1000L, -1, 3, true),
-                    new SkipKeyValueDefaultRecord(25, (byte) 0, 4L, 9999L, -1, 3, true)
+                    new PartialDefaultRecord(9, (byte) 0, 0L, 1L, -1, 1, true),
+                    new PartialDefaultRecord(9, (byte) 0, 1L, 2L, -1, 1, true),
+                    new PartialDefaultRecord(9, (byte) 0, 2L, 3L, -1, 1, true),
+                    new PartialDefaultRecord(12, (byte) 0, 3L, 1000L, -1, 3, true),
+                    new PartialDefaultRecord(25, (byte) 0, 4L, 9999L, -1, 3, true)
                 )
             );
         }

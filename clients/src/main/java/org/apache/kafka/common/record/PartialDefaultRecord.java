@@ -20,18 +20,18 @@ import org.apache.kafka.common.header.Header;
 
 import java.nio.ByteBuffer;
 
-public class SkipKeyValueDefaultRecord extends DefaultRecord {
+public class PartialDefaultRecord extends DefaultRecord {
 
     private final boolean hasKey;
     private final int keySize;
 
-    SkipKeyValueDefaultRecord(int sizeInBytes,
-                              byte attributes,
-                              long offset,
-                              long timestamp,
-                              int sequence,
-                              int keySize,
-                              boolean hasKey) {
+    PartialDefaultRecord(int sizeInBytes,
+                         byte attributes,
+                         long offset,
+                         long timestamp,
+                         int sequence,
+                         int keySize,
+                         boolean hasKey) {
         super(sizeInBytes, attributes, offset, timestamp, sequence, null, null, null);
 
         this.hasKey = hasKey;
@@ -41,8 +41,8 @@ public class SkipKeyValueDefaultRecord extends DefaultRecord {
     @Override
     public boolean equals(Object o) {
         return super.equals(o) &&
-            this.keySize == ((SkipKeyValueDefaultRecord) o).keySize &&
-            this.hasKey == ((SkipKeyValueDefaultRecord) o).hasKey;
+            this.keySize == ((PartialDefaultRecord) o).keySize &&
+            this.hasKey == ((PartialDefaultRecord) o).hasKey;
     }
 
     @Override
@@ -51,6 +51,14 @@ public class SkipKeyValueDefaultRecord extends DefaultRecord {
         result = 31 * result + keySize;
         result = 31 * result + (hasKey ? 0 : 1);
         return result;
+    }
+
+    @Override
+    public String toString() {
+        return String.format("PartialDefaultRecord(offset=%d, timestamp=%d, key=%d bytes)",
+            offset(),
+            timestamp(),
+            keySize);
     }
 
     @Override
@@ -65,26 +73,26 @@ public class SkipKeyValueDefaultRecord extends DefaultRecord {
 
     @Override
     public ByteBuffer key() {
-        throw new UnsupportedOperationException("key is skipped in SkipKeyValueDefaultRecord");
+        throw new UnsupportedOperationException("key is skipped in PartialDefaultRecord");
     }
 
     @Override
     public int valueSize() {
-        throw new UnsupportedOperationException("valueSize is skipped in SkipKeyValueDefaultRecord");
+        throw new UnsupportedOperationException("valueSize is skipped in PartialDefaultRecord");
     }
 
     @Override
     public boolean hasValue() {
-        throw new UnsupportedOperationException("hasValue is skipped in SkipKeyValueDefaultRecord");
+        throw new UnsupportedOperationException("hasValue is skipped in PartialDefaultRecord");
     }
 
     @Override
     public ByteBuffer value() {
-        throw new UnsupportedOperationException("value is skipped in SkipKeyValueDefaultRecord");
+        throw new UnsupportedOperationException("value is skipped in PartialDefaultRecord");
     }
 
     @Override
     public Header[] headers() {
-        throw new UnsupportedOperationException("headers is skipped in SkipKeyValueDefaultRecord");
+        throw new UnsupportedOperationException("headers is skipped in PartialDefaultRecord");
     }
 }

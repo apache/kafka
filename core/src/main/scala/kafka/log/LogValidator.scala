@@ -23,7 +23,7 @@ import kafka.common.LongRef
 import kafka.message.{CompressionCodec, NoCompressionCodec, ZStdCompressionCodec}
 import kafka.utils.Logging
 import org.apache.kafka.common.errors.{InvalidTimestampException, UnsupportedCompressionTypeException, UnsupportedForMessageFormatException}
-import org.apache.kafka.common.record._
+import org.apache.kafka.common.record.{AbstractRecords, CompressionType, InvalidRecordException, MemoryRecords, Record, RecordBatch, RecordConversionStats, TimestampType, BufferSupplier}
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.mutable
@@ -84,7 +84,7 @@ private[kafka] object LogValidator extends Logging {
     val batch = batchIterator.next()
 
     // if the format is v2 and beyond, or if the messages are compressed, we should check there's only one batch.
-    if (batch.magic() >= RecordBatch.MAGIC_VALUE_V1 || sourceCodec != NoCompressionCodec) {
+    if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 || sourceCodec != NoCompressionCodec) {
       if (batchIterator.hasNext) {
         throw new InvalidRecordException("Compressed outer record has more than one batch")
       }
@@ -272,6 +272,10 @@ private[kafka] object LogValidator extends Logging {
                                                  isFromClient: Boolean,
                                                  interBrokerProtocolVersion: ApiVersion): ValidationAndOffsetAssignResult = {
 
+    if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
+      throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " +
+        "are not allowed to use ZStandard compression")
+
     // No in place assignment situation 1
     var inPlaceAssignment = sourceCodec == targetCodec
 
@@ -312,8 +316,6 @@ private[kafka] object LogValidator extends Logging {
         if (sourceCodec != NoCompressionCodec && record.isCompressed)
           throw new InvalidRecordException("Compressed outer record should not have an inner record with a " +
             s"compression attribute set: $record")
-        if (targetCodec == ZStdCompressionCodec && interBrokerProtocolVersion < KAFKA_2_1_IV0)
-          throw new UnsupportedCompressionTypeException("Produce requests to inter.broker.protocol.version < 2.1 broker " + "are not allowed to use ZStandard compression")
         validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
 
         uncompressedSizeInBytes += record.sizeInBytes()
