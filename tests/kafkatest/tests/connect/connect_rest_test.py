@@ -16,6 +16,7 @@
 from kafkatest.tests.kafka_test import KafkaTest
 from kafkatest.services.connect import ConnectDistributedService, ConnectRestError, ConnectServiceBase
 from ducktape.utils.util import wait_until
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from ducktape.cluster.remoteaccount import RemoteCommandError
 
@@ -65,6 +66,8 @@ class ConnectRestApiTest(KafkaTest):
 
     SCHEMA = {"type": "string", "optional": False}
 
+    CONNECT_PROTOCOL="compatible"
+
     def __init__(self, test_context):
         super(ConnectRestApiTest, self).__init__(test_context, num_zk=1, num_brokers=1, topics={
             'test': {'partitions': 1, 'replication-factor': 1}
@@ -73,11 +76,13 @@ class ConnectRestApiTest(KafkaTest):
         self.cc = ConnectDistributedService(test_context, 2, self.kafka, [self.INPUT_FILE, self.INPUT_FILE2, self.OUTPUT_FILE])
 
     @cluster(num_nodes=4)
-    def test_rest_api(self):
+    @matrix(connect_protocol=['compatible', 'eager'])
+    def test_rest_api(self, connect_protocol):
         # Template parameters
         self.key_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.value_converter = "org.apache.kafka.connect.json.JsonConverter"
         self.schemas = True
+        self.CONNECT_PROTOCOL = connect_protocol
 
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
         self.cc.set_external_configs(lambda node: self.render("connect-file-external.properties", node=node))
