@@ -31,7 +31,7 @@ class StreamsStaticMembershipTest(Test):
     def __init__(self, test_context):
         super(StreamsStaticMembershipTest, self).__init__(test_context)
         self.topics = {
-            self.input_topic: {'partitions': 6},
+            self.input_topic: {'partitions': 18},
         }
 
         self.zookeeper = ZookeeperService(self.test_context, num_nodes=1)
@@ -50,9 +50,10 @@ class StreamsStaticMembershipTest(Test):
         self.zookeeper.start()
         self.kafka.start()
 
-        processor1 = StreamsStaticMembershipService(self.test_context, self.kafka, "consumer-A")
-        processor2 = StreamsStaticMembershipService(self.test_context, self.kafka, "consumer-B")
-        processor3 = StreamsStaticMembershipService(self.test_context, self.kafka, "consumer-C")
+        numThreads = 3
+        processor1 = StreamsStaticMembershipService(self.test_context, self.kafka, "consumer-A", numThreads)
+        processor2 = StreamsStaticMembershipService(self.test_context, self.kafka, "consumer-B", numThreads)
+        processor3 = StreamsStaticMembershipService(self.test_context, self.kafka, "consumer-C", numThreads)
 
         processors = [processor1, processor2, processor3]
 
@@ -75,7 +76,7 @@ class StreamsStaticMembershipTest(Test):
         stableGeneration = 3
         for processor in processors:
             generations = self.extract_generation_from_logs(processor)
-            for generation in generations[-numBounces:]:
+            for generation in generations[-(numBounces * numThreads):]:
                 assert stableGeneration == int(generation), \
                     "Stream rolling bounce have caused unexpected generation bump %d" % int(generation)
 

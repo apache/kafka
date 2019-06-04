@@ -536,16 +536,18 @@ class StreamsNamedRepartitionTopicService(StreamsTestBaseService):
         return cfg.render()
 
 class StreamsStaticMembershipService(StreamsTestBaseService):
-    def __init__(self, test_context, kafka, group_instance_id):
+    def __init__(self, test_context, kafka, group_instance_id, num_threads):
         super(StreamsStaticMembershipService, self).__init__(test_context,
                                                              kafka,
                                                              "org.apache.kafka.streams.tests.StreamsStaticMembershipTest",
                                                              "")
         self.INPUT_TOPIC = None
         self.GROUP_INSTANCE_ID = group_instance_id
+        self.NUM_THREADS = num_threads
     def prop_file(self):
         properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
                       streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      streams_property.NUM_THREADS: self.NUM_THREADS,
                       consumer_property.GROUP_INSTANCE_ID: self.GROUP_INSTANCE_ID,
                       consumer_property.SESSION_TIMEOUT_MS: 60000}
 

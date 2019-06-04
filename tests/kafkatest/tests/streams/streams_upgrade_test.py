@@ -43,7 +43,7 @@ anyone can verify that by calling
 curl https://s3-us-west-2.amazonaws.com/kafka-packages/kafka_$scala_version-$version.tgz to download the jar
 and if it is not uploaded yet, ping the dev@kafka mailing list to request it being uploaded.
 
-This test needs to get updated, but this requires several steps
+This test needs to get updated, but this requires several steps,
 which are outlined here:
 
 1. Update all relevant versions in tests/kafkatest/version.py this will include adding a new version for the new
@@ -55,17 +55,17 @@ which are outlined here:
    during the system test run.
    
 3. Update the vagrant/bash.sh file to include all new versions, including the newly released version
-   and all point releases for existing releases.  You only need to list the latest version in 
+   and all point releases for existing releases. You only need to list the latest version in 
    this file.
    
 4. Then update all relevant versions in the tests/docker/Dockerfile
 
-5. Add a new upgrade-system-tests-XXXX module under streams.  You can probably just copy the 
-   latest system test module from the last release.  Just make sure to update the systout print
-   statement in StreamsUpgradeTest to the version for the release.  After you add the new module
+5. Add a new upgrade-system-tests-XXXX module under streams. You can probably just copy the 
+   latest system test module from the last release. Just make sure to update the systout print
+   statement in StreamsUpgradeTest to the version for the release. After you add the new module
    you'll need to update settings.gradle file to include the name of the module you just created
-   for gradle to recognize the newly added module
-   
+   for gradle to recognize the newly added module.
+
 6. Then you'll need to update any version changes in gradle/dependencies.gradle
 
 """
