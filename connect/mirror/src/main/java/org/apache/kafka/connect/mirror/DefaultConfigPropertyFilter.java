@@ -31,7 +31,7 @@ public class DefaultConfigPropertyFilter implements ConfigPropertyFilter, Config
     public static final String CONFIG_PROPERTIES_BLACKLIST_CONFIG = "config.properties.blacklist";
     private static final String CONFIG_PROPERTIES_BLACKLIST_DOC = "List of topic configuration properties and/or regexes "
         + "that should not be replicated.";
-    public static final String CONFIG_PROPERTIES_BLACKLIST_DEFAULT = "segment\\.bytes";
+    public static final String CONFIG_PROPERTIES_BLACKLIST_DEFAULT = "segment\\.bytes, min\\.insync\\.replicas";
 
     private Pattern blacklistPattern;
 

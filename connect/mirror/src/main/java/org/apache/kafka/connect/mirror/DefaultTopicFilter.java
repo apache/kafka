@@ -34,7 +34,7 @@ public class DefaultTopicFilter implements TopicFilter, Configurable {
 
     public static final String TOPICS_BLACKLIST_CONFIG = "topics.blacklist";
     private static final String TOPICS_BLACKLIST_DOC = "List of topics and/or regexes that should not be replicated.";
-    public static final String TOPICS_BLACKLIST_DEFAULT = ".*[\\-\\.]internal, .*\\.replica, __consumer_offsets";
+    public static final String TOPICS_BLACKLIST_DEFAULT = ".*[\\-\\.]internal, .*\\.replica, __.*";
 
     private Pattern whitelistPattern;
     private Pattern blacklistPattern;

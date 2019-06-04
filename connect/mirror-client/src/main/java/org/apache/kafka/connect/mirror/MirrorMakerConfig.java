@@ -72,7 +72,7 @@ public class MirrorMakerConfig extends AbstractConfig {
     // Properties passed to internal Kafka clients
     static final ConfigDef CLIENT_CONFIG_DEF = new ConfigDef()
         .define(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG,
-            Type.STRING,
+            Type.LIST,
             null,
             Importance.HIGH,
             CommonClientConfigs.BOOTSTRAP_SERVERS_DOC)
@@ -93,7 +93,7 @@ public class MirrorMakerConfig extends AbstractConfig {
             ENABLED_DOC);
 
     public MirrorMakerConfig(Map<?, ?> props) {
-        super(CONFIG_DEF, props, false);
+        super(CONFIG_DEF, props);
     }
 
     public Set<String> clusters() {

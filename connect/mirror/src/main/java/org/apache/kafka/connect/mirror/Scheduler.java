@@ -43,14 +43,14 @@ class Scheduler {
         if (interval.toMillis() < 0L) {
             return;
         }
-        executor.scheduleAtFixedRate(() -> execute(task, description), 0, interval.toMillis(), TimeUnit.MILLISECONDS);
+        executor.scheduleAtFixedRate(() -> executeThread(task, description), 0, interval.toMillis(), TimeUnit.MILLISECONDS);
     }
  
     void scheduleRepeatingDelayed(Task task, Duration interval, String description) {
         if (interval.toMillis() < 0L) {
             return;
         }
-        executor.scheduleAtFixedRate(() -> execute(task, description), interval.toMillis(),
+        executor.scheduleAtFixedRate(() -> executeThread(task, description), interval.toMillis(),
             interval.toMillis(), TimeUnit.MILLISECONDS);
     } 
 
@@ -70,6 +70,11 @@ class Scheduler {
 
     interface Task {
         void run() throws InterruptedException, ExecutionException;
+    }
+
+    private void executeThread(Task task, String description) {
+        Thread.currentThread().setName(description);
+        execute(task, description);
     }
 }
 

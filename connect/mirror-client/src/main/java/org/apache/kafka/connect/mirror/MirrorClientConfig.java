@@ -28,9 +28,10 @@ import java.util.stream.Collectors;
 
 public class MirrorClientConfig extends AbstractConfig {
     public static final String REPLICATION_POLICY_CLASS = "replication.policy.class";
-    private static final String REPLICATION_POLICY_CLASS_DOC = "Defines how to create and interpret remote topics.";
+    private static final String REPLICATION_POLICY_CLASS_DOC = "Class which defines the remote topic naming convention.";
+    public static final Class REPLICATION_POLICY_CLASS_DEFAULT = DefaultReplicationPolicy.class;
     public static final String REPLICATION_POLICY_SEPARATOR = "replication.policy.separator";
-    private static final String REPLICATION_POLICY_SEPARATOR_DOC = "Separator used to construct remote topics.";
+    private static final String REPLICATION_POLICY_SEPARATOR_DOC = "Separator used in remote topic naming convention.";
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
         DefaultReplicationPolicy.SEPARATOR_DEFAULT;
     
@@ -78,7 +79,7 @@ public class MirrorClientConfig extends AbstractConfig {
         .define(
             REPLICATION_POLICY_CLASS,
             ConfigDef.Type.CLASS,
-            DefaultReplicationPolicy.class.getName(),
+            REPLICATION_POLICY_CLASS_DEFAULT,
             ConfigDef.Importance.LOW,
             REPLICATION_POLICY_CLASS_DOC)
         .define(

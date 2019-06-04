@@ -41,7 +41,6 @@ public class MirrorConnectorConfig extends AbstractConfig {
     protected static final String SYNC_TOPIC_ACLS = "sync.topic.acls";
     protected static final String EMIT_HEARTBEATS = "emit.heartbeats";
     protected static final String EMIT_CHECKPOINTS = "emit.checkpoints";
-    protected static final String BOOTSTRAP_SERVERS = CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
     
     public static final String ENABLED = "enabled";
     private static final String ENABLED_DOC = "Whether to replicate source->target.";
@@ -51,15 +50,15 @@ public class MirrorConnectorConfig extends AbstractConfig {
     public static final String TARGET_CLUSTER_ALIAS_DEFAULT = "target";
     private static final String TARGET_CLUSTER_ALIAS_DOC = "Alias of target cluster. Used in metrics reporting.";
     public static final String REPLICATION_POLICY_CLASS = MirrorClientConfig.REPLICATION_POLICY_CLASS;
-    public static final Class REPLICATION_POLICY_CLASS_DEFAULT = DefaultReplicationPolicy.class;
-    private static final String REPLICATION_POLICY_CLASS_DOC = "Controls how remote topics are defined.";
+    public static final Class REPLICATION_POLICY_CLASS_DEFAULT = MirrorClientConfig.REPLICATION_POLICY_CLASS_DEFAULT;
+    private static final String REPLICATION_POLICY_CLASS_DOC = "Class which defines the remote topic naming convention.";
     public static final String REPLICATION_POLICY_SEPARATOR = MirrorClientConfig.REPLICATION_POLICY_SEPARATOR;
     private static final String REPLICATION_POLICY_SEPARATOR_DOC = "Separator used in remote topic naming convention.";
     public static final String REPLICATION_POLICY_SEPARATOR_DEFAULT =
         MirrorClientConfig.REPLICATION_POLICY_SEPARATOR_DEFAULT;
     public static final String REPLICATION_FACTOR = "replication.factor";
     private static final String REPLICATION_FACTOR_DOC = "Replication factor for newly created remote topics.";
-    public static final int REPLICATION_FACTOR_DEFAULT = 1;
+    public static final int REPLICATION_FACTOR_DEFAULT = 2;
 
     protected static final String TASK_TOPIC_PARTITIONS = "task.assigned.partitions";
     protected static final String TASK_CONSUMER_GROUPS = "task.assigned.groups";
@@ -138,7 +137,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
     }
 
     protected MirrorConnectorConfig(ConfigDef configDef, Map<String, String> props) {
-        super(configDef, props, false);
+        super(configDef, props);
     }
 
     String connectorName() {
@@ -215,7 +214,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
         return getString(TARGET_CLUSTER_ALIAS);
     }
 
-    String offsetSyncTopic() {
+    String offsetSyncsTopic() {
         // ".internal" suffix ensures this doesn't get replicated
         return "mm2-offset-syncs." + targetClusterAlias() + ".internal";
     }
@@ -331,7 +330,7 @@ public class MirrorConnectorConfig extends AbstractConfig {
             ConfigDef.Type.CLASS,
             GROUP_FILTER_CLASS_DEFAULT,
             ConfigDef.Importance.LOW,
-            TOPIC_FILTER_CLASS_DOC)
+            GROUP_FILTER_CLASS_DOC)
         .define(
             CONFIG_PROPERTY_FILTER_CLASS,
             ConfigDef.Type.CLASS,

@@ -58,7 +58,9 @@ public class MirrorCheckpointConnector extends SourceConnector {
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
         groupFilter = config.groupFilter();
         replicationPolicy = config.replicationPolicy();
-        sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
+        synchronized (this) {
+            sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
+        }
         scheduler = new Scheduler(MirrorCheckpointConnector.class);
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
@@ -72,7 +74,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
             return;
         }
         scheduler.shutdown();
-        synchronized (sourceAdminClient) {
+        synchronized (this) {
             sourceAdminClient.close();
         } 
     }
@@ -138,7 +140,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
 
     private Collection<ConsumerGroupListing> listConsumerGroups()
             throws InterruptedException, ExecutionException {
-        synchronized (sourceAdminClient) {
+        synchronized (this) {
             return sourceAdminClient.listConsumerGroups().valid().get();
         }
     }

@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -31,8 +28,6 @@ import java.time.Duration;
 
 /** Used internally by MirrorMaker. Stores offset syncs and performs offset translation. */
 class OffsetSyncStore {
-    private static final Logger log = LoggerFactory.getLogger(OffsetSyncStore.class);
-
     private KafkaConsumer<byte[], byte[]> consumer;
     private Map<TopicPartition, OffsetSync> offsetSyncs = new HashMap<>();
     private TopicPartition offsetSyncTopicPartition;
@@ -40,7 +35,7 @@ class OffsetSyncStore {
     OffsetSyncStore(MirrorConnectorConfig config) {
         consumer = new KafkaConsumer<>(config.sourceConsumerConfig(),
             new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        offsetSyncTopicPartition = new TopicPartition(config.offsetSyncTopic(), 0);
+        offsetSyncTopicPartition = new TopicPartition(config.offsetSyncsTopic(), 0);
         consumer.assign(Collections.singleton(offsetSyncTopicPartition));
     }
 
@@ -67,7 +62,7 @@ class OffsetSyncStore {
 
     void close() {
         // cleanup off-thread to prevent blocking
-        new Thread(this::cleanup).start();
+        new Thread(this::cleanup, "cleaning up OffsetSyncStore").start();
     }
 
     private synchronized void cleanup() {

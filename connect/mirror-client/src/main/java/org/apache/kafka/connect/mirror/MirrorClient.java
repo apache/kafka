@@ -120,28 +120,31 @@ public class MirrorClient implements AutoCloseable {
             String remoteClusterAlias, Duration timeout)
             throws InterruptedException, TimeoutException {
         long deadline = System.currentTimeMillis() + timeout.toMillis();
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerConfig,
             new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        // checkpoint topics are not "remote topics", as they are not replicated. So we don't need
-        // to use ReplicationPolicy to create the checkpoint topic here.
-        String checkpointTopic = remoteClusterAlias + MirrorClientConfig.CHECKPOINTS_TOPIC_SUFFIX;
-        List<TopicPartition> checkpointAssignment =
-            Collections.singletonList(new TopicPartition(checkpointTopic, 0));
-        consumer.assign(checkpointAssignment);
-        consumer.seekToBeginning(checkpointAssignment);
-        while (System.currentTimeMillis() < deadline && !endOfStream(consumer, checkpointAssignment)) {
-            ConsumerRecords<byte[], byte[]> records = consumer.poll(timeout);
-            for (ConsumerRecord<byte[], byte[]> record : records) {
-                Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
-                if (checkpoint.consumerGroupId().equals(consumerGroupId)) {
-                    offsets.put(checkpoint.topicPartition(), checkpoint.offsetAndMetadata());
+        try {
+            // checkpoint topics are not "remote topics", as they are not replicated. So we don't need
+            // to use ReplicationPolicy to create the checkpoint topic here.
+            String checkpointTopic = remoteClusterAlias + MirrorClientConfig.CHECKPOINTS_TOPIC_SUFFIX;
+            List<TopicPartition> checkpointAssignment =
+                Collections.singletonList(new TopicPartition(checkpointTopic, 0));
+            consumer.assign(checkpointAssignment);
+            consumer.seekToBeginning(checkpointAssignment);
+            while (System.currentTimeMillis() < deadline && !endOfStream(consumer, checkpointAssignment)) {
+                ConsumerRecords<byte[], byte[]> records = consumer.poll(timeout);
+                for (ConsumerRecord<byte[], byte[]> record : records) {
+                    Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
+                    if (checkpoint.consumerGroupId().equals(consumerGroupId)) {
+                        offsets.put(checkpoint.topicPartition(), checkpoint.offsetAndMetadata());
+                    }
                 }
             }
+            log.info("Consumed {} checkpoint records for {} from {}.", offsets.size(),
+                consumerGroupId, checkpointTopic);
+        } finally {
+            consumer.close();
         }
-        log.info("Consumed {} checkpoint records for {} from {}.", offsets.size(),
-            consumerGroupId, checkpointTopic);
-        consumer.close();
         return offsets;
     }
 

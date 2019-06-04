@@ -70,7 +70,6 @@ public class MirrorSourceConnector extends SourceConnector {
     private int replicationFactor;
     private AdminClient sourceAdminClient;
     private AdminClient targetAdminClient;
-    private boolean enabled;
 
     public MirrorSourceConnector() {
         // nop
@@ -96,8 +95,10 @@ public class MirrorSourceConnector extends SourceConnector {
         configPropertyFilter = config.configPropertyFilter();
         replicationPolicy = config.replicationPolicy();
         replicationFactor = config.replicationFactor();
-        sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
-        targetAdminClient = AdminClient.create(config.targetAdminConfig());
+        synchronized (this) {
+            sourceAdminClient = AdminClient.create(config.sourceAdminConfig());
+            targetAdminClient = AdminClient.create(config.targetAdminConfig());
+        }
         scheduler = new Scheduler(MirrorSourceConnector.class);
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
         scheduler.execute(this::createTopicPartitions, "creating downstream topic-partitions");
@@ -115,10 +116,8 @@ public class MirrorSourceConnector extends SourceConnector {
             return;
         }
         scheduler.shutdown();
-        synchronized (sourceAdminClient) {
+        synchronized (this) {
             sourceAdminClient.close();
-        }
-        synchronized (targetAdminClient) {
             targetAdminClient.close();
         }
     }
@@ -232,7 +231,7 @@ public class MirrorSourceConnector extends SourceConnector {
         Map<String, NewPartitions> newPartitions = partitionCounts.entrySet().stream()
             .filter(x -> knownTargetTopics.contains(x.getKey()))
             .collect(Collectors.toMap(x -> x.getKey(), x -> NewPartitions.increaseTo(x.getValue().intValue())));
-        synchronized (targetAdminClient) {
+        synchronized (this) {
             targetAdminClient.createTopics(newTopics, new CreateTopicsOptions()).values().forEach((k, v) -> v.whenComplete((x, e) -> {
                 if (e != null) {
                     log.warn("Could not create topic {}.", k, e);
@@ -240,8 +239,6 @@ public class MirrorSourceConnector extends SourceConnector {
                     log.info("Created remote topic {} with {} partitions.", k, partitionCounts.get(k));
                 }
             }));
-        }
-        synchronized (targetAdminClient) {
             targetAdminClient.createPartitions(newPartitions).values().forEach((k, v) -> v.whenComplete((x, e) -> {
                 if (e instanceof InvalidPartitionsException) {
                     // swallow, this is normal
@@ -254,23 +251,23 @@ public class MirrorSourceConnector extends SourceConnector {
         }
     }
 
-    private static Set<String> listTopics(AdminClient adminClient)
+    private Set<String> listTopics(AdminClient adminClient)
             throws InterruptedException, ExecutionException {
-        synchronized (adminClient) {
+        synchronized (this) {
             return adminClient.listTopics().names().get();
         }
     }
 
     private Collection<AclBinding> listTopicAclBindings()
             throws InterruptedException, ExecutionException {
-        synchronized (sourceAdminClient) {
+        synchronized (this) {
             return sourceAdminClient.describeAcls(ANY_TOPIC_ACL).values().get();
         }
     }
 
     private Collection<TopicDescription> describeTopics(Collection<String> topics)
             throws InterruptedException, ExecutionException {
-        synchronized (sourceAdminClient) {
+        synchronized (this) {
             return sourceAdminClient.describeTopics(topics).all().get().values();
         }
     }
@@ -284,7 +281,7 @@ public class MirrorSourceConnector extends SourceConnector {
             .collect(Collectors.toMap(x ->
                 new ConfigResource(ConfigResource.Type.TOPIC, x.getKey()), x -> x.getValue()));
         log.trace("Syncing configs for {} topics.", configs.size());
-        synchronized (targetAdminClient) {
+        synchronized (this) {
             targetAdminClient.alterConfigs(configs).values().forEach((k, v) -> v.whenComplete((x, e) -> {
                 if (e != null) {
                     log.warn("Could not alter configuration of topic {}.", k.name(), e);
@@ -296,7 +293,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private void updateTopicAcls(List<AclBinding> bindings)
             throws InterruptedException, ExecutionException {
         log.trace("Syncing {} topic ACL bindings.", bindings.size());
-        synchronized (targetAdminClient) {
+        synchronized (this) {
             targetAdminClient.createAcls(bindings).values().forEach((k, v) -> v.whenComplete((x, e) -> {
                 if (e != null) {
                     log.warn("Could not sync ACL of topic {}.", k.pattern().name(), e);
@@ -316,7 +313,7 @@ public class MirrorSourceConnector extends SourceConnector {
         Set<ConfigResource> resources = topics.stream()
             .map(x -> new ConfigResource(ConfigResource.Type.TOPIC, x))
             .collect(Collectors.toSet());
-        synchronized (sourceAdminClient) {
+        synchronized (this) {
             return sourceAdminClient.describeConfigs(resources).all().get().entrySet().stream()
                 .collect(Collectors.toMap(x -> x.getKey().name(), x -> x.getValue()));
         }

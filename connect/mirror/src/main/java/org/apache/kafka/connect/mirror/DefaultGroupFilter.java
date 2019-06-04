@@ -34,7 +34,7 @@ public class DefaultGroupFilter implements GroupFilter, Configurable {
 
     public static final String GROUPS_BLACKLIST_CONFIG = "groups.blacklist";
     private static final String GROUPS_BLACKLIST_DOC = "List of consumer group names and/or regexes that should not be replicated.";
-    public static final String GROUPS_BLACKLIST_DEFAULT = "console-consumer-.*, connect-.*";
+    public static final String GROUPS_BLACKLIST_DEFAULT = "console-consumer-.*, connect-.*, __.*";
 
     private Pattern whitelistPattern;
     private Pattern blacklistPattern;

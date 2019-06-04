@@ -24,22 +24,13 @@ import java.util.Map;
 import java.util.List;
 import java.util.Collections;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 public class MirrorHeartbeatConnector extends SourceConnector {
-
-    private static final Logger log = LoggerFactory.getLogger(MirrorHeartbeatConnector.class);
-
-    private String connectorName;
     private MirrorConnectorConfig config;
-    private SourceAndTarget sourceAndTarget;
 
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorConnectorConfig(props);
-        connectorName = config.connectorName();
-        sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
     }
 
     @Override

@@ -54,8 +54,7 @@ public class MirrorSourceTask extends SourceTask {
     private KafkaConsumer<byte[], byte[]> consumer;
     private KafkaProducer<byte[], byte[]> offsetProducer;
     private String sourceClusterAlias;
-    private String offsetSyncTopic;
-    private String heartbeatsTopic;
+    private String offsetSyncsTopic;
     private Duration pollTimeout;
     private long maxOffsetLag;
     private Map<TopicPartition, PartitionState> partitionStates;
@@ -84,8 +83,7 @@ public class MirrorSourceTask extends SourceTask {
         maxOffsetLag = config.maxOffsetLag();
         replicationPolicy = config.replicationPolicy();
         partitionStates = new HashMap<>();
-        offsetSyncTopic = config.offsetSyncTopic();
-        heartbeatsTopic = config.targetHeartbeatsTopic();
+        offsetSyncsTopic = config.offsetSyncsTopic();
         consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig());
         offsetProducer = MirrorUtils.newProducer(config.sourceProducerConfig());
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
@@ -97,7 +95,7 @@ public class MirrorSourceTask extends SourceTask {
     }
 
     @Override
-    public void commit() throws InterruptedException {
+    public void commit() {
         // nop
     }
 
@@ -107,8 +105,8 @@ public class MirrorSourceTask extends SourceTask {
     }
 
     private void cleanup() {
+        lock.lock();
         try {
-            lock.lock();
             consumer.close();
             // re-use the poll-timeout to approximate round-trip time
             if (!outstandingOffsetSyncs.tryAcquire(MAX_OUTSTANDING_OFFSET_SYNCS, 2 * pollTimeout.toMillis(),
@@ -129,9 +127,9 @@ public class MirrorSourceTask extends SourceTask {
     }
 
     @Override
-    public List<SourceRecord> poll() throws InterruptedException {
+    public List<SourceRecord> poll() {
+        lock.lock();
         try {
-            lock.lock();
             ConsumerRecords<byte[], byte[]> records = consumer.poll(pollTimeout);
             List<SourceRecord> sourceRecords = new ArrayList<>(records.count());
             for (ConsumerRecord<byte[], byte[]> record : records) {
@@ -177,11 +175,11 @@ public class MirrorSourceTask extends SourceTask {
     private void sendOffsetSync(TopicPartition topicPartition, long upstreamOffset,
             long downstreamOffset) {
         if (!outstandingOffsetSyncs.tryAcquire()) {
-            log.warn("Too many outstanding offset syncs.");
+            // Too many outstanding offset syncs.
             return;
         }
         OffsetSync offsetSync = new OffsetSync(topicPartition, upstreamOffset, downstreamOffset);
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(offsetSyncTopic, 0,
+        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(offsetSyncsTopic, 0,
                 offsetSync.recordKey(), offsetSync.recordValue());
         offsetProducer.send(record, (x, e) -> {
             if (e != null) {

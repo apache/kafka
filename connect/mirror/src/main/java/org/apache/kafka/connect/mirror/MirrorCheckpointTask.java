@@ -97,8 +97,12 @@ public class MirrorCheckpointTask extends SourceTask {
 
     private void cleanup() {
         lock.lock();
-        offsetSyncStore.close();
-        sourceAdminClient.close();
+        try {
+            offsetSyncStore.close();
+            sourceAdminClient.close();
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
@@ -108,8 +112,8 @@ public class MirrorCheckpointTask extends SourceTask {
 
     @Override
     public List<SourceRecord> poll() throws InterruptedException {
+        lock.lock();
         try { 
-            lock.lock();
             long deadline = System.currentTimeMillis() + interval.toMillis();
             while (!stopped && System.currentTimeMillis() < deadline) {
                 offsetSyncStore.update(pollTimeout);
