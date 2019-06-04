@@ -74,7 +74,7 @@ public class KTableKTableLeftJoinTest {
 
         final KTable<Integer, String> table1 = builder.table(topic1, consumed);
         final KTable<Integer, String> table2 = builder.table(topic2, consumed);
-        final KTable<Integer, String> joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
+        final KTable<Integer, String> joined = (KTable<Integer, String>) table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
         joined.toStream().to(output);
 
         final Collection<Set<String>> copartitionGroups =
@@ -193,7 +193,7 @@ public class KTableKTableLeftJoinTest {
 
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
-        joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
+        joined = (KTable<Integer, String>) table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         supplier = new MockProcessorSupplier<>();
         final Topology topology = builder.build().addProcessor("proc", supplier, ((KTableImpl<?, ?, ?>) joined).name);
@@ -298,7 +298,7 @@ public class KTableKTableLeftJoinTest {
 
         table1 = builder.table(topic1, consumed);
         table2 = builder.table(topic2, consumed);
-        joined = table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
+        joined = (KTable<Integer, String>) table1.leftJoin(table2, MockValueJoiner.TOSTRING_JOINER);
 
         ((KTableImpl<?, ?, ?>) joined).enableSendingOldValues();
 
@@ -445,9 +445,9 @@ public class KTableKTableLeftJoinTest {
 
         final ValueMapper<String, String> mapper = value -> value.toUpperCase(Locale.ROOT);
 
-        final KTable<Long, String> seven = one.mapValues(mapper);
+        final KTable<Long, String> seven = (KTable<Long, String>) one.mapValues(mapper);
 
-        final KTable<Long, String> eight = six.leftJoin(seven, MockValueJoiner.TOSTRING_JOINER);
+        final KTable<Long, String> eight = (KTable<Long, String>) six.leftJoin(seven, MockValueJoiner.TOSTRING_JOINER);
 
         aggTable
             .leftJoin(one, MockValueJoiner.TOSTRING_JOINER)

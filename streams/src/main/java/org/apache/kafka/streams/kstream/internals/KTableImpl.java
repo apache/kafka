@@ -19,18 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.KGroupedTable;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.Suppressed;
-import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -42,6 +31,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcess
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -450,54 +440,52 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @Override
-    public <V1, R> KTable<K, R> join(final KTable<K, V1> other,
-                                     final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
-        return doJoin(other, joiner, null, false, false);
+    public <VO, VR> KTable<K, VR> join(AbstractTable<K, VO, KeyValueStore<Bytes, byte[]>> other, ValueJoiner<? super V, ? super VO, ? extends VR> joiner) {
+        return doJoin((KTable<K, VO>) other, joiner, null, false, false);
     }
 
     @Override
-    public <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
-                                       final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                       final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+    public <VO, VR> KTable<K, VR> join(AbstractTable<K, VO, KeyValueStore<Bytes, byte[]>> other,
+                                       ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                       Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, builder, MERGE_NAME);
 
-        return doJoin(other, joiner, materializedInternal, false, false);
+        return doJoin((KTable<K, VO>) other, joiner, materializedInternal, false, false);
     }
 
     @Override
-    public <V1, R> KTable<K, R> outerJoin(final KTable<K, V1> other,
-                                          final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
-        return doJoin(other, joiner, null, true, true);
+    public <VO, VR>  KTable<K, VR> leftJoin(AbstractTable<K, VO, KeyValueStore<Bytes, byte[]>> other,
+                                            ValueJoiner<? super V, ? super VO, ? extends VR> joiner) {
+        return doJoin((KTable<K, VO>)other, joiner, null, true, false);
     }
 
     @Override
-    public <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
-                                            final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                            final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+    public <VO, VR>  KTable<K, VR> leftJoin(AbstractTable<K, VO, KeyValueStore<Bytes, byte[]>> other,
+                                            ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                            Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+                new MaterializedInternal<>(materialized, builder, MERGE_NAME);
+
+        return doJoin((KTable<K, VO>)other, joiner, materializedInternal, true, false);
+    }
+
+    @Override
+    public <VO, VR>  KTable<K, VR> outerJoin(AbstractTable<K, VO, KeyValueStore<Bytes, byte[]>> other) {
+        return doJoin((KTable<K, VO>) other, null, null, true, true);
+    }
+
+    @Override
+    public <VO, VR>  KTable<K, VR> outerJoin(AbstractTable<K, VO, KeyValueStore<Bytes, byte[]>> other,
+                                             ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
+                                             Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
             new MaterializedInternal<>(materialized, builder, MERGE_NAME);
 
-        return doJoin(other, joiner, materializedInternal, true, true);
-    }
-
-    @Override
-    public <V1, R> KTable<K, R> leftJoin(final KTable<K, V1> other,
-                                         final ValueJoiner<? super V, ? super V1, ? extends R> joiner) {
-        return doJoin(other, joiner, null, true, false);
-    }
-
-    @Override
-    public <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
-                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
-        Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(materialized, builder, MERGE_NAME);
-
-        return doJoin(other, joiner, materializedInternal, true, false);
+        return doJoin((KTable<K, VO>)other, joiner, materializedInternal, true, true);
     }
 
     @SuppressWarnings("unchecked")
