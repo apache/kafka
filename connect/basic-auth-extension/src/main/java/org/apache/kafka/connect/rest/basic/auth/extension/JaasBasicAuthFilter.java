@@ -17,6 +17,8 @@
 
 package org.apache.kafka.connect.rest.basic.auth.extension;
 
+import java.util.regex.Pattern;
+import javax.ws.rs.HttpMethod;
 import org.apache.kafka.common.config.ConfigException;
 
 import java.io.IOException;
@@ -35,18 +37,18 @@ import javax.ws.rs.container.ContainerRequestFilter;
 import javax.ws.rs.core.Response;
 
 public class JaasBasicAuthFilter implements ContainerRequestFilter {
-
     private static final String CONNECT_LOGIN_MODULE = "KafkaConnect";
     static final String AUTHORIZATION = "Authorization";
-
+    private static final Pattern TASK_REQUEST_PATTERN = Pattern.compile("/?connectors/([^/]+)/tasks/?");
     @Override
     public void filter(ContainerRequestContext requestContext) throws IOException {
-
         try {
-            LoginContext loginContext =
-                new LoginContext(CONNECT_LOGIN_MODULE, new BasicAuthCallBackHandler(
-                    requestContext.getHeaderString(AUTHORIZATION)));
-            loginContext.login();
+            if (!(requestContext.getMethod().equals(HttpMethod.POST) && TASK_REQUEST_PATTERN.matcher(requestContext.getUriInfo().getPath()).matches())) {
+                LoginContext loginContext =
+                    new LoginContext(CONNECT_LOGIN_MODULE, new BasicAuthCallBackHandler(
+                        requestContext.getHeaderString(AUTHORIZATION)));
+                loginContext.login();
+            }
         } catch (LoginException | ConfigException e) {
             requestContext.abortWith(
                 Response.status(Response.Status.UNAUTHORIZED)
