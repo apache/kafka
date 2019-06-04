@@ -32,8 +32,7 @@ fi
 
 EXTRA_ARGS=${EXTRA_ARGS-'-name connectDistributed'}
 
-COMMAND=$1
-case $COMMAND in
+case $1 in
   -daemon)
     EXTRA_ARGS="-daemon "$EXTRA_ARGS
     shift

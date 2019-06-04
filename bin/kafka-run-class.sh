@@ -239,8 +239,7 @@ if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
 fi
 
 while [ $# -gt 0 ]; do
-  COMMAND=$1
-  case $COMMAND in
+  case $1 in
     -name)
       DAEMON_NAME=$2
       CONSOLE_OUTPUT_FILE=$LOG_DIR/$DAEMON_NAME.out
