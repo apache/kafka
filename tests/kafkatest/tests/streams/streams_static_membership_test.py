@@ -18,7 +18,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsStaticMembershipService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.tests.streams.utils import verify_stopped, verify_running
+from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running, extract_generation_from_logs
 
 class StreamsStaticMembershipTest(Test):
     """
@@ -77,40 +77,18 @@ class StreamsStaticMembershipTest(Test):
 
         stableGeneration = 3
         for processor in processors:
-            generations = self.extract_generation_from_logs(processor)
+            generations = extract_generation_from_logs(processor)
             for generation in generations[-(numBounces * numThreads):]:
                 assert stableGeneration == int(generation), \
                     "Stream rolling bounce have caused unexpected generation bump %d" % int(generation)
 
         self.verify_processing(processors)
 
-        self.stop_processors(processors)
+        stop_processors(processors, self.stopped_message)
 
         self.producer.stop()
         self.kafka.stop()
         self.zookeeper.stop()
-
-    @staticmethod
-    def extract_generation_from_logs(processor):
-        return list(processor.node.account.ssh_capture("grep \"Successfully joined group with generation\" %s| awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % processor.LOG_FILE, allow_fail=True))
-
-    # @staticmethod
-    # def verify_running(processor, message):
-    #     node = processor.node
-    #     with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-    #         processor.start()
-    #         monitor.wait_until(message,
-    #                            timeout_sec=60,
-    #                            err_msg="Never saw '%s' message " % message + str(processor.node.account))
-    #
-    # @staticmethod
-    # def verify_stopped(processor):
-    #     node = processor.node
-    #     with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-    #         processor.stop()
-    #         monitor.wait_until('Static membership test closed',
-    #                            timeout_sec=60,
-    #                            err_msg="'Static membership test closed' message" + str(processor.node.account))
 
     def verify_processing(self, processors):
         for processor in processors:
@@ -118,10 +96,6 @@ class StreamsStaticMembershipTest(Test):
                 monitor.wait_until(self.pattern,
                                    timeout_sec=60,
                                    err_msg="Never saw processing of %s " % self.pattern + str(processor.node.account))
-
-    def stop_processors(self, processors):
-        for processor in processors:
-            verify_stopped(processor, self.stopped_message)
 
     def set_topics(self, processor):
         processor.INPUT_TOPIC = self.input_topic
