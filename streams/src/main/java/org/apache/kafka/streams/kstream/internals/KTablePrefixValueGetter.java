@@ -17,9 +17,10 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 public interface KTablePrefixValueGetter<K, V> extends KTableValueGetter<K, V> {
 
-    KeyValueIterator<K, V> prefixScan(final K prefix);
+    KeyValueIterator<K, ValueAndTimestamp<V>> prefixScan(final K prefix);
 
 }

@@ -27,6 +27,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -74,10 +75,10 @@ public class KTableKTablePrefixScanProcessorSupplier<K, KO, VO> implements Proce
 
             final CombinedKey<KO, K> prefixKey = new CombinedKey<>(key);
             //Perform the prefixScan and propagate the results
-            final KeyValueIterator<CombinedKey<KO, K>, SubscriptionWrapper> prefixScanResults = prefixValueGetter.prefixScan(prefixKey);
+            final KeyValueIterator<CombinedKey<KO, K>, ValueAndTimestamp<SubscriptionWrapper>> prefixScanResults = prefixValueGetter.prefixScan(prefixKey);
             while (prefixScanResults.hasNext()) {
-                final KeyValue<CombinedKey<KO, K>, SubscriptionWrapper> scanResult = prefixScanResults.next();
-                context().forward(scanResult.key.getPrimaryKey(), new SubscriptionResponseWrapper<>(scanResult.value.getHash(), value.newValue));
+                final KeyValue<CombinedKey<KO, K>, ValueAndTimestamp<SubscriptionWrapper>> scanResult = prefixScanResults.next();
+                context().forward(scanResult.key.getPrimaryKey(), new SubscriptionResponseWrapper<>(scanResult.value.value().getHash(), value.newValue));
             }
         }
     }

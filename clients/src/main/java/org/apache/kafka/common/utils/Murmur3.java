@@ -14,6 +14,7 @@ package org.apache.kafka.common.utils;
  * "All MurmurHash versions are public domain software, and the author disclaims all copyright
  * to their code."
  */
+@SuppressWarnings("fallthrough")
 public class Murmur3 {
     // from 64-bit linear congruential generator
     public static final long NULL_HASHCODE = 2862933555777941757L;

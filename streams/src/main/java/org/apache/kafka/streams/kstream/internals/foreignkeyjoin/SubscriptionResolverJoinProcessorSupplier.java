@@ -55,7 +55,7 @@ public class SubscriptionResolverJoinProcessorSupplier<K, V, VO, VR> implements 
 
             @Override
             public void process(K key, SubscriptionResponseWrapper<VO> value) {
-                final V currentValue = valueGetter.get(key);
+                final V currentValue = valueGetter.get(key).value();
                 //We are unable to access the actual source topic name for the valueSerializer at runtime, without
                 //tightly coupling to KTableRepartitionProcessorSupplier.
                 //While we can use the source topic from where the events came from, we shouldn't serialize against it

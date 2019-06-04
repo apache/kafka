@@ -17,6 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.kstream.internals.KTablePrefixValueGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableSourceValueGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
@@ -26,6 +27,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -51,11 +53,13 @@ public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
             private KeyValueStore<CombinedKey<KO, K>, SubscriptionWrapper> store;
             private KTableValueGetter<KO, VO> foreignValues;
             private StreamsMetricsImpl metrics;
+            private Sensor skippedRecordsSensor;
 
             @Override@SuppressWarnings("unchecked")
             public void init(final ProcessorContext context) {
                 super.init(context);
                 metrics = (StreamsMetricsImpl) context.metrics();
+                skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
                 foreignValues = foreignValueGetterSupplier.get();
                 foreignValues.init(context);
                 store = (KeyValueStore<CombinedKey<KO, K>, SubscriptionWrapper>) context.getStateStore(stateStoreName);
@@ -69,7 +73,7 @@ public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
                             "Skipping record due to null foreign key. value=[{}] topic=[{}] partition=[{}] offset=[{}]",
                             value, context().topic(), context().partition(), context().offset()
                     );
-                    metrics.skippedRecordsSensor().record();
+                    skippedRecordsSensor.record();
                     return;
                 }
 
@@ -81,7 +85,7 @@ public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
                     store.put(key, value);
                 }
 
-                VO foreignValue = foreignValues.get(foreignKey);
+                VO foreignValue = foreignValues.get(foreignKey).value();
                 //Propagate valid requests for the foreign event data as well as deletions.
                 if ((value.getHash() != null && foreignValue != null) ||
                     (value.getHash() == null && value.isPropagate())) {
