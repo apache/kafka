@@ -170,7 +170,7 @@ class GroupCoordinator(val brokerId: Int,
         // if the group is marked as dead, it means some other thread has just removed the group
         // from the coordinator metadata; it is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
-        // joining without resetting specified member id in case we need to fence.
+        // finding the correct coordinator and rejoin.
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.COORDINATOR_NOT_AVAILABLE))
       } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
         responseCallback(joinError(JoinGroupRequest.UNKNOWN_MEMBER_ID, Errors.INCONSISTENT_GROUP_PROTOCOL))
@@ -235,7 +235,7 @@ class GroupCoordinator(val brokerId: Int,
         // if the group is marked as dead, it means some other thread has just removed the group
         // from the coordinator metadata; this is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
-        // joining without resetting specified member id in case we need to fence.
+        // finding the correct coordinator and rejoin.
         responseCallback(joinError(memberId, Errors.COORDINATOR_NOT_AVAILABLE))
       } else if (!group.supportsProtocols(protocolType, MemberMetadata.plainProtocolSet(protocols))) {
         responseCallback(joinError(memberId, Errors.INCONSISTENT_GROUP_PROTOCOL))
@@ -334,7 +334,7 @@ class GroupCoordinator(val brokerId: Int,
 
       case None =>
         groupManager.getGroup(groupId) match {
-          case None => responseCallback(Array.empty, Errors.COORDINATOR_NOT_AVAILABLE)
+          case None => responseCallback(Array.empty, Errors.UNKNOWN_MEMBER_ID)
           case Some(group) => doSyncGroup(group, generation, memberId, groupInstanceId, groupAssignment, responseCallback)
         }
     }
@@ -351,7 +351,7 @@ class GroupCoordinator(val brokerId: Int,
         // if the group is marked as dead, it means some other thread has just removed the group
         // from the coordinator metadata; this is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
-        // joining without resetting specified member id in case we need to fence.
+        // finding the correct coordinator and rejoin.
         responseCallback(Array.empty, Errors.COORDINATOR_NOT_AVAILABLE)
       } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
         responseCallback(Array.empty, Errors.FENCED_INSTANCE_ID)
@@ -417,11 +417,7 @@ class GroupCoordinator(val brokerId: Int,
 
     groupManager.getGroup(groupId) match {
       case None =>
-        // if the group is marked as dead, it means some other thread has just removed the group
-        // from the coordinator metadata; it is likely that the group has migrated to some other
-        // coordinator OR the group is in a transient unstable phase. Let the member retry
-        // joining without resetting specified member id in case we need to fence.
-        responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
+        responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
       case Some(group) =>
         group.inLock {
@@ -504,14 +500,14 @@ class GroupCoordinator(val brokerId: Int,
 
     groupManager.getGroup(groupId) match {
       case None =>
-        responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
+        responseCallback(Errors.UNKNOWN_MEMBER_ID)
 
       case Some(group) => group.inLock {
         if (group.is(Dead)) {
           // if the group is marked as dead, it means some other thread has just removed the group
-          // from the coordinator metadata; it is likely that the group has migrated to some other
+          // from the coordinator metadata; this is likely that the group has migrated to some other
           // coordinator OR the group is in a transient unstable phase. Let the member retry
-          // joining without resetting specified member id in case we need to fence.
+          // finding the correct coordinator and rejoin.
           responseCallback(Errors.COORDINATOR_NOT_AVAILABLE)
         } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
           responseCallback(Errors.FENCED_INSTANCE_ID)
@@ -609,7 +605,7 @@ class GroupCoordinator(val brokerId: Int,
         // if the group is marked as dead, it means some other thread has just removed the group
         // from the coordinator metadata; it is likely that the group has migrated to some other
         // coordinator OR the group is in a transient unstable phase. Let the member retry
-        // joining without resetting specified member id in case we need to fence.
+        // finding the correct coordinator and rejoin.
         responseCallback(offsetMetadata.mapValues(_ => Errors.COORDINATOR_NOT_AVAILABLE))
       } else if (group.isStaticMemberFenced(memberId, groupInstanceId)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.FENCED_INSTANCE_ID))

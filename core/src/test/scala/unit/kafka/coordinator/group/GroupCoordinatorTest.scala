@@ -1024,7 +1024,7 @@ class GroupCoordinatorTest {
   @Test
   def testHeartbeatUnknownGroup() {
     val heartbeatResult = heartbeat(groupId, memberId, -1)
-    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, heartbeatResult)
+    assertEquals(Errors.UNKNOWN_MEMBER_ID, heartbeatResult)
   }
 
   @Test
@@ -1339,7 +1339,7 @@ class GroupCoordinatorTest {
   @Test
   def testSyncGroupFromUnknownGroup() {
     val syncGroupResult = syncGroupFollower(groupId, 1, memberId)
-    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, syncGroupResult._2)
+    assertEquals(Errors.UNKNOWN_MEMBER_ID, syncGroupResult._2)
   }
 
   @Test
@@ -2212,7 +2212,7 @@ class GroupCoordinatorTest {
   @Test
   def testLeaveGroupUnknownGroup() {
     val leaveGroupResult = leaveGroup(groupId, memberId)
-    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, leaveGroupResult)
+    assertEquals(Errors.UNKNOWN_MEMBER_ID, leaveGroupResult)
   }
 
   @Test
