@@ -578,6 +578,11 @@ class ReplicaManager(val config: KafkaConfig,
     replicaStateChangeLock synchronized {
       partitionDirs.map { case (topicPartition, destinationDir) =>
         try {
+          /* If the topic name is exceptionally long, we can't support altering the log directory.
+           * See KAFKA-4893 for details.
+           * TODO: fix this by implementing topic IDs. */
+          if (Log.logFutureDirName(topicPartition).size > 255)
+            throw new InvalidTopicException("The topic name is too long.")
           if (!logManager.isLogDirOnline(destinationDir))
             throw new KafkaStorageException(s"Log directory $destinationDir is offline")
 
@@ -621,7 +626,8 @@ class ReplicaManager(val config: KafkaConfig,
 
           (topicPartition, Errors.NONE)
         } catch {
-          case e@(_: LogDirNotFoundException |
+          case e@(_: InvalidTopicException |
+                  _: LogDirNotFoundException |
                   _: ReplicaNotAvailableException |
                   _: KafkaStorageException) =>
             (topicPartition, Errors.forException(e))

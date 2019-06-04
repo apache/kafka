@@ -1793,6 +1793,24 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertFutureExceptionTypeEquals(alterResult.values().get(topic1Resource), classOf[InvalidRequestException],
       Some("Invalid config value for resource"))
   }
+
+  @Test
+  def testLongTopicNames(): Unit = {
+    val client = AdminClient.create(createConfig)
+    val longTopicName = String.join("", Collections.nCopies(249, "x"));
+    val invalidTopicName = String.join("", Collections.nCopies(250, "x"));
+    val newTopics2 = Seq(new NewTopic(invalidTopicName, 3, 3),
+                         new NewTopic(longTopicName, 3, 3))
+    val results = client.createTopics(newTopics2.asJava).values()
+    assertTrue(results.containsKey(longTopicName))
+    results.get(longTopicName).get()
+    assertTrue(results.containsKey(invalidTopicName))
+    assertFutureExceptionTypeEquals(results.get(invalidTopicName), classOf[InvalidTopicException])
+    assertFutureExceptionTypeEquals(client.alterReplicaLogDirs(
+      Map(new TopicPartitionReplica(longTopicName, 0, 0) -> servers(0).config.logDirs(0)).asJava).all(),
+      classOf[InvalidTopicException])
+    client.close()
+  }
 }
 
 object AdminClientIntegrationTest {
