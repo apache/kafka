@@ -51,10 +51,10 @@ public class KStreamMapValuesTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topicName, expectedKey, Integer.toString(expectedKey)));
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, Integer.toString(expectedKey), expectedKey / 2L));
             }
         }
-        final String[] expected = {"1:1 (ts: 0)", "10:2 (ts: 0)", "100:3 (ts: 0)", "1000:4 (ts: 0)"};
+        final String[] expected = {"1:1 (ts: 0)", "10:2 (ts: 5)", "100:3 (ts: 50)", "1000:4 (ts: 500)"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }
@@ -72,10 +72,10 @@ public class KStreamMapValuesTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topicName, expectedKey, Integer.toString(expectedKey)));
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, Integer.toString(expectedKey), expectedKey / 2L));
             }
         }
-        final String[] expected = {"1:2 (ts: 0)", "10:12 (ts: 0)", "100:103 (ts: 0)", "1000:1004 (ts: 0)"};
+        final String[] expected = {"1:2 (ts: 0)", "10:12 (ts: 5)", "100:103 (ts: 50)", "1000:1004 (ts: 500)"};
 
         assertArrayEquals(expected, supplier.theCapturedProcessor().processed.toArray());
     }

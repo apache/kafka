@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -32,16 +33,17 @@ import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
+import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.Before;
 import org.junit.Test;
 
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -67,50 +69,93 @@ public class SessionWindowedKStreamImplTest {
     }
 
     @Test
-    public void shouldCountSessionWindowed() {
-        final Map<Windowed<String>, Long> results = new HashMap<>();
+    public void shouldCountSessionWindowedWithCachingDisabled() {
+        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        shouldCountSessionWindowed();
+    }
+
+    @Test
+    public void shouldCountSessionWindowedWithCachingEnabled() {
+        shouldCountSessionWindowed();
+    }
+
+    private void shouldCountSessionWindowed() {
+        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
         stream.count()
-                .toStream()
-                .foreach(results::put);
+            .toStream()
+            .process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }
-        assertThat(results.get(new Windowed<>("1", new SessionWindow(10, 15))), equalTo(2L));
-        assertThat(results.get(new Windowed<>("2", new SessionWindow(600, 600))), equalTo(1L));
-        assertThat(results.get(new Windowed<>("1", new SessionWindow(600, 600))), equalTo(1L));
+
+        final Map<Windowed<String>, ValueAndTimestamp<Long>> result =
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+
+        assertThat(result.size(), equalTo(3));
+        assertThat(
+            result.get(new Windowed<>("1", new SessionWindow(10L, 15L))),
+            equalTo(ValueAndTimestamp.make(2L, 15L)));
+        assertThat(
+            result.get(new Windowed<>("2", new SessionWindow(599L, 600L))),
+            equalTo(ValueAndTimestamp.make(2L, 600L)));
+        assertThat(
+            result.get(new Windowed<>("1", new SessionWindow(600L, 600L))),
+            equalTo(ValueAndTimestamp.make(1L, 600L)));
     }
 
     @Test
     public void shouldReduceWindowed() {
-        final Map<Windowed<String>, String> results = new HashMap<>();
+        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         stream.reduce(MockReducer.STRING_ADDER)
-                .toStream()
-                .foreach(results::put);
+            .toStream()
+            .process(supplier);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }
-        assertThat(results.get(new Windowed<>("1", new SessionWindow(10, 15))), equalTo("1+2"));
-        assertThat(results.get(new Windowed<>("2", new SessionWindow(600, 600))), equalTo("1"));
-        assertThat(results.get(new Windowed<>("1", new SessionWindow(600, 600))), equalTo("3"));
+
+        final Map<Windowed<String>, ValueAndTimestamp<String>> result =
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+
+        assertThat(result.size(), equalTo(3));
+        assertThat(
+            result.get(new Windowed<>("1", new SessionWindow(10, 15))),
+            equalTo(ValueAndTimestamp.make("1+2", 15L)));
+        assertThat(
+            result.get(new Windowed<>("2", new SessionWindow(599L, 600))),
+            equalTo(ValueAndTimestamp.make("1+2", 600L)));
+        assertThat(
+            result.get(new Windowed<>("1", new SessionWindow(600, 600))),
+            equalTo(ValueAndTimestamp.make("3", 600L)));
     }
 
     @Test
     public void shouldAggregateSessionWindowed() {
-        final Map<Windowed<String>, String> results = new HashMap<>();
+        final MockProcessorSupplier<Windowed<String>, String> supplier = new MockProcessorSupplier<>();
         stream.aggregate(MockInitializer.STRING_INIT,
                          MockAggregator.TOSTRING_ADDER,
                          sessionMerger,
                          Materialized.with(Serdes.String(), Serdes.String()))
-                .toStream()
-                .foreach(results::put);
+            .toStream()
+            .process(supplier);
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }
-        assertThat(results.get(new Windowed<>("1", new SessionWindow(10, 15))), equalTo("0+0+1+2"));
-        assertThat(results.get(new Windowed<>("2", new SessionWindow(600, 600))), equalTo("0+1"));
-        assertThat(results.get(new Windowed<>("1", new SessionWindow(600, 600))), equalTo("0+3"));
+
+        final Map<Windowed<String>, ValueAndTimestamp<String>> result =
+            supplier.theCapturedProcessor().lastValueAndTimestampPerKey;
+
+        assertThat(result.size(), equalTo(3));
+        assertThat(
+            result.get(new Windowed<>("1", new SessionWindow(10, 15))),
+            equalTo(ValueAndTimestamp.make("0+0+1+2", 15L)));
+        assertThat(
+            result.get(new Windowed<>("2", new SessionWindow(599, 600))),
+            equalTo(ValueAndTimestamp.make("0+0+1+2", 600L)));
+        assertThat(
+            result.get(new Windowed<>("1", new SessionWindow(600, 600))),
+            equalTo(ValueAndTimestamp.make("0+3", 600L)));
     }
 
     @Test
@@ -126,7 +171,7 @@ public class SessionWindowedKStreamImplTest {
                 equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), 2L),
                     KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), 1L),
-                    KeyValue.pair(new Windowed<>("2", new SessionWindow(600, 600)), 1L))));
+                    KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), 2L))));
         }
     }
 
@@ -144,7 +189,7 @@ public class SessionWindowedKStreamImplTest {
                 equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "1+2"),
                     KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "3"),
-                    KeyValue.pair(new Windowed<>("2", new SessionWindow(600, 600)), "1"))));
+                    KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "1+2"))));
         }
     }
 
@@ -165,7 +210,7 @@ public class SessionWindowedKStreamImplTest {
                 equalTo(Arrays.asList(
                     KeyValue.pair(new Windowed<>("1", new SessionWindow(10, 15)), "0+0+1+2"),
                     KeyValue.pair(new Windowed<>("1", new SessionWindow(600, 600)), "0+3"),
-                    KeyValue.pair(new Windowed<>("2", new SessionWindow(600, 600)), "0+1"))));
+                    KeyValue.pair(new Windowed<>("2", new SessionWindow(599, 600)), "0+0+1+2"))));
         }
     }
 
@@ -247,6 +292,6 @@ public class SessionWindowedKStreamImplTest {
         driver.pipeInput(recordFactory.create(TOPIC, "1", "2", 15));
         driver.pipeInput(recordFactory.create(TOPIC, "1", "3", 600));
         driver.pipeInput(recordFactory.create(TOPIC, "2", "1", 600));
+        driver.pipeInput(recordFactory.create(TOPIC, "2", "2", 599));
     }
-
 }

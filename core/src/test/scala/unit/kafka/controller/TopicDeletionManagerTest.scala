@@ -33,6 +33,30 @@ class TopicDeletionManagerTest {
   private val deletionClient = mock(classOf[DeletionClient])
 
   @Test
+  def testInitialization(): Unit = {
+    val controllerContext = initContext(
+      brokers = Seq(1, 2, 3),
+      topics = Set("foo", "bar", "baz"),
+      numPartitions = 2,
+      replicationFactor = 3)
+
+    val replicaStateMachine = new MockReplicaStateMachine(controllerContext)
+    replicaStateMachine.startup()
+
+    val partitionStateMachine = new MockPartitionStateMachine(controllerContext, uncleanLeaderElectionEnabled = false)
+    partitionStateMachine.startup()
+
+    val deletionManager = new TopicDeletionManager(config, controllerContext, replicaStateMachine,
+      partitionStateMachine, deletionClient)
+
+    assertTrue(deletionManager.isDeleteTopicEnabled)
+    deletionManager.init(initialTopicsToBeDeleted = Set("foo", "bar"), initialTopicsIneligibleForDeletion = Set("bar", "baz"))
+
+    assertEquals(Set("foo", "bar"), controllerContext.topicsToBeDeleted.toSet)
+    assertEquals(Set("bar"), controllerContext.topicsIneligibleForDeletion.toSet)
+  }
+
+  @Test
   def testBasicDeletion(): Unit = {
     val controllerContext = initContext(
       brokers = Seq(1, 2, 3),

@@ -27,6 +27,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
+import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
@@ -85,6 +86,7 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.fail;
 
 public class TransactionManagerTest {
@@ -1356,8 +1358,8 @@ public class TransactionManagerTest {
         assertTrue(secondResponseFuture.isDone());
     }
 
-    @Test(expected = ExecutionException.class)
-    public void testProducerFencedException() throws InterruptedException, ExecutionException {
+    @Test
+    public void testProducerFencedException() throws InterruptedException {
         final long pid = 13131L;
         final short epoch = 1;
 
@@ -1378,7 +1380,20 @@ public class TransactionManagerTest {
 
         assertTrue(responseFuture.isDone());
         assertTrue(transactionManager.hasError());
-        responseFuture.get();
+
+        try {
+            // make sure the produce was expired.
+            responseFuture.get();
+            fail("Expected to get a ExecutionException from the response");
+        } catch (ExecutionException e) {
+            assertTrue(e.getCause() instanceof ProducerFencedException);
+        }
+
+        // make sure the exception was thrown directly from the follow-up calls.
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginTransaction());
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginCommit());
+        assertThrows(ProducerFencedException.class, () -> transactionManager.beginAbort());
+        assertThrows(ProducerFencedException.class, () -> transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), "dummyId"));
     }
 
     @Test

@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -69,7 +70,7 @@ public class GlobalStateUpdateTask implements GlobalStateMaintainer {
                     source,
                     deserializationExceptionHandler,
                     logContext,
-                    processorContext.metrics().skippedRecordsSensor()
+                    ThreadMetrics.skipRecordSensor(processorContext.metrics())
                 )
             );
         }

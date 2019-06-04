@@ -20,10 +20,10 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
-
     private final KTableImpl<K, ?, V> parent;
     private final Predicate<? super K, ? super V> predicate;
     private final boolean filterNot;
@@ -61,18 +61,35 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         return newValue;
     }
 
+    private ValueAndTimestamp<V> computeValue(final K key, final ValueAndTimestamp<V> valueAndTimestamp) {
+        ValueAndTimestamp<V> newValueAndTimestamp = null;
+
+        if (valueAndTimestamp != null) {
+            final V value = valueAndTimestamp.value();
+            if (filterNot ^ predicate.test(key, value)) {
+                newValueAndTimestamp = valueAndTimestamp;
+            }
+        }
+
+        return newValueAndTimestamp;
+    }
+
+
     private class KTableFilterProcessor extends AbstractProcessor<K, Change<V>> {
-        private KeyValueStore<K, V> store;
-        private TupleForwarder<K, V> tupleForwarder;
+        private TimestampedKeyValueStore<K, V> store;
+        private TimestampedTupleForwarder<K, V> tupleForwarder;
 
         @SuppressWarnings("unchecked")
         @Override
         public void init(final ProcessorContext context) {
             super.init(context);
             if (queryableName != null) {
-                store = (KeyValueStore<K, V>) context.getStateStore(queryableName);
-                tupleForwarder = new TupleForwarder<>(store, context,
-                    new ForwardingCacheFlushListener<>(context), sendOldValues);
+                store = (TimestampedKeyValueStore<K, V>) context.getStateStore(queryableName);
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                    store,
+                    context,
+                    new TimestampedCacheFlushListener<>(context),
+                    sendOldValues);
             }
         }
 
@@ -86,13 +103,12 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
             }
 
             if (queryableName != null) {
-                store.put(key, newValue);
+                store.put(key, ValueAndTimestamp.make(newValue, context().timestamp()));
                 tupleForwarder.maybeForward(key, newValue, oldValue);
             } else {
                 context().forward(key, new Change<>(newValue, oldValue));
             }
         }
-
     }
 
     @Override
@@ -117,6 +133,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         }
     }
 
+
     private class KTableFilterValueGetter implements KTableValueGetter<K, V> {
         private final KTableValueGetter<K, V> parentGetter;
 
@@ -131,7 +148,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         }
 
         @Override
-        public V get(final K key) {
+        public ValueAndTimestamp<V> get(final K key) {
             return computeValue(key, parentGetter.get(key));
         }
 

@@ -415,7 +415,7 @@ object TopicCommand extends Logging {
     }
 
     override def getTopics(topicWhitelist: Option[String], excludeInternalTopics: Boolean = false): Seq[String] = {
-      val allTopics = zkClient.getAllTopicsInCluster.sorted
+      val allTopics = zkClient.getAllTopicsInCluster.toSeq.sorted
       doGetTopics(allTopics, topicWhitelist, excludeInternalTopics)
     }
 
@@ -635,12 +635,13 @@ object TopicCommand extends Logging {
         CommandLineUtils.checkRequiredArgs(parser, options, topicOpt)
       if (has(createOpt) && !has(replicaAssignmentOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt, replicationFactorOpt)
-      if (has(bootstrapServerOpt) && has(alterOpt))
+      if (has(bootstrapServerOpt) && has(alterOpt)) {
+        CommandLineUtils.checkInvalidArgsSet(parser, options, Set(bootstrapServerOpt, configOpt), Set(alterOpt))
         CommandLineUtils.checkRequiredArgs(parser, options, partitionsOpt)
+      }
 
       // check invalid args
       CommandLineUtils.checkInvalidArgs(parser, options, configOpt, allTopicLevelOpts -- Set(alterOpt, createOpt))
-      CommandLineUtils.checkInvalidArgsSet(parser, options, Set(bootstrapServerOpt, configOpt), Set(alterOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, deleteConfigOpt, allTopicLevelOpts -- Set(alterOpt) ++ Set(bootstrapServerOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, partitionsOpt, allTopicLevelOpts -- Set(alterOpt, createOpt))
       CommandLineUtils.checkInvalidArgs(parser, options, replicationFactorOpt, allTopicLevelOpts -- Set(createOpt))

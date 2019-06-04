@@ -17,23 +17,22 @@
 
 package integration.kafka.api
 
-import org.junit.runner.RunWith
-import org.junit.runners.Parameterized
-import org.junit.runners.Parameterized.Parameters
 import java.lang.{Boolean => JBoolean}
 import java.time.Duration
 import java.util
+import java.util.Collections
 
-import scala.collection.JavaConverters._
 import kafka.api.IntegrationTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import org.apache.kafka.clients.admin.{AdminClient, AdminClientConfig}
+import org.apache.kafka.clients.admin.NewTopic
 import org.apache.kafka.clients.consumer.ConsumerConfig
-import org.apache.kafka.clients.producer.ProducerConfig
-import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.utils.Utils
-import org.junit.{After, Test}
+import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
+import org.junit.Assert._
+import org.junit.Test
+import org.junit.runner.RunWith
+import org.junit.runners.Parameterized
+import org.junit.runners.Parameterized.Parameters
 
 /**
  * Tests behavior of specifying auto topic creation configuration for the consumer and broker
@@ -42,12 +41,10 @@ import org.junit.{After, Test}
 class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consumerAllowAutoCreateTopics: JBoolean) extends IntegrationTestHarness {
   override protected def brokerCount: Int = 1
 
-  val topic = "topic"
-  val part = 0
-  val tp = new TopicPartition(topic, part)
+  val topic_1 = "topic-1"
+  val topic_2 = "topic-2"
   val producerClientId = "ConsumerTestProducer"
   val consumerClientId = "ConsumerTestConsumer"
-  var adminClient: AdminClient = null
 
   // configure server properties
   this.serverConfig.setProperty(KafkaConfig.ControlledShutdownEnableProp, "false") // speed up shutdown
@@ -62,36 +59,31 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
   this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100")
   this.consumerConfig.setProperty(ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG, consumerAllowAutoCreateTopics.toString)
 
-  @After
-  override def tearDown(): Unit = {
-    if (adminClient != null)
-      Utils.closeQuietly(adminClient, "AdminClient")
-    super.tearDown()
-  }
-
   @Test
   def testAutoTopicCreation(): Unit = {
     val consumer = createConsumer()
-    adminClient = AdminClient.create(createConfig())
+    val producer = createProducer()
+    val adminClient = createAdminClient()
+    val record = new ProducerRecord(topic_1, 0, "key".getBytes, "value".getBytes)
 
-    consumer.subscribe(util.Arrays.asList(topic))
-    consumer.poll(Duration.ofMillis(100))
+    // create `topic_1` and produce a record to it
+    adminClient.createTopics(Collections.singleton(new NewTopic(topic_1, 1, 1))).all.get
+    producer.send(record).get
 
-    val topicCreated = adminClient.listTopics.names.get.contains(topic)
+    consumer.subscribe(util.Arrays.asList(topic_1, topic_2))
+
+    // Wait until the produced record was consumed. This guarantees that metadata request for `topic_2` was sent to the
+    // broker.
+    TestUtils.waitUntilTrue(() => {
+      consumer.poll(Duration.ofMillis(100)).count > 0
+    }, "Timed out waiting to consume")
+
+    // MetadataRequest is guaranteed to create the topic znode if creation was required
+    val topicCreated = zkClient.getAllTopicsInCluster.contains(topic_2)
     if (brokerAutoTopicCreationEnable && consumerAllowAutoCreateTopics)
-      assert(topicCreated == true)
+      assertTrue(topicCreated)
     else
-      assert(topicCreated == false)
-  }
-
-  def createConfig(): util.Map[String, Object] = {
-    val config = new util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList)
-    config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "20000")
-    val securityProps: util.Map[Object, Object] =
-      TestUtils.adminClientSecurityConfigs(securityProtocol, trustStoreFile, clientSaslProperties)
-    securityProps.asScala.foreach { case (key, value) => config.put(key.asInstanceOf[String], value) }
-    config
+      assertFalse(topicCreated)
   }
 }
 

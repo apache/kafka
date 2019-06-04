@@ -1126,6 +1126,8 @@ project(':streams') {
     testCompile libs.log4j
     testCompile libs.junit
     testCompile libs.easymock
+    testCompile libs.powermockJunit4
+    testCompile libs.powermockEasymock
     testCompile libs.bcpkix
     testCompile libs.hamcrest
 
@@ -1367,6 +1369,18 @@ project(':streams:upgrade-system-tests-21') {
   }
 }
 
+project(':streams:upgrade-system-tests-22') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-22"
+
+  dependencies {
+    testCompile libs.kafkaStreams_22
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.github.johnrengelman.shadow'
@@ -1443,7 +1457,11 @@ project(':connect:api') {
 
   javadoc {
     include "**/org/apache/kafka/connect/**" // needed for the `javadocAll` task
-    options.links "https://docs.oracle.com/javase/8/docs/api/"
+    // The URL structure was changed to include the locale after Java 8
+    if (JavaVersion.current().isJava11Compatible())
+      options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+    else
+      options.links "https://docs.oracle.com/javase/8/docs/api/"
   }
 
   tasks.create(name: "copyDependantLibs", type: Copy) {
@@ -1571,6 +1589,7 @@ project(':connect:runtime') {
     testCompile libs.junit
     testCompile libs.powermockJunit4
     testCompile libs.powermockEasymock
+    testCompile libs.mockitoCore
     testCompile libs.httpclient
 
     testCompile project(':clients').sourceSets.test.output
@@ -1796,5 +1815,9 @@ task aggregatedJavadoc(type: Javadoc) {
   classpath = files(projectsWithJavadoc.collect { it.sourceSets.main.compileClasspath })
   includes = projectsWithJavadoc.collectMany { it.javadoc.getIncludes() }
   excludes = projectsWithJavadoc.collectMany { it.javadoc.getExcludes() }
-  options.links "https://docs.oracle.com/javase/8/docs/api/"
+  // The URL structure was changed to include the locale after Java 8
+  if (JavaVersion.current().isJava11Compatible())
+    options.links "https://docs.oracle.com/en/java/javase/${JavaVersion.current().majorVersion}/docs/api/"
+  else
+    options.links "https://docs.oracle.com/javase/8/docs/api/"
 }

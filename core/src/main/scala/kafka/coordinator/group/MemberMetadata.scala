@@ -139,5 +139,4 @@ private[group] class MemberMetadata(var memberId: String,
       s"supportedProtocols=${supportedProtocols.map(_._1)}, " +
       ")"
   }
-
 }

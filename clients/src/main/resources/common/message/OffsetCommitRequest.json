@@ -26,7 +26,8 @@
   // Version 5 removes the retention time, which is now controlled only by a broker configuration.
   //
   // Version 6 adds the leader epoch for fencing.
-  "validVersions": "0-6",
+  // version 7 adds a new field called groupInstanceId to indicate member identity across restarts.
+  "validVersions": "0-7",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
       "about": "The unique group identifier." },
@@ -34,6 +35,9 @@
       "about": "The generation of the group." },
     { "name": "MemberId", "type": "string", "versions": "1+", "ignorable": true,
       "about": "The member ID assigned by the group coordinator." },
+    { "name": "GroupInstanceId", "type": "string", "versions": "7+",
+      "nullableVersions": "7+", "default": "null",
+      "about": "The unique identifier of the consumer instance provided by end user." },
     { "name": "RetentionTimeMs", "type": "int64", "versions": "2-4", "default": "-1", "ignorable": true,
       "about": "The time period in ms to retain the offset." },
     { "name": "Topics", "type": "[]OffsetCommitRequestTopic", "versions": "0+",

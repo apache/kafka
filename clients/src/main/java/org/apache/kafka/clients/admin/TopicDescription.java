@@ -70,7 +70,7 @@ public class TopicDescription {
      * @param internal Whether the topic is internal to Kafka
      * @param partitions A list of partitions where the index represents the partition id and the element contains
      *                   leadership and replica information for that partition.
-     * @param authorizedOperations authorized operations for this topic
+     * @param authorizedOperations authorized operations for this topic, or null if this is not known.
      */
     TopicDescription(String name, boolean internal, List<TopicPartitionInfo> partitions,
                             Set<AclOperation> authorizedOperations) {
@@ -104,7 +104,7 @@ public class TopicDescription {
     }
 
     /**
-     * authorized operations for this topic
+     * authorized operations for this topic, or null if this is not known.
      */
     public Set<AclOperation>  authorizedOperations() {
         return authorizedOperations;

@@ -39,6 +39,7 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Exit;
@@ -213,6 +214,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
         } catch (WakeupException e) {
             // we only call wakeup() once to close the consumer, so this recursion should be safe
             commitSync(offsets);
+            throw e;
+        } catch (FencedInstanceIdException e) {
             throw e;
         } catch (Exception e) {
             onComplete(offsets, e);

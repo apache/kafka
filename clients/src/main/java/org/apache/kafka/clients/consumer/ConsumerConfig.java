@@ -177,6 +177,11 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
     /**
+     * <code>client.rack</code>
+     */
+    public static final String CLIENT_RACK_CONFIG = CommonClientConfigs.CLIENT_RACK_CONFIG;
+
+    /**
      * <code>reconnect.backoff.ms</code>
      */
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
@@ -248,6 +253,17 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String EXCLUDE_INTERNAL_TOPICS_DOC = "Whether internal topics matching a subscribed pattern should " +
             "be excluded from the subscription. It is always possible to explicitly subscribe to an internal topic.";
     public static final boolean DEFAULT_EXCLUDE_INTERNAL_TOPICS = true;
+
+    /**
+     * <code>internal.leave.group.on.close</code>
+     * Whether or not the consumer should leave the group on close. If set to <code>false</code> then a rebalance
+     * won't occur until <code>session.timeout.ms</code> expires.
+     *
+     * <p>
+     * Note: this is an internal configuration and could be changed in the future in a backward incompatible way
+     *
+     */
+    static final String LEAVE_GROUP_ON_CLOSE_CONFIG = "internal.leave.group.on.close";
 
     /** <code>isolation.level</code> */
     public static final String ISOLATION_LEVEL_CONFIG = "isolation.level";
@@ -328,6 +344,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         "",
                                         Importance.LOW,
                                         CommonClientConfigs.CLIENT_ID_DOC)
+                                .define(CLIENT_RACK_CONFIG,
+                                        Type.STRING,
+                                        "",
+                                        Importance.LOW,
+                                        CommonClientConfigs.CLIENT_RACK_DOC)
                                 .define(MAX_PARTITION_FETCH_BYTES_CONFIG,
                                         Type.INT,
                                         DEFAULT_MAX_PARTITION_FETCH_BYTES,
@@ -466,6 +487,10 @@ public class ConsumerConfig extends AbstractConfig {
                                         DEFAULT_EXCLUDE_INTERNAL_TOPICS,
                                         Importance.MEDIUM,
                                         EXCLUDE_INTERNAL_TOPICS_DOC)
+                                .defineInternal(LEAVE_GROUP_ON_CLOSE_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW)
                                 .define(ISOLATION_LEVEL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_ISOLATION_LEVEL,
@@ -529,6 +554,10 @@ public class ConsumerConfig extends AbstractConfig {
 
     public static Set<String> configNames() {
         return CONFIG.names();
+    }
+
+    public static ConfigDef configDef() {
+        return  new ConfigDef(CONFIG);
     }
 
     public static void main(String[] args) {
