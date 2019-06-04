@@ -451,7 +451,7 @@ object TopicCommand extends Logging {
     print("\tPartition: " + tp.partition)
     print("\tLeader: " + (if(tp.leader.isDefined) tp.leader.get else "none"))
     print("\tReplicas: " + tp.assignedReplicas.mkString(","))
-    print("\tIsr: " + (if(tp.isr.isEmpty) "not available" else tp.isr.mkString(",")))
+    print("\tIsr: " + (if(tp.leader.isDefined) tp.isr.mkString(",") else "none"))
     print(markedForDeletionString)
     println()
   }

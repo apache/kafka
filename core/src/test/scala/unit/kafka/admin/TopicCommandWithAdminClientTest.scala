@@ -601,7 +601,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
           topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName, "--unavailable-partitions"))))
       val rows = output.split("\n")
       assertTrue(rows(0).startsWith(s"\tTopic: $testTopicName"))
-      assertTrue(rows(0).endsWith("Leader: none\tReplicas: 0\tIsr: not available"))
+      assertTrue(rows(0).endsWith("Leader: none\tReplicas: 0\tIsr: none"))
     } finally {
       restartDeadBrokers()
     }
@@ -755,7 +755,7 @@ class TopicCommandWithAdminClientTest extends KafkaServerTestHarness with Loggin
       testTopicDescription.partitions.asScala.head.isr.asScala.map(_.id).foreach(killBroker)
       val output = TestUtils.grabConsoleOutput(topicService.describeTopic(new TopicCommandOptions(Array("--topic", testTopicName))))
       val rows = output.split("\n")
-      assertTrue(rows(1).endsWith("Isr: not available"))
+      assertTrue(rows(1).endsWith("Isr: none"))
     } finally {
       restartDeadBrokers()
     }
