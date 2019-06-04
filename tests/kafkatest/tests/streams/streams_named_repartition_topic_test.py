@@ -18,7 +18,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsNamedRepartitionTopicService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.tests.streams.utils import stop_processors, verify_running
+from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running
 
 class StreamsNamedRepartitionTopicTest(Test):
     """
@@ -71,7 +71,7 @@ class StreamsNamedRepartitionTopicTest(Test):
 
         # do rolling upgrade
         for processor in processors:
-            self.verify_stopped(processor, self.stopped_message)
+            verify_stopped(processor, self.stopped_message)
             #  will tell app to add operations before repartition topic
             processor.ADD_ADDITIONAL_OPS = 'true'
             verify_running(processor, 'UPDATED Topology')

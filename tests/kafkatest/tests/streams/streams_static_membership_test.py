@@ -15,7 +15,7 @@
 
 from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.streams import StreamsStaticMembershipService
+from kafkatest.services.streams import StaticMemberTestService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running, extract_generation_from_logs
@@ -53,9 +53,9 @@ class StreamsStaticMembershipTest(Test):
         self.kafka.start()
 
         numThreads = 3
-        processor1 = StreamsStaticMembershipService(self.test_context, self.kafka, "consumer-A", numThreads)
-        processor2 = StreamsStaticMembershipService(self.test_context, self.kafka, "consumer-B", numThreads)
-        processor3 = StreamsStaticMembershipService(self.test_context, self.kafka, "consumer-C", numThreads)
+        processor1 = StaticMemberTestService(self.test_context, self.kafka, "consumer-A", numThreads)
+        processor2 = StaticMemberTestService(self.test_context, self.kafka, "consumer-B", numThreads)
+        processor3 = StaticMemberTestService(self.test_context, self.kafka, "consumer-C", numThreads)
 
         processors = [processor1, processor2, processor3]
 
@@ -69,18 +69,25 @@ class StreamsStaticMembershipTest(Test):
         self.verify_processing(processors)
 
         # do several rolling bounces
-        numBounces = 3
-        for i in range(0, numBounces):
+        num_bounces = 3
+        for i in range(0, num_bounces):
             for processor in processors:
                 verify_stopped(processor, self.stopped_message)
                 verify_running(processor, self.running_message)
 
-        stableGeneration = 3
+        stable_generation = -1
         for processor in processors:
             generations = extract_generation_from_logs(processor)
-            for generation in generations[-(numBounces * numThreads):]:
-                assert stableGeneration == int(generation), \
-                    "Stream rolling bounce have caused unexpected generation bump %d" % int(generation)
+            num_bounce_generations = num_bounces * numThreads
+            assert num_bounce_generations <= len(generations), \
+                "Smaller than minimum expected %d generation messages, actual %d" % (num_bounce_generations, len(generations))
+
+            for generation in generations[-num_bounce_generations:]:
+                generation = int(generation)
+                if stable_generation == -1:
+                    stable_generation = generation
+                assert stable_generation == generation, \
+                    "Stream rolling bounce have caused unexpected generation bump %d" % generation
 
         self.verify_processing(processors)
 

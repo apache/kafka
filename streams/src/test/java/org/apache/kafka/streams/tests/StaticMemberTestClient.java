@@ -26,9 +26,9 @@ import org.apache.kafka.streams.kstream.KStream;
 import java.util.Objects;
 import java.util.Properties;
 
-public class StreamsStaticMembershipTest {
+public class StaticMemberTestClient {
 
-    private static String testName = "StreamsStaticMembershipTest";
+    private static String testName = "StaticMemberTestClient";
 
     @SuppressWarnings("unchecked")
     public static void main(final String[] args) throws Exception {

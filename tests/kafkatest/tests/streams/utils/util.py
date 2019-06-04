@@ -24,7 +24,7 @@ def verify_stopped(processor, message):
     node = processor.node
     with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
         processor.stop()
-        monitor.wait_until('Static membership test closed',
+        monitor.wait_until(message,
                            timeout_sec=60,
                            err_msg="'%s' message " % message + str(processor.node.account))
 

@@ -535,12 +535,12 @@ class StreamsNamedRepartitionTopicService(StreamsTestBaseService):
         cfg = KafkaConfig(**properties)
         return cfg.render()
 
-class StreamsStaticMembershipService(StreamsTestBaseService):
+class StaticMemberTestService(StreamsTestBaseService):
     def __init__(self, test_context, kafka, group_instance_id, num_threads):
-        super(StreamsStaticMembershipService, self).__init__(test_context,
-                                                             kafka,
-                                                             "org.apache.kafka.streams.tests.StreamsStaticMembershipTest",
-                                                             "")
+        super(StaticMemberTestService, self).__init__(test_context,
+                                                      kafka,
+                                                      "org.apache.kafka.streams.tests.StaticMemberTestClient",
+                                                      "")
         self.INPUT_TOPIC = None
         self.GROUP_INSTANCE_ID = group_instance_id
         self.NUM_THREADS = num_threads
