@@ -335,6 +335,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     <!-- END Suppress warnings for unused members that are undetectably used by Jackson -->
 
     <Match>
+        <!-- Suppress a warning about ignoring return value because this is intentional. -->
+        <Class name="org.apache.kafka.common.config.AbstractConfig$ResolvingMap"/>
+        <Method name="get"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
+
+    <Match>
         <Package name="io.confluent.support.metrics.collectors"/>
         <Source name="CollectorFactory.java"/>
         <Bug pattern="IS2_INCONSISTENT_SYNC"/>

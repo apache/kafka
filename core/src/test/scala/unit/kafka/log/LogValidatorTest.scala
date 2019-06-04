@@ -37,40 +37,42 @@ class LogValidatorTest {
   val time = Time.SYSTEM
 
   @Test
-  def testOnlyOneBatchCompressedV0(): Unit = {
-    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP)
+  def testOnlyOneBatch(): Unit = {
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.GZIP)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP, CompressionType.GZIP)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP, CompressionType.GZIP)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V0, CompressionType.GZIP, CompressionType.NONE)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP, CompressionType.NONE)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP, CompressionType.NONE)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE, CompressionType.NONE)
+    checkOnlyOneBatch(RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE, CompressionType.GZIP)
   }
 
   @Test
-  def testOnlyOneBatchCompressedV1(): Unit = {
-    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V1, CompressionType.GZIP)
+  def testAllowMultiBatch(): Unit = {
+    checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V0, CompressionType.NONE, CompressionType.NONE)
+    checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE, CompressionType.NONE)
+    checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V0, CompressionType.NONE, CompressionType.GZIP)
+    checkAllowMultiBatch(RecordBatch.MAGIC_VALUE_V1, CompressionType.NONE, CompressionType.GZIP)
   }
 
-  @Test
-  def testOnlyOneBatchCompressedV2(): Unit = {
-    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V2, CompressionType.GZIP)
-  }
-
-  @Test
-  def testOnlyOneBatchUncompressedV2(): Unit = {
-    checkOnlyOneBatchCompressed(RecordBatch.MAGIC_VALUE_V2, CompressionType.NONE)
-  }
-
-  private def checkOnlyOneBatchCompressed(magic: Byte, compressionType: CompressionType) {
-    validateMessages(createRecords(magic, 0L, compressionType), magic, compressionType)
-
+  private def checkOnlyOneBatch(magic: Byte, sourceCompressionType: CompressionType, targetCompressionType: CompressionType) {
     assertThrows[InvalidRecordException] {
-      validateMessages(createTwoBatchedRecords(magic, 0L, compressionType), magic, compressionType)
+      validateMessages(createTwoBatchedRecords(magic, 0L, sourceCompressionType), magic, sourceCompressionType, targetCompressionType)
     }
   }
 
-  private def validateMessages(records: MemoryRecords, magic: Byte, compressionType: CompressionType): Unit = {
+  private def checkAllowMultiBatch(magic: Byte, sourceCompressionType: CompressionType, targetCompressionType: CompressionType) {
+    validateMessages(createTwoBatchedRecords(magic, 0L, sourceCompressionType), magic, sourceCompressionType, targetCompressionType)
+  }
+
+  private def validateMessages(records: MemoryRecords, magic: Byte, sourceCompressionType: CompressionType, targetCompressionType: CompressionType): Unit = {
     LogValidator.validateMessagesAndAssignOffsets(records,
       new LongRef(0L),
       time,
       now = 0L,
-      CompressionCodec.getCompressionCodec(compressionType.name),
-      CompressionCodec.getCompressionCodec(compressionType.name),
+      CompressionCodec.getCompressionCodec(sourceCompressionType.name),
+      CompressionCodec.getCompressionCodec(targetCompressionType.name),
       compactedTopic = false,
       magic,
       TimestampType.CREATE_TIME,
