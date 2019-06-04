@@ -907,10 +907,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
         final HashSet<String> copartitions = new HashSet<>();
         copartitions.add(repartitionSourceName);
+        copartitions.addAll(sourceNodes);
         copartitions.addAll(((KTableImpl<?, ?, ?>) other).sourceNodes);
         //TODO - Figure out a correct copartitioning strategy for topics with differing partition counts.
 //        copartitions.add(finalRepartitionSourceName);
-//        copartitions.addAll(sourceNodes);
         builder.internalTopologyBuilder.copartitionSources(copartitions);
 
         final HashSet<String> copartitions2 = new HashSet<>();

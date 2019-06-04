@@ -86,19 +86,11 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
 
     @BeforeClass
     public static void beforeTest() throws Exception {
-        //TODO - This fails about half the time! Not all of the tasks seem to get created or assigned, and it crashes.
-        /**
-         * Exception in thread "INNER-ktable-ktable-joinOnForeignKeyINNER-ktable-ktable-joinOnForeignKey-query-665f82ce-37a7-4176-b572-5244ed20e13f-StreamThread-2" java.lang.NullPointerException: Task was unexpectedly missing for partition table1-1
-         * 	at org.apache.kafka.streams.processor.internals.StreamThread.addRecordsToTasks(StreamThread.java:989)
-         * 	at org.apache.kafka.streams.processor.internals.StreamThread.runOnce(StreamThread.java:834)
-         * 	at org.apache.kafka.streams.processor.internals.StreamThread.runLoop(StreamThread.java:778)
-         * 	at org.apache.kafka.streams.processor.internals.StreamThread.run(StreamThread.java:748)
-         */
         //Use multiple partitions to ensure distribution of keys.
-        CLUSTER.createTopic(TABLE_1, 11, 1);
-        CLUSTER.createTopic(TABLE_2, 2, 1);
-        CLUSTER.createTopic(TABLE_3, 7, 1);
-        CLUSTER.createTopic(OUTPUT, 13, 1);
+        CLUSTER.createTopic(TABLE_1, 3, 1);
+        CLUSTER.createTopic(TABLE_2, 3, 1);
+        CLUSTER.createTopic(TABLE_3, 3, 1);
+        CLUSTER.createTopic(OUTPUT, 3, 1);
 
         producerConfigOne.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         producerConfigOne.put(ProducerConfig.ACKS_CONFIG, "all");
@@ -130,8 +122,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             new KeyValue<>(2, 2.22f),
             new KeyValue<>(3, -1.22f), //Won't be joined in yet.
             new KeyValue<>(4, -2.22f)  //Won't be joined in at all.
-                //,
-            //new KeyValue<>(5, 5.55f)   //Will have foreign key be deleted
         );
 
         //Partitions pre-computed using the default Murmur2 hash, just to ensure that all 3 partitions will be exercised.
@@ -152,7 +142,6 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         final List<KeyValue<Integer, String>> table3 = Arrays.asList(
                 new KeyValue<>(10, "waffle")
         );
-
 
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, producerConfigOne, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_2, table2, producerConfigTwo, MOCK_TIME);
@@ -196,19 +185,18 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         expectedOne.add(new KeyValue<>(1, "value1=1.33,value2=10,value3=waffle"));
 
         verifyKTableKTableJoin(JoinType.INNER, expectedOne, true);
-
-        assert(false); //Manually failing because of Task exception.
     }
 
     private void verifyKTableKTableJoin(final JoinType joinType,
                                         final Set<KeyValue<Integer, String>> expectedResult,
                                         boolean verifyQueryableState) throws Exception {
-        final String queryableName = verifyQueryableState ? joinType + "-ktable-ktable-joinOnForeignKey-query" : null;
-        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, joinType + "-ktable-ktable-joinOnForeignKey" + queryableName);
+        final String queryableName = verifyQueryableState ? joinType + "-store1" : null;
+        final String queryableNameTwo = verifyQueryableState ? joinType + "-store2" : null;
+        streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, joinType + queryableName);
 
-        streams = prepareTopology(queryableName);
-        streamsTwo = prepareTopology(queryableName);
-        streamsThree = prepareTopology(queryableName);
+        streams = prepareTopology(queryableName, queryableNameTwo);
+        streamsTwo = prepareTopology(queryableName, queryableNameTwo);
+        streamsThree = prepareTopology(queryableName, queryableNameTwo);
         streams.start();
         streamsTwo.start();
         streamsThree.start();
@@ -221,7 +209,7 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         assertThat(result, equalTo(expectedResult));
     }
 
-    private KafkaStreams prepareTopology(final String queryableName) {
+    private KafkaStreams prepareTopology(final String queryableName, final String queryableNameTwo) {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KTable<Integer, Float> table1 = builder.table(TABLE_1, Consumed.with(Serdes.Integer(), Serdes.Float()));
@@ -239,8 +227,8 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
         }
 
         Materialized<Integer, String, KeyValueStore<Bytes, byte[]>> materializedTwo;
-        if (queryableName != null) {
-            materializedTwo = Materialized.<Integer, String, KeyValueStore<Bytes, byte[]>>as(queryableName + "wafflehouse")
+        if (queryableNameTwo != null) {
+            materializedTwo = Materialized.<Integer, String, KeyValueStore<Bytes, byte[]>>as(queryableNameTwo)
                     .withKeySerde(Serdes.Integer())
                     .withValueSerde(Serdes.String())
                     .withCachingDisabled();
@@ -248,14 +236,14 @@ public class KTableKTableForeignKeyInnerJoinMultiIntegrationTest {
             throw new RuntimeException("Current implementation of joinOnForeignKey requires a materialized store");
         }
 
-
         ValueMapper<Float, String> tableOneKeyExtractor = (value) -> Integer.toString((int)value.floatValue());
         ValueMapper<String, Integer> joinedTableKeyExtractor = (value) -> {
+            //Hardwired to return the desired foreign key as a test shortcut
             if (value.contains("value2=10"))
                 return 10;
             else
                 return 0;
-        }; //Hardwired to get the waffle FK.
+        };
 
         ValueJoiner<Float, Long, String> joiner = (value1, value2) -> "value1=" + value1 + ",value2=" + value2;
         ValueJoiner<String, String, String> joinerTwo = (value1, value2) -> value1 + ",value3=" + value2;
