@@ -33,6 +33,8 @@ import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.storage.Converter;
 import org.apache.kafka.connect.util.ConnectUtils;
+import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,6 +67,8 @@ public class MirrorMaker {
     private static final Logger log = LoggerFactory.getLogger(MirrorMaker.class);
 
     private static final long SHUTDOWN_TIMEOUT_SECONDS = 60L;
+    private static final ConnectorClientConfigOverridePolicy CLIENT_CONFIG_OVERRIDE_POLICY =
+            new AllConnectorClientConfigOverridePolicy();
 
     private static final List<Class> CONNECTOR_CLASSES = Arrays.asList(
         MirrorSourceConnector.class,
@@ -209,7 +213,7 @@ public class MirrorMaker {
         String kafkaClusterId = ConnectUtils.lookupKafkaClusterId(config);
         KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore();
         offsetBackingStore.configure(config);
-        Worker worker = new Worker(workerId, time, plugins, config, offsetBackingStore);
+        Worker worker = new Worker(workerId, time, plugins, config, offsetBackingStore, CLIENT_CONFIG_OVERRIDE_POLICY);
         WorkerConfigTransformer configTransformer = worker.configTransformer();
         Converter internalValueConverter = worker.getInternalValueConverter();
         StatusBackingStore statusBackingStore = new KafkaStatusBackingStore(time, internalValueConverter);
@@ -220,7 +224,7 @@ public class MirrorMaker {
                 configTransformer);
         Herder herder = new DistributedHerder(config, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                advertisedUrl);
+                advertisedUrl, CLIENT_CONFIG_OVERRIDE_POLICY);
         herders.put(sourceAndTarget, herder);
     }
 
