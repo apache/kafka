@@ -40,7 +40,7 @@ public class StreamsUpgradeTest {
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
 
-        System.out.println("StreamsTest instance started (StreamsUpgradeTest v2.1)");
+        System.out.println("StreamsTest instance started (StreamsUpgradeTest v2.2)");
         System.out.println("kafka=" + kafka);
         System.out.println("props=" + streamsProperties);
 
@@ -71,7 +71,7 @@ public class StreamsUpgradeTest {
 
             @Override
             public void init(final ProcessorContext context) {
-                System.out.println("[2.1] initializing processor: topic=data taskId=" + context.taskId());
+                System.out.println("[2.2] initializing processor: topic=data taskId=" + context.taskId());
                 numRecordsProcessed = 0;
             }
 
