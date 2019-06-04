@@ -18,6 +18,7 @@ from kafkatest.services.kafka import KafkaService
 from kafkatest.services.streams import StreamsStaticMembershipService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.tests.streams.utils import verify_stopped, verify_running
 
 class StreamsStaticMembershipTest(Test):
     """
@@ -27,6 +28,8 @@ class StreamsStaticMembershipTest(Test):
 
     input_topic = 'inputTopic'
     pattern = 'PROCESSED'
+    running_message = 'REBALANCING -> RUNNING'
+    stopped_message = 'Static membership test closed'
 
     def __init__(self, test_context):
         super(StreamsStaticMembershipTest, self).__init__(test_context)
@@ -46,7 +49,6 @@ class StreamsStaticMembershipTest(Test):
                                            acks=1)
 
     def test_rolling_bounces_will_not_trigger_rebalance_under_static_membership(self):
-        self.logger.info("code rolling bounce test started")
         self.zookeeper.start()
         self.kafka.start()
 
@@ -62,7 +64,7 @@ class StreamsStaticMembershipTest(Test):
         for processor in processors:
             processor.CLEAN_NODE_ENABLED = False
             self.set_topics(processor)
-            self.verify_running(processor, 'REBALANCING -> RUNNING')
+            verify_running(processor, self.running_message)
 
         self.verify_processing(processors)
 
@@ -70,8 +72,8 @@ class StreamsStaticMembershipTest(Test):
         numBounces = 3
         for i in range(0, numBounces):
             for processor in processors:
-                self.verify_stopped(processor)
-                self.verify_running(processor, 'REBALANCING -> RUNNING')
+                verify_stopped(processor, self.stopped_message)
+                verify_running(processor, self.running_message)
 
         stableGeneration = 3
         for processor in processors:
@@ -92,23 +94,23 @@ class StreamsStaticMembershipTest(Test):
     def extract_generation_from_logs(processor):
         return list(processor.node.account.ssh_capture("grep \"Successfully joined group with generation\" %s| awk \'{for(i=1;i<=NF;i++) {if ($i == \"generation\") beginning=i+1; if($i== \"(org.apache.kafka.clients.consumer.internals.AbstractCoordinator)\") ending=i }; for (j=beginning;j<ending;j++) printf $j; printf \"\\n\"}\'" % processor.LOG_FILE, allow_fail=True))
 
-    @staticmethod
-    def verify_running(processor, message):
-        node = processor.node
-        with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-            processor.start()
-            monitor.wait_until(message,
-                               timeout_sec=60,
-                               err_msg="Never saw '%s' message " % message + str(processor.node.account))
-
-    @staticmethod
-    def verify_stopped(processor):
-        node = processor.node
-        with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
-            processor.stop()
-            monitor.wait_until('Static membership test closed',
-                               timeout_sec=60,
-                               err_msg="'Static membership test closed' message" + str(processor.node.account))
+    # @staticmethod
+    # def verify_running(processor, message):
+    #     node = processor.node
+    #     with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
+    #         processor.start()
+    #         monitor.wait_until(message,
+    #                            timeout_sec=60,
+    #                            err_msg="Never saw '%s' message " % message + str(processor.node.account))
+    #
+    # @staticmethod
+    # def verify_stopped(processor):
+    #     node = processor.node
+    #     with node.account.monitor_log(processor.STDOUT_FILE) as monitor:
+    #         processor.stop()
+    #         monitor.wait_until('Static membership test closed',
+    #                            timeout_sec=60,
+    #                            err_msg="'Static membership test closed' message" + str(processor.node.account))
 
     def verify_processing(self, processors):
         for processor in processors:
@@ -119,7 +121,7 @@ class StreamsStaticMembershipTest(Test):
 
     def stop_processors(self, processors):
         for processor in processors:
-            self.verify_stopped(processor)
+            verify_stopped(processor, self.stopped_message)
 
     def set_topics(self, processor):
         processor.INPUT_TOPIC = self.input_topic

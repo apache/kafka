@@ -26,8 +26,6 @@ import org.apache.kafka.streams.kstream.KStream;
 import java.util.Objects;
 import java.util.Properties;
 
-import static org.junit.Assert.assertTrue;
-
 public class StreamsStaticMembershipTest {
 
     private static String testName = "StreamsStaticMembershipTest";
@@ -44,8 +42,7 @@ public class StreamsStaticMembershipTest {
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
 
-        assertTrue(streamsProperties.contains(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
-        final String groupInstanceId = streamsProperties.getProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG);
+        final String groupInstanceId = Objects.requireNonNull(streamsProperties.getProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
 
         System.out.println(testName + " instance started with group.instance.id " + groupInstanceId);
         System.out.println("props=" + streamsProperties);
