@@ -263,12 +263,12 @@ class MetadataCache(brokerId: Int) extends Logging {
           val controllerEpoch = updateMetadataRequest.controllerEpoch
           if (info.basePartitionState.leader == LeaderAndIsr.LeaderDuringDelete) {
             removePartitionInfo(partitionStates, tp.topic, tp.partition)
-            stateChangeLogger.trace(s"Deleted partition $tp from metadata cache in response to UpdateMetadata " +
+            stateChangeLogger.info(s"Deleted partition $tp from metadata cache in response to UpdateMetadata " +
               s"request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
             deletedPartitions += tp
           } else {
             addOrUpdatePartitionInfo(partitionStates, tp.topic, tp.partition, info)
-            stateChangeLogger.trace(s"Cached leader info $info for partition $tp in response to " +
+            stateChangeLogger.info(s"Cached leader info $info for partition $tp in response to " +
               s"UpdateMetadata request sent by controller $controllerId epoch $controllerEpoch with correlation id $correlationId")
           }
         }

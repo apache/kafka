@@ -418,7 +418,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
 
   private def logSuccessfulTransition(replicaId: Int, partition: TopicPartition, currState: ReplicaState, targetState: ReplicaState): Unit = {
     stateChangeLogger.withControllerEpoch(controllerContext.epoch)
-      .trace(s"Changed state of replica $replicaId for partition $partition from $currState to $targetState")
+      .info(s"Changed state of replica $replicaId for partition $partition from $currState to $targetState")
   }
 
   private def logInvalidTransition(replica: PartitionAndReplica, targetState: ReplicaState): Unit = {

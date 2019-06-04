@@ -273,7 +273,7 @@ class RequestSendThread(val controllerId: Int,
 
         val response = clientResponse.responseBody
 
-        stateChangeLogger.withControllerEpoch(controllerContext.epoch).trace(s"Received response " +
+        stateChangeLogger.withControllerEpoch(controllerContext.epoch).info(s"Received response " +
           s"${response.toString(requestHeader.apiVersion)} for request $api with correlation id " +
           s"${requestHeader.correlationId} sent to broker $brokerNode")
 
@@ -452,7 +452,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
             val typeOfRequest =
               if (broker == state.basePartitionState.leader) "become-leader"
               else "become-follower"
-            stateChangeLog.trace(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
+            stateChangeLog.info(s"Sending $typeOfRequest LeaderAndIsr request $state to broker $broker for partition $topicPartition")
         }
         val leaderIds = leaderAndIsrPartitionStates.map(_._2.basePartitionState.leader).toSet
         val leaders = controllerContext.liveOrShuttingDownBrokers.filter(b => leaderIds.contains(b.id)).map {
@@ -469,7 +469,7 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
 
   private def sendUpdateMetadataRequests(controllerEpoch: Int, stateChangeLog: StateChangeLogger): Unit = {
     updateMetadataRequestPartitionInfoMap.foreach { case (tp, partitionState) =>
-      stateChangeLog.trace(s"Sending UpdateMetadata request $partitionState to brokers $updateMetadataRequestBrokerSet " +
+      stateChangeLog.info(s"Sending UpdateMetadata request $partitionState to brokers $updateMetadataRequestBrokerSet " +
         s"for partition $tp")
     }
 
