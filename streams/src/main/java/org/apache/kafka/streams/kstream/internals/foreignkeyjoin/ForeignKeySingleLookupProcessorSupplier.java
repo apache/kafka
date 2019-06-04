@@ -52,7 +52,7 @@ public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
             private KTableValueGetter<KO, VO> foreignValues;
             private StreamsMetricsImpl metrics;
 
-            @Override
+            @Override@SuppressWarnings("unchecked")
             public void init(final ProcessorContext context) {
                 super.init(context);
                 metrics = (StreamsMetricsImpl) context.metrics();

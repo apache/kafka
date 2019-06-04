@@ -17,16 +17,20 @@
 
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
+import java.util.Objects;
+
 public class CombinedKey<KF, KP> {
     private final KF foreignKey;
     private final KP primaryKey;
 
     public CombinedKey(final KF foreignKey, final KP primaryKey) {
+        Objects.requireNonNull(foreignKey, "foreignKey can't be null");
         this.foreignKey = foreignKey;
         this.primaryKey = primaryKey;
     }
 
     public CombinedKey(final KF foreignKey) {
+        Objects.requireNonNull(foreignKey, "foreignKey can't be null");
         this.foreignKey = foreignKey;
         this.primaryKey = null;
     }
@@ -40,7 +44,10 @@ public class CombinedKey<KF, KP> {
     }
 
     public boolean equals(final KF foreignKey, final KP primaryKey) {
-        return foreignKey.equals(foreignKey) && primaryKey.equals(primaryKey);
+        if (this.primaryKey == null) {
+            return false;
+        }
+        return this.foreignKey.equals(foreignKey) && this.primaryKey.equals(primaryKey);
     }
 
     @Override

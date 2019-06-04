@@ -181,7 +181,7 @@ public class MeteredKeyValueStoreTest {
     @Test
     public void shouldGetRangeFromInnerStoreAndRecordRangeMetric() {
         expect(inner.range(keyBytes, keyBytes))
-            .andReturn(new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValuePair).iterator()));
+                .andReturn(new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValuePair).iterator()));
         init();
 
         final KeyValueIterator<String, String> iterator = metered.range(key, key);
@@ -190,6 +190,22 @@ public class MeteredKeyValueStoreTest {
         iterator.close();
 
         final KafkaMetric metric = metric("range-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+        verify(inner);
+    }
+
+    @Test
+    public void shouldGetPrefixFromInnerStoreAndRecordPrefixMetric() {
+        expect(inner.prefixScan(keyBytes))
+                .andReturn(new KeyValueIteratorStub<>(Collections.singletonList(byteKeyValuePair).iterator()));
+        init();
+
+        final KeyValueIterator<String, String> iterator = metered.prefixScan(key);
+        assertThat(iterator.next().value, equalTo(value));
+        assertFalse(iterator.hasNext());
+        iterator.close();
+
+        final KafkaMetric metric = metric("prefix-rate");
         assertTrue((Double) metric.metricValue() > 0);
         verify(inner);
     }

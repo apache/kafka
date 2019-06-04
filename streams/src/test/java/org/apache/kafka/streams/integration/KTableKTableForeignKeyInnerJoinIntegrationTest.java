@@ -141,50 +141,6 @@ public class KTableKTableForeignKeyInnerJoinIntegrationTest {
             new KeyValue<>("9", 90L)  //partition 2
         );
 
-
-//        SubscriptionWrapperSerializer sws = new SubscriptionWrapperSerializer();
-//        SubscriptionWrapperDeserializer swd = new SubscriptionWrapperDeserializer();
-//        byte[] md5 = Utils.md5(new byte[]{(byte)(0xFF), (byte)(0xFF), (byte)(0xFF), (byte)(0xFF)});
-//        SubscriptionWrapper wrapper = new SubscriptionWrapper(md5, false);
-//        byte[] serialized = sws.serialize(null, wrapper);
-//        SubscriptionWrapper deserialized = swd.deserialize(null, serialized);
-//
-//        assert(!deserialized.isPropagate());
-//        assert(java.util.Arrays.equals(deserialized.getHash(),md5));
-//
-//        byte[] md5Null = Utils.md5(new byte[]{});
-//        String foo = bytesToHex(md5Null).toString();
-//        System.out.println(foo);
-
-        SubscriptionWrapperSerde swSerde = new SubscriptionWrapperSerde();
-        long[] hashedValue = Murmur3.hash128(new byte[]{(byte)(0xFF), (byte)(0xFF), (byte)(0xFF), (byte)(0xFF)});
-        SubscriptionWrapper wrapper = new SubscriptionWrapper(hashedValue, false);
-        byte[] serialized = swSerde.serializer().serialize(null, wrapper);
-        SubscriptionWrapper deserialized = (SubscriptionWrapper)swSerde.deserializer().deserialize(null, serialized);
-
-        assert(!deserialized.isPropagate());
-        assert(java.util.Arrays.equals(deserialized.getHash(),hashedValue));
-
-        SubscriptionResponseWrapper<String> srw = new SubscriptionResponseWrapper<>(hashedValue, null);
-        SubscriptionResponseWrapperSerde srwSerde = new SubscriptionResponseWrapperSerde(Serdes.String().serializer(), Serdes.String().deserializer());
-
-        byte[] serResponse = srwSerde.serializer().serialize(null, srw);
-        SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>)srwSerde.deserializer().deserialize(null, serResponse);
-
-
-        byte[] stringResults = Serdes.String().serializer().serialize(null, null);
-        String dataadas = Serdes.String().deserializer().deserialize(null, stringResults);
-
-
-        assert(java.util.Arrays.equals(result.getOriginalValueHash(), hashedValue));
-        assert(result.getForeignValue() == null);
-
-
-//        long[] hashNull = Murmur3.hash128(new byte[]{});
-//        String foo = hashNull.toString();
-//        System.out.println(foo);
-
-
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_1, table1, producerConfigOne, MOCK_TIME);
         IntegrationTestUtils.produceKeyValuesSynchronously(TABLE_2, table2, producerConfigTwo, MOCK_TIME);
 
@@ -193,16 +149,6 @@ public class KTableKTableForeignKeyInnerJoinIntegrationTest {
         CONSUMER_CONFIG.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class);
         CONSUMER_CONFIG.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
     }
-
-//    public static String bytesToHex(byte[] in) {
-//        final StringBuilder builder = new StringBuilder();
-//        for(byte b : in) {
-//            builder.append(String.format("%02x", b));
-//        }
-//        return builder.toString();
-//    }
-
-
 
     @Before
     public void before() throws IOException {

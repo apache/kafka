@@ -412,7 +412,18 @@ public class RocksDBStoreTest {
         rocksDBStore.init(context, rocksDBStore);
         try {
             rocksDBStore.range(null, new Bytes(stringSerializer.serialize(null, "2")));
-            fail("Should have thrown NullPointerException on deleting null key");
+            fail("Should have thrown NullPointerException on null range key");
+        } catch (final NullPointerException e) {
+            // this is good
+        }
+    }
+
+    @Test
+    public void shouldThrowNullPointerExceptionOnPrefix() {
+        rocksDBStore.init(context, rocksDBStore);
+        try {
+            rocksDBStore.prefixScan(null);
+            fail("Should have thrown NullPointerException null prefix key");
         } catch (final NullPointerException e) {
             // this is good
         }

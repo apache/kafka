@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -87,12 +88,67 @@ public class RocksDBKeyValueStoreTest extends AbstractKeyValueStoreTest {
     }
 
     @Test
-    public void shouldCloseOpenIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() {
+    public void shouldPerformPrefixQueriesWithCachingDisabled() {
+        context.setTime(1L);
+        store.put(1, "hi");
+        store.put(2, "goodbye");
+        final KeyValueIterator<Integer, String> prefixOne = store.prefixScan(1);
+        assertEquals("hi", prefixOne.next().value);
+        assertFalse(prefixOne.hasNext());
+        final KeyValueIterator<Integer, String> prefixTwo = store.prefixScan(2);
+        assertEquals("goodbye", prefixTwo.next().value);
+        assertFalse(prefixTwo.hasNext());
+    }
+
+    @Test
+    public void shouldCloseOpenRangeIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() {
         context.setTime(1L);
         store.put(1, "hi");
         store.put(2, "goodbye");
         final KeyValueIterator<Integer, String> iteratorOne = store.range(1, 5);
         final KeyValueIterator<Integer, String> iteratorTwo = store.range(1, 4);
+
+        assertTrue(iteratorOne.hasNext());
+        assertTrue(iteratorTwo.hasNext());
+
+        store.close();
+
+        try {
+            iteratorOne.hasNext();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (final InvalidStateStoreException e) {
+            // ok
+        }
+
+        try {
+            iteratorOne.next();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (final InvalidStateStoreException e) {
+            // ok
+        }
+
+        try {
+            iteratorTwo.hasNext();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (final InvalidStateStoreException e) {
+            // ok
+        }
+
+        try {
+            iteratorTwo.next();
+            fail("should have thrown InvalidStateStoreException on closed store");
+        } catch (final InvalidStateStoreException e) {
+            // ok
+        }
+    }
+
+    @Test
+    public void shouldCloseOpenPrefixIteratorsWhenStoreClosedAndThrowInvalidStateStoreOnHasNextAndNext() {
+        context.setTime(1L);
+        store.put(1, "hi");
+        store.put(2, "goodbye");
+        final KeyValueIterator<Integer, String> iteratorOne = store.prefixScan(1);
+        final KeyValueIterator<Integer, String> iteratorTwo = store.prefixScan(2);
 
         assertTrue(iteratorOne.hasNext());
         assertTrue(iteratorTwo.hasNext());

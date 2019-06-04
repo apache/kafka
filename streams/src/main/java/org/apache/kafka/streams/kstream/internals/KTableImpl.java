@@ -841,7 +841,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return doJoinOnForeignKey(other, foreignKeyExtractor, joiner, new MaterializedInternal<>(materialized));
     }
 
-
+    @SuppressWarnings("unchecked")
     private <VR, KO, VO> KTable<K, VR> doJoinOnForeignKey(final KTable<KO, VO> other,
                                                           final ValueMapper<V, KO> foreignKeyExtractor,
                                                           final ValueJoiner<V, VO, VR> joiner,
