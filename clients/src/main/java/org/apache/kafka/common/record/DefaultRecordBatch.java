@@ -262,7 +262,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             protected Record readNext(long baseOffset, long firstTimestamp, int baseSequence, Long logAppendTime) {
                 try {
                     if (skipKeyValue) {
-                        return DefaultRecord.readFromSkipKeyValue(inputStream, baseOffset, firstTimestamp, baseSequence, logAppendTime);
+                        return DefaultRecord.readPartiallyFrom(inputStream, baseOffset, firstTimestamp, baseSequence, logAppendTime);
                     } else {
                         return DefaultRecord.readFrom(inputStream, baseOffset, firstTimestamp, baseSequence, logAppendTime);
                     }

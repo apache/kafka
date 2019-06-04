@@ -370,24 +370,24 @@ public class DefaultRecord implements Record {
         }
     }
 
-    public static PartialDefaultRecord readFromSkipKeyValue(DataInput input,
-                                                            long baseOffset,
-                                                            long baseTimestamp,
-                                                            int baseSequence,
-                                                            Long logAppendTime) throws IOException {
+    public static PartialDefaultRecord readPartiallyFrom(DataInput input,
+                                                         long baseOffset,
+                                                         long baseTimestamp,
+                                                         int baseSequence,
+                                                         Long logAppendTime) throws IOException {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
-        return readFromSkipKeyValue(input, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
+        return readPartiallyFrom(input, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
                 baseSequence, logAppendTime);
     }
 
-    private static PartialDefaultRecord readFromSkipKeyValue(DataInput input,
-                                                             int sizeInBytes,
-                                                             int sizeOfBodyInBytes,
-                                                             long baseOffset,
-                                                             long baseTimestamp,
-                                                             int baseSequence,
-                                                             Long logAppendTime) throws IOException {
+    private static PartialDefaultRecord readPartiallyFrom(DataInput input,
+                                                          int sizeInBytes,
+                                                          int sizeOfBodyInBytes,
+                                                          long baseOffset,
+                                                          long baseTimestamp,
+                                                          int baseSequence,
+                                                          Long logAppendTime) throws IOException {
         try {
             byte attributes = input.readByte();
             int skipBytes = 1;
