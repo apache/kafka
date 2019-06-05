@@ -24,6 +24,6 @@ package kafka.log.remote
  *  - HDFS can represent this value as string with path and offset.
  *  - S3 can represent this value as key and offset.
  */
-class RDI(value: Array[Byte]) {
+class RDI(val value: Array[Byte]) {
 
 }

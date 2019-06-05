@@ -77,19 +77,16 @@ class RemoteLogIndexTest extends JUnitSuite {
 
   private def appendEntries(numEntries: Int, baseOffset: Long = 1000): Seq[RemoteLogIndexEntry] = {
     val entries = new ListBuffer[RemoteLogIndexEntry]
-    val magic: Short = 0
     val baseTimestamp = System.currentTimeMillis()
     val rdi = "rdi://foo/bar"
     val rdiBytes = rdi.getBytes
-    val rdiLen = rdiBytes.length
-    val crc = 10
     for (i <- 1 to numEntries) {
       val firstOffset = baseOffset + (i * 100)
       val lastOffset = firstOffset + 99
       val firstTimestamp = baseTimestamp + (100 * i)
       val lastTimestamp = firstTimestamp + 10
       val dataLength = Math.abs(new Random().nextInt())
-      val entry: RemoteLogIndexEntry = RemoteLogIndexEntry(magic, crc, firstOffset, lastOffset, firstTimestamp, lastTimestamp, dataLength, rdiLen.toShort, rdiBytes)
+      val entry: RemoteLogIndexEntry = RemoteLogIndexEntry(firstOffset, lastOffset, firstTimestamp, lastTimestamp, dataLength, rdiBytes)
       index.append(entry)
       entries += entry
     }

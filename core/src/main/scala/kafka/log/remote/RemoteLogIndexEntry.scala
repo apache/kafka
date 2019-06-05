@@ -18,6 +18,7 @@ package kafka.log.remote
 
 import java.nio.ByteBuffer
 import java.util
+import java.util.zip.CRC32
 
 /**
  * Entry representation in a remote log index
@@ -29,25 +30,23 @@ import java.util
  * @param firstTimeStamp timestamp value of the first record for this entry stored at respective { @link #rdi}
  * @param lastTimeStamp  timestamp value of the last record for this entry stored at respective { @link #rdi}
  * @param dataLength     length of the data stored in remote tier at rdi.
- * @param rdiLength      length of bytes to be read to construct rdi.
  * @param rdi            bytes value of rdi.
  */
 case class RemoteLogIndexEntry(magic: Short, crc: Int, firstOffset: Long, lastOffset: Long,
-                               firstTimeStamp: Long, lastTimeStamp: Long, dataLength: Int, rdiLength: Short,
+                               firstTimeStamp: Long, lastTimeStamp: Long, dataLength: Int,
                                rdi: Array[Byte]) {
-
   /**
    * @return bytes length of this entry value
    */
-  def entryLength: Int = {
+  def entryLength: Short = {
     (4 // crc - int
       + 8 // firstOffset - long
-      + 8 // lasstOffset - long
+      + 8 // lastOffset - long
       + 8 // firstTimestamp - long
       + 8 // lastTimestamp - long
       + 4 // dataLength - int
-      + 2 // rdiLength type
-      + rdiLength)
+      + 2 // rdiLength - short
+      + rdi.length).asInstanceOf[Short]
   }
 
   override def equals(any: Any): Boolean = {
@@ -55,31 +54,62 @@ case class RemoteLogIndexEntry(magic: Short, crc: Int, firstOffset: Long, lastOf
       case that: RemoteLogIndexEntry if this.magic == that.magic && this.crc== that.crc &&
         this.firstOffset == that.firstOffset && this.lastOffset == that.lastOffset &&
         this.firstTimeStamp == that.firstTimeStamp && this.lastTimeStamp == that.lastTimeStamp &&
-        this.dataLength == that.dataLength && this.rdiLength == that.rdiLength &&
+        this.dataLength == that.dataLength &&
         util.Arrays.equals(this.rdi, that.rdi) => true
       case _ => false
     }
   }
 
   override def hashCode(): Int = {
-    val state = Seq(magic, crc, firstOffset, lastOffset, firstTimeStamp, lastTimeStamp, dataLength, rdiLength, rdi)
-    state.map(_.hashCode()).foldLeft(0)((a, b) => 31 * a + b)
+    crc
   }
 
   def asBuffer: ByteBuffer = {
-    val buffer = ByteBuffer.allocate(entryLength + 2 + 4)
+    val buffer = ByteBuffer.allocate(entryLength + 2 + 2)
     buffer.putShort(magic)
-    buffer.putInt(entryLength)
+    buffer.putShort(entryLength)
     buffer.putInt(crc)
     buffer.putLong(firstOffset)
     buffer.putLong(lastOffset)
     buffer.putLong(firstTimeStamp)
     buffer.putLong(lastTimeStamp)
     buffer.putInt(dataLength)
-    buffer.putShort(rdiLength)
+    buffer.putShort(rdi.length.asInstanceOf[Short])
     buffer.put(rdi)
     buffer.flip()
     buffer
   }
 
+}
+
+object RemoteLogIndexEntry {
+  def apply (firstOffset: Long, lastOffset: Long, firstTimeStamp: Long, lastTimeStamp: Long,
+             dataLength: Int, rdi: Array[Byte]): RemoteLogIndexEntry = {
+
+    val entryLength = (4 // crc - int
+        + 8 // firstOffset - long
+        + 8 // lastOffset - long
+        + 8 // firstTimestamp - long
+        + 8 // lastTimestamp - long
+        + 4 // dataLength - int
+        + 2 // rdiLength - short
+        + rdi.length)
+
+    val buffer = ByteBuffer.allocate(entryLength)
+    buffer.putLong(firstOffset)
+    buffer.putLong(lastOffset)
+    buffer.putLong(firstTimeStamp)
+    buffer.putLong(lastTimeStamp)
+    buffer.putInt(dataLength)
+    buffer.putShort(rdi.length.asInstanceOf[Short])
+    buffer.put(rdi)
+    buffer.flip()
+
+    val crc32 = new CRC32
+    crc32.update(buffer)
+    val crc = crc32.getValue.asInstanceOf[Int]
+
+    val entry = RemoteLogIndexEntry(0, crc, firstOffset, lastOffset, firstTimeStamp, lastTimeStamp, dataLength, rdi)
+    entry
+  }
 }

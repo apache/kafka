@@ -16,7 +16,7 @@
  */
 package kafka.log.remote
 
-import java.io.{Closeable, File, IOException}
+import java.io.{Closeable, File}
 import java.nio.ByteBuffer
 import java.nio.channels.FileChannel
 import java.nio.file.{Files, StandardOpenOption}
@@ -77,10 +77,10 @@ class RemoteLogIndex(val startOffset: Long, @volatile var file: File) extends Lo
           val nextPos = position + 2
           ch.read(valBuffer, nextPos)
           valBuffer.flip()
-          val length = valBuffer.getInt
+          val length = valBuffer.getShort
 
           val valueBuffer = ByteBuffer.allocate(length)
-          ch.read(valueBuffer, nextPos + 4)
+          ch.read(valueBuffer, nextPos + 2)
           valueBuffer.flip()
 
           val crc = valueBuffer.getInt
@@ -93,7 +93,7 @@ class RemoteLogIndex(val startOffset: Long, @volatile var file: File) extends Lo
           val rdiBuffer = ByteBuffer.allocate(rdiLength)
           valueBuffer.get(rdiBuffer.array())
           RemoteLogIndexEntry(magic, crc, firstOffset, lastOffset, firstTimestamp, lastTimestamp, dataLength,
-            rdiLength, rdiBuffer.array())
+            rdiBuffer.array())
         case _ =>
           throw new RuntimeException("magic version " + magic + " is not supported")
       }
