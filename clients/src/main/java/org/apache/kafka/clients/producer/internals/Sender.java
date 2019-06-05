@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import java.util.ArrayList;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
@@ -33,11 +32,9 @@ import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InvalidMetadataException;
 import org.apache.kafka.common.errors.OutOfOrderSequenceException;
-import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.InitProducerIdRequestData;
@@ -60,6 +57,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -295,9 +293,7 @@ public class Sender implements Runnable {
     void runOnce() {
         if (transactionManager != null) {
             try {
-                if (transactionManager.shouldResetProducerStateAfterResolvingSequences())
-                    // Check if the previous run expired batches which requires a reset of the producer state.
-                    transactionManager.resetProducerId();
+                transactionManager.resetProducerIdIfNeeded();
 
                 if (!transactionManager.isTransactional()) {
                     // this is an idempotent producer, so make sure we have a producer id
@@ -694,16 +690,7 @@ public class Sender implements Runnable {
 
     private void completeBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
         if (transactionManager != null) {
-            if (transactionManager.hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
-                transactionManager
-                    .maybeUpdateLastAckedSequence(batch.topicPartition, batch.baseSequence() + batch.recordCount - 1);
-                log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}",
-                    batch.producerId(),
-                    batch.topicPartition,
-                    transactionManager.lastAckedSequence(batch.topicPartition).orElse(-1));
-            }
-            transactionManager.updateLastAckedOffset(response, batch);
-            transactionManager.removeInFlightBatch(batch);
+            transactionManager.handleCompletedBatch(batch, response);
         }
 
         if (batch.done(response.baseOffset, response.logAppendTime, null)) {
@@ -725,28 +712,7 @@ public class Sender implements Runnable {
                            RuntimeException exception,
                            boolean adjustSequenceNumbers) {
         if (transactionManager != null) {
-            if (exception instanceof OutOfOrderSequenceException
-                    && !transactionManager.isTransactional()
-                    && transactionManager.hasProducerId(batch.producerId())) {
-                log.error("The broker returned {} for topic-partition " +
-                            "{} at offset {}. This indicates data loss on the broker, and should be investigated.",
-                        exception, batch.topicPartition, baseOffset);
-
-                // Reset the transaction state since we have hit an irrecoverable exception and cannot make any guarantees
-                // about the previously committed message. Note that this will discard the producer id and sequence
-                // numbers for all existing partitions.
-                transactionManager.resetProducerId();
-            } else if (exception instanceof ClusterAuthorizationException
-                    || exception instanceof TransactionalIdAuthorizationException
-                    || exception instanceof ProducerFencedException
-                    || exception instanceof UnsupportedVersionException) {
-                transactionManager.transitionToFatalError(exception);
-            } else if (transactionManager.isTransactional()) {
-                transactionManager.transitionToAbortableError(exception);
-            }
-            transactionManager.removeInFlightBatch(batch);
-            if (adjustSequenceNumbers)
-                transactionManager.adjustSequencesDueToFailedBatch(batch);
+            transactionManager.handleFailedBatch(batch, exception, adjustSequenceNumbers);
         }
 
         this.sensors.recordErrors(batch.topicPartition.topic(), batch.recordCount);
