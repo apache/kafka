@@ -256,7 +256,7 @@ class WorkerSinkTask extends WorkerTask {
         } else {
             long durationMillis = time.milliseconds() - commitStarted;
             if (error != null) {
-                log.error("{} Commit of offsets threw an unexpected exception for sequence number {}: {}",
+                log.error("{} Commit of offsets threw an unexpected exception for sequence number {}: {} with error {}",
                         this, seqno, committedOffsets, error);
                 commitFailures++;
                 recordCommitFailure(durationMillis, error);
