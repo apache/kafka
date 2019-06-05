@@ -17,6 +17,7 @@
 package kafka.utils
 
 import scala.collection.mutable.PriorityQueue
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit
 
 import org.apache.kafka.common.utils.Time
@@ -71,11 +72,12 @@ class MockScheduler(val time: Time) extends Scheduler {
     }
   }
   
-  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) {
+  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : ScheduledFuture[Unit] = {
     this synchronized {
       tasks += MockTask(name, fun, time.milliseconds + delay, period = period)
       tick()
     }
+    null
   }
 
   def clear(): Unit = {
@@ -83,7 +85,6 @@ class MockScheduler(val time: Time) extends Scheduler {
       tasks.clear()
     }
   }
-  
 }
 
 case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long) extends Ordered[MockTask] {
