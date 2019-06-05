@@ -21,6 +21,7 @@ import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
@@ -934,6 +935,67 @@ public abstract class AdminClient implements AutoCloseable {
             ElectionType electionType,
             Set<TopicPartition> partitions,
             ElectLeadersOptions options);
+
+    /**
+     * Change the reassignments for one or more partitions.
+     *
+     * This is a convenience method for {@link #alterPartitionReassignments(Map, AlterPartitionReassignmentsOptions)}
+     * with default options.  See the overload for more details.
+     */
+    public AlterPartitionReassignmentsResult alterPartitionReassignments(
+                Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments) {
+        return alterPartitionReassignments(reassignments, new AlterPartitionReassignmentsOptions());
+    }
+
+    /**
+     * Change the reassignments for one or more partitions.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code AlterPartitionReassignmentsResult}:</p>
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user didn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnknownTopicOrPartitionException}
+     *   If the topic or partition does not exist within the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   if the request timed out before the controller could record the new assignments.</li>
+     * </ul>
+     *
+     * @param reassignments   The reassignments to add, modify, or remove.
+     * @param options         The options to use.
+     * @return                The result.
+     */
+    public abstract AlterPartitionReassignmentsResult alterPartitionReassignments(
+                Map<TopicPartition, Optional<NewPartitionReassignment>> reassignments,
+                AlterPartitionReassignmentsOptions options);
+
+    /**
+     * List the reassignments which are in progress.
+     *
+     * This is a convenience method for {@link #listPartitionReassignments(ListPartitionReassignmentsOptions)}
+     * with default options.  See the overload for more details.
+     */
+    public ListPartitionReassignmentsResult listPartitionReassignments() {
+        return listPartitionReassignments(new ListPartitionReassignmentsOptions());
+    }
+
+    /**
+     * Change the reassignments for one or more partitions.
+     *
+     * <p>The following exceptions can be anticipated when calling {@code get()} on the futures obtained from
+     * the returned {@code ListPartitionReassignmentsResult}:</p>
+     * <ul>
+     *   <li>{@link org.apache.kafka.common.errors.ClusterAuthorizationException}
+     *   If the authenticated user doesn't have alter access to the cluster.</li>
+     *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
+     *   if the request timed out before the controller could list the current reassignments.</li>
+     * </ul>
+     *
+     * @param options         The options to use.
+     * @return                The result.
+     */
+    public abstract ListPartitionReassignmentsResult listPartitionReassignments(
+                ListPartitionReassignmentsOptions options);
 
     /**
      * Get the metrics kept by the adminClient
