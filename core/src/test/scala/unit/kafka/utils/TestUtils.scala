@@ -1500,19 +1500,10 @@ object TestUtils extends Logging {
   }
 
   def resource[R <: AutoCloseable, A](resource: R)(func: R => A): A = {
-    var error: Throwable = null
-
     try {
       func(resource)
-    } catch {
-      case e: Throwable =>
-        error = e
-        null.asInstanceOf[A]
     } finally {
       resource.close()
-      if (error != null) {
-          throw error
-      }
     }
   }
 }

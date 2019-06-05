@@ -21,11 +21,11 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 
-import kafka.common.{AdminCommandFailedException, TopicAndPartition}
+import kafka.common.AdminCommandFailedException
 import kafka.network.RequestChannel
 import kafka.security.auth._
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.{Logging, TestUtils, ZkUtils}
+import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ClusterAuthorizationException

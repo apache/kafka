@@ -23,7 +23,6 @@ import java.nio.file.Path
 import kafka.common.AdminCommandFailedException
 import kafka.server.KafkaConfig
 import kafka.server.KafkaServer
-import kafka.utils.CoreUtils
 import kafka.utils.TestUtils
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.clients.admin.AdminClientConfig
@@ -32,14 +31,9 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.serialization.StringDeserializer
-import org.apache.log4j.Level
-import org.apache.log4j.Logger
 import org.junit.After
 import org.junit.Assert._
 import org.junit.Before
-import org.junit.Ignore
 import org.junit.Test
 import scala.collection.JavaConverters._
 import scala.concurrent.duration._
@@ -340,7 +334,7 @@ object LeaderElectionCommandTest {
       () => {
         val description = client.describeTopics(partitions.map(_.topic).asJava).all.get.asScala
         val isr = description.values.flatMap(_.partitions.asScala.flatMap(_.isr.asScala))
-        isr.exists(_.id != brokerId)
+        isr.exists(_.id == brokerId)
       },
       s"Expect broker $brokerId to no longer be in any ISR for $partitions"
     )
