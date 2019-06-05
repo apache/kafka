@@ -463,7 +463,7 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
                     int numPartitions = UNKNOWN;
                     try {
                         numPartitions = repartitionTopicMetadata.get(topicName).numberOfPartitions();
-                    } catch (IllegalStateException numPartitionsUnknown) {
+                    } catch (final IllegalStateException unknownNumPartitions) {
 
                         // try set the number of partitions for this repartition topic if it is not set yet
                         for (final InternalTopologyBuilder.TopicsInfo otherTopicsInfo : topicGroups.values()) {
@@ -938,10 +938,10 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<String, InternalTopicConfig> topicsToMakeReady = new HashMap<>();
 
         for (final InternalTopicConfig topic : topicPartitions.values()) {
-            int numPartitions;
+            final int numPartitions;
             try {
                 numPartitions = topic.numberOfPartitions();
-            } catch (IllegalStateException unknownNumPartitions) {
+            } catch (final IllegalStateException unknownNumPartitions) {
                 throw new StreamsException(String.format("%sTopic [%s] number of partitions not defined", logPrefix, topic.name()));
             }
 

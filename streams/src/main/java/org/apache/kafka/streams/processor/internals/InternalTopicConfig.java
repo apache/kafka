@@ -27,7 +27,7 @@ import java.util.Objects;
  */
 public abstract class InternalTopicConfig {
 
-    static final int UNKNOWN = -1;
+    private static final int UNKNOWN = -1;
     final String name;
     final Map<String, String> topicConfigs;
 
