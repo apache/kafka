@@ -595,11 +595,11 @@ public class TransactionManagerTest {
         TransactionManager transactionManager = new TransactionManager();
         transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
 
-        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, producerIdAndEpoch, tp0, "1");
-        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, producerIdAndEpoch, tp0, "2");
-        ProducerBatch b3 = writeIdempotentBatchWithValue(transactionManager, producerIdAndEpoch, tp0, "3");
-        ProducerBatch b4 = writeIdempotentBatchWithValue(transactionManager, producerIdAndEpoch, tp0, "4");
-        ProducerBatch b5 = writeIdempotentBatchWithValue(transactionManager, producerIdAndEpoch, tp0, "5");
+        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
+        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
+        ProducerBatch b3 = writeIdempotentBatchWithValue(transactionManager, tp0, "3");
+        ProducerBatch b4 = writeIdempotentBatchWithValue(transactionManager, tp0, "4");
+        ProducerBatch b5 = writeIdempotentBatchWithValue(transactionManager, tp0, "5");
         assertEquals(5, transactionManager.sequenceNumber(tp0).intValue());
 
         // First batch succeeds
@@ -629,11 +629,11 @@ public class TransactionManagerTest {
         TransactionManager transactionManager = new TransactionManager();
         transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
 
-        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, producerIdAndEpoch, tp0, "1");
-        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, producerIdAndEpoch, tp0, "2");
-        ProducerBatch b3 = writeIdempotentBatchWithValue(transactionManager, producerIdAndEpoch, tp0, "3");
-        ProducerBatch b4 = writeIdempotentBatchWithValue(transactionManager, producerIdAndEpoch, tp0, "4");
-        ProducerBatch b5 = writeIdempotentBatchWithValue(transactionManager, producerIdAndEpoch, tp0, "5");
+        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
+        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
+        ProducerBatch b3 = writeIdempotentBatchWithValue(transactionManager, tp0, "3");
+        ProducerBatch b4 = writeIdempotentBatchWithValue(transactionManager, tp0, "4");
+        ProducerBatch b5 = writeIdempotentBatchWithValue(transactionManager, tp0, "5");
         assertEquals(5, transactionManager.sequenceNumber(tp0).intValue());
 
         // First batch succeeds
@@ -669,7 +669,8 @@ public class TransactionManagerTest {
 
     @Test
     public void testBatchFailureAfterProducerReset() {
-        // This tests a scenario where the producerId is reset while pending requests are still inflight
+        // This tests a scenario where the producerId is reset while pending requests are still inflight.
+        // The returned responses should not update internal state.
 
         final long producerId = 13131L;
         final short epoch = 1;
@@ -677,13 +678,13 @@ public class TransactionManagerTest {
         TransactionManager transactionManager = new TransactionManager();
         transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
 
-        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, producerIdAndEpoch, tp0, "1");
+        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
 
         ProducerIdAndEpoch updatedProducerIdAndEpoch = new ProducerIdAndEpoch(producerId + 1, epoch);
         transactionManager.resetProducerId();
         transactionManager.setProducerIdAndEpoch(updatedProducerIdAndEpoch);
 
-        writeIdempotentBatchWithValue(transactionManager, producerIdAndEpoch, tp0, "2");
+        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
         assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
 
         ProduceResponse.PartitionResponse b1Response = new ProduceResponse.PartitionResponse(
@@ -692,17 +693,16 @@ public class TransactionManagerTest {
         transactionManager.handleFailedBatch(b1, Errors.UNKNOWN_PRODUCER_ID.exception(), true);
 
         assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
-
+        assertEquals(b2, transactionManager.nextBatchBySequence(tp0));
     }
 
     private ProducerBatch writeIdempotentBatchWithValue(TransactionManager manager,
-                                                        ProducerIdAndEpoch producerIdAndEpoch,
                                                         TopicPartition tp,
                                                         String value) {
         int seq = manager.sequenceNumber(tp);
         manager.incrementSequenceNumber(tp, 1);
         ProducerBatch batch = batchWithValue(tp, value);
-        batch.setProducerState(producerIdAndEpoch, seq, false);
+        batch.setProducerState(manager.producerIdAndEpoch(), seq, false);
         manager.addInFlightBatch(batch);
         batch.close();
         return batch;
@@ -2423,7 +2423,7 @@ public class TransactionManagerTest {
         TopicPartition tp0 = new TopicPartition("foo", 0);
         assertEquals(Integer.valueOf(0), manager.sequenceNumber(tp0));
 
-        ProducerBatch b1 = writeIdempotentBatchWithValue(manager, producerIdAndEpoch, tp0, "1");
+        ProducerBatch b1 = writeIdempotentBatchWithValue(manager, tp0, "1");
         assertEquals(Integer.valueOf(1), manager.sequenceNumber(tp0));
         manager.handleCompletedBatch(b1, new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, time.milliseconds(), 0L));
@@ -2436,7 +2436,7 @@ public class TransactionManagerTest {
         assertFalse(manager.hasUnresolvedSequences());
 
         // We have a new batch which fails with a timeout
-        ProducerBatch b2 = writeIdempotentBatchWithValue(manager, producerIdAndEpoch, tp0, "2");
+        ProducerBatch b2 = writeIdempotentBatchWithValue(manager, tp0, "2");
         assertEquals(Integer.valueOf(2), manager.sequenceNumber(tp0));
         manager.markSequenceUnresolved(tp0);
         manager.handleFailedBatch(b2, new TimeoutException(), false);
@@ -2459,9 +2459,9 @@ public class TransactionManagerTest {
         manager.setProducerIdAndEpoch(producerIdAndEpoch);
 
         TopicPartition tp0 = new TopicPartition("foo", 0);
-        ProducerBatch b1 = writeIdempotentBatchWithValue(manager, producerIdAndEpoch, tp0, "1");
-        ProducerBatch b2 = writeIdempotentBatchWithValue(manager, producerIdAndEpoch, tp0, "2");
-        ProducerBatch b3 = writeIdempotentBatchWithValue(manager, producerIdAndEpoch, tp0, "3");
+        ProducerBatch b1 = writeIdempotentBatchWithValue(manager, tp0, "1");
+        ProducerBatch b2 = writeIdempotentBatchWithValue(manager, tp0, "2");
+        ProducerBatch b3 = writeIdempotentBatchWithValue(manager, tp0, "3");
         assertEquals(3, manager.sequenceNumber(tp0).intValue());
 
         // The first batch fails with a timeout
@@ -2500,9 +2500,9 @@ public class TransactionManagerTest {
         manager.setProducerIdAndEpoch(producerIdAndEpoch);
 
         TopicPartition tp0 = new TopicPartition("foo", 0);
-        ProducerBatch b1 = writeIdempotentBatchWithValue(manager, producerIdAndEpoch, tp0, "1");
-        ProducerBatch b2 = writeIdempotentBatchWithValue(manager, producerIdAndEpoch, tp0, "2");
-        ProducerBatch b3 = writeIdempotentBatchWithValue(manager, producerIdAndEpoch, tp0, "3");
+        ProducerBatch b1 = writeIdempotentBatchWithValue(manager, tp0, "1");
+        ProducerBatch b2 = writeIdempotentBatchWithValue(manager, tp0, "2");
+        ProducerBatch b3 = writeIdempotentBatchWithValue(manager, tp0, "3");
         assertEquals(Integer.valueOf(3), manager.sequenceNumber(tp0));
 
         // The first batch fails with a timeout
