@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.StateStoreType;
 import org.apache.kafka.streams.kstream.internals.graph.GroupedTableOperationRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
@@ -102,7 +103,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
                                 materialized.queryableStoreName(),
                                 aggregateSupplier,
                                 statefulProcessorNode,
-                                builder);
+                                builder, StateStoreType.KEY_VALUE_STORE);
     }
 
     private GroupedTableOperationRepartitionNode<K, V> createRepartitionNode(final String sinkName,

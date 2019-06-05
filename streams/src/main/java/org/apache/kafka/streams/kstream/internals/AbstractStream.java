@@ -28,6 +28,7 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
+import java.time.Duration;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;

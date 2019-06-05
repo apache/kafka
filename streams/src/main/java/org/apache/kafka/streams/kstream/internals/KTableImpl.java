@@ -16,21 +16,11 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.metrics.Stat;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.Grouped;
-import org.apache.kafka.streams.kstream.KGroupedTable;
-import org.apache.kafka.streams.kstream.KStream;
-import org.apache.kafka.streams.kstream.KTable;
-import org.apache.kafka.streams.kstream.KeyValueMapper;
-import org.apache.kafka.streams.kstream.Materialized;
-import org.apache.kafka.streams.kstream.Predicate;
-import org.apache.kafka.streams.kstream.Suppressed;
-import org.apache.kafka.streams.kstream.ValueJoiner;
-import org.apache.kafka.streams.kstream.ValueMapper;
-import org.apache.kafka.streams.kstream.ValueMapperWithKey;
-import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.*;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -42,6 +32,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.KTableSuppressProcess
 import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -52,6 +43,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.streams.kstream.internals.graph.GraphGraceSearchUtil.findAndVerifyWindowGrace;
@@ -92,6 +84,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     private final String queryableStoreName;
 
+    private final StateStoreType stateStoreType;
+
+    private final Optional<Windows<?>> timeWindows;
+
+    private final Optional<SessionWindows> sessionWindow;
+
     private boolean sendOldValues = false;
 
     public KTableImpl(final String name,
@@ -101,10 +99,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                       final String queryableStoreName,
                       final ProcessorSupplier<?, ?> processorSupplier,
                       final StreamsGraphNode streamsGraphNode,
-                      final InternalStreamsBuilder builder) {
+                      final InternalStreamsBuilder builder,
+                      final StateStoreType stateStoreType, 
+                      Optional<Windows<?>> timeWindows, 
+                      Optional<SessionWindows> sessionWindow) {
         super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
+        this.stateStoreType = stateStoreType;
+        this.timeWindows = timeWindows;
+        this.sessionWindow = sessionWindow;
     }
 
     @Override
@@ -113,12 +117,12 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
-                                  final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal,
+                                  final MaterializedInternal<K, V, StateStore> materializedInternal,
                                   final boolean filterNot) {
         final Serde<K> keySerde;
         final Serde<V> valueSerde;
         final String queryableStoreName;
-        final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder;
+        final StoreBuilder<?> storeBuilder;
 
         if (materializedInternal != null) {
             // we actually do not need to generate store names at all since if it is not specified, we will not
@@ -133,7 +137,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             valueSerde = materializedInternal.valueSerde() != null ? materializedInternal.valueSerde() : this.valSerde;
             queryableStoreName = materializedInternal.queryableStoreName();
             // only materialize if materialized is specified and it has queryable name
-            storeBuilder = queryableStoreName != null ? (new TimestampedKeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
+            storeBuilder = queryableStoreName != null ? getStoreBuilder(materializedInternal) : null;
         } else {
             keySerde = this.keySerde;
             valueSerde = this.valSerde;
@@ -165,7 +169,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                 queryableStoreName,
                                 processorSupplier,
                                 tableNode,
-                                builder);
+                                builder, StateStoreType.KEY_VALUE_STORE, Optional.empty(), Optional.empty());
     }
 
     @Override
@@ -176,10 +180,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
-                               final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+                               final Materialized<K, V, StateStore> materialized) throws IllegalArgumentException {
         Objects.requireNonNull(predicate, "predicate can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materialized.containsValidStoreSupplier(stateStoreType);
+        final MaterializedInternal<K, V, StateStore> materializedInternal = new MaterializedInternal<>(materialized);
 
         return doFilter(predicate, materializedInternal, false);
     }
@@ -192,20 +197,21 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
-                                  final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+                                  final Materialized<K, V, StateStore> materialized) throws IllegalArgumentException {
         Objects.requireNonNull(predicate, "predicate can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materialized.containsValidStoreSupplier(stateStoreType);
+        final MaterializedInternal<K, V, StateStore> materializedInternal = new MaterializedInternal<>(materialized);
 
         return doFilter(predicate, materializedInternal, true);
     }
 
     private <VR> KTable<K, VR> doMapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
-                                           final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal) {
+                                           final MaterializedInternal<K, VR, StateStore> materializedInternal) throws IllegalArgumentException {
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
         final String queryableStoreName;
-        final StoreBuilder<TimestampedKeyValueStore<K, VR>> storeBuilder;
+        final StoreBuilder<?> storeBuilder;
 
         if (materializedInternal != null) {
             // we actually do not need to generate store names at all since if it is not specified, we will not
@@ -217,7 +223,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.queryableStoreName();
             // only materialize if materialized is specified and it has queryable name
-            storeBuilder = queryableStoreName != null ? (new TimestampedKeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
+            storeBuilder = queryableStoreName != null ? getStoreBuilder(materializedInternal) : null;
         } else {
             keySerde = this.keySerde;
             valueSerde = null;
@@ -253,8 +259,8 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             queryableStoreName,
             processorSupplier,
             tableNode,
-            builder
-        );
+            builder,
+            StateStoreType.KEY_VALUE_STORE, Optional.empty(), Optional.empty());
     }
 
     @Override
@@ -271,22 +277,24 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                        final Materialized<K, VR, StateStore> materialized) throws IllegalArgumentException {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+        materialized.containsValidStoreSupplier(stateStoreType);
 
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        final MaterializedInternal<K, VR, StateStore> materializedInternal = new MaterializedInternal<>(materialized);
 
         return doMapValues(withKey(mapper), materializedInternal);
     }
 
     @Override
     public <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
-                                        final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                        final Materialized<K, VR, StateStore> materialized) throws IllegalArgumentException {
         Objects.requireNonNull(mapper, "mapper can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
+        materialized.containsValidStoreSupplier(stateStoreType);
 
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        final MaterializedInternal<K, VR, StateStore> materializedInternal = new MaterializedInternal<>(materialized);
         return doMapValues(mapper, materializedInternal);
     }
 
@@ -298,22 +306,23 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     @Override
     public <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                              final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
-                                              final String... stateStoreNames) {
+                                              final Materialized<K, VR, StateStore> materialized,
+                                              final String... stateStoreNames) throws IllegalArgumentException {
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+        materialized.containsValidStoreSupplier(stateStoreType);
+        final MaterializedInternal<K, VR, StateStore> materializedInternal = new MaterializedInternal<>(materialized);
 
         return doTransformValues(transformerSupplier, materializedInternal, stateStoreNames);
     }
 
     private <VR> KTable<K, VR> doTransformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                                 final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
-                                                 final String... stateStoreNames) {
+                                                 final MaterializedInternal<K, VR, StateStore> materializedInternal,
+                                                 final String... stateStoreNames) throws IllegalArgumentException {
         Objects.requireNonNull(stateStoreNames, "stateStoreNames");
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
         final String queryableStoreName;
-        final StoreBuilder<TimestampedKeyValueStore<K, VR>> storeBuilder;
+        final StoreBuilder<?> storeBuilder;
 
         if (materializedInternal != null) {
             // don't inherit parent value serde, since this operation may change the value type, more specifically:
@@ -323,7 +332,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.queryableStoreName();
             // only materialize if materialized is specified and it has queryable name
-            storeBuilder = queryableStoreName != null ? (new TimestampedKeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
+            storeBuilder = queryableStoreName != null ? getStoreBuilder(materializedInternal) : null;
         } else {
             keySerde = this.keySerde;
             valueSerde = null;
@@ -359,7 +368,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             queryableStoreName,
             processorSupplier,
             tableNode,
-            builder);
+            builder, 
+            StateStoreType.KEY_VALUE_STORE, Optional.empty(),
+                Optional.empty());
     }
 
     @Override
@@ -425,8 +436,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             null,
             suppressionSupplier,
             node,
-            builder
-        );
+            builder,
+            stateStoreType,
+                Optional.empty(), Optional.empty());
     }
 
     @SuppressWarnings("unchecked")
@@ -458,9 +470,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     @Override
     public <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
                                        final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                       final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                       final Materialized<K, VR, StateStore> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+        materialized.containsValidStoreSupplier(stateStoreType);
+
+        final MaterializedInternal<K, VR, StateStore> materializedInternal =
             new MaterializedInternal<>(materialized, builder, MERGE_NAME);
 
         return doJoin(other, joiner, materializedInternal, false, false);
@@ -475,9 +489,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     @Override
     public <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
                                             final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                            final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                            final Materialized<K, VR, StateStore> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+        materialized.containsValidStoreSupplier(stateStoreType);
+        final MaterializedInternal<K, VR, StateStore> materializedInternal =
             new MaterializedInternal<>(materialized, builder, MERGE_NAME);
 
         return doJoin(other, joiner, materializedInternal, true, true);
@@ -492,10 +507,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     @Override
     public <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
                                            final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                           final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized) {
+                                           final Materialized<K, VR, StateStore> materialized) {
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
-            new MaterializedInternal<>(materialized, builder, MERGE_NAME);
+        materialized.containsValidStoreSupplier(stateStoreType);
+        final MaterializedInternal<K, VR, StateStore> materializedInternal =
+            new MaterializedInternal<>( materialized, builder, MERGE_NAME);
 
         return doJoin(other, joiner, materializedInternal, true, false);
     }
@@ -503,7 +519,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     @SuppressWarnings("unchecked")
     private <VO, VR> KTable<K, VR> doJoin(final KTable<K, VO> other,
                                           final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                          final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal,
+                                          final MaterializedInternal<K, VR, StateStore> materializedInternal,
                                           final boolean leftOuter,
                                           final boolean rightOuter) {
         Objects.requireNonNull(other, "other can't be null");
@@ -542,13 +558,14 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final Serde<K> keySerde;
         final Serde<VR> valueSerde;
         final String queryableStoreName;
-        final StoreBuilder<TimestampedKeyValueStore<K, VR>> storeBuilder;
+        final StoreBuilder<?> storeBuilder;
 
         if (materializedInternal != null) {
             keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
             valueSerde = materializedInternal.valueSerde();
             queryableStoreName = materializedInternal.storeName();
-            storeBuilder = new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize();
+
+            storeBuilder = getStoreBuilder(materializedInternal);
         } else {
             keySerde = this.keySerde;
             valueSerde = null;
@@ -568,7 +585,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                 .withKeySerde(keySerde)
                 .withValueSerde(valueSerde)
                 .withQueryableStoreName(queryableStoreName)
-                .withStoreBuilder(storeBuilder)
+                .withStoreBuilder((StoreBuilder<StateStore>) storeBuilder)
                 .build();
         builder.addGraphNode(this.streamsGraphNode, kTableKTableJoinNode);
 
@@ -581,8 +598,28 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             kTableKTableJoinNode.queryableStoreName(),
             kTableKTableJoinNode.joinMerger(),
             kTableKTableJoinNode,
-            builder
-        );
+            builder,
+            stateStoreType, 
+            Optional.empty(), 
+            Optional.empty());
+    }
+
+    private <VR> StoreBuilder<?> getStoreBuilder(MaterializedInternal<K, VR, StateStore> materializedInternal) {
+        StoreBuilder<?> storeBuilder;
+        if (stateStoreType == StateStoreType.KEY_VALUE_STORE) {
+            storeBuilder = new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize();
+        } else if (stateStoreType == StateStoreType.TIME_WINDOW_STORE) {
+            if (!timeWindows.isPresent()) {
+                throw new IllegalArgumentException("Window store type KTable doesn't have time window defined");
+            }
+            storeBuilder = new WindowStoreMaterializer(materializedInternal, timeWindows.get()).materialize();
+        } else {
+            if (!sessionWindow.isPresent()) {
+                throw new IllegalArgumentException("Session store type KTable doesn't have session window defined");
+            }
+            storeBuilder = new SessionStoreMaterializer<>(materializedInternal, sessionWindow.get()).materialize();
+        }
+        return storeBuilder;
     }
 
     @Override
@@ -666,6 +703,11 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     @SuppressWarnings("unchecked")
     private <VR> ProcessorParameters<K, VR> unsafeCastProcessorParametersToCompletelyDifferentType(final ProcessorParameters<K, Change<V>> kObjectProcessorParameters) {
         return (ProcessorParameters<K, VR>) kObjectProcessorParameters;
+    }
+
+    @Override
+    public StateStoreType getStateStoreType() {
+        return this.stateStoreType;
     }
 
 }

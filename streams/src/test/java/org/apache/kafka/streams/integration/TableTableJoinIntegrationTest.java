@@ -24,6 +24,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.ForeachAction;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.Before;
@@ -64,7 +65,7 @@ public class TableTableJoinIntegrationTest extends AbstractJoinIntegrationTest {
     final private KeyValueTimestamp<Long, String> expectedFinalMultiJoinResult = new KeyValueTimestamp<>(ANY_UNIQUE_KEY, "D-d-d", 15L);
     final private String storeName = appID + "-store";
 
-    private Materialized<Long, String, KeyValueStore<Bytes, byte[]>> materialized = Materialized.<Long, String, KeyValueStore<Bytes, byte[]>>as(storeName)
+    private Materialized<Long, String, StateStore> materialized = Materialized.<Long, String, StateStore>as(storeName)
             .withKeySerde(Serdes.Long())
             .withValueSerde(Serdes.String())
             .withCachingDisabled()

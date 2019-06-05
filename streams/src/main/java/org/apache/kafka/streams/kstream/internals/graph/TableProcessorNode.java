@@ -26,18 +26,18 @@ import java.util.Arrays;
 public class TableProcessorNode<K, V> extends StreamsGraphNode {
 
     private final ProcessorParameters<K, V> processorParameters;
-    private final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder;
+    private final StoreBuilder<?> storeBuilder;
     private final String[] storeNames;
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V> processorParameters,
-                              final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder) {
+                              final StoreBuilder<?> storeBuilder) {
         this(nodeName, processorParameters, storeBuilder, null);
     }
 
     public TableProcessorNode(final String nodeName,
                               final ProcessorParameters<K, V> processorParameters,
-                              final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder,
+                              final StoreBuilder<?> storeBuilder,
                               final String[] storeNames) {
         super(nodeName);
         this.processorParameters = processorParameters;

@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.StateStoreType;
 import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -140,7 +141,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                 materialized.queryableStoreName(),
                                 tableSource,
                                 tableSourceNode,
-                                this);
+                                this, StateStoreType.KEY_VALUE_STORE);
     }
 
     public <K, V> GlobalKTable<K, V> globalTable(final String topic,

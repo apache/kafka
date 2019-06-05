@@ -20,6 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.StateStoreType;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
@@ -31,6 +32,7 @@ import static org.apache.kafka.streams.kstream.internals.graph.OptimizableRepart
 
 
 import java.util.Collections;
+import java.util.Optional;
 import java.util.Set;
 
 class GroupedStreamAggregateBuilder<K, V> {
@@ -114,7 +116,8 @@ class GroupedStreamAggregateBuilder<K, V> {
                                 queryableStoreName,
                                 aggregateSupplier,
                                 statefulProcessorNode,
-                                builder);
+                                builder, StateStoreType.KEY_VALUE_STORE,
+                Optional.empty(), Optional.empty());
 
     }
 

@@ -127,7 +127,7 @@ public interface KTable<K, V> {
      * @see #filterNot(Predicate, Materialized)
      */
     KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
-                        final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+                        final Materialized<K, V, StateStore> materialized) throws IllegalArgumentException;
 
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
@@ -187,7 +187,7 @@ public interface KTable<K, V> {
      * @see #filter(Predicate, Materialized)
      */
     KTable<K, V> filterNot(final Predicate<? super K, ? super V> predicate,
-                           final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+                           final Materialized<K, V, StateStore> materialized) throws IllegalArgumentException;
 
 
     /**
@@ -303,7 +303,7 @@ public interface KTable<K, V> {
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
     <VR> KTable<K, VR> mapValues(final ValueMapper<? super V, ? extends VR> mapper,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+                                 final Materialized<K, VR, StateStore> materialized) throws IllegalArgumentException;
 
     /**
      * Create a new {@code KTable} by transforming the value of each record in this {@code KTable} into a new value
@@ -350,7 +350,7 @@ public interface KTable<K, V> {
      * @return a {@code KTable} that contains records with unmodified keys and new values (possibly of different type)
      */
     <VR> KTable<K, VR> mapValues(final ValueMapperWithKey<? super K, ? super V, ? extends VR> mapper,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+                                 final Materialized<K, VR, StateStore> materialized) throws IllegalArgumentException;
 
     /**
      * Convert this changelog stream to a {@link KStream}.
@@ -548,8 +548,8 @@ public interface KTable<K, V> {
      * @see #mapValues(ValueMapperWithKey)
      */
     <VR> KTable<K, VR> transformValues(final ValueTransformerWithKeySupplier<? super K, ? super V, ? extends VR> transformerSupplier,
-                                       final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized,
-                                       final String... stateStoreNames);
+                                       final Materialized<K, VR, StateStore> materialized,
+                                       final String... stateStoreNames) throws IllegalArgumentException;
 
     /**
      * Re-groups the records of this {@code KTable} using the provided {@link KeyValueMapper} and default serializers
@@ -789,12 +789,12 @@ public interface KTable<K, V> {
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
      *
+     * @param <VO>          the value type of the other {@code KTable}
+     * @param <VR>          the value type of the result {@code KTable}
      * @param other         the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
      *                      Cannot be {@code null}
-     * @param <VO>          the value type of the other {@code KTable}
-     * @param <VR>          the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key
      * @see #leftJoin(KTable, ValueJoiner, Materialized)
@@ -802,7 +802,7 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> join(final KTable<K, VO> other,
                                 final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+                                final Materialized<K, VR, StateStore> materialized);
 
 
     /**
@@ -957,12 +957,12 @@ public interface KTable<K, V> {
      * Both input streams (or to be more precise, their underlying source topics) need to have the same number of
      * partitions.
      *
+     * @param <VO>          the value type of the other {@code KTable}
+     * @param <VR>          the value type of the result {@code KTable}
      * @param other         the other {@code KTable} to be joined with this {@code KTable}
      * @param joiner        a {@link ValueJoiner} that computes the join result for a pair of matching records
      * @param materialized  an instance of {@link Materialized} used to describe how the state store should be materialized.
      *                      Cannot be {@code null}
-     * @param <VO>          the value type of the other {@code KTable}
-     * @param <VR>          the value type of the result {@code KTable}
      * @return a {@code KTable} that contains join-records for each key and values computed by the given
      * {@link ValueJoiner}, one for each matched record-pair with the same key plus one for each non-matching record of
      * left {@code KTable}
@@ -971,7 +971,7 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> leftJoin(final KTable<K, VO> other,
                                     final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                    final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+                                    final Materialized<K, VR, StateStore> materialized);
 
 
     /**
@@ -1138,7 +1138,7 @@ public interface KTable<K, V> {
      */
     <VO, VR> KTable<K, VR> outerJoin(final KTable<K, VO> other,
                                      final ValueJoiner<? super V, ? super VO, ? extends VR> joiner,
-                                     final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+                                     final Materialized<K, VR, StateStore> materialized);
 
     /**
      * Get the name of the local state store used that can be used to query this {@code KTable}.
@@ -1146,4 +1146,11 @@ public interface KTable<K, V> {
      * @return the underlying state store name, or {@code null} if this {@code KTable} cannot be queried.
      */
     String queryableStoreName();
+
+    /**
+     * Get the required state store materialization type.
+     *
+     * @return state store type
+     */
+    StateStoreType getStateStoreType();
 }

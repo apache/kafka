@@ -182,5 +182,4 @@ public final class QueryableStoreTypes {
             return new CompositeReadOnlySessionStore<>(storeProvider, this, storeName);
         }
     }
-
 }

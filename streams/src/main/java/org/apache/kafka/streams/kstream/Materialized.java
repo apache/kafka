@@ -64,6 +64,7 @@ public class Materialized<K, V, S extends StateStore> {
     protected boolean cachingEnabled = true;
     protected Map<String, String> topicConfig = new HashMap<>();
     protected Duration retention;
+    protected Duration windowSize;
 
     private Materialized(final StoreSupplier<S> storeSupplier) {
         this.storeSupplier = storeSupplier;
@@ -257,5 +258,36 @@ public class Materialized<K, V, S extends StateStore> {
         }
         this.retention = retention;
         return this;
+    }
+
+    /**
+     * Validate input materialized struct contains valid state store supplier. This aims to restrict
+     * only using out-of-box state store suppliers when writing DSL.
+     * @param stateStoreType state store type
+     * @return true if the given supplier matches the state store type.
+     * @throws IllegalArgumentException if the given state store type is unrecognizable (must be one of the key-value,
+     * window, or session store)
+     */
+    public void containsValidStoreSupplier(StateStoreType stateStoreType) throws IllegalArgumentException {
+        if (storeSupplier != null) {
+            boolean isValidStoreSupplier;
+            switch (stateStoreType) {
+                case KEY_VALUE_STORE:
+                    isValidStoreSupplier = storeSupplier instanceof KeyValueBytesStoreSupplier;
+                    break;
+                case TIME_WINDOW_STORE:
+                    isValidStoreSupplier = storeSupplier instanceof WindowBytesStoreSupplier;
+                    break;
+                case SESSION_STORE:
+                    isValidStoreSupplier = storeSupplier instanceof SessionBytesStoreSupplier;
+                    break;
+                default:
+                    throw new IllegalArgumentException("Unknown state store type " + stateStoreType);
+            }
+            if (!isValidStoreSupplier) {
+                throw new IllegalArgumentException("State store supplier is invalid, expected type " + stateStoreType
+                + ", actual " + storeSupplier.getClass());
+            }
+        }
     }
 }
