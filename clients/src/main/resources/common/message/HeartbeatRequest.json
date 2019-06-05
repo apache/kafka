@@ -27,7 +27,8 @@
       "about": "The generation of the group." },
     { "name": "MemberId", "type": "string", "versions": "0+",
       "about": "The member ID." },
-    { "name": "GroupInstanceId", "type": "string", "versions": "3+", "nullableVersions": "3+",
+    { "name": "GroupInstanceId", "type": "string", "versions": "3+",
+      "nullableVersions": "3+", "default": "null",
       "about": "The unique identifier of the consumer instance provided by end user." }
   ]
 }

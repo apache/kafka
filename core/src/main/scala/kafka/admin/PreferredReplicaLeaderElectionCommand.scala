@@ -16,32 +16,34 @@
  */
 package kafka.admin
 
+import collection.JavaConverters._
+import collection._
 import java.util.Properties
 import java.util.concurrent.ExecutionException
-
 import joptsimple.OptionSpecBuilder
 import kafka.common.AdminCommandFailedException
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AdminClientConfig
+import org.apache.kafka.common.ElectionType
+import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.errors.ClusterAuthorizationException
+import org.apache.kafka.common.errors.ElectionNotNeededException
 import org.apache.kafka.common.errors.TimeoutException
-
-import collection.JavaConverters._
-import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.security.JaasUtils
-import org.apache.kafka.common.{KafkaFuture, TopicPartition}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.Utils
 import org.apache.zookeeper.KeeperException.NodeExistsException
-
-import collection._
 
 object PreferredReplicaLeaderElectionCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
-
     val timeout = 30000
     run(args, timeout)
   }
+
   def run(args: Array[String], timeout: Int = 30000): Unit = {
+    println("This tool is deprecated. Please use kafka-leader-election tool. Tracking issue: KAFKA-8405")
     val commandOpts = new PreferredReplicaLeaderElectionCommandOptions(args)
     CommandLineUtils.printHelpAndExitIfNeeded(commandOpts, "This tool helps to causes leadership for each partition to be transferred back to the 'preferred replica'," +
       " it can be used to balance leadership among the servers.")
@@ -209,71 +211,68 @@ object PreferredReplicaLeaderElectionCommand extends Logging {
 
     val adminClient = org.apache.kafka.clients.admin.AdminClient.create(adminClientProps)
 
-    /**
-      * Wait until the given future has completed, then return whether it completed exceptionally.
-      * Because KafkaFuture.isCompletedExceptionally doesn't wait for a result
-      */
-    private def completedExceptionally[T](future: KafkaFuture[T]): Boolean = {
-      try {
-        future.get()
-        false
-      } catch {
-        case (_: Throwable) =>
-          true
-      }
-    }
-
     override def electPreferredLeaders(partitionsFromUser: Option[Set[TopicPartition]]): Unit = {
       val partitions = partitionsFromUser match {
         case Some(partitionsFromUser) => partitionsFromUser.asJava
         case None => null
       }
-      debug(s"Calling AdminClient.electPreferredLeaders($partitions)")
-      val result = adminClient.electPreferredLeaders(partitions)
-      // wait for all results
+      debug(s"Calling AdminClient.electLeaders(ElectionType.PREFERRED, $partitions)")
 
-      val attemptedPartitions = partitionsFromUser match {
-        case Some(partitionsFromUser) => partitions.asScala
-        case None => try {
-          result.partitions().get.asScala
-        } catch {
-          case e: ExecutionException =>
-            val cause = e.getCause
-            if (cause.isInstanceOf[TimeoutException]) {
-              // We timed out, or don't even know the attempted partitions
-              println("Timeout waiting for election results")
-            }
-            throw new AdminCommandFailedException(null, cause)
-          case e: Throwable =>
-            // We don't even know the attempted partitions
-            println("Error while making request")
-            e.printStackTrace()
-            return
-        }
-      }
-
-      val (exceptional, ok) = attemptedPartitions.map(tp => tp -> result.partitionResult(tp)).
-        partition { case (_, partitionResult) => completedExceptionally(partitionResult) }
-
-      if (!ok.isEmpty) {
-        println(s"Successfully completed preferred replica election for partitions ${ok.map{ case (tp, future) => tp }.mkString(", ")}")
-      }
-      if (!exceptional.isEmpty) {
-        val adminException = new AdminCommandFailedException(
-          s"${exceptional.size} preferred replica(s) could not be elected")
-        for ((partition, void) <- exceptional) {
-          val exception = try {
-            void.get()
-            new AdminCommandFailedException("Exceptional future with no exception")
-          } catch {
-            case e: ExecutionException => e.getCause
+      val electionResults = try {
+        adminClient.electLeaders(ElectionType.PREFERRED, partitions).partitions.get.asScala
+      } catch {
+        case e: ExecutionException =>
+          val cause = e.getCause
+          if (cause.isInstanceOf[TimeoutException]) {
+            println("Timeout waiting for election results")
+            throw new AdminCommandFailedException("Timeout waiting for election results", cause)
+          } else if (cause.isInstanceOf[ClusterAuthorizationException]) {
+            println(s"Not authorized to perform leader election")
+            throw new AdminCommandFailedException("Not authorized to perform leader election", cause)
           }
-          println(s"Error completing preferred replica election for partition $partition: $exception")
-          adminException.addSuppressed(exception)
-        }
-        throw adminException
+
+          throw e
+        case e: Throwable =>
+          // We don't even know the attempted partitions
+          println("Error while making request")
+          e.printStackTrace()
+          return
       }
 
+      val succeeded = mutable.Set.empty[TopicPartition]
+      val noop = mutable.Set.empty[TopicPartition]
+      val failed = mutable.Map.empty[TopicPartition, Throwable]
+
+      electionResults.foreach { case (topicPartition, error) =>
+        val _: Unit = if (error.isPresent) {
+          if (error.get.isInstanceOf[ElectionNotNeededException]) {
+            noop += topicPartition
+          } else {
+            failed += topicPartition -> error.get
+          }
+        } else {
+          succeeded += topicPartition
+        }
+      }
+
+      if (!succeeded.isEmpty) {
+        val partitions = succeeded.mkString(", ")
+        println(s"Successfully completed preferred leader election for partitions $partitions")
+      }
+
+      if (!noop.isEmpty) {
+        val partitions = succeeded.mkString(", ")
+        println(s"Preferred replica already elected for partitions $partitions")
+      }
+
+      if (!failed.isEmpty) {
+        val rootException = new AdminCommandFailedException(s"${failed.size} preferred replica(s) could not be elected")
+        failed.foreach { case (topicPartition, exception) =>
+          println(s"Error completing preferred leader election for partition: $topicPartition: $exception")
+          rootException.addSuppressed(exception)
+        }
+        throw rootException
+      }
     }
 
     override def close(): Unit = {

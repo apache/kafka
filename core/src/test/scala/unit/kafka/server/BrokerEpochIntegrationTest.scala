@@ -191,10 +191,9 @@ class BrokerEpochIntegrationTest extends ZooKeeperTestHarness {
 
         if (isEpochInRequestStale) {
           sendAndVerifyStaleBrokerEpochInResponse(controllerChannelManager, requestBuilder)
-        }
-        else {
+        } else {
           sendAndVerifySuccessfulResponse(controllerChannelManager, requestBuilder)
-          assertTrue(broker2.replicaManager.getPartition(tp).isEmpty)
+          assertEquals(HostedPartition.None, broker2.replicaManager.getPartition(tp))
         }
       }
     } finally {

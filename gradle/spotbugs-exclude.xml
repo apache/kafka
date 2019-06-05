@@ -100,8 +100,10 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Add a suppression for the equals() method of NetworkClientBlockingOps. -->
-        <Class name="kafka.utils.NetworkClientBlockingOps"/>
+        <!-- Suppression for the equals() for extensiom methods. -->
+        <Or>
+            <Class name="kafka.api.package$ElectLeadersRequestOps"/>
+        </Or>
         <Bug pattern="EQ_UNUSUAL"/>
     </Match>
 
@@ -331,5 +333,12 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <!-- END Suppress warnings for unused members that are undetectably used by Jackson -->
+
+    <Match>
+        <!-- Suppress a warning about ignoring return value because this is intentional. -->
+        <Class name="org.apache.kafka.common.config.AbstractConfig$ResolvingMap"/>
+        <Method name="get"/>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
+    </Match>
 
 </FindBugsFilter>

@@ -174,7 +174,8 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         fetcher.removePartitions(partitions)
       failedPartitions.removeAll(partitions)
     }
-    info(s"Removed fetcher for partitions $partitions")
+    if (partitions.nonEmpty)
+      info(s"Removed fetcher for partitions $partitions")
   }
 
   def shutdownIdleFetcherThreads() {

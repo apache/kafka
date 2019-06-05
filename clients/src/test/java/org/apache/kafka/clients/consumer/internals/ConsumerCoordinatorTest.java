@@ -2323,7 +2323,8 @@ public class ConsumerCoordinatorTest {
                 retryBackoffMs,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-                null);
+                null,
+                !groupInstanceId.isPresent());
     }
 
     private Collection<TopicPartition> getRevoked(final List<TopicPartition> owned,
