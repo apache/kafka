@@ -584,23 +584,8 @@ public class TransactionManager {
         removeInFlightBatch(batch);
     }
 
-    public synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
-        if (!hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
-            log.debug("Ignoring failed batch {} with producer id {}, epoch {}, and sequence number {} " +
-                    "since the producerId has been reset internally", batch, batch.producerId(),
-                    batch.producerEpoch(), batch.baseSequence(), exception);
-            return;
-        }
-
-        if (exception instanceof OutOfOrderSequenceException && !isTransactional() && hasProducerId(batch.producerId())) {
-            log.error("The broker returned {} for topic-partition {} with producerId {}, epoch {}, and sequence number {}",
-                    exception, batch.topicPartition, batch.producerId(), batch.producerEpoch(), batch.baseSequence());
-
-            // Reset the producerId since we have hit an irrecoverable exception and cannot make any guarantees
-            // about the previously committed message. Note that this will discard the producer id and sequence
-            // numbers for all existing partitions.
-            resetProducerId();
-        } else if (exception instanceof ClusterAuthorizationException
+    private void maybeTransitionToErrorState(RuntimeException exception) {
+        if (exception instanceof ClusterAuthorizationException
                 || exception instanceof TransactionalIdAuthorizationException
                 || exception instanceof ProducerFencedException
                 || exception instanceof UnsupportedVersionException) {
@@ -608,9 +593,31 @@ public class TransactionManager {
         } else if (isTransactional()) {
             transitionToAbortableError(exception);
         }
-        removeInFlightBatch(batch);
-        if (adjustSequenceNumbers)
-            adjustSequencesDueToFailedBatch(batch);
+    }
+
+    public synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
+        maybeTransitionToErrorState(exception);
+
+        if (!hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
+            log.debug("Ignoring failed batch {} with producer id {}, epoch {}, and sequence number {} " +
+                    "since the producerId has been reset internally", batch, batch.producerId(),
+                    batch.producerEpoch(), batch.baseSequence(), exception);
+            return;
+        }
+
+        if (exception instanceof OutOfOrderSequenceException && !isTransactional()) {
+            log.error("The broker returned {} for topic-partition {} with producerId {}, epoch {}, and sequence number {}",
+                    exception, batch.topicPartition, batch.producerId(), batch.producerEpoch(), batch.baseSequence());
+
+            // Reset the producerId since we have hit an irrecoverable exception and cannot make any guarantees
+            // about the previously committed message. Note that this will discard the producer id and sequence
+            // numbers for all existing partitions.
+            resetProducerId();
+        } else {
+            removeInFlightBatch(batch);
+            if (adjustSequenceNumbers)
+                adjustSequencesDueToFailedBatch(batch);
+        }
     }
 
 
