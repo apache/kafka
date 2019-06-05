@@ -173,11 +173,14 @@ object TestUtils extends Logging {
     enableSaslSsl: Boolean = false,
     rackInfo: Map[Int, String] = Map(),
     logDirCount: Int = 1,
-    enableToken: Boolean = false): Seq[Properties] = {
+    enableToken: Boolean = false,
+    numPartitions: Int = 1,
+    defaultReplicationFactor: Short = 1): Seq[Properties] = {
     (0 until numConfigs).map { node =>
       createBrokerConfig(node, zkConnect, enableControlledShutdown, enableDeleteTopic, RandomPort,
         interBrokerSecurityProtocol, trustStoreFile, saslProperties, enablePlaintext = enablePlaintext, enableSsl = enableSsl,
-        enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node), logDirCount = logDirCount, enableToken = enableToken)
+        enableSaslPlaintext = enableSaslPlaintext, enableSaslSsl = enableSaslSsl, rack = rackInfo.get(node), logDirCount = logDirCount, enableToken = enableToken,
+        numPartitions = numPartitions, defaultReplicationFactor = defaultReplicationFactor)
     }
   }
 
@@ -229,7 +232,9 @@ object TestUtils extends Logging {
                          saslSslPort: Int = RandomPort,
                          rack: Option[String] = None,
                          logDirCount: Int = 1,
-                         enableToken: Boolean = false): Properties = {
+                         enableToken: Boolean = false,
+                         numPartitions: Int = 1,
+                         defaultReplicationFactor: Short = 1): Properties = {
     def shouldEnable(protocol: SecurityProtocol) = interBrokerSecurityProtocol.fold(false)(_ == protocol)
 
     val protocolAndPorts = ArrayBuffer[(SecurityProtocol, Int)]()
@@ -288,6 +293,9 @@ object TestUtils extends Logging {
 
     if (enableToken)
       props.put(KafkaConfig.DelegationTokenMasterKeyProp, "masterkey")
+
+    props.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
+    props.put(KafkaConfig.DefaultReplicationFactorProp, defaultReplicationFactor.toString)
 
     props
   }

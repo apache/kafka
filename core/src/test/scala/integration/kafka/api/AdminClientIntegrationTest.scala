@@ -50,10 +50,10 @@ import org.junit.rules.Timeout
 import org.junit.{After, Before, Rule, Test}
 import org.scalatest.Assertions.intercept
 import scala.collection.JavaConverters._
+import scala.compat.java8.OptionConverters._
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.util.Random
-
 /**
  * An integration test of the KafkaAdminClient.
  *
@@ -150,10 +150,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   @Test
   def testCreateDeleteTopics(): Unit = {
     client = AdminClient.create(createConfig())
-    val topics = Seq("mytopic", "mytopic2")
+    val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
       new NewTopic("mytopic", Map((0: Integer) -> Seq[Integer](1, 2).asJava, (1: Integer) -> Seq[Integer](2, 0).asJava).asJava),
-      new NewTopic("mytopic2", 3, 3)
+      new NewTopic("mytopic2", 3, 3.toShort),
+      new NewTopic("mytopic3", Option.empty[Integer].asJava, Option.empty[java.lang.Short].asJava)
     )
     client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all.get()
     waitForTopics(client, List(), topics)
@@ -166,6 +167,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertFutureExceptionTypeEquals(results.get("mytopic"), classOf[TopicExistsException])
     assertTrue(results.containsKey("mytopic2"))
     assertFutureExceptionTypeEquals(results.get("mytopic2"), classOf[TopicExistsException])
+    assertTrue(results.containsKey("mytopic3"))
+    assertFutureExceptionTypeEquals(results.get("mytopic3"), classOf[TopicExistsException])
 
     val topicToDescription = client.describeTopics(topics.asJava).all.get()
     assertEquals(topics.toSet, topicToDescription.keySet.asScala)
@@ -204,6 +207,11 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       assertTrue(partition.replicas.contains(partition.leader))
     }
 
+    val topic3 = topicToDescription.get("mytopic3")
+    assertEquals("mytopic3", topic3.name)
+    assertEquals(configs.head.numPartitions, topic3.partitions.size)
+    assertEquals(configs.head.defaultReplicationFactor, topic3.partitions.get(0).replicas().size())
+
     client.deleteTopics(topics.asJava).all.get()
     waitForTopics(client, List(), topics)
   }
@@ -212,7 +220,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   def testMetadataRefresh(): Unit = {
     client = AdminClient.create(createConfig())
     val topics = Seq("mytopic")
-    val newTopics = Seq(new NewTopic("mytopic", 3, 3))
+    val newTopics = Seq(new NewTopic("mytopic", 3, 3.toShort))
     client.createTopics(newTopics.asJava).all.get()
     waitForTopics(client, expectedPresent = topics, expectedMissing = List())
 
@@ -237,7 +245,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(expectedOperations, result.authorizedOperations().get())
 
     val topic = "mytopic"
-    val newTopics = Seq(new NewTopic(topic, 3, 3))
+    val newTopics = Seq(new NewTopic(topic, 3, 3.toShort))
     client.createTopics(newTopics.asJava).all.get()
     waitForTopics(client, expectedPresent = Seq(topic), expectedMissing = List())
 
@@ -265,7 +273,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     client = AdminClient.create(createConfig())
 
     val existingTopic = "existing-topic"
-    client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1)).asJava).all.get()
+    client.createTopics(Seq(existingTopic).map(new NewTopic(_, 1, 1.toShort)).asJava).all.get()
     waitForTopics(client, Seq(existingTopic), List())
 
     val nonExistingTopic = "non-existing"
@@ -1063,7 +1071,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
   def testDelayedClose(): Unit = {
     client = AdminClient.create(createConfig())
     val topics = Seq("mytopic", "mytopic2")
-    val newTopics = topics.map(new NewTopic(_, 1, 1))
+    val newTopics = topics.map(new NewTopic(_, 1, 1.toShort))
     val future = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
     client.close(time.Duration.ofHours(2))
     val future2 = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
@@ -1083,7 +1091,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     client = AdminClient.create(config)
     // Because the bootstrap servers are set up incorrectly, this call will not complete, but must be
     // cancelled by the close operation.
-    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
+    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
       new CreateTopicsOptions().timeoutMs(900000)).all()
     client.close(time.Duration.ZERO)
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
@@ -1100,7 +1108,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "0")
     client = AdminClient.create(config)
     val startTimeMs = Time.SYSTEM.milliseconds()
-    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
+    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
       new CreateTopicsOptions().timeoutMs(2)).all()
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
     val endTimeMs = Time.SYSTEM.milliseconds()
@@ -1116,10 +1124,10 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     config.put(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG, "100000000")
     val factory = new KafkaAdminClientTest.FailureInjectingTimeoutProcessorFactory()
     client = KafkaAdminClientTest.createInternal(new AdminClientConfig(config), factory)
-    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1)).asJava,
+    val future = client.createTopics(Seq("mytopic", "mytopic2").map(new NewTopic(_, 1, 1.toShort)).asJava,
         new CreateTopicsOptions().validateOnly(true)).all()
     assertFutureExceptionTypeEquals(future, classOf[TimeoutException])
-    val future2 = client.createTopics(Seq("mytopic3", "mytopic4").map(new NewTopic(_, 1, 1)).asJava,
+    val future2 = client.createTopics(Seq("mytopic3", "mytopic4").map(new NewTopic(_, 1, 1.toShort)).asJava,
       new CreateTopicsOptions().validateOnly(true)).all()
     future2.get
     assertEquals(1, factory.failuresInjected)
@@ -1141,7 +1149,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       val testTopicName = "test_topic"
       val testNumPartitions = 2
       client.createTopics(Collections.singleton(
-        new NewTopic(testTopicName, testNumPartitions, 1))).all().get()
+        new NewTopic(testTopicName, testNumPartitions, 1.toShort))).all().get()
       waitForTopics(client, List(testTopicName), List())
 
       val producer = createProducer()
@@ -1799,8 +1807,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val client = AdminClient.create(createConfig)
     val longTopicName = String.join("", Collections.nCopies(249, "x"));
     val invalidTopicName = String.join("", Collections.nCopies(250, "x"));
-    val newTopics2 = Seq(new NewTopic(invalidTopicName, 3, 3),
-                         new NewTopic(longTopicName, 3, 3))
+    val newTopics2 = Seq(new NewTopic(invalidTopicName, 3, 3.toShort),
+                         new NewTopic(longTopicName, 3, 3.toShort))
     val results = client.createTopics(newTopics2.asJava).values()
     assertTrue(results.containsKey(longTopicName))
     results.get(longTopicName).get()
