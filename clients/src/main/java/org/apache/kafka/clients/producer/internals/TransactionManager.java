@@ -62,6 +62,10 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.PriorityQueue;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Consumer;
 import java.util.function.Supplier;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PRODUCER_EPOCH;
@@ -133,7 +137,7 @@ public class TransactionManager {
         // we continue to order batches by the sequence numbers even when the responses come back out of order during
         // leader failover. We add a batch to the queue when it is drained, and remove it when the batch completes
         // (either successfully or through a fatal failure).
-        private PriorityQueue<ProducerBatch> inflightBatchesBySequence;
+        private SortedSet<ProducerBatch> inflightBatchesBySequence;
 
         // We keep track of the last acknowledged offset on a per partition basis in order to disambiguate UnknownProducer
         // responses which are due to the retention period elapsing, and those which are due to actual lost data.
@@ -143,8 +147,18 @@ public class TransactionManager {
             this.nextSequence = 0;
             this.lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
             this.lastAckedOffset = ProduceResponse.INVALID_OFFSET;
-            this.inflightBatchesBySequence = new PriorityQueue<>(5, Comparator.comparingInt(ProducerBatch::baseSequence));
+            this.inflightBatchesBySequence = new TreeSet<>(Comparator.comparingInt(ProducerBatch::baseSequence));
         }
+
+        public void resetSequenceNumbers(Consumer<ProducerBatch> resetSequence) {
+            TreeSet<ProducerBatch> newInflights = new TreeSet<>(Comparator.comparingInt(ProducerBatch::baseSequence));
+            for (ProducerBatch inflightBatch : inflightBatchesBySequence) {
+                resetSequence.accept(inflightBatch);
+                newInflights.add(inflightBatch);
+            }
+            inflightBatchesBySequence = newInflights;
+        }
+
     }
 
     private final TopicPartitionBookkeeper topicPartitionBookkeeper;
@@ -479,7 +493,7 @@ public class TransactionManager {
     synchronized void addInFlightBatch(ProducerBatch batch) {
         if (!batch.hasSequence())
             throw new IllegalStateException("Can't track batch for partition " + batch.topicPartition + " when sequence is not set.");
-        topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence.offer(batch);
+        topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence.add(batch);
     }
 
     /**
@@ -493,21 +507,21 @@ public class TransactionManager {
         if (!hasInflightBatches(topicPartition))
             return RecordBatch.NO_SEQUENCE;
 
-        ProducerBatch first = topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence.peek();
-        if (first == null)
+        SortedSet<ProducerBatch> inflightBatches = topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence;
+        if (inflightBatches.isEmpty())
             return RecordBatch.NO_SEQUENCE;
-
-        return first.baseSequence();
+        else
+            return inflightBatches.first().baseSequence();
     }
 
     synchronized ProducerBatch nextBatchBySequence(TopicPartition topicPartition) {
-        PriorityQueue<ProducerBatch> queue = topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence;
-        return queue.peek();
+        SortedSet<ProducerBatch> queue = topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence;
+        return queue.isEmpty() ? null : queue.first();
     }
 
     synchronized void removeInFlightBatch(ProducerBatch batch) {
         if (hasInflightBatches(batch.topicPartition)) {
-            PriorityQueue<ProducerBatch> queue = topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence;
+            SortedSet<ProducerBatch> queue = topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence;
             queue.remove(batch);
         }
     }
@@ -549,7 +563,7 @@ public class TransactionManager {
     // This method must only be called when we know that the batch is question has been unequivocally failed by the broker,
     // ie. it has received a confirmed fatal status code like 'Message Too Large' or something similar.
     synchronized void adjustSequencesDueToFailedBatch(ProducerBatch batch) {
-        if (!topicPartitionBookkeeper.contains(batch.topicPartition))
+        if (!topicPartitionBookkeeper.contains(batch.topicPartition) || !hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch()))
             // Sequence numbers are not being tracked for this partition. This could happen if the producer id was just
             // reset due to a previous OutOfOrderSequenceException.
             return;
@@ -558,34 +572,35 @@ public class TransactionManager {
         int currentSequence = sequenceNumber(batch.topicPartition);
         currentSequence -= batch.recordCount;
         if (currentSequence < 0)
-            throw new IllegalStateException("Sequence number for partition " + batch.topicPartition + " is going to become negative : " + currentSequence);
+            throw new IllegalStateException("Sequence number for partition " + batch.topicPartition + " is going to become negative: " + currentSequence);
 
         setNextSequence(batch.topicPartition, currentSequence);
 
-        for (ProducerBatch inFlightBatch : topicPartitionBookkeeper.getPartition(batch.topicPartition).inflightBatchesBySequence) {
+        topicPartitionBookkeeper.getPartition(batch.topicPartition).resetSequenceNumbers(inFlightBatch -> {
             if (inFlightBatch.baseSequence() < batch.baseSequence())
-                continue;
+                return;
+
             int newSequence = inFlightBatch.baseSequence() - batch.recordCount;
             if (newSequence < 0)
                 throw new IllegalStateException("Sequence number for batch with sequence " + inFlightBatch.baseSequence()
-                        + " for partition " + batch.topicPartition + " is going to become negative :" + newSequence);
+                        + " for partition " + batch.topicPartition + " is going to become negative: " + newSequence);
 
             log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}", inFlightBatch.baseSequence(), batch.topicPartition, newSequence);
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(), inFlightBatch.producerEpoch()), newSequence, inFlightBatch.isTransactional());
-        }
+
+        });
     }
 
     private synchronized void startSequencesAtBeginning(TopicPartition topicPartition) {
-        int sequence = 0;
-        for (ProducerBatch inFlightBatch : topicPartitionBookkeeper.getPartition(topicPartition).inflightBatchesBySequence) {
+        final AtomicInteger sequence = new AtomicInteger(0);
+        topicPartitionBookkeeper.getPartition(topicPartition).resetSequenceNumbers(inFlightBatch -> {
             log.info("Resetting sequence number of batch with current sequence {} for partition {} to {}",
-                    inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence);
+                    inFlightBatch.baseSequence(), inFlightBatch.topicPartition, sequence.get());
             inFlightBatch.resetProducerState(new ProducerIdAndEpoch(inFlightBatch.producerId(),
-                    inFlightBatch.producerEpoch()), sequence, inFlightBatch.isTransactional());
-
-            sequence += inFlightBatch.recordCount;
-        }
-        setNextSequence(topicPartition, sequence);
+                    inFlightBatch.producerEpoch()), sequence.get(), inFlightBatch.isTransactional());
+            sequence.getAndAdd(inFlightBatch.recordCount);
+        });
+        setNextSequence(topicPartition, sequence.get());
         topicPartitionBookkeeper.getPartition(topicPartition).lastAckedSequence = NO_LAST_ACKED_SEQUENCE_NUMBER;
     }
 

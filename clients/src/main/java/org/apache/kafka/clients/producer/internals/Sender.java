@@ -712,13 +712,18 @@ public class Sender implements Runnable {
         }
     }
 
-    private void failBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response, RuntimeException exception,
+    private void failBatch(ProducerBatch batch,
+                           ProduceResponse.PartitionResponse response,
+                           RuntimeException exception,
                            boolean adjustSequenceNumbers) {
         failBatch(batch, response.baseOffset, response.logAppendTime, exception, adjustSequenceNumbers);
     }
 
-    private void failBatch(ProducerBatch batch, long baseOffset, long logAppendTime, RuntimeException exception,
-        boolean adjustSequenceNumbers) {
+    private void failBatch(ProducerBatch batch,
+                           long baseOffset,
+                           long logAppendTime,
+                           RuntimeException exception,
+                           boolean adjustSequenceNumbers) {
         if (transactionManager != null) {
             if (exception instanceof OutOfOrderSequenceException
                     && !transactionManager.isTransactional()
