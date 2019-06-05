@@ -567,13 +567,19 @@ public class TransactionManager {
     }
 
     public synchronized void handleCompletedBatch(ProducerBatch batch, ProduceResponse.PartitionResponse response) {
-        if (hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
-            maybeUpdateLastAckedSequence(batch.topicPartition, batch.baseSequence() + batch.recordCount - 1);
-            log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}",
-                    batch.producerId(),
-                    batch.topicPartition,
-                    lastAckedSequence(batch.topicPartition).orElse(-1));
+        if (!hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch())) {
+            log.debug("Ignoring completed batch {} with producer id {}, epoch {}, and sequence number {} " +
+                            "since the producerId has been reset internally", batch, batch.producerId(),
+                    batch.producerEpoch(), batch.baseSequence());
+            return;
         }
+
+        maybeUpdateLastAckedSequence(batch.topicPartition, batch.baseSequence() + batch.recordCount - 1);
+        log.debug("ProducerId: {}; Set last ack'd sequence number for topic-partition {} to {}",
+                batch.producerId(),
+                batch.topicPartition,
+                lastAckedSequence(batch.topicPartition).orElse(-1));
+
         updateLastAckedOffset(response, batch);
         removeInFlightBatch(batch);
     }
@@ -821,7 +827,7 @@ public class TransactionManager {
     }
 
     synchronized boolean canRetry(ProduceResponse.PartitionResponse response, ProducerBatch batch) {
-        if (!hasProducerId(batch.producerId()))
+        if (!hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch()))
             return false;
 
         Errors error = response.error;

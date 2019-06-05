@@ -603,7 +603,7 @@ public class TransactionManagerTest {
         assertEquals(5, transactionManager.sequenceNumber(tp0).intValue());
 
         // First batch succeeds
-        long b1AppendTime = System.currentTimeMillis();
+        long b1AppendTime = time.milliseconds();
         ProduceResponse.PartitionResponse b1Response = new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, b1AppendTime, 0L);
         b1.done(500L, b1AppendTime, null);
@@ -637,7 +637,7 @@ public class TransactionManagerTest {
         assertEquals(5, transactionManager.sequenceNumber(tp0).intValue());
 
         // First batch succeeds
-        long b1AppendTime = System.currentTimeMillis();
+        long b1AppendTime = time.milliseconds();
         ProduceResponse.PartitionResponse b1Response = new ProduceResponse.PartitionResponse(
                 Errors.NONE, 500L, b1AppendTime, 0L);
         b1.done(500L, b1AppendTime, null);
@@ -696,6 +696,33 @@ public class TransactionManagerTest {
         assertEquals(b2, transactionManager.nextBatchBySequence(tp0));
     }
 
+    @Test
+    public void testBatchCompletedAfterProducerReset() {
+        final long producerId = 13131L;
+        final short epoch = 1;
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
+        TransactionManager transactionManager = new TransactionManager();
+        transactionManager.setProducerIdAndEpoch(producerIdAndEpoch);
+
+        ProducerBatch b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
+
+        // The producerId might be reset due to a failure on another partition
+        ProducerIdAndEpoch updatedProducerIdAndEpoch = new ProducerIdAndEpoch(producerId + 1, epoch);
+        transactionManager.resetProducerId();
+        transactionManager.setProducerIdAndEpoch(updatedProducerIdAndEpoch);
+
+        ProducerBatch b2 = writeIdempotentBatchWithValue(transactionManager, tp0, "2");
+        assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
+
+        // If the request returns successfully, we should ignore the response and not update any state
+        ProduceResponse.PartitionResponse b1Response = new ProduceResponse.PartitionResponse(
+                Errors.NONE, 500L, time.milliseconds(), 0L);
+        transactionManager.handleCompletedBatch(b1, b1Response);
+
+        assertEquals(1, transactionManager.sequenceNumber(tp0).intValue());
+        assertEquals(b2, transactionManager.nextBatchBySequence(tp0));
+    }
+
     private ProducerBatch writeIdempotentBatchWithValue(TransactionManager manager,
                                                         TopicPartition tp,
                                                         String value) {
@@ -711,8 +738,8 @@ public class TransactionManagerTest {
     private ProducerBatch batchWithValue(TopicPartition tp, String value) {
         MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(64),
                 CompressionType.NONE, TimestampType.CREATE_TIME, 0L);
-        long currentTimeMs = System.currentTimeMillis();
-        ProducerBatch batch = new ProducerBatch(tp, builder, System.currentTimeMillis());
+        long currentTimeMs = time.milliseconds();
+        ProducerBatch batch = new ProducerBatch(tp, builder, currentTimeMs);
         batch.tryAppend(currentTimeMs, new byte[0], value.getBytes(), new Header[0], null, currentTimeMs);
         return batch;
     }
