@@ -58,7 +58,7 @@ import static org.apache.kafka.common.utils.Utils.getPort;
 
 public class StreamsPartitionAssignor implements PartitionAssignor, Configurable {
 
-    private final static int UNKNOWN = -1;
+    final static int UNKNOWN = -1;
     private final static int VERSION_ONE = 1;
     private final static int VERSION_TWO = 2;
     private final static int VERSION_THREE = 3;
@@ -460,11 +460,9 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
             for (final InternalTopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
                 for (final String topicName : topicsInfo.repartitionSourceTopics.keySet()) {
-                    int numPartitions = UNKNOWN;
-                    try {
-                        numPartitions = repartitionTopicMetadata.get(topicName).numberOfPartitions();
-                    } catch (final IllegalStateException unknownNumPartitions) {
+                    int numPartitions = repartitionTopicMetadata.get(topicName).numberOfPartitions();
 
+                    if (numPartitions == UNKNOWN) {
                         // try set the number of partitions for this repartition topic if it is not set yet
                         for (final InternalTopologyBuilder.TopicsInfo otherTopicsInfo : topicGroups.values()) {
                             final Set<String> otherSinkTopics = otherTopicsInfo.sinkTopics;
@@ -938,10 +936,8 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<String, InternalTopicConfig> topicsToMakeReady = new HashMap<>();
 
         for (final InternalTopicConfig topic : topicPartitions.values()) {
-            final int numPartitions;
-            try {
-                numPartitions = topic.numberOfPartitions();
-            } catch (final IllegalStateException unknownNumPartitions) {
+            final int numPartitions = topic.numberOfPartitions();
+            if (numPartitions == UNKNOWN) {
                 throw new StreamsException(String.format("%sTopic [%s] number of partitions not defined", logPrefix, topic.name()));
             }
 

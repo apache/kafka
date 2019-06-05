@@ -27,11 +27,10 @@ import java.util.Objects;
  */
 public abstract class InternalTopicConfig {
 
-    private static final int UNKNOWN = -1;
     final String name;
     final Map<String, String> topicConfigs;
 
-    private int numberOfPartitions = UNKNOWN;
+    private int numberOfPartitions = StreamsPartitionAssignor.UNKNOWN;
 
     InternalTopicConfig(final String name, final Map<String, String> topicConfigs) {
         Objects.requireNonNull(name, "name can't be null");
@@ -55,9 +54,6 @@ public abstract class InternalTopicConfig {
     }
 
     public int numberOfPartitions() {
-        if (numberOfPartitions == UNKNOWN) {
-            throw new IllegalStateException("Number of partitions not specified.");
-        }
         return numberOfPartitions;
     }
 
