@@ -26,10 +26,12 @@ import java.util.Objects;
  * the internal topics we create for change-logs and repartitioning etc.
  */
 public abstract class InternalTopicConfig {
+
+    static final int UNKNOWN = -1;
     final String name;
     final Map<String, String> topicConfigs;
 
-    private int numberOfPartitions = -1;
+    private int numberOfPartitions = UNKNOWN;
 
     InternalTopicConfig(final String name, final Map<String, String> topicConfigs) {
         Objects.requireNonNull(name, "name can't be null");
@@ -53,7 +55,7 @@ public abstract class InternalTopicConfig {
     }
 
     public int numberOfPartitions() {
-        if (numberOfPartitions == -1) {
+        if (numberOfPartitions == UNKNOWN) {
             throw new IllegalStateException("Number of partitions not specified.");
         }
         return numberOfPartitions;

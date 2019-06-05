@@ -460,10 +460,12 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
 
             for (final InternalTopologyBuilder.TopicsInfo topicsInfo : topicGroups.values()) {
                 for (final String topicName : topicsInfo.repartitionSourceTopics.keySet()) {
-                    int numPartitions = repartitionTopicMetadata.get(topicName).numberOfPartitions();
+                    int numPartitions = UNKNOWN;
+                    try {
+                        numPartitions = repartitionTopicMetadata.get(topicName).numberOfPartitions();
+                    } catch (IllegalStateException numPartitionsUnknown) {
 
-                    // try set the number of partitions for this repartition topic if it is not set yet
-                    if (numPartitions == UNKNOWN) {
+                        // try set the number of partitions for this repartition topic if it is not set yet
                         for (final InternalTopologyBuilder.TopicsInfo otherTopicsInfo : topicGroups.values()) {
                             final Set<String> otherSinkTopics = otherTopicsInfo.sinkTopics;
 
@@ -936,9 +938,10 @@ public class StreamsPartitionAssignor implements PartitionAssignor, Configurable
         final Map<String, InternalTopicConfig> topicsToMakeReady = new HashMap<>();
 
         for (final InternalTopicConfig topic : topicPartitions.values()) {
-            final int numPartitions = topic.numberOfPartitions();
-
-            if (numPartitions < 0) {
+            int numPartitions;
+            try {
+                numPartitions = topic.numberOfPartitions();
+            } catch (IllegalStateException unknownNumPartitions) {
                 throw new StreamsException(String.format("%sTopic [%s] number of partitions not defined", logPrefix, topic.name()));
             }
 
