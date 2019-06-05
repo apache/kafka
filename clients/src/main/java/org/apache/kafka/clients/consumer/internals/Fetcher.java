@@ -861,13 +861,14 @@ public class Fetcher<K, V> implements Closeable {
         final Map<TopicPartition, ListOffsetRequest.PartitionData> partitionDataMap = new HashMap<>();
         for (Map.Entry<TopicPartition, Long> entry: timestampsToSearch.entrySet()) {
             TopicPartition tp  = entry.getKey();
+            Long offset = entry.getValue();
             Optional<MetadataCache.PartitionInfoAndEpoch> currentInfo = metadata.partitionInfoIfCurrent(tp);
             if (!currentInfo.isPresent()) {
-                log.debug("Leader for partition {} is unknown for fetching offset", tp);
+                log.debug("Leader for partition {} is unknown for fetching offset {}", tp, offset);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
             } else if (currentInfo.get().partitionInfo().leader() == null) {
-                log.debug("Leader for partition {} is unavailable for fetching offset", tp);
+                log.debug("Leader for partition {} is unavailable for fetching offset {}", tp, offset);
                 metadata.requestUpdate();
                 partitionsToRetry.add(tp);
             } else if (client.isUnavailable(currentInfo.get().partitionInfo().leader())) {
@@ -881,7 +882,7 @@ public class Fetcher<K, V> implements Closeable {
                 partitionsToRetry.add(tp);
             } else {
                 partitionDataMap.put(tp,
-                        new ListOffsetRequest.PartitionData(entry.getValue(), Optional.of(currentInfo.get().epoch())));
+                        new ListOffsetRequest.PartitionData(offset, Optional.of(currentInfo.get().epoch())));
             }
         }
         return regroupPartitionMapByNode(partitionDataMap);
