@@ -18,7 +18,7 @@
 package kafka.log
 
 import java.io._
-import java.util.Properties
+import java.util.{Collections, Properties}
 
 import kafka.server.FetchDataInfo
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -378,6 +378,13 @@ class LogManagerTest {
     assertTrue("Logs deleted too early", logManager.hasLogsToBeDeleted)
     time.sleep(logManager.currentDefaultConfig.fileDeleteDelayMs - logManager.InitialTaskDelayMs)
     assertFalse("Logs not deleted", logManager.hasLogsToBeDeleted)
+  }
+
+  @Test
+  def testCreateAndDeleteOverlyLongTopic(): Unit = {
+    val invalidTopicName = String.join("", Collections.nCopies(253, "x"));
+    val log = logManager.getOrCreateLog(new TopicPartition(invalidTopicName, 0), logConfig)
+    logManager.asyncDelete(new TopicPartition(invalidTopicName, 0))
   }
 
   @Test

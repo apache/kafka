@@ -21,10 +21,12 @@ import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
@@ -57,6 +59,7 @@ import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 @RunWith(EasyMockRunner.class)
 public class MeteredTimestampedKeyValueStoreTest {
@@ -254,4 +257,53 @@ public class MeteredTimestampedKeyValueStoreTest {
         return this.metrics.metric(metricName);
     }
 
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext() {
+        expect(context.keySerde()).andStubReturn((Serde) Serdes.String());
+        expect(context.valueSerde()).andStubReturn((Serde) Serdes.Long());
+        final MeteredTimestampedKeyValueStore<String, Long> store = new MeteredTimestampedKeyValueStore<>(
+            inner,
+            "scope",
+            new MockTime(),
+            null,
+            null
+        );
+        replay(inner, context);
+        store.init(context, inner);
+
+        try {
+            store.put("key", ValueAndTimestamp.make(42L, 60000));
+        } catch (final StreamsException exception) {
+            if (exception.getCause() instanceof ClassCastException) {
+                fail("Serdes are not correctly set from processor context.");
+            }
+            throw exception;
+        }
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    public void shouldNotThrowExceptionIfSerdesCorrectlySetFromConstructorParameters() {
+        expect(context.keySerde()).andStubReturn((Serde) Serdes.String());
+        expect(context.valueSerde()).andStubReturn((Serde) Serdes.Long());
+        final MeteredTimestampedKeyValueStore<String, Long> store = new MeteredTimestampedKeyValueStore<>(
+            inner,
+            "scope",
+            new MockTime(),
+            Serdes.String(),
+            new ValueAndTimestampSerde<>(Serdes.Long())
+        );
+        replay(inner, context);
+        store.init(context, inner);
+
+        try {
+            store.put("key", ValueAndTimestamp.make(42L, 60000));
+        } catch (final StreamsException exception) {
+            if (exception.getCause() instanceof ClassCastException) {
+                fail("Serdes are not correctly set from constructor parameters.");
+            }
+            throw exception;
+        }
+    }
 }

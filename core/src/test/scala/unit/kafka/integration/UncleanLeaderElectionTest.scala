@@ -18,7 +18,7 @@
 package kafka.integration
 
 import org.apache.kafka.common.config.ConfigException
-import org.junit.{After, Before, Ignore, Test}
+import org.junit.{After, Before, Test}
 
 import scala.util.Random
 import scala.collection.JavaConverters._
@@ -113,7 +113,6 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  @Ignore // Should be re-enabled after KAFKA-3096 is fixed
   def testUncleanLeaderElectionDisabled(): Unit = {
     // unclean leader election is disabled by default
     startBrokers(Seq(configProps1, configProps2))
@@ -140,8 +139,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
   }
 
   @Test
-  @Ignore // Should be re-enabled after KAFKA-3096 is fixed
-  def testCleanLeaderElectionDisabledByTopicOverride(): Unit = {
+  def testUncleanLeaderElectionDisabledByTopicOverride(): Unit = {
     // enable unclean leader election globally, but disable for our specific test topic
     configProps1.put("unclean.leader.election.enable", "true")
     configProps2.put("unclean.leader.election.enable", "true")

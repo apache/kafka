@@ -29,6 +29,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
@@ -98,8 +99,7 @@ public class KStreamAggregationIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
     @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER =
-        new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     private static volatile AtomicInteger testNo = new AtomicInteger(0);
     private final MockTime mockTime = CLUSTER.time;
@@ -122,8 +122,7 @@ public class KStreamAggregationIntegrationTest {
         streamsConfiguration = new Properties();
         final String applicationId = "kgrouped-stream-test-" + testNo.incrementAndGet();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
-        streamsConfiguration
-            .put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath());
         streamsConfiguration.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
@@ -160,30 +159,35 @@ public class KStreamAggregationIntegrationTest {
 
         produceMessages(mockTime.milliseconds());
 
-        final List<KeyValue<String, String>> results = receiveMessages(
+        final List<KeyValueTimestamp<String, String>> results = receiveMessages(
             new StringDeserializer(),
             new StringDeserializer(),
             10);
 
         results.sort(KStreamAggregationIntegrationTest::compare);
 
-        assertThat(results, is(Arrays.asList(KeyValue.pair("A", "A"),
-            KeyValue.pair("A", "A:A"),
-            KeyValue.pair("B", "B"),
-            KeyValue.pair("B", "B:B"),
-            KeyValue.pair("C", "C"),
-            KeyValue.pair("C", "C:C"),
-            KeyValue.pair("D", "D"),
-            KeyValue.pair("D", "D:D"),
-            KeyValue.pair("E", "E"),
-            KeyValue.pair("E", "E:E"))));
+        assertThat(results, is(Arrays.asList(
+            new KeyValueTimestamp("A", "A", mockTime.milliseconds()),
+            new KeyValueTimestamp("A", "A:A", mockTime.milliseconds()),
+            new KeyValueTimestamp("B", "B", mockTime.milliseconds()),
+            new KeyValueTimestamp("B", "B:B", mockTime.milliseconds()),
+            new KeyValueTimestamp("C", "C", mockTime.milliseconds()),
+            new KeyValueTimestamp("C", "C:C", mockTime.milliseconds()),
+            new KeyValueTimestamp("D", "D", mockTime.milliseconds()),
+            new KeyValueTimestamp("D", "D:D", mockTime.milliseconds()),
+            new KeyValueTimestamp("E", "E", mockTime.milliseconds()),
+            new KeyValueTimestamp("E", "E:E", mockTime.milliseconds()))));
     }
 
-    private static <K extends Comparable, V extends Comparable> int compare(final KeyValue<K, V> o1,
-                                                                            final KeyValue<K, V> o2) {
-        final int keyComparison = o1.key.compareTo(o2.key);
+    private static <K extends Comparable, V extends Comparable> int compare(final KeyValueTimestamp<K, V> o1,
+                                                                            final KeyValueTimestamp<K, V> o2) {
+        final int keyComparison = o1.key().compareTo(o2.key());
         if (keyComparison == 0) {
-            return o1.value.compareTo(o2.value);
+            final int valueComparison = o1.value().compareTo(o2.value());
+            if (valueComparison == 0) {
+                return Long.compare(o1.timestamp(), o2.timestamp());
+            }
+            return valueComparison;
         }
         return keyComparison;
     }
@@ -206,7 +210,7 @@ public class KStreamAggregationIntegrationTest {
 
         startStreams();
 
-        final List<KeyValue<Windowed<String>, String>> windowedOutput = receiveMessages(
+        final List<KeyValueTimestamp<Windowed<String>, String>> windowedOutput = receiveMessages(
             new TimeWindowedDeserializer<>(),
             new StringDeserializer(),
             String.class,
@@ -218,44 +222,45 @@ public class KStreamAggregationIntegrationTest {
             new StringDeserializer(),
             String.class,
             15,
-            false);
+            true);
 
-        final Comparator<KeyValue<Windowed<String>, String>>
-            comparator =
-            Comparator.comparing((KeyValue<Windowed<String>, String> o) -> o.key.key()).thenComparing(o -> o.value);
+        final Comparator<KeyValueTimestamp<Windowed<String>, String>> comparator =
+            Comparator.comparing((KeyValueTimestamp<Windowed<String>, String> o) -> o.key().key())
+                .thenComparing(KeyValueTimestamp::value);
 
         windowedOutput.sort(comparator);
         final long firstBatchWindow = firstBatchTimestamp / 500 * 500;
         final long secondBatchWindow = secondBatchTimestamp / 500 * 500;
 
-        final List<KeyValue<Windowed<String>, String>> expectResult = Arrays.asList(
-                new KeyValue<>(new Windowed<>("A", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "A"),
-                new KeyValue<>(new Windowed<>("A", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "A"),
-                new KeyValue<>(new Windowed<>("A", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "A:A"),
-                new KeyValue<>(new Windowed<>("B", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "B"),
-                new KeyValue<>(new Windowed<>("B", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "B"),
-                new KeyValue<>(new Windowed<>("B", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "B:B"),
-                new KeyValue<>(new Windowed<>("C", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "C"),
-                new KeyValue<>(new Windowed<>("C", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "C"),
-                new KeyValue<>(new Windowed<>("C", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "C:C"),
-                new KeyValue<>(new Windowed<>("D", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "D"),
-                new KeyValue<>(new Windowed<>("D", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "D"),
-                new KeyValue<>(new Windowed<>("D", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "D:D"),
-                new KeyValue<>(new Windowed<>("E", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "E"),
-                new KeyValue<>(new Windowed<>("E", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "E"),
-                new KeyValue<>(new Windowed<>("E", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "E:E")
+        final List<KeyValueTimestamp<Windowed<String>, String>> expectResult = Arrays.asList(
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "A", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "A", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "A:A", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "B", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "B", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "B:B", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "C", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "C", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "C:C", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "D", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "D", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "D:D", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(firstBatchWindow, Long.MAX_VALUE)), "E", firstBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "E", secondBatchTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondBatchWindow, Long.MAX_VALUE)), "E:E", secondBatchTimestamp)
         );
         assertThat(windowedOutput, is(expectResult));
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
-        for (final KeyValue<Windowed<String>, String> eachRecord: expectResult) {
-            expectResultString.add(eachRecord.toString());
+        for (final KeyValueTimestamp<Windowed<String>, String> eachRecord: expectResult) {
+            expectResultString.add("CreateTime:" + eachRecord.timestamp() + ", "
+                + eachRecord.key() + ", " + eachRecord.value());
         }
 
         // check every message is contained in the expect result
         final String[] allRecords = resultFromConsoleConsumer.split("\n");
         for (final String record: allRecords) {
-            assertTrue(expectResultString.contains("KeyValue(" + record + ")"));
+            assertTrue(expectResultString.contains(record));
         }
     }
 
@@ -273,7 +278,7 @@ public class KStreamAggregationIntegrationTest {
 
         produceMessages(mockTime.milliseconds());
 
-        final List<KeyValue<String, Integer>> results = receiveMessages(
+        final List<KeyValueTimestamp<String, Integer>> results = receiveMessages(
             new StringDeserializer(),
             new IntegerDeserializer(),
             10);
@@ -281,16 +286,16 @@ public class KStreamAggregationIntegrationTest {
         results.sort(KStreamAggregationIntegrationTest::compare);
 
         assertThat(results, is(Arrays.asList(
-            KeyValue.pair("A", 1),
-            KeyValue.pair("A", 2),
-            KeyValue.pair("B", 1),
-            KeyValue.pair("B", 2),
-            KeyValue.pair("C", 1),
-            KeyValue.pair("C", 2),
-            KeyValue.pair("D", 1),
-            KeyValue.pair("D", 2),
-            KeyValue.pair("E", 1),
-            KeyValue.pair("E", 2)
+            new KeyValueTimestamp("A", 1, mockTime.milliseconds()),
+            new KeyValueTimestamp("A", 2, mockTime.milliseconds()),
+            new KeyValueTimestamp("B", 1, mockTime.milliseconds()),
+            new KeyValueTimestamp("B", 2, mockTime.milliseconds()),
+            new KeyValueTimestamp("C", 1, mockTime.milliseconds()),
+            new KeyValueTimestamp("C", 2, mockTime.milliseconds()),
+            new KeyValueTimestamp("D", 1, mockTime.milliseconds()),
+            new KeyValueTimestamp("D", 2, mockTime.milliseconds()),
+            new KeyValueTimestamp("E", 1, mockTime.milliseconds()),
+            new KeyValueTimestamp("E", 2, mockTime.milliseconds())
         )));
     }
 
@@ -315,7 +320,7 @@ public class KStreamAggregationIntegrationTest {
 
         startStreams();
 
-        final List<KeyValue<Windowed<String>, KeyValue<Integer, Long>>> windowedMessages = receiveMessagesWithTimestamp(
+        final List<KeyValueTimestamp<Windowed<String>, Integer>> windowedMessages = receiveMessagesWithTimestamp(
             new TimeWindowedDeserializer<>(),
             new IntegerDeserializer(),
             String.class,
@@ -329,37 +334,36 @@ public class KStreamAggregationIntegrationTest {
             15,
             true);
 
-        final Comparator<KeyValue<Windowed<String>, KeyValue<Integer, Long>>>
-            comparator =
-            Comparator.comparing((KeyValue<Windowed<String>, KeyValue<Integer, Long>> o) -> o.key.key()).thenComparingInt(o -> o.value.key);
-
+        final Comparator<KeyValueTimestamp<Windowed<String>, Integer>> comparator =
+            Comparator.comparing((KeyValueTimestamp<Windowed<String>, Integer> o) -> o.key().key())
+                .thenComparingInt(KeyValueTimestamp::value);
         windowedMessages.sort(comparator);
 
         final long firstWindow = firstTimestamp / 500 * 500;
         final long secondWindow = secondTimestamp / 500 * 500;
 
-        final List<KeyValue<Windowed<String>, KeyValue<Integer, Long>>> expectResult = Arrays.asList(
-                new KeyValue<>(new Windowed<>("A", new TimeWindow(firstWindow, Long.MAX_VALUE)), KeyValue.pair(1, firstTimestamp)),
-                new KeyValue<>(new Windowed<>("A", new TimeWindow(secondWindow, Long.MAX_VALUE)), KeyValue.pair(1, secondTimestamp)),
-                new KeyValue<>(new Windowed<>("A", new TimeWindow(secondWindow, Long.MAX_VALUE)), KeyValue.pair(2, secondTimestamp)),
-                new KeyValue<>(new Windowed<>("B", new TimeWindow(firstWindow, Long.MAX_VALUE)), KeyValue.pair(1, firstTimestamp)),
-                new KeyValue<>(new Windowed<>("B", new TimeWindow(secondWindow, Long.MAX_VALUE)), KeyValue.pair(1, secondTimestamp)),
-                new KeyValue<>(new Windowed<>("B", new TimeWindow(secondWindow, Long.MAX_VALUE)), KeyValue.pair(2, secondTimestamp)),
-                new KeyValue<>(new Windowed<>("C", new TimeWindow(firstWindow, Long.MAX_VALUE)), KeyValue.pair(1, firstTimestamp)),
-                new KeyValue<>(new Windowed<>("C", new TimeWindow(secondWindow, Long.MAX_VALUE)), KeyValue.pair(1, secondTimestamp)),
-                new KeyValue<>(new Windowed<>("C", new TimeWindow(secondWindow, Long.MAX_VALUE)), KeyValue.pair(2, secondTimestamp)),
-                new KeyValue<>(new Windowed<>("D", new TimeWindow(firstWindow, Long.MAX_VALUE)), KeyValue.pair(1, firstTimestamp)),
-                new KeyValue<>(new Windowed<>("D", new TimeWindow(secondWindow, Long.MAX_VALUE)), KeyValue.pair(1, secondTimestamp)),
-                new KeyValue<>(new Windowed<>("D", new TimeWindow(secondWindow, Long.MAX_VALUE)), KeyValue.pair(2, secondTimestamp)),
-                new KeyValue<>(new Windowed<>("E", new TimeWindow(firstWindow, Long.MAX_VALUE)), KeyValue.pair(1, firstTimestamp)),
-                new KeyValue<>(new Windowed<>("E", new TimeWindow(secondWindow, Long.MAX_VALUE)), KeyValue.pair(1, secondTimestamp)),
-                new KeyValue<>(new Windowed<>("E", new TimeWindow(secondWindow, Long.MAX_VALUE)), KeyValue.pair(2, secondTimestamp)));
+        final List<KeyValueTimestamp<Windowed<String>, Integer>> expectResult = Arrays.asList(
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("A", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("B", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("C", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("D", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(firstWindow, Long.MAX_VALUE)), 1, firstTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondWindow, Long.MAX_VALUE)), 1, secondTimestamp),
+                new KeyValueTimestamp<>(new Windowed<>("E", new TimeWindow(secondWindow, Long.MAX_VALUE)), 2, secondTimestamp));
 
         assertThat(windowedMessages, is(expectResult));
 
         final Set<String> expectResultString = new HashSet<>(expectResult.size());
-        for (final KeyValue<Windowed<String>, KeyValue<Integer, Long>> eachRecord: expectResult) {
-            expectResultString.add("CreateTime:" + eachRecord.value.value + ", " + eachRecord.key.toString() + ", " + eachRecord.value.key);
+        for (final KeyValueTimestamp<Windowed<String>, Integer> eachRecord: expectResult) {
+            expectResultString.add("CreateTime:" + eachRecord.timestamp() + ", " + eachRecord.key() + ", " + eachRecord.value());
         }
 
         // check every message is contained in the expect result
@@ -375,23 +379,23 @@ public class KStreamAggregationIntegrationTest {
 
         produceMessages(mockTime.milliseconds());
 
-        final List<KeyValue<String, Long>> results = receiveMessages(
+        final List<KeyValueTimestamp<String, Long>> results = receiveMessages(
             new StringDeserializer(),
             new LongDeserializer(),
             10);
         results.sort(KStreamAggregationIntegrationTest::compare);
 
         assertThat(results, is(Arrays.asList(
-            KeyValue.pair("A", 1L),
-            KeyValue.pair("A", 2L),
-            KeyValue.pair("B", 1L),
-            KeyValue.pair("B", 2L),
-            KeyValue.pair("C", 1L),
-            KeyValue.pair("C", 2L),
-            KeyValue.pair("D", 1L),
-            KeyValue.pair("D", 2L),
-            KeyValue.pair("E", 1L),
-            KeyValue.pair("E", 2L)
+            new KeyValueTimestamp("A", 1L, mockTime.milliseconds()),
+            new KeyValueTimestamp("A", 2L, mockTime.milliseconds()),
+            new KeyValueTimestamp("B", 1L, mockTime.milliseconds()),
+            new KeyValueTimestamp("B", 2L, mockTime.milliseconds()),
+            new KeyValueTimestamp("C", 1L, mockTime.milliseconds()),
+            new KeyValueTimestamp("C", 2L, mockTime.milliseconds()),
+            new KeyValueTimestamp("D", 1L, mockTime.milliseconds()),
+            new KeyValueTimestamp("D", 2L, mockTime.milliseconds()),
+            new KeyValueTimestamp("E", 1L, mockTime.milliseconds()),
+            new KeyValueTimestamp("E", 2L, mockTime.milliseconds())
         )));
     }
 
@@ -430,7 +434,7 @@ public class KStreamAggregationIntegrationTest {
 
         startStreams();
 
-        final List<KeyValue<String, Long>> results = receiveMessages(
+        final List<KeyValueTimestamp<String, Long>> results = receiveMessages(
             new StringDeserializer(),
             new LongDeserializer(),
             10);
@@ -438,18 +442,17 @@ public class KStreamAggregationIntegrationTest {
 
         final long window = timestamp / 500 * 500;
         assertThat(results, is(Arrays.asList(
-            KeyValue.pair("1@" + window, 1L),
-            KeyValue.pair("1@" + window, 2L),
-            KeyValue.pair("2@" + window, 1L),
-            KeyValue.pair("2@" + window, 2L),
-            KeyValue.pair("3@" + window, 1L),
-            KeyValue.pair("3@" + window, 2L),
-            KeyValue.pair("4@" + window, 1L),
-            KeyValue.pair("4@" + window, 2L),
-            KeyValue.pair("5@" + window, 1L),
-            KeyValue.pair("5@" + window, 2L)
+            new KeyValueTimestamp("1@" + window, 1L, timestamp),
+            new KeyValueTimestamp("1@" + window, 2L, timestamp),
+            new KeyValueTimestamp("2@" + window, 1L, timestamp),
+            new KeyValueTimestamp("2@" + window, 2L, timestamp),
+            new KeyValueTimestamp("3@" + window, 1L, timestamp),
+            new KeyValueTimestamp("3@" + window, 2L, timestamp),
+            new KeyValueTimestamp("4@" + window, 1L, timestamp),
+            new KeyValueTimestamp("4@" + window, 2L, timestamp),
+            new KeyValueTimestamp("5@" + window, 1L, timestamp),
+            new KeyValueTimestamp("5@" + window, 2L, timestamp)
         )));
-
     }
 
     @Test
@@ -796,17 +799,17 @@ public class KStreamAggregationIntegrationTest {
         kafkaStreams.start();
     }
 
-    private <K, V> List<KeyValue<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
-                                                                        final Deserializer<V> valueDeserializer,
-                                                                        final int numMessages)
+    private <K, V> List<KeyValueTimestamp<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
+                                                                 final Deserializer<V> valueDeserializer,
+                                                                 final int numMessages)
         throws InterruptedException {
         return receiveMessages(keyDeserializer, valueDeserializer, null, numMessages);
     }
 
-    private <K, V> List<KeyValue<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
-                                                        final Deserializer<V> valueDeserializer,
-                                                        final Class innerClass,
-                                                        final int numMessages) throws InterruptedException {
+    private <K, V> List<KeyValueTimestamp<K, V>> receiveMessages(final Deserializer<K> keyDeserializer,
+                                                                 final Deserializer<V> valueDeserializer,
+                                                                 final Class innerClass,
+                                                                 final int numMessages) throws InterruptedException {
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kgroupedstream-test-" + testNo);
@@ -817,17 +820,17 @@ public class KStreamAggregationIntegrationTest {
             consumerProperties.setProperty(StreamsConfig.DEFAULT_WINDOWED_KEY_SERDE_INNER_CLASS,
                     Serdes.serdeFrom(innerClass).getClass().getName());
         }
-        return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
+        return IntegrationTestUtils.waitUntilMinKeyValueWithTimestampRecordsReceived(
                 consumerProperties,
                 outputTopic,
                 numMessages,
                 60 * 1000);
     }
 
-    private <K, V> List<KeyValue<K, KeyValue<V, Long>>> receiveMessagesWithTimestamp(final Deserializer<K> keyDeserializer,
-                                                                                     final Deserializer<V> valueDeserializer,
-                                                                                     final Class innerClass,
-                                                                                     final int numMessages) throws InterruptedException {
+    private <K, V> List<KeyValueTimestamp<K, V>> receiveMessagesWithTimestamp(final Deserializer<K> keyDeserializer,
+                                                                                              final Deserializer<V> valueDeserializer,
+                                                                                              final Class innerClass,
+                                                                                              final int numMessages) throws InterruptedException {
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "kgroupedstream-test-" + testNo);

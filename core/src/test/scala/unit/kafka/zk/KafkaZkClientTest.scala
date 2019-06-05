@@ -648,19 +648,19 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
     val emptyConfig = LogConfig(Collections.emptyMap())
     assertEquals("Non existent config, no defaults",
       (Map(topic1 -> emptyConfig), Map.empty),
-      zkClient.getLogConfigs(Seq(topic1), Collections.emptyMap()))
+      zkClient.getLogConfigs(Set(topic1), Collections.emptyMap()))
 
     val logProps2 = createLogProps(2048)
 
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
     assertEquals("One existing and one non-existent topic",
       (Map(topic1 -> LogConfig(logProps), topic2 -> emptyConfig), Map.empty),
-      zkClient.getLogConfigs(Seq(topic1, topic2), Collections.emptyMap()))
+      zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()))
 
     zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic2, logProps2)
     assertEquals("Two existing topics",
       (Map(topic1 -> LogConfig(logProps), topic2 -> LogConfig(logProps2)), Map.empty),
-      zkClient.getLogConfigs(Seq(topic1, topic2), Collections.emptyMap()))
+      zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()))
 
     val logProps1WithMoreValues = createLogProps(1024)
     logProps1WithMoreValues.put(LogConfig.SegmentJitterMsProp, "100")
@@ -668,7 +668,7 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
 
     assertEquals("Config with defaults",
       (Map(topic1 -> LogConfig(logProps1WithMoreValues)), Map.empty),
-      zkClient.getLogConfigs(Seq(topic1),
+      zkClient.getLogConfigs(Set(topic1),
         Map[String, AnyRef](LogConfig.SegmentJitterMsProp -> "100", LogConfig.SegmentBytesProp -> "128").asJava))
   }
 
@@ -794,14 +794,20 @@ class KafkaZkClientTest extends ZooKeeperTestHarness {
                   expectedPartitionsToRetry: Seq[TopicPartition],
                   expectedFailedPartitions: Map[TopicPartition, (Class[_], String)],
                   actualUpdateLeaderAndIsrResult: UpdateLeaderAndIsrResult): Unit = {
-    val failedPartitionsExcerpt =
-      actualUpdateLeaderAndIsrResult.failedPartitions.mapValues(e => (e.getClass, e.getMessage))
+    val failedPartitionsExcerpt = mutable.Map.empty[TopicPartition, (Class[_], String)]
+    val successfulPartitions = mutable.Map.empty[TopicPartition, LeaderAndIsr]
+
+    actualUpdateLeaderAndIsrResult.finishedPartitions.foreach {
+      case (partition, Left(e)) => failedPartitionsExcerpt += partition -> (e.getClass, e.getMessage)
+      case (partition, Right(leaderAndIsr)) => successfulPartitions += partition -> leaderAndIsr
+    }
+
     assertEquals("Permanently failed updates do not match expected",
       expectedFailedPartitions, failedPartitionsExcerpt)
     assertEquals("Retriable updates (due to BADVERSION) do not match expected",
       expectedPartitionsToRetry, actualUpdateLeaderAndIsrResult.partitionsToRetry)
     assertEquals("Successful updates do not match expected",
-      expectedSuccessfulPartitions, actualUpdateLeaderAndIsrResult.successfulPartitions)
+      expectedSuccessfulPartitions, successfulPartitions)
   }
 
   @Test

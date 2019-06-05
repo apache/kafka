@@ -45,6 +45,10 @@ public class DescribeClusterOptions extends AbstractOptions<DescribeClusterOptio
         return this;
     }
 
+    /**
+     * Specify if authorized operations should be included in the response.  Note that some
+     * older brokers cannot not supply this information even if it is requested.
+     */
     public boolean includeAuthorizedOperations() {
         return includeAuthorizedOperations;
     }

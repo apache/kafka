@@ -495,32 +495,6 @@ public class ConsumerCoordinatorTest {
     }
 
     @Test
-    public void testInvalidCoordinatorAssignment() {
-        final String consumerId = "invalid_assignment";
-
-        subscriptions.subscribe(singleton(topic1), rebalanceListener);
-
-        client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
-        coordinator.ensureCoordinatorReady(time.timer(Long.MAX_VALUE));
-
-        // normal join group
-        Map<String, List<String>> memberSubscriptions = singletonMap(consumerId, singletonList(topic2));
-        partitionAssignor.prepare(singletonMap(consumerId, singletonList(t2p)));
-
-        client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data.memberId().equals(consumerId) &&
-                        sync.data.generationId() == 1 &&
-                        sync.groupAssignments().containsKey(consumerId);
-            }
-        }, syncGroupResponse(singletonList(t2p), Errors.NONE));
-        assertThrows(IllegalStateException.class, () -> coordinator.poll(time.timer(Long.MAX_VALUE)));
-    }
-
-    @Test
     public void testPatternJoinGroupLeader() {
         final String consumerId = "leader";
 
@@ -2219,7 +2193,8 @@ public class ConsumerCoordinatorTest {
                 retryBackoffMs,
                 autoCommitEnabled,
                 autoCommitIntervalMs,
-                null
+                null,
+                !groupInstanceId.isPresent()
         );
     }
 
