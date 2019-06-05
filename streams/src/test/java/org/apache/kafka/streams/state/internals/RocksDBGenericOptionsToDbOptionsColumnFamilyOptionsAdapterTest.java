@@ -20,6 +20,9 @@ import org.easymock.EasyMockRunner;
 import org.easymock.Mock;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.rocksdb.AbstractCompactionFilter;
+import org.rocksdb.AbstractCompactionFilter.Context;
+import org.rocksdb.AbstractCompactionFilterFactory;
 import org.rocksdb.AccessHint;
 import org.rocksdb.BuiltinComparator;
 import org.rocksdb.ColumnFamilyOptions;
@@ -35,11 +38,13 @@ import org.rocksdb.Logger;
 import org.rocksdb.Options;
 import org.rocksdb.PlainTableConfig;
 import org.rocksdb.RateLimiter;
+import org.rocksdb.RemoveEmptyValueCompactionFilter;
 import org.rocksdb.RocksDB;
 import org.rocksdb.SstFileManager;
 import org.rocksdb.StringAppendOperator;
 import org.rocksdb.VectorMemTableConfig;
 import org.rocksdb.WALRecoveryMode;
+import org.rocksdb.WriteBufferManager;
 import org.rocksdb.util.BytewiseComparator;
 
 import java.lang.reflect.InvocationTargetException;
@@ -167,6 +172,9 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                 case "org.rocksdb.WALRecoveryMode":
                     parameters[i] = WALRecoveryMode.AbsoluteConsistency;
                     break;
+                case "org.rocksdb.WriteBufferManager":
+                    parameters[i] = new WriteBufferManager(1L, new LRUCache(1L));
+                    break;
                 default:
                     parameters[i] = parameterTypes[i].newInstance();
             }
@@ -228,6 +236,23 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                     break;
                 case "java.util.List":
                     parameters[i] = new ArrayList<>();
+                    break;
+                case "org.rocksdb.AbstractCompactionFilter":
+                    parameters[i] = new RemoveEmptyValueCompactionFilter();
+                    break;
+                case "org.rocksdb.AbstractCompactionFilterFactory":
+                    parameters[i] = new AbstractCompactionFilterFactory() {
+
+                        @Override
+                        public AbstractCompactionFilter<?> createCompactionFilter(final Context context) {
+                            return null;
+                        }
+
+                        @Override
+                        public String name() {
+                            return "AbstractCompactionFilterFactory";
+                        }
+                    };
                     break;
                 case "org.rocksdb.AbstractComparator":
                     parameters[i] = new BytewiseComparator(new ComparatorOptions());

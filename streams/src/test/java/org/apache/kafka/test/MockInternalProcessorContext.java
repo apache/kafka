@@ -16,15 +16,100 @@
  */
 package org.apache.kafka.test;
 
+import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.processor.MockProcessorContext;
+import org.apache.kafka.streams.processor.StateRestoreCallback;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StreamPartitioner;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
+import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.io.File;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
+import java.util.Properties;
+
+import static java.util.Collections.unmodifiableList;
+
 public class MockInternalProcessorContext extends MockProcessorContext implements InternalProcessorContext {
+    public static final class MockRecordCollector implements RecordCollector {
+        private final List<ProducerRecord<byte[], byte[]>> collected = new LinkedList<>();
+
+        @Override
+        public <K, V> void send(final String topic,
+                                final K key,
+                                final V value,
+                                final Headers headers,
+                                final Integer partition,
+                                final Long timestamp,
+                                final Serializer<K> keySerializer,
+                                final Serializer<V> valueSerializer) {
+            collected.add(new ProducerRecord<>(topic,
+                                               partition,
+                                               timestamp,
+                                               keySerializer.serialize(topic, key),
+                                               valueSerializer.serialize(topic, value),
+                                               headers));
+        }
+
+        @Override
+        public <K, V> void send(final String topic,
+                                final K key,
+                                final V value,
+                                final Headers headers,
+                                final Long timestamp,
+                                final Serializer<K> keySerializer,
+                                final Serializer<V> valueSerializer,
+                                final StreamPartitioner<? super K, ? super V> partitioner) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void init(final Producer<byte[], byte[]> producer) {
+
+        }
+
+        @Override
+        public void flush() {
+
+        }
+
+        @Override
+        public void close() {
+
+        }
+
+        @Override
+        public Map<TopicPartition, Long> offsets() {
+            return null;
+        }
+
+        public List<ProducerRecord<byte[], byte[]>> collected() {
+            return unmodifiableList(collected);
+        }
+    }
+
+    private final Map<String, StateRestoreCallback> restoreCallbacks = new LinkedHashMap<>();
     private ProcessorNode currentNode;
+    private RecordCollector recordCollector;
+
+    public MockInternalProcessorContext() {
+    }
+
+    public MockInternalProcessorContext(final Properties config, final TaskId taskId, final File stateDir) {
+        super(config, taskId, stateDir);
+    }
 
     @Override
     public StreamsMetricsImpl metrics() {
@@ -67,4 +152,23 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
 
     @Override
     public void uninitialize() {}
+
+    @Override
+    public RecordCollector recordCollector() {
+        return recordCollector;
+    }
+
+    public void setRecordCollector(final RecordCollector recordCollector) {
+        this.recordCollector = recordCollector;
+    }
+
+    @Override
+    public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
+        restoreCallbacks.put(store.name(), stateRestoreCallback);
+        super.register(store, stateRestoreCallback);
+    }
+
+    public StateRestoreCallback stateRestoreCallback(final String storeName) {
+        return restoreCallbacks.get(storeName);
+    }
 }

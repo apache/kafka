@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.ClientDnsLookup;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -53,6 +52,16 @@ public class ConsumerConfig extends AbstractConfig {
      */
     public static final String GROUP_ID_CONFIG = "group.id";
     private static final String GROUP_ID_DOC = "A unique string that identifies the consumer group this consumer belongs to. This property is required if the consumer uses either the group management functionality by using <code>subscribe(topic)</code> or the Kafka-based offset management strategy.";
+
+    /**
+     * <code>group.instance.id</code>
+     */
+    public static final String GROUP_INSTANCE_ID_CONFIG = "group.instance.id";
+    private static final String GROUP_INSTANCE_ID_DOC = "A unique identifier of the consumer instance provided by end user. " +
+            "Only non-empty strings are permitted. If set, the consumer is treated as a static member, " +
+            "which means that only one instance with this ID is allowed in the consumer group at any time. " +
+            "This can be used in combination with a larger session timeout to avoid group rebalances caused by transient unavailability " +
+            "(e.g. process restarts). If not set, the consumer will join the group as a dynamic member, which is the traditional behavior.";
 
     /** <code>max.poll.records</code> */
     public static final String MAX_POLL_RECORDS_CONFIG = "max.poll.records";
@@ -168,6 +177,11 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
 
     /**
+     * <code>client.rack</code>
+     */
+    public static final String CLIENT_RACK_CONFIG = CommonClientConfigs.CLIENT_RACK_CONFIG;
+
+    /**
      * <code>reconnect.backoff.ms</code>
      */
     public static final String RECONNECT_BACKOFF_MS_CONFIG = CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG;
@@ -263,15 +277,14 @@ public class ConsumerConfig extends AbstractConfig {
 
     public static final String DEFAULT_ISOLATION_LEVEL = IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT);
 
-    /** <code>rebalance.protocol</code> */
-    public static final String REBALANCE_PROTOCOL_CONFIG = "rebalance.protocol";
-    public static final String REBALANCE_PROTOCOL_DOC = "<p>Controls how consumer clients will participate in a rebalance. If set to <code>eager</code>, consumer will always revoke all its assigned partitions" +
-        " before sending the join group request. If set to <code>cooperative</code>, consumer will only revoke partitions as required in the previously received assignment information and then join group with the rest of the owned partitions" +
-        " encoded in the subscription information</p> <p>When upgrading consumer from versions older than 2.3 to versions equal or newer than 2.3, users should keep this config as <code>eager</code> during the first rolling bounce to upgrade" +
-        " to the newer version, and only consider changing this config to <code>cooperative</code> after that with a second rolling bounce</p>";
-
-    public static final String DEFAULT_REBALANCE_PROTOCOL = ConsumerCoordinator.RebalanceProtocol.EAGER.toString().toLowerCase(Locale.ROOT);
-
+    /** <code>allow.auto.create.topics</code> */
+    public static final String ALLOW_AUTO_CREATE_TOPICS_CONFIG = "allow.auto.create.topics";
+    private static final String ALLOW_AUTO_CREATE_TOPICS_DOC = "Allow automatic topic creation on the broker when" +
+            " subscribing to or assigning a topic. A topic being subscribed to will be automatically created only if the" +
+            " broker allows for it using `auto.create.topics.enable` broker configuration. This configuration must" +
+            " be set to `false` when using brokers older than 0.11.0";
+    public static final boolean DEFAULT_ALLOW_AUTO_CREATE_TOPICS = true;
+    
     static {
         CONFIG = new ConfigDef().define(BOOTSTRAP_SERVERS_CONFIG,
                                         Type.LIST,
@@ -288,6 +301,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         CommonClientConfigs.CLIENT_DNS_LOOKUP_DOC)
                                 .define(GROUP_ID_CONFIG, Type.STRING, null, Importance.HIGH, GROUP_ID_DOC)
+                                .define(GROUP_INSTANCE_ID_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        Importance.MEDIUM,
+                                        GROUP_INSTANCE_ID_DOC)
                                 .define(SESSION_TIMEOUT_MS_CONFIG,
                                         Type.INT,
                                         10000,
@@ -326,6 +344,11 @@ public class ConsumerConfig extends AbstractConfig {
                                         "",
                                         Importance.LOW,
                                         CommonClientConfigs.CLIENT_ID_DOC)
+                                .define(CLIENT_RACK_CONFIG,
+                                        Type.STRING,
+                                        "",
+                                        Importance.LOW,
+                                        CommonClientConfigs.CLIENT_RACK_DOC)
                                 .define(MAX_PARTITION_FETCH_BYTES_CONFIG,
                                         Type.INT,
                                         DEFAULT_MAX_PARTITION_FETCH_BYTES,
@@ -465,21 +488,20 @@ public class ConsumerConfig extends AbstractConfig {
                                         Importance.MEDIUM,
                                         EXCLUDE_INTERNAL_TOPICS_DOC)
                                 .defineInternal(LEAVE_GROUP_ON_CLOSE_CONFIG,
-                                                Type.BOOLEAN,
-                                                true,
-                                                Importance.LOW)
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.LOW)
                                 .define(ISOLATION_LEVEL_CONFIG,
                                         Type.STRING,
                                         DEFAULT_ISOLATION_LEVEL,
                                         in(IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT), IsolationLevel.READ_UNCOMMITTED.toString().toLowerCase(Locale.ROOT)),
                                         Importance.MEDIUM,
                                         ISOLATION_LEVEL_DOC)
-                                .define(REBALANCE_PROTOCOL_CONFIG,
-                                        Type.STRING,
-                                        DEFAULT_REBALANCE_PROTOCOL,
-                                        in(ConsumerCoordinator.RebalanceProtocol.EAGER.toString().toLowerCase(Locale.ROOT), ConsumerCoordinator.RebalanceProtocol.COOPERATIVE.toString().toLowerCase(Locale.ROOT)),
+                                .define(ALLOW_AUTO_CREATE_TOPICS_CONFIG,
+                                        Type.BOOLEAN,
+                                        DEFAULT_ALLOW_AUTO_CREATE_TOPICS,
                                         Importance.MEDIUM,
-                                        REBALANCE_PROTOCOL_DOC)
+                                        ALLOW_AUTO_CREATE_TOPICS_DOC)
                                 // security support
                                 .define(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
                                         Type.STRING,
@@ -488,7 +510,6 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.SECURITY_PROTOCOL_DOC)
                                 .withClientSslSupport()
                                 .withClientSaslSupport();
-
     }
 
     @Override
@@ -533,6 +554,10 @@ public class ConsumerConfig extends AbstractConfig {
 
     public static Set<String> configNames() {
         return CONFIG.names();
+    }
+
+    public static ConfigDef configDef() {
+        return  new ConfigDef(CONFIG);
     }
 
     public static void main(String[] args) {

@@ -30,7 +30,7 @@ import org.junit.{After, Before, Test}
 import scala.collection.JavaConverters._
 
 class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslSetup {
-  override val serverCount = 1
+  override val brokerCount = 1
   this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[SimpleAclAuthorizer].getName)
 

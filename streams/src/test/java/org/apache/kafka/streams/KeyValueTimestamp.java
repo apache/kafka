@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams;
 
+import java.util.Objects;
+
 public class KeyValueTimestamp<K, V> {
     private final K key;
     private final V value;
@@ -42,5 +44,20 @@ public class KeyValueTimestamp<K, V> {
     @Override
     public String toString() {
         return "KeyValueTimestamp{key=" + key + ", value=" + value + ", timestamp=" + timestamp + '}';
+    }
+
+    @Override
+    public boolean equals(final Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        final KeyValueTimestamp<?, ?> that = (KeyValueTimestamp<?, ?>) o;
+        return timestamp == that.timestamp &&
+            Objects.equals(key, that.key) &&
+            Objects.equals(value, that.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(key, value, timestamp);
     }
 }

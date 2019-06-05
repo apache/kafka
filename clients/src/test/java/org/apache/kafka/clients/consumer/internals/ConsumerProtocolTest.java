@@ -29,21 +29,18 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSUMER_PROTOCOL_HEADER_SCHEMA;
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.OWNED_PARTITIONS_KEY_NAME;
-import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.REVOKED_PARTITIONS_KEY_NAME;
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.TOPICS_KEY_NAME;
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.TOPIC_ASSIGNMENT_V0;
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.TOPIC_PARTITIONS_KEY_NAME;
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.USER_DATA_KEY_NAME;
 import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.VERSION_KEY_NAME;
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
+import static org.apache.kafka.test.TestUtils.toSet;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
@@ -73,17 +70,17 @@ public class ConsumerProtocolTest {
 
     @Test
     public void deserializeOldSubscriptionVersion() {
-        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"));
-        ByteBuffer buffer = ConsumerProtocol.serializeSubscriptionV0(subscription);
+        Subscription subscription = new Subscription((short) 0, Arrays.asList("foo", "bar"), null);
+        ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
         Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
         assertEquals(parsedSubscription.topics(), parsedSubscription.topics());
-        assertEquals(0, parsedSubscription.userData().limit());
+        assertNull(parsedSubscription.userData());
         assertTrue(parsedSubscription.ownedPartitions().isEmpty());
     }
 
     @Test
-    public void deserializeNewSubscriptionVersion() {
-        Subscription subscription = new Subscription(Arrays.asList("foo", "bar"), null, Collections.singletonList(tp2));
+    public void deserializeNewSubscriptionWithOldVersion() {
+        Subscription subscription = new Subscription((short) 1, Arrays.asList("foo", "bar"), null, Collections.singletonList(tp2));
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
         // ignore the version assuming it is the old byte code, as it will blindly deserialize as V0
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
@@ -148,25 +145,23 @@ public class ConsumerProtocolTest {
     @Test
     public void deserializeOldAssignmentVersion() {
         List<TopicPartition> partitions = Arrays.asList(tp1, tp2);
-        ByteBuffer buffer = ConsumerProtocol.serializeAssignmentV0(new Assignment(partitions));
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment((short) 0, partitions, null));
         Assignment parsedAssignment = ConsumerProtocol.deserializeAssignment(buffer);
         assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
-        assertEquals(0, parsedAssignment.userData().limit());
-        assertTrue(parsedAssignment.revokedPartitions().isEmpty());
+        assertNull(parsedAssignment.userData());
         assertEquals(Errors.NONE, parsedAssignment.error());
     }
 
     @Test
-    public void deserializeNewAssignmentVersion() {
+    public void deserializeNewAssignmentWithOldVersion() {
         List<TopicPartition> partitions = Collections.singletonList(tp1);
-        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment(partitions, null, Collections.singletonList(tp2), Errors.NEED_REJOIN));
+        ByteBuffer buffer = ConsumerProtocol.serializeAssignment(new Assignment((short) 1, partitions, null, Errors.NEED_REJOIN));
         // ignore the version assuming it is the old byte code, as it will blindly deserialize as 0
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         header.getShort(VERSION_KEY_NAME);
         Assignment parsedAssignment = ConsumerProtocol.deserializeAssignmentV0(buffer);
         assertEquals(toSet(partitions), toSet(parsedAssignment.partitions()));
         assertNull(parsedAssignment.userData());
-        assertTrue(parsedAssignment.revokedPartitions().isEmpty());
         assertEquals(Errors.NONE, parsedAssignment.error());
     }
 
@@ -178,7 +173,6 @@ public class ConsumerProtocolTest {
         Schema assignmentSchemaV100 = new Schema(
                 new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
                 new Field(USER_DATA_KEY_NAME, Type.BYTES),
-                new Field(REVOKED_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
                 ERROR_CODE,
                 new Field("foo", Type.STRING));
 
@@ -188,10 +182,6 @@ public class ConsumerProtocolTest {
                         .set(ConsumerProtocol.TOPIC_KEY_NAME, tp1.topic())
                         .set(ConsumerProtocol.PARTITIONS_KEY_NAME, new Object[]{tp1.partition()})});
         assignmentV100.set(USER_DATA_KEY_NAME, ByteBuffer.wrap(new byte[0]));
-        assignmentV100.set(REVOKED_PARTITIONS_KEY_NAME,
-            new Object[]{new Struct(TOPIC_ASSIGNMENT_V0)
-                .set(ConsumerProtocol.TOPIC_KEY_NAME, tp2.topic())
-                .set(ConsumerProtocol.PARTITIONS_KEY_NAME, new Object[]{tp2.partition()})});
         assignmentV100.set(ERROR_CODE.name, Errors.NEED_REJOIN.code());
         assignmentV100.set("foo", "bar");
 
@@ -206,11 +196,6 @@ public class ConsumerProtocolTest {
 
         PartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(buffer);
         assertEquals(toSet(Collections.singletonList(tp1)), toSet(assignment.partitions()));
-        assertEquals(toSet(Collections.singletonList(tp2)), toSet(assignment.revokedPartitions()));
         assertEquals(Errors.NEED_REJOIN, assignment.error());
-    }
-
-    private static <T> Set<T> toSet(Collection<T> collection) {
-        return new HashSet<>(collection);
     }
 }

@@ -257,6 +257,7 @@ class FetchRequestTest extends BaseRequestTest {
     val batchSize = 4 * msgValueLen
     val producer = TestUtils.createProducer(TestUtils.getBrokerListStrFromServers(servers),
       lingerMs = Int.MaxValue,
+      deliveryTimeoutMs = Int.MaxValue,
       batchSize = batchSize,
       keySerializer = new StringSerializer,
       valueSerializer = new ByteArraySerializer)

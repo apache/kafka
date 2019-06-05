@@ -33,7 +33,7 @@ import scala.collection.JavaConverters._
 
 abstract class BaseQuotaTest extends IntegrationTestHarness {
 
-  override val serverCount = 2
+  override val brokerCount = 2
 
   protected def producerClientId = "QuotasTestProducer-1"
   protected def consumerClientId = "QuotasTestConsumer-1"
@@ -70,7 +70,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     super.setUp()
 
     val numPartitions = 1
-    val leaders = createTopic(topic1, numPartitions, serverCount)
+    val leaders = createTopic(topic1, numPartitions, brokerCount)
     leaderNode = if (leaders(0) == servers.head.config.brokerId) servers.head else servers(1)
     followerNode = if (leaders(0) != servers.head.config.brokerId) servers.head else servers(1)
     quotaTestClients = createQuotaTestClients(topic1, leaderNode)

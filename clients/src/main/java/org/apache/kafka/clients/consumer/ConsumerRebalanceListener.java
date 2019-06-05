@@ -145,7 +145,7 @@ public interface ConsumerRebalanceListener {
      * @throws org.apache.kafka.common.errors.WakeupException If raised from a nested call to {@link KafkaConsumer}
      * @throws org.apache.kafka.common.errors.InterruptException If raised from a nested call to {@link KafkaConsumer}
      */
-    default void onPartitionsEmigrated(Collection<TopicPartition> partitions) {
+    default void onPartitionsLost(Collection<TopicPartition> partitions) {
         onPartitionsRevoked(partitions);
     }
 }

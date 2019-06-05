@@ -21,7 +21,7 @@
   // Starting in version 3, authorized operations can be requested.
   "validVersions": "0-3",
   "fields": [
-    { "name": "Groups", "type": "[]string", "versions": "0+",
+    { "name": "Groups", "type": "[]string", "versions": "0+", "entityType": "groupId",
       "about": "The names of the groups to describe" },
     { "name": "IncludeAuthorizedOperations", "type": "bool", "versions": "3+",
       "about": "Whether to include authorized operations." }

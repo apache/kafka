@@ -33,7 +33,7 @@ import scala.util.Random
 
 class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
   override val logDirCount = 5
-  override val numBrokers = 1
+  override val brokerCount = 1
 
   val topic = "topic"
 

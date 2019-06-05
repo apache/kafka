@@ -34,7 +34,7 @@ import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 
 /**
  * ConsumerProtocol contains the schemas for consumer subscriptions and assignments for use with
- * Kafka's generalized group management protocol. Below is the version 0 format:
+ * Kafka's generalized group management protocol. Below is the version 1 format:
  *
  * <pre>
  * Subscription => Version Topics
@@ -50,12 +50,11 @@ import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
  *   AssignedPartitions => [Topic Partitions]
  *     Topic            => String
  *     Partitions       => [int32]
- *     UserData   => Bytes
- *   RevokedPartitions  => [Topic Partitions]
- *     Topic            => String
- *     Partitions       => [int32]
+ *   UserData           => Bytes
  *   ErrorCode          => [int16]
  * </pre>
+ *
+ * Older versioned formats can be inferred by reading the code below.
  *
  * The current implementation assumes that future versions will not break compatibility. When
  * it encounters a newer version, it parses it using the current format. This basically means
@@ -70,7 +69,6 @@ public class ConsumerProtocol {
     public static final String TOPIC_KEY_NAME = "topic";
     public static final String PARTITIONS_KEY_NAME = "partitions";
     public static final String OWNED_PARTITIONS_KEY_NAME = "owned_partitions";
-    public static final String REVOKED_PARTITIONS_KEY_NAME = "revoked_partitions";
     public static final String TOPIC_PARTITIONS_KEY_NAME = "topic_partitions";
     public static final String USER_DATA_KEY_NAME = "user_data";
 
@@ -104,7 +102,6 @@ public class ConsumerProtocol {
     public static final Schema ASSIGNMENT_V1 = new Schema(
         new Field(TOPIC_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
         new Field(USER_DATA_KEY_NAME, Type.NULLABLE_BYTES),
-        new Field(REVOKED_PARTITIONS_KEY_NAME, new ArrayOf(TOPIC_ASSIGNMENT_V0)),
         ERROR_CODE);
 
     public enum Errors {
@@ -164,11 +161,20 @@ public class ConsumerProtocol {
         SUBSCRIPTION_V1.write(buffer, struct);
         buffer.flip();
         return buffer;
-
     }
 
     public static ByteBuffer serializeSubscription(PartitionAssignor.Subscription subscription) {
-        return serializeSubscriptionV1(subscription);
+        switch (subscription.version()) {
+            case CONSUMER_PROTOCOL_V0:
+                return serializeSubscriptionV0(subscription);
+
+            case CONSUMER_PROTOCOL_V1:
+                return serializeSubscriptionV1(subscription);
+
+            default:
+                // for any versions higher than known, try to serialize it as V1
+                return serializeSubscriptionV1(subscription);
+        }
     }
 
     public static PartitionAssignor.Subscription deserializeSubscriptionV0(ByteBuffer buffer) {
@@ -178,7 +184,7 @@ public class ConsumerProtocol {
         for (Object topicObj : struct.getArray(TOPICS_KEY_NAME))
             topics.add((String) topicObj);
 
-        return new PartitionAssignor.Subscription(topics, userData);
+        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V0, topics, userData);
     }
 
     public static PartitionAssignor.Subscription deserializeSubscriptionV1(ByteBuffer buffer) {
@@ -193,12 +199,11 @@ public class ConsumerProtocol {
             Struct assignment = (Struct) structObj;
             String topic = assignment.getString(TOPIC_KEY_NAME);
             for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                Integer partition = (Integer) partitionObj;
-                ownedPartitions.add(new TopicPartition(topic, partition));
+                ownedPartitions.add(new TopicPartition(topic, (Integer) partitionObj));
             }
         }
 
-        return new PartitionAssignor.Subscription(topics, userData, ownedPartitions);
+        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V1, topics, userData, ownedPartitions);
     }
 
     public static PartitionAssignor.Subscription deserializeSubscription(ByteBuffer buffer) {
@@ -211,6 +216,9 @@ public class ConsumerProtocol {
         switch (version) {
             case CONSUMER_PROTOCOL_V0:
                 return deserializeSubscriptionV0(buffer);
+
+            case CONSUMER_PROTOCOL_V1:
+                return deserializeSubscriptionV1(buffer);
 
             // assume all higher versions can be parsed as V1
             default:
@@ -250,15 +258,6 @@ public class ConsumerProtocol {
             topicAssignments.add(topicAssignment);
         }
         struct.set(TOPIC_PARTITIONS_KEY_NAME, topicAssignments.toArray());
-        List<Struct> revokedAssignments = new ArrayList<>();
-        partitionsByTopic = CollectionUtils.groupPartitionsByTopic(assignment.revokedPartitions());
-        for (Map.Entry<String, List<Integer>> topicEntry : partitionsByTopic.entrySet()) {
-            Struct topicAssignment = new Struct(TOPIC_ASSIGNMENT_V0);
-            topicAssignment.set(TOPIC_KEY_NAME, topicEntry.getKey());
-            topicAssignment.set(PARTITIONS_KEY_NAME, topicEntry.getValue().toArray());
-            revokedAssignments.add(topicAssignment);
-        }
-        struct.set(REVOKED_PARTITIONS_KEY_NAME, revokedAssignments.toArray());
         struct.set(ERROR_CODE.name, assignment.error().code);
 
         ByteBuffer buffer = ByteBuffer.allocate(CONSUMER_PROTOCOL_HEADER_V1.sizeOf() + ASSIGNMENT_V1.sizeOf(struct));
@@ -269,7 +268,17 @@ public class ConsumerProtocol {
     }
 
     public static ByteBuffer serializeAssignment(PartitionAssignor.Assignment assignment) {
-        return serializeAssignmentV1(assignment);
+        switch (assignment.version()) {
+            case CONSUMER_PROTOCOL_V0:
+                return serializeAssignmentV0(assignment);
+
+            case CONSUMER_PROTOCOL_V1:
+                return serializeAssignmentV1(assignment);
+
+            default:
+                // for any versions higher than known, try to serialize it as V1
+                return serializeAssignmentV1(assignment);
+        }
     }
 
     public static PartitionAssignor.Assignment deserializeAssignmentV0(ByteBuffer buffer) {
@@ -280,11 +289,10 @@ public class ConsumerProtocol {
             Struct assignment = (Struct) structObj;
             String topic = assignment.getString(TOPIC_KEY_NAME);
             for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                Integer partition = (Integer) partitionObj;
-                partitions.add(new TopicPartition(topic, partition));
+                partitions.add(new TopicPartition(topic, (Integer) partitionObj));
             }
         }
-        return new PartitionAssignor.Assignment(partitions, userData);
+        return new PartitionAssignor.Assignment(CONSUMER_PROTOCOL_V0, partitions, userData);
     }
 
     public static PartitionAssignor.Assignment deserializeAssignmentV1(ByteBuffer buffer) {
@@ -295,23 +303,13 @@ public class ConsumerProtocol {
             Struct assignment = (Struct) structObj;
             String topic = assignment.getString(TOPIC_KEY_NAME);
             for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                Integer partition = (Integer) partitionObj;
-                partitions.add(new TopicPartition(topic, partition));
+                partitions.add(new TopicPartition(topic, (Integer) partitionObj));
             }
         }
 
-        List<TopicPartition> revokedPartitions = new ArrayList<>();
-        for (Object structObj : struct.getArray(REVOKED_PARTITIONS_KEY_NAME)) {
-            Struct assignment = (Struct) structObj;
-            String topic = assignment.getString(TOPIC_KEY_NAME);
-            for (Object partitionObj : assignment.getArray(PARTITIONS_KEY_NAME)) {
-                Integer partition = (Integer) partitionObj;
-                revokedPartitions.add(new TopicPartition(topic, partition));
-            }
-        }
         Errors error = Errors.fromCode(struct.get(ERROR_CODE));
 
-        return new PartitionAssignor.Assignment(partitions, userData, revokedPartitions, error);
+        return new PartitionAssignor.Assignment(CONSUMER_PROTOCOL_V1, partitions, userData, error);
     }
 
     public static PartitionAssignor.Assignment deserializeAssignment(ByteBuffer buffer) {
@@ -325,8 +323,11 @@ public class ConsumerProtocol {
             case CONSUMER_PROTOCOL_V0:
                 return deserializeAssignmentV0(buffer);
 
-            // assume all higher versions can be parsed as V1
+            case CONSUMER_PROTOCOL_V1:
+                return deserializeAssignmentV1(buffer);
+
             default:
+                // assume all higher versions can be parsed as V1
                 return deserializeAssignmentV1(buffer);
         }
     }
