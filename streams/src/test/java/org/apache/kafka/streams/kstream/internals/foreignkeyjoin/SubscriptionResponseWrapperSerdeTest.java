@@ -5,6 +5,7 @@ import org.apache.kafka.common.utils.Murmur3;
 import org.junit.Test;
 
 import static junit.framework.TestCase.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 
 public class SubscriptionResponseWrapperSerdeTest {
 
@@ -18,7 +19,7 @@ public class SubscriptionResponseWrapperSerdeTest {
         byte[] serResponse = srwSerde.serializer().serialize(null, srw);
         SubscriptionResponseWrapper<String> result = (SubscriptionResponseWrapper<String>)srwSerde.deserializer().deserialize(null, serResponse);
 
-        assertEquals(hashedValue, result.getOriginalValueHash());
+        assertArrayEquals(hashedValue, result.getOriginalValueHash());
         assertEquals(null, result.getForeignValue());
     }
 }

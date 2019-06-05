@@ -3,8 +3,9 @@ package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 import org.apache.kafka.common.utils.Murmur3;
 import org.junit.Test;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertFalse;
+
 
 public class SubscriptionWrapperSerdeTest {
 
@@ -18,6 +19,6 @@ public class SubscriptionWrapperSerdeTest {
         SubscriptionWrapper deserialized = (SubscriptionWrapper)swSerde.deserializer().deserialize(null, serialized);
 
         assertFalse(deserialized.isPropagate());
-        assertEquals(hashedValue, deserialized.getHash());
+        assertArrayEquals(hashedValue, deserialized.getHash());
     }
 }
