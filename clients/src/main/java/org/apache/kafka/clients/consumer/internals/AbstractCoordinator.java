@@ -553,7 +553,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 future.raise(error);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
                 // reset the member id and retry immediately
-                resetGeneration();
+                resetGeneration(this.getClass().getName() + " encountering " + error);
                 log.debug("Attempt to join group failed due to unknown member id.");
                 future.raise(Errors.UNKNOWN_MEMBER_ID);
             } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
@@ -675,7 +675,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 } else if (error == Errors.UNKNOWN_MEMBER_ID
                         || error == Errors.ILLEGAL_GENERATION) {
                     log.debug("SyncGroup failed: {}", error.message());
-                    resetGeneration();
+                    resetGeneration(this.getClass().getName() + " encountering " + error);
                     future.raise(error);
                 } else if (error == Errors.COORDINATOR_NOT_AVAILABLE
                         || error == Errors.NOT_COORDINATOR) {
@@ -824,7 +824,9 @@ public abstract class AbstractCoordinator implements Closeable {
     /**
      * Reset the generation and memberId because we have fallen out of the group.
      */
-    protected synchronized void resetGeneration() {
+    protected synchronized void resetGeneration(String errorMessage) {
+        log.debug("Resetting generation and requesting re-join group due to {}", errorMessage);
+
         this.generation = Generation.NO_GENERATION;
         this.rejoinNeeded = true;
         this.state = MemberState.UNJOINED;
@@ -884,7 +886,7 @@ public abstract class AbstractCoordinator implements Closeable {
             client.pollNoWakeup();
         }
 
-        resetGeneration();
+        resetGeneration("consumer proactively leaving group");
     }
 
     protected boolean isDynamicMember() {
@@ -938,14 +940,14 @@ public abstract class AbstractCoordinator implements Closeable {
                 future.raise(Errors.REBALANCE_IN_PROGRESS);
             } else if (error == Errors.ILLEGAL_GENERATION) {
                 log.info("Attempt to heartbeat failed since generation {} is not current", generation.generationId);
-                resetGeneration();
+                resetGeneration(this.getClass().getName() + " encountering " + error);
                 future.raise(Errors.ILLEGAL_GENERATION);
             } else if (error == Errors.FENCED_INSTANCE_ID) {
                 log.error("Received fatal exception: group.instance.id gets fenced");
                 future.raise(error);
             } else if (error == Errors.UNKNOWN_MEMBER_ID) {
                 log.info("Attempt to heartbeat failed for since member id {} is not valid.", generation.memberId);
-                resetGeneration();
+                resetGeneration(this.getClass().getName() + " encountering " + error);
                 future.raise(Errors.UNKNOWN_MEMBER_ID);
             } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.raise(new GroupAuthorizationException(groupId));

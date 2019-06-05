@@ -46,7 +46,6 @@ import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.requests.JoinGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
@@ -584,48 +583,35 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // execute the user's callback before rebalance
         ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
 
-        // if member.id is unknown, it means a reset generation,
-        // hence we should always call onPartitionsLost to all
-        // previously assigned partitions regardless of the rebalance protocol
-        if (memberId.equals(JoinGroupResponse.UNKNOWN_MEMBER_ID)) {
-            Set<TopicPartition> emigrated = new HashSet<>(subscriptions.assignedPartitions());
-            log.info("Emigrating previously assigned partitions {}", emigrated);
+        switch (protocol) {
+            case EAGER:
+                Set<TopicPartition> revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+                log.info("Revoking previously assigned partitions {}", revokedPartitions);
+                try {
+                    listener.onPartitionsRevoked(revokedPartitions);
+                } catch (WakeupException | InterruptException e) {
+                    throw e;
+                } catch (Exception e) {
+                    log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
+                }
 
-            try {
-                listener.onPartitionsLost(emigrated);
-            } catch (WakeupException | InterruptException e) {
-                throw e;
-            } catch (Exception e) {
-                log.error("User provided listener {} failed on partition emigration", listener.getClass().getName(), e);
-            }
+                // also clear the assigned partitions since all have been revoked
+                subscriptions.assignFromSubscribed(Collections.emptySet());
 
-            // also clear the assigned partitions since all have been emigrated
-            subscriptions.assignFromSubscribed(Collections.emptySet());
-        } else {
-            switch (protocol) {
-                case EAGER:
-                    Set<TopicPartition> revoked = new HashSet<>(subscriptions.assignedPartitions());
-                    log.info("Revoking previously assigned partitions {}", revoked);
-                    try {
-                        listener.onPartitionsLost(revoked);
-                    } catch (WakeupException | InterruptException e) {
-                        throw e;
-                    } catch (Exception e) {
-                        log.error("User provided listener {} failed on partition revocation", listener.getClass().getName(), e);
-                    }
+                break;
 
-                    // also clear the assigned partitions since all have been revoked
-                    subscriptions.assignFromSubscribed(Collections.emptySet());
-
-                    break;
-
-                case COOPERATIVE:
-                    break;
-            }
+            case COOPERATIVE:
+                break;
         }
 
         isLeader = false;
         subscriptions.resetGroupSubscription();
+    }
+
+    @Override
+    public void resetGeneration(String errorMessage) {
+        maybeLosePartitions(errorMessage);
+        super.resetGeneration(errorMessage);
     }
 
     @Override
@@ -634,14 +620,38 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return false;
 
         // we need to rejoin if we performed the assignment and metadata has changed
-        if (assignmentSnapshot != null && !assignmentSnapshot.matches(metadataSnapshot))
+        if (assignmentSnapshot != null && !assignmentSnapshot.matches(metadataSnapshot)) {
+            maybeLosePartitions("topic metadata has changed and therefore some topics may not exist any moreq");
             return true;
+        }
 
         // we need to join if our subscription has changed since the last join
-        if (joinedSubscription != null && !joinedSubscription.equals(subscriptions.subscription()))
+        if (joinedSubscription != null && !joinedSubscription.equals(subscriptions.subscription())) {
+            maybeLosePartitions("consumer subscription has changed since last joined generation");
             return true;
+        }
 
         return super.rejoinNeededOrPending();
+    }
+
+    private void maybeLosePartitions(String rootCause) {
+        Set<TopicPartition> lostPartitions = new HashSet<>(subscriptions.assignedPartitions());
+
+        if (!lostPartitions.isEmpty()) {
+            log.info("Lost previously assigned partitions {} due to {}", lostPartitions, rootCause);
+
+            ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
+            try {
+                listener.onPartitionsLost(lostPartitions);
+            } catch (WakeupException | InterruptException e) {
+                throw e;
+            } catch (Exception e) {
+                log.error("User provided listener {} failed on partition being lost", listener.getClass().getName(), e);
+            }
+
+            // also clear the assigned partitions since all have been lost
+            subscriptions.assignFromSubscribed(Collections.emptySet());
+        }
     }
 
     /**
@@ -1035,7 +1045,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                 || error == Errors.ILLEGAL_GENERATION
                                 || error == Errors.REBALANCE_IN_PROGRESS) {
                             // need to re-join group
-                            resetGeneration();
+                            resetGeneration(this.getClass().getName() + " encountering " + error);
                             future.raise(new CommitFailedException());
                             return;
                         } else {
