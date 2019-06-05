@@ -28,6 +28,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -49,6 +50,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     private static final Field.Array ISR = new Field.Array("isr", INT32, "The in sync replica ids.");
     private static final Field.Int32 ZK_VERSION = new Field.Int32("zk_version", "The ZK version.");
     private static final Field.Array REPLICAS = new Field.Array("replicas", INT32, "The replica ids.");
+    private static final Field.Array TARGET_REPLICAS = new Field.Array("target_replicas", INT32, "The target replica ids.");
     private static final Field.Bool IS_NEW = new Field.Bool("is_new", "Whether the replica should have existed on the broker or not");
 
     // live_leaders fields
@@ -94,6 +96,22 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             TOPIC_NAME,
             PARTITION_STATES_V2);
 
+    private static final Field PARTITION_STATES_V3  = PARTITION_STATES.withFields(
+            PARTITION_ID,
+            CONTROLLER_EPOCH,
+            LEADER,
+            LEADER_EPOCH,
+            ISR,
+            ZK_VERSION,
+            REPLICAS,
+            TARGET_REPLICAS,
+            IS_NEW);
+
+    // TOPIC_STATES_V3 adds a TargetReplicas field
+    private static final Field TOPIC_STATES_V3 = TOPIC_STATES.withFields(
+            TOPIC_NAME,
+            PARTITION_STATES_V3);
+
     private static final Field LIVE_LEADERS_V0 = LIVE_LEADERS.withFields(
             END_POINT_ID,
             HOST,
@@ -116,6 +134,14 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     // LEADER_AND_ISR_REQUEST_V2 added a broker_epoch Field. This field specifies the generation of the broker across
     // bounces. It also normalizes partitions under each topic.
     private static final Schema LEADER_AND_ISR_REQUEST_V2 = new Schema(
+            CONTROLLER_ID,
+            CONTROLLER_EPOCH,
+            BROKER_EPOCH,
+            TOPIC_STATES_V2,
+            LIVE_LEADERS_V0);
+
+    // LEADER_AND_ISR_REQUEST_V3 adds target replicas.
+    private static final Schema LEADER_AND_ISR_REQUEST_V3 = new Schema(
             CONTROLLER_ID,
             CONTROLLER_EPOCH,
             BROKER_EPOCH,
@@ -223,7 +249,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 for (Map.Entry<Integer, PartitionState> partitionEntry : partitionMap.entrySet()) {
                     Struct partitionStateData = topicStateData.instance(PARTITION_STATES);
                     partitionStateData.set(PARTITION_ID, partitionEntry.getKey());
-                    partitionEntry.getValue().setStruct(partitionStateData);
+                    partitionEntry.getValue().setStruct(partitionStateData, version);
                     partitionStatesData.add(partitionStateData);
                 }
                 topicStateData.set(PARTITION_STATES, partitionStatesData.toArray());
@@ -237,7 +263,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 TopicPartition topicPartition = entry.getKey();
                 partitionStateData.set(TOPIC_NAME, topicPartition.topic());
                 partitionStateData.set(PARTITION_ID, topicPartition.partition());
-                entry.getValue().setStruct(partitionStateData);
+                entry.getValue().setStruct(partitionStateData, version);
                 partitionStatesData.add(partitionStateData);
             }
             struct.set(PARTITION_STATES, partitionStatesData.toArray());
@@ -298,6 +324,7 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
 
     public static final class PartitionState {
         public final BasePartitionState basePartitionState;
+        public final List<Integer> targetReplicas;
         public final boolean isNew;
 
         public PartitionState(int controllerEpoch,
@@ -307,7 +334,26 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                               int zkVersion,
                               List<Integer> replicas,
                               boolean isNew) {
+            this(controllerEpoch,
+                    leader,
+                    leaderEpoch,
+                    isr,
+                    zkVersion,
+                    replicas,
+                    Collections.emptyList(),
+                    isNew);
+        }
+
+        public PartitionState(int controllerEpoch,
+                              int leader,
+                              int leaderEpoch,
+                              List<Integer> isr,
+                              int zkVersion,
+                              List<Integer> replicas,
+                              List<Integer> targetReplicas,
+                              boolean isNew) {
             this.basePartitionState = new BasePartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas);
+            this.targetReplicas = targetReplicas;
             this.isNew = isNew;
         }
 
@@ -328,7 +374,15 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
             for (Object r : replicasArray)
                 replicas.add((Integer) r);
 
+            List<Integer> newTargetReplicas = new ArrayList<>();
+            if (struct.hasField(TARGET_REPLICAS)) {
+                Object[] targetReplicasArray = struct.get(TARGET_REPLICAS);
+                for (Object r : targetReplicasArray)
+                    newTargetReplicas.add((Integer) r);
+            }
+
             this.basePartitionState = new BasePartitionState(controllerEpoch, leader, leaderEpoch, isr, zkVersion, replicas);
+            this.targetReplicas = newTargetReplicas;
             this.isNew = struct.getOrElse(IS_NEW, false);
         }
 
@@ -340,18 +394,21 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 ", isr=" + Utils.join(basePartitionState.isr, ",") +
                 ", zkVersion=" + basePartitionState.zkVersion +
                 ", replicas=" + Utils.join(basePartitionState.replicas, ",") +
+                ", targetReplicas=" + Utils.join(targetReplicas, ",") +
                 ", isNew=" + isNew + ")";
         }
 
-        private void setStruct(Struct struct) {
+        private void setStruct(Struct struct, int version) {
             struct.set(CONTROLLER_EPOCH, basePartitionState.controllerEpoch);
             struct.set(LEADER, basePartitionState.leader);
             struct.set(LEADER_EPOCH, basePartitionState.leaderEpoch);
             struct.set(ISR, basePartitionState.isr.toArray());
             struct.set(ZK_VERSION, basePartitionState.zkVersion);
             struct.set(REPLICAS, basePartitionState.replicas.toArray());
+            if (version > 3) {
+                struct.set(REPLICAS, targetReplicas.toArray());
+            }
             struct.setIfExists(IS_NEW, isNew);
         }
     }
-
 }

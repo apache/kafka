@@ -14,26 +14,20 @@
 // limitations under the License.
 
 {
-  "apiKey": 4,
+  "apiKey": 45,
   "type": "response",
-  "name": "LeaderAndIsrResponse",
-  // Version 1 adds KAFKA_STORAGE_ERROR as a valid error code.
-  //
-  // Version 2 is the same as version 1.
-  //
-  // Version 3 is the same as version 2.
-  "validVersions": "0-3",
+  "name": "AlterPartitionReassignmentsResponse",
+  "validVersions": "0",
   "fields": [
-    { "name": "ErrorCode", "type": "int16", "versions": "0+",
-      "about": "The error code, or 0 if there was no error." },
-    { "name": "Partitions", "type": "[]LeaderAndIsrResponsePartition", "versions": "0+",
-      "about": "Each partition.", "fields": [
-      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
-        "about": "The topic name." },
-      { "name": "PartitionIndex", "type": "int32", "versions": "0+",
-        "about": "The partition index." },
+    { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
+      "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
+    { "name": "Responses", "type": "[]ReassignablePartitionResponse", "versions": "0+",
+      "about": "The responses to partitions to reassign.", "fields": [
       { "name": "ErrorCode", "type": "int16", "versions": "0+",
-        "about": "The partition error code, or 0 if there was no error." }
-    ]}
+        "about": "The error code." },
+      { "name": "ErrorString", "type": "string", "versions": "0+", "nullableVersions": "0+",
+        "about": "The error string, or null if there was no error." }
+      ]
+    }
   ]
 }
