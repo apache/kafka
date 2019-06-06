@@ -1252,7 +1252,7 @@ class GroupMetadataManagerTest {
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
     EasyMock.replay(partition)
 
-    groupMetadataManager.cleanupGroupMetadata()
+    groupMetadataManager.cleanupGroupMetadata(_ => {})
 
     assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
     assertEquals(None, group.offset(topicPartition1))
@@ -1287,7 +1287,7 @@ class GroupMetadataManagerTest {
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
     EasyMock.replay(replicaManager, partition)
 
-    groupMetadataManager.cleanupGroupMetadata()
+    groupMetadataManager.cleanupGroupMetadata(_ => {})
 
     // the full group should be gone since all offsets were removed
     assertEquals(None, groupMetadataManager.getGroup(groupId))
@@ -1344,7 +1344,7 @@ class GroupMetadataManagerTest {
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
     EasyMock.replay(partition)
 
-    groupMetadataManager.cleanupGroupMetadata()
+    groupMetadataManager.cleanupGroupMetadata(_ => {})
 
     assertTrue(recordsCapture.hasCaptured)
 
@@ -1420,7 +1420,7 @@ class GroupMetadataManagerTest {
     // do not expire any offset even though expiration timestamp is reached for one (due to group still being active)
     time.sleep(2)
 
-    groupMetadataManager.cleanupGroupMetadata()
+    groupMetadataManager.cleanupGroupMetadata(_ => {})
 
     // group and offsets should still be there
     assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
@@ -1445,7 +1445,7 @@ class GroupMetadataManagerTest {
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
     EasyMock.replay(partition)
 
-    groupMetadataManager.cleanupGroupMetadata()
+    groupMetadataManager.cleanupGroupMetadata(_ => {})
 
     // group is empty now, only one offset should expire
     assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
@@ -1469,7 +1469,7 @@ class GroupMetadataManagerTest {
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
     EasyMock.replay(partition)
 
-    groupMetadataManager.cleanupGroupMetadata()
+    groupMetadataManager.cleanupGroupMetadata(_ => {})
 
     // one more offset should expire
     assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
@@ -1487,7 +1487,7 @@ class GroupMetadataManagerTest {
     // advance time to just before the offset of last partition is to be expired, no offset should expire
     time.sleep(group.currentStateTimestamp.get + defaultOffsetRetentionMs - time.milliseconds() - 1)
 
-    groupMetadataManager.cleanupGroupMetadata()
+    groupMetadataManager.cleanupGroupMetadata(_ => {})
 
     // one more offset should expire
     assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
@@ -1512,7 +1512,7 @@ class GroupMetadataManagerTest {
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
     EasyMock.replay(partition)
 
-    groupMetadataManager.cleanupGroupMetadata()
+    groupMetadataManager.cleanupGroupMetadata(_ => {})
 
     // group and all its offsets should be gone now
     assertEquals(None, groupMetadataManager.getGroup(groupId))
@@ -1569,7 +1569,7 @@ class GroupMetadataManagerTest {
     val expiryTimestamp = offsets.get(topicPartition1).get.commitTimestamp + defaultOffsetRetentionMs
     time.sleep(expiryTimestamp - time.milliseconds() - 1)
 
-    groupMetadataManager.cleanupGroupMetadata()
+    groupMetadataManager.cleanupGroupMetadata(_ => {})
 
     // group and offsets should still be there
     assertEquals(Some(group), groupMetadataManager.getGroup(groupId))
@@ -1590,7 +1590,7 @@ class GroupMetadataManagerTest {
       .andReturn(LogAppendInfo.UnknownLogAppendInfo)
     EasyMock.replay(partition)
 
-    groupMetadataManager.cleanupGroupMetadata()
+    groupMetadataManager.cleanupGroupMetadata(_ => {})
 
     // group and all its offsets should be gone now
     assertEquals(None, groupMetadataManager.getGroup(groupId))
@@ -1978,7 +1978,7 @@ class GroupMetadataManagerTest {
 
   @Test
   def testMetrics() {
-    groupMetadataManager.cleanupGroupMetadata()
+    groupMetadataManager.cleanupGroupMetadata(_ => {})
     expectMetrics(groupMetadataManager, 0, 0, 0)
     val group = new GroupMetadata("foo2", Stable, time)
     groupMetadataManager.addGroup(group)
