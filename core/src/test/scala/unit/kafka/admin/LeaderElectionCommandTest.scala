@@ -207,7 +207,25 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
     } catch {
       case e: Throwable =>
         assertTrue(e.getMessage.startsWith("Missing required option(s)"))
-        assertTrue(e.getMessage.contains("partition"))
+        assertTrue(e.getMessage.contains(" partition"))
+    }
+  }
+
+  @Test
+  def testPartitionWithoutTopic(): Unit = {
+    try {
+      LeaderElectionCommand.main(
+        Array(
+          "--bootstrap-server", bootstrapServers(servers),
+          "--election-type", "unclean",
+          "--all-topic-partitions",
+          "--partition", "0"
+        )
+      )
+      fail()
+    } catch {
+      case e: Throwable =>
+        assertEquals("Option partition is only allowed if topic is used", e.getMessage)
     }
   }
 
@@ -243,7 +261,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
     } catch {
       case e: Throwable =>
         assertTrue(e.getMessage.startsWith("Missing required option(s)"))
-        assertTrue(e.getMessage.contains("election-type"))
+        assertTrue(e.getMessage.contains(" election-type"))
     }
   }
 
@@ -259,8 +277,10 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
       fail()
     } catch {
       case e: Throwable =>
-        assertTrue(e.getMessage.startsWith("Missing required option(s)"))
-        assertTrue(e.getMessage.contains("all-topic-partitions"))
+        assertTrue(e.getMessage.startsWith("One of the following options is required: "))
+        assertTrue(e.getMessage.contains(" all-topic-partitions"))
+        assertTrue(e.getMessage.contains(" topic"))
+        assertTrue(e.getMessage.contains(" path-to-json-file"))
     }
   }
 

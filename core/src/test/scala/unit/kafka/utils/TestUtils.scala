@@ -1493,7 +1493,6 @@ object TestUtils extends Logging {
   def stringifyTopicPartitions(partitions: Set[TopicPartition]): String = {
     Json.legacyEncodeAsString(
       Map(
-        "version" -> 1,
         "partitions" -> partitions.map(tp => Map("topic" -> tp.topic, "partition" -> tp.partition))
       )
     )
