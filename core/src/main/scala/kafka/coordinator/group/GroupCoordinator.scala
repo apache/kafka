@@ -82,7 +82,7 @@ class GroupCoordinator(val brokerId: Int,
    */
   def startup(enableMetadataExpiration: Boolean = true) {
     info("Starting up.")
-    groupManager.startup(enableMetadataExpiration)
+    groupManager.startup(enableMetadataExpiration, onGroupUnloaded)
     isActive.set(true)
     info("Startup complete.")
   }
@@ -464,7 +464,7 @@ class GroupCoordinator(val brokerId: Int,
                     groupErrors += groupId ->
                       (if (groupManager.groupNotExists(groupId)) Errors.GROUP_ID_NOT_FOUND else Errors.NOT_COORDINATOR)
                   case Empty =>
-                    group.transitionTo(Dead)
+                    groupManager.removeGroup(group, onGroupUnloaded)
                     groupsEligibleForDeletion :+= group
                   case _ =>
                     groupErrors += groupId -> Errors.NON_EMPTY_GROUP
@@ -475,7 +475,7 @@ class GroupCoordinator(val brokerId: Int,
     }
 
     if (groupsEligibleForDeletion.nonEmpty) {
-      val offsetsRemoved = groupManager.cleanupGroupMetadata(groupsEligibleForDeletion, _.removeAllOffsets())
+      val offsetsRemoved = groupManager.cleanupGroupMetadata(groupsEligibleForDeletion, _.removeAllOffsets(), onGroupUnloaded)
       groupErrors ++= groupsEligibleForDeletion.map(_.groupId -> Errors.NONE).toMap
       info(s"The following groups were deleted: ${groupsEligibleForDeletion.map(_.groupId).mkString(", ")}. " +
         s"A total of $offsetsRemoved offsets were removed.")
@@ -665,7 +665,7 @@ class GroupCoordinator(val brokerId: Int,
   def handleDeletedPartitions(topicPartitions: Seq[TopicPartition]) {
     val offsetsRemoved = groupManager.cleanupGroupMetadata(groupManager.currentGroups, group => {
       group.removeOffsets(topicPartitions)
-    })
+    }, onGroupUnloaded)
     info(s"Removed $offsetsRemoved offsets associated with deleted partitions: ${topicPartitions.mkString(", ")}.")
   }
 
@@ -701,7 +701,6 @@ class GroupCoordinator(val brokerId: Int,
     group.inLock {
       info(s"Unloading group metadata for ${group.groupId} with generation ${group.generationId}")
       val previousState = group.currentState
-      group.transitionTo(Dead)
 
       previousState match {
         case Empty | Dead =>

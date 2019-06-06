@@ -136,11 +136,11 @@ class GroupMetadataManager(brokerId: Int,
       })
     })
 
-  def startup(enableMetadataExpiration: Boolean) {
+  def startup(enableMetadataExpiration: Boolean, onGroupUnLoaded: GroupMetadata => Unit) {
     scheduler.startup()
     if (enableMetadataExpiration) {
       scheduler.schedule(name = "delete-expired-group-metadata",
-        fun = () => cleanupGroupMetadata,
+        fun = () => cleanupGroupMetadata(onGroupUnLoaded),
         period = config.offsetsRetentionCheckIntervalMs,
         unit = TimeUnit.MILLISECONDS)
     }
@@ -701,12 +701,9 @@ class GroupMetadataManager(brokerId: Int,
         // we need to guard the group removal in cache in the loading partition lock
         // to prevent coordinator's check-and-get-group race condition
         ownedPartitions.remove(offsetsPartition)
-
         for (group <- groupMetadataCache.values) {
           if (partitionFor(group.groupId) == offsetsPartition) {
-            onGroupUnloaded(group)
-            groupMetadataCache.remove(group.groupId, group)
-            removeGroupFromAllProducers(group.groupId)
+            removeGroup(group, onGroupUnloaded)
             numGroupsRemoved += 1
             numOffsetsRemoved += group.numOffsets
           }
@@ -718,12 +715,25 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
+  /**
+    * Remove a consumer group from metadata.
+    */
+  def removeGroup(group: GroupMetadata,
+                  onGroupUnloaded: GroupMetadata => Unit) {
+    group.transitionTo(Dead)
+    info(s"Group ${group.groupId} transitioned to Dead in generation ${group.generationId}")
+
+    onGroupUnloaded(group)
+    groupMetadataCache.remove(group.groupId, group)
+    removeGroupFromAllProducers(group.groupId)
+  }
+
   // visible for testing
-  private[group] def cleanupGroupMetadata(): Unit = {
+  private[group] def cleanupGroupMetadata(onGroupUnLoaded: GroupMetadata => Unit): Unit = {
     val currentTimestamp = time.milliseconds()
     val numOffsetsRemoved = cleanupGroupMetadata(groupMetadataCache.values, group => {
       group.removeExpiredOffsets(currentTimestamp, config.offsetsRetentionMs)
-    })
+    }, onGroupUnLoaded)
     info(s"Removed $numOffsetsRemoved expired offsets in ${time.milliseconds() - currentTimestamp} milliseconds.")
   }
 
@@ -732,9 +742,12 @@ class GroupMetadataManager(brokerId: Int,
     * @param groups Groups whose metadata are to be cleaned up
     * @param selector A function that implements deletion of (all or part of) group offsets. This function is called while
     *                 a group lock is held, therefore there is no need for the caller to also obtain a group lock.
+    * @param onGroupUnloaded A function that handles group unload.
     * @return The cumulative number of offsets removed
     */
-  def cleanupGroupMetadata(groups: Iterable[GroupMetadata], selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata]): Int = {
+  def cleanupGroupMetadata(groups: Iterable[GroupMetadata],
+                           selector: GroupMetadata => Map[TopicPartition, OffsetAndMetadata],
+                           onGroupUnloaded: GroupMetadata => Unit): Int = {
     var offsetsRemoved = 0
 
     groups.foreach { group =>
@@ -742,8 +755,7 @@ class GroupMetadataManager(brokerId: Int,
       val (removedOffsets, groupIsDead, generation) = group.inLock {
         val removedOffsets = selector(group)
         if (group.is(Empty) && !group.hasOffsets) {
-          info(s"Group $groupId transitioned to Dead in generation ${group.generationId}")
-          group.transitionTo(Dead)
+          removeGroup(group, onGroupUnloaded)
         }
         (removedOffsets, group.is(Dead), group.generationId)
       }
