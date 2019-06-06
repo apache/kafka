@@ -17,11 +17,42 @@
 
 package kafka.utils
 
-import java.util
 import java.util.Locale
 
 import org.apache.log4j.{Level, LogManager, Logger}
 
+import scala.collection.mutable
+import scala.collection.JavaConverters._
+
+
+object Log4jController {
+
+  val ROOT_LOGGER = "root"
+
+  /**
+    * Returns a map of the log4j loggers and their assigned log level.
+    * If a logger does not have a log level assigned, we return the string "null" for that logger
+    */
+  def loggers: mutable.Map[String, String] = {
+    val logs = new mutable.HashMap[String, String]()
+    logs.put(ROOT_LOGGER, existingLogger(ROOT_LOGGER).getLevel.toString)
+
+    val loggers = LogManager.getCurrentLoggers
+    while (loggers.hasMoreElements) {
+      val logger = loggers.nextElement().asInstanceOf[Logger]
+      if (logger != null) {
+        val level = if (logger.getLevel != null) logger.getLevel.toString else "null"
+        logs.put(logger.getName, level)
+      }
+    }
+    logs
+  }
+
+  private def existingLogger(loggerName: String) =
+    if (loggerName == ROOT_LOGGER)
+      LogManager.getRootLogger
+    else LogManager.exists(loggerName)
+}
 
 /**
  * An MBean that allows the user to dynamically alter log4j levels at runtime.
@@ -29,37 +60,23 @@ import org.apache.log4j.{Level, LogManager, Logger}
  * registers the MBean. The [[kafka.utils.Logging]] trait forces initialization
  * of the companion object.
  */
-private class Log4jController extends Log4jControllerMBean {
+class Log4jController extends Log4jControllerMBean {
 
   def getLoggers = {
-    val lst = new util.ArrayList[String]()
-    lst.add("root=" + existingLogger("root").getLevel.toString)
-    val loggers = LogManager.getCurrentLoggers
-    while (loggers.hasMoreElements) {
-      val logger = loggers.nextElement().asInstanceOf[Logger]
-      if (logger != null) {
-        val level =  if (logger != null) logger.getLevel else null
-        lst.add("%s=%s".format(logger.getName, if (level != null) level.toString else "null"))
-      }
-    }
-    lst
+    Log4jController.loggers.map {
+      case (logger, level) => s"$logger=$level"
+    }.toList.asJava
   }
 
-
   private def newLogger(loggerName: String) =
-    if (loggerName == "root")
+    if (loggerName == Log4jController.ROOT_LOGGER)
       LogManager.getRootLogger
     else LogManager.getLogger(loggerName)
 
 
-  private def existingLogger(loggerName: String) =
-    if (loggerName == "root")
-      LogManager.getRootLogger
-    else LogManager.exists(loggerName)
-
 
   def getLogLevel(loggerName: String) = {
-    val log = existingLogger(loggerName)
+    val log = Log4jController.existingLogger(loggerName)
     if (log != null) {
       val level = log.getLevel
       if (level != null)
@@ -82,9 +99,8 @@ private class Log4jController extends Log4jControllerMBean {
 }
 
 
-private trait Log4jControllerMBean {
+trait Log4jControllerMBean {
   def getLoggers: java.util.List[String]
   def getLogLevel(logger: String): String
   def setLogLevel(logger: String, level: String): Boolean
 }
-
