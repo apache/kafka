@@ -23,6 +23,8 @@ import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
+import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.SyncGroupRequest
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, immutable, mutable}
@@ -290,6 +292,19 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     val oldMember = members.remove(oldMemberId)
       .getOrElse(throw new IllegalArgumentException(s"Cannot replace non-existing member id $oldMemberId"))
 
+    // Fence potential duplicate member immediately if someone awaits join/sync callback.
+    maybeInvokeJoinCallback(oldMember, JoinGroupResult(
+      members = List.empty,
+      memberId = oldMemberId,
+      generationId = GroupCoordinator.NoGeneration,
+      subProtocol = GroupCoordinator.NoProtocol,
+      leaderId = GroupCoordinator.NoLeader,
+      error = Errors.FENCED_INSTANCE_ID))
+
+    maybeInvokeSyncCallback(oldMember, SyncGroupResult(
+      Array.empty, Errors.FENCED_INSTANCE_ID
+    ))
+
     oldMember.memberId = newMemberId
     members.put(newMemberId, oldMember)
 
@@ -430,6 +445,17 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
       member.awaitingJoinCallback(joinGroupResult)
       member.awaitingJoinCallback = null
       numMembersAwaitingJoin -= 1
+    }
+  }
+
+  def maybeInvokeSyncCallback(member: MemberMetadata,
+                              syncGroupResult: SyncGroupResult) : Boolean = {
+    if (member.isAwaitingSync) {
+      member.awaitingSyncCallback(syncGroupResult)
+      member.awaitingSyncCallback = null
+      true
+    } else {
+      false
     }
   }
 
