@@ -38,6 +38,7 @@ import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CreateResult, ErrorResult, SetDataResult}
 import org.apache.zookeeper.data.{ACL, Stat}
 import org.apache.zookeeper.{CreateMode, KeeperException, ZooKeeper}
+
 import scala.collection.Seq
 import scala.collection.breakOut
 import scala.collection.mutable
@@ -482,6 +483,18 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   }
 
   /**
+    * Sets the topic znode with the given assignment.
+    * @param topic the topic whose assignment is being set.
+    * @param assignment the partition to replica mapping to set for the given topic
+    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
+    * @return SetDataResponse
+    */
+  def setTopicAssignmentRaw(topic: String, expectedControllerEpochZkVersion: Int, assignment: collection.Map[TopicPartition, Assignment]): SetDataResponse = {
+    val setDataRequest = SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(assignment), ZkVersion.MatchAnyVersion)
+    retryRequestUntilConnected(setDataRequest, expectedControllerEpochZkVersion)
+  }
+
+  /**
    * Sets the topic znode with the given assignment.
    * @param topic the topic whose assignment is being set.
    * @param assignment the partition to replica mapping to set for the given topic
@@ -489,8 +502,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @return SetDataResponse
    */
   def setTopicAssignmentRaw(topic: String, assignment: collection.Map[TopicPartition, Seq[Int]], expectedControllerEpochZkVersion: Int): SetDataResponse = {
-    val setDataRequest = SetDataRequest(TopicZNode.path(topic), TopicZNode.encode(assignment), ZkVersion.MatchAnyVersion)
-    retryRequestUntilConnected(setDataRequest, expectedControllerEpochZkVersion)
+    setTopicAssignmentRaw(topic, expectedControllerEpochZkVersion, assignment.mapValues(brokers => Assignment(brokers, None)))
   }
 
   /**
@@ -508,11 +520,11 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
   /**
    * Create the topic znode with the given assignment.
    * @param topic the topic whose assignment is being set.
-   * @param assignment the partition to replica mapping to set for the given topic
+   * @param assignments the partition to replica mapping to set for the given topic
    * @throws KeeperException if there is an error while creating assignment
    */
-  def createTopicAssignment(topic: String, assignment: Map[TopicPartition, Seq[Int]]) = {
-    createRecursive(TopicZNode.path(topic), TopicZNode.encode(assignment))
+  def createTopicAssignment(topic: String, assignments: Map[TopicPartition, Seq[Int]]) = {
+    createRecursive(TopicZNode.path(topic), TopicZNode.encode(assignments.mapValues(a => Assignment(a, None))))
   }
 
   /**
@@ -572,43 +584,45 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
     retryRequestsUntilConnected(deleteRequests, expectedControllerEpochZkVersion)
   }
 
-  /**
-   * Gets the assignments for the given topics.
-   * @param topics the topics whose partitions we wish to get the assignments for.
-   * @return the replica assignment for each partition from the given topics.
-   */
-  def getReplicaAssignmentForTopics(topics: Set[String]): Map[TopicPartition, Seq[Int]] = {
+  def getReplicaInfoForTopics(topics: Set[String]): Map[TopicPartition, Assignment] = {
     val getDataRequests = topics.map(topic => GetDataRequest(TopicZNode.path(topic), ctx = Some(topic)))
     val getDataResponses = retryRequestsUntilConnected(getDataRequests.toSeq)
     getDataResponses.flatMap { getDataResponse =>
       val topic = getDataResponse.ctx.get.asInstanceOf[String]
       getDataResponse.resultCode match {
         case Code.OK => TopicZNode.decode(topic, getDataResponse.data)
-        case Code.NONODE => Map.empty[TopicPartition, Seq[Int]]
+        case Code.NONODE => Map.empty[TopicPartition, Assignment]
         case _ => throw getDataResponse.resultException.get
       }
     }.toMap
   }
 
   /**
-   * Gets partition the assignments for the given topics.
+   * Gets the assignments for the given topics.
    * @param topics the topics whose partitions we wish to get the assignments for.
-   * @return the partition assignment for each partition from the given topics.
+   * @return the replica assignment for each partition from the given topics.
    */
+  def getReplicaAssignmentForTopics(topics: Set[String]): Map[TopicPartition, Seq[Int]] =
+    getReplicaInfoForTopics(topics).mapValues(assignment => assignment.brokers)
+
+  /**
+    * Gets partition the assignments for the given topics.
+    * @param topics the topics whose partitions we wish to get the assignments for.
+    * @return the partition assignment for each partition from the given topics.
+    */
   def getPartitionAssignmentForTopics(topics: Set[String]): Map[String, Map[Int, Seq[Int]]] = {
-    val getDataRequests = topics.map(topic => GetDataRequest(TopicZNode.path(topic), ctx = Some(topic)))
-    val getDataResponses = retryRequestsUntilConnected(getDataRequests.toSeq)
-    getDataResponses.flatMap { getDataResponse =>
-      val topic = getDataResponse.ctx.get.asInstanceOf[String]
-       if (getDataResponse.resultCode == Code.OK) {
-        val partitionMap = TopicZNode.decode(topic, getDataResponse.data).map { case (k, v) => (k.partition, v) }
-        Map(topic -> partitionMap)
-      } else if (getDataResponse.resultCode == Code.NONODE) {
-        Map.empty[String, Map[Int, Seq[Int]]]
-      } else {
-        throw getDataResponse.resultException.get
-      }
-    }.toMap
+    var result = Map.empty[String, Map[Int, Seq[Int]]]
+    getReplicaInfoForTopics(topics).foldRight(result) {
+      case (value, result) =>
+        value match {
+          case (topicPartition, assignment) =>
+            val partitions = result.
+              getOrElse(topicPartition.topic(), Map.empty[Int, Seq[Int]])
+            val newPartitionToBrokers = partitions.updated(topicPartition.partition(), assignment.brokers)
+            result.updated(topicPartition.topic(), newPartitionToBrokers)
+        }
+    }
+    result
   }
 
   /**

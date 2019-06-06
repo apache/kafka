@@ -236,24 +236,46 @@ object TopicsZNode {
   def path = s"${BrokersZNode.path}/topics"
 }
 
+case class Assignment(val brokers: Seq[Int] = Seq(),
+                      val targetBrokers: Option[Seq[Int]] = None) {
+}
+
 object TopicZNode {
   def path(topic: String) = s"${TopicsZNode.path}/$topic"
-  def encode(assignment: collection.Map[TopicPartition, Seq[Int]]): Array[Byte] = {
-    val assignmentJson = assignment.map { case (partition, replicas) =>
-      partition.partition.toString -> replicas.asJava
+  def encode(partitionAssignments: collection.Map[TopicPartition, Assignment]): Array[Byte] = {
+    val assignmentJson = partitionAssignments.map { case (partition, assignment) =>
+      partition.partition.toString -> assignment.brokers.asJava
     }
-    Json.encodeAsBytes(Map("version" -> 1, "partitions" -> assignmentJson.asJava).asJava)
+    val reassignmentJson = partitionAssignments.filter {
+      case (partition, assignment) => assignment.targetBrokers.isDefined
+    }.map {
+      case (partition, assignment) => {
+        partition.partition.toString -> assignment.targetBrokers.get.asJava
+      }
+    }
+    Json.encodeAsBytes(Map("version" -> 2,
+                           "partitions" -> assignmentJson.asJava,
+                           "reassigningPartitions" -> reassignmentJson.asJava).asJava)
   }
-  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, Seq[Int]] = {
-    Json.parseBytes(bytes).flatMap { js =>
-      val assignmentJson = js.asJsonObject
-      val partitionsJsonOpt = assignmentJson.get("partitions").map(_.asJsonObject)
-      partitionsJsonOpt.map { partitionsJson =>
-        partitionsJson.iterator.map { case (partition, replicas) =>
-          new TopicPartition(topic, partition.toInt) -> replicas.to[Seq[Int]]
+  def decode(topic: String, bytes: Array[Byte]): Map[TopicPartition, Assignment] = {
+    val results = collection.mutable.Map[TopicPartition, Assignment]()
+    Json.parseBytes(bytes).foreach { js =>
+      val nodeJson = js.asJsonObject
+      nodeJson.get("partitions").map(_.asJsonObject).foreach { partitionsJson =>
+        partitionsJson.iterator.foreach { case (partition, replicas) =>
+          val topicPartition = new TopicPartition(topic, partition.toInt)
+          results += (topicPartition -> Assignment(replicas.to[Seq[Int]]))
         }
       }
-    }.map(_.toMap).getOrElse(Map.empty)
+      nodeJson.get("reassigningPartitions").map(_.asJsonObject).foreach { partitionsJson =>
+        partitionsJson.iterator.foreach { case (partition, replicas) =>
+          val topicPartition = new TopicPartition(topic, partition.toInt)
+          val existingAssignment = results.getOrElse(topicPartition, new Assignment())
+          results += (topicPartition -> Assignment(existingAssignment.brokers, Some(replicas.to[Seq[Int]])))
+        }
+      }
+    }
+    results.toMap
   }
 }
 
