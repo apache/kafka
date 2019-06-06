@@ -880,10 +880,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             log.error("Received fatal exception: group.instance.id gets fenced");
                             future.raise(error);
                             return;
+                        } else if (error == Errors.REBALANCE_IN_PROGRESS) {
+                            // need to re-join group but do not need to reset generation
+                            requestRejoin();
+                            future.raise(new CommitFailedException());
+                            return;
                         } else if (error == Errors.UNKNOWN_MEMBER_ID
-                                || error == Errors.ILLEGAL_GENERATION
-                                || error == Errors.REBALANCE_IN_PROGRESS) {
-                            // need to re-join group
+                                || error == Errors.ILLEGAL_GENERATION) {
+                            // need to reset generation and re-join group
                             resetGeneration();
                             future.raise(new CommitFailedException());
                             return;
