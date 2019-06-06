@@ -174,7 +174,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         //   1. only consider protocols that are supported by all the assignors. If there is no common protocols supported
         //      across all the assignors, throw an exception.
         //   2. if there are multiple protocols that are commonly supported, select the one with the highest id (i.e. the
-        //      id number indicates how advanced is the protocol).
+        //      id number indicates how advanced the protocol is).
         // we know there are at least one assignor in the list, no need to double check for NPE
         List<RebalanceProtocol> supportedProtocols = new ArrayList<>(assignors.get(0).supportedProtocols());
 
@@ -183,7 +183,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         if (supportedProtocols.isEmpty()) {
-            throw new IllegalArgumentException("Specified assignors do not have commonly supported rebalance protocol");
+            throw new IllegalArgumentException("Specified assignors " +
+                assignors.stream().map(PartitionAssignor::name).collect(Collectors.toSet()) +
+                " do not have commonly supported rebalance protocol");
         }
 
         Collections.sort(supportedProtocols);
@@ -300,8 +302,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         switch (protocol) {
             case EAGER:
                 if (!ownedPartitions.isEmpty()) {
-                    log.warn("Some partitions are not revoked with " + protocol + " protocol, " +
-                        "it is likely that the previous rebalance did not complete due to some errors");
+                    throw new IllegalStateException("Coordinator has some partitions are not revoked with " +
+                        protocol + " protocol, it is likely that the previous rebalance did not complete due to some errors");
                 }
 
                 log.info("Setting newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
