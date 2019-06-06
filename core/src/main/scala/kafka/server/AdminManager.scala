@@ -21,6 +21,7 @@ import java.util.{Collections, Properties}
 import kafka.admin.{AdminOperationException, AdminUtils}
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.log.LogConfig
+import kafka.utils.Log4jController
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -347,8 +348,16 @@ class AdminManager(val config: KafkaConfig,
               createResponseConfig(allConfigs(config),
                 createBrokerConfigEntry(perBrokerConfig = true, includeSynonyms))
             else
-              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} or empty string, but received $resource.name")
+              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} or empty string, but received ${resource.name}")
 
+          case ConfigResource.Type.BROKER_LOGGER =>
+            if (resource.name == null || resource.name.isEmpty)
+              throw new InvalidRequestException(s"Broker id must not be empty")
+            else if (resourceNameToBrokerId(resource.name) != config.brokerId) // still suffers from https://issues.apache.org/jira/browse/KAFKA-5276
+              throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} but received ${resource.name}")
+            else
+              createResponseConfig(Log4jController.loggers,
+                (name, value) => new DescribeConfigsResponse.ConfigEntry(name, value.toString, ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, false, false, List.empty.asJava))
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
         }
         resource -> resourceConfig
@@ -434,7 +443,7 @@ class AdminManager(val config: KafkaConfig,
     else {
       val id = resourceNameToBrokerId(resource.name)
       if (id != this.config.brokerId)
-        throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received $resource.name")
+        throw new InvalidRequestException(s"Unexpected broker id, expected ${this.config.brokerId}, but received ${resource.name}")
       Some(id)
     }
   }

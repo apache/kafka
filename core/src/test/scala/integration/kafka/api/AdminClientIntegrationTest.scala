@@ -1819,6 +1819,24 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       classOf[InvalidTopicException])
     client.close()
   }
+
+  @Test
+  def testDescribeConfigsForLog4jLogLevels(): Unit = {
+    createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
+    client = AdminClient.create(createConfig())
+
+    val brokerLoggerConfig = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, servers.head.config.brokerId.toString)
+    val loggerConfig = client.describeConfigs(Collections.singletonList(brokerLoggerConfig)).values.get(brokerLoggerConfig).get()
+    val logCleanerLogLevelConfig = loggerConfig.get("kafka.log.LogCleaner")
+    assertEquals("null", logCleanerLogLevelConfig.value())
+    assertEquals("kafka.log.LogCleaner", logCleanerLogLevelConfig.name())
+    assertEquals(ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, logCleanerLogLevelConfig.source())
+    assertEquals(false, logCleanerLogLevelConfig.isReadOnly)
+    assertEquals(false, logCleanerLogLevelConfig.isSensitive)
+    assertTrue(logCleanerLogLevelConfig.synonyms().isEmpty)
+
+    assertEquals("OFF", loggerConfig.get("root").value())
+  }
 }
 
 object AdminClientIntegrationTest {

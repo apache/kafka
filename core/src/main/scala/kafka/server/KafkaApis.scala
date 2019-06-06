@@ -2331,6 +2331,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   private def configsAuthorizationApiError(session: RequestChannel.Session, resource: ConfigResource): ApiError = {
     val error = resource.`type` match {
+      case ConfigResource.Type.BROKER_LOGGER => Errors.CLUSTER_AUTHORIZATION_FAILED
       case ConfigResource.Type.BROKER => Errors.CLUSTER_AUTHORIZATION_FAILED
       case ConfigResource.Type.TOPIC => Errors.TOPIC_AUTHORIZATION_FAILED
       case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.name}")
@@ -2370,6 +2371,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val describeConfigsRequest = request.body[DescribeConfigsRequest]
     val (authorizedResources, unauthorizedResources) = describeConfigsRequest.resources.asScala.partition { resource =>
       resource.`type` match {
+        case ConfigResource.Type.BROKER_LOGGER => authorize(request.session, DescribeConfigs, Resource.ClusterResource)
         case ConfigResource.Type.BROKER => authorize(request.session, DescribeConfigs, Resource.ClusterResource)
         case ConfigResource.Type.TOPIC =>
           authorize(request.session, DescribeConfigs, Resource(Topic, resource.name, LITERAL))
