@@ -1762,7 +1762,8 @@ public class KafkaAdminClient extends AdminClient {
         final Collection<ConfigResource> unifiedRequestResources = new ArrayList<>(configResources.size());
 
         for (ConfigResource resource : configResources) {
-            if (resource.type() == ConfigResource.Type.BROKER && !resource.isDefault()) {
+            if ((resource.type() == ConfigResource.Type.BROKER || resource.type() == ConfigResource.Type.BROKER_LOGGER)
+                    && !resource.isDefault()) {
                 brokerFutures.put(resource, new KafkaFutureImpl<>());
                 brokerResources.add(resource);
             } else {
@@ -1889,6 +1890,9 @@ public class KafkaAdminClient extends AdminClient {
                 break;
             case DEFAULT_CONFIG:
                 configSource = ConfigEntry.ConfigSource.DEFAULT_CONFIG;
+                break;
+            case DYNAMIC_BROKER_LOGGER_CONFIG:
+                configSource = ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG;
                 break;
             default:
                 throw new IllegalArgumentException("Unexpected config source " + source);
