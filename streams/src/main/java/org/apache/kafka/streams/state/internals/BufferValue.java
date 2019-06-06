@@ -129,12 +129,12 @@ public final class BufferValue {
         return buffer;
     }
 
-    private static void addValue(final ByteBuffer buffer, final byte[] newValue) {
-        if (newValue == null) {
+    private static void addValue(final ByteBuffer buffer, final byte[] value) {
+        if (value == null) {
             buffer.putInt(NULL_VALUE_SENTINEL);
         } else {
-            buffer.putInt(newValue.length);
-            buffer.put(newValue);
+            buffer.putInt(value.length);
+            buffer.put(value);
         }
     }
 
