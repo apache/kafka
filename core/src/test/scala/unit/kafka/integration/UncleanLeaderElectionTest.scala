@@ -255,11 +255,7 @@ class UncleanLeaderElectionTest extends ZooKeeperTestHarness {
     //make sure follower server joins the ISR
     TestUtils.waitUntilTrue(() => {
       val partitionInfoOpt = followerServer.metadataCache.getPartitionInfo(topic, partitionId)
-      if (partitionInfoOpt.isDefined) {
-        partitionInfoOpt.get.basePartitionState.isr.size() == 2
-      } else {
-        false
-      }
+      partitionInfoOpt.isDefined && partitionInfoOpt.get.basePartitionState.isr.size == 2
     }, "Inconsistent metadata after first server startup")
 
     servers.filter(server => server.config.brokerId == leaderId).map(server => shutdownServer(server))
