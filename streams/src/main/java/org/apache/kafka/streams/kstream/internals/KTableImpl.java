@@ -879,9 +879,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final ForeignKeySingleLookupProcessorSupplier<K, KO, VO> oneToOne =
                 new ForeignKeySingleLookupProcessorSupplier<>(thisStateStoreName, ((KTableImpl<KO, VO, VO>) other).valueGetterSupplier());
 
-        final RocksDbKeyValueBytesStoreSupplier thisRocksDBRef = new RocksDbKeyValueBytesStoreSupplier(thisStateStoreName, false); //Dont need timestamped store.
+        final RocksDbKeyValueBytesStoreSupplier thisRocksDBRef = new RocksDbKeyValueBytesStoreSupplier(thisStateStoreName, true);
 
-        final StoreBuilder<KeyValueStore<Bytes, byte[]>> prefixScanStoreBuilder = Stores.keyValueStoreBuilder(thisRocksDBRef,
+        final StoreBuilder<KeyValueStore<Bytes, byte[]>> prefixScanStoreBuilder = Stores.timestampedKeyValueStoreBuilder(thisRocksDBRef,
                 combinedKeySerde,
                 new SubscriptionWrapperSerde());
 

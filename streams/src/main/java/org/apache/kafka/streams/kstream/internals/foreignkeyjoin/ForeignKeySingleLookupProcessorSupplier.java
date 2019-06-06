@@ -26,9 +26,12 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
+import org.apache.kafka.streams.processor.To;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -50,7 +53,7 @@ public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
 
         return new AbstractProcessor<CombinedKey<KO, K>, SubscriptionWrapper>() {
 
-            private KeyValueStore<CombinedKey<KO, K>, SubscriptionWrapper> store;
+            private TimestampedKeyValueStore<CombinedKey<KO, K>, SubscriptionWrapper> store;
             private KTableValueGetter<KO, VO> foreignValues;
             private StreamsMetricsImpl metrics;
             private Sensor skippedRecordsSensor;
@@ -62,7 +65,7 @@ public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
                 skippedRecordsSensor = ThreadMetrics.skipRecordSensor(metrics);
                 foreignValues = foreignValueGetterSupplier.get();
                 foreignValues.init(context);
-                store = (KeyValueStore<CombinedKey<KO, K>, SubscriptionWrapper>) context.getStateStore(stateStoreName);
+                store = (TimestampedKeyValueStore<CombinedKey<KO, K>, SubscriptionWrapper>) context.getStateStore(stateStoreName);
             }
 
             @Override
@@ -82,15 +85,20 @@ public class ForeignKeySingleLookupProcessorSupplier<K, KO, VO>
                 if (value.getHash() == null) {
                     store.delete(key);
                 } else {
-                    store.put(key, value);
+                    store.put(key, ValueAndTimestamp.make(value, context().timestamp()));
                 }
 
-                VO foreignValue = foreignValues.get(foreignKey).value();
+
+                ValueAndTimestamp<VO> foreignValueAndTime = foreignValues.get(foreignKey);
+                if (foreignValueAndTime == null) {
+                    return;
+                }
+
                 //Propagate valid requests for the foreign event data as well as deletions.
-                if ((value.getHash() != null && foreignValue != null) ||
+                if ((value.getHash() != null && foreignValueAndTime.value() != null) ||
                     (value.getHash() == null && value.isPropagate())) {
-                    final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), foreignValue);
-                    context().forward(key.getPrimaryKey(), newValue);
+                    final SubscriptionResponseWrapper<VO> newValue = new SubscriptionResponseWrapper<>(value.getHash(), foreignValueAndTime.value());
+                    context().forward(key.getPrimaryKey(), newValue, To.all().withTimestamp(context().timestamp()));
                 }
             }
         };
