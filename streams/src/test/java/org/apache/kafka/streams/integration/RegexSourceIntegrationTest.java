@@ -96,6 +96,7 @@ public class RegexSourceIntegrationTest {
     private static final String STREAM_TASKS_NOT_UPDATED = "Stream tasks not updated";
     private KafkaStreams streams;
     private static volatile AtomicInteger topicSuffixGenerator = new AtomicInteger(0);
+    private String outputTopic;
 
 
     @BeforeClass
@@ -114,7 +115,8 @@ public class RegexSourceIntegrationTest {
     }
 
     @Before
-    public void setUp() {
+    public void setUp() throws InterruptedException {
+        outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
         final Properties properties = new Properties();
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100);
@@ -139,7 +141,6 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testRegexMatchesTopicsAWhenCreated() throws Exception {
-        final String outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
 
         final Serde<String> stringSerde = Serdes.String();
         final List<String> expectedFirstAssignment = Collections.singletonList("TEST-TOPIC-1");
@@ -183,7 +184,6 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testRegexMatchesTopicsAWhenDeleted() throws Exception {
-        final String outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
 
         final Serde<String> stringSerde = Serdes.String();
         final List<String> expectedFirstAssignment = Arrays.asList("TEST-TOPIC-A", "TEST-TOPIC-B");
@@ -252,7 +252,6 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testShouldReadFromRegexAndNamedTopics() throws Exception {
-        final String outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
 
         final String topic1TestMessage = "topic-1 test";
         final String topic2TestMessage = "topic-2 test";
@@ -303,7 +302,6 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testMultipleConsumersCanReadFromPartitionedTopic() throws Exception {
-        final String outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
 
         KafkaStreams partitionedStreamsLeader = null;
         KafkaStreams partitionedStreamsFollower = null;
@@ -364,7 +362,6 @@ public class RegexSourceIntegrationTest {
 
     @Test
     public void testNoMessagesSentExceptionFromOverlappingPatterns() throws Exception {
-        final String outputTopic = createTopic(topicSuffixGenerator.incrementAndGet());
 
         final String fMessage = "fMessage";
         final String fooMessage = "fooMessage";
