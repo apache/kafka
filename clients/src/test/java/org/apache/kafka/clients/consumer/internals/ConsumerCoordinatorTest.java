@@ -1696,14 +1696,11 @@ public class ConsumerCoordinatorTest {
         partitionAssignor.prepare(singletonMap(consumerId, singletonList(t1p)));
 
         client.prepareResponse(joinGroupLeaderResponse(1, consumerId, memberSubscriptions, Errors.NONE));
-        client.prepareResponse(new MockClient.RequestMatcher() {
-            @Override
-            public boolean matches(AbstractRequest body) {
-                SyncGroupRequest sync = (SyncGroupRequest) body;
-                return sync.data.memberId().equals(consumerId) &&
-                    sync.data.generationId() == 1 &&
-                    sync.groupAssignments().containsKey(consumerId);
-            }
+        client.prepareResponse(body -> {
+            SyncGroupRequest sync = (SyncGroupRequest) body;
+            return sync.data.memberId().equals(consumerId) &&
+                sync.data.generationId() == 1 &&
+                sync.groupAssignments().containsKey(consumerId);
         }, syncGroupResponse(singletonList(t1p), Errors.NONE));
         coordinator.poll(time.timer(Long.MAX_VALUE));
 
