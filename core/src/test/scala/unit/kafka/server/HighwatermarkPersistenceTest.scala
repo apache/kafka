@@ -81,12 +81,12 @@ class HighwatermarkPersistenceTest {
       partition0.addReplicaIfNotExists(followerReplicaPartition0)
       replicaManager.checkpointHighWatermarks()
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
-      assertEquals(leaderReplicaPartition0.highWatermark.messageOffset, fooPartition0Hw)
+      assertEquals(leaderReplicaPartition0.highWatermark, fooPartition0Hw)
       // set the high watermark for local replica
-      partition0.localReplica.get.highWatermark = new LogOffsetMetadata(5L)
+      partition0.localReplica.get.highWatermark = 5L
       replicaManager.checkpointHighWatermarks()
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
-      assertEquals(leaderReplicaPartition0.highWatermark.messageOffset, fooPartition0Hw)
+      assertEquals(leaderReplicaPartition0.highWatermark, fooPartition0Hw)
       EasyMock.verify(zkClient)
     } finally {
       // shutdown the replica manager upon test completion
@@ -125,12 +125,12 @@ class HighwatermarkPersistenceTest {
       topic1Partition0.addReplicaIfNotExists(leaderReplicaTopic1Partition0)
       replicaManager.checkpointHighWatermarks()
       topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
-      assertEquals(leaderReplicaTopic1Partition0.highWatermark.messageOffset, topic1Partition0Hw)
+      assertEquals(leaderReplicaTopic1Partition0.highWatermark, topic1Partition0Hw)
       // set the high watermark for local replica
-      topic1Partition0.localReplica.get.highWatermark = new LogOffsetMetadata(5L)
+      topic1Partition0.localReplica.get.highWatermark = 5L
       replicaManager.checkpointHighWatermarks()
       topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
-      assertEquals(5L, leaderReplicaTopic1Partition0.highWatermark.messageOffset)
+      assertEquals(5L, leaderReplicaTopic1Partition0.highWatermark)
       assertEquals(5L, topic1Partition0Hw)
       // add another partition and set highwatermark
       val t2p0 = new TopicPartition(topic2, 0)
@@ -142,13 +142,13 @@ class HighwatermarkPersistenceTest {
       topic2Partition0.addReplicaIfNotExists(leaderReplicaTopic2Partition0)
       replicaManager.checkpointHighWatermarks()
       var topic2Partition0Hw = hwmFor(replicaManager, topic2, 0)
-      assertEquals(leaderReplicaTopic2Partition0.highWatermark.messageOffset, topic2Partition0Hw)
+      assertEquals(leaderReplicaTopic2Partition0.highWatermark, topic2Partition0Hw)
       // set the highwatermark for local replica
-      topic2Partition0.localReplica.get.highWatermark = new LogOffsetMetadata(15L)
-      assertEquals(15L, leaderReplicaTopic2Partition0.highWatermark.messageOffset)
+      topic2Partition0.localReplica.get.highWatermark = 15L
+      assertEquals(15L, leaderReplicaTopic2Partition0.highWatermark)
       // change the highwatermark for topic1
-      topic1Partition0.localReplica.get.highWatermark = new LogOffsetMetadata(10L)
-      assertEquals(10L, leaderReplicaTopic1Partition0.highWatermark.messageOffset)
+      topic1Partition0.localReplica.get.highWatermark = 10L
+      assertEquals(10L, leaderReplicaTopic1Partition0.highWatermark)
       replicaManager.checkpointHighWatermarks()
       // verify checkpointed hw for topic 2
       topic2Partition0Hw = hwmFor(replicaManager, topic2, 0)

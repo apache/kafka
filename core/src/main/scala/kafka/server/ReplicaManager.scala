@@ -108,16 +108,6 @@ case class FetchPartitionData(error: Errors = Errors.NONE,
                               lastStableOffset: Option[Long],
                               abortedTransactions: Option[List[AbortedTransaction]])
 
-object LogReadResult {
-  val UnknownLogReadResult = LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
-                                           highWatermark = -1L,
-                                           leaderLogStartOffset = -1L,
-                                           leaderLogEndOffset = -1L,
-                                           followerLogStartOffset = -1L,
-                                           fetchTimeMs = -1L,
-                                           readSize = -1,
-                                           lastStableOffset = None)
-}
 
 /**
  * Trait to represent the state of hosted partitions. We create a concrete (active) Partition
@@ -620,7 +610,7 @@ class ReplicaManager(val config: KafkaConfig,
             logManager.abortAndPauseCleaning(topicPartition)
 
             val initialFetchState = InitialFetchState(BrokerEndPoint(config.brokerId, "localhost", -1),
-              partition.getLeaderEpoch, futureReplica.highWatermark.messageOffset)
+              partition.getLeaderEpoch, futureReplica.highWatermark)
             replicaAlterLogDirsManager.addFetcherForPartitions(Map(topicPartition -> initialFetchState))
           }
 
@@ -685,7 +675,7 @@ class ReplicaManager(val config: KafkaConfig,
         if (isFuture)
           replica.logEndOffset - logEndOffset
         else
-          math.max(replica.highWatermark.messageOffset - logEndOffset, 0)
+          math.max(replica.highWatermark - logEndOffset, 0)
       case None =>
         // return -1L to indicate that the LEO lag is not available if the replica is not created or is offline
         DescribeLogDirsResponse.INVALID_OFFSET_LAG
@@ -849,7 +839,7 @@ class ReplicaManager(val config: KafkaConfig,
         hardMaxBytesLimit = hardMaxBytesLimit,
         readPartitionInfo = fetchInfos,
         quota = quota)
-      if (isFromFollower) updateFollowerLogReadResults(replicaId, result)
+      if (isFromFollower) updateFollowerFetchState(replicaId, result)
       else result
     }
 
@@ -967,14 +957,14 @@ class ReplicaManager(val config: KafkaConfig,
                  _: KafkaStorageException |
                  _: OffsetOutOfRangeException) =>
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
-                        highWatermark = -1L,
-                        leaderLogStartOffset = -1L,
-                        leaderLogEndOffset = -1L,
-                        followerLogStartOffset = -1L,
-                        fetchTimeMs = -1L,
-                        readSize = 0,
-                        lastStableOffset = None,
-                        exception = Some(e))
+            highWatermark = Log.UnknownOffset,
+            leaderLogStartOffset = Log.UnknownOffset,
+            leaderLogEndOffset = Log.UnknownOffset,
+            followerLogStartOffset = Log.UnknownOffset,
+            fetchTimeMs = -1L,
+            readSize = 0,
+            lastStableOffset = None,
+            exception = Some(e))
         case e: Throwable =>
           brokerTopicStats.topicStats(tp.topic).failedFetchRequestRate.mark()
           brokerTopicStats.allTopicsStats.failedFetchRequestRate.mark()
@@ -984,14 +974,14 @@ class ReplicaManager(val config: KafkaConfig,
             s"on partition $tp: $fetchInfo", e)
 
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
-                        highWatermark = -1L,
-                        leaderLogStartOffset = -1L,
-                        leaderLogEndOffset = -1L,
-                        followerLogStartOffset = -1L,
-                        fetchTimeMs = -1L,
-                        readSize = 0,
-                        lastStableOffset = None,
-                        exception = Some(e))
+            highWatermark = Log.UnknownOffset,
+            leaderLogStartOffset = Log.UnknownOffset,
+            leaderLogEndOffset = Log.UnknownOffset,
+            followerLogStartOffset = Log.UnknownOffset,
+            fetchTimeMs = -1L,
+            readSize = 0,
+            lastStableOffset = None,
+            exception = Some(e))
       }
     }
 
@@ -1161,7 +1151,7 @@ class ReplicaManager(val config: KafkaConfig,
               logManager.abortAndPauseCleaning(topicPartition)
 
               futureReplicasAndInitialOffset.put(topicPartition, InitialFetchState(leader,
-                partition.getLeaderEpoch, replica.highWatermark.messageOffset))
+                partition.getLeaderEpoch, replica.highWatermark))
             }
           }
         }
@@ -1356,7 +1346,7 @@ class ReplicaManager(val config: KafkaConfig,
         val partitionsToMakeFollowerWithLeaderAndOffset = partitionsToMakeFollower.map { partition =>
           val leader = metadataCache.getAliveBrokers.find(_.id == partition.leaderReplicaIdOpt.get).get
             .brokerEndPoint(config.interBrokerListenerName)
-          val fetchOffset = partition.localReplicaOrException.highWatermark.messageOffset
+          val fetchOffset = partition.localReplicaOrException.highWatermark
           partition.topicPartition -> InitialFetchState(leader, partition.getLeaderEpoch, fetchOffset)
        }.toMap
 
@@ -1394,33 +1384,41 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /**
-   * Update the follower's fetch state in the leader based on the last fetch request and update `readResult`,
-   * if the follower replica is not recognized to be one of the assigned replicas. Do not update
-   * `readResult` otherwise, so that log start/end offset and high watermark is consistent with
+   * Update the follower's fetch state on the leader based on the last fetch request and update `readResult`.
+   * If the follower replica is not recognized to be one of the assigned replicas, do not update
+   * `readResult` so that log start/end offset and high watermark is consistent with
    * records in fetch response. Log start/end offset and high watermark may change not only due to
    * this fetch request, e.g., rolling new log segment and removing old log segment may move log
    * start offset further than the last offset in the fetched records. The followers will get the
    * updated leader's state in the next fetch response.
    */
-  private def updateFollowerLogReadResults(replicaId: Int,
-                                           readResults: Seq[(TopicPartition, LogReadResult)]): Seq[(TopicPartition, LogReadResult)] = {
-    debug(s"Recording follower broker $replicaId log end offsets: $readResults")
+  private def updateFollowerFetchState(followerId: Int,
+                                       readResults: Seq[(TopicPartition, LogReadResult)]): Seq[(TopicPartition, LogReadResult)] = {
     readResults.map { case (topicPartition, readResult) =>
-      var updatedReadResult = readResult
-      nonOfflinePartition(topicPartition) match {
-        case Some(partition) =>
-          partition.getReplica(replicaId) match {
-            case Some(replica) =>
-              partition.updateReplicaLogReadResult(replica, readResult)
-            case None =>
-              warn(s"Leader $localBrokerId failed to record follower $replicaId's position " +
+      val updatedReadResult = if (readResult.error != Errors.NONE) {
+        debug(s"Skipping update of fetch state for follower $followerId since the " +
+          s"log read returned error ${readResult.error}")
+        readResult
+      } else {
+        nonOfflinePartition(topicPartition) match {
+          case Some(partition) =>
+            if (partition.updateFollowerFetchState(followerId,
+              followerFetchOffsetMetadata = readResult.info.fetchOffsetMetadata,
+              followerStartOffset = readResult.followerLogStartOffset,
+              followerFetchTimeMs = readResult.fetchTimeMs,
+              leaderEndOffset = readResult.leaderLogEndOffset)) {
+              readResult
+            } else {
+              warn(s"Leader $localBrokerId failed to record follower $followerId's position " +
                 s"${readResult.info.fetchOffsetMetadata.messageOffset} since the replica is not recognized to be " +
                 s"one of the assigned replicas ${partition.assignedReplicas.map(_.brokerId).mkString(",")} " +
                 s"for partition $topicPartition. Empty records will be returned for this partition.")
-              updatedReadResult = readResult.withEmptyFetchInfo
-          }
-        case None =>
-          warn(s"While recording the replica LEO, the partition $topicPartition hasn't been created.")
+              readResult.withEmptyFetchInfo
+            }
+          case None =>
+            warn(s"While recording the replica LEO, the partition $topicPartition hasn't been created.")
+            readResult
+        }
       }
       topicPartition -> updatedReadResult
     }
@@ -1442,7 +1440,7 @@ class ReplicaManager(val config: KafkaConfig,
     }.filter(_.log.isDefined).toBuffer
     val replicasByDir = replicas.groupBy(_.log.get.dir.getParent)
     for ((dir, reps) <- replicasByDir) {
-      val hwms = reps.map(r => r.topicPartition -> r.highWatermark.messageOffset).toMap
+      val hwms = reps.map(r => r.topicPartition -> r.highWatermark).toMap
       try {
         highWatermarkCheckpoints.get(dir).foreach(_.write(hwms))
       } catch {

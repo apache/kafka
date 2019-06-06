@@ -386,7 +386,18 @@ class GroupCoordinatorTest {
 
     groupCoordinator.groupManager.addGroup(new GroupMetadata(deadGroupId, Dead, new MockTime()))
     val joinGroupResult = dynamicJoinGroup(deadGroupId, memberId, protocolType, protocols)
-    assertEquals(Errors.UNKNOWN_MEMBER_ID, joinGroupResult.error)
+    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, joinGroupResult.error)
+  }
+
+  @Test
+  def testSyncDeadGroup() {
+    val memberId = "memberId"
+
+    val deadGroupId = "deadGroupId"
+
+    groupCoordinator.groupManager.addGroup(new GroupMetadata(deadGroupId, Dead, new MockTime()))
+    val syncGroupResult = syncGroupFollower(deadGroupId, 1, memberId)
+    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, syncGroupResult._2)
   }
 
   @Test
@@ -507,7 +518,7 @@ class GroupCoordinatorTest {
 
     EasyMock.reset(replicaManager)
     val joinGroupResult = staticJoinGroup(groupId, rebalanceResult.leaderId, leaderInstanceId, protocolType, protocols, clockAdvance = 1)
-    assertEquals(Errors.UNKNOWN_MEMBER_ID, joinGroupResult.error)
+    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, joinGroupResult.error)
   }
 
   @Test
@@ -713,6 +724,19 @@ class GroupCoordinatorTest {
     EasyMock.reset(replicaManager)
     val invalidHeartbeatResult = heartbeat(groupId, invalidMemberId, rebalanceResult.generation, leaderInstanceId)
     assertEquals(Errors.FENCED_INSTANCE_ID, invalidHeartbeatResult)
+  }
+
+  @Test
+  def testOffsetCommitDeadGroup() {
+    val memberId = "memberId"
+
+    val deadGroupId = "deadGroupId"
+    val tp = new TopicPartition("topic", 0)
+    val offset = offsetAndMetadata(0)
+
+    groupCoordinator.groupManager.addGroup(new GroupMetadata(deadGroupId, Dead, new MockTime()))
+    val offsetCommitResult = commitOffsets(deadGroupId, memberId, 1, Map(tp -> offset))
+    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, offsetCommitResult(tp))
   }
 
   @Test
@@ -999,9 +1023,19 @@ class GroupCoordinatorTest {
 
   @Test
   def testHeartbeatUnknownGroup() {
-
     val heartbeatResult = heartbeat(groupId, memberId, -1)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, heartbeatResult)
+  }
+
+  @Test
+  def testheartbeatDeadGroup() {
+    val memberId = "memberId"
+
+    val deadGroupId = "deadGroupId"
+
+    groupCoordinator.groupManager.addGroup(new GroupMetadata(deadGroupId, Dead, new MockTime()))
+    val heartbeatResult = heartbeat(deadGroupId, memberId, 1)
+    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, heartbeatResult)
   }
 
   @Test
@@ -1304,9 +1338,7 @@ class GroupCoordinatorTest {
 
   @Test
   def testSyncGroupFromUnknownGroup() {
-    val generation = 1
-
-    val syncGroupResult = syncGroupFollower(groupId, generation, memberId)
+    val syncGroupResult = syncGroupFollower(groupId, 1, memberId)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, syncGroupResult._2)
   }
 
@@ -2179,9 +2211,19 @@ class GroupCoordinatorTest {
 
   @Test
   def testLeaveGroupUnknownGroup() {
-
     val leaveGroupResult = leaveGroup(groupId, memberId)
     assertEquals(Errors.UNKNOWN_MEMBER_ID, leaveGroupResult)
+  }
+
+  @Test
+  def testLeaveDeadGroup() {
+    val memberId = "memberId"
+
+    val deadGroupId = "deadGroupId"
+
+    groupCoordinator.groupManager.addGroup(new GroupMetadata(deadGroupId, Dead, new MockTime()))
+    val leaveGroupResult = leaveGroup(deadGroupId, memberId)
+    assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, leaveGroupResult)
   }
 
   @Test
