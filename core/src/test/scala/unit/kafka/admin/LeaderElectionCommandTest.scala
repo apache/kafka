@@ -277,7 +277,7 @@ final class LeaderElectionCommandTest extends ZooKeeperTestHarness {
       fail()
     } catch {
       case e: Throwable =>
-        assertTrue(e.getMessage.startsWith("One of the following options is required: "))
+        assertTrue(e.getMessage.startsWith("One and only one of the following options is required: "))
         assertTrue(e.getMessage.contains(" all-topic-partitions"))
         assertTrue(e.getMessage.contains(" topic"))
         assertTrue(e.getMessage.contains(" path-to-json-file"))

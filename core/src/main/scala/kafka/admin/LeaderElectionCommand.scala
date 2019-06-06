@@ -195,23 +195,18 @@ object LeaderElectionCommand extends Logging {
     }
 
     // One and only one is required: --topic, --all-topic-partitions or --path-to-json-file
-    (
-      commandOptions.options.has(commandOptions.topic),
-      commandOptions.options.has(commandOptions.allTopicPartitions),
-      commandOptions.options.has(commandOptions.pathToJsonFile)
-    ) match {
-      case (false, false, false) =>
-        throw new AdminCommandFailedException(
-          s"One of the following options is required: ${commandOptions.topic.options.get(0)}, " +
-          s"${commandOptions.allTopicPartitions.options.get(0)}, ${commandOptions.pathToJsonFile.options.get(0)}"
-        )
-      case (true, false, false) |
-           (false, true, false) |
-           (false, false, true) => // This is the only correct configuration, don't throw an exception
+    val mutuallyExclusiveOptions = Seq(
+      commandOptions.topic,
+      commandOptions.allTopicPartitions,
+      commandOptions.pathToJsonFile
+    )
+
+    mutuallyExclusiveOptions.count(commandOptions.options.has) match {
+      case 1 => // This is the only correct configuration, don't throw an exception
       case _ =>
         throw new AdminCommandFailedException(
-          s"One and only one is allow: ${commandOptions.topic.options.get(0)}, " +
-          s"${commandOptions.allTopicPartitions.options.get(0)}, ${commandOptions.pathToJsonFile.options.get(0)}"
+          "One and only one of the following options is required: " +
+          s"${mutuallyExclusiveOptions.map(_.options.get(0)).mkString(", ")}"
         )
     }
 
