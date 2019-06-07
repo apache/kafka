@@ -382,8 +382,8 @@ class LogManagerTest {
 
   @Test
   def testCreateAndDeleteOverlyLongTopic(): Unit = {
-    val invalidTopicName = String.join("", Collections.nCopies(253, "x"));
-    val log = logManager.getOrCreateLog(new TopicPartition(invalidTopicName, 0), logConfig)
+    val invalidTopicName = String.join("", Collections.nCopies(253, "x"))
+    logManager.getOrCreateLog(new TopicPartition(invalidTopicName, 0), logConfig)
     logManager.asyncDelete(new TopicPartition(invalidTopicName, 0))
   }
 

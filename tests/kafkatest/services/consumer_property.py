@@ -14,9 +14,8 @@
 # limitations under the License.
 
 """
-Define Streams configuration property names here.
+Define Consumer configuration property names here.
 """
 
-STATE_DIR = "state.dir"
-KAFKA_SERVERS = "bootstrap.servers"
-NUM_THREADS = "num.stream.threads"
+GROUP_INSTANCE_ID = "group.instance.id"
+SESSION_TIMEOUT_MS = "session.timeout.ms"
