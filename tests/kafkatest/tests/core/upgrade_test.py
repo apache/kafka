@@ -36,7 +36,7 @@ class TestUpgrade(ProduceConsumeValidateTest):
         self.zk.start()
 
         # Producer and consumer
-        self.producer_throughput = 10000
+        self.producer_throughput = 1000
         self.num_producers = 1
         self.num_consumers = 1
 
