@@ -86,6 +86,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
             jaas_override_variables     A dict of variables to be used in the jaas.conf template file
             kafka_opts_override         Override parameters of the KAFKA_OPTS environment variable
             client_prop_file_override   Override client.properties file used by the consumer
+            consumer_properties         A dict of values to pass in as --consumer-property key=value
         """
         JmxMixin.__init__(self, num_nodes=num_nodes, jmx_object_names=jmx_object_names, jmx_attributes=(jmx_attributes or []),
                           root=ConsoleConsumer.PERSISTENT_ROOT)
@@ -208,7 +209,7 @@ class ConsoleConsumer(KafkaPathResolverMixin, JmxMixin, BackgroundThreadService)
 
         if self.consumer_properties is not None:
             for k, v in self.consumer_properties.items():
-                cmd += "--consumer_properties %s=%s" % (k, v)
+                cmd += " --consumer-property %s=%s" % (k, v)
 
         cmd += " 2>> %(stderr)s | tee -a %(stdout)s &" % args
         return cmd

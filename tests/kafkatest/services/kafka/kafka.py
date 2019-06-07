@@ -75,7 +75,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
     def __init__(self, context, num_nodes, zk, security_protocol=SecurityConfig.PLAINTEXT, interbroker_security_protocol=SecurityConfig.PLAINTEXT,
                  client_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI, interbroker_sasl_mechanism=SecurityConfig.SASL_MECHANISM_GSSAPI,
                  authorizer_class_name=None, topics=None, version=DEV_BRANCH, jmx_object_names=None,
-                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None):
+                 jmx_attributes=None, zk_connect_timeout=5000, zk_session_timeout=6000, server_prop_overides=None, zk_chroot=None,
+                 per_node_server_prop_overrides={}):
         """
         :type context
         :type zk: ZookeeperService
@@ -99,6 +100,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             self.server_prop_overides = []
         else:
             self.server_prop_overides = server_prop_overides
+        if per_node_server_prop_overrides is None:
+            self.per_node_server_prop_overrides = {}
+        else:
+            self.per_node_server_prop_overrides = per_node_server_prop_overrides
         self.log_level = "DEBUG"
         self.zk_chroot = zk_chroot
 
@@ -230,6 +235,9 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         override_configs[config_property.ZOOKEEPER_CONNECT] = self.zk_connect_setting()
 
         for prop in self.server_prop_overides:
+            override_configs[prop[0]] = prop[1]
+
+        for prop in self.per_node_server_prop_overrides.get(self.idx(node), []):
             override_configs[prop[0]] = prop[1]
 
         #update template configs with test override configs
