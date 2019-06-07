@@ -497,7 +497,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     try {
       // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "2", "2", willBeCommitted = false)).get()
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "2", "2", willBeCommitted = false)).get()
       fail("should have raised a ProducerFencedException since the transaction has expired")
     } catch {
       case _: ProducerFencedException =>
@@ -506,9 +506,13 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
 
     // Verify that the first message was aborted and the second one was never written at all.
-    val nonTransactionalConsumer = nonTransactionalConsumers(0)
+    val nonTransactionalConsumer = nonTransactionalConsumers.head
     nonTransactionalConsumer.subscribe(List(topic1).asJava)
-    val records = TestUtils.consumeRecordsFor(nonTransactionalConsumer, 1000)
+
+    // Attempt to consume the one written record. We should not see the second. The
+    // assertion does not strictly guarantee that the record wasn't written, but the
+    // data is small enough that had it been written, it would have been in the first fetch.
+    val records = TestUtils.consumeRecords(nonTransactionalConsumer, numRecords = 1)
     assertEquals(1, records.size)
     assertEquals("1", TestUtils.recordValueAsString(records.head))
 
