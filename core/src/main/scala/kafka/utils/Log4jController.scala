@@ -17,6 +17,7 @@
 
 package kafka.utils
 
+import java.util
 import java.util.Locale
 
 import org.apache.log4j.{Level, LogManager, Logger}
@@ -26,7 +27,6 @@ import scala.collection.JavaConverters._
 
 
 object Log4jController {
-
   val ROOT_LOGGER = "root"
 
   /**
@@ -48,6 +48,29 @@ object Log4jController {
     logs
   }
 
+  /**
+    * Sets the log level of a particular logger
+    */
+  def logLevel(loggerName: String, logLevel: String): Boolean = {
+    val log = existingLogger(loggerName)
+    if (!loggerName.trim.isEmpty && !logLevel.trim.isEmpty && log != null) {
+      log.setLevel(Level.toLevel(logLevel.toUpperCase(Locale.ROOT)))
+      true
+    }
+    else false
+  }
+
+  def resetLogLevel(loggerName: String): Boolean = {
+    val log = existingLogger(loggerName)
+    if (!loggerName.trim.isEmpty && log != null) {
+      log.setLevel(existingLogger(ROOT_LOGGER).getLevel)
+      true
+    }
+    else false
+  }
+
+  def loggerExists(loggerName: String): Boolean = existingLogger(loggerName) != null
+
   private def existingLogger(loggerName: String) =
     if (loggerName == ROOT_LOGGER)
       LogManager.getRootLogger
@@ -62,20 +85,14 @@ object Log4jController {
  */
 class Log4jController extends Log4jControllerMBean {
 
-  def getLoggers = {
+  def getLoggers: util.List[String] = {
     Log4jController.loggers.map {
       case (logger, level) => s"$logger=$level"
     }.toList.asJava
   }
 
-  private def newLogger(loggerName: String) =
-    if (loggerName == Log4jController.ROOT_LOGGER)
-      LogManager.getRootLogger
-    else LogManager.getLogger(loggerName)
 
-
-
-  def getLogLevel(loggerName: String) = {
+  def getLogLevel(loggerName: String): String = {
     val log = Log4jController.existingLogger(loggerName)
     if (log != null) {
       val level = log.getLevel
@@ -86,16 +103,7 @@ class Log4jController extends Log4jControllerMBean {
     else "No such logger."
   }
 
-
-  def setLogLevel(loggerName: String, level: String) = {
-    val log = newLogger(loggerName)
-    if (!loggerName.trim.isEmpty && !level.trim.isEmpty && log != null) {
-      log.setLevel(Level.toLevel(level.toUpperCase(Locale.ROOT)))
-      true
-    }
-    else false
-  }
-
+  def setLogLevel(loggerName: String, level: String): Boolean = Log4jController.logLevel(loggerName, level)
 }
 
 
