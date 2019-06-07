@@ -2605,7 +2605,7 @@ object Log {
     filename.endsWith(IndexFileSuffix) || filename.endsWith(TimeIndexFileSuffix) || filename.endsWith(TxnIndexFileSuffix)
   }
 
-  private def isLogFile(file: File): Boolean =
+  def isLogFile(file: File): Boolean =
     file.getPath.endsWith(LogFileSuffix)
 
 }
