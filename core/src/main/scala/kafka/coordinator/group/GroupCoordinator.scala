@@ -182,9 +182,9 @@ class GroupCoordinator(val brokerId: Int,
 
           group.currentState match {
             case Stable =>
-              info(s"Static member $groupInstanceId with unknown member id rejoins group ${group.groupId} in ${group.currentState} state, " +
-                s"assigning new member id $newMemberId, while old member $oldMemberId will be removed. " +
-                s"No rebalance will be triggered.")
+              info(s"Static member $groupInstanceId with unknown member id rejoins group ${group.groupId} " +
+                s"in ${group.currentState} state. Assigning new member id $newMemberId, while old member $oldMemberId " +
+                "will be removed. No rebalance will be triggered.")
 
               val oldMember = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
 
@@ -205,8 +205,8 @@ class GroupCoordinator(val brokerId: Int,
                 error = Errors.NONE))
 
             case _ =>
-              info(s"Static member $groupInstanceId with unkonwn member id rejoins group ${group.groupId} in ${group.currentState} state, " +
-                s"Update its membership with the pre-registered old member id $oldMemberId.")
+              info(s"Static member $groupInstanceId with unkonwn member id rejoins group ${group.groupId} " +
+                s"in ${group.currentState} state. Update its membership with the pre-registered old member id $oldMemberId.")
 
               val knownStaticMember = group.get(oldMemberId)
               updateMemberAndRebalance(group, knownStaticMember, protocols, responseCallback)
@@ -214,13 +214,13 @@ class GroupCoordinator(val brokerId: Int,
         } else if (requireKnownMemberId) {
             // If member id required (dynamic membership), register the member in the pending member list
             // and send back a response to call for another join group request with allocated member id.
-            info(s"Dynamic member with unknown member id rejoins group ${group.groupId} in " +
+          debug(s"Dynamic member with unknown member id rejoins group ${group.groupId} in " +
               s"${group.currentState} state. Created a new member id $newMemberId and request the member to rejoin with this id.")
             group.addPendingMember(newMemberId)
             addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
             responseCallback(joinError(newMemberId, Errors.MEMBER_ID_REQUIRED))
         } else {
-          info(s"Dynamic member with unknown member id rejoins group ${group.groupId} in " +
+          debug(s"Dynamic member with unknown member id rejoins group ${group.groupId} in " +
             s"${group.currentState} state. Created a new member id $newMemberId for this member and add to the group.")
           addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, newMemberId, groupInstanceId,
             clientId, clientHost, protocolType, protocols, group, responseCallback)
@@ -638,7 +638,7 @@ class GroupCoordinator(val brokerId: Int,
             groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback)
 
           case CompletingRebalance =>
-            // we should not receive a commit request if the group has not completed rebalance;
+            // We should not receive a commit request if the group has not completed rebalance;
             // but since the consumer's member.id and generation is valid, it means it has received
             // the latest group generation information from the JoinResponse.
             // So let's return a REBALANCE_IN_PROGRESS to let consumer handle it gracefully.
