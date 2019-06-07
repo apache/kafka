@@ -38,6 +38,7 @@ RUN pip install -U pip==9.0.3 setuptools && pip install --upgrade cffi virtualen
 # Set up ssh
 COPY ./ssh-config /root/.ssh/config
 RUN ssh-keygen -q -t rsa -N '' -f /root/.ssh/id_rsa && cp -f /root/.ssh/id_rsa.pub /root/.ssh/authorized_keys
+RUN echo 'PermitUserEnvironment yes' >> /etc/ssh/sshd_config
 
 # Install binary test dependencies.
 ENV MIRROR="https://s3-us-west-2.amazonaws.com/kafka-packages"
@@ -49,7 +50,7 @@ RUN mkdir -p "/opt/kafka-0.10.2.2" && curl -s "${MIRROR}/kafka_2.11-0.10.2.2.tgz
 RUN mkdir -p "/opt/kafka-0.11.0.3" && curl -s "${MIRROR}/kafka_2.11-0.11.0.3.tgz" | tar xz --strip-components=1 -C "/opt/kafka-0.11.0.3"
 
 # Set up the ducker user.
-RUN useradd -ms /bin/bash ducker && mkdir -p /home/ducker/ && rsync -aiq /root/.ssh/ /home/ducker/.ssh && chown -R ducker /home/ducker/ /mnt/ && echo 'ducker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
+RUN useradd -ms /bin/bash ducker && mkdir -p /home/ducker/ && rsync -aiq /root/.ssh/ /home/ducker/.ssh && chown -R ducker /home/ducker/ /mnt/ && echo "PATH=$(runuser -l ducker -c 'echo $PATH'):$JAVA_HOME/bin" >> /home/ducker/.ssh/environment && echo 'PATH=$PATH:'"$JAVA_HOME/bin" >> /home/ducker/.profile && echo 'ducker ALL=(ALL) NOPASSWD: ALL' >> /etc/sudoers
 USER ducker
 
 CMD sudo service ssh start && tail -f /dev/null
