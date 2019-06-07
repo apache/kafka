@@ -315,7 +315,7 @@ class GroupCoordinator(val brokerId: Int,
                   error = Errors.NONE))
               }
 
-            case _ =>
+            case Empty | Dead =>
               // Group reaches unexpected state. Let the joining member reset their generation and rejoin.
               warn(s"Attempt to add rejoining member $memberId of group ${group.groupId} in " +
                 s"unexpected group state ${group.currentState}")
@@ -411,9 +411,6 @@ class GroupCoordinator(val brokerId: Int,
             val memberMetadata = group.get(memberId)
             responseCallback(memberMetadata.assignment, Errors.NONE)
             completeAndScheduleNextHeartbeatExpiration(group, group.get(memberId))
-
-          case _ =>
-            throw new IllegalStateException(s"Reached unexpected state ${group.currentState} for group ${group.groupId} when handling SyncGroup request")
         }
       }
     }
@@ -542,10 +539,6 @@ class GroupCoordinator(val brokerId: Int,
                 val member = group.get(memberId)
                 completeAndScheduleNextHeartbeatExpiration(group, member)
                 responseCallback(Errors.NONE)
-
-            case _ =>
-              // actually this should never happen since we check group.is(Dead) before, but leaving it here just for completeness
-              throw new IllegalStateException(s"Reached unexpected state ${group.currentState} for group ${group.groupId} when handling Heartbeat request")
           }
         }
       }
@@ -643,9 +636,6 @@ class GroupCoordinator(val brokerId: Int,
             // the latest group generation information from the JoinResponse.
             // So let's return a REBALANCE_IN_PROGRESS to let consumer handle it gracefully.
             responseCallback(offsetMetadata.mapValues(_ => Errors.REBALANCE_IN_PROGRESS))
-
-          case _ =>
-            throw new IllegalStateException(s"Reached unexpected state ${group.currentState} for group ${group.groupId} when handling CommitOffsets request")
         }
       }
     }

@@ -882,7 +882,13 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             future.raise(error);
                             return;
                         } else if (error == Errors.REBALANCE_IN_PROGRESS) {
-                            // need to re-join group but do not need to reset generation
+                            /* Consumer never tries to commit offset in between join-group and sync-group,
+                             * and hence on broker-side it is not expected to see a commit offset request
+                             * during CompletingRebalance phase; if it ever happens then broker would return
+                             * this error. In this case we should just treat as a fatal CommitFailed exception.
+                             * However, we do not need to reset generations and just request re-join, such that
+                             * if the caller decides to proceed and poll, it would still try to proceed and re-join normally.
+                             */
                             requestRejoin();
                             future.raise(new CommitFailedException());
                             return;
