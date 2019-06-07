@@ -1202,7 +1202,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                                     return;
                                 }
                                 String reconfigUrl = RestServer.urlJoin(leaderUrl, "/connectors/" + connName + "/tasks");
-                                RestClient.httpRequest(reconfigUrl, "POST", rawTaskProps, null, config);
+                                RestClient.httpRequest(reconfigUrl, "POST", null, rawTaskProps, null, config);
                                 cb.onCompletion(null, null);
                             } catch (ConnectException e) {
                                 log.error("Request to leader to reconfigure connector tasks failed", e);

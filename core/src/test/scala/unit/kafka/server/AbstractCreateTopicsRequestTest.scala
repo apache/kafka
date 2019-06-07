@@ -124,8 +124,18 @@ class AbstractCreateTopicsRequestTest extends BaseRequestTest {
         else {
           assertNotNull("The topic should be created", metadataForTopic)
           assertEquals(Errors.NONE, metadataForTopic.error)
-          assertEquals("The topic should have the correct number of partitions", partitions, metadataForTopic.partitionMetadata.size)
-          assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+          if (partitions == -1) {
+            assertEquals("The topic should have the default number of partitions", configs.head.numPartitions, metadataForTopic.partitionMetadata.size)
+          } else {
+            assertEquals("The topic should have the correct number of partitions", partitions, metadataForTopic.partitionMetadata.size)
+          }
+
+          if (replication == -1) {
+            assertEquals("The topic should have the default replication factor",
+              configs.head.defaultReplicationFactor, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+          } else {
+            assertEquals("The topic should have the correct replication factor", replication, metadataForTopic.partitionMetadata.asScala.head.replicas.size)
+          }
         }
       }
 

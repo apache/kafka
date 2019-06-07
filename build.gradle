@@ -939,6 +939,8 @@ project(':clients') {
     compile libs.lz4
     compile libs.snappy
     compile libs.slf4jApi
+    compile libs.scalaJava8Compat
+
     compileOnly libs.jacksonDatabind // for SASL/OAUTHBEARER bearer token parsing
     compileOnly libs.jacksonJDK8Datatypes
 
@@ -1356,6 +1358,18 @@ project(':streams:upgrade-system-tests-21') {
 
   dependencies {
     testCompile libs.kafkaStreams_21
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
+project(':streams:upgrade-system-tests-22') {
+  archivesBaseName = "kafka-streams-upgrade-system-tests-22"
+
+  dependencies {
+    testCompile libs.kafkaStreams_22
   }
 
   systemTestLibs {

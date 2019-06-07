@@ -76,7 +76,7 @@ class ReplicaTest {
       initialHighWatermarkValue = initialHighWatermark,
       log = Some(log))
 
-    assertEquals(initialHighWatermark, replica.highWatermark.messageOffset)
+    assertEquals(initialHighWatermark, replica.highWatermark)
 
     val expiredTimestamp = time.milliseconds() - 1000
     for (i <- 0 until 100) {
@@ -100,13 +100,13 @@ class ReplicaTest {
 
     // ensure we have at least a few segments so the test case is not trivial
     assertTrue(log.numberOfSegments > 5)
-    assertEquals(0L, replica.highWatermark.messageOffset)
+    assertEquals(0L, replica.highWatermark)
     assertEquals(0L, replica.logStartOffset)
     assertEquals(100L, replica.logEndOffset)
 
     for (hw <- 0 to 100) {
-      replica.highWatermark = new LogOffsetMetadata(hw)
-      assertEquals(hw, replica.highWatermark.messageOffset)
+      replica.highWatermark = hw
+      assertEquals(hw, replica.highWatermark)
       log.deleteOldSegments()
       assertTrue(replica.logStartOffset <= hw)
 
@@ -134,7 +134,7 @@ class ReplicaTest {
       log.appendAsLeader(records, leaderEpoch = 0)
     }
 
-    replica.highWatermark = new LogOffsetMetadata(25L)
+    replica.highWatermark = 25L
     replica.maybeIncrementLogStartOffset(26L)
   }
 
