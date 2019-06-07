@@ -16,11 +16,23 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import org.apache.kafka.common.metrics.Stat;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.kstream.*;
+import org.apache.kafka.streams.kstream.Grouped;
+import org.apache.kafka.streams.kstream.KGroupedTable;
+import org.apache.kafka.streams.kstream.KStream;
+import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.StateStoreType;
+import org.apache.kafka.streams.kstream.Suppressed;
+import org.apache.kafka.streams.kstream.ValueJoiner;
+import org.apache.kafka.streams.kstream.ValueMapper;
+import org.apache.kafka.streams.kstream.ValueMapperWithKey;
+import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -33,9 +45,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.NamedSuppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -86,8 +96,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
 
     private final StateStoreType stateStoreType;
 
-    private final Optional<Windows<?>> timeWindows;
+    // Needed if given KTable needs to be materialized as window store.
+    private final Optional<Windows<?>> timeWindow;
 
+    // Needed if given KTable needs to be materialized as session store.
     private final Optional<SessionWindows> sessionWindow;
 
     private boolean sendOldValues = false;
@@ -101,13 +113,13 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                       final StreamsGraphNode streamsGraphNode,
                       final InternalStreamsBuilder builder,
                       final StateStoreType stateStoreType, 
-                      Optional<Windows<?>> timeWindows, 
+                      Optional<Windows<?>> timeWindow,
                       Optional<SessionWindows> sessionWindow) {
         super(name, keySerde, valSerde, sourceNodes, streamsGraphNode, builder);
         this.processorSupplier = processorSupplier;
         this.queryableStoreName = queryableStoreName;
         this.stateStoreType = stateStoreType;
-        this.timeWindows = timeWindows;
+        this.timeWindow = timeWindow;
         this.sessionWindow = sessionWindow;
     }
 
@@ -169,7 +181,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                 queryableStoreName,
                                 processorSupplier,
                                 tableNode,
-                                builder, StateStoreType.KEY_VALUE_STORE, Optional.empty(), Optional.empty());
+                                builder,
+                                stateStoreType,
+                                timeWindow,
+                                sessionWindow);
     }
 
     @Override
@@ -419,7 +434,6 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             this
         );
 
-
         final ProcessorGraphNode<K, Change<V>> node = new StatefulProcessorNode<>(
             name,
             new ProcessorParameters<>(suppressionSupplier, name),
@@ -609,10 +623,10 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         if (stateStoreType == StateStoreType.KEY_VALUE_STORE) {
             storeBuilder = new TimestampedKeyValueStoreMaterializer<>(materializedInternal).materialize();
         } else if (stateStoreType == StateStoreType.TIME_WINDOW_STORE) {
-            if (!timeWindows.isPresent()) {
+            if (!timeWindow.isPresent()) {
                 throw new IllegalArgumentException("Window store type KTable doesn't have time window defined");
             }
-            storeBuilder = new WindowStoreMaterializer(materializedInternal, timeWindows.get()).materialize();
+            storeBuilder = new WindowStoreMaterializer(materializedInternal, timeWindow.get()).materialize();
         } else {
             if (!sessionWindow.isPresent()) {
                 throw new IllegalArgumentException("Session store type KTable doesn't have session window defined");

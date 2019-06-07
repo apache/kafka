@@ -27,6 +27,7 @@ import org.apache.kafka.streams.kstream.Merger;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.StateStoreType;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
@@ -37,6 +38,7 @@ import org.apache.kafka.streams.state.Stores;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
@@ -93,14 +95,17 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             AGGREGATE_NAME,
             materialize(materializedInternal),
             new KStreamSessionWindowAggregate<>(
-                windows,
-                materializedInternal.storeName(),
-                aggregateBuilder.countInitializer,
-                aggregateBuilder.countAggregator,
-                countMerger),
+            windows,
+            materializedInternal.storeName(),
+            aggregateBuilder.countInitializer,
+            aggregateBuilder.countAggregator,
+            countMerger),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            StateStoreType.SESSION_STORE,
+            Optional.empty(),
+            Optional.of(windows));
     }
 
     @Override
@@ -135,7 +140,10 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
             ),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            StateStoreType.SESSION_STORE,
+            Optional.empty(),
+            Optional.of(windows));
     }
 
     @Override
@@ -172,7 +180,10 @@ public class SessionWindowedKStreamImpl<K, V> extends AbstractStream<K, V> imple
                 sessionMerger),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new WindowedSerdes.SessionWindowedSerde<>(materializedInternal.keySerde()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            StateStoreType.SESSION_STORE,
+            Optional.empty(),
+            Optional.of(windows));
     }
 
     @SuppressWarnings("deprecation") // continuing to support SessionWindows#maintainMs in fallback mode

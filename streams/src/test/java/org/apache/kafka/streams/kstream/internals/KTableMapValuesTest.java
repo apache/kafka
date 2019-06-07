@@ -27,6 +27,7 @@ import org.apache.kafka.streams.TopologyWrapper;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -86,7 +87,7 @@ public class KTableMapValuesTest {
         final KTable<String, Integer> table2 = table1
             .mapValues(
                 value -> value.charAt(0) - 48,
-                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as("anyName")
+                Materialized.<String, Integer, StateStore>as("anyName")
                     .withValueSerde(Serdes.Integer()));
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
@@ -173,12 +174,12 @@ public class KTableMapValuesTest {
         final KTableImpl<String, String, Integer> table2 =
             (KTableImpl<String, String, Integer>) table1.mapValues(
                 Integer::new,
-                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName2)
+                Materialized.<String, Integer, StateStore>as(storeName2)
                     .withValueSerde(Serdes.Integer()));
         final KTableImpl<String, String, Integer> table3 =
             (KTableImpl<String, String, Integer>) table1.mapValues(
                 value -> new Integer(value) * (-1),
-                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(storeName3)
+                Materialized.<String, Integer, StateStore>as(storeName3)
                     .withValueSerde(Serdes.Integer()));
         final KTableImpl<String, String, Integer> table4 =
             (KTableImpl<String, String, Integer>) table1.mapValues(Integer::new);

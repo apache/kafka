@@ -24,6 +24,7 @@ import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
+import org.apache.kafka.streams.kstream.StateStoreType;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
@@ -38,6 +39,7 @@ import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 
 import java.time.Duration;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 import static org.apache.kafka.streams.kstream.internals.KGroupedStreamImpl.AGGREGATE_NAME;
@@ -96,7 +98,10 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            StateStoreType.TIME_WINDOW_STORE,
+            Optional.of(windows),
+            Optional.empty());
     }
 
     @Override
@@ -123,7 +128,10 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            StateStoreType.TIME_WINDOW_STORE,
+            Optional.of(windows),
+            Optional.empty());
     }
 
     @Override
@@ -152,7 +160,10 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
             new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            StateStoreType.TIME_WINDOW_STORE,
+            Optional.of(windows),
+            Optional.empty());
     }
 
     @SuppressWarnings("deprecation") // continuing to support Windows#maintainMs/segmentInterval in fallback mode

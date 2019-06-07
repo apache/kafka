@@ -32,6 +32,7 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.KeyValueStore;
@@ -342,7 +343,7 @@ public class KTableTransformValuesTest {
             .table(INPUT_TOPIC, CONSUMED)
             .transformValues(
                 new ExclamationValueTransformerSupplier(STORE_NAME, QUERYABLE_NAME),
-                Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(QUERYABLE_NAME)
+                Materialized.<String, String, StateStore>as(QUERYABLE_NAME)
                     .withKeySerde(Serdes.String())
                     .withValueSerde(Serdes.String()),
                 STORE_NAME)
@@ -377,7 +378,7 @@ public class KTableTransformValuesTest {
             .table(INPUT_TOPIC, CONSUMED)
             .transformValues(
                 new StatefulTransformerSupplier(),
-                Materialized.<String, Integer, KeyValueStore<Bytes, byte[]>>as(QUERYABLE_NAME)
+                Materialized.<String, Integer, StateStore>as(QUERYABLE_NAME)
                     .withKeySerde(Serdes.String())
                     .withValueSerde(Serdes.Integer()))
             .groupBy(toForceSendingOfOldValues(), Grouped.with(Serdes.String(), Serdes.Integer()))

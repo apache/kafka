@@ -49,6 +49,7 @@ import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.PriorityQueue;
 import java.util.Properties;
 import java.util.Set;
@@ -123,7 +124,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         final KTableSource<K, V> tableSource = new KTableSource<>(materialized.storeName(), materialized.queryableStoreName());
         final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(tableSource, tableSourceName);
 
-        final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder()
+        final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder(StateStoreType.KEY_VALUE_STORE)
             .withTopic(topic)
             .withSourceName(sourceName)
             .withNodeName(tableSourceName)
@@ -141,7 +142,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                 materialized.queryableStoreName(),
                                 tableSource,
                                 tableSourceNode,
-                                this, StateStoreType.KEY_VALUE_STORE);
+                                this, StateStoreType.KEY_VALUE_STORE,
+                Optional.empty(),
+                Optional.empty());
     }
 
     public <K, V> GlobalKTable<K, V> globalTable(final String topic,
@@ -159,7 +162,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(tableSource, processorName);
 
-        final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder()
+        final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder(StateStoreType.KEY_VALUE_STORE)
             .withTopic(topic)
             .isGlobalKTable(true)
             .withSourceName(sourceName)

@@ -20,7 +20,9 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.StateStoreType;
+import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
@@ -75,7 +77,10 @@ class GroupedStreamAggregateBuilder<K, V> {
                                   final KStreamAggProcessorSupplier<K, KR, V, VR> aggregateSupplier,
                                   final String queryableStoreName,
                                   final Serde<KR> keySerde,
-                                  final Serde<VR> valSerde) {
+                                  final Serde<VR> valSerde,
+                                  StateStoreType stateStoreType,
+                                  Optional<Windows<?>> timeWindows,
+                                  Optional<SessionWindows> sessionWindow) {
         assert queryableStoreName == null || queryableStoreName.equals(storeBuilder.name());
 
         final String aggFunctionName = builder.newProcessorName(functionName);
@@ -116,9 +121,10 @@ class GroupedStreamAggregateBuilder<K, V> {
                                 queryableStoreName,
                                 aggregateSupplier,
                                 statefulProcessorNode,
-                                builder, StateStoreType.KEY_VALUE_STORE,
-                Optional.empty(), Optional.empty());
-
+                                builder,
+                                stateStoreType,
+                                timeWindows,
+                                sessionWindow);
     }
 
     /**

@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.SessionWindowedKStream;
 import org.apache.kafka.streams.kstream.SessionWindows;
+import org.apache.kafka.streams.kstream.StateStoreType;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windows;
@@ -189,6 +190,7 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             aggregateSupplier,
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde(),
-            materializedInternal.valueSerde());
+            materializedInternal.valueSerde(),
+            StateStoreType.KEY_VALUE_STORE, , );
     }
 }

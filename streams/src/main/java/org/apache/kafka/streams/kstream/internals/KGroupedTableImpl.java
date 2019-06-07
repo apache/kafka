@@ -34,6 +34,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Collections;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -103,7 +104,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
                                 materialized.queryableStoreName(),
                                 aggregateSupplier,
                                 statefulProcessorNode,
-                                builder, StateStoreType.KEY_VALUE_STORE);
+                                builder, StateStoreType.KEY_VALUE_STORE,
+                                Optional.empty(),
+                                Optional.empty());
     }
 
     private GroupedTableOperationRepartitionNode<K, V> createRepartitionNode(final String sinkName,
