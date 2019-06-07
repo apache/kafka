@@ -5,7 +5,7 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- * 
+ *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
@@ -17,21 +17,21 @@
 package kafka.utils
 
 import scala.collection.mutable.PriorityQueue
-import java.util.concurrent.{Delayed, ScheduledFuture, TimeUnit}
+import java.util.concurrent.{Delayed, CompletableFuture, TimeUnit}
 
 import org.apache.kafka.common.utils.Time
 
 /**
  * A mock scheduler that executes tasks synchronously using a mock time instance. Tasks are executed synchronously when
  * the time is advanced. This class is meant to be used in conjunction with MockTime.
- * 
+ *
  * Example usage
  * <code>
  *   val time = new MockTime
  *   time.scheduler.schedule("a task", println("hello world: " + time.milliseconds), delay = 1000)
  *   time.sleep(1001) // this should cause our scheduled task to fire
  * </code>
- *   
+ *
  * Incrementing the time to the exact next execution time of a task will result in that task executing (it as if execution itself takes no time).
  */
 class MockScheduler(val time: Time) extends Scheduler {
@@ -71,7 +71,7 @@ class MockScheduler(val time: Time) extends Scheduler {
     }
   }
 
-  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): ScheduledFuture[Unit] = {
+  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): CompletableFuture[Unit] = {
     var task : MockTask = null
     this synchronized {
       task = MockTask(name, fun, time.milliseconds + delay, period = period, time=time)
@@ -88,7 +88,7 @@ class MockScheduler(val time: Time) extends Scheduler {
   }
 }
 
-case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long, time: Time) extends ScheduledFuture[Unit] {
+case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long, time: Time) extends CompletableFuture[Unit] {
   def periodic = period >= 0
   def compare(t: MockTask): Int = {
     if(t.nextExecution == nextExecution)
@@ -97,27 +97,6 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
       -1
     else
       1
-  }
-
-  /**
-   * Not used, so not not fully implemented
-   */
-  def cancel(mayInterruptIfRunning: Boolean) : Boolean = {
-    false
-  }
-
-  def get() {
-  }
-
-  def get(timeout: Long, unit: TimeUnit){
-  }
-
-  def isCancelled: Boolean = {
-    false
-  }
-
-  def isDone: Boolean = {
-    false
   }
 
   def getDelay(unit: TimeUnit): Long = {
@@ -137,3 +116,4 @@ object MockTask {
     }
   }
 }
+
