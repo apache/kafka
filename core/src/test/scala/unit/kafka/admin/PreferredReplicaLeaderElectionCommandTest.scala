@@ -21,11 +21,11 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util.Properties
 
-import kafka.common.{AdminCommandFailedException, TopicAndPartition}
+import kafka.common.AdminCommandFailedException
 import kafka.network.RequestChannel
 import kafka.security.auth._
 import kafka.server.{KafkaConfig, KafkaServer}
-import kafka.utils.{Logging, TestUtils, ZkUtils}
+import kafka.utils.{Logging, TestUtils}
 import kafka.zk.ZooKeeperTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ClusterAuthorizationException
@@ -152,10 +152,10 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     assertEquals(testPartitionPreferredLeader, getLeader(testPartition))
   }
 
-  private def toJsonFile(partitions: scala.collection.Set[TopicPartition]): File = {
+  private def toJsonFile(partitions: Set[TopicPartition]): File = {
     val jsonFile = File.createTempFile("preferredreplicaelection", ".js")
     jsonFile.deleteOnExit()
-    val jsonString = ZkUtils.preferredReplicaLeaderElectionZkData(partitions.map(new TopicAndPartition(_)))
+    val jsonString = TestUtils.stringifyTopicPartitions(partitions)
     debug("Using json: "+jsonString)
     Files.write(Paths.get(jsonFile.getAbsolutePath), jsonString.getBytes(StandardCharsets.UTF_8))
     jsonFile
