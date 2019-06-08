@@ -160,7 +160,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final String name = builder.newProcessorName(FILTER_NAME);
 
         final KTableProcessorSupplier<K, V, V> processorSupplier =
-            new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
+            new KTableFilter<>(this, predicate, filterNot, queryableStoreName, stateStoreType);
 
         final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
             new ProcessorParameters<>(processorSupplier, name)

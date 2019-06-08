@@ -17,10 +17,13 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.StateStoreType;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
@@ -29,15 +32,18 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final boolean filterNot;
     private final String queryableName;
     private boolean sendOldValues = false;
+    private final StateStoreType stateStoreType;
 
     KTableFilter(final KTableImpl<K, ?, V> parent,
                  final Predicate<? super K, ? super V> predicate,
                  final boolean filterNot,
-                 final String queryableName) {
+                 final String queryableName,
+                 StateStoreType stateStoreType) {
         this.parent = parent;
         this.predicate = predicate;
         this.filterNot = filterNot;
         this.queryableName = queryableName;
+        this.stateStoreType = stateStoreType;
     }
 
     @Override
@@ -107,6 +113,45 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
                 tupleForwarder.maybeForward(key, newValue, oldValue);
             } else {
                 context().forward(key, new Change<>(newValue, oldValue));
+            }
+        }
+    }
+
+    private class TimeWindowedKTableFilterProcessor extends AbstractProcessor<Windowed<K>, Change<V>> {
+        private TimestampedWindowStore<K, V> store;
+        private TimestampedTupleForwarder<K, V> tupleForwarder;
+
+        @SuppressWarnings("unchecked")
+        @Override
+        public void init(final ProcessorContext context) {
+            super.init(context);
+            if (queryableName != null) {
+                store = (TimestampedWindowStore<K, V>) context.getStateStore(queryableName);
+                tupleForwarder = new TimestampedTupleForwarder<>(
+                        store,
+                        context,
+                        new TimestampedCacheFlushListener<>(context),
+                        sendOldValues);
+            }
+        }
+
+        @Override
+        public void process(final Windowed<K> windowedKey, final Change<V> change) {
+            final K messageKey = windowedKey.key();
+            final V newValue = computeValue(windowedKey.key(), change.newValue);
+            final V oldValue = sendOldValues ? computeValue(windowedKey.key(), change.oldValue) : null;
+
+            if (sendOldValues && oldValue == null && newValue == null) {
+                return; // unnecessary to forward here.
+            }
+
+            if (queryableName != null) {
+                store.put(messageKey,
+                          ValueAndTimestamp.make(newValue, context().timestamp()),
+                          windowedKey.window().start());
+                tupleForwarder.maybeForward(messageKey, newValue, oldValue);
+            } else {
+                context().forward(windowedKey, new Change<>(newValue, oldValue));
             }
         }
     }

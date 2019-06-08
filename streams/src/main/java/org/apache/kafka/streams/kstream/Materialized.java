@@ -116,9 +116,9 @@ public class Materialized<K, V, S extends StateStore> {
      * @param <V>      value type of the store
      * @return a new {@link Materialized} instance with the given supplier
      */
-    public static <K, V> Materialized<K, V, WindowStore<Bytes, byte[]>> as(final WindowBytesStoreSupplier supplier) {
+    public static <K, V, S extends StateStore> Materialized<K, V, S> as(final WindowBytesStoreSupplier supplier) {
         Objects.requireNonNull(supplier, "supplier can't be null");
-        return new Materialized<>(supplier);
+        return new Materialized<>((StoreSupplier<S>) supplier);
     }
 
     /**

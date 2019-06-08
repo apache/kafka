@@ -30,6 +30,9 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.StoreSupplier;
+import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
@@ -46,6 +49,7 @@ import java.util.List;
 import java.util.Properties;
 
 import static java.time.Duration.ofMillis;
+import static java.time.Duration.ofSeconds;
 import static java.time.Instant.ofEpochMilli;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -242,6 +246,38 @@ public class TimeWindowedKStreamImplTest {
                     KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make("0+10+20", 550L)))));
             }
         }
+    }
+
+    @Test
+    public void shouldBeAbleToMaterializedAsWindowed() {
+        final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
+        windowedStream
+                .count()
+                .filter(
+                        (key, value) -> true,
+                        Materialized.as(Stores.persistentWindowStore(
+                                "window-store",
+                                ofSeconds(30L),
+                                ofSeconds(10L),
+                                false
+                        ))
+                );
+
+        try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
+            processData(driver);
+        }
+        assertThat(
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                        .get(new Windowed<>("1", new TimeWindow(0L, 500L))),
+                equalTo(ValueAndTimestamp.make(2L, 15L)));
+        assertThat(
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                        .get(new Windowed<>("2", new TimeWindow(500L, 1000L))),
+                equalTo(ValueAndTimestamp.make(2L, 550L)));
+        assertThat(
+                supplier.theCapturedProcessor().lastValueAndTimestampPerKey
+                        .get(new Windowed<>("1", new TimeWindow(500L, 1000L))),
+                equalTo(ValueAndTimestamp.make(1L, 500L)));
     }
 
     @Test(expected = NullPointerException.class)

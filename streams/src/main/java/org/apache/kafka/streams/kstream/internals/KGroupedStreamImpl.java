@@ -34,6 +34,7 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.state.KeyValueStore;
 
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 
 class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedStream<K, V> {
@@ -191,6 +192,8 @@ class KGroupedStreamImpl<K, V> extends AbstractStream<K, V> implements KGroupedS
             materializedInternal.queryableStoreName(),
             materializedInternal.keySerde(),
             materializedInternal.valueSerde(),
-            StateStoreType.KEY_VALUE_STORE, , );
+            StateStoreType.KEY_VALUE_STORE,
+            Optional.empty(),
+            Optional.empty());
     }
 }
