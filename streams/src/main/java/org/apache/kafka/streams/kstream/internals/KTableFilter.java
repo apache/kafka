@@ -28,14 +28,14 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private final KTableImpl<K, ?, V> parent;
-    private final Predicate<? super K, ? super V> predicate;
+    private final Predicate<?, ? super V> predicate;
     private final boolean filterNot;
     private final String queryableName;
     private boolean sendOldValues = false;
     private final StateStoreType stateStoreType;
 
     KTableFilter(final KTableImpl<K, ?, V> parent,
-                 final Predicate<? super K, ? super V> predicate,
+                 final Predicate<?, ? super V> predicate,
                  final boolean filterNot,
                  final String queryableName,
                  StateStoreType stateStoreType) {
@@ -64,7 +64,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     private V computeValue(final K key, final V value) {
         V newValue = null;
 
-        if (value != null && (filterNot ^ predicate.test(key, value))) {
+        if (value != null && (filterNot ^ ((Predicate<K, V>)predicate).test(key, value))) {
             newValue = value;
         }
 
@@ -76,7 +76,31 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
         if (valueAndTimestamp != null) {
             final V value = valueAndTimestamp.value();
-            if (filterNot ^ predicate.test(key, value)) {
+            if (filterNot ^ ((Predicate<K, V>)predicate).test(key, value)) {
+                newValueAndTimestamp = valueAndTimestamp;
+            }
+        }
+
+        return newValueAndTimestamp;
+    }
+
+
+    private V computeWindowedValue(final Windowed<K> key, final V value) {
+        V newValue = null;
+
+        if (value != null && (filterNot ^ ((Predicate<Windowed<K>, V>)predicate).test(key, value))) {
+            newValue = value;
+        }
+
+        return newValue;
+    }
+
+    private ValueAndTimestamp<V> computeWindowedValue(final Windowed<K> key, final ValueAndTimestamp<V> valueAndTimestamp) {
+        ValueAndTimestamp<V> newValueAndTimestamp = null;
+
+        if (valueAndTimestamp != null) {
+            final V value = valueAndTimestamp.value();
+            if (filterNot ^ ((Predicate<Windowed<K>, V>)predicate).test(key, value)) {
                 newValueAndTimestamp = valueAndTimestamp;
             }
         }
@@ -141,8 +165,8 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         @Override
         public void process(Windowed<K> windowedKey, final Change<V> change) {
             final K messageKey = windowedKey.key();
-            final V newValue = computeValue(windowedKey.key(), change.newValue);
-            final V oldValue = sendOldValues ? computeValue(windowedKey.key(), change.oldValue) : null;
+            final V newValue = computeWindowedValue(windowedKey, change.newValue);
+            final V oldValue = sendOldValues ? computeWindowedValue(windowedKey, change.oldValue) : null;
 
             if (sendOldValues && oldValue == null && newValue == null) {
                 return; // unnecessary to forward here.

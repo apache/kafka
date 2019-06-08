@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -126,7 +125,7 @@ public interface KTable<K, V> {
      * @return a {@code KTable} that contains only those records that satisfy the given predicate
      * @see #filterNot(Predicate, Materialized)
      */
-    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+    KTable<K, V> filter(final Predicate<?, ? super V> predicate,
                         final Materialized<K, V, StateStore> materialized) throws IllegalArgumentException;
 
     /**

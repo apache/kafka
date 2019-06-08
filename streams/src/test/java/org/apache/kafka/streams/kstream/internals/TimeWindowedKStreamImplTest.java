@@ -30,6 +30,7 @@ import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.StoreSupplier;
 import org.apache.kafka.streams.state.Stores;
@@ -255,13 +256,10 @@ public class TimeWindowedKStreamImplTest {
                 .count()
                 .filter(
                         (key, value) -> true,
-                        Materialized.as(Stores.persistentTimestampedWindowStore(
-                                "window-store",
-                                ofSeconds(30L),
-                                ofSeconds(10L),
-                                false
-                        ))
-                );
+                        Materialized.with(new
+                                WindowedSerdes.TimeWindowedSerde(Serdes.String()), Serdes.Long())
+
+                        );
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);

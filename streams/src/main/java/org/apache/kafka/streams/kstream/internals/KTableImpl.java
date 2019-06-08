@@ -128,7 +128,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         return queryableStoreName;
     }
 
-    private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
+    private KTable<K, V> doFilter(final Predicate<?, ? super V> predicate,
                                   final MaterializedInternal<K, V, StateStore> materializedInternal,
                                   final boolean filterNot) {
         final Serde<K> keySerde;
@@ -194,7 +194,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     @Override
-    public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+    public KTable<K, V> filter(final Predicate<?, ? super V> predicate,
                                final Materialized<K, V, StateStore> materialized) throws IllegalArgumentException {
         Objects.requireNonNull(predicate, "predicate can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
