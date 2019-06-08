@@ -426,24 +426,6 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     }
 
     /**
-     * Append a record with old format: v0 or v1 only.
-     *
-     * Should only be used for tests only
-     */
-    public Long appendWithOldFormat(long offset, long timestamp, ByteBuffer key, ByteBuffer value, byte magic) {
-        try {
-            if (magic > RecordBatch.MAGIC_VALUE_V1) {
-                throw new IllegalArgumentException("Magic v" + magic + " should be only v0 or v1");
-            }
-
-            return appendLegacyRecord(offset, timestamp, key, value, magic);
-        } catch (IOException e) {
-            throw new KafkaException("I/O exception when writing to the append stream, closing", e);
-        }
-    }
-
-
-    /**
      * Append a new record at the given offset.
      * @param offset The absolute offset of the record in the log buffer
      * @param timestamp The record timestamp

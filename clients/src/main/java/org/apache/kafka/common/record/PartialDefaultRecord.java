@@ -22,8 +22,8 @@ import java.nio.ByteBuffer;
 
 public class PartialDefaultRecord extends DefaultRecord {
 
-    private final boolean hasKey;
     private final int keySize;
+    private final boolean hasKey;
 
     PartialDefaultRecord(int sizeInBytes,
                          byte attributes,

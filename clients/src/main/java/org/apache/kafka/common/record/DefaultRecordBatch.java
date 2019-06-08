@@ -293,11 +293,6 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         };
     }
 
-    /**
-     * For uncompressed iterator, it is actually not worth skipping key / value / headers at all since
-     * its ByteBufferInputStream's skip() function is less efficient compared with just reading it actually
-     * as it will allocate new byte array.
-     */
     private CloseableIterator<Record> uncompressedIterator() {
         final ByteBuffer buffer = this.buffer.duplicate();
         buffer.position(RECORDS_OFFSET);
@@ -341,28 +336,14 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
     @Override
     public CloseableIterator<Record> skipKeyValueIterator() {
         if (count() == 0) {
-            Iterator<Record> inner = Collections.emptyIterator();
-            return new CloseableIterator<Record>() {
-                @Override
-                public void close() {}
-
-                @Override
-                public boolean hasNext() {
-                    return inner.hasNext();
-                }
-
-                @Override
-                public Record next() {
-                    return inner.next();
-                }
-
-                @Override
-                public void remove() {
-                    inner.remove();
-                }
-            };
+            return wrapAsCloseable(Collections.emptyIterator());
         }
 
+        /*
+         * For uncompressed iterator, it is actually not worth skipping key / value / headers at all since
+         * its ByteBufferInputStream's skip() function is less efficient compared with just reading it actually
+         * as it will allocate new byte array.
+         */
         if (!isCompressed())
             return uncompressedIterator();
 

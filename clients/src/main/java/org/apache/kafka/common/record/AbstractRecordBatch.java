@@ -16,6 +16,10 @@
  */
 package org.apache.kafka.common.record;
 
+import org.apache.kafka.common.utils.CloseableIterator;
+
+import java.util.Iterator;
+
 abstract class AbstractRecordBatch implements RecordBatch {
     @Override
     public boolean hasProducerId() {
@@ -30,5 +34,27 @@ abstract class AbstractRecordBatch implements RecordBatch {
     @Override
     public boolean isCompressed() {
         return compressionType() != CompressionType.NONE;
+    }
+
+    static CloseableIterator<Record> wrapAsCloseable(Iterator<Record> inner) {
+        return new CloseableIterator<Record>() {
+            @Override
+            public void close() {}
+
+            @Override
+            public boolean hasNext() {
+                return inner.hasNext();
+            }
+
+            @Override
+            public Record next() {
+                return inner.next();
+            }
+
+            @Override
+            public void remove() {
+                inner.remove();
+            }
+        };
     }
 }

@@ -93,7 +93,11 @@ private[kafka] object LogValidator extends Logging {
     batch
   }
 
-  private def validateBatch(batch: RecordBatch, isFromClient: Boolean, toMagic: Byte): Unit = {
+  private def validateBatch(firstBatch: RecordBatch, batch: RecordBatch, isFromClient: Boolean, toMagic: Byte): Unit = {
+    // batch magic byte should have the same magic as the first batch
+    if (firstBatch.magic() != batch.magic())
+      throw new InvalidRecordException(s"Batch magic ${batch.magic()} is not the same as the first batch'es magic byte ${firstBatch.magic()}")
+
     if (isFromClient) {
       if (batch.magic >= RecordBatch.MAGIC_VALUE_V2) {
         val countFromOffsets = batch.lastOffset - batch.baseOffset + 1
@@ -128,7 +132,7 @@ private[kafka] object LogValidator extends Logging {
   private def validateRecord(batch: RecordBatch, record: Record, now: Long, timestampType: TimestampType,
                              timestampDiffMaxMs: Long, compactedTopic: Boolean): Unit = {
     if (!record.hasMagic(batch.magic))
-      throw new InvalidRecordException(s"Log record magic does not match outer magic ${batch.magic}")
+      throw new InvalidRecordException(s"Log record $record'sZ magic does not match outer magic ${batch.magic}")
 
     // verify the record-level CRC only if this is one of the deep entries of a compressed message
     // set for magic v0 and v1. For non-compressed messages, there is no inner record for magic v0 and v1,
@@ -164,10 +168,10 @@ private[kafka] object LogValidator extends Logging {
     val builder = MemoryRecords.builder(newBuffer, toMagicValue, CompressionType.NONE, timestampType,
       offsetCounter.value, now, producerId, producerEpoch, sequence, isTransactional, partitionLeaderEpoch)
 
-    getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
+    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
 
     for (batch <- records.batches.asScala) {
-      validateBatch(batch, isFromClient, toMagicValue)
+      validateBatch(firstBatch, batch, isFromClient, toMagicValue)
 
       for (record <- batch.asScala) {
         validateRecord(batch, record, now, timestampType, timestampDiffMaxMs, compactedTopic)
@@ -201,10 +205,10 @@ private[kafka] object LogValidator extends Logging {
     var offsetOfMaxTimestamp = -1L
     val initialOffset = offsetCounter.value
 
-    getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
+    val firstBatch = getFirstBatchAndMaybeValidateNoMoreBatches(records, NoCompressionCodec)
 
     for (batch <- records.batches.asScala) {
-      validateBatch(batch, isFromClient, magic)
+      validateBatch(firstBatch, batch, isFromClient, magic)
 
       var maxBatchTimestamp = RecordBatch.NO_TIMESTAMP
       var offsetOfMaxBatchTimestamp = -1L
@@ -302,7 +306,7 @@ private[kafka] object LogValidator extends Logging {
 
     val batches = records.batches.asScala
     for (batch <- batches) {
-      validateBatch(batch, isFromClient, toMagic)
+      validateBatch(firstBatch, batch, isFromClient, toMagic)
       uncompressedSizeInBytes += AbstractRecords.recordBatchHeaderSizeInBytes(toMagic, batch.compressionType())
 
       // if we are on version 2 and beyond, and we know we are going for in place assignment,
@@ -327,10 +331,6 @@ private[kafka] object LogValidator extends Logging {
           if (record.timestamp > maxTimestamp)
             maxTimestamp = record.timestamp
         }
-
-        // inner record should have the same magic as the outer record batch
-        if (!record.hasMagic(firstBatch.magic()))
-          throw new InvalidRecordException(s"Inner record $record's magic byte is not the same as the magic byte ${firstBatch.magic()} of the outer batch")
 
         validatedRecords += record
       }
