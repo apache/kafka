@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-public class KStreamPrint<K, V> implements ProcessorSupplier<K, V> {
+public class KStreamPrint<K, V> implements ProcessorSupplier<V> {
 
     private final ForeachAction<K, V> action;
     

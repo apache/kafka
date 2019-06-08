@@ -58,10 +58,10 @@ public class PrintedTest {
     @Test
     public void shouldCreateProcessorThatPrintsToFile() throws IOException {
         final File file = TestUtils.tempFile();
-        final ProcessorSupplier<String, Integer> processorSupplier = new PrintedInternal<>(
+        final ProcessorSupplier<Integer> processorSupplier = new PrintedInternal<>(
                 Printed.<String, Integer>toFile(file.getPath()))
                 .build("processor");
-        final Processor<String, Integer> processor = processorSupplier.get();
+        final Processor<String, Integer> processor =  (Processor<String, Integer>) processorSupplier.get();
         processor.process("hi", 1);
         processor.close();
         try (final InputStream stream = Files.newInputStream(file.toPath())) {
@@ -73,8 +73,8 @@ public class PrintedTest {
 
     @Test
     public void shouldCreateProcessorThatPrintsToStdOut() throws UnsupportedEncodingException {
-        final ProcessorSupplier<String, Integer> supplier = new PrintedInternal<>(sysOutPrinter).build("processor");
-        final Processor<String, Integer> processor = supplier.get();
+        final ProcessorSupplier<Integer> supplier = new PrintedInternal<>(sysOutPrinter).build("processor");
+        final Processor<String, Integer> processor = (Processor<String, Integer>) supplier.get();
 
         processor.process("good", 2);
         processor.close();
@@ -83,9 +83,9 @@ public class PrintedTest {
 
     @Test
     public void shouldPrintWithLabel() throws UnsupportedEncodingException {
-        final Processor<String, Integer> processor = new PrintedInternal<>(sysOutPrinter.withLabel("label"))
-                .build("processor")
-                .get();
+        final Processor<String, Integer> processor =  (Processor<String, Integer>)
+                                                              new PrintedInternal<>(sysOutPrinter.withLabel("label"))
+                                                                      .build("processor").get();
 
         processor.process("hello", 3);
         processor.close();
@@ -94,13 +94,9 @@ public class PrintedTest {
 
     @Test
     public void shouldPrintWithKeyValueMapper() throws UnsupportedEncodingException {
-        final Processor<String, Integer> processor = new PrintedInternal<>(sysOutPrinter.withKeyValueMapper(
-                new KeyValueMapper<String, Integer, String>() {
-                    @Override
-                    public String apply(final String key, final Integer value) {
-                        return String.format("%s -> %d", key, value);
-                    }
-                })).build("processor")
+        final Processor<String, Integer> processor =  (Processor<String, Integer>)
+                                                              new PrintedInternal<>(sysOutPrinter.withKeyValueMapper(
+                                                                      (key, value) -> String.format("%s -> %d", key, value))).build("processor")
                 .get();
         processor.process("hello", 1);
         processor.close();

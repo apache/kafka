@@ -23,7 +23,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.ForwardingDisabledProcessorContext;
 
-public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<K, V> {
+public class KStreamTransformValues<K, V, R> implements ProcessorSupplier<V> {
 
     private final ValueTransformerWithKeySupplier<K, V, R> valueTransformerSupplier;
 

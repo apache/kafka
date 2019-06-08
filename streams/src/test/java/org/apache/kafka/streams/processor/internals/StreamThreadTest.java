@@ -1061,7 +1061,7 @@ public class StreamThreadTest {
     public void shouldPunctuateActiveTask() {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
-        final ProcessorSupplier<Object, Object> punctuateProcessor = () -> new Processor<Object, Object>() {
+        final ProcessorSupplier<Object> punctuateProcessor = () -> new Processor<Object, Object>() {
             @Override
             public void init(final ProcessorContext context) {
                 context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);

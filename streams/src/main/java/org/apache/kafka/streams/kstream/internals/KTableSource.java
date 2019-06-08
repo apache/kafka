@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import java.util.Objects;
 
-public class KTableSource<K, V> implements ProcessorSupplier<K, V> {
+public class KTableSource<K, V> implements ProcessorSupplier<V> {
     private static final Logger LOG = LoggerFactory.getLogger(KTableSource.class);
 
     private final String storeName;

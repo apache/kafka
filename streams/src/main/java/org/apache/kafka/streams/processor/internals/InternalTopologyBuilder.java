@@ -190,12 +190,12 @@ public class InternalTopologyBuilder {
     }
 
     private static class ProcessorNodeFactory extends NodeFactory {
-        private final ProcessorSupplier<?, ?> supplier;
+        private final ProcessorSupplier<?> supplier;
         private final Set<String> stateStoreNames = new HashSet<>();
 
         ProcessorNodeFactory(final String name,
                              final String[] predecessors,
-                             final ProcessorSupplier<?, ?> supplier) {
+                             final ProcessorSupplier<?> supplier) {
             super(name, predecessors.clone());
             this.supplier = supplier;
         }

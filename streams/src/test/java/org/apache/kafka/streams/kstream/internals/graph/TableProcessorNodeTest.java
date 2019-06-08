@@ -42,7 +42,7 @@ public class TableProcessorNodeTest {
     public void shouldConvertToStringWithNullStoreBuilder() {
         final TableProcessorNode<String, String> node = new TableProcessorNode<>(
             "name",
-            new ProcessorParameters<>(TestProcessor::new, "processor"),
+            new ProcessorParameters<>(() -> new TestProcessor(), "processor"),
             null,
             new String[]{"store1", "store2"}
         );

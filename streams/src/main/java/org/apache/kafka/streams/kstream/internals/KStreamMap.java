@@ -22,7 +22,7 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamMap<K, V, K1, V1> implements ProcessorSupplier<K, V> {
+class KStreamMap<K, V, K1, V1> implements ProcessorSupplier<V> {
 
     private final KeyValueMapper<? super K, ? super V, ? extends KeyValue<? extends K1, ? extends V1>> mapper;
 

@@ -30,7 +30,7 @@ import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, K, V, V> {
+public class KStreamReduce<K, V> implements KStreamAggProcessorSupplier<K, V, V> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamReduce.class);
 
     private final String storeName;

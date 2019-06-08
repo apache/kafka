@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamFlatMap<K, V, K1, V1> implements ProcessorSupplier<K, V> {
+class KStreamFlatMap<K, V, K1, V1> implements ProcessorSupplier<V> {
 
     private final KeyValueMapper<? super K, ? super V, ? extends Iterable<? extends KeyValue<? extends K1, ? extends V1>>> mapper;
 

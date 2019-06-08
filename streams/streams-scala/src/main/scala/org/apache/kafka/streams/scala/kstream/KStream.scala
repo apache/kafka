@@ -21,6 +21,7 @@ package org.apache.kafka.streams.scala
 package kstream
 
 import org.apache.kafka.streams.KeyValue
+import org.apache.kafka.streams.kstream.internals.Change
 import org.apache.kafka.streams.kstream.{KStream => KStreamJ, _}
 import org.apache.kafka.streams.processor.{Processor, ProcessorSupplier, TopicNameExtractor}
 import org.apache.kafka.streams.scala.FunctionsCompatConversions._
@@ -350,7 +351,7 @@ class KStream[K, V](val inner: KStreamJ[K, V]) {
   def process(processorSupplier: () => Processor[K, V], stateStoreNames: String*): Unit = {
     //noinspection ConvertExpressionToSAM // because of the 2.11 build
     val processorSupplierJ: ProcessorSupplier[K, V] = new ProcessorSupplier[K, V] {
-      override def get(): Processor[K, V] = processorSupplier()
+      override def get(): Processor[_, Change[K]] = processorSupplier()
     }
     inner.process(processorSupplierJ, stateStoreNames: _*)
   }

@@ -48,7 +48,7 @@ public class GraphGraceSearchUtilTest {
     public void shouldFailIfThereIsNoGraceAncestor() {
         // doesn't matter if this ancestor is stateless or stateful. The important thing it that there is
         // no grace period defined on any ancestor of the node
-        final StatefulProcessorNode<String, Long> gracelessAncestor = new StatefulProcessorNode<>(
+        final StatefulProcessorNode<Long> gracelessAncestor = new StatefulProcessorNode<>(
             "stateful",
             new ProcessorParameters<>(
                 () -> new Processor<String, Long>() {
@@ -66,7 +66,7 @@ public class GraphGraceSearchUtilTest {
             (StoreBuilder<? extends StateStore>) null
         );
 
-        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);
+        final ProcessorGraphNode<Long> node = new ProcessorGraphNode<>("stateless", null);
         gracelessAncestor.addChild(node);
 
         try {
@@ -80,7 +80,7 @@ public class GraphGraceSearchUtilTest {
     @Test
     public void shouldExtractGraceFromKStreamWindowAggregateNode() {
         final TimeWindows windows = TimeWindows.of(ofMillis(10L)).grace(ofMillis(1234L));
-        final StatefulProcessorNode<String, Long> node = new StatefulProcessorNode<>(
+        final StatefulProcessorNode<Long> node = new StatefulProcessorNode<>(
             "asdf",
             new ProcessorParameters<>(
                 new KStreamWindowAggregate<String, Long, Integer, TimeWindow>(
@@ -102,7 +102,7 @@ public class GraphGraceSearchUtilTest {
     public void shouldExtractGraceFromKStreamSessionWindowAggregateNode() {
         final SessionWindows windows = SessionWindows.with(ofMillis(10L)).grace(ofMillis(1234L));
 
-        final StatefulProcessorNode<String, Long> node = new StatefulProcessorNode<>(
+        final StatefulProcessorNode<Long> node = new StatefulProcessorNode<>(
             "asdf",
             new ProcessorParameters<>(
                 new KStreamSessionWindowAggregate<String, Long, Integer>(
@@ -124,7 +124,7 @@ public class GraphGraceSearchUtilTest {
     @Test
     public void shouldExtractGraceFromSessionAncestorThroughStatefulParent() {
         final SessionWindows windows = SessionWindows.with(ofMillis(10L)).grace(ofMillis(1234L));
-        final StatefulProcessorNode<String, Long> graceGrandparent = new StatefulProcessorNode<>(
+        final StatefulProcessorNode<Long> graceGrandparent = new StatefulProcessorNode<>(
             "asdf",
             new ProcessorParameters<>(new KStreamSessionWindowAggregate<String, Long, Integer>(
                 windows, "asdf", null, null, null
@@ -132,7 +132,7 @@ public class GraphGraceSearchUtilTest {
             (StoreBuilder<? extends StateStore>) null
         );
 
-        final StatefulProcessorNode<String, Long> statefulParent = new StatefulProcessorNode<>(
+        final StatefulProcessorNode<Long> statefulParent = new StatefulProcessorNode<>(
             "stateful",
             new ProcessorParameters<>(
                 () -> new Processor<String, Long>() {
@@ -151,7 +151,7 @@ public class GraphGraceSearchUtilTest {
         );
         graceGrandparent.addChild(statefulParent);
 
-        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);
+        final ProcessorGraphNode<Long> node = new ProcessorGraphNode<>("stateless", null);
         statefulParent.addChild(node);
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
@@ -161,7 +161,7 @@ public class GraphGraceSearchUtilTest {
     @Test
     public void shouldExtractGraceFromSessionAncestorThroughStatelessParent() {
         final SessionWindows windows = SessionWindows.with(ofMillis(10L)).grace(ofMillis(1234L));
-        final StatefulProcessorNode<String, Long> graceGrandparent = new StatefulProcessorNode<>(
+        final StatefulProcessorNode<Long> graceGrandparent = new StatefulProcessorNode<>(
             "asdf",
             new ProcessorParameters<>(
                 new KStreamSessionWindowAggregate<String, Long, Integer>(
@@ -176,10 +176,10 @@ public class GraphGraceSearchUtilTest {
             (StoreBuilder<? extends StateStore>) null
         );
 
-        final ProcessorGraphNode<String, Long> statelessParent = new ProcessorGraphNode<>("stateless", null);
+        final ProcessorGraphNode<Long> statelessParent = new ProcessorGraphNode<>("stateless", null);
         graceGrandparent.addChild(statelessParent);
 
-        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);
+        final ProcessorGraphNode<Long> node = new ProcessorGraphNode<>("stateless", null);
         statelessParent.addChild(node);
 
         final long extracted = GraphGraceSearchUtil.findAndVerifyWindowGrace(node);
@@ -188,7 +188,7 @@ public class GraphGraceSearchUtilTest {
 
     @Test
     public void shouldUseMaxIfMultiParentsDoNotAgreeOnGrace() {
-        final StatefulProcessorNode<String, Long> leftParent = new StatefulProcessorNode<>(
+        final StatefulProcessorNode<Long> leftParent = new StatefulProcessorNode<>(
             "asdf",
             new ProcessorParameters<>(
                 new KStreamSessionWindowAggregate<String, Long, Integer>(
@@ -203,7 +203,7 @@ public class GraphGraceSearchUtilTest {
             (StoreBuilder<? extends StateStore>) null
         );
 
-        final StatefulProcessorNode<String, Long> rightParent = new StatefulProcessorNode<>(
+        final StatefulProcessorNode<Long> rightParent = new StatefulProcessorNode<>(
             "asdf",
             new ProcessorParameters<>(
                 new KStreamWindowAggregate<String, Long, Integer, TimeWindow>(
@@ -217,7 +217,7 @@ public class GraphGraceSearchUtilTest {
             (StoreBuilder<? extends StateStore>) null
         );
 
-        final ProcessorGraphNode<String, Long> node = new ProcessorGraphNode<>("stateless", null);
+        final ProcessorGraphNode<Long> node = new ProcessorGraphNode<>("stateless", null);
         leftParent.addChild(node);
         rightParent.addChild(node);
 

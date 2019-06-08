@@ -74,7 +74,7 @@ class GroupedStreamAggregateBuilder<K, V> {
 
     <KR, VR> KTable<KR, VR> build(final String functionName,
                                   final StoreBuilder<? extends StateStore> storeBuilder,
-                                  final KStreamAggProcessorSupplier<K, KR, V, VR> aggregateSupplier,
+                                  final KStreamAggProcessorSupplier<KR, V, VR> aggregateSupplier,
                                   final String queryableStoreName,
                                   final Serde<KR> keySerde,
                                   final Serde<VR> valSerde,
@@ -105,7 +105,7 @@ class GroupedStreamAggregateBuilder<K, V> {
             parentNode = repartitionNode;
         }
 
-        final StatefulProcessorNode<K, V> statefulProcessorNode =
+        final StatefulProcessorNode<V> statefulProcessorNode =
             new StatefulProcessorNode<>(
                 aggFunctionName,
                 new ProcessorParameters<>(aggregateSupplier, aggFunctionName),

@@ -719,7 +719,7 @@ public class ProcessorTopologyTest {
         }
     }
 
-    private <K, V> ProcessorSupplier<K, V> define(final Processor<K, V> processor) {
+    private <K, V> ProcessorSupplier<V> define(final Processor<K, V> processor) {
         return () -> processor;
     }
 

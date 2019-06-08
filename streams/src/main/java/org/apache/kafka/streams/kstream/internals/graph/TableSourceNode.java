@@ -25,7 +25,7 @@ import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.kstream.internals.SessionStoreMaterializer;
 import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
-import org.apache.kafka.streams.kstream.internals.WindowStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.TimestampedWindowStoreMaterializer;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.StoreBuilder;
 
@@ -40,7 +40,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
 
     private final String sourceName;
     private final MaterializedInternal<K, V, ?> materializedInternal;
-    private final ProcessorParameters<K, V> processorParameters;
+    private final ProcessorParameters<V> processorParameters;
     private final boolean isGlobalKTable;
     private final StateStoreType stateStoreType;
     private final Optional<Windows<?>> timeWindows;
@@ -52,7 +52,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
                             final String topic,
                             final ConsumedInternal<K, V> consumedInternal,
                             final MaterializedInternal<K, V, ?> materializedInternal,
-                            final ProcessorParameters<K, V> processorParameters,
+                            final ProcessorParameters<V> processorParameters,
                             final boolean isGlobalKTable,
                             final StateStoreType stateStoreType,
                             final Windows<?> timeWindows,
@@ -102,7 +102,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
             if (!timeWindows.isPresent()) {
                 throw new IllegalArgumentException("Window store type KTable doesn't have time window defined");
             }
-            storeBuilder = new WindowStoreMaterializer(materializedInternal, timeWindows.get()).materialize();
+            storeBuilder = new TimestampedWindowStoreMaterializer(materializedInternal, timeWindows.get()).materialize();
         } else {
             if (!sessionWindow.isPresent()) {
                 throw new IllegalArgumentException("Session store type KTable doesn't have session window defined");
@@ -150,7 +150,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
         private String topic;
         private ConsumedInternal<K, V> consumedInternal;
         private MaterializedInternal<K, V, ?> materializedInternal;
-        private ProcessorParameters<K, V> processorParameters;
+        private ProcessorParameters<V> processorParameters;
         private boolean isGlobalKTable = false;
         private final StateStoreType stateStoreType;
         private Windows<?> timeWindows;
@@ -180,7 +180,7 @@ public class TableSourceNode<K, V> extends StreamSourceNode<K, V> {
             return this;
         }
 
-        public TableSourceNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<K, V> processorParameters) {
+        public TableSourceNodeBuilder<K, V> withProcessorParameters(final ProcessorParameters<V> processorParameters) {
             this.processorParameters = processorParameters;
             return this;
         }

@@ -216,7 +216,7 @@ public class RegexSourceIntegrationTest {
     @Test
     public void shouldAddStateStoreToRegexDefinedSource() throws InterruptedException {
 
-        final ProcessorSupplier<String, String> processorSupplier = new MockProcessorSupplier<>();
+        final ProcessorSupplier<String> processorSupplier = new MockProcessorSupplier<>();
         final StoreBuilder storeBuilder = new MockKeyValueStoreBuilder("testStateStore", false);
         final long thirtySecondTimeout = 30 * 1000;
 

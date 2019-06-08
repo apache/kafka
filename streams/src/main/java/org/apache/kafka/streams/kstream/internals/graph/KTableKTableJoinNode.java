@@ -31,7 +31,7 @@ import java.util.Arrays;
 /**
  * Too much specific information to generalize so the KTable-KTable join requires a specific node.
  */
-public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, Change<V1>, Change<V2>, Change<VR>> {
+public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<Change<V1>, Change<V2>, Change<VR>> {
 
     private final Serde<K> keySerde;
     private final Serde<VR> valueSerde;
@@ -40,9 +40,9 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     private final StoreBuilder<StateStore> storeBuilder;
 
     KTableKTableJoinNode(final String nodeName,
-                         final ProcessorParameters<K, Change<V1>> joinThisProcessorParameters,
-                         final ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters,
-                         final ProcessorParameters<K, Change<VR>> joinMergeProcessorParameters,
+                         final ProcessorParameters<Change<V1>> joinThisProcessorParameters,
+                         final ProcessorParameters<Change<V2>> joinOtherProcessorParameters,
+                         final ProcessorParameters<Change<VR>> joinMergeProcessorParameters,
                          final String thisJoinSide,
                          final String otherJoinSide,
                          final Serde<K> keySerde,
@@ -137,8 +137,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
 
     public static final class KTableKTableJoinNodeBuilder<K, V1, V2, VR> {
         private String nodeName;
-        private ProcessorParameters<K, Change<V1>> joinThisProcessorParameters;
-        private ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters;
+        private ProcessorParameters<Change<V1>> joinThisProcessorParameters;
+        private ProcessorParameters<Change<V2>> joinOtherProcessorParameters;
         private String thisJoinSide;
         private String otherJoinSide;
         private Serde<K> keySerde;
@@ -156,12 +156,12 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinThisProcessorParameters(final ProcessorParameters<K, Change<V1>> joinThisProcessorParameters) {
+        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinThisProcessorParameters(final ProcessorParameters<Change<V1>> joinThisProcessorParameters) {
             this.joinThisProcessorParameters = joinThisProcessorParameters;
             return this;
         }
 
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinOtherProcessorParameters(final ProcessorParameters<K, Change<V2>> joinOtherProcessorParameters) {
+        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withJoinOtherProcessorParameters(final ProcessorParameters<Change<V2>> joinOtherProcessorParameters) {
             this.joinOtherProcessorParameters = joinOtherProcessorParameters;
             return this;
         }

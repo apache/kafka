@@ -1965,7 +1965,7 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
-    void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
+    void process(final ProcessorSupplier<? super V> processorSupplier,
                  final String... stateStoreNames);
 
     /**
@@ -2025,7 +2025,7 @@ public interface KStream<K, V> {
      * @see #foreach(ForeachAction)
      * @see #transform(TransformerSupplier, String...)
      */
-    void process(final ProcessorSupplier<? super K, ? super V> processorSupplier,
+    void process(final ProcessorSupplier<? super V> processorSupplier,
                  final Named named,
                  final String... stateStoreNames);
 

@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamFilter<K, V> implements ProcessorSupplier<K, V> {
+class KStreamFilter<K, V> implements ProcessorSupplier<V> {
 
     private final Predicate<K, V> predicate;
     private final boolean filterNot;

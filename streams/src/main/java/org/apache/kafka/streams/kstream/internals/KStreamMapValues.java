@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamMapValues<K, V, V1> implements ProcessorSupplier<K, V> {
+class KStreamMapValues<K, V, V1> implements ProcessorSupplier<V> {
 
     private final ValueMapperWithKey<K, V, V1> mapper;
 

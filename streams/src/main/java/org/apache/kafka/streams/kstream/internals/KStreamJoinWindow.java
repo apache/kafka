@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
-class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V> {
+class KStreamJoinWindow<K, V> implements ProcessorSupplier<V> {
 
     private final String windowName;
 

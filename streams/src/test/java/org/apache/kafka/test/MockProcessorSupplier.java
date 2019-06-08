@@ -25,7 +25,7 @@ import java.util.List;
 
 import static org.junit.Assert.assertEquals;
 
-public class MockProcessorSupplier<K, V> implements ProcessorSupplier<K, V> {
+public class MockProcessorSupplier<K, V> implements ProcessorSupplier<V> {
 
     private final long scheduleInterval;
     private final PunctuationType punctuationType;

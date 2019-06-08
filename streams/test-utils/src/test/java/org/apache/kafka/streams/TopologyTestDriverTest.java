@@ -33,6 +33,7 @@ import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -1117,7 +1118,7 @@ public class TopologyTestDriverTest {
 
     private class CustomMaxAggregatorSupplier implements ProcessorSupplier<String, Long> {
         @Override
-        public Processor<String, Long> get() {
+        public Processor<?, Change<String>> get() {
             return new CustomMaxAggregator();
         }
     }

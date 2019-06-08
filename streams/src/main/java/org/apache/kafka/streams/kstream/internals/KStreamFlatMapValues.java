@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamFlatMapValues<K, V, V1> implements ProcessorSupplier<K, V> {
+class KStreamFlatMapValues<K, V, V1> implements ProcessorSupplier<V> {
 
     private final ValueMapperWithKey<? super K, ? super V, ? extends Iterable<? extends V1>> mapper;
 
@@ -35,6 +35,7 @@ class KStreamFlatMapValues<K, V, V1> implements ProcessorSupplier<K, V> {
     }
 
     private class KStreamFlatMapValuesProcessor extends AbstractProcessor<K, V> {
+
         @Override
         public void process(final K key, final V value) {
             final Iterable<? extends V1> newValues = mapper.apply(key, value);

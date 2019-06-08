@@ -39,7 +39,7 @@ import java.util.Map;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggProcessorSupplier<K, Windowed<K>, V, Agg> {
+public class KStreamWindowAggregate<K, V, Agg, W extends Window> implements KStreamAggProcessorSupplier<Windowed<K>, V, Agg> {
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final String storeName;

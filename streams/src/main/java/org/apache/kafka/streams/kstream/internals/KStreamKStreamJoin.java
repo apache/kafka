@@ -31,7 +31,7 @@ import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
+class KStreamKStreamJoin<K, R, V1, V2> implements ProcessorSupplier<V1> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
     private final String otherWindowName;

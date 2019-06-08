@@ -69,7 +69,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         this.userProvidedRepartitionTopicName = groupedInternal.name();
     }
 
-    private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
+    private <T> KTable<K, T> doAggregate(final ProcessorSupplier<Change<V>> aggregateSupplier,
                                          final String functionName,
                                          final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
 
@@ -138,9 +138,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         if (materializedInternal.valueSerde() == null) {
             materializedInternal.withValueSerde(valSerde);
         }
-        final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableReduce<>(materializedInternal.storeName(),
-                                                                                     adder,
-                                                                                     subtractor);
+        final ProcessorSupplier<Change<V>> aggregateSupplier = new KTableReduce<>(materializedInternal.storeName(),
+                                                                                  adder,
+                                                                                  subtractor);
         return doAggregate(aggregateSupplier, REDUCE_NAME, materializedInternal);
     }
 
@@ -162,7 +162,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
             materializedInternal.withValueSerde(Serdes.Long());
         }
 
-        final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(materializedInternal.storeName(),
+        final ProcessorSupplier<Change<V>> aggregateSupplier = new KTableAggregate<>(materializedInternal.storeName(),
                                                                                         countInitializer,
                                                                                         countAdder,
                                                                                         countSubtractor);
@@ -191,7 +191,7 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
         }
-        final ProcessorSupplier<K, Change<V>> aggregateSupplier = new KTableAggregate<>(materializedInternal.storeName(),
+        final ProcessorSupplier<Change<V>> aggregateSupplier = new KTableAggregate<>(materializedInternal.storeName(),
                                                                                         initializer,
                                                                                         adder,
                                                                                         subtractor);

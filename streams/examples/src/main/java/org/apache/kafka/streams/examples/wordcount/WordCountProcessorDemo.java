@@ -23,6 +23,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
@@ -55,7 +56,7 @@ public final class WordCountProcessorDemo {
     static class MyProcessorSupplier implements ProcessorSupplier<String, String> {
 
         @Override
-        public Processor<String, String> get() {
+        public Processor<?, Change<String>> get() {
             return new Processor<String, String>() {
                 private ProcessorContext context;
                 private KeyValueStore<String, Integer> kvStore;

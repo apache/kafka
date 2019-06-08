@@ -21,7 +21,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<K, V1> {
+class KStreamKTableJoin<K, R, V1, V2> implements ProcessorSupplier<V1> {
 
     private final KeyValueMapper<K, V1, K> keyValueMapper = new KeyValueMapper<K, V1, K>() {
         @Override

@@ -25,25 +25,9 @@ import java.util.{Locale, Properties}
 import java.util.regex.Pattern
 
 import org.apache.kafka.common.serialization.{Serdes => SerdesJ}
-import org.apache.kafka.streams.kstream.{
-  Aggregator,
-  ForeachAction,
-  Initializer,
-  JoinWindows,
-  KeyValueMapper,
-  Predicate,
-  Reducer,
-  Transformer,
-  TransformerSupplier,
-  ValueJoiner,
-  ValueMapper,
-  Joined => JoinedJ,
-  KGroupedStream => KGroupedStreamJ,
-  KStream => KStreamJ,
-  KTable => KTableJ,
-  Materialized => MaterializedJ
-}
-import org.apache.kafka.streams.processor.{AbstractProcessor, ProcessorContext, ProcessorSupplier}
+import org.apache.kafka.streams.kstream.internals.Change
+import org.apache.kafka.streams.kstream.{Aggregator, ForeachAction, Initializer, JoinWindows, KeyValueMapper, Predicate, Reducer, Transformer, TransformerSupplier, ValueJoiner, ValueMapper, Joined => JoinedJ, KGroupedStream => KGroupedStreamJ, KStream => KStreamJ, KTable => KTableJ, Materialized => MaterializedJ}
+import org.apache.kafka.streams.processor.{AbstractProcessor, Processor, ProcessorContext, ProcessorSupplier}
 import org.apache.kafka.streams.scala.ImplicitConversions._
 import org.apache.kafka.streams.scala.Serdes._
 import org.apache.kafka.streams.scala.kstream._
@@ -363,7 +347,7 @@ class TopologyTest {
       }
       val processorValueCollector = new util.ArrayList[String]
       val processorSupplier: ProcessorSupplier[String, String] = new ProcessorSupplier[String, String] {
-        override def get() = new SimpleProcessor(processorValueCollector)
+        override def get(): Processor[_, Change[String]] = new SimpleProcessor(processorValueCollector)
       }
       val valueJoiner2: ValueJoiner[String, Integer, String] = new ValueJoiner[String, Integer, String] {
         override def apply(value1: String, value2: Integer): String = value1 + ":" + value2.toString

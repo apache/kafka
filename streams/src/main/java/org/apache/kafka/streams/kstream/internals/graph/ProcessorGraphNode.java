@@ -24,12 +24,12 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
  *
  * map, mapValues, flatMap, flatMapValues, filter, filterNot, branch
  */
-public class ProcessorGraphNode<K, V> extends StreamsGraphNode {
+public class ProcessorGraphNode<V> extends StreamsGraphNode {
 
-    private final ProcessorParameters<K, V> processorParameters;
+    private final ProcessorParameters<V> processorParameters;
 
     public ProcessorGraphNode(final String nodeName,
-                              final ProcessorParameters<K, V> processorParameters) {
+                              final ProcessorParameters<V> processorParameters) {
 
         super(nodeName);
 

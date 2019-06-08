@@ -43,6 +43,7 @@ import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -437,7 +438,7 @@ public class SimpleBenchmark {
 
         final KStream<Integer, byte[]> source = builder.stream(topic);
 
-        source.peek(new CountDownAction(latch)).process(new ProcessorSupplier<Integer, byte[]>() {
+        source.peek(new CountDownAction(latch)).process(new ProcessorSupplier<byte[]>() {
             @Override
             public Processor<Integer, byte[]> get() {
                 return new AbstractProcessor<Integer, byte[]>() {
@@ -484,7 +485,7 @@ public class SimpleBenchmark {
 
         final KStream<Integer, byte[]> source = builder.stream(topic);
 
-        source.peek(new CountDownAction(latch)).process(new ProcessorSupplier<Integer, byte[]>() {
+        source.peek(new CountDownAction(latch)).process(new ProcessorSupplier<byte[]>() {
             @Override
             public Processor<Integer, byte[]> get() {
                 return new AbstractProcessor<Integer, byte[]>() {

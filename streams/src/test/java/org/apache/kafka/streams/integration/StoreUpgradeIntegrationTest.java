@@ -112,7 +112,7 @@ public class StoreUpgradeIntegrationTest {
                 Serdes.Integer(),
                 Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
-            .process(KeyValueProcessor::new, STORE_NAME);
+            .process(() -> new KeyValueProcessor(), STORE_NAME);
 
         final Properties props = props();
         kafkaStreams = new KafkaStreams(streamsBuilderForOldStore.build(), props);
@@ -166,7 +166,7 @@ public class StoreUpgradeIntegrationTest {
                 Serdes.Integer(),
                 Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
-            .process(TimestampedKeyValueProcessor::new, STORE_NAME);
+            .process(() -> new TimestampedKeyValueProcessor(), STORE_NAME);
 
         kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
         kafkaStreams.start();
@@ -222,7 +222,7 @@ public class StoreUpgradeIntegrationTest {
                 Serdes.Integer(),
                 Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
-            .process(KeyValueProcessor::new, STORE_NAME);
+            .process(() -> new KeyValueProcessor(), STORE_NAME);
 
         final Properties props = props();
         kafkaStreams = new KafkaStreams(streamsBuilderForOldStore.build(), props);
@@ -272,7 +272,7 @@ public class StoreUpgradeIntegrationTest {
                 Serdes.Integer(),
                 Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
-            .process(TimestampedKeyValueProcessor::new, STORE_NAME);
+            .process(() -> new TimestampedKeyValueProcessor(), STORE_NAME);
 
         kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
         kafkaStreams.start();
@@ -459,7 +459,7 @@ public class StoreUpgradeIntegrationTest {
                 Serdes.Integer(),
                 Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
-            .process(WindowedProcessor::new, STORE_NAME);
+            .process(() -> new WindowedProcessor(), STORE_NAME);
 
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
         streamsBuilderForNewStore
@@ -473,7 +473,7 @@ public class StoreUpgradeIntegrationTest {
             Serdes.Integer(),
             Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
-            .process(TimestampedWindowedProcessor::new, STORE_NAME);
+            .process(() -> new TimestampedWindowedProcessor(), STORE_NAME);
 
 
         shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(
@@ -497,7 +497,7 @@ public class StoreUpgradeIntegrationTest {
                     Serdes.Integer(),
                     Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
-            .process(WindowedProcessor::new, STORE_NAME);
+            .process(() -> new WindowedProcessor(), STORE_NAME);
 
         final StreamsBuilder streamsBuilderForNewStore = new StreamsBuilder();
         streamsBuilderForNewStore
@@ -511,7 +511,7 @@ public class StoreUpgradeIntegrationTest {
                     Serdes.Integer(),
                     Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
-            .process(TimestampedWindowedProcessor::new, STORE_NAME);
+            .process(() -> new TimestampedWindowedProcessor(), STORE_NAME);
 
         final Properties props = props();
         shouldMigrateWindowStoreToTimestampedWindowStoreUsingPapi(
@@ -671,7 +671,7 @@ public class StoreUpgradeIntegrationTest {
                 Serdes.Integer(),
                 Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
-            .process(WindowedProcessor::new, STORE_NAME);
+            .process(() -> new WindowedProcessor(), STORE_NAME);
 
         final Properties props = props();
         kafkaStreams = new KafkaStreams(streamsBuilderForOldStore.build(), props);
@@ -727,7 +727,7 @@ public class StoreUpgradeIntegrationTest {
                 Serdes.Integer(),
                 Serdes.Long()))
             .<Integer, Integer>stream(inputStream)
-            .process(TimestampedWindowedProcessor::new, STORE_NAME);
+            .process(() -> new TimestampedWindowedProcessor(), STORE_NAME);
 
         kafkaStreams = new KafkaStreams(streamsBuilderForNewStore.build(), props);
         kafkaStreams.start();

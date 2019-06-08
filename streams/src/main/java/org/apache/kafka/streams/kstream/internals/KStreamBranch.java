@@ -22,7 +22,7 @@ import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.processor.To;
 
-class KStreamBranch<K, V> implements ProcessorSupplier<K, V> {
+class KStreamBranch<K, V> implements ProcessorSupplier<V> {
 
     private final Predicate<K, V>[] predicates;
     private final String[] childNodes;

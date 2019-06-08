@@ -255,7 +255,7 @@ public class TimeWindowedKStreamImplTest {
                 .count()
                 .filter(
                         (key, value) -> true,
-                        Materialized.as(Stores.persistentWindowStore(
+                        Materialized.as(Stores.persistentTimestampedWindowStore(
                                 "window-store",
                                 ofSeconds(30L),
                                 ofSeconds(10L),

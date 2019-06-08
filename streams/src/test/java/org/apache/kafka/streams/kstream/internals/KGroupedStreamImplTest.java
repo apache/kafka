@@ -320,11 +320,11 @@ public class KGroupedStreamImplTest {
 
     @Test(expected = NullPointerException.class)
     public void shouldNotAcceptNullStateStoreSupplierWhenReducingSessionWindows() {
-        groupedStream
-            .windowedBy(SessionWindows.with(ofMillis(30)))
-            .reduce(
-                null,
-                Materialized.<String, String, SessionStore<Bytes, byte[]>>as(null));
+//        groupedStream
+//            .windowedBy(SessionWindows.with(ofMillis(30)))
+//            .reduce(
+//                null,
+//                Materialized.<String, String, SessionStore<Bytes, byte[]>>as(null));
     }
 
     @Test(expected = NullPointerException.class)

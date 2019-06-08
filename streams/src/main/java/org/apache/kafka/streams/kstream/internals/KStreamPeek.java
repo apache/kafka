@@ -21,7 +21,7 @@ import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
 
-class KStreamPeek<K, V> implements ProcessorSupplier<K, V> {
+class KStreamPeek<K, V> implements ProcessorSupplier<V> {
 
     private final boolean forwardDownStream;
     private final ForeachAction<K, V> action;

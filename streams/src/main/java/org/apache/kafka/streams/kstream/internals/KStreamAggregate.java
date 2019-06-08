@@ -31,7 +31,7 @@ import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
-public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, K, V, T> {
+public class KStreamAggregate<K, V, T> implements KStreamAggProcessorSupplier<K, V, T> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamAggregate.class);
     private final String storeName;
     private final Initializer<T> initializer;

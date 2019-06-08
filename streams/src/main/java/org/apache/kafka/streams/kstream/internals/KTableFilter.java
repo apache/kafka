@@ -47,8 +47,12 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
     }
 
     @Override
-    public Processor<K, Change<V>> get() {
-        return new KTableFilterProcessor();
+    public Processor<?, Change<V>> get() {
+        if (stateStoreType == StateStoreType.KEY_VALUE_STORE) {
+            return new KTableFilterProcessor();
+        } else {
+            return new TimeWindowedKTableFilterProcessor();
+        }
     }
 
     @Override
@@ -79,7 +83,6 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
         return newValueAndTimestamp;
     }
-
 
     private class KTableFilterProcessor extends AbstractProcessor<K, Change<V>> {
         private TimestampedKeyValueStore<K, V> store;
@@ -136,7 +139,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
         }
 
         @Override
-        public void process(final Windowed<K> windowedKey, final Change<V> change) {
+        public void process(Windowed<K> windowedKey, final Change<V> change) {
             final K messageKey = windowedKey.key();
             final V newValue = computeValue(windowedKey.key(), change.newValue);
             final V oldValue = sendOldValues ? computeValue(windowedKey.key(), change.oldValue) : null;
