@@ -13,10 +13,4 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-"""
-Define Streams configuration property names here.
-"""
-
-STATE_DIR = "state.dir"
-KAFKA_SERVERS = "bootstrap.servers"
-NUM_THREADS = "num.stream.threads"
+from util import verify_running, verify_stopped, stop_processors, extract_generation_from_logs

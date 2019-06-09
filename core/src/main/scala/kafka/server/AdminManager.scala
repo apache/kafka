@@ -62,6 +62,9 @@ class AdminManager(val config: KafkaConfig,
 
   def hasDelayedTopicOperations = topicPurgatory.numDelayed != 0
 
+  private val defaultNumPartitions = config.numPartitions.intValue()
+  private val defaultReplicationFactor = config.defaultReplicationFactor.shortValue()
+
   /**
     * Try to complete delayed topic operations with the request key
     */
@@ -95,8 +98,15 @@ class AdminManager(val config: KafkaConfig,
           throw new InvalidRequestException("Both numPartitions or replicationFactor and replicasAssignments were set. " +
             "Both cannot be used at the same time.")
         }
+
+        val resolvedNumPartitions = if (topic.numPartitions == NO_NUM_PARTITIONS)
+          defaultNumPartitions else topic.numPartitions
+        val resolvedReplicationFactor = if (topic.replicationFactor == NO_REPLICATION_FACTOR)
+          defaultReplicationFactor else topic.replicationFactor
+
         val assignments = if (topic.assignments().isEmpty) {
-          AdminUtils.assignReplicasToBrokers(brokers, topic.numPartitions, topic.replicationFactor)
+          AdminUtils.assignReplicasToBrokers(
+            brokers, resolvedNumPartitions, resolvedReplicationFactor)
         } else {
           val assignments = new mutable.HashMap[Int, Seq[Int]]
           // Note: we don't check that replicaAssignment contains unknown brokers - unlike in add-partitions case,
@@ -115,9 +125,9 @@ class AdminManager(val config: KafkaConfig,
 
             // Use `null` for unset fields in the public API
             val numPartitions: java.lang.Integer =
-              if (topic.numPartitions == NO_NUM_PARTITIONS) null else topic.numPartitions
+              if (topic.assignments().isEmpty) resolvedNumPartitions else null
             val replicationFactor: java.lang.Short =
-              if (topic.replicationFactor == NO_REPLICATION_FACTOR) null else topic.replicationFactor
+              if (topic.assignments().isEmpty) resolvedReplicationFactor else null
             val javaAssignments = if (topic.assignments().isEmpty) {
               null
             } else {
