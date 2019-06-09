@@ -189,6 +189,11 @@ public class Materialized<K, V, S extends StateStore> {
         return this;
     }
 
+    public Materialized<K, V, S> withName(final String storeName) {
+        this.storeName = storeName;
+        return this;
+    }
+
     /**
      * Set the keySerde the materialize {@link StateStore} will use.
      * @param keySerde  the key {@link Serde} to use. If the {@link Serde} is null, then the default key
@@ -207,10 +212,6 @@ public class Materialized<K, V, S extends StateStore> {
 //                       .withKeySerde(new WindowedSerdes.TimeWindowedSerde(keySerde));
 //    }
 
-    public Materialized<K, V, S> withName(final String storeName) {
-        this.storeName = storeName;
-        return this;
-    }
 
     /**
      * Indicates that a changelog should be created for the store. The changelog will be created

@@ -22,18 +22,22 @@ import org.apache.kafka.common.serialization.Serdes;
 public class WindowedSerdes {
 
     static public class TimeWindowedSerde<T> extends Serdes.WrapperSerde<Windowed<T>> {
+        final Serde<T> inner;
         // Default constructor needed for reflection object creation
         public TimeWindowedSerde() {
             super(new TimeWindowedSerializer<>(), new TimeWindowedDeserializer<>());
+            this.inner = null;
         }
 
         public TimeWindowedSerde(final Serde<T> inner) {
             super(new TimeWindowedSerializer<>(inner.serializer()), new TimeWindowedDeserializer<>(inner.deserializer()));
+            this.inner = inner;
         }
 
         // This constructor can be used for serialize/deserialize a windowed topic
         public TimeWindowedSerde(final Serde<T> inner, final long windowSize) {
             super(new TimeWindowedSerializer<>(inner.serializer()), new TimeWindowedDeserializer<>(inner.deserializer(), windowSize));
+            this.inner = inner;
         }
 
         // Helper method for users to specify whether the input topic is a changelog topic for deserializing the key properly.
@@ -41,6 +45,10 @@ public class WindowedSerdes {
             final TimeWindowedDeserializer deserializer = (TimeWindowedDeserializer) this.deserializer();
             deserializer.setIsChangelogTopic(isChangelogTopic);
             return this;
+        }
+
+        public Serde<T> inner() {
+            return inner;
         }
     }
 
