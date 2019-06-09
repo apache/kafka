@@ -123,7 +123,7 @@ public class ProcessorStateManager extends AbstractStateManager {
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback) {
         final String storeName = store.name();
-        log.debug("Registering state store {} to its state manager", storeName);
+        log.info("Registering state store {} to its state manager", storeName);
 
         if (CHECKPOINT_FILE_NAME.equals(storeName)) {
             throw new IllegalArgumentException(String.format("%sIllegal store name: %s", logPrefix, CHECKPOINT_FILE_NAME));

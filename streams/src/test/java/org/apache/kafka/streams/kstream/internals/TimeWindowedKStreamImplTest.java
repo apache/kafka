@@ -17,11 +17,13 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.Grouped;
@@ -52,6 +54,7 @@ import java.util.Properties;
 import static java.time.Duration.ofMillis;
 import static java.time.Duration.ofSeconds;
 import static java.time.Instant.ofEpochMilli;
+import static org.apache.kafka.streams.StreamsConfig.NO_OPTIMIZATION;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -250,19 +253,40 @@ public class TimeWindowedKStreamImplTest {
     }
 
     @Test
+//    @SuppressWarnings("unchecked")
     public void shouldBeAbleToMaterializedAsWindowed() {
         final MockProcessorSupplier<Windowed<String>, Long> supplier = new MockProcessorSupplier<>();
+        String windowStoreName = "window-store";
         windowedStream
                 .count()
-                .filter(
-                        (key, value) -> true,
-                        Materialized.with(new
-                                WindowedSerdes.TimeWindowedSerde(Serdes.String()), Serdes.Long())
-
-                        );
+                .filter((key, value) -> true,
+                        Materialized.with(new WindowedSerdes.TimeWindowedSerde(Serdes.String()), Serdes.Long())
+                        .withName(windowStoreName)
+                );
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
+
+            {
+//                final WindowStore<String, Long> windowStore = driver.getWindowStore(windowStoreName);
+//                final List<KeyValue<Windowed<String>, Long>> data =
+//                        StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+//
+//                assertThat(data, equalTo(Arrays.asList(
+//                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), "0+1+2"),
+//                        KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), "0+3"),
+//                        KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), "0+10+20"))));
+            }
+            {
+                final WindowStore<String, ValueAndTimestamp<Long>> windowStore = driver.getTimestampedWindowStore(windowStoreName);
+                final List<KeyValue<Windowed<String>, ValueAndTimestamp<Long>>> data =
+                        StreamsTestUtils.toList(windowStore.fetch("1", "2", ofEpochMilli(0), ofEpochMilli(1000L)));
+
+                assertThat(data, equalTo(Arrays.asList(
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(0, 500)), ValueAndTimestamp.make("0+1+2", 15L)),
+                        KeyValue.pair(new Windowed<>("1", new TimeWindow(500, 1000)), ValueAndTimestamp.make("0+3", 500L)),
+                        KeyValue.pair(new Windowed<>("2", new TimeWindow(500, 1000)), ValueAndTimestamp.make("0+10+20", 550L)))));
+            }
         }
         assertThat(
                 supplier.theCapturedProcessor().lastValueAndTimestampPerKey

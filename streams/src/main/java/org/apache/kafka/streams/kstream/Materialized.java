@@ -170,6 +170,12 @@ public class Materialized<K, V, S extends StateStore> {
         return new Materialized<K, V, S>((String) null).withKeySerde(keySerde).withValueSerde(valueSerde);
     }
 
+    @SuppressWarnings("unchecked")
+    public static <K, V, S extends StateStore> Materialized<Windowed<K>, V, S> withWindowed(final Serde<K> keySerde,
+                                                                                            final Serde<V> valueSerde) {
+        return with(new WindowedSerdes.TimeWindowedSerde(keySerde), valueSerde);
+    }
+
     /**
      * Set the valueSerde the materialized {@link StateStore} will use.
      *
@@ -191,6 +197,18 @@ public class Materialized<K, V, S extends StateStore> {
      */
     public Materialized<K, V, S> withKeySerde(final Serde<K> keySerde) {
         this.keySerde = keySerde;
+        return this;
+    }
+
+//    public Materialized<Windowed<K>, V, S> withWindowedKeySerde(final Serde<K> keySerde) {
+//        this.keySerde = keySerde;
+//
+//        return new Materialized<Windowed<K>, V, S>(this.storeName)
+//                       .withKeySerde(new WindowedSerdes.TimeWindowedSerde(keySerde));
+//    }
+
+    public Materialized<K, V, S> withName(final String storeName) {
+        this.storeName = storeName;
         return this;
     }
 
