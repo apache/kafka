@@ -67,7 +67,7 @@ class ConsumerTopicCreationTest(brokerAutoTopicCreationEnable: JBoolean, consume
     val record = new ProducerRecord(topic_1, 0, "key".getBytes, "value".getBytes)
 
     // create `topic_1` and produce a record to it
-    adminClient.createTopics(Collections.singleton(new NewTopic(topic_1, 1, 1))).all.get
+    adminClient.createTopics(Collections.singleton(new NewTopic(topic_1, 1, 1.toShort))).all.get
     producer.send(record).get
 
     consumer.subscribe(util.Arrays.asList(topic_1, topic_2))

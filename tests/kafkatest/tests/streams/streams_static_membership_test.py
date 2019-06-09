@@ -15,28 +15,26 @@
 
 from ducktape.tests.test import Test
 from kafkatest.services.kafka import KafkaService
-from kafkatest.services.streams import StreamsNamedRepartitionTopicService
+from kafkatest.services.streams import StaticMemberTestService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.zookeeper import ZookeeperService
-from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running
+from kafkatest.tests.streams.utils import verify_stopped, stop_processors, verify_running, extract_generation_from_logs
 
-class StreamsNamedRepartitionTopicTest(Test):
+class StreamsStaticMembershipTest(Test):
     """
-    Tests using a named repartition topic by starting
-    application then doing a rolling upgrade with added
-    operations and the application still runs
+    Tests using static membership when broker points to minimum supported
+    version (2.3) or higher.
     """
 
     input_topic = 'inputTopic'
-    aggregation_topic = 'aggregationTopic'
-    pattern = 'AGGREGATED'
-    stopped_message = 'NAMED_REPARTITION_TEST Streams Stopped'
+    pattern = 'PROCESSED'
+    running_message = 'REBALANCING -> RUNNING'
+    stopped_message = 'Static membership test closed'
 
     def __init__(self, test_context):
-        super(StreamsNamedRepartitionTopicTest, self).__init__(test_context)
+        super(StreamsStaticMembershipTest, self).__init__(test_context)
         self.topics = {
-            self.input_topic: {'partitions': 6},
-            self.aggregation_topic: {'partitions': 6}
+            self.input_topic: {'partitions': 18},
         }
 
         self.zookeeper = ZookeeperService(self.test_context, num_nodes=1)
@@ -50,13 +48,14 @@ class StreamsNamedRepartitionTopicTest(Test):
                                            throughput=1000,
                                            acks=1)
 
-    def test_upgrade_topology_with_named_repartition_topic(self):
+    def test_rolling_bounces_will_not_trigger_rebalance_under_static_membership(self):
         self.zookeeper.start()
         self.kafka.start()
 
-        processor1 = StreamsNamedRepartitionTopicService(self.test_context, self.kafka)
-        processor2 = StreamsNamedRepartitionTopicService(self.test_context, self.kafka)
-        processor3 = StreamsNamedRepartitionTopicService(self.test_context, self.kafka)
+        numThreads = 3
+        processor1 = StaticMemberTestService(self.test_context, self.kafka, "consumer-A", numThreads)
+        processor2 = StaticMemberTestService(self.test_context, self.kafka, "consumer-B", numThreads)
+        processor3 = StaticMemberTestService(self.test_context, self.kafka, "consumer-C", numThreads)
 
         processors = [processor1, processor2, processor3]
 
@@ -65,16 +64,30 @@ class StreamsNamedRepartitionTopicTest(Test):
         for processor in processors:
             processor.CLEAN_NODE_ENABLED = False
             self.set_topics(processor)
-            verify_running(processor, 'REBALANCING -> RUNNING')
+            verify_running(processor, self.running_message)
 
         self.verify_processing(processors)
 
-        # do rolling upgrade
+        # do several rolling bounces
+        num_bounces = 3
+        for i in range(0, num_bounces):
+            for processor in processors:
+                verify_stopped(processor, self.stopped_message)
+                verify_running(processor, self.running_message)
+
+        stable_generation = -1
         for processor in processors:
-            verify_stopped(processor, self.stopped_message)
-            #  will tell app to add operations before repartition topic
-            processor.ADD_ADDITIONAL_OPS = 'true'
-            verify_running(processor, 'UPDATED Topology')
+            generations = extract_generation_from_logs(processor)
+            num_bounce_generations = num_bounces * numThreads
+            assert num_bounce_generations <= len(generations), \
+                "Smaller than minimum expected %d generation messages, actual %d" % (num_bounce_generations, len(generations))
+
+            for generation in generations[-num_bounce_generations:]:
+                generation = int(generation)
+                if stable_generation == -1:
+                    stable_generation = generation
+                assert stable_generation == generation, \
+                    "Stream rolling bounce have caused unexpected generation bump %d" % generation
 
         self.verify_processing(processors)
 
@@ -93,4 +106,3 @@ class StreamsNamedRepartitionTopicTest(Test):
 
     def set_topics(self, processor):
         processor.INPUT_TOPIC = self.input_topic
-        processor.AGGREGATION_TOPIC = self.aggregation_topic

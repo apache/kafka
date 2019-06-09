@@ -137,7 +137,10 @@ public class MetadataCache {
     @Override
     public String toString() {
         return "MetadataCache{" +
-                "cluster=" + cluster() +
+                "clusterId='" + clusterId + '\'' +
+                ", nodes=" + nodes +
+                ", partitions=" + metadataByPartition.values() +
+                ", controller=" + controller +
                 '}';
     }
 
