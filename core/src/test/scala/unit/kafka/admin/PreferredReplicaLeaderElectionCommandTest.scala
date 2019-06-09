@@ -98,16 +98,11 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     servers.find(p => p.kafkaController.isActive)
   }
 
-  private def awaitLeader(topicPartition: TopicPartition, time: Long = test.TestUtils.DEFAULT_MAX_WAIT_MS): Int = {
-    var currentLeader: Option[Int] = None
-    TestUtils.waitUntilTrue(() => {
-      val infoOpt = servers.head.metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition)
-      currentLeader = infoOpt.map { info =>
-        info.basePartitionState.leader
-      }
-      currentLeader.isDefined
-    }, s"Timed out waiting to find current leader of $topicPartition")
-    currentLeader.get
+  private def awaitLeader(topicPartition: TopicPartition, timeoutMs: Long = test.TestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    TestUtils.awaitValue(() => {
+      servers.head.metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition)
+          .map(_.basePartitionState.leader)
+    }, s"Timed out waiting to find current leader of $topicPartition", timeoutMs)
   }
 
   private def bootstrapServer(broker: Int = 0): String = {
