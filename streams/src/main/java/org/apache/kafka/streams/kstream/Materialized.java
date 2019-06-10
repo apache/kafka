@@ -263,9 +263,9 @@ public class Materialized<K, V, S extends StateStore> {
      * Validate input materialized struct contains valid state store supplier. This aims to restrict
      * only using out-of-box state store suppliers when writing DSL.
      * @param stateStoreType state store type
-     * @return true if the given supplier matches the state store type.
+     *
      * @throws IllegalArgumentException if the given state store type is unrecognizable (must be one of the key-value,
-     * window, or session store)
+     * window, or session store), or the supplier doesn't match with expected state store type.
      */
     public void containsValidStoreSupplier(StateStoreType stateStoreType) throws IllegalArgumentException {
         if (storeSupplier != null) {
