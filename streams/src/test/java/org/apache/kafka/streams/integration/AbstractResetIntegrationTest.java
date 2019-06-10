@@ -168,7 +168,7 @@ public abstract class AbstractResetIntegrationTest {
 
     private static final long STREAMS_CONSUMER_TIMEOUT = 2000L;
     private static final long CLEANUP_CONSUMER_TIMEOUT = 2000L;
-    private static final int TIMEOUT_MULTIPLIER = 5;
+    private static final int TIMEOUT_MULTIPLIER = 15;
 
     private class ConsumerGroupInactiveCondition implements TestCondition {
         @Override
