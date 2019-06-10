@@ -776,7 +776,14 @@ object TestUtils extends Logging {
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
 
-
+  /**
+   * Wait for the presence of an optional value.
+   *
+   * @param func The function defining the optional value
+   * @param msg Error message in the case that the value never appears
+   * @param waitTimeMs Maximum time to wait
+   * @return The unwrapped value returned by the function
+   */
   def awaitValue[T](func: () => Option[T], msg: => String, waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): T = {
     var value: Option[T] = None
     waitUntilTrue(() => {
