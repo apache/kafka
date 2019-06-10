@@ -657,7 +657,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   }
 
   @Test
-  def testIncrementalAlterConfigsRequestClusterPermissionForBrokerLogger(): Unit = {
+  def testIncrementalAlterConfigsRequestRequiresClusterPermissionForBrokerLogger(): Unit = {
     val data = new IncrementalAlterConfigsRequestData
     val alterableConfig = new AlterableConfig().setName("kafka.controller.KafkaController").
       setValue(LogLevelConfig.DEBUG_LOG_LEVEL).setConfigOperation(AlterConfigOp.OpType.SET.id())

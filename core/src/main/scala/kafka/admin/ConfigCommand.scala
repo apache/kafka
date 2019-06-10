@@ -371,8 +371,7 @@ object ConfigCommand extends Config {
   private def brokerLoggerConfigs(adminClient: Admin, entityName: String): Seq[ConfigEntry] = {
     val configResource = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, entityName)
     val configs = adminClient.describeConfigs(Collections.singleton(configResource)).all.get(30, TimeUnit.SECONDS)
-    configs.get(configResource).entries.asScala
-      .toSeq
+    configs.get(configResource).entries.asScala.toSeq
   }
 
   case class Entity(entityType: String, sanitizedName: Option[String]) {
@@ -515,7 +514,7 @@ object ConfigCommand extends Config {
     val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id)")
             .withRequiredArg
             .ofType(classOf[String])
-    val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers/broker-loggers (applies to corresponding entity type in command line)")
+    val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers (applies to corresponding entity type in command line)")
 
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
@@ -548,7 +547,7 @@ object ConfigCommand extends Config {
 
       if (!options.has(bootstrapServerOpt) && !options.has(zkConnectOpt))
         throw new IllegalArgumentException("One of the required --bootstrap-server or --zookeeper arguments must be specified")
-      if (options.has(bootstrapServerOpt) && options.has(zkConnectOpt))
+      else if (options.has(bootstrapServerOpt) && options.has(zkConnectOpt))
         throw new IllegalArgumentException("Only one of --bootstrap-server or --zookeeper must be specified")
       if (entityTypeVals.contains(EntityType.Client) || entityTypeVals.contains(EntityType.Topic) || entityTypeVals.contains(EntityType.User))
         CommandLineUtils.checkRequiredArgs(parser, options, zkConnectOpt, entityType)

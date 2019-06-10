@@ -45,7 +45,6 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, MetadataResponse}
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceType}
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.log4j.Logger
 import org.junit.Assert._
 import org.junit.rules.Timeout
 import org.junit.{After, Before, Rule, Test}
@@ -1851,21 +1850,21 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       new AlterConfigOp(new ConfigEntry("kafka.zookeeper.ZooKeeperClient", ""), AlterConfigOp.OpType.DELETE) // should reset to the root logger level
     ).asJavaCollection
 
-    // Test validateOnly does not change them
     val initialLoggerConfig = client.describeConfigs(Collections.singletonList(brokerLoggerConfig)).values.get(brokerLoggerConfig).get()
     assertEquals("null", initialLoggerConfig.get("kafka.controller.KafkaController").value())
     assertEquals("null", initialLoggerConfig.get("kafka.log.LogCleaner").value())
     assertEquals("null", initialLoggerConfig.get("kafka.server.ReplicaManager").value())
 
+    // Test validateOnly does not change them
     client.incrementalAlterConfigs(Map(brokerLoggerConfig -> alterLogLevelsEntries).asJava, new AlterConfigsOptions().validateOnly(true))
 
-    val secondLoggerConfig = client.describeConfigs(Collections.singletonList(brokerLoggerConfig)).values.get(brokerLoggerConfig).get()
-    assertEquals("null", secondLoggerConfig.get("kafka.controller.KafkaController").value())
-    assertEquals("null", secondLoggerConfig.get("kafka.log.LogCleaner").value())
-    assertEquals("null", secondLoggerConfig.get("kafka.server.ReplicaManager").value())
-    assertEquals("null", secondLoggerConfig.get("kafka.zookeeper.ZooKeeperClient").value())
+    val validatedLoggerConfig = client.describeConfigs(Collections.singletonList(brokerLoggerConfig)).values.get(brokerLoggerConfig).get()
+    assertEquals("null", validatedLoggerConfig.get("kafka.controller.KafkaController").value())
+    assertEquals("null", validatedLoggerConfig.get("kafka.log.LogCleaner").value())
+    assertEquals("null", validatedLoggerConfig.get("kafka.server.ReplicaManager").value())
+    assertEquals("null", validatedLoggerConfig.get("kafka.zookeeper.ZooKeeperClient").value())
 
-    // Test we can actually change them
+    // Test that we can actually change them
     client.incrementalAlterConfigs(Map(brokerLoggerConfig -> alterLogLevelsEntries).asJava).values.get(brokerLoggerConfig).get()
     val alteredLoggerConfig = client.describeConfigs(Collections.singletonList(brokerLoggerConfig)).values.get(brokerLoggerConfig).get()
     assertEquals(LogLevelConfig.ALL_LOG_LEVEL, alteredLoggerConfig.get("kafka.controller.KafkaController").value())

@@ -352,8 +352,8 @@ class AdminManager(val config: KafkaConfig,
 
           case ConfigResource.Type.BROKER_LOGGER =>
             if (resource.name == null || resource.name.isEmpty)
-              throw new InvalidRequestException(s"Broker id must not be empty")
-            else if (resourceNameToBrokerId(resource.name) != config.brokerId) // still suffers from https://issues.apache.org/jira/browse/KAFKA-5276
+              throw new InvalidRequestException("Broker id must not be empty")
+            else if (resourceNameToBrokerId(resource.name) != config.brokerId)
               throw new InvalidRequestException(s"Unexpected broker id, expected ${config.brokerId} but received ${resource.name}")
             else
               createResponseConfig(Log4jController.loggers,
