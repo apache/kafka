@@ -516,9 +516,6 @@ public class StreamThread extends Thread {
         }
     }
 
-
-    private final boolean eosEnabled;
-
     private final Time time;
     private final Logger log;
     private final String logPrefix;
@@ -686,8 +683,6 @@ public class StreamThread extends Thread {
         ThreadMetrics.closeTaskSensor(streamsMetrics);
         ThreadMetrics.skipRecordSensor(streamsMetrics);
         ThreadMetrics.commitOverTasksSensor(streamsMetrics);
-
-        this.eosEnabled = StreamsConfig.EXACTLY_ONCE.equals(config.getString(StreamsConfig.PROCESSING_GUARANTEE_CONFIG));
 
         this.time = time;
         this.builder = builder;
@@ -872,16 +867,7 @@ public class StreamThread extends Thread {
                     if (processed > 0) {
                         final long processLatency = advanceNowAndComputeLatency();
                         processSensor.record(processLatency / (double) processed, now);
-
-                        if (eosEnabled) {
-                            maybeCommit();
-                        } else {
-                            final int committed = taskManager.maybeCommitActiveTasksPerUserRequested();
-
-                        if (committed > 0) {
-                            final long commitLatency = advanceNowAndComputeLatency();
-                            commitSensor.record(commitLatency / (double) committed, now);
-                        }
+                        maybeCommit();
                     } else {
                         // if there is no records to be processed, exit immediately
                         break;
@@ -890,7 +876,7 @@ public class StreamThread extends Thread {
 
                 timeSinceLastPoll = Math.max(now - lastPollMs, 0);
 
-                if (maybePunctuate() || (!eosEnabled && maybeCommit())) {
+                if (maybePunctuate()) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
                 } else if (timeSinceLastPoll > maxPollTimeMs / 2) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
