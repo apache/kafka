@@ -64,13 +64,12 @@ public class Materialized<K, V, S extends StateStore> {
     protected boolean cachingEnabled = true;
     protected Map<String, String> topicConfig = new HashMap<>();
     protected Duration retention;
-    protected Duration windowSize;
 
     private Materialized(final StoreSupplier<S> storeSupplier) {
         this.storeSupplier = storeSupplier;
     }
 
-    protected Materialized(final String storeName) {
+    private Materialized(final String storeName) {
         this.storeName = storeName;
     }
 

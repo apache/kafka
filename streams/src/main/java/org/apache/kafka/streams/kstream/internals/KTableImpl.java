@@ -275,7 +275,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             processorSupplier,
             tableNode,
             builder,
-            StateStoreType.KEY_VALUE_STORE, Optional.empty(), Optional.empty());
+            stateStoreType,
+            Optional.empty(),
+            Optional.empty());
     }
 
     @Override
@@ -384,8 +386,9 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
             processorSupplier,
             tableNode,
             builder, 
-            StateStoreType.KEY_VALUE_STORE, Optional.empty(),
-                Optional.empty());
+            stateStoreType,
+            Optional.empty(),
+            Optional.empty());
     }
 
     @Override

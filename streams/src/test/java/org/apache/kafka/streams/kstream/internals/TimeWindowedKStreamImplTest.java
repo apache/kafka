@@ -252,11 +252,10 @@ public class TimeWindowedKStreamImplTest {
         String windowStoreName = "window-store";
         windowedStream
                 .count()
-                .filter(
-                        (key, value) -> true,
+                .filter((key, value) -> true,
                         Materialized.as(windowStoreName)
                                 .withKeySerde(new WindowedSerdes.TimeWindowedSerde(Serdes.String()))
-                        .withValueSerde(Serdes.Long()));
+                                .withValueSerde(Serdes.Long()));
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
             {
