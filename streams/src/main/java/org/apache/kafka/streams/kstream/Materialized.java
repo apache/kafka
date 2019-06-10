@@ -70,7 +70,7 @@ public class Materialized<K, V, S extends StateStore> {
         this.storeSupplier = storeSupplier;
     }
 
-    private Materialized(final String storeName) {
+    protected Materialized(final String storeName) {
         this.storeName = storeName;
     }
 
@@ -170,12 +170,6 @@ public class Materialized<K, V, S extends StateStore> {
         return new Materialized<K, V, S>((String) null).withKeySerde(keySerde).withValueSerde(valueSerde);
     }
 
-    @SuppressWarnings("unchecked")
-    public static <K, V, S extends StateStore> Materialized<Windowed<K>, V, S> withWindowed(final Serde<K> keySerde,
-                                                                                            final Serde<V> valueSerde) {
-        return with(new WindowedSerdes.TimeWindowedSerde(keySerde), valueSerde);
-    }
-
     /**
      * Set the valueSerde the materialized {@link StateStore} will use.
      *
@@ -189,11 +183,6 @@ public class Materialized<K, V, S extends StateStore> {
         return this;
     }
 
-    public Materialized<K, V, S> withName(final String storeName) {
-        this.storeName = storeName;
-        return this;
-    }
-
     /**
      * Set the keySerde the materialize {@link StateStore} will use.
      * @param keySerde  the key {@link Serde} to use. If the {@link Serde} is null, then the default key
@@ -204,14 +193,6 @@ public class Materialized<K, V, S extends StateStore> {
         this.keySerde = keySerde;
         return this;
     }
-
-//    public Materialized<Windowed<K>, V, S> withWindowedKeySerde(final Serde<K> keySerde) {
-//        this.keySerde = keySerde;
-//
-//        return new Materialized<Windowed<K>, V, S>(this.storeName)
-//                       .withKeySerde(new WindowedSerdes.TimeWindowedSerde(keySerde));
-//    }
-
 
     /**
      * Indicates that a changelog should be created for the store. The changelog will be created
@@ -309,4 +290,5 @@ public class Materialized<K, V, S extends StateStore> {
             }
         }
     }
+
 }
