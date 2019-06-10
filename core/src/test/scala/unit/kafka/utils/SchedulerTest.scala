@@ -16,15 +16,13 @@
  */
 package kafka.utils
 
-import java.util.Properties
-
 import org.junit.Assert._
 import java.util.concurrent.atomic._
-
 import kafka.log.{Log, LogConfig, LogManager, ProducerStateManager}
 import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import org.junit.{After, Before, Test}
 import kafka.utils.TestUtils.retry
+import java.util.Properties
 
 class SchedulerTest {
 
