@@ -22,7 +22,6 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.NetworkClient;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
@@ -80,8 +79,6 @@ public class WorkerGroupMember {
             this.time = time;
             this.clientId = clientId;
             this.log = logContext.logger(WorkerGroupMember.class);
-
-            String groupId = config.getString(DistributedConfig.GROUP_ID_CONFIG);
 
             Map<String, String> metricsTags = new LinkedHashMap<>();
             metricsTags.put("client-id", clientId);

@@ -25,7 +25,7 @@ import org.apache.kafka.common.utils.Timer;
  */
 public final class Heartbeat {
     private final int maxPollIntervalMs;
-    private final GroupRebalanceConfig config;
+    private final GroupRebalanceConfig rebalanceConfig;
     private final Time time;
     private final Timer heartbeatTimer;
     private final Timer sessionTimer;
@@ -37,7 +37,7 @@ public final class Heartbeat {
                      Time time) {
         if (config.heartbeatIntervalMs >= config.sessionTimeoutMs)
             throw new IllegalArgumentException("Heartbeat must be set lower than the session timeout");
-        this.config = config;
+        this.rebalanceConfig = config;
         this.time = time;
         this.heartbeatTimer = time.timer(config.heartbeatIntervalMs);
         this.sessionTimer = time.timer(config.sessionTimeoutMs);
@@ -59,17 +59,17 @@ public final class Heartbeat {
     public void sentHeartbeat(long now) {
         this.lastHeartbeatSend = now;
         update(now);
-        heartbeatTimer.reset(config.heartbeatIntervalMs);
+        heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
     }
 
     public void failHeartbeat() {
         update(time.milliseconds());
-        heartbeatTimer.reset(config.retryBackoffMs);
+        heartbeatTimer.reset(rebalanceConfig.retryBackoffMs);
     }
 
     public void receiveHeartbeat() {
         update(time.milliseconds());
-        sessionTimer.reset(config.sessionTimeoutMs);
+        sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
     }
 
     public boolean shouldHeartbeat(long now) {
@@ -93,14 +93,14 @@ public final class Heartbeat {
 
     public void resetTimeouts() {
         update(time.milliseconds());
-        sessionTimer.reset(config.sessionTimeoutMs);
+        sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
         pollTimer.reset(maxPollIntervalMs);
-        heartbeatTimer.reset(config.heartbeatIntervalMs);
+        heartbeatTimer.reset(rebalanceConfig.heartbeatIntervalMs);
     }
 
     public void resetSessionTimeout() {
         update(time.milliseconds());
-        sessionTimer.reset(config.sessionTimeoutMs);
+        sessionTimer.reset(rebalanceConfig.sessionTimeoutMs);
     }
 
     public boolean pollTimeoutExpired(long now) {
