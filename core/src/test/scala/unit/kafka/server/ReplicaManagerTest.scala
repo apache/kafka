@@ -690,7 +690,7 @@ class ReplicaManagerTest {
 
     val partition = replicaManager.createPartition(new TopicPartition(topic, topicPartition))
 
-    val offsetCheckpoints = new SimpleOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+    val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
     partition.getOrCreateReplica(leaderBrokerId, isNew = false, offsetCheckpoints)
     partition.makeLeader(
       controllerId,
@@ -730,7 +730,7 @@ class ReplicaManagerTest {
     val tp0 = new TopicPartition(topic, 0)
 
     val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
-    partition.getOrCreateReplica(0, isNew = false, new SimpleOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
+    partition.getOrCreateReplica(0, isNew = false, new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
 
     // Make this replica the follower
     val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -774,7 +774,7 @@ class ReplicaManagerTest {
     val tp0 = new TopicPartition(topic, 0)
 
     val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
-    partition.getOrCreateReplica(0, isNew = false, new SimpleOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
+    partition.getOrCreateReplica(0, isNew = false, new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
 
     // Make this replica the follower
     val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,

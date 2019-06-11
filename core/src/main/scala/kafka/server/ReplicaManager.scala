@@ -931,7 +931,7 @@ class ReplicaManager(val config: KafkaConfig,
         // If we are the leader, determine the preferred read-replica
         val preferredReadReplica = findPreferredReadReplica(tp, clientMetadata, replicaId, fetchInfo.fetchOffset)
 
-        if (preferredReadReplica.isDefined && !preferredReadReplica.contains(replicaId)) {
+        if (preferredReadReplica.isDefined && !preferredReadReplica.contains(localBrokerId)) {
           // If the a preferred read-replica is set and is not this replica (the leader), skip the read
           val localReplica: Replica = partition.localReplicaOrException
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
