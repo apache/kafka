@@ -1018,11 +1018,10 @@ class ReplicaManager(val config: KafkaConfig,
 
   case class SomeReplicaView(isLeader: Boolean,
                              endpoint: Node,
-                             logOffset: Long,
+                             logEndOffset: Long,
                              lastCaughtUpTimeMs: Long) extends ReplicaView
 
-  case class SomePartitionView(replicas: util.Set[ReplicaView],
-                               leader: util.Optional[ReplicaView]) extends PartitionView
+  case class SomePartitionView(replicas: util.Set[ReplicaView]) extends PartitionView
 
   def findPreferredReadReplica(tp: TopicPartition, clientMetadata: ClientMetadata, replicaId: Int): Option[Int] = {
     val partition = getPartitionOrException(tp, expectLeader = false)
@@ -1040,13 +1039,10 @@ class ReplicaManager(val config: KafkaConfig,
           replica => SomeReplicaView(
             isLeader = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId)),
             endpoint = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
-            logOffset = replica.logEndOffset,
+            logEndOffset = replica.logEndOffset,
             lastCaughtUpTimeMs = replica.lastCaughtUpTimeMs
           ))
-        val partitionInfo = SomePartitionView(
-          replicas = replicaInfoSet.asJava,
-          leader = CoreUtils.asJavaOptional(replicaInfoSet.find(info => info.isLeader))
-        )
+        val partitionInfo = SomePartitionView(replicas = replicaInfoSet.asJava)
         Option.apply(replicaSelector.select(tp, clientMetadata, partitionInfo).orElse(null))
           .filter(!_.endpoint.isEmpty)
           .map(_.endpoint.id())

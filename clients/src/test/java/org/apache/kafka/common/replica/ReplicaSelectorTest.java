@@ -106,7 +106,7 @@ public class ReplicaSelectorTest {
             }
 
             @Override
-            public long logOffset() {
+            public long logEndOffset() {
                 return logOffset;
             }
 

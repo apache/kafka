@@ -30,35 +30,25 @@ public class RackAwareReplicaSelector implements ReplicaSelector {
     public Optional<ReplicaView> select(TopicPartition topicPartition,
                                         ClientMetadata clientMetadata,
                                         PartitionView partitionView) {
-        if (clientMetadata.rackId != null && !clientMetadata.rackId.isEmpty()) {
+        if (clientMetadata.rackId() != null && !clientMetadata.rackId().isEmpty()) {
             Set<ReplicaView> sameRackReplicas = partitionView.replicas().stream()
-                    .filter(replicaInfo -> clientMetadata.rackId.equalsIgnoreCase(replicaInfo.endpoint().rack()))
+                    .filter(replicaInfo -> clientMetadata.rackId().equalsIgnoreCase(replicaInfo.endpoint().rack()))
                     .collect(Collectors.toSet());
             if (sameRackReplicas.isEmpty()) {
-                return partitionView.leader();
+                return partitionView.findLeader();
             } else {
-                Optional<ReplicaView> leader = partitionView.leader().filter(sameRackReplicas::contains);
+                Optional<ReplicaView> leader = partitionView.findLeader().filter(sameRackReplicas::contains);
                 if (leader.isPresent()) {
                     // Use the leader if it's in this rack
                     return leader;
                 } else {
                     // Otherwise, get the most caught-up replica
-                    PartitionView sameRackPartition = new PartitionView() {
-                        @Override
-                        public Set<ReplicaView> replicas() {
-                            return sameRackReplicas;
-                        }
-
-                        @Override
-                        public Optional<ReplicaView> leader() {
-                            return partitionView.leader();
-                        }
-                    };
+                    PartitionView sameRackPartition = () -> sameRackReplicas;
                     return tieBreaker.select(topicPartition, clientMetadata, sameRackPartition);
                 }
             }
         } else {
-            return partitionView.leader();
+            return partitionView.findLeader();
         }
     }
 }

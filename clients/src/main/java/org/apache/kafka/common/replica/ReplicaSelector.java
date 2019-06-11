@@ -54,27 +54,43 @@ public interface ReplicaSelector extends Configurable, Closeable {
     /**
      * Holder for all the client metadata required to determine a preferred replica.
      */
-    class ClientMetadata {
-        public static final ClientMetadata NO_METADATA =
-                new ClientMetadata("", "", null, null, null);
+    interface ClientMetadata {
+        String rackId();
 
-        public final String rackId;
-        public final String clientId;
-        public final InetAddress clientAddress;
-        public final KafkaPrincipal principal;
-        public final String listenerName;
+        String clientId();
 
-        public ClientMetadata(String rackId,
-                              String clientId,
-                              InetAddress clientAddress,
-                              KafkaPrincipal principal,
-                              String listenerName) {
-            this.rackId = rackId;
-            this.clientId = clientId;
-            this.clientAddress = clientAddress;
-            this.principal = principal;
-            this.listenerName = listenerName;
-        }
+        InetAddress clientAddress();
+
+        KafkaPrincipal principal();
+
+        String listenerName();
+
+        ClientMetadata NO_METADATA = new ClientMetadata() {
+            @Override
+            public String rackId() {
+                return "";
+            }
+
+            @Override
+            public String clientId() {
+                return "";
+            }
+
+            @Override
+            public InetAddress clientAddress() {
+                return null;
+            }
+
+            @Override
+            public KafkaPrincipal principal() {
+                return null;
+            }
+
+            @Override
+            public String listenerName() {
+                return "";
+            }
+        };
     }
 
     /**
@@ -83,7 +99,9 @@ public interface ReplicaSelector extends Configurable, Closeable {
     interface PartitionView {
         Set<ReplicaView> replicas();
 
-        Optional<ReplicaView> leader();
+        default Optional<ReplicaView> findLeader() {
+            return replicas().stream().filter(ReplicaView::isLeader).findFirst();
+        }
     }
 
     /**
@@ -94,7 +112,7 @@ public interface ReplicaSelector extends Configurable, Closeable {
 
         Node endpoint();
 
-        long logOffset();
+        long logEndOffset();
 
         long lastCaughtUpTimeMs();
     }

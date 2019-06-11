@@ -19,6 +19,7 @@ package kafka.server
 
 import java.lang.{Byte => JByte}
 import java.lang.{Long => JLong}
+import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util
 import java.util.Optional
@@ -565,6 +566,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
+
+  case class SomeClientMetadata(rackId: String,
+                                clientId: String,
+                                clientAddress: InetAddress,
+                                principal: KafkaPrincipal,
+                                listenerName: String) extends ClientMetadata
   /**
    * Handle a fetch request
    */
@@ -578,7 +585,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       fetchRequest.toForget,
       fetchRequest.isFromFollower)
 
-    val clientMetadata = new ClientMetadata(
+    val clientMetadata = SomeClientMetadata(
       fetchRequest.rackId(),
       clientId,
       request.context.clientAddress,

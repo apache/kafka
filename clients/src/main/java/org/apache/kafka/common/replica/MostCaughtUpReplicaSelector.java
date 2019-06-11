@@ -27,7 +27,7 @@ public class MostCaughtUpReplicaSelector implements ReplicaSelector {
                                         ClientMetadata clientMetadata,
                                         PartitionView partitionView) {
         return partitionView.replicas().stream()
-            .max(Comparator.comparing(ReplicaView::logOffset)
+            .max(Comparator.comparing(ReplicaView::logEndOffset)
                 .thenComparing(ReplicaView::lastCaughtUpTimeMs)
                 .thenComparing(replicaInfo -> replicaInfo.endpoint().id()));
     }
