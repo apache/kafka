@@ -22,7 +22,7 @@ import java.util.Properties
 
 import kafka.api.KAFKA_0_11_0_IV0
 import kafka.api.{KAFKA_0_10_0_IV1, KAFKA_0_9_0}
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, LogOffsetMetadata}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -102,7 +102,7 @@ class LogCleanerParameterizedIntegrationTest(compressionCodec: String) extends A
       val messages = writeDups(numKeys = numKeys, numDups = 3, log = log, codec = codec)
       val startSize = log.size
 
-      log.onHighWatermarkIncremented(log.logEndOffset)
+      log.highWatermarkMetadata = LogOffsetMetadata(log.logEndOffset)
 
       val firstDirty = log.activeSegment.baseOffset
       cleaner.startup()

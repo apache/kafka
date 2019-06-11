@@ -266,7 +266,7 @@ class Log(@volatile var dir: File,
    * equals the log end offset (which may never happen for a partition under consistent load). This is needed to
    * prevent the log start offset (which is exposed in fetch responses) from getting ahead of the high watermark.
    */
-  @volatile private var replicaHighWatermark: Option[Long] = None
+  @volatile private[this] var _highWatermarkMetadata : LogOffsetMetadata = LogOffsetMetadata(0)
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
@@ -304,9 +304,6 @@ class Log(@volatile var dir: File,
       s"log end offset $logEndOffset in ${time.milliseconds() - startMs} ms")
   }
 
-  // the high watermark offset value, in non-leader logs only its message offsets are kept
-  @volatile private[this] var _highWatermarkMetadata : LogOffsetMetadata = LogOffsetMetadata(0)
-
   def highWatermark: Long = highWatermarkMetadata.messageOffset
 
   def highWatermark_=(newHighWatermark: Long): Unit = {
@@ -328,12 +325,12 @@ class Log(@volatile var dir: File,
    * Convert hw to local offset metadata by reading the log at the hw offset.
    * If the hw offset is out of range, return the first offset of the first log segment as the offset metadata.
    */
-  def maybeFetchHighWatermarkOffsetMetadata() : Unit = {
+  def maybeFetchHighWatermarkOffsetMetadata(): Unit = {
     if (highWatermarkMetadata.messageOffsetOnly) {
-      highWatermarkMetadata = convertToOffsetMetadata (highWatermark).getOrElse {
-        convertToOffsetMetadata (logStartOffset).getOrElse {
+      highWatermarkMetadata = convertToOffsetMetadata(highWatermark).getOrElse {
+        convertToOffsetMetadata(logStartOffset).getOrElse {
           val firstSegmentOffset = logSegments.head.baseOffset
-          LogOffsetMetadata (firstSegmentOffset, firstSegmentOffset, 0)
+          LogOffsetMetadata(firstSegmentOffset, firstSegmentOffset, 0)
         }
       }
     }
@@ -354,6 +351,8 @@ class Log(@volatile var dir: File,
   }
 
   def lastStableOffset: Long = lastStableOffsetMetadata.messageOffset
+
+  def lastStableOffsetLag: Long = highWatermark - lastStableOffset
 
   def offsetSnapshot: LogOffsetSnapshot = {
     LogOffsetSnapshot(
@@ -1085,9 +1084,8 @@ class Log(@volatile var dir: File,
     }
   }
 
-  def onHighWatermarkIncremented(highWatermark: Long): Unit = {
+  private def onHighWatermarkIncremented(highWatermark: Long): Unit = {
     lock synchronized {
-      replicaHighWatermark = Some(highWatermark)
       producerStateManager.onHighWatermarkUpdated(highWatermark)
       updateFirstUnstableOffset()
     }
@@ -1565,10 +1563,9 @@ class Log(@volatile var dir: File,
    * @return the segments ready to be deleted
    */
   private def deletableSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean): Iterable[LogSegment] = {
-    if (segments.isEmpty || replicaHighWatermark.isEmpty) {
+    if (segments.isEmpty) {
       Seq.empty
     } else {
-      val highWatermark = replicaHighWatermark.get
       val deletable = ArrayBuffer.empty[LogSegment]
       var segmentEntry = segments.firstEntry
       while (segmentEntry != null) {

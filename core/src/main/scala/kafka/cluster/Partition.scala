@@ -250,9 +250,7 @@ class Partition(val topicPartition: TopicPartition,
   newGauge("LastStableOffsetLag",
     new Gauge[Long] {
       def value = {
-        log.map { partitionLog =>
-          partitionLog.highWatermark - partitionLog.lastStableOffset
-        }.getOrElse(0)
+        log.map(_.lastStableOffsetLag).getOrElse(0)
       }
     },
     tags
@@ -284,8 +282,8 @@ class Partition(val topicPartition: TopicPartition,
     inWriteLock(leaderIsrUpdateLock) {
       val currentLogDir = localLogOrException.dir.getParent
       if (currentLogDir == logDir) {
-        info(s"current log directory $currentLogDir of partition $topicPartition is same as requested log " +
-          s"dir $logDir. Skipping future replica creation.")
+        info(s"Current log directory $currentLogDir is same as requested log dir $logDir. " +
+          s"Skipping future replica creation.")
         false
       } else {
         futureLog match {
@@ -398,7 +396,7 @@ class Partition(val topicPartition: TopicPartition,
     getLocalLog(currentLeaderEpoch, requireLeader) match {
       case Left(localLog) => localLog
       case Right(error) =>
-        throw error.exception(s"Failed to find ${if (requireLeader) "leader " else ""} for " +
+        throw error.exception(s"Failed to find log ${if (requireLeader) "leader " else ""} for " +
           s"partition $topicPartition with leader epoch $currentLeaderEpoch. The current leader " +
           s"is $leaderReplicaIdOpt and the current epoch $leaderEpoch")
     }
@@ -406,17 +404,17 @@ class Partition(val topicPartition: TopicPartition,
 
   // Visible for testing -- Only used in tests to add replica to existing partition
   def addReplicaIfNotExists(replica: Replica): Replica = {
-    allReplicasMap.putIfNotExists(replica.brokerId, replica)
-    replica match {
+    val savedReplica = allReplicasMap.getAndMaybePut(replica.brokerId, replica)
+    savedReplica match {
       case localReplica : LocalReplica =>
-        if (replica.brokerId == Request.FutureLocalReplicaId) {
+        if (savedReplica.brokerId == Request.FutureLocalReplicaId) {
           this.futureLog = Some(localReplica.log)
         } else {
           this.log = Some(localReplica.log)
         }
       case _ =>
     }
-    replica
+    savedReplica
   }
 
   def assignedReplicas: Set[Replica] =

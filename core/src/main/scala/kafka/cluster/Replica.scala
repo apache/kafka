@@ -62,7 +62,7 @@ abstract class Replica(val brokerId: Int,
   override def hashCode: Int = 31 + topicPartition.hashCode + 17 * brokerId
 }
 
-final class LocalReplica(brokerId: Int,
+class LocalReplica(brokerId: Int,
                    topicPartition: TopicPartition,
                    @volatile var log: Log) extends Replica(brokerId, topicPartition) {
   def logStartOffset: Long =
@@ -84,7 +84,7 @@ final class LocalReplica(brokerId: Int,
   }
 }
 
-final class RemoteReplica(brokerId: Int,
+class RemoteReplica(brokerId: Int,
                     topicPartition: TopicPartition) extends Replica(brokerId, topicPartition) {
   // the log end offset value, kept in all replicas;
   // for local replica it is the log's end offset, for remote replicas its value is only updated by follower fetch
