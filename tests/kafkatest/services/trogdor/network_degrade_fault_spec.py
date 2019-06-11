@@ -30,7 +30,7 @@ class NetworkDegradeFaultSpec(TaskSpec):
         :param start_ms:        The start time, as described in task_spec.py
         :param duration_ms:     The duration in milliseconds.
         :param node_latencies:  A dict of node name to desired latency
-        :param network_device:  The name of the
+        :param network_device:  The name of the network device
         """
         super(NetworkDegradeFaultSpec, self).__init__(start_ms, duration_ms)
         self.message["class"] = "org.apache.kafka.trogdor.fault.NetworkDegradeFaultSpec"

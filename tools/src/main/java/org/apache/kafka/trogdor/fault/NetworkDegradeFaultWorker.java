@@ -27,7 +27,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.NetworkInterface;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Uses the linux utility <pre>tc</pre> (traffic controller) to simulate latency on a specified network device
@@ -53,7 +57,9 @@ public class NetworkDegradeFaultWorker implements TaskWorker {
         Node curNode = platform.curNode();
         NetworkDegradeFaultSpec.NodeDegradeSpec nodeSpec = nodeSpecs.get(curNode.name());
         if (nodeSpec != null) {
-            enableTrafficControl(platform, nodeSpec.getNetworkDevice(), nodeSpec.getLatency());
+            for (String device : devicesForSpec(nodeSpec)) {
+                enableTrafficControl(platform, device, nodeSpec.getLatencyMs());
+            }
         }
         this.status.update(new TextNode("enabled traffic control " + id));
     }
@@ -65,9 +71,25 @@ public class NetworkDegradeFaultWorker implements TaskWorker {
         Node curNode = platform.curNode();
         NetworkDegradeFaultSpec.NodeDegradeSpec nodeSpec = nodeSpecs.get(curNode.name());
         if (nodeSpec != null) {
-            disableTrafficControl(platform, nodeSpec.getNetworkDevice());
+            for (String device : devicesForSpec(nodeSpec)) {
+                disableTrafficControl(platform, device);
+            }
         }
         this.status.update(new TextNode("disabled traffic control " + id));
+    }
+
+    private Set<String> devicesForSpec(NetworkDegradeFaultSpec.NodeDegradeSpec nodeSpec) throws Exception {
+        Set<String> devices = new HashSet<>();
+        if (nodeSpec.getNetworkDevice().isEmpty()) {
+            for (NetworkInterface networkInterface : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                if (!networkInterface.isLoopback()) {
+                    devices.add(networkInterface.getName());
+                }
+            }
+        } else {
+            devices.add(nodeSpec.getNetworkDevice());
+        }
+        return devices;
     }
 
     private void enableTrafficControl(Platform platform, String networkDevice, int delayMs) throws IOException {

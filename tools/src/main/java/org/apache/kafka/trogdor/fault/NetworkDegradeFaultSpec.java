@@ -30,13 +30,13 @@ public class NetworkDegradeFaultSpec extends TaskSpec {
 
     public static class NodeDegradeSpec {
         private final String networkDevice;
-        private final Integer latency;
+        private final Integer latencyMs;
 
         public NodeDegradeSpec(
                 @JsonProperty("networkDevice") String networkDevice,
-                @JsonProperty("latency") Integer latency) {
-            this.networkDevice = networkDevice;
-            this.latency = latency;
+                @JsonProperty("latencyMs") Integer latencyMs) {
+            this.networkDevice = networkDevice == null ? "" : networkDevice;
+            this.latencyMs = latencyMs;
         }
 
         @JsonProperty
@@ -45,8 +45,8 @@ public class NetworkDegradeFaultSpec extends TaskSpec {
         }
 
         @JsonProperty
-        public Integer getLatency() {
-            return latency;
+        public Integer getLatencyMs() {
+            return latencyMs;
         }
     }
 
