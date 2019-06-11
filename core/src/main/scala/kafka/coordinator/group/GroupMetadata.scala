@@ -24,7 +24,6 @@ import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.SyncGroupRequest
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, immutable, mutable}
@@ -164,7 +163,7 @@ case class GroupSummary(state: String,
   * being materialized.
   */
 case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offsetAndMetadata: OffsetAndMetadata) {
-  def olderThan(that: CommitRecordMetadataAndOffset) : Boolean = appendedBatchOffset.get < that.appendedBatchOffset.get
+  def olderThan(that: CommitRecordMetadataAndOffset): Boolean = appendedBatchOffset.get < that.appendedBatchOffset.get
 }
 
 /**
@@ -440,7 +439,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def maybeInvokeJoinCallback(member: MemberMetadata,
-                              joinGroupResult: JoinGroupResult) : Unit = {
+                              joinGroupResult: JoinGroupResult): Unit = {
     if (member.isAwaitingJoin) {
       member.awaitingJoinCallback(joinGroupResult)
       member.awaitingJoinCallback = null
@@ -448,8 +447,11 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
   }
 
+  /**
+    * @return true if a sync callback actually performs.
+    */
   def maybeInvokeSyncCallback(member: MemberMetadata,
-                              syncGroupResult: SyncGroupResult) : Boolean = {
+                              syncGroupResult: SyncGroupResult): Boolean = {
     if (member.isAwaitingSync) {
       member.awaitingSyncCallback(syncGroupResult)
       member.awaitingSyncCallback = null
@@ -626,7 +628,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }.toMap
   }
 
-  def removeExpiredOffsets(currentTimestamp: Long, offsetRetentionMs: Long) : Map[TopicPartition, OffsetAndMetadata] = {
+  def removeExpiredOffsets(currentTimestamp: Long, offsetRetentionMs: Long): Map[TopicPartition, OffsetAndMetadata] = {
 
     def getExpiredOffsets(baseTimestamp: CommitRecordMetadataAndOffset => Long): Map[TopicPartition, OffsetAndMetadata] = {
       offsets.filter {

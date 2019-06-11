@@ -180,7 +180,7 @@ class GroupCoordinator(val brokerId: Int,
         if (group.hasStaticMember(groupInstanceId)) {
           val oldMemberId = group.getStaticMemberId(groupInstanceId)
           info(s"Static member $groupInstanceId with unknown member id rejoins, assigning new member id $newMemberId, while " +
-            s"old member $oldMemberId will be removed. If group is currently stable, no rebalance will be triggered.")
+            s"old member $oldMemberId will be removed.")
 
           val currentLeader = group.leaderOrNull
           val member = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
@@ -193,11 +193,18 @@ class GroupCoordinator(val brokerId: Int,
 
           group.currentState match {
             case Stable | CompletingRebalance =>
+              info(s"Static member joins during ${group.currentState} stage will not trigger rebalance.")
               group.maybeInvokeJoinCallback(member, JoinGroupResult(
                 members = List.empty,
                 memberId = newMemberId,
                 generationId = group.generationId,
                 subProtocol = group.protocolOrNull,
+                // We want to avoid current leader performing trivial assignment while the group
+                // is in stable/awaiting sync stage, because the new assignment in leader's next sync call
+                // won't be broadcast by a stable/awaiting sync group. This could be guaranteed by
+                // always returning the old leader id so that the current leader won't assume itself
+                // as a leader based on the returned message, since the new member.id won't match
+                // returned leader id, therefore no assignment will be performed.
                 leaderId = currentLeader,
                 error = Errors.NONE))
             case Empty | Dead =>
@@ -778,16 +785,6 @@ class GroupCoordinator(val brokerId: Int,
     }
   }
 
-  private def joinError(memberId: String, error: Errors): JoinGroupResult = {
-    JoinGroupResult(
-      members = List.empty,
-      memberId = memberId,
-      generationId = GroupCoordinator.NoGeneration,
-      subProtocol = GroupCoordinator.NoProtocol,
-      leaderId = GroupCoordinator.NoLeader,
-      error = error)
-  }
-
   /**
    * Complete existing DelayedHeartbeats for the given member and schedule the next one
    */
@@ -1097,6 +1094,15 @@ object GroupCoordinator {
     new GroupCoordinator(config.brokerId, groupConfig, offsetConfig, groupMetadataManager, heartbeatPurgatory, joinPurgatory, time)
   }
 
+  def joinError(memberId: String, error: Errors): JoinGroupResult = {
+    JoinGroupResult(
+      members = List.empty,
+      memberId = memberId,
+      generationId = GroupCoordinator.NoGeneration,
+      subProtocol = GroupCoordinator.NoProtocol,
+      leaderId = GroupCoordinator.NoLeader,
+      error = error)
+  }
 }
 
 case class GroupConfig(groupMinSessionTimeoutMs: Int,
@@ -1109,7 +1115,8 @@ case class JoinGroupResult(members: List[JoinGroupResponseMember],
                            generationId: Int,
                            subProtocol: String,
                            leaderId: String,
-                           error: Errors)
+                           error: Errors) {
+}
 
 case class SyncGroupResult(memberAssignment: Array[Byte],
                            error: Errors)
