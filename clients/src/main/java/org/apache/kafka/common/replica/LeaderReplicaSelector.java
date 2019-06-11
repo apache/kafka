@@ -20,6 +20,9 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Optional;
 
+/**
+ * Replica selector that simply returns the leader replica
+ */
 public class LeaderReplicaSelector implements ReplicaSelector {
     @Override
     public Optional<ReplicaView> select(TopicPartition topicPartition,

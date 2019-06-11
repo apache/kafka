@@ -22,9 +22,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+/**
+ * Returns a replica whose rack id is equal to the rack id specified in the client request metadata. If no such replica
+ * is found, returns the leader.
+ */
 public class RackAwareReplicaSelector implements ReplicaSelector {
-
-    private final MostCaughtUpReplicaSelector tieBreaker = new MostCaughtUpReplicaSelector();
 
     @Override
     public Optional<ReplicaView> select(TopicPartition topicPartition,
@@ -43,8 +45,7 @@ public class RackAwareReplicaSelector implements ReplicaSelector {
                     return leader;
                 } else {
                     // Otherwise, get the most caught-up replica
-                    PartitionView sameRackPartition = () -> sameRackReplicas;
-                    return tieBreaker.select(topicPartition, clientMetadata, sameRackPartition);
+                    return sameRackReplicas.stream().max(ReplicaView.comparator());
                 }
             }
         } else {

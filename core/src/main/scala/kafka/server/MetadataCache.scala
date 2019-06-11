@@ -202,7 +202,6 @@ class MetadataCache(brokerId: Int) extends Logging {
     snapshot.partitionStates.get(topic).flatMap(_.get(partitionId)).map(partitionInfo => {
       val replicaIds = partitionInfo.basePartitionState.replicas
       replicaIds.asScala
-      //JavaConverters.asScalaBuffer(replicaIds)
         .map(replicaId => replicaId.intValue() -> {
           snapshot.aliveBrokers.get(replicaId.longValue()) match {
             case Some(broker) =>

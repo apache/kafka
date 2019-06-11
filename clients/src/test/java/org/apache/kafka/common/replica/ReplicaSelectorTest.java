@@ -111,29 +111,42 @@ public class ReplicaSelectorTest {
             }
 
             @Override
-            public long lastCaughtUpTimeMs() {
-                return lastCaughtUpTimeMs;
+            public Optional<Long> lastCaughtUpTimeMs() {
+                return Optional.of(lastCaughtUpTimeMs);
             }
         };
     }
 
     static ReplicaSelector.PartitionView partitionInfo(Set<ReplicaSelector.ReplicaView> replicaViewSet) {
-        return new ReplicaSelector.PartitionView() {
-            @Override
-            public Set<ReplicaSelector.ReplicaView> replicas() {
-                return replicaViewSet;
-            }
-
-            @Override
-            public Optional<ReplicaSelector.ReplicaView> leader() {
-                return replicaViewSet.stream().filter(ReplicaSelector.ReplicaView::isLeader).findFirst();
-            }
-        };
+        return () -> replicaViewSet;
     }
 
     static ReplicaSelector.ClientMetadata metadata(String rack) {
-        return new ReplicaSelector.ClientMetadata(rack, "test-client",
-                InetAddress.getLoopbackAddress(), KafkaPrincipal.ANONYMOUS, "test");
+        return new ReplicaSelector.ClientMetadata() {
+            @Override
+            public String rackId() {
+                return rack;
+            }
 
+            @Override
+            public String clientId() {
+                return "test-client";
+            }
+
+            @Override
+            public InetAddress clientAddress() {
+                return InetAddress.getLoopbackAddress();
+            }
+
+            @Override
+            public KafkaPrincipal principal() {
+                return KafkaPrincipal.ANONYMOUS;
+            }
+
+            @Override
+            public String listenerName() {
+                return "test";
+            }
+        };
     }
 }

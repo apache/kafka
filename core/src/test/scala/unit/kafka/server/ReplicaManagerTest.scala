@@ -701,10 +701,10 @@ class ReplicaManagerTest {
 
     val tp0 = new TopicPartition(topic, 0)
 
-    val metadata: ClientMetadata = new ClientMetadata("rack-a", "client-id",
+    val metadata: ClientMetadata = SomeClientMetadata("rack-a", "client-id",
       InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
-    val preferredReadReplica: Option[Int] = replicaManager.findPreferredReadReplica(tp0, metadata, Request.OrdinaryConsumerId)
+    val preferredReadReplica: Option[Int] = replicaManager.findPreferredReadReplica(tp0, metadata, Request.OrdinaryConsumerId, 1L)
     assertTrue(preferredReadReplica.isDefined)
     assertEquals(preferredReadReplica, partition.leaderReplicaIdOpt)
   }
@@ -739,7 +739,7 @@ class ReplicaManagerTest {
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
-    val metadata: ClientMetadata = new ClientMetadata("rack-a", "client-id",
+    val metadata: ClientMetadata = SomeClientMetadata("rack-a", "client-id",
       InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
     val consumerResult = fetchAsConsumer(replicaManager, tp0,
@@ -783,7 +783,7 @@ class ReplicaManagerTest {
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
-    val metadata: ClientMetadata = new ClientMetadata("rack-a", "client-id",
+    val metadata: ClientMetadata = SomeClientMetadata("rack-a", "client-id",
       InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
     val consumerResult = fetchAsConsumer(replicaManager, tp0,

@@ -24,6 +24,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.InetAddress;
+import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -99,6 +100,9 @@ public interface ReplicaSelector extends Configurable, Closeable {
     interface PartitionView {
         Set<ReplicaView> replicas();
 
+        /**
+         * Helper method to find the leader among the replicas for this partition
+         */
         default Optional<ReplicaView> findLeader() {
             return replicas().stream().filter(ReplicaView::isLeader).findFirst();
         }
@@ -108,13 +112,34 @@ public interface ReplicaSelector extends Configurable, Closeable {
      * View of a replica used by {@link ReplicaSelector} to determine a preferred replica.
      */
     interface ReplicaView {
+        /**
+         * Is this replica the leader of its partition
+         */
         boolean isLeader();
 
+        /**
+         * The endpoint information for this replica (hostname, port, rack, etc)
+         */
         Node endpoint();
 
+        /**
+         * The log end offset for this replica
+         */
         long logEndOffset();
 
-        long lastCaughtUpTimeMs();
-    }
+        /**
+         * The number of milliseconds (if any) since the last time this replica was caught up to the high watermark.
+         */
+        Optional<Long> lastCaughtUpTimeMs();
 
+        /**
+         * Comparator for ReplicaView that returns in the order of "most caught up". This is used for deterministic
+         * selection of a replica when there is a tie from a selector.
+         */
+        static Comparator<ReplicaView> comparator() {
+            return Comparator.comparing(ReplicaView::logEndOffset)
+                .thenComparing(replicaView -> replicaView.lastCaughtUpTimeMs().orElse(-1L))
+                .thenComparing(replicaInfo -> replicaInfo.endpoint().id());
+        }
+    }
 }

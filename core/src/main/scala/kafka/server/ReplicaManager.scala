@@ -1032,7 +1032,7 @@ class ReplicaManager(val config: KafkaConfig,
   case class SomeReplicaView(isLeader: Boolean,
                              endpoint: Node,
                              logEndOffset: Long,
-                             lastCaughtUpTimeMs: Long) extends ReplicaView
+                             lastCaughtUpTimeMs: util.Optional[java.lang.Long]) extends ReplicaView
 
   case class SomePartitionView(replicas: util.Set[ReplicaView]) extends PartitionView
 
@@ -1054,7 +1054,11 @@ class ReplicaManager(val config: KafkaConfig,
             isLeader = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId)),
             endpoint = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
             logEndOffset = replica.logEndOffset,
-            lastCaughtUpTimeMs = replica.lastCaughtUpTimeMs
+            lastCaughtUpTimeMs = if (replica.lastCaughtUpTimeMs == 0) {
+              util.Optional.empty()
+            } else {
+              util.Optional.of(long2Long(replica.lastCaughtUpTimeMs))
+            }
           ))
         val partitionInfo = SomePartitionView(replicas = replicaInfoSet.asJava)
         Option.apply(replicaSelector.select(tp, clientMetadata, partitionInfo).orElse(null))

@@ -358,25 +358,4 @@ object CoreUtils {
         map.putIfAbsent(key, value).getOrElse(value)
     }
   }
-
-  /**
-    * A simple scala.Option to java.util.Optional converter
-    */
-  def asJavaOptional[T](option: Option[T]): java.util.Optional[T] = {
-    option match {
-      case Some(value) => java.util.Optional.of(value)
-      case None => java.util.Optional.empty()
-    }
-  }
-
-  /**
-    * A simple java.util.Optional to scala.Option converter
-    */
-  def asScalaOption[T](optional: java.util.Optional[T]): Option[T] = {
-    if (optional.isPresent) {
-      Option.apply(optional.get)
-    } else {
-      Option.empty
-    }
-  }
 }

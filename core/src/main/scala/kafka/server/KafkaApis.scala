@@ -84,10 +84,17 @@ import org.apache.kafka.common.security.token.delegation.{DelegationToken, Token
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{Node, TopicPartition}
 
+import scala.compat.java8.OptionConverters._
 import scala.collection.JavaConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
+
+case class SomeClientMetadata(rackId: String,
+                              clientId: String,
+                              clientAddress: InetAddress,
+                              principal: KafkaPrincipal,
+                              listenerName: String) extends ClientMetadata
 
 /**
  * Logic to handle the various Kafka requests
@@ -566,12 +573,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-
-  case class SomeClientMetadata(rackId: String,
-                                clientId: String,
-                                clientAddress: InetAddress,
-                                principal: KafkaPrincipal,
-                                listenerName: String) extends ClientMetadata
   /**
    * Handle a fetch request
    */
@@ -690,7 +691,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         if (data.preferredReadReplica.isDefined) {
           partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
-            data.logStartOffset, CoreUtils.asJavaOptional(data.preferredReadReplica.map(int2Integer)),
+            data.logStartOffset, data.preferredReadReplica.map(int2Integer).asJava,
             abortedTransactions, data.records))
         } else {
           partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
