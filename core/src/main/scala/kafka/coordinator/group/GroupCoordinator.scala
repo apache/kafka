@@ -216,9 +216,9 @@ class GroupCoordinator(val brokerId: Int,
             // and send back a response to call for another join group request with allocated member id.
           debug(s"Dynamic member with unknown member id rejoins group ${group.groupId} in " +
               s"${group.currentState} state. Created a new member id $newMemberId and request the member to rejoin with this id.")
-            group.addPendingMember(newMemberId)
-            addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
-            responseCallback(joinError(newMemberId, Errors.MEMBER_ID_REQUIRED))
+          group.addPendingMember(newMemberId)
+          addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
+          responseCallback(joinError(newMemberId, Errors.MEMBER_ID_REQUIRED))
         } else {
           debug(s"Dynamic member with unknown member id rejoins group ${group.groupId} in " +
             s"${group.currentState} state. Created a new member id $newMemberId for this member and add to the group.")
@@ -411,6 +411,9 @@ class GroupCoordinator(val brokerId: Int,
             val memberMetadata = group.get(memberId)
             responseCallback(memberMetadata.assignment, Errors.NONE)
             completeAndScheduleNextHeartbeatExpiration(group, group.get(memberId))
+
+          case Dead =>
+            throw new IllegalStateException(s"Reached unexpected condition for Dead group ${group.groupId}")
         }
       }
     }
@@ -539,6 +542,9 @@ class GroupCoordinator(val brokerId: Int,
                 val member = group.get(memberId)
                 completeAndScheduleNextHeartbeatExpiration(group, member)
                 responseCallback(Errors.NONE)
+
+            case Dead =>
+              throw new IllegalStateException(s"Reached unexpected condition for Dead group $groupId")
           }
         }
       }

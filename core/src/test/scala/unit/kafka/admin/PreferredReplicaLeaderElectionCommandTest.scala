@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.PreferredLeaderNotAvailableException
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.test
 import org.junit.Assert._
 import org.junit.{After, Test}
 
@@ -63,9 +64,9 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     // create brokers
     servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
     // create the topic
-    partitionsAndAssignments.foreach { case (tp, assigment) =>
-      zkClient.createTopicAssignment(tp.topic(),
-      Map(tp -> assigment))
+    partitionsAndAssignments.foreach { case (tp, assignment) =>
+      zkClient.createTopicAssignment(tp.topic,
+      Map(tp -> assignment))
     }
     // wait until replica log is created on every broker
     TestUtils.waitUntilTrue(
@@ -97,8 +98,11 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     servers.find(p => p.kafkaController.isActive)
   }
 
-  private def getLeader(topicPartition: TopicPartition) = {
-    servers(0).metadataCache.getPartitionInfo(topicPartition.topic(), topicPartition.partition()).get.basePartitionState.leader
+  private def awaitLeader(topicPartition: TopicPartition, timeoutMs: Long = test.TestUtils.DEFAULT_MAX_WAIT_MS): Int = {
+    TestUtils.awaitValue(() => {
+      servers.head.metadataCache.getPartitionInfo(topicPartition.topic, topicPartition.partition)
+          .map(_.basePartitionState.leader)
+    }, s"Timed out waiting to find current leader of $topicPartition", timeoutMs)
   }
 
   private def bootstrapServer(broker: Int = 0): String = {
@@ -118,11 +122,11 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     createTestTopicAndCluster(testPartitionAndAssignment)
     bounceServer(testPartitionPreferredLeader, testPartition)
     // Check the leader for the partition is not the preferred one
-    assertNotEquals(testPartitionPreferredLeader, getLeader(testPartition))
+    assertNotEquals(testPartitionPreferredLeader, awaitLeader(testPartition))
     PreferredReplicaLeaderElectionCommand.run(Array(
       "--bootstrap-server", s"${bootstrapServer(1)},${bootstrapServer(0)}"))
     // Check the leader for the partition IS the preferred one
-    assertEquals(testPartitionPreferredLeader, getLeader(testPartition))
+    assertEquals(testPartitionPreferredLeader, awaitLeader(testPartition))
   }
 
   /** Test the case when an invalid broker is given for --bootstrap-broker */
@@ -145,11 +149,11 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     createTestTopicAndCluster(testPartitionAndAssignment)
     bounceServer(testPartitionPreferredLeader, testPartition)
     // Check the leader for the partition is not the preferred one
-    assertNotEquals(testPartitionPreferredLeader, getLeader(testPartition))
+    assertNotEquals(testPartitionPreferredLeader, awaitLeader(testPartition))
     PreferredReplicaLeaderElectionCommand.run(Array(
       "--bootstrap-server", bootstrapServer()))
     // Check the leader for the partition IS the preferred one
-    assertEquals(testPartitionPreferredLeader, getLeader(testPartition))
+    assertEquals(testPartitionPreferredLeader, awaitLeader(testPartition))
   }
 
   private def toJsonFile(partitions: Set[TopicPartition]): File = {
@@ -167,7 +171,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     createTestTopicAndCluster(testPartitionAndAssignment)
     bounceServer(testPartitionPreferredLeader, testPartition)
     // Check the leader for the partition is not the preferred one
-    assertNotEquals(testPartitionPreferredLeader, getLeader(testPartition))
+    assertNotEquals(testPartitionPreferredLeader, awaitLeader(testPartition))
     val jsonFile = toJsonFile(testPartitionAndAssignment.keySet)
     try {
       PreferredReplicaLeaderElectionCommand.run(Array(
@@ -177,7 +181,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
       jsonFile.delete()
     }
     // Check the leader for the partition IS the preferred one
-    assertEquals(testPartitionPreferredLeader, getLeader(testPartition))
+    assertEquals(testPartitionPreferredLeader, awaitLeader(testPartition))
   }
 
   /** Test the case where a topic does not exist */
@@ -217,8 +221,8 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     createTestTopicAndCluster(testPartitionAndAssignment)
     bounceServer(testPartitionPreferredLeader, testPartitionA)
     // Check the leader for the partition is not the preferred one
-    assertNotEquals(testPartitionPreferredLeader, getLeader(testPartitionA))
-    assertNotEquals(testPartitionPreferredLeader, getLeader(testPartitionB))
+    assertNotEquals(testPartitionPreferredLeader, awaitLeader(testPartitionA))
+    assertNotEquals(testPartitionPreferredLeader, awaitLeader(testPartitionB))
     val jsonFile = toJsonFile(testPartitionAndAssignment.keySet)
     try {
       PreferredReplicaLeaderElectionCommand.run(Array(
@@ -228,16 +232,16 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
       jsonFile.delete()
     }
     // Check the leader for the partition IS the preferred one
-    assertEquals(testPartitionPreferredLeader, getLeader(testPartitionA))
-    assertEquals(testPartitionPreferredLeader, getLeader(testPartitionB))
+    assertEquals(testPartitionPreferredLeader, awaitLeader(testPartitionA))
+    assertEquals(testPartitionPreferredLeader, awaitLeader(testPartitionB))
   }
 
   /** What happens when the preferred replica is already the leader? */
   @Test
   def testNoopElection() {
     createTestTopicAndCluster(testPartitionAndAssignment)
-    // Don't bounce the server. Doublec heck the leader for the partition is the preferred one
-    assertEquals(testPartitionPreferredLeader, getLeader(testPartition))
+    // Don't bounce the server. Doublecheck the leader for the partition is the preferred one
+    assertEquals(testPartitionPreferredLeader, awaitLeader(testPartition))
     val jsonFile = toJsonFile(testPartitionAndAssignment.keySet)
     try {
       // Now do the election, even though the preferred replica is *already* the leader
@@ -245,7 +249,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
         "--bootstrap-server", bootstrapServer(),
         "--path-to-json-file", jsonFile.getAbsolutePath))
       // Check the leader for the partition still is the preferred one
-      assertEquals(testPartitionPreferredLeader, getLeader(testPartition))
+      assertEquals(testPartitionPreferredLeader, awaitLeader(testPartition))
     } finally {
       jsonFile.delete()
     }
@@ -257,7 +261,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     createTestTopicAndCluster(testPartitionAndAssignment)
     bounceServer(testPartitionPreferredLeader, testPartition)
     // Check the leader for the partition is not the preferred one
-    val leader = getLeader(testPartition)
+    val leader = awaitLeader(testPartition)
     assertNotEquals(testPartitionPreferredLeader, leader)
     // Now kill the preferred one
     servers(testPartitionPreferredLeader).shutdown()
@@ -275,7 +279,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
         assertTrue(suppressed.isInstanceOf[PreferredLeaderNotAvailableException])
         assertTrue(suppressed.getMessage, suppressed.getMessage.contains("Failed to elect leader for partition test-0 under strategy PreferredReplicaPartitionLeaderElectionStrategy"))
         // Check we still have the same leader
-        assertEquals(leader, getLeader(testPartition))
+        assertEquals(leader, awaitLeader(testPartition))
     } finally {
       jsonFile.delete()
     }
@@ -287,7 +291,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     createTestTopicAndCluster(testPartitionAndAssignment)
     bounceServer(testPartitionPreferredLeader, testPartition)
     // Check the leader for the partition is not the preferred one
-    val leader = getLeader(testPartition)
+    val leader = awaitLeader(testPartition)
     assertNotEquals(testPartitionPreferredLeader, leader)
     // Now kill the controller just before we trigger the election
     val controller = getController().get.config.brokerId
@@ -303,7 +307,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
       case e: AdminCommandFailedException =>
         assertEquals("Timeout waiting for election results", e.getMessage)
         // Check we still have the same leader
-        assertEquals(leader, getLeader(testPartition))
+        assertEquals(leader, awaitLeader(testPartition))
     } finally {
       jsonFile.delete()
     }
@@ -315,10 +319,10 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
     createTestTopicAndCluster(testPartitionAndAssignment, Some(classOf[PreferredReplicaLeaderElectionCommandTestAuthorizer].getName))
     bounceServer(testPartitionPreferredLeader, testPartition)
     // Check the leader for the partition is not the preferred one
-    val leader = getLeader(testPartition)
+    val leader = awaitLeader(testPartition)
     assertNotEquals(testPartitionPreferredLeader, leader)
     // Check the leader for the partition is not the preferred one
-    assertNotEquals(testPartitionPreferredLeader, getLeader(testPartition))
+    assertNotEquals(testPartitionPreferredLeader, awaitLeader(testPartition))
     val jsonFile = toJsonFile(testPartitionAndAssignment.keySet)
     try {
       PreferredReplicaLeaderElectionCommand.run(Array(
@@ -330,7 +334,7 @@ class PreferredReplicaLeaderElectionCommandTest extends ZooKeeperTestHarness wit
         assertEquals("Not authorized to perform leader election", e.getMessage)
         assertTrue(e.getCause().isInstanceOf[ClusterAuthorizationException])
         // Check we still have the same leader
-        assertEquals(leader, getLeader(testPartition))
+        assertEquals(leader, awaitLeader(testPartition))
     } finally {
       jsonFile.delete()
     }
