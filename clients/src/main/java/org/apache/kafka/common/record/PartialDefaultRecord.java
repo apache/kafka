@@ -23,7 +23,7 @@ import java.nio.ByteBuffer;
 public class PartialDefaultRecord extends DefaultRecord {
 
     private final int keySize;
-    private final boolean hasKey;
+    private final int valueSize;
 
     PartialDefaultRecord(int sizeInBytes,
                          byte attributes,
@@ -31,34 +31,36 @@ public class PartialDefaultRecord extends DefaultRecord {
                          long timestamp,
                          int sequence,
                          int keySize,
-                         boolean hasKey) {
-        super(sizeInBytes, attributes, offset, timestamp, sequence, null, null, null);
+                         int valueSize,
+                         Header[] headers) {
+        super(sizeInBytes, attributes, offset, timestamp, sequence, null, null, headers);
 
-        this.hasKey = hasKey;
         this.keySize = keySize;
+        this.valueSize = valueSize;
     }
 
     @Override
     public boolean equals(Object o) {
         return super.equals(o) &&
             this.keySize == ((PartialDefaultRecord) o).keySize &&
-            this.hasKey == ((PartialDefaultRecord) o).hasKey;
+            this.valueSize == ((PartialDefaultRecord) o).valueSize;
     }
 
     @Override
     public int hashCode() {
         int result = super.hashCode();
         result = 31 * result + keySize;
-        result = 31 * result + (hasKey ? 0 : 1);
+        result = 31 * result + valueSize;
         return result;
     }
 
     @Override
     public String toString() {
-        return String.format("PartialDefaultRecord(offset=%d, timestamp=%d, key=%d bytes)",
+        return String.format("PartialDefaultRecord(offset=%d, timestamp=%d, key=%d bytes, value=%d bytes)",
             offset(),
             timestamp(),
-            keySize);
+            keySize,
+            valueSize);
     }
 
     @Override
@@ -68,7 +70,7 @@ public class PartialDefaultRecord extends DefaultRecord {
 
     @Override
     public boolean hasKey() {
-        return hasKey;
+        return keySize >= 0;
     }
 
     @Override
@@ -78,21 +80,16 @@ public class PartialDefaultRecord extends DefaultRecord {
 
     @Override
     public int valueSize() {
-        throw new UnsupportedOperationException("valueSize is skipped in PartialDefaultRecord");
+        return valueSize;
     }
 
     @Override
     public boolean hasValue() {
-        throw new UnsupportedOperationException("hasValue is skipped in PartialDefaultRecord");
+        return valueSize >= 0;
     }
 
     @Override
     public ByteBuffer value() {
         throw new UnsupportedOperationException("value is skipped in PartialDefaultRecord");
-    }
-
-    @Override
-    public Header[] headers() {
-        throw new UnsupportedOperationException("headers is skipped in PartialDefaultRecord");
     }
 }

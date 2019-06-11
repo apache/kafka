@@ -69,6 +69,8 @@ public class DefaultRecord implements Record {
 
     private static final int NULL_VARINT_SIZE_BYTES = ByteUtils.sizeOfVarint(-1);
 
+    private static final int MAX_SKIP_BUFFER_SIZE = 2048; // as in InputStream.MAX_SKIP_BUFFER_SIZE
+
     private final int sizeInBytes;
     private final byte attributes;
     private final long offset;
@@ -370,15 +372,24 @@ public class DefaultRecord implements Record {
         }
     }
 
-    public static PartialDefaultRecord readPartiallyFrom(DataInput input,
-                                                         long baseOffset,
-                                                         long baseTimestamp,
-                                                         int baseSequence,
-                                                         Long logAppendTime) throws IOException {
+    public static DefaultRecord readPartiallyFrom(DataInput input,
+                                                  long baseOffset,
+                                                  long baseTimestamp,
+                                                  int baseSequence,
+                                                  Long logAppendTime) throws IOException {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
-        return readPartiallyFrom(input, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
+
+        // only use skipBytes when the size is large enough to be beneficial
+        if (sizeOfBodyInBytes > MAX_SKIP_BUFFER_SIZE * 3) {
+            return readPartiallyFrom(input, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
                 baseSequence, logAppendTime);
+        } else {
+            ByteBuffer recordBuffer = ByteBuffer.allocate(sizeOfBodyInBytes);
+            input.readFully(recordBuffer.array(), 0, sizeOfBodyInBytes);
+            return readFrom(recordBuffer, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
+                baseSequence, logAppendTime);
+        }
     }
 
     private static PartialDefaultRecord readPartiallyFrom(DataInput input,
@@ -390,35 +401,65 @@ public class DefaultRecord implements Record {
                                                           Long logAppendTime) throws IOException {
         try {
             byte attributes = input.readByte();
-            int skipBytes = 1;
+            int bytesRead = 1;
             long timestampDelta = ByteUtils.readVarlong(input);
             long timestamp = baseTimestamp + timestampDelta;
             if (logAppendTime != null)
                 timestamp = logAppendTime;
-            skipBytes += ByteUtils.sizeOfVarlong(timestampDelta);
+            bytesRead += ByteUtils.sizeOfVarlong(timestampDelta);
 
             int offsetDelta = ByteUtils.readVarint(input);
+            bytesRead += ByteUtils.sizeOfVarint(offsetDelta);
             long offset = baseOffset + offsetDelta;
             int sequence = baseSequence >= 0 ?
                     DefaultRecordBatch.incrementSequence(baseSequence, offsetDelta) :
                     RecordBatch.NO_SEQUENCE;
-            skipBytes += ByteUtils.sizeOfVarlong(offsetDelta);
 
             int keySize = ByteUtils.readVarint(input);
-            boolean hasKey = false;
+            bytesRead += ByteUtils.sizeOfVarint(keySize);
             if (keySize >= 0) {
-                hasKey = true;
-            }
-            skipBytes += ByteUtils.sizeOfVarlong(keySize);
-
-            skipBytes = sizeOfBodyInBytes - skipBytes;
-            if (skipBytes > 0) {
-                int currentSkipBytes = input.skipBytes(skipBytes);
-                if (currentSkipBytes != skipBytes)
-                    throw new InvalidRecordException("Found invalid record structure , skipBytes expected is " + skipBytes + ", actually is " + currentSkipBytes);
+                int skippedBytes = input.skipBytes(keySize);
+                if (skippedBytes != keySize)
+                    throw new InvalidRecordException("Found invalid record structure, skipped key size expected is " + keySize + ", actually is " + skippedBytes);
+                bytesRead += keySize;
             }
 
-            return new PartialDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, keySize, hasKey);
+            int valueSize = ByteUtils.readVarint(input);
+            bytesRead += ByteUtils.sizeOfVarint(valueSize);
+            if (valueSize >= 0) {
+                int skippedBytes = input.skipBytes(valueSize);
+                if (skippedBytes != valueSize)
+                    throw new InvalidRecordException("Found invalid record structure, skipped value size expected is " + valueSize + ", actually is " + skippedBytes);
+                bytesRead += valueSize;
+            }
+
+            int numHeaders = ByteUtils.readVarint(input);
+            if (numHeaders < 0)
+                throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
+            bytesRead += ByteUtils.sizeOfVarint(numHeaders);
+
+            final Header[] headers;
+            if (numHeaders == 0) {
+                headers = Record.EMPTY_HEADERS;
+
+                // validate whether we have read all bytes in the current record
+                if (bytesRead != sizeOfBodyInBytes)
+                    throw new InvalidRecordException("Invalid record size: expected to read " + sizeOfBodyInBytes +
+                        " bytes in record payload, but instead read " + bytesRead);
+            } else {
+                final int sizeOfHeaderInBytes = sizeOfBodyInBytes - bytesRead;
+                ByteBuffer headerBuffer = ByteBuffer.allocate(sizeOfHeaderInBytes);
+                input.readFully(headerBuffer.array(), 0, sizeOfHeaderInBytes);
+                int headerStart = headerBuffer.position();
+                headers = readHeaders(headerBuffer, numHeaders);
+
+                // validate whether we have read all bytes in the current record
+                if (headerBuffer.position() - headerStart != sizeOfBodyInBytes - bytesRead)
+                    throw new InvalidRecordException("Invalid record size: expected to read " + sizeOfBodyInBytes +
+                        " bytes in record payload, but instead read " + (headerBuffer.position() - headerStart) + bytesRead);
+            }
+
+            return new PartialDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, keySize, valueSize, headers);
         } catch (BufferUnderflowException | IllegalArgumentException e) {
             throw new InvalidRecordException("Found invalid record structure", e);
         }
