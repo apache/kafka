@@ -313,7 +313,7 @@ object TestUtils extends Logging {
                   topicConfig: Properties = new Properties): scala.collection.immutable.Map[Int, Int] = {
     val adminZkClient = new AdminZkClient(zkClient)
     // create topic
-    TestUtils.waitUntilTrue( () => {
+    waitUntilTrue( () => {
       var hasSessionExpirationException = false
       try {
         adminZkClient.createTopic(topic, numPartitions, replicationFactor, topicConfig)
@@ -355,7 +355,7 @@ object TestUtils extends Logging {
                   topicConfig: Properties): scala.collection.immutable.Map[Int, Int] = {
     val adminZkClient = new AdminZkClient(zkClient)
     // create topic
-    TestUtils.waitUntilTrue( () => {
+    waitUntilTrue( () => {
       var hasSessionExpirationException = false
       try {
         adminZkClient.createTopicWithAssignment(topic, topicConfig, partitionReplicaAssignment)
@@ -777,6 +777,23 @@ object TestUtils extends Logging {
   }
 
   /**
+   * Wait for the presence of an optional value.
+   *
+   * @param func The function defining the optional value
+   * @param msg Error message in the case that the value never appears
+   * @param waitTimeMs Maximum time to wait
+   * @return The unwrapped value returned by the function
+   */
+  def awaitValue[T](func: () => Option[T], msg: => String, waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): T = {
+    var value: Option[T] = None
+    waitUntilTrue(() => {
+      value = func()
+      value.isDefined
+    }, msg, waitTimeMs)
+    value.get
+  }
+
+  /**
     *  Wait until the given condition is true or throw an exception if the given wait time elapses.
     *
     * @param condition condition to check
@@ -865,7 +882,7 @@ object TestUtils extends Logging {
   def waitUntilBrokerMetadataIsPropagated(servers: Seq[KafkaServer],
                                           timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = servers.map(_.config.brokerId).toSet
-    TestUtils.waitUntilTrue(() => servers.forall(server =>
+    waitUntilTrue(() => servers.forall(server =>
       expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers.map(_.id).toSet
     ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
   }
@@ -883,7 +900,7 @@ object TestUtils extends Logging {
   def waitUntilMetadataIsPropagated(servers: Seq[KafkaServer], topic: String, partition: Int,
                                     timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Int = {
     var leader: Int = -1
-    TestUtils.waitUntilTrue(() =>
+    waitUntilTrue(() =>
       servers.foldLeft(true) {
         (result, server) =>
           val partitionStateOpt = server.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic, partition)
@@ -916,7 +933,7 @@ object TestUtils extends Logging {
       }.map(_.config.brokerId)
     }
 
-    TestUtils.waitUntilTrue(() => newLeaderExists.isDefined,
+    waitUntilTrue(() => newLeaderExists.isDefined,
       s"Did not observe leader change for partition $tp after $timeout ms", waitTimeMs = timeout)
 
     newLeaderExists.get
@@ -931,7 +948,7 @@ object TestUtils extends Logging {
       }.map(_.config.brokerId)
     }
 
-    TestUtils.waitUntilTrue(() => leaderIfExists.isDefined,
+    waitUntilTrue(() => leaderIfExists.isDefined,
       s"Partition $tp leaders not made yet after $timeout ms", waitTimeMs = timeout)
 
     leaderIfExists.get
@@ -964,18 +981,18 @@ object TestUtils extends Logging {
   def ensureNoUnderReplicatedPartitions(zkClient: KafkaZkClient, topic: String, partitionToBeReassigned: Int, assignedReplicas: Seq[Int],
                                                 servers: Seq[KafkaServer]) {
     val topicPartition = new TopicPartition(topic, partitionToBeReassigned)
-    TestUtils.waitUntilTrue(() => {
+    waitUntilTrue(() => {
         val inSyncReplicas = zkClient.getInSyncReplicasForPartition(topicPartition)
         inSyncReplicas.get.size == assignedReplicas.size
       },
       "Reassigned partition [%s,%d] is under replicated".format(topic, partitionToBeReassigned))
     var leader: Option[Int] = None
-    TestUtils.waitUntilTrue(() => {
+    waitUntilTrue(() => {
         leader = zkClient.getLeaderForPartition(topicPartition)
         leader.isDefined
       },
       "Reassigned partition [%s,%d] is unavailable".format(topic, partitionToBeReassigned))
-    TestUtils.waitUntilTrue(() => {
+    waitUntilTrue(() => {
         val leaderBroker = servers.filter(s => s.config.brokerId == leader.get).head
         leaderBroker.replicaManager.underReplicatedPartitionCount == 0
       },
@@ -1059,33 +1076,33 @@ object TestUtils extends Logging {
   def verifyTopicDeletion(zkClient: KafkaZkClient, topic: String, numPartitions: Int, servers: Seq[KafkaServer]) {
     val topicPartitions = (0 until numPartitions).map(new TopicPartition(topic, _))
     // wait until admin path for delete topic is deleted, signaling completion of topic deletion
-    TestUtils.waitUntilTrue(() => !zkClient.isTopicMarkedForDeletion(topic),
+    waitUntilTrue(() => !zkClient.isTopicMarkedForDeletion(topic),
       "Admin path /admin/delete_topics/%s path not deleted even after a replica is restarted".format(topic))
-    TestUtils.waitUntilTrue(() => !zkClient.topicExists(topic),
+    waitUntilTrue(() => !zkClient.topicExists(topic),
       "Topic path /brokers/topics/%s not deleted after /admin/delete_topics/%s path is deleted".format(topic, topic))
     // ensure that the topic-partition has been deleted from all brokers' replica managers
-    TestUtils.waitUntilTrue(() =>
+    waitUntilTrue(() =>
       servers.forall(server => topicPartitions.forall(tp => server.replicaManager.nonOfflinePartition(tp).isEmpty)),
       "Replica manager's should have deleted all of this topic's partitions")
     // ensure that logs from all replicas are deleted if delete topic is marked successful in ZooKeeper
     assertTrue("Replica logs not deleted after delete topic is complete",
       servers.forall(server => topicPartitions.forall(tp => server.getLogManager.getLog(tp).isEmpty)))
     // ensure that topic is removed from all cleaner offsets
-    TestUtils.waitUntilTrue(() => servers.forall(server => topicPartitions.forall { tp =>
+    waitUntilTrue(() => servers.forall(server => topicPartitions.forall { tp =>
       val checkpoints = server.getLogManager.liveLogDirs.map { logDir =>
         new OffsetCheckpointFile(new File(logDir, "cleaner-offset-checkpoint")).read()
       }
       checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))
     }), "Cleaner offset for deleted partition should have been removed")
     import scala.collection.JavaConverters._
-    TestUtils.waitUntilTrue(() => servers.forall(server =>
+    waitUntilTrue(() => servers.forall(server =>
       server.config.logDirs.forall { logDir =>
         topicPartitions.forall { tp =>
           !new File(logDir, tp.topic + "-" + tp.partition).exists()
         }
       }
     ), "Failed to soft-delete the data to a delete directory")
-    TestUtils.waitUntilTrue(() => servers.forall(server =>
+    waitUntilTrue(() => servers.forall(server =>
       server.config.logDirs.forall { logDir =>
         topicPartitions.forall { tp =>
           !java.util.Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
@@ -1145,7 +1162,7 @@ object TestUtils extends Logging {
   def waitAndVerifyAcls(expected: Set[Acl], authorizer: Authorizer, resource: Resource) = {
     val newLine = scala.util.Properties.lineSeparator
 
-    TestUtils.waitUntilTrue(() => authorizer.getAcls(resource) == expected,
+    waitUntilTrue(() => authorizer.getAcls(resource) == expected,
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
         s"but got:${authorizer.getAcls(resource).mkString(newLine + "\t", newLine + "\t", newLine)}", waitTimeMs = JTestUtils.DEFAULT_MAX_WAIT_MS)
   }
