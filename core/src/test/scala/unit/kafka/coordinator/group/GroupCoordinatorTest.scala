@@ -1176,25 +1176,25 @@ class GroupCoordinatorTest {
 
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols,
       rebalanceTimeout = sessionTimeout, sessionTimeout = sessionTimeout)
-    val assignedConsumerId = joinGroupResult.memberId
+    val assignedMemberId = joinGroupResult.memberId
     val generationId = joinGroupResult.generationId
     val joinGroupError = joinGroupResult.error
     assertEquals(Errors.NONE, joinGroupError)
 
     EasyMock.reset(replicaManager)
-    val (_, syncGroupError) = syncGroupLeader(groupId, generationId, assignedConsumerId, Map(assignedConsumerId -> Array[Byte]()))
+    val (_, syncGroupError) = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupError)
 
     timer.advanceClock(sessionTimeout / 2)
 
     EasyMock.reset(replicaManager)
-    val commitOffsetResult = commitOffsets(groupId, assignedConsumerId, generationId, Map(tp -> offset))
+    val commitOffsetResult = commitOffsets(groupId, assignedMemberId, generationId, Map(tp -> offset))
     assertEquals(Errors.NONE, commitOffsetResult(tp))
 
     timer.advanceClock(sessionTimeout / 2 + 100)
 
     EasyMock.reset(replicaManager)
-    val heartbeatResult = heartbeat(groupId, assignedConsumerId, 1)
+    val heartbeatResult = heartbeat(groupId, assignedMemberId, 1)
     assertEquals(Errors.NONE, heartbeatResult)
   }
 
@@ -2159,6 +2159,40 @@ class GroupCoordinatorTest {
   }
 
   @Test
+  def testCommitOffsetInCompletingRebalanceFromUnknownMemberId() {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+    val tp = new TopicPartition("topic", 0)
+    val offset = offsetAndMetadata(0)
+
+    val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
+    val assignedMemberId = joinGroupResult.memberId
+    val generationId = joinGroupResult.generationId
+    val joinGroupError = joinGroupResult.error
+    assertEquals(Errors.NONE, joinGroupError)
+
+    EasyMock.reset(replicaManager)
+    val commitOffsetResult = commitOffsets(groupId, memberId, generationId, Map(tp -> offset))
+    assertEquals(Errors.UNKNOWN_MEMBER_ID, commitOffsetResult(tp))
+  }
+
+  @Test
+  def testCommitOffsetInCompletingRebalanceFromIllegalGeneration() {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+    val tp = new TopicPartition("topic", 0)
+    val offset = offsetAndMetadata(0)
+
+    val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
+    val assignedMemberId = joinGroupResult.memberId
+    val generationId = joinGroupResult.generationId
+    val joinGroupError = joinGroupResult.error
+    assertEquals(Errors.NONE, joinGroupError)
+
+    EasyMock.reset(replicaManager)
+    val commitOffsetResult = commitOffsets(groupId, assignedMemberId, generationId + 1, Map(tp -> offset))
+    assertEquals(Errors.ILLEGAL_GENERATION, commitOffsetResult(tp))
+  }
+
+  @Test
   def testHeartbeatDuringRebalanceCausesRebalanceInProgress() {
     // First start up a group (with a slightly larger timeout to give us time to heartbeat when the rebalance starts)
     val joinGroupResult = dynamicJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, protocolType, protocols)
@@ -2666,7 +2700,7 @@ class GroupCoordinatorTest {
   }
 
   private def commitOffsets(groupId: String,
-                            consumerId: String,
+                            memberId: String,
                             generationId: Int,
                             offsets: Map[TopicPartition, OffsetAndMetadata],
                             groupInstanceId: Option[String] = None): CommitOffsetCallbackParams = {
@@ -2692,7 +2726,7 @@ class GroupCoordinatorTest {
     EasyMock.expect(replicaManager.getMagic(EasyMock.anyObject())).andReturn(Some(RecordBatch.MAGIC_VALUE_V1)).anyTimes()
     EasyMock.replay(replicaManager)
 
-    groupCoordinator.handleCommitOffsets(groupId, consumerId, groupInstanceId, generationId, offsets, responseCallback)
+    groupCoordinator.handleCommitOffsets(groupId, memberId, groupInstanceId, generationId, offsets, responseCallback)
     Await.result(responseFuture, Duration(40, TimeUnit.MILLISECONDS))
   }
 

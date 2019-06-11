@@ -180,38 +180,48 @@ class GroupCoordinator(val brokerId: Int,
         if (group.hasStaticMember(groupInstanceId)) {
           val oldMemberId = group.getStaticMemberId(groupInstanceId)
 
-          if (group.is(Stable)) {
-            info(s"Static member $groupInstanceId with unknown member id rejoins, assigning new member id $newMemberId, while " +
-              s"old member $oldMemberId will be removed. No rebalance will be triggered.")
+          group.currentState match {
+            case Stable =>
+              info(s"Static member $groupInstanceId with unknown member id rejoins group ${group.groupId} " +
+                s"in ${group.currentState} state. Assigning new member id $newMemberId, while old member $oldMemberId " +
+                "will be removed. No rebalance will be triggered.")
 
-            val oldMember = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
+              val oldMember = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
 
-            // Heartbeat of old member id will expire without affection since the group no longer contains that member id.
-            // New heartbeat shall be scheduled with new member id.
-            completeAndScheduleNextHeartbeatExpiration(group, oldMember)
+              // Heartbeat of old member id will expire without affection since the group no longer contains that member id.
+              // New heartbeat shall be scheduled with new member id.
+              completeAndScheduleNextHeartbeatExpiration(group, oldMember)
 
-            responseCallback(JoinGroupResult(
-              members = if (group.isLeader(newMemberId)) {
-                group.currentMemberMetadata
-              } else {
-                List.empty
-              },
-              memberId = newMemberId,
-              generationId = group.generationId,
-              subProtocol = group.protocolOrNull,
-              leaderId = group.leaderOrNull,
-              error = Errors.NONE))
-          } else {
-            val knownStaticMember = group.get(oldMemberId)
-            updateMemberAndRebalance(group, knownStaticMember, protocols, responseCallback)
+              responseCallback(JoinGroupResult(
+                members = if (group.isLeader(newMemberId)) {
+                  group.currentMemberMetadata
+                } else {
+                  List.empty
+                },
+                memberId = newMemberId,
+                generationId = group.generationId,
+                subProtocol = group.protocolOrNull,
+                leaderId = group.leaderOrNull,
+                error = Errors.NONE))
+
+            case _ =>
+              info(s"Static member $groupInstanceId with unkonwn member id rejoins group ${group.groupId} " +
+                s"in ${group.currentState} state. Update its membership with the pre-registered old member id $oldMemberId.")
+
+              val knownStaticMember = group.get(oldMemberId)
+              updateMemberAndRebalance(group, knownStaticMember, protocols, responseCallback)
           }
         } else if (requireKnownMemberId) {
             // If member id required (dynamic membership), register the member in the pending member list
             // and send back a response to call for another join group request with allocated member id.
-            group.addPendingMember(newMemberId)
-            addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
-            responseCallback(joinError(newMemberId, Errors.MEMBER_ID_REQUIRED))
+          debug(s"Dynamic member with unknown member id rejoins group ${group.groupId} in " +
+              s"${group.currentState} state. Created a new member id $newMemberId and request the member to rejoin with this id.")
+          group.addPendingMember(newMemberId)
+          addPendingMemberExpiration(group, newMemberId, sessionTimeoutMs)
+          responseCallback(joinError(newMemberId, Errors.MEMBER_ID_REQUIRED))
         } else {
+          debug(s"Dynamic member with unknown member id rejoins group ${group.groupId} in " +
+            s"${group.currentState} state. Created a new member id $newMemberId for this member and add to the group.")
           addMemberAndRebalance(rebalanceTimeoutMs, sessionTimeoutMs, newMemberId, groupInstanceId,
             clientId, clientHost, protocolType, protocols, group, responseCallback)
 
@@ -613,16 +623,26 @@ class GroupCoordinator(val brokerId: Int,
         // The group is only using Kafka to store offsets.
         // Also, for transactional offset commits we don't need to validate group membership and the generation.
         groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback, producerId, producerEpoch)
-      } else if (group.is(CompletingRebalance)) {
-        responseCallback(offsetMetadata.mapValues(_ => Errors.REBALANCE_IN_PROGRESS))
       } else if (!group.has(memberId)) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.UNKNOWN_MEMBER_ID))
       } else if (generationId != group.generationId) {
         responseCallback(offsetMetadata.mapValues(_ => Errors.ILLEGAL_GENERATION))
       } else {
-        val member = group.get(memberId)
-        completeAndScheduleNextHeartbeatExpiration(group, member)
-        groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback)
+        group.currentState match {
+          case Stable | PreparingRebalance =>
+            // During PreparingRebalance phase, we still allow a commit request since we rely
+            // on heartbeat response to eventually notify the rebalance in progress signal to the consumer
+            val member = group.get(memberId)
+            completeAndScheduleNextHeartbeatExpiration(group, member)
+            groupManager.storeOffsets(group, memberId, offsetMetadata, responseCallback)
+
+          case CompletingRebalance =>
+            // We should not receive a commit request if the group has not completed rebalance;
+            // but since the consumer's member.id and generation is valid, it means it has received
+            // the latest group generation information from the JoinResponse.
+            // So let's return a REBALANCE_IN_PROGRESS to let consumer handle it gracefully.
+            responseCallback(offsetMetadata.mapValues(_ => Errors.REBALANCE_IN_PROGRESS))
+        }
       }
     }
   }
