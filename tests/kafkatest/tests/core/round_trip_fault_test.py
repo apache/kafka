@@ -96,6 +96,7 @@ class RoundTripFaultTest(Test):
 
     def test_produce_consume_with_latency(self):
         workload1 = self.trogdor.create_task("workload1", self.round_trip_spec)
+        time.sleep(2)
         node_specs = {}
         for node in self.kafka.nodes + self.zk.nodes:
             node_specs[node.name] = {"latencyMs": 500, "networkDevice": "eth0"}
