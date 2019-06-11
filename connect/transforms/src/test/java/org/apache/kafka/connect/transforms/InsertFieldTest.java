@@ -104,11 +104,10 @@ public class InsertFieldTest {
 
         final SourceRecord transformedRecord = xform.apply(record);
 
-        assertEquals(42L, ((Map) transformedRecord.value()).get("magic"));
-        assertEquals("test", ((Map) transformedRecord.value()).get("topic_field"));
-        assertEquals(0, ((Map) transformedRecord.value()).get("partition_field"));
-        assertEquals(null, ((Map) transformedRecord.value()).get("timestamp_field"));
-        assertEquals("my-instance-id", ((Map) transformedRecord.value()).get("instance_id"));
+        assertEquals(42L, ((Map<?, ?>) transformedRecord.value()).get("magic"));
+        assertEquals("test", ((Map<?, ?>) transformedRecord.value()).get("topic_field"));
+        assertEquals(0, ((Map<?, ?>) transformedRecord.value()).get("partition_field"));
+        assertEquals(null, ((Map<?, ?>) transformedRecord.value()).get("timestamp_field"));
+        assertEquals("my-instance-id", ((Map<?, ?>) transformedRecord.value()).get("instance_id"));
     }
-
 }
