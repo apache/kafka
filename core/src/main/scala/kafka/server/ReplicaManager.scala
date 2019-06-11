@@ -841,7 +841,7 @@ class ReplicaManager(val config: KafkaConfig,
     def readFromLog(): Seq[(TopicPartition, LogReadResult)] = {
       val result = readFromLocalLog(
         replicaId = replicaId,
-        fetchOnlyFromLeader = false, // TODO remove this argument
+        fetchOnlyFromLeader = isFromFollower,
         fetchIsolation = fetchIsolation,
         fetchMaxBytes = fetchMaxBytes,
         hardMaxBytesLimit = hardMaxBytesLimit,
@@ -928,40 +928,53 @@ class ReplicaManager(val config: KafkaConfig,
         val partition = getPartitionOrException(tp, expectLeader = fetchOnlyFromLeader)
         val fetchTimeMs = time.milliseconds
 
-        // Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
-        val readInfo = partition.readRecords(
-          fetchOffset = fetchInfo.fetchOffset,
-          currentLeaderEpoch = fetchInfo.currentLeaderEpoch,
-          maxBytes = adjustedMaxBytes,
-          fetchIsolation = fetchIsolation,
-          fetchOnlyFromLeader = fetchOnlyFromLeader,
-          minOneMessage = minOneMessage)
-
-
         // If we are the leader, determine the preferred read-replica
-        val preferredReadReplica = findPreferredReadReplica(tp, clientMetadata, replicaId)
+        val preferredReadReplica = findPreferredReadReplica(tp, clientMetadata, replicaId, fetchInfo.fetchOffset)
 
-        val fetchDataInfo = if (shouldLeaderThrottle(quota, tp, replicaId)) {
-          // If the partition is being throttled, simply return an empty set.
-          FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
-        } else if (!hardMaxBytesLimit && readInfo.fetchedData.firstEntryIncomplete) {
-          // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
-          // progress in such cases and don't need to report a `RecordTooLargeException`
-          FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
+        if (preferredReadReplica.isDefined && !preferredReadReplica.contains(replicaId)) {
+          // If the a preferred read-replica is set and is not this replica (the leader), skip the read
+          val localReplica: Replica = partition.localReplicaOrException
+          LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
+            highWatermark = localReplica.highWatermark,
+            leaderLogStartOffset = localReplica.logStartOffset,
+            leaderLogEndOffset = localReplica.logEndOffset,
+            followerLogStartOffset = followerLogStartOffset,
+            fetchTimeMs = -1L,
+            readSize = 0,
+            lastStableOffset = Some(localReplica.lastStableOffset),
+            preferredReadReplica = preferredReadReplica,
+            exception = None)
         } else {
-          readInfo.fetchedData
-        }
+          // Try the read first, this tells us whether we need all of adjustedFetchSize for this partition
+          val readInfo: LogReadInfo = partition.readRecords(
+            fetchOffset = fetchInfo.fetchOffset,
+            currentLeaderEpoch = fetchInfo.currentLeaderEpoch,
+            maxBytes = adjustedMaxBytes,
+            fetchIsolation = fetchIsolation,
+            fetchOnlyFromLeader = fetchOnlyFromLeader,
+            minOneMessage = minOneMessage)
+          val fetchDataInfo = if (shouldLeaderThrottle(quota, tp, replicaId)) {
+            // If the partition is being throttled, simply return an empty set.
+            FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
+          } else if (!hardMaxBytesLimit && readInfo.fetchedData.firstEntryIncomplete) {
+            // For FetchRequest version 3, we replace incomplete message sets with an empty one as consumers can make
+            // progress in such cases and don't need to report a `RecordTooLargeException`
+            FetchDataInfo(readInfo.fetchedData.fetchOffsetMetadata, MemoryRecords.EMPTY)
+          } else {
+            readInfo.fetchedData
+          }
 
-        LogReadResult(info = fetchDataInfo,
-                      highWatermark = readInfo.highWatermark,
-                      leaderLogStartOffset = readInfo.logStartOffset,
-                      leaderLogEndOffset = readInfo.logEndOffset,
-                      followerLogStartOffset = followerLogStartOffset,
-                      fetchTimeMs = fetchTimeMs,
-                      readSize = adjustedMaxBytes,
-                      lastStableOffset = Some(readInfo.lastStableOffset),
-                      preferredReadReplica = preferredReadReplica,
-                      exception = None)
+          LogReadResult(info = fetchDataInfo,
+            highWatermark = readInfo.highWatermark,
+            leaderLogStartOffset = readInfo.logStartOffset,
+            leaderLogEndOffset = readInfo.logEndOffset,
+            followerLogStartOffset = followerLogStartOffset,
+            fetchTimeMs = fetchTimeMs,
+            readSize = adjustedMaxBytes,
+            lastStableOffset = Some(readInfo.lastStableOffset),
+            preferredReadReplica = preferredReadReplica,
+            exception = None)
+        }
       } catch {
         // NOTE: Failed fetch requests metric is not incremented for known exceptions since it
         // is supposed to indicate un-expected failure of a broker in handling a fetch request
@@ -1023,7 +1036,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   case class SomePartitionView(replicas: util.Set[ReplicaView]) extends PartitionView
 
-  def findPreferredReadReplica(tp: TopicPartition, clientMetadata: ClientMetadata, replicaId: Int): Option[Int] = {
+  def findPreferredReadReplica(tp: TopicPartition, clientMetadata: ClientMetadata, replicaId: Int, fetchOffset: Long): Option[Int] = {
     val partition = getPartitionOrException(tp, expectLeader = false)
 
     if (partition.leaderReplicaIfLocal.isDefined) {
@@ -1035,8 +1048,9 @@ class ReplicaManager(val config: KafkaConfig,
         partition.leaderReplicaIdOpt
       } else {
         val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
-        val replicaInfoSet: Set[ReplicaView] = partition.allReplicas.map(
-          replica => SomeReplicaView(
+        val replicaInfoSet: Set[ReplicaView] = partition.allReplicas
+          .filter(replica => replica.logEndOffset > fetchOffset)
+          .map(replica => SomeReplicaView(
             isLeader = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId)),
             endpoint = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
             logEndOffset = replica.logEndOffset,
