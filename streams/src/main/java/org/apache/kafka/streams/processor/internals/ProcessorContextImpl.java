@@ -113,14 +113,14 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         final StateStore store = stateManager.getStore(name);
         if (store instanceof TimestampedKeyValueStore) {
             return new TimestampedKeyValueStoreReadWriteDecorator((TimestampedKeyValueStore) store);
-        } else if (store instanceof KeyValueStore) {
-            return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
         } else if (store instanceof TimestampedWindowStore) {
             return new TimestampedWindowStoreReadWriteDecorator((TimestampedWindowStore) store);
         } else if (store instanceof WindowStore) {
             return new WindowStoreReadWriteDecorator((WindowStore) store);
         } else if (store instanceof SessionStore) {
             return new SessionStoreReadWriteDecorator((SessionStore) store);
+        } else if (store instanceof KeyValueStore) {
+            return new KeyValueStoreReadWriteDecorator((KeyValueStore) store);
         }
 
         return store;
@@ -323,12 +323,6 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         @Override
         public void put(final K key,
-                        final V value) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
-        }
-
-        @Override
-        public void put(final K key,
                         final V value,
                         final long windowStartTimestamp) {
             throw new UnsupportedOperationException(ERROR_MESSAGE);
@@ -358,8 +352,23 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
+        public V get(Windowed<K> key) {
+            return null;
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> range(Windowed<K> from, Windowed<K> to) {
+            return null;
+        }
+
+        @Override
         public KeyValueIterator<Windowed<K>, V> all() {
             return wrapped().all();
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return 0;
         }
 
         @Override
@@ -367,6 +376,26 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                          final long timeTo) {
             return wrapped().fetchAll(timeFrom, timeTo);
+        }
+
+        @Override
+        public void put(Windowed<K> key, V value) {
+
+        }
+
+        @Override
+        public V putIfAbsent(Windowed<K> key, V value) {
+            return null;
+        }
+
+        @Override
+        public void putAll(List<KeyValue<Windowed<K>, V>> entries) {
+
+        }
+
+        @Override
+        public V delete(Windowed<K> key) {
+            return null;
         }
     }
 
@@ -376,6 +405,41 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
 
         private TimestampedWindowStoreReadOnlyDecorator(final TimestampedWindowStore<K, V> inner) {
             super(inner);
+        }
+
+        @Override
+        public void put(Windowed<K> key, ValueAndTimestamp<V> value) {
+
+        }
+
+        @Override
+        public ValueAndTimestamp<V> putIfAbsent(Windowed<K> key, ValueAndTimestamp<V> value) {
+            return null;
+        }
+
+        @Override
+        public void putAll(List<KeyValue<Windowed<K>, ValueAndTimestamp<V>>> entries) {
+
+        }
+
+        @Override
+        public ValueAndTimestamp<V> delete(Windowed<K> key) {
+            return null;
+        }
+
+        @Override
+        public ValueAndTimestamp<V> get(Windowed<K> key) {
+            return null;
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, ValueAndTimestamp<V>> range(Windowed<K> from, Windowed<K> to) {
+            return null;
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return 0;
         }
     }
 
@@ -414,6 +478,21 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
+        public AGG putIfAbsent(Windowed<K> key, AGG value) {
+            return null;
+        }
+
+        @Override
+        public void putAll(List<KeyValue<Windowed<K>, AGG>> entries) {
+
+        }
+
+        @Override
+        public AGG delete(Windowed<K> key) {
+            return null;
+        }
+
+        @Override
         public AGG fetchSession(final K key, final long startTime, final long endTime) {
             return wrapped().fetchSession(key, startTime, endTime);
         }
@@ -427,6 +506,26 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
                                                         final K to) {
             return wrapped().fetch(from, to);
+        }
+
+        @Override
+        public AGG get(Windowed<K> key) {
+            return null;
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> range(Windowed<K> from, Windowed<K> to) {
+            return null;
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> all() {
+            return null;
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return 0;
         }
     }
 
@@ -520,11 +619,11 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
             super(inner);
         }
 
-        @Override
-        public void put(final K key,
-                        final V value) {
-            wrapped().put(key, value);
-        }
+//        @Override
+//        public void put(final K key,
+//                        final V value) {
+//            wrapped().put(key, value);
+//        }
 
         @Override
         public void put(final K key,
@@ -564,8 +663,43 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
+        public V get(Windowed<K> key) {
+            return null;
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, V> range(Windowed<K> from, Windowed<K> to) {
+            return null;
+        }
+
+        @Override
         public KeyValueIterator<Windowed<K>, V> all() {
             return wrapped().all();
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return 0;
+        }
+
+        @Override
+        public void put(Windowed<K> key, V value) {
+
+        }
+
+        @Override
+        public V putIfAbsent(Windowed<K> key, V value) {
+            return null;
+        }
+
+        @Override
+        public void putAll(List<KeyValue<Windowed<K>, V>> entries) {
+
+        }
+
+        @Override
+        public V delete(Windowed<K> key) {
+            return null;
         }
     }
 
@@ -613,6 +747,21 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         }
 
         @Override
+        public AGG putIfAbsent(Windowed<K> key, AGG value) {
+            return null;
+        }
+
+        @Override
+        public void putAll(List<KeyValue<Windowed<K>, AGG>> entries) {
+
+        }
+
+        @Override
+        public AGG delete(Windowed<K> key) {
+            return null;
+        }
+
+        @Override
         public AGG fetchSession(final K key,
                                 final long startTime,
                                 final long endTime) {
@@ -628,6 +777,26 @@ public class ProcessorContextImpl extends AbstractProcessorContext implements Re
         public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
                                                         final K to) {
             return wrapped().fetch(from, to);
+        }
+
+        @Override
+        public AGG get(Windowed<K> key) {
+            return null;
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> range(Windowed<K> from, Windowed<K> to) {
+            return null;
+        }
+
+        @Override
+        public KeyValueIterator<Windowed<K>, AGG> all() {
+            return null;
+        }
+
+        @Override
+        public long approximateNumEntries() {
+            return 0;
         }
     }
 }

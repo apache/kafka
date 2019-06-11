@@ -670,16 +670,16 @@ public abstract class WindowBytesStoreTest {
         final long startTime = SEGMENT_INTERVAL - 4L;
 
         setCurrentTime(startTime);
-        windowStore.put(0, "zero");
+        windowStore.put(0, "zero", context.timestamp());
 
         assertEquals(
             new HashSet<>(Collections.singletonList("zero")),
             toSet(windowStore.fetch(0, ofEpochMilli(startTime - WINDOW_SIZE),
                 ofEpochMilli(startTime + WINDOW_SIZE))));
 
-        windowStore.put(0, "zero");
-        windowStore.put(0, "zero+");
-        windowStore.put(0, "zero++");
+        windowStore.put(0, "zero", context.timestamp());
+        windowStore.put(0, "zero+", context.timestamp());
+        windowStore.put(0, "zero++", context.timestamp());
 
         assertEquals(
             new HashSet<>(asList("zero", "zero", "zero+", "zero++")),
@@ -775,13 +775,13 @@ public abstract class WindowBytesStoreTest {
 
         final long currentTime = 0;
         setCurrentTime(currentTime);
-        windowStore.put(1, "one");
-        windowStore.put(1, "one v2");
+        windowStore.put(1, "one", context.timestamp());
+        windowStore.put(1, "one v2", context.timestamp());
 
         WindowStoreIterator<String> iterator = windowStore.fetch(1, 0, currentTime);
         assertEquals(new KeyValue<>(currentTime, "one v2"), iterator.next());
 
-        windowStore.put(1, null);
+        windowStore.put(1, null, context.timestamp());
         iterator = windowStore.fetch(1, 0, currentTime);
         assertFalse(iterator.hasNext());
     }
@@ -935,7 +935,7 @@ public abstract class WindowBytesStoreTest {
     public void testWindowIteratorPeek() {
         final long currentTime = 0;
         setCurrentTime(currentTime);
-        windowStore.put(1, "one");
+        windowStore.put(1, "one", context.timestamp());
 
         final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.fetchAll(0L, currentTime);
 
@@ -965,21 +965,21 @@ public abstract class WindowBytesStoreTest {
     public void shouldNotThrowConcurrentModificationException() {
         long currentTime = 0;
         setCurrentTime(currentTime);
-        windowStore.put(1, "one");
+        windowStore.put(1, "one", context.timestamp());
 
         currentTime += WINDOW_SIZE * 10;
         setCurrentTime(currentTime);
-        windowStore.put(1, "two");
+        windowStore.put(1, "two", context.timestamp());
 
         final KeyValueIterator<Windowed<Integer>, String> iterator = windowStore.all();
 
         currentTime += WINDOW_SIZE * 10;
         setCurrentTime(currentTime);
-        windowStore.put(1, "three");
+        windowStore.put(1, "three", context.timestamp());
 
         currentTime += WINDOW_SIZE * 10;
         setCurrentTime(currentTime);
-        windowStore.put(2, "four");
+        windowStore.put(2, "four", context.timestamp());
 
         // Iterator should return all records in store and not throw exception b/c some were added after fetch
         assertEquals(windowedPair(1, "one", 0), iterator.next());
@@ -996,18 +996,18 @@ public abstract class WindowBytesStoreTest {
 
         long currentTime = 0;
         setCurrentTime(currentTime);
-        windowStore.put(1, "one");
-        windowStore.put(1, "one-2");
+        windowStore.put(1, "one", context.timestamp());
+        windowStore.put(1, "one-2", context.timestamp());
 
         currentTime += WINDOW_SIZE * 10;
         setCurrentTime(currentTime);
-        windowStore.put(1, "two");
-        windowStore.put(1, "two-2");
+        windowStore.put(1, "two", context.timestamp());
+        windowStore.put(1, "two-2", context.timestamp());
 
         currentTime += WINDOW_SIZE * 10;
         setCurrentTime(currentTime);
-        windowStore.put(1, "three");
-        windowStore.put(1, "three-2");
+        windowStore.put(1, "three", context.timestamp());
+        windowStore.put(1, "three-2", context.timestamp());
 
         final WindowStoreIterator<String> iterator = windowStore.fetch(1, 0, WINDOW_SIZE * 10);
 
@@ -1023,32 +1023,32 @@ public abstract class WindowBytesStoreTest {
         @SuppressWarnings("SameParameterValue") final long startTime,
         final InternalMockProcessorContext context) {
         context.setRecordContext(createRecordContext(startTime));
-        store.put(0, "zero");
+        store.put(0, "zero", context.timestamp());
         context.setRecordContext(createRecordContext(startTime + 1L));
-        store.put(1, "one");
+        store.put(1, "one", context.timestamp());
         context.setRecordContext(createRecordContext(startTime + 2L));
-        store.put(2, "two");
+        store.put(2, "two", context.timestamp());
         context.setRecordContext(createRecordContext(startTime + 4L));
-        store.put(4, "four");
+        store.put(4, "four", context.timestamp());
         context.setRecordContext(createRecordContext(startTime + 5L));
-        store.put(5, "five");
+        store.put(5, "five", context.timestamp());
     }
 
     private void putSecondBatch(final WindowStore<Integer, String> store,
         @SuppressWarnings("SameParameterValue") final long startTime,
         final InternalMockProcessorContext context) {
         context.setRecordContext(createRecordContext(startTime + 3L));
-        store.put(2, "two+1");
+        store.put(2, "two+1", context.timestamp());
         context.setRecordContext(createRecordContext(startTime + 4L));
-        store.put(2, "two+2");
+        store.put(2, "two+2", context.timestamp());
         context.setRecordContext(createRecordContext(startTime + 5L));
-        store.put(2, "two+3");
+        store.put(2, "two+3", context.timestamp());
         context.setRecordContext(createRecordContext(startTime + 6L));
-        store.put(2, "two+4");
+        store.put(2, "two+4", context.timestamp());
         context.setRecordContext(createRecordContext(startTime + 7L));
-        store.put(2, "two+5");
+        store.put(2, "two+5", context.timestamp());
         context.setRecordContext(createRecordContext(startTime + 8L));
-        store.put(2, "two+6");
+        store.put(2, "two+6", context.timestamp());
     }
 
     protected static <E> Set<E> toSet(final WindowStoreIterator<E> iterator) {

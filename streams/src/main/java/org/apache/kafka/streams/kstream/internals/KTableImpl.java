@@ -31,6 +31,7 @@ import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.kstream.WindowedMaterialized;
 import org.apache.kafka.streams.kstream.internals.graph.KTableKTableJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
@@ -45,6 +46,7 @@ import org.apache.kafka.streams.processor.ProcessorSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.InMemoryTimeOrderedKeyValueBuffer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -168,6 +170,62 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
                                 builder);
     }
 
+    private KTable<K, V> doWindowedFilter(final Predicate<? super K, ? super V> predicate,
+                                  final WindowMaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materializedInternal,
+                                  final boolean filterNot) {
+        final Serde<K> keySerde;
+        final Serde<V> valueSerde;
+        final String queryableStoreName;
+        final StoreBuilder<TimestampedKeyValueStore<K, V>> storeBuilder;
+
+        if (materializedInternal != null) {
+            // we actually do not need to generate store names at all since if it is not specified, we will not
+            // materialize the store; but we still need to burn one index BEFORE generating the processor to keep compatibility.
+            if (materializedInternal.storeName() == null) {
+                builder.newStoreName(FILTER_NAME);
+            }
+            // we can inherit parent key and value serde if user do not provide specific overrides, more specifically:
+            // we preserve the key following the order of 1) materialized, 2) parent
+            keySerde = materializedInternal.keySerde() != null ? materializedInternal.keySerde() : this.keySerde;
+            // we preserve the value following the order of 1) materialized, 2) parent
+            valueSerde = materializedInternal.valueSerde() != null ? materializedInternal.valueSerde() : this.valSerde;
+            queryableStoreName = materializedInternal.queryableStoreName();
+            // only materialize if materialized is specified and it has queryable name
+            storeBuilder = queryableStoreName != null ? (new TimestampedKeyValueStoreMaterializer<>(materializedInternal)).materialize() : null;
+        } else {
+            keySerde = this.keySerde;
+            valueSerde = this.valSerde;
+            queryableStoreName = null;
+            storeBuilder = null;
+        }
+
+        final String name = builder.newProcessorName(FILTER_NAME);
+
+        final KTableProcessorSupplier<K, V, V> processorSupplier =
+                new KTableFilter<>(this, predicate, filterNot, queryableStoreName);
+
+        final ProcessorParameters<K, V> processorParameters = unsafeCastProcessorParametersToCompletelyDifferentType(
+                new ProcessorParameters<>(processorSupplier, name)
+        );
+
+        final StreamsGraphNode tableNode = new TableProcessorNode<>(
+                name,
+                processorParameters,
+                storeBuilder
+        );
+
+        builder.addGraphNode(this.streamsGraphNode, tableNode);
+
+        return new KTableImpl<>(name,
+                                keySerde,
+                                valueSerde,
+                                sourceNodes,
+                                queryableStoreName,
+                                processorSupplier,
+                                tableNode,
+                                builder);
+    }
+
     @Override
     public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate) {
         Objects.requireNonNull(predicate, "predicate can't be null");
@@ -182,6 +240,16 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
 
         return doFilter(predicate, materializedInternal, false);
+    }
+
+    @Override
+    public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+                               final WindowedMaterialized<K, V, WindowStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(predicate, "predicate can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        final WindowMaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materializedInternal = new WindowMaterializedInternal<>(materialized);
+
+        return doWindowedFilter(predicate, materializedInternal, false);
     }
 
     @Override

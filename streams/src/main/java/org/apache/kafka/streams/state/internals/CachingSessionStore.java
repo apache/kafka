@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -134,6 +135,21 @@ class CachingSessionStore
     }
 
     @Override
+    public byte[] putIfAbsent(Windowed<Bytes> key, byte[] value) {
+        return new byte[0];
+    }
+
+    @Override
+    public void putAll(List<KeyValue<Windowed<Bytes>, byte[]>> entries) {
+
+    }
+
+    @Override
+    public byte[] delete(Windowed<Bytes> key) {
+        return new byte[0];
+    }
+
+    @Override
     public void remove(final Windowed<Bytes> sessionKey) {
         validateStoreOpen();
         put(sessionKey, null);
@@ -235,6 +251,26 @@ class CachingSessionStore
         flush();
         cache.close(cacheName);
         super.close();
+    }
+
+    @Override
+    public byte[] get(Windowed<Bytes> key) {
+        return new byte[0];
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> range(Windowed<Bytes> from, Windowed<Bytes> to) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
+        return null;
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return 0;
     }
 
     private class CacheIteratorWrapper implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {

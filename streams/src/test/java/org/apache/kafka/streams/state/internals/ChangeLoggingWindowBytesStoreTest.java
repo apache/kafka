@@ -89,7 +89,7 @@ public class ChangeLoggingWindowBytesStoreTest {
 
         init();
 
-        store.put(bytesKey, value);
+        store.put(bytesKey, value, context.timestamp());
 
         assertArrayEquals(
             value,
@@ -128,8 +128,8 @@ public class ChangeLoggingWindowBytesStoreTest {
         EasyMock.expectLastCall().times(2);
 
         init();
-        store.put(bytesKey, value);
-        store.put(bytesKey, value);
+        store.put(bytesKey, value, context.timestamp());
+        store.put(bytesKey, value, context.timestamp());
 
         assertArrayEquals(value, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 1)));
         assertArrayEquals(value, (byte[]) sent.get(WindowKeySchema.toStoreKeyBinary(bytesKey, 0, 2)));

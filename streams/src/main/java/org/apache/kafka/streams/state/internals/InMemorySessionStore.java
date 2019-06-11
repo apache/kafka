@@ -20,6 +20,7 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addInvocationRateAndCount;
 
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.NoSuchElementException;
@@ -115,6 +116,21 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
                 remove(sessionKey);
             }
         }
+    }
+
+    @Override
+    public byte[] putIfAbsent(Windowed<Bytes> key, byte[] value) {
+        return new byte[0];
+    }
+
+    @Override
+    public void putAll(List<KeyValue<Windowed<Bytes>, byte[]>> entries) {
+
+    }
+
+    @Override
+    public byte[] delete(Windowed<Bytes> key) {
+        return new byte[0];
     }
 
     @Override
@@ -257,6 +273,26 @@ public class InMemorySessionStore implements SessionStore<Bytes, byte[]> {
         final InMemorySessionStoreIterator iterator = new InMemorySessionStoreIterator(keyFrom, keyTo, latestSessionStartTime, endTimeIterator, it -> openIterators.remove(it));
         openIterators.add(iterator);
         return iterator;
+    }
+
+    @Override
+    public byte[] get(Windowed<Bytes> key) {
+        return new byte[0];
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> range(Windowed<Bytes> from, Windowed<Bytes> to) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
+        return null;
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return 0;
     }
 
     interface ClosingCallback {

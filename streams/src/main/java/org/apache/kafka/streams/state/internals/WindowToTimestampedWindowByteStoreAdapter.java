@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -25,6 +26,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
 import java.time.Instant;
+import java.util.List;
 
 import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
 import static org.apache.kafka.streams.state.internals.ValueAndTimestampDeserializer.rawValue;
@@ -37,12 +39,6 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
             throw new IllegalArgumentException("Provided store must be a persistent store, but it is not.");
         }
         this.store = store;
-    }
-
-    @Override
-    public void put(final Bytes key,
-                    final byte[] valueWithTimestamp) {
-        store.put(key, valueWithTimestamp == null ? null : rawValue(valueWithTimestamp));
     }
 
     @Override
@@ -91,8 +87,23 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     }
 
     @Override
+    public byte[] get(Windowed<Bytes> key) {
+        return new byte[0];
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> range(Windowed<Bytes> from, Windowed<Bytes> to) {
+        return null;
+    }
+
+    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
         return new KeyValueToTimestampedKeyValueIteratorAdapter<>(store.all());
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return 0;
     }
 
     @Override
@@ -137,6 +148,26 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
     @Override
     public boolean isOpen() {
         return store.isOpen();
+    }
+
+    @Override
+    public void put(Windowed<Bytes> key, byte[] value) {
+
+    }
+
+    @Override
+    public byte[] putIfAbsent(Windowed<Bytes> key, byte[] value) {
+        return new byte[0];
+    }
+
+    @Override
+    public void putAll(List<KeyValue<Windowed<Bytes>, byte[]>> entries) {
+
+    }
+
+    @Override
+    public byte[] delete(Windowed<Bytes> key) {
+        return new byte[0];
     }
 
 

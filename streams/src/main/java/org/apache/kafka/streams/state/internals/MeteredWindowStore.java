@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -31,6 +32,7 @@ import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.metrics.Sensor.RecordingLevel.DEBUG;
@@ -125,12 +127,6 @@ public class MeteredWindowStore<K, V>
 
     @Override
     public void put(final K key,
-                    final V value) {
-        put(key, value, context.timestamp());
-    }
-
-    @Override
-    public void put(final K key,
                     final V value,
                     final long windowStartTimestamp) {
         final long startNs = time.nanoseconds();
@@ -198,8 +194,23 @@ public class MeteredWindowStore<K, V>
     }
 
     @Override
+    public V get(Windowed<K> key) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> range(Windowed<K> from, Windowed<K> to) {
+        return null;
+    }
+
+    @Override
     public KeyValueIterator<Windowed<K>, V> all() {
         return new MeteredWindowedKeyValueIterator<>(wrapped().all(), fetchTime, metrics, serdes, time);
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return 0;
     }
 
     @Override
@@ -220,5 +231,25 @@ public class MeteredWindowStore<K, V>
 
     private Bytes keyBytes(final K key) {
         return Bytes.wrap(serdes.rawKey(key));
+    }
+
+    @Override
+    public void put(Windowed<K> key, V value) {
+
+    }
+
+    @Override
+    public V putIfAbsent(Windowed<K> key, V value) {
+        return null;
+    }
+
+    @Override
+    public void putAll(List<KeyValue<Windowed<K>, V>> entries) {
+
+    }
+
+    @Override
+    public V delete(Windowed<K> key) {
+        return null;
     }
 }

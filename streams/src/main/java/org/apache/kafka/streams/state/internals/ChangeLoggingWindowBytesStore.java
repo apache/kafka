@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -26,6 +27,8 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.StateSerdes;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+
+import java.util.List;
 
 /**
  * Simple wrapper around a {@link WindowStore} to support writing
@@ -83,8 +86,23 @@ class ChangeLoggingWindowBytesStore
     }
 
     @Override
+    public byte[] get(Windowed<Bytes> key) {
+        return new byte[0];
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> range(Windowed<Bytes> from, Windowed<Bytes> to) {
+        return null;
+    }
+
+    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
         return wrapped().all();
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return 0;
     }
 
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
@@ -92,15 +110,6 @@ class ChangeLoggingWindowBytesStore
     public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
                                                               final long timeTo) {
         return wrapped().fetchAll(timeFrom, timeTo);
-    }
-
-    @Override
-    public void put(final Bytes key, final byte[] value) {
-        // Note: It's incorrect to bypass the wrapped store here by delegating to another method,
-        // but we have no alternative. We must send a timestamped key to the changelog, which means
-        // we need to know what timestamp gets used for the record. Hopefully, we can deprecate this
-        // method in the future to resolve the situation.
-        put(key, value, context.timestamp());
     }
 
     @Override
@@ -121,5 +130,25 @@ class ChangeLoggingWindowBytesStore
             seqnum = (seqnum + 1) & 0x7FFFFFFF;
         }
         return seqnum;
+    }
+
+    @Override
+    public void put(Windowed<Bytes> key, byte[] value) {
+
+    }
+
+    @Override
+    public byte[] putIfAbsent(Windowed<Bytes> key, byte[] value) {
+        return new byte[0];
+    }
+
+    @Override
+    public void putAll(List<KeyValue<Windowed<Bytes>, byte[]>> entries) {
+
+    }
+
+    @Override
+    public byte[] delete(Windowed<Bytes> key) {
+        return new byte[0];
     }
 }

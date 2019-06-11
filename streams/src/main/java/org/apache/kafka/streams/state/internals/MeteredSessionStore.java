@@ -20,6 +20,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -30,6 +31,7 @@ import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.StateSerdes;
 
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -131,6 +133,21 @@ public class MeteredSessionStore<K, V>
         } finally {
             metrics.recordLatency(putTime, startNs, time.nanoseconds());
         }
+    }
+
+    @Override
+    public V putIfAbsent(Windowed<K> key, V value) {
+        return null;
+    }
+
+    @Override
+    public void putAll(List<KeyValue<Windowed<K>, V>> entries) {
+
+    }
+
+    @Override
+    public V delete(Windowed<K> key) {
+        return null;
     }
 
     @Override
@@ -244,5 +261,25 @@ public class MeteredSessionStore<K, V>
 
     private Bytes keyBytes(final K key) {
         return Bytes.wrap(serdes.rawKey(key));
+    }
+
+    @Override
+    public V get(Windowed<K> key) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> range(Windowed<K> from, Windowed<K> to) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> all() {
+        return null;
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return 0;
     }
 }

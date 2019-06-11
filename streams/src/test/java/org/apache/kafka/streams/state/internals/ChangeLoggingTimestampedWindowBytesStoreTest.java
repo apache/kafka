@@ -92,7 +92,7 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
 
         init();
 
-        store.put(bytesKey, valueAndTimestamp);
+        store.put(bytesKey, valueAndTimestamp, context.timestamp());
 
         assertArrayEquals(
             value,
@@ -134,8 +134,8 @@ public class ChangeLoggingTimestampedWindowBytesStoreTest {
         EasyMock.expectLastCall().times(2);
 
         init();
-        store.put(bytesKey, valueAndTimestamp);
-        store.put(bytesKey, valueAndTimestamp);
+        store.put(bytesKey, valueAndTimestamp, context.timestamp());
+        store.put(bytesKey, valueAndTimestamp, context.timestamp());
 
         assertArrayEquals(
             value,

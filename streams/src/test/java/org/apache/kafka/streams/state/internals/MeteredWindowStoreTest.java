@@ -119,7 +119,7 @@ public class MeteredWindowStoreTest {
         replay(innerStoreMock);
 
         store.init(context, store);
-        store.put("a", "a");
+        store.put("a", "a", context.timestamp());
         final Map<MetricName, ? extends Metric> metrics = context.metrics().metrics();
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "put-total", "stream-scope-metrics", singletonMap("scope-id", "all")).metricValue());
         assertEquals(1.0, getMetricByNameFilterByTags(metrics, "put-total", "stream-scope-metrics", singletonMap("scope-id", "mocked-store")).metricValue());

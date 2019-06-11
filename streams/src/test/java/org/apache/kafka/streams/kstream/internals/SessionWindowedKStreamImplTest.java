@@ -34,6 +34,7 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
@@ -84,7 +85,7 @@ public class SessionWindowedKStreamImplTest {
         stream.count()
             .toStream()
             .process(supplier);
-
+//.filter((k, v) -> true, Materialized.<Windowed<String>, String, WindowStore<Bytes, byte[]>>as("store"))
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             processData(driver);
         }

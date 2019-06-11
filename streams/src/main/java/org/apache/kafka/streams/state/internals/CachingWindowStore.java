@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.List;
 import java.util.NoSuchElementException;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -129,12 +130,6 @@ class CachingWindowStore
         this.sendOldValues = sendOldValues;
 
         return true;
-    }
-
-    @Override
-    public synchronized void put(final Bytes key,
-                                 final byte[] value) {
-        put(key, value, context.timestamp());
     }
 
     @Override
@@ -270,6 +265,16 @@ class CachingWindowStore
     }
 
     @Override
+    public byte[] get(Windowed<Bytes> key) {
+        return new byte[0];
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> range(Windowed<Bytes> from, Windowed<Bytes> to) {
+        return null;
+    }
+
+    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
         validateStoreOpen();
 
@@ -286,6 +291,11 @@ class CachingWindowStore
     }
 
     @Override
+    public long approximateNumEntries() {
+        return 0;
+    }
+
+    @Override
     public synchronized void flush() {
         cache.flush(name);
         wrapped().flush();
@@ -296,6 +306,26 @@ class CachingWindowStore
         flush();
         cache.close(name);
         wrapped().close();
+    }
+
+    @Override
+    public void put(Windowed<Bytes> key, byte[] value) {
+
+    }
+
+    @Override
+    public byte[] putIfAbsent(Windowed<Bytes> key, byte[] value) {
+        return new byte[0];
+    }
+
+    @Override
+    public void putAll(List<KeyValue<Windowed<Bytes>, byte[]>> entries) {
+
+    }
+
+    @Override
+    public byte[] delete(Windowed<Bytes> key) {
+        return new byte[0];
     }
 
     private class CacheIteratorWrapper implements PeekingKeyValueIterator<Bytes, LRUCacheEntry> {

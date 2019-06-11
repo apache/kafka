@@ -17,9 +17,12 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.SessionStore;
+
+import java.util.List;
 
 
 public class RocksDBSessionStore
@@ -79,5 +82,40 @@ public class RocksDBSessionStore
     @Override
     public void put(final Windowed<Bytes> sessionKey, final byte[] aggregate) {
         wrapped().put(SessionKeySchema.toBinary(sessionKey), aggregate);
+    }
+
+    @Override
+    public byte[] putIfAbsent(Windowed<Bytes> key, byte[] value) {
+        return new byte[0];
+    }
+
+    @Override
+    public void putAll(List<KeyValue<Windowed<Bytes>, byte[]>> entries) {
+
+    }
+
+    @Override
+    public byte[] delete(Windowed<Bytes> key) {
+        return new byte[0];
+    }
+
+    @Override
+    public byte[] get(Windowed<Bytes> key) {
+        return new byte[0];
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> range(Windowed<Bytes> from, Windowed<Bytes> to) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
+        return null;
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return 0;
     }
 }

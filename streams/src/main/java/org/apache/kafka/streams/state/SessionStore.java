@@ -32,7 +32,7 @@ import org.apache.kafka.streams.processor.StateStore;
  * @param <K>   type of the record keys
  * @param <AGG> type of the aggregated values
  */
-public interface SessionStore<K, AGG> extends StateStore, ReadOnlySessionStore<K, AGG> {
+public interface SessionStore<K, AGG> extends KeyValueStore<Windowed<K>, AGG>, ReadOnlySessionStore<K, AGG> {
 
     /**
      * Fetch any sessions with the matching key and the sessions end is &ge; earliestSessionEndTime and the sessions

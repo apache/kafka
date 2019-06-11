@@ -30,6 +30,8 @@ import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
+import org.apache.kafka.streams.state.SessionStore;
+import org.apache.kafka.streams.state.WindowStore;
 
 /**
  * {@code KTable} is an abstraction of a <i>changelog stream</i> from a primary-keyed table.
@@ -128,6 +130,10 @@ public interface KTable<K, V> {
      */
     KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
                         final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+
+
+    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+                                  final WindowedMaterialized<K, V, WindowStore<Bytes, byte[]>> materialized);
 
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the

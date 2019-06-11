@@ -17,12 +17,17 @@
 package org.apache.kafka.streams.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.ReadOnlyWindowStoreFacade;
+
+import java.util.List;
 
 public class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> implements WindowStore<K, V> {
 
@@ -34,12 +39,6 @@ public class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> imp
     public void init(final ProcessorContext context,
                      final StateStore root) {
         inner.init(context, root);
-    }
-
-    @Override
-    public void put(final K key,
-                    final V value) {
-        inner.put(key, ValueAndTimestamp.make(value, ConsumerRecord.NO_TIMESTAMP));
     }
 
     @Override
@@ -72,5 +71,40 @@ public class WindowStoreFacade<K, V> extends ReadOnlyWindowStoreFacade<K, V> imp
     @Override
     public boolean isOpen() {
         return inner.isOpen();
+    }
+
+    @Override
+    public void put(Windowed<K> key, V value) {
+
+    }
+
+    @Override
+    public V putIfAbsent(Windowed<K> key, V value) {
+        return null;
+    }
+
+    @Override
+    public void putAll(List<KeyValue<Windowed<K>, V>> entries) {
+
+    }
+
+    @Override
+    public V delete(Windowed<K> key) {
+        return null;
+    }
+
+    @Override
+    public V get(Windowed<K> key) {
+        return null;
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<K>, V> range(Windowed<K> from, Windowed<K> to) {
+        return null;
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return 0;
     }
 }

@@ -17,12 +17,15 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
+
+import java.util.List;
 
 public class RocksDBWindowStore
     extends WrappedStateStore<SegmentedBytesStore, Object, Object>
@@ -46,11 +49,6 @@ public class RocksDBWindowStore
     public void init(final ProcessorContext context, final StateStore root) {
         this.context = context;
         super.init(context, root);
-    }
-
-    @Override
-    public void put(final Bytes key, final byte[] value) {
-        put(key, value, context.timestamp());
     }
 
     @Override
@@ -87,9 +85,24 @@ public class RocksDBWindowStore
     }
 
     @Override
+    public byte[] get(Windowed<Bytes> key) {
+        return new byte[0];
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> range(Windowed<Bytes> from, Windowed<Bytes> to) {
+        return null;
+    }
+
+    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
         final KeyValueIterator<Bytes, byte[]> bytesIterator = wrapped().all();
         return new WindowStoreIteratorWrapper(bytesIterator, windowSize).keyValueIterator();
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return 0;
     }
 
     @SuppressWarnings("deprecation") // note, this method must be kept if super#fetchAll(...) is removed
@@ -103,5 +116,25 @@ public class RocksDBWindowStore
         if (retainDuplicates) {
             seqnum = (seqnum + 1) & 0x7FFFFFFF;
         }
+    }
+
+    @Override
+    public void put(Windowed<Bytes> key, byte[] value) {
+
+    }
+
+    @Override
+    public byte[] putIfAbsent(Windowed<Bytes> key, byte[] value) {
+        return new byte[0];
+    }
+
+    @Override
+    public void putAll(List<KeyValue<Windowed<Bytes>, byte[]>> entries) {
+
+    }
+
+    @Override
+    public byte[] delete(Windowed<Bytes> key) {
+        return new byte[0];
     }
 }

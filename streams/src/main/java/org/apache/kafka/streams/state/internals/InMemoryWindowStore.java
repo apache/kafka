@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import java.nio.ByteBuffer;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -111,11 +112,6 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
             });
         }
         open = true;
-    }
-
-    @Override
-    public void put(final Bytes key, final byte[] value) {
-        put(key, value, context.timestamp());
     }
 
     @Override
@@ -229,6 +225,16 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
     }
 
     @Override
+    public byte[] get(Windowed<Bytes> key) {
+        return new byte[0];
+    }
+
+    @Override
+    public KeyValueIterator<Windowed<Bytes>, byte[]> range(Windowed<Bytes> from, Windowed<Bytes> to) {
+        return null;
+    }
+
+    @Override
     public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
         removeExpiredSegments();
 
@@ -236,6 +242,11 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
 
         return registerNewWindowedKeyValueIterator(
             null, null, segmentMap.tailMap(minTime, false).entrySet().iterator());
+    }
+
+    @Override
+    public long approximateNumEntries() {
+        return 0;
     }
 
     @Override
@@ -322,6 +333,26 @@ public class InMemoryWindowStore implements WindowStore<Bytes, byte[]> {
                                                 windowSize);
         openIterators.add(iterator);
         return iterator;
+    }
+
+    @Override
+    public void put(Windowed<Bytes> key, byte[] value) {
+
+    }
+
+    @Override
+    public byte[] putIfAbsent(Windowed<Bytes> key, byte[] value) {
+        return new byte[0];
+    }
+
+    @Override
+    public void putAll(List<KeyValue<Windowed<Bytes>, byte[]>> entries) {
+
+    }
+
+    @Override
+    public byte[] delete(Windowed<Bytes> key) {
+        return new byte[0];
     }
 
 

@@ -33,22 +33,7 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
  * @param <K> Type of keys
  * @param <V> Type of values
  */
-public interface WindowStore<K, V> extends StateStore, ReadOnlyWindowStore<K, V> {
-
-    /**
-     * Use the current record timestamp as the {@code windowStartTimestamp} and
-     * delegate to {@link WindowStore#put(Object, Object, long)}.
-     *
-     * It's highly recommended to use {@link WindowStore#put(Object, Object, long)} instead, as the record timestamp
-     * is unlikely to be the correct windowStartTimestamp in general.
-     *
-     * @param key The key to associate the value to
-     * @param value The value to update, it can be null;
-     *              if the serialized bytes are also null it is interpreted as deletes
-     * @throws NullPointerException if the given key is {@code null}
-     */
-    void put(K key, V value);
-
+public interface WindowStore<K, V> extends KeyValueStore<Windowed<K>, V>, ReadOnlyWindowStore<K, V> {
     /**
      * Put a key-value pair into the window with given window start timestamp
      * @param key The key to associate the value to

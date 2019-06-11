@@ -107,7 +107,7 @@ public class MeteredTimestampedWindowStoreTest {
         store.init(context, innerStoreMock);
 
         try {
-            store.put("key", ValueAndTimestamp.make(42L, 60000));
+            store.put("key", ValueAndTimestamp.make(42L, 60000), context.timestamp());
         } catch (final StreamsException exception) {
             if (exception.getCause() instanceof ClassCastException) {
                 fail("Serdes are not correctly set from processor context.");
@@ -131,7 +131,7 @@ public class MeteredTimestampedWindowStoreTest {
         store.init(context, innerStoreMock);
 
         try {
-            store.put("key", ValueAndTimestamp.make(42L, 60000));
+            store.put("key", ValueAndTimestamp.make(42L, 60000), context.timestamp());
         } catch (final StreamsException exception) {
             if (exception.getCause() instanceof ClassCastException) {
                 fail("Serdes are not correctly set from constructor parameters.");
