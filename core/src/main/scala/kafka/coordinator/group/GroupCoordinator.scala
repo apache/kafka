@@ -184,7 +184,7 @@ class GroupCoordinator(val brokerId: Int,
 
           val currentLeader = group.leaderOrNull
           val member = group.replaceGroupInstance(oldMemberId, newMemberId, groupInstanceId)
-          // Heartbeat of old member id will expire without affection since the group no longer contains that member id.
+          // Heartbeat of old member id will expire without effect since the group no longer contains that member id.
           // New heartbeat shall be scheduled with new member id.
           completeAndScheduleNextHeartbeatExpiration(group, member)
 
@@ -1115,8 +1115,7 @@ case class JoinGroupResult(members: List[JoinGroupResponseMember],
                            generationId: Int,
                            subProtocol: String,
                            leaderId: String,
-                           error: Errors) {
-}
+                           error: Errors)
 
 case class SyncGroupResult(memberAssignment: Array[Byte],
                            error: Errors)

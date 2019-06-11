@@ -467,6 +467,7 @@ class GroupMetadataTest {
   @Test(expected = classOf[IllegalArgumentException])
   def testReplaceGroupInstanceWithEmptyGroupInstanceId(): Unit = {
     group.add(member)
+    group.addStaticMember(groupInstanceId, memberId)
     assertTrue(group.isLeader(memberId))
     assertEquals(memberId, group.getStaticMemberId(groupInstanceId))
 
@@ -528,7 +529,8 @@ class GroupMetadataTest {
 
   @Test
   def testInvokeSyncCallback(): Unit = {
-    group.add(member, () => _)
+    group.add(member)
+    member.awaitingSyncCallback = _ => {}
 
     val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Array.empty, Errors.NONE))
     assertTrue(invoked)
