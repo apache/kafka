@@ -33,5 +33,5 @@ class NetworkDegradeFaultSpec(TaskSpec):
         :param network_device:  The name of the network device
         """
         super(NetworkDegradeFaultSpec, self).__init__(start_ms, duration_ms)
-        self.message["class"] = "org.apache.kafka.trogdor.fault.NetworkDegradeFaultSpec"
+        self.message["class"] = "org.apache.kafka.trogdor.fault.DegradedNetworkFaultSpec"
         self.message["nodeSpecs"] = node_specs

@@ -36,26 +36,26 @@ import java.util.Set;
 /**
  * Uses the linux utility <pre>tc</pre> (traffic controller) to simulate latency on a specified network device
  */
-public class NetworkDegradeFaultWorker implements TaskWorker {
+public class DegradedNetworkFaultWorker implements TaskWorker {
 
-    private static final Logger log = LoggerFactory.getLogger(NetworkDegradeFaultWorker.class);
+    private static final Logger log = LoggerFactory.getLogger(DegradedNetworkFaultWorker.class);
 
     private final String id;
-    private final Map<String, NetworkDegradeFaultSpec.NodeDegradeSpec> nodeSpecs;
+    private final Map<String, DegradedNetworkFaultSpec.NodeDegradeSpec> nodeSpecs;
     private WorkerStatusTracker status;
 
-    public NetworkDegradeFaultWorker(String id, Map<String, NetworkDegradeFaultSpec.NodeDegradeSpec> nodeSpecs) {
+    public DegradedNetworkFaultWorker(String id, Map<String, DegradedNetworkFaultSpec.NodeDegradeSpec> nodeSpecs) {
         this.id = id;
         this.nodeSpecs = nodeSpecs;
     }
 
     @Override
     public void start(Platform platform, WorkerStatusTracker status, KafkaFutureImpl<String> haltFuture) throws Exception {
-        log.info("Activating NetworkDegradeFaultWorker {}.", id);
+        log.info("Activating DegradedNetworkFaultWorker {}.", id);
         this.status = status;
         this.status.update(new TextNode("enabling traffic control " + id));
         Node curNode = platform.curNode();
-        NetworkDegradeFaultSpec.NodeDegradeSpec nodeSpec = nodeSpecs.get(curNode.name());
+        DegradedNetworkFaultSpec.NodeDegradeSpec nodeSpec = nodeSpecs.get(curNode.name());
         if (nodeSpec != null) {
             for (String device : devicesForSpec(nodeSpec)) {
                 enableTrafficControl(platform, device, nodeSpec.getLatencyMs());
@@ -66,10 +66,10 @@ public class NetworkDegradeFaultWorker implements TaskWorker {
 
     @Override
     public void stop(Platform platform) throws Exception {
-        log.info("Deactivating NetworkDegradeFaultWorker {}.", id);
+        log.info("Deactivating DegradedNetworkFaultWorker {}.", id);
         this.status.update(new TextNode("disabling traffic control " + id));
         Node curNode = platform.curNode();
-        NetworkDegradeFaultSpec.NodeDegradeSpec nodeSpec = nodeSpecs.get(curNode.name());
+        DegradedNetworkFaultSpec.NodeDegradeSpec nodeSpec = nodeSpecs.get(curNode.name());
         if (nodeSpec != null) {
             for (String device : devicesForSpec(nodeSpec)) {
                 disableTrafficControl(platform, device);
@@ -78,7 +78,7 @@ public class NetworkDegradeFaultWorker implements TaskWorker {
         this.status.update(new TextNode("disabled traffic control " + id));
     }
 
-    private Set<String> devicesForSpec(NetworkDegradeFaultSpec.NodeDegradeSpec nodeSpec) throws Exception {
+    private Set<String> devicesForSpec(DegradedNetworkFaultSpec.NodeDegradeSpec nodeSpec) throws Exception {
         Set<String> devices = new HashSet<>();
         if (nodeSpec.getNetworkDevice().isEmpty()) {
             for (NetworkInterface networkInterface : Collections.list(NetworkInterface.getNetworkInterfaces())) {

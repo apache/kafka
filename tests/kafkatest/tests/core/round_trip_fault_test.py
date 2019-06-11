@@ -98,7 +98,7 @@ class RoundTripFaultTest(Test):
         workload1 = self.trogdor.create_task("workload1", self.round_trip_spec)
         node_specs = {}
         for node in self.kafka.nodes + self.zk.nodes:
-            node_specs[node.name] = {"latency": 500, "networkDevice": "eth0"}
+            node_specs[node.name] = {"latencyMs": 500, "networkDevice": "eth0"}
         spec = NetworkDegradeFaultSpec(0, 60000, node_specs)
         slow1 = self.trogdor.create_task("slow1", spec)
         workload1.wait_for_done(timeout_sec=600)

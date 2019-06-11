@@ -26,7 +26,7 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 import java.util.Collections;
 import java.util.Map;
 
-public class NetworkDegradeFaultSpec extends TaskSpec {
+public class DegradedNetworkFaultSpec extends TaskSpec {
 
     public static class NodeDegradeSpec {
         private final String networkDevice;
@@ -53,9 +53,9 @@ public class NetworkDegradeFaultSpec extends TaskSpec {
     private final Map<String, NodeDegradeSpec> nodeSpecs;
 
     @JsonCreator
-    public NetworkDegradeFaultSpec(@JsonProperty("startMs") long startMs,
-                                   @JsonProperty("durationMs") long durationMs,
-                                   @JsonProperty("nodeSpecs") Map<String, NodeDegradeSpec> nodeSpecs) {
+    public DegradedNetworkFaultSpec(@JsonProperty("startMs") long startMs,
+                                    @JsonProperty("durationMs") long durationMs,
+                                    @JsonProperty("nodeSpecs") Map<String, NodeDegradeSpec> nodeSpecs) {
         super(startMs, durationMs);
         this.nodeSpecs = nodeSpecs == null ? Collections.emptyMap() : Collections.unmodifiableMap(nodeSpecs);
     }
@@ -67,7 +67,7 @@ public class NetworkDegradeFaultSpec extends TaskSpec {
 
     @Override
     public TaskWorker newTaskWorker(String id) {
-        return new NetworkDegradeFaultWorker(id, nodeSpecs);
+        return new DegradedNetworkFaultWorker(id, nodeSpecs);
     }
 
     @JsonProperty
