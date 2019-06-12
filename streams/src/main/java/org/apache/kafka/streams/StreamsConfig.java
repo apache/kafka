@@ -1013,9 +1013,8 @@ public class StreamsConfig extends AbstractConfig {
             final int batchSize = Integer.parseInt(producerProps.get(ProducerConfig.BATCH_SIZE_CONFIG).toString());
             
             if (segmentSize < 1048576) {
-            	throw new ConfigException("segment.bytes", segmentSize, null);
-            }
-            else if (segmentSize < batchSize) {
+                throw new ConfigException("segment.bytes", segmentSize, null);
+            } else if (segmentSize < batchSize) {
                 throw new IllegalArgumentException(String.format("Specified topic segment size %d is is smaller than the configured producer batch size %d, this will cause produced batch not able to be appended to the topic",
                         segmentSize,
                         batchSize));
