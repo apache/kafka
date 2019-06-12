@@ -97,13 +97,6 @@ public class MetadataCache {
         return Optional.ofNullable(metadataByPartition.get(topicPartition));
     }
 
-    synchronized void retainTopics(Collection<String> topics) {
-        metadataByPartition.entrySet().removeIf(entry -> !topics.contains(entry.getKey().topic()));
-        unauthorizedTopics.retainAll(topics);
-        invalidTopics.retainAll(topics);
-        computeClusterView();
-    }
-
     Cluster cluster() {
         if (clusterInstance == null) {
             throw new IllegalStateException("Cached Cluster instance should not be null, but was.");
