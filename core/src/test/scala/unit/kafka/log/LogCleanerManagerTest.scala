@@ -492,7 +492,7 @@ class LogCleanerManagerTest extends Logging {
       new LogCleanerManager(Array(logDir), pool, null)
   }
 
-  private def createLog(segmentSize: Int, cleanupPolicy: String, segmentsCount: Int = 0): Log = {
+  private def createLog(segmentSize: Int, cleanupPolicy: String, segmentsCount: Int = 0, backupOnTruncateToZero: Boolean = false): Log = {
     val logProps = new Properties()
     logProps.put(LogConfig.SegmentBytesProp, segmentSize: Integer)
     logProps.put(LogConfig.RetentionMsProp, 1: Integer)
@@ -514,7 +514,7 @@ class LogCleanerManagerTest extends Logging {
     for (i <- 0 until segmentsCount) {
       val startOffset = i * 10
       val endOffset = startOffset + 10
-      val segment = LogUtils.createSegment(startOffset, logDir)
+      val segment = LogUtils.createSegment(startOffset, logDir, backupOnTruncateToZero = backupOnTruncateToZero)
       var lastTimestamp = 0L
       val records = (startOffset until endOffset).map { offset =>
         val currentTimestamp = time.milliseconds()

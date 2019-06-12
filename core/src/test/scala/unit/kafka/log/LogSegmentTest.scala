@@ -38,8 +38,10 @@ class LogSegmentTest {
   /* create a segment with the given base offset */
   def createSegment(offset: Long,
                     indexIntervalBytes: Int = 10,
-                    time: Time = Time.SYSTEM): LogSegment = {
-    val seg = LogUtils.createSegment(offset, logDir, indexIntervalBytes, time)
+                    time: Time = Time.SYSTEM,
+                    backupOnTruncateToZero: Boolean = false,
+                    recordsBackupNameStrategy: Option[RecordsBackupNameStrategy] = None): LogSegment = {
+    val seg = LogUtils.createSegment(offset, logDir, indexIntervalBytes, time, backupOnTruncateToZero, recordsBackupNameStrategy)
     segments += seg
     seg
   }
@@ -233,6 +235,37 @@ class LogSegmentTest {
     assertNull("Segment should be empty.", seg.read(0, None, 1024))
 
     seg.append(41, RecordBatch.NO_TIMESTAMP, -1L, records(40, "hello", "there"))
+  }
+
+  @Test
+  def testTruncateFullWithBackup(): Unit = {
+    // test the case where we fully truncate the log
+    val time = new MockTime
+    val backupFiles: mutable.Set[File] = mutable.Set()
+    val fileNameStrategy: RecordsBackupNameStrategy = originalFile => {
+      val backupFile = new LogBackupNameStrategy(time).getBackupFile(originalFile)
+      backupFiles += backupFile
+      backupFile
+    }
+
+    val seg = createSegment(40, time = time, backupOnTruncateToZero = true, recordsBackupNameStrategy = Some(fileNameStrategy))
+    seg.append(41, RecordBatch.NO_TIMESTAMP, -1L, records(40, "hello", "there"))
+
+    // If the segment is empty after truncation, the create time should be reset
+    time.sleep(500)
+    assertEquals(500, seg.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
+
+    seg.truncateTo(0)
+    assertEquals(0, seg.timeWaitedForRoll(time.milliseconds(), RecordBatch.NO_TIMESTAMP))
+    assertFalse(seg.timeIndex.isFull)
+    assertFalse(seg.offsetIndex.isFull)
+    assertNull("Segment should be empty.", seg.read(0, None, 1024))
+    assertTrue("backup segment should have been created", backupFiles.nonEmpty)
+    val backupFile: File = backupFiles.toVector(0)
+    assertTrue(backupFile.getAbsolutePath.endsWith(".log.backup"))
+
+    val backedUpFile = FileRecords.open(backupFile, false)
+    assertEquals(78, backedUpFile.sizeInBytes())
   }
 
   /**

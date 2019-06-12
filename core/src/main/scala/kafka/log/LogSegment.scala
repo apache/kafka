@@ -17,8 +17,8 @@
 package kafka.log
 
 import java.io.{File, IOException}
-import java.nio.file.{Files, NoSuchFileException}
 import java.nio.file.attribute.FileTime
+import java.nio.file.{Files, NoSuchFileException}
 import java.util.concurrent.TimeUnit
 
 import kafka.common.LogSegmentOffsetOverflowException
@@ -59,7 +59,9 @@ class LogSegment private[log] (val log: FileRecords,
                                val baseOffset: Long,
                                val indexIntervalBytes: Int,
                                val rollJitterMs: Long,
-                               val time: Time) extends Logging {
+                               val time: Time,
+                               val backupOnTruncateToZero: Boolean,
+                               val recordsBackupNameStrategy: Option[RecordsBackupNameStrategy] = None) extends Logging {
 
   def offsetIndex: OffsetIndex = lazyOffsetIndex.get
 
@@ -429,6 +431,7 @@ class LogSegment private[log] (val log: FileRecords,
 
   override def toString = "LogSegment(baseOffset=" + baseOffset + ", size=" + size + ")"
 
+
   /**
    * Truncate off all index and log entries with offsets >= the given offset.
    * If the given offset is larger than the largest message in this segment, do nothing.
@@ -449,7 +452,7 @@ class LogSegment private[log] (val log: FileRecords,
     offsetIndex.resize(offsetIndex.maxIndexSize)
     timeIndex.resize(timeIndex.maxIndexSize)
 
-    val bytesTruncated = if (mapping == null) 0 else log.truncateTo(mapping.position)
+    val bytesTruncated = if (mapping == null) 0 else truncateSafe(log, offset, mapping.position)
     if (log.sizeInBytes == 0) {
       created = time.milliseconds
       rollingBasedTimestamp = None
@@ -460,6 +463,22 @@ class LogSegment private[log] (val log: FileRecords,
       loadLargestTimestamp()
     bytesTruncated
   }
+
+  def truncateSafe(log: FileRecords, offset: Long, position: Int): Int = {
+    if (backupOnTruncateToZero && offset == 0) {
+      LogBackupStats.fileBackupMeter.mark()
+      log.backupAndTruncateTo(position, backupNameStrategy)
+    } else {
+      log.truncateTo(position)
+    }
+  }
+
+  private def backupNameStrategy =
+    recordsBackupNameStrategy match {
+      case Some(i) => i
+      case None => new LogBackupNameStrategy(time)
+    }
+
 
   /**
    * Calculate the offset that would be used for the next message to be append to this segment.
@@ -663,8 +682,8 @@ class LogSegment private[log] (val log: FileRecords,
 
 object LogSegment {
 
-  def open(dir: File, baseOffset: Long, config: LogConfig, time: Time, fileAlreadyExists: Boolean = false,
-           initFileSize: Int = 0, preallocate: Boolean = false, fileSuffix: String = ""): LogSegment = {
+  def open(dir: File, baseOffset: Long, config: LogConfig, time: Time, backupOnTruncateToZero: Boolean = false,
+           fileAlreadyExists: Boolean = false, initFileSize: Int = 0, preallocate: Boolean = false, fileSuffix: String = ""): LogSegment = {
     val maxIndexSize = config.maxIndexSize
     new LogSegment(
       FileRecords.open(Log.logFile(dir, baseOffset, fileSuffix), fileAlreadyExists, initFileSize, preallocate),
@@ -674,7 +693,8 @@ object LogSegment {
       baseOffset,
       indexIntervalBytes = config.indexInterval,
       rollJitterMs = config.randomSegmentJitter,
-      time)
+      time,
+      backupOnTruncateToZero)
   }
 
   def deleteIfExists(dir: File, baseOffset: Long, fileSuffix: String = ""): Unit = {
@@ -687,4 +707,9 @@ object LogSegment {
 
 object LogFlushStats extends KafkaMetricsGroup {
   val logFlushTimer = new KafkaTimer(newTimer("LogFlushRateAndTimeMs", TimeUnit.MILLISECONDS, TimeUnit.SECONDS))
+}
+
+object LogBackupStats extends KafkaMetricsGroup {
+  /* The meter to track when files are backed up */
+  val fileBackupMeter = newMeter("SegmentFileBackupPerMin", "files", TimeUnit.MINUTES)
 }

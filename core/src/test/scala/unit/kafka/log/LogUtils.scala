@@ -19,7 +19,7 @@ package kafka.log
 
 import java.io.File
 
-import org.apache.kafka.common.record.FileRecords
+import org.apache.kafka.common.record.{FileRecords, RecordsBackupNameStrategy}
 import org.apache.kafka.common.utils.Time
 
 object LogUtils {
@@ -29,12 +29,15 @@ object LogUtils {
   def createSegment(offset: Long,
                     logDir: File,
                     indexIntervalBytes: Int = 10,
-                    time: Time = Time.SYSTEM): LogSegment = {
+                    time: Time = Time.SYSTEM,
+                    backupOnTruncateToZero: Boolean = false,
+                    recordsBackupNameStrategy: Option[RecordsBackupNameStrategy] = None): LogSegment = {
     val ms = FileRecords.open(Log.logFile(logDir, offset))
     val idx = new LazyOffsetIndex(Log.offsetIndexFile(logDir, offset), offset, maxIndexSize = 1000)
     val timeIdx = new LazyTimeIndex(Log.timeIndexFile(logDir, offset), offset, maxIndexSize = 1500)
     val txnIndex = new TransactionIndex(offset, Log.transactionIndexFile(logDir, offset))
 
-    new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0, time)
+    new LogSegment(ms, idx, timeIdx, txnIndex, offset, indexIntervalBytes, 0,
+      time, backupOnTruncateToZero, recordsBackupNameStrategy)
   }
 }

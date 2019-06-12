@@ -47,6 +47,10 @@ public class TopicConfig {
         "maps offsets to file positions. We preallocate this index file and shrink it only after log " +
         "rolls. You generally should not need to change this setting.";
 
+    public static final String SEGMENT_BACKUP_ON_TRUNCATE_TO_ZERO_CONFIG = "segment.backup.on.truncate.to.zero";
+    public static final String SEGMENT_BACKUP_ON_TRUNCATE_TO_ZERO_DOC = "This configuration controls whether or not a segment file should be backed up " +
+        "instead of truncated when a truncate to 0 offset is requested.";
+
     public static final String FLUSH_MESSAGES_INTERVAL_CONFIG = "flush.messages";
     public static final String FLUSH_MESSAGES_INTERVAL_DOC = "This setting allows specifying an interval at " +
         "which we will force an fsync of data written to the log. For example if this was set to 1 " +

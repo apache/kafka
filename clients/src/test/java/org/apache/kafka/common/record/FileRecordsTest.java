@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
+import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestUtils;
@@ -32,9 +33,11 @@ import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.utf8;
@@ -54,6 +57,10 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class FileRecordsTest {
+
+    private final FileChannelOptions fileChannelOptions = new FileChannelOptions(
+        true, true, 0, false
+    );
 
     private byte[][] values = new byte[][] {
             "abcd".getBytes(),
@@ -75,7 +82,7 @@ public class FileRecordsTest {
         FileChannel fileChannelMock = mock(FileChannel.class);
         when(fileChannelMock.size()).thenReturn((long) Integer.MAX_VALUE);
 
-        FileRecords records = new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
+        FileRecords records = new FileRecords(fileMock, fileChannelOptions, fileChannelMock, 0, Integer.MAX_VALUE, false);
         append(records, values);
     }
 
@@ -85,7 +92,7 @@ public class FileRecordsTest {
         FileChannel fileChannelMock = mock(FileChannel.class);
         when(fileChannelMock.size()).thenReturn(Integer.MAX_VALUE + 5L);
 
-        new FileRecords(fileMock, fileChannelMock, 0, Integer.MAX_VALUE, false);
+        new FileRecords(fileMock, fileChannelOptions, fileChannelMock, 0, Integer.MAX_VALUE, false);
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -269,7 +276,7 @@ public class FileRecordsTest {
         when(channelMock.size()).thenReturn(42L);
         when(channelMock.position(42L)).thenReturn(null);
 
-        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
+        FileRecords fileRecords = new FileRecords(tempFile(), fileChannelOptions, channelMock, 0, Integer.MAX_VALUE, false);
         fileRecords.truncateTo(42);
 
         verify(channelMock, atLeastOnce()).size();
@@ -286,7 +293,7 @@ public class FileRecordsTest {
 
         when(channelMock.size()).thenReturn(42L);
 
-        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
+        FileRecords fileRecords = new FileRecords(tempFile(), fileChannelOptions, channelMock, 0, Integer.MAX_VALUE, false);
 
         try {
             fileRecords.truncateTo(43);
@@ -308,7 +315,7 @@ public class FileRecordsTest {
         when(channelMock.size()).thenReturn(42L);
         when(channelMock.truncate(anyLong())).thenReturn(channelMock);
 
-        FileRecords fileRecords = new FileRecords(tempFile(), channelMock, 0, Integer.MAX_VALUE, false);
+        FileRecords fileRecords = new FileRecords(tempFile(), fileChannelOptions, channelMock, 0, Integer.MAX_VALUE, false);
         fileRecords.truncateTo(23);
 
         verify(channelMock, atLeastOnce()).size();
@@ -442,6 +449,73 @@ public class FileRecordsTest {
         doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V1);
         doTestConversion(CompressionType.NONE, RecordBatch.MAGIC_VALUE_V2);
         doTestConversion(CompressionType.GZIP, RecordBatch.MAGIC_VALUE_V2);
+    }
+
+    @Test
+    public void testWillCreateBackupFileOnTruncateToZero() throws IOException {
+        File temp = tempFile();
+        File backupFile = new File(temp.getAbsolutePath() + ".test.backup");
+        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
+        append(fileRecords, values);
+        int originalSize = fileRecords.sizeInBytes();
+
+        fileRecords.backupAndTruncateTo(0, new FixedBackupNameStrategy(backupFile));
+
+        assertTrue(String.format("Backup file %s exists.", backupFile), backupFile.exists());
+        assertTrue("Original file exists", temp.exists());
+
+        assertEquals(0, fileRecords.sizeInBytes());
+        assertFalse(fileRecords.batches().iterator().hasNext());
+        try (FileRecords backupRecords = FileRecords.open(backupFile)) {
+            assertEquals(originalSize, backupRecords.sizeInBytes());
+            Set<String> values = new HashSet<>();
+            for (FileChannelRecordBatch batch : backupRecords.batches()) {
+                for (Record record : batch) {
+                    values.add(new String(record.value().array(), record.value().arrayOffset(), record.valueSize()));
+                }
+            }
+            assertEquals(new HashSet<>(asList("ijkl", "efgh", "abcd")), values);
+        }
+    }
+
+    @Test
+    public void testWillCreateBackupFileOnTruncateToNonZero() throws IOException {
+        File temp = tempFile();
+        File backupFile = new File(temp.getAbsolutePath() + ".test.backup");
+        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
+        append(fileRecords, values);
+        int originalSize = fileRecords.sizeInBytes();
+        fileRecords.backupAndTruncateTo(16, new FixedBackupNameStrategy(backupFile));
+
+        assertTrue(String.format("Backup file %s exists.", backupFile), backupFile.exists());
+        assertTrue("Original file exists", temp.exists());
+
+        assertEquals(16, fileRecords.sizeInBytes());
+        try (FileRecords backupRecords = FileRecords.open(backupFile)) {
+            assertEquals(originalSize, backupRecords.sizeInBytes());
+            Set<String> values = new HashSet<>();
+            for (FileChannelRecordBatch batch : backupRecords.batches()) {
+                for (Record record : batch) {
+                    values.add(new String(record.value().array(), record.value().arrayOffset(), record.valueSize()));
+                }
+            }
+            assertEquals(new HashSet<>(asList("ijkl", "efgh", "abcd")), values);
+        }
+    }
+
+    @Test
+    public void testWillNotCreateBackupIfTruncateToSameSize() throws IOException {
+        File temp = tempFile();
+        File backupFile = new File(temp.getAbsolutePath() + ".test.backup");
+        FileRecords fileRecords = FileRecords.open(temp, false, 1024 * 1024, true);
+        append(fileRecords, values);
+        int originalSize = fileRecords.sizeInBytes();
+        fileRecords.backupAndTruncateTo(originalSize, new FixedBackupNameStrategy(backupFile));
+
+        assertFalse(String.format("Backup file %s does not exist.", backupFile), backupFile.exists());
+        assertTrue("Original file exists", temp.exists());
+
+        assertEquals(originalSize, fileRecords.sizeInBytes());
     }
 
     private void doTestConversion(CompressionType compressionType, byte toMagic) throws IOException {
@@ -608,5 +682,18 @@ public class FileRecordsTest {
             fileRecords.append(builder.build());
         }
         fileRecords.flush();
+    }
+
+    private static class FixedBackupNameStrategy implements RecordsBackupNameStrategy {
+        private final File target;
+
+        private FixedBackupNameStrategy(File target) {
+            this.target = target;
+        }
+
+        @Override
+        public File getBackupFile(File recordsFile) {
+            return target;
+        }
     }
 }
