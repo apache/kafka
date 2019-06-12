@@ -934,8 +934,27 @@ class GroupCoordinatorTest {
   }
 
   @Test
+  def staticMemberReJoinWithIllegalStateAsUnknownMember() {
+    staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+    val group = groupCoordinator.groupManager.getGroup(groupId).get
+    group.transitionTo(PreparingRebalance)
+    group.transitionTo(Empty)
+
+    EasyMock.reset(replicaManager)
+
+    // Illegal state exception shall trigger since follower id resides in pending member bucket.
+    val expectedException = intercept[IllegalStateException] {
+      staticJoinGroup(groupId, JoinGroupRequest.UNKNOWN_MEMBER_ID, followerInstanceId, protocolType, protocolSuperset, clockAdvance = 1)
+    }
+
+    val message = expectedException.getMessage
+    assertTrue(message.contains(group.groupId))
+    assertTrue(message.contains(followerInstanceId.get))
+  }
+
+  @Test
   def staticMemberReJoinWithIllegalArgumentAsMissingOldMember() {
-    val _ = staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
+    staticMembersJoinAndRebalance(leaderInstanceId, followerInstanceId)
     val group = groupCoordinator.groupManager.getGroup(groupId).get
     val invalidMemberId = "invalid_member_id"
     group.addStaticMember(followerInstanceId, invalidMemberId)
@@ -1183,6 +1202,21 @@ class GroupCoordinatorTest {
     groupCoordinator.groupManager.addGroup(new GroupMetadata(deadGroupId, Dead, new MockTime()))
     val heartbeatResult = heartbeat(deadGroupId, memberId, 1)
     assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, heartbeatResult)
+  }
+
+  @Test
+  def testheartbeatEmptyGroup() {
+    val memberId = "memberId"
+
+    val group = new GroupMetadata(groupId, Empty, new MockTime())
+    val member = new MemberMetadata(memberId, groupId, groupInstanceId,
+      ClientId, ClientHost, DefaultRebalanceTimeout, DefaultSessionTimeout,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
+
+    group.add(member)
+    groupCoordinator.groupManager.addGroup(group)
+    val heartbeatResult = heartbeat(groupId, memberId, 0)
+    assertEquals(Errors.UNKNOWN_MEMBER_ID, heartbeatResult)
   }
 
   @Test
