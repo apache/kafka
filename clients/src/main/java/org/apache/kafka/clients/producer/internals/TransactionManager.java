@@ -620,14 +620,13 @@ public class TransactionManager {
         }
     }
 
-
     // If a batch is failed fatally, the sequence numbers for future batches bound for the partition must be adjusted
     // so that they don't fail with the OutOfOrderSequenceException.
     //
     // This method must only be called when we know that the batch is question has been unequivocally failed by the broker,
     // ie. it has received a confirmed fatal status code like 'Message Too Large' or something similar.
     private void adjustSequencesDueToFailedBatch(ProducerBatch batch) {
-        if (!topicPartitionBookkeeper.contains(batch.topicPartition) || !hasProducerIdAndEpoch(batch.producerId(), batch.producerEpoch()))
+        if (!topicPartitionBookkeeper.contains(batch.topicPartition))
             // Sequence numbers are not being tracked for this partition. This could happen if the producer id was just
             // reset due to a previous OutOfOrderSequenceException.
             return;
