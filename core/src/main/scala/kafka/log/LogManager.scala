@@ -802,7 +802,11 @@ class LogManager(logDirs: Seq[File],
       if (destLog == null)
         throw new KafkaStorageException(s"The future replica for $topicPartition is offline")
 
+      // Since we are renaming the folder, close the handlers and re-open it after renaming
+      destLog.closeHandlers()
       destLog.renameDir(Log.logDirName(topicPartition))
+      destLog.reopenHandlers()
+
       // Now that future replica has been successfully renamed to be the current replica
       // Update the cached map and log cleaner as appropriate.
       futureLogs.remove(topicPartition)
@@ -814,10 +818,11 @@ class LogManager(logDirs: Seq[File],
       }
 
       try {
+        //Closing the log as we are deleting it
+        sourceLog.close()
         sourceLog.renameDir(Log.logDeleteDirName(topicPartition))
         // Now that replica in source log directory has been successfully renamed for deletion.
         // Close the log, update checkpoint files, and enqueue this log to be deleted.
-        sourceLog.close()
         checkpointRecoveryOffsetsAndCleanSnapshot(sourceLog.dir.getParentFile, ArrayBuffer.empty)
         checkpointLogStartOffsetsInDir(sourceLog.dir.getParentFile)
         addLogToBeDeleted(sourceLog)
@@ -855,6 +860,8 @@ class LogManager(logDirs: Seq[File],
         cleaner.abortCleaning(topicPartition)
         cleaner.updateCheckpoints(removedLog.dir.getParentFile)
       }
+      // Closing the log as we are deleting it
+      removedLog.close()
       removedLog.renameDir(Log.logDeleteDirName(topicPartition))
       checkpointRecoveryOffsetsAndCleanSnapshot(removedLog.dir.getParentFile, ArrayBuffer.empty)
       checkpointLogStartOffsetsInDir(removedLog.dir.getParentFile)

@@ -109,7 +109,9 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   protected val lock = new ReentrantLock
 
   @volatile
-  protected var mmap: MappedByteBuffer = {
+  protected var mmap: MappedByteBuffer = initMemoryMap()
+
+  protected def initMemoryMap(): MappedByteBuffer = {
     val newlyCreated = file.createNewFile()
     val raf = if (writable) new RandomAccessFile(file, "rw") else new RandomAccessFile(file, "r")
     try {
@@ -137,6 +139,16 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
       idx
     } finally {
       CoreUtils.swallow(raf.close(), AbstractIndex)
+    }
+  }
+
+  /**
+    * Re-opens the memory map file
+    */
+  def reopenHandler(): Unit = {
+    inLock(lock) {
+      if(mmap == null)
+        mmap = initMemoryMap()
     }
   }
 
@@ -309,7 +321,7 @@ abstract class AbstractIndex[K, V](@volatile var file: File, val baseOffset: Lon
   }
 
   protected def safeForceUnmap(): Unit = {
-    try forceUnmap()
+    try if(mmap != null) forceUnmap()
     catch {
       case t: Throwable => error(s"Error unmapping index $file", t)
     }

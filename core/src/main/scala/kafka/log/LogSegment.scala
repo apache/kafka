@@ -616,6 +616,16 @@ class LogSegment private[log] (val log: FileRecords,
   }
 
   /**
+    * Re-Open the file handlers
+    */
+  def reopenHandlers() {
+    offsetIndex.reopenHandler()
+    timeIndex.reopenHandler()
+    log.reopenHandler()
+    txnIndex.reopenHandler()
+  }
+
+  /**
    * Delete this log segment from the filesystem.
    */
   def deleteIfExists() {

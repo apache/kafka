@@ -797,6 +797,17 @@ class Log(@volatile var dir: File,
   }
 
   /**
+    * Re-Open handlers
+    */
+  def reopenHandlers() {
+    debug("Re-Opening handlers")
+    lock synchronized {
+      logSegments.foreach(_.reopenHandlers())
+      isMemoryMappedBufferClosed = false
+    }
+  }
+
+  /**
    * Append this message set to the active segment of the log, assigning offsets and Partition Leader Epochs
    *
    * @param records The records to append
@@ -1950,6 +1961,8 @@ class Log(@volatile var dir: File,
    * @throws IOException if the file can't be renamed and still exists
    */
   private def asyncDeleteSegment(segment: LogSegment) {
+    // Since we are deleting the segment, lets close its handlers
+    segment.closeHandlers()
     segment.changeFileSuffixes("", Log.DeletedFileSuffix)
     def deleteSeg() {
       info(s"Deleting segment ${segment.baseOffset}")
@@ -2001,6 +2014,10 @@ class Log(@volatile var dir: File,
       val sortedOldSegments = oldSegments.filter(seg => segments.containsKey(seg.baseOffset)).sortBy(_.baseOffset)
 
       checkIfMemoryMappedBufferClosed()
+
+      // Close the handlers of the new segments as we are renaming the files
+      sortedNewSegments.foreach(_.closeHandlers())
+
       // need to do this in two phases to be crash safe AND do the delete asynchronously
       // if we crash in the middle of this we complete the swap in loadSegments()
       if (!isRecoveredSwapFile)
@@ -2017,6 +2034,9 @@ class Log(@volatile var dir: File,
       }
       // okay we are safe now, remove the swap suffix
       sortedNewSegments.foreach(_.changeFileSuffixes(Log.SwapFileSuffix, ""))
+
+      // Re-Open the handlers since we closed them for renaming
+      sortedNewSegments.foreach(_.reopenHandlers())
     }
   }
 
