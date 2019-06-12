@@ -27,8 +27,6 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.Consumed;
-import org.apache.kafka.streams.kstream.KGroupedStream;
-import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.streams.kstream.SessionWindows;
@@ -61,8 +59,7 @@ public class MetricsIntegrationTest {
     private static final int NUM_BROKERS = 1;
 
     @ClassRule
-    public static final EmbeddedKafkaCluster CLUSTER =
-            new EmbeddedKafkaCluster(NUM_BROKERS);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS);
 
     // Metric group
     private static final String STREAM_THREAD_NODE_METRICS = "stream-metrics";
@@ -156,10 +153,6 @@ public class MetricsIntegrationTest {
     private static final String MY_STORE_PERSISTENT_KEY_VALUE = "myStorePersistentKeyValue";
     private static final String MY_STORE_LRU_MAP = "myStoreLruMap";
 
-    private StreamsBuilder builder;
-    private Properties streamsConfiguration;
-    private KafkaStreams kafkaStreams;
-
     // topic names
     private static final String STREAM_INPUT = "STREAM_INPUT";
     private static final String STREAM_OUTPUT_1 = "STREAM_OUTPUT_1";
@@ -167,17 +160,16 @@ public class MetricsIntegrationTest {
     private static final String STREAM_OUTPUT_3 = "STREAM_OUTPUT_3";
     private static final String STREAM_OUTPUT_4 = "STREAM_OUTPUT_4";
 
-    private KStream<Integer, String> stream;
-    private KStream<Integer, String> stream2;
-
-    private final String appId = "stream-metrics-test";
+    private StreamsBuilder builder;
+    private Properties streamsConfiguration;
+    private KafkaStreams kafkaStreams;
 
     @Before
     public void before() throws InterruptedException {
         builder = new StreamsBuilder();
         CLUSTER.createTopics(STREAM_INPUT, STREAM_OUTPUT_1, STREAM_OUTPUT_2, STREAM_OUTPUT_3, STREAM_OUTPUT_4);
         streamsConfiguration = new Properties();
-        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "stream-metrics-test");
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
@@ -212,26 +204,28 @@ public class MetricsIntegrationTest {
             () -> "Kafka Streams application did not reach state NOT_RUNNING in " + timeout + " ms");
     }
 
-    private void checkMetricDeregistration() {
+    private void checkMetricsDeregistration() {
         final List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
             .filter(m -> m.metricName().group().contains(STREAM_STRING)).collect(Collectors.toList());
         assertThat(listMetricAfterClosingApp.size(), is(0));
     }
 
     @Test
-    public void testStreamMetric() throws Exception {
-        stream = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
-        stream.to(STREAM_OUTPUT_1, Produced.with(Serdes.Integer(), Serdes.String()));
-        builder.table(STREAM_OUTPUT_1, Materialized.as(Stores.inMemoryKeyValueStore(MY_STORE_IN_MEMORY)).withCachingEnabled())
-                .toStream()
-                .to(STREAM_OUTPUT_2);
-        builder.table(STREAM_OUTPUT_2, Materialized.as(Stores.persistentKeyValueStore(MY_STORE_PERSISTENT_KEY_VALUE)).withCachingEnabled())
-                .toStream()
-                .to(STREAM_OUTPUT_3);
-        builder.table(STREAM_OUTPUT_3, Materialized.as(Stores.lruMap(MY_STORE_LRU_MAP, 10000)).withCachingEnabled())
-                .toStream()
-                .to(STREAM_OUTPUT_4);
-
+    public void shouldAddMetricsOnAllLevels() throws Exception {
+        builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .to(STREAM_OUTPUT_1, Produced.with(Serdes.Integer(), Serdes.String()));
+        builder.table(STREAM_OUTPUT_1,
+                      Materialized.as(Stores.inMemoryKeyValueStore(MY_STORE_IN_MEMORY)).withCachingEnabled())
+            .toStream()
+            .to(STREAM_OUTPUT_2);
+        builder.table(STREAM_OUTPUT_2,
+                      Materialized.as(Stores.persistentKeyValueStore(MY_STORE_PERSISTENT_KEY_VALUE)).withCachingEnabled())
+            .toStream()
+            .to(STREAM_OUTPUT_3);
+        builder.table(STREAM_OUTPUT_3,
+                      Materialized.as(Stores.lruMap(MY_STORE_LRU_MAP, 10000)).withCachingEnabled())
+            .toStream()
+            .to(STREAM_OUTPUT_4);
         startApplication();
 
         checkThreadLevelMetrics();
@@ -244,46 +238,44 @@ public class MetricsIntegrationTest {
 
         closeApplication();
 
-        // check all metrics de-registered
-        checkMetricDeregistration();
+        checkMetricsDeregistration();
     }
 
     @Test
-    public void testStreamMetricOfWindowStore() throws Exception {
-        stream2 = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
-        final KGroupedStream<Integer, String> groupedStream = stream2.groupByKey();
-        groupedStream.windowedBy(TimeWindows.of(Duration.ofMillis(50)))
-                .aggregate(() -> 0L, (aggKey, newValue, aggValue) -> aggValue,
-                        Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as(TIME_WINDOWED_AGGREGATED_STREAM_STORE)
-                                .withValueSerde(Serdes.Long()));
-
+    public void shouldAddMetricsForWindowStore() throws Exception {
+        builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(TimeWindows.of(Duration.ofMillis(50)))
+            .aggregate(() -> 0L,
+                (aggKey, newValue, aggValue) -> aggValue,
+                Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as(TIME_WINDOWED_AGGREGATED_STREAM_STORE)
+                    .withValueSerde(Serdes.Long()));
         startApplication();
 
         checkWindowStoreMetrics();
 
         closeApplication();
 
-        // check all metrics de-registered
-        checkMetricDeregistration();
+        checkMetricsDeregistration();
     }
 
     @Test
-    public void testStreamMetricOfSessionStore() throws Exception {
-        stream2 = builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()));
-        final KGroupedStream<Integer, String> groupedStream = stream2.groupByKey();
-        groupedStream.windowedBy(SessionWindows.with(Duration.ofMillis(50)))
-                .aggregate(() -> 0L, (aggKey, newValue, aggValue) -> aggValue, (aggKey, leftAggValue, rightAggValue) -> leftAggValue,
-                        Materialized.<Integer, Long, SessionStore<Bytes, byte[]>>as(SESSION_AGGREGATED_STREAM_STORE)
-                                .withValueSerde(Serdes.Long()));
-
+    public void shouldAddMetricsForSessionStore() throws Exception {
+        builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
+            .groupByKey()
+            .windowedBy(SessionWindows.with(Duration.ofMillis(50)))
+            .aggregate(() -> 0L,
+                (aggKey, newValue, aggValue) -> aggValue,
+                (aggKey, leftAggValue, rightAggValue) -> leftAggValue,
+                Materialized.<Integer, Long, SessionStore<Bytes, byte[]>>as(SESSION_AGGREGATED_STREAM_STORE)
+                    .withValueSerde(Serdes.Long()));
         startApplication();
 
         checkSessionStoreMetrics();
 
         closeApplication();
 
-        // check all metrics de-registered
-        checkMetricDeregistration();
+        checkMetricsDeregistration();
     }
 
     private void checkTaskLevelMetrics() {
@@ -389,7 +381,8 @@ public class MetricsIntegrationTest {
 
     private void checkCacheMetrics() {
         final List<Metric> listMetricCache = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-            .filter(m -> m.metricName().group().equals(STREAM_CACHE_NODE_METRICS)).collect(Collectors.toList());
+            .filter(m -> m.metricName().group().equals(STREAM_CACHE_NODE_METRICS))
+            .collect(Collectors.toList());
         testMetricByName(listMetricCache, HIT_RATIO_AVG, 6);
         testMetricByName(listMetricCache, HIT_RATIO_MIN, 6);
         testMetricByName(listMetricCache, HIT_RATIO_MAX, 6);
@@ -478,7 +471,9 @@ public class MetricsIntegrationTest {
     }
 
     private void testMetricByName(final List<Metric> listMetric, final String metricName, final int numMetric) {
-        final List<Metric> metrics = listMetric.stream().filter(m -> m.metricName().name().equals(metricName)).collect(Collectors.toList());
+        final List<Metric> metrics = listMetric.stream()
+            .filter(m -> m.metricName().name().equals(metricName))
+            .collect(Collectors.toList());
         Assert.assertEquals("Size of metrics of type:'" + metricName + "' must be equal to:" + numMetric + " but it's equal to " + metrics.size(), numMetric, metrics.size());
         for (final Metric m : metrics) {
             Assert.assertNotNull("Metric:'" + m.metricName() + "' must be not null", m.metricValue());
