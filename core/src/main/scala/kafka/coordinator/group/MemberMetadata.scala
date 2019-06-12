@@ -66,13 +66,14 @@ private[group] class MemberMetadata(var memberId: String,
 
   var assignment: Array[Byte] = Array.empty[Byte]
   var awaitingJoinCallback: JoinGroupResult => Unit = null
-  var awaitingSyncCallback: (Array[Byte], Errors) => Unit = null
+  var awaitingSyncCallback: SyncGroupResult => Unit = null
   var latestHeartbeat: Long = -1
   var isLeaving: Boolean = false
   var isNew: Boolean = false
   val isStaticMember: Boolean = groupInstanceId.isDefined
 
   def isAwaitingJoin = awaitingJoinCallback != null
+  def isAwaitingSync = awaitingSyncCallback != null
 
   /**
    * Get metadata corresponding to the provided protocol.
