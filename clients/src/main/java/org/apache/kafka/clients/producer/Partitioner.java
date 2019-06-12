@@ -44,4 +44,14 @@ public interface Partitioner extends Configurable, Closeable {
      */
     public void close();
 
+
+    /**
+     * Executes right before a new batch will be created. For example, if a sticky partitioner is used,
+     * this method can change the chosen sticky partition for the new batch. 
+     * @param topic The topic name
+     * @param cluster The current cluster metadata
+     * @param prevPartition The partition of the batch that was just completed
+     */
+    default public void batchCompleted(String topic, Cluster cluster, int prevPartition) {
+    }
 }

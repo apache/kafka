@@ -23,12 +23,9 @@ import org.apache.kafka.common.PartitionInfo;
 import org.junit.Test;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import static java.util.Arrays.asList;
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
 
 public class DefaultPartitionerTest {
     private byte[] keyBytes = "key".getBytes();
@@ -49,53 +46,5 @@ public class DefaultPartitionerTest {
     public void testKeyPartitionIsStable() {
         int partition = partitioner.partition("test",  null, keyBytes, null, null, cluster);
         assertEquals("Same key should yield same partition", partition, partitioner.partition("test", null, keyBytes, null, null, cluster));
-    }
-
-    @Test
-    public void testRoundRobinWithUnavailablePartitions() {
-        // When there are some unavailable partitions, we want to make sure that (1) we always pick an available partition,
-        // and (2) the available partitions are selected in a round robin way.
-        int countForPart0 = 0;
-        int countForPart2 = 0;
-        for (int i = 1; i <= 100; i++) {
-            int part = partitioner.partition("test", null, null, null, null, cluster);
-            assertTrue("We should never choose a leader-less node in round robin", part == 0 || part == 2);
-            if (part == 0)
-                countForPart0++;
-            else
-                countForPart2++;
-        }
-        assertEquals("The distribution between two available partitions should be even", countForPart0, countForPart2);
-    }
-
-    @Test
-    public void testRoundRobin() throws InterruptedException {
-        final String topicA = "topicA";
-        final String topicB = "topicB";
-
-        List<PartitionInfo> allPartitions = asList(new PartitionInfo(topicA, 0, node0, nodes, nodes),
-                new PartitionInfo(topicA, 1, node1, nodes, nodes),
-                new PartitionInfo(topicA, 2, node2, nodes, nodes),
-                new PartitionInfo(topicB, 0, node0, nodes, nodes)
-                );
-        Cluster testCluster = new Cluster("clusterId", asList(node0, node1, node2), allPartitions,
-                Collections.<String>emptySet(), Collections.<String>emptySet());
-
-        final Map<Integer, Integer> partitionCount = new HashMap<>();
-
-        for (int i = 0; i < 30; ++i) {
-            int partition = partitioner.partition(topicA, null, null, null, null, testCluster);
-            Integer count = partitionCount.get(partition);
-            if (null == count) count = 0;
-            partitionCount.put(partition, count + 1);
-
-            if (i % 5 == 0) {
-                partitioner.partition(topicB, null, null, null, null, testCluster);
-            }
-        }
-
-        assertEquals(10, (int) partitionCount.get(0));
-        assertEquals(10, (int) partitionCount.get(1));
-        assertEquals(10, (int) partitionCount.get(2));
     }
 }
