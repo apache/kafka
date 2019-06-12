@@ -22,11 +22,10 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.Lock
 
 import com.yammer.metrics.core.Meter
-import kafka.cluster.Partition
 import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.Pool
-import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 
 import scala.collection._
@@ -88,7 +87,7 @@ class DelayedProduce(delayMs: Long,
       // skip those partitions that have already been satisfied
       if (status.acksPending) {
         val (hasEnough, error) = replicaManager.getPartition(topicPartition) match {
-          case partition: Partition  =>
+          case HostedPartition.Online(partition) =>
             partition.checkEnoughReplicasReachOffset(status.requiredOffset)
 
           case HostedPartition.Offline =>

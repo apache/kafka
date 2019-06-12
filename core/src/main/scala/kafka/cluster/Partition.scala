@@ -165,7 +165,7 @@ class Partition(val topicPartition: TopicPartition,
                 private val stateStore: PartitionStateStore,
                 private val delayedOperations: DelayedOperations,
                 private val metadataCache: MetadataCache,
-                private val logManager: LogManager) extends HostedPartition with Logging with KafkaMetricsGroup {
+                private val logManager: LogManager) extends Logging with KafkaMetricsGroup {
 
   def topic: String = topicPartition.topic
   def partitionId: Int = topicPartition.partition
