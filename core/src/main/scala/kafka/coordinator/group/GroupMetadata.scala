@@ -23,6 +23,7 @@ import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
 
 import scala.collection.{Seq, immutable, mutable}
@@ -162,7 +163,7 @@ case class GroupSummary(state: String,
   * being materialized.
   */
 case class CommitRecordMetadataAndOffset(appendedBatchOffset: Option[Long], offsetAndMetadata: OffsetAndMetadata) {
-  def olderThan(that: CommitRecordMetadataAndOffset) : Boolean = appendedBatchOffset.get < that.appendedBatchOffset.get
+  def olderThan(that: CommitRecordMetadataAndOffset): Boolean = appendedBatchOffset.get < that.appendedBatchOffset.get
 }
 
 /**
@@ -289,6 +290,19 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }
     val oldMember = members.remove(oldMemberId)
       .getOrElse(throw new IllegalArgumentException(s"Cannot replace non-existing member id $oldMemberId"))
+
+    // Fence potential duplicate member immediately if someone awaits join/sync callback.
+    maybeInvokeJoinCallback(oldMember, JoinGroupResult(
+      members = List.empty,
+      memberId = oldMemberId,
+      generationId = GroupCoordinator.NoGeneration,
+      subProtocol = GroupCoordinator.NoProtocol,
+      leaderId = GroupCoordinator.NoLeader,
+      error = Errors.FENCED_INSTANCE_ID))
+
+    maybeInvokeSyncCallback(oldMember, SyncGroupResult(
+      Array.empty, Errors.FENCED_INSTANCE_ID
+    ))
 
     oldMember.memberId = newMemberId
     members.put(newMemberId, oldMember)
@@ -425,11 +439,25 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def maybeInvokeJoinCallback(member: MemberMetadata,
-                              joinGroupResult: JoinGroupResult) : Unit = {
+                              joinGroupResult: JoinGroupResult): Unit = {
     if (member.isAwaitingJoin) {
       member.awaitingJoinCallback(joinGroupResult)
       member.awaitingJoinCallback = null
       numMembersAwaitingJoin -= 1
+    }
+  }
+
+  /**
+    * @return true if a sync callback actually performs.
+    */
+  def maybeInvokeSyncCallback(member: MemberMetadata,
+                              syncGroupResult: SyncGroupResult): Boolean = {
+    if (member.isAwaitingSync) {
+      member.awaitingSyncCallback(syncGroupResult)
+      member.awaitingSyncCallback = null
+      true
+    } else {
+      false
     }
   }
 
@@ -600,7 +628,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
     }.toMap
   }
 
-  def removeExpiredOffsets(currentTimestamp: Long, offsetRetentionMs: Long) : Map[TopicPartition, OffsetAndMetadata] = {
+  def removeExpiredOffsets(currentTimestamp: Long, offsetRetentionMs: Long): Map[TopicPartition, OffsetAndMetadata] = {
 
     def getExpiredOffsets(baseTimestamp: CommitRecordMetadataAndOffset => Long): Map[TopicPartition, OffsetAndMetadata] = {
       offsets.filter {
