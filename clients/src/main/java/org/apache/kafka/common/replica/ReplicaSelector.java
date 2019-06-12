@@ -17,20 +17,15 @@
 package org.apache.kafka.common.replica;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.net.InetAddress;
-import java.util.Comparator;
 import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
 
 /**
- * Pluggable interface for selecting a preferred read replica given the current set of replicas for a partition
+ * Plug-able interface for selecting a preferred read replica given the current set of replicas for a partition
  * and metadata from the client.
  */
 public interface ReplicaSelector extends Configurable, Closeable {
@@ -53,93 +48,9 @@ public interface ReplicaSelector extends Configurable, Closeable {
     }
 
     /**
-     * Holder for all the client metadata required to determine a preferred replica.
+     * Helper method to find the leader among the replicas for this partition
      */
-    interface ClientMetadata {
-        String rackId();
-
-        String clientId();
-
-        InetAddress clientAddress();
-
-        KafkaPrincipal principal();
-
-        String listenerName();
-
-        ClientMetadata NO_METADATA = new ClientMetadata() {
-            @Override
-            public String rackId() {
-                return "";
-            }
-
-            @Override
-            public String clientId() {
-                return "";
-            }
-
-            @Override
-            public InetAddress clientAddress() {
-                return null;
-            }
-
-            @Override
-            public KafkaPrincipal principal() {
-                return null;
-            }
-
-            @Override
-            public String listenerName() {
-                return "";
-            }
-        };
-    }
-
-    /**
-     * View of a partition used by {@link ReplicaSelector} to determine a preferred replica.
-     */
-    interface PartitionView {
-        Set<ReplicaView> replicas();
-
-        /**
-         * Helper method to find the leader among the replicas for this partition
-         */
-        default Optional<ReplicaView> findLeader() {
-            return replicas().stream().filter(ReplicaView::isLeader).findFirst();
-        }
-    }
-
-    /**
-     * View of a replica used by {@link ReplicaSelector} to determine a preferred replica.
-     */
-    interface ReplicaView {
-        /**
-         * Is this replica the leader of its partition
-         */
-        boolean isLeader();
-
-        /**
-         * The endpoint information for this replica (hostname, port, rack, etc)
-         */
-        Node endpoint();
-
-        /**
-         * The log end offset for this replica
-         */
-        long logEndOffset();
-
-        /**
-         * The number of milliseconds (if any) since the last time this replica was caught up to the high watermark.
-         */
-        Optional<Long> lastCaughtUpTimeMs();
-
-        /**
-         * Comparator for ReplicaView that returns in the order of "most caught up". This is used for deterministic
-         * selection of a replica when there is a tie from a selector.
-         */
-        static Comparator<ReplicaView> comparator() {
-            return Comparator.comparing(ReplicaView::logEndOffset)
-                .thenComparing(replicaView -> replicaView.lastCaughtUpTimeMs().orElse(-1L))
-                .thenComparing(replicaInfo -> replicaInfo.endpoint().id());
-        }
+    static Optional<ReplicaView> findLeader(PartitionView partitionView) {
+        return partitionView.replicas().stream().filter(ReplicaView::isLeader).findFirst();
     }
 }

@@ -43,6 +43,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.replica.PartitionView.DefaultPartitionView
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.{LogDirInfo, ReplicaInfo}
 import org.apache.kafka.common.requests.EpochEndOffset._
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
@@ -50,9 +51,10 @@ import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.replica.ReplicaSelector.{ClientMetadata, PartitionView, ReplicaView}
-import org.apache.kafka.common.replica.{LeaderReplicaSelector, ReplicaSelector}
+import org.apache.kafka.common.replica.ReplicaView.DefaultReplicaView
+import org.apache.kafka.common.replica.{ClientMetadata, _}
 
+import scala.compat.java8.OptionConverters._
 import scala.collection.JavaConverters._
 import scala.collection._
 
@@ -885,7 +887,7 @@ class ReplicaManager(val config: KafkaConfig,
           fetchPartitionStatus += (topicPartition -> FetchPartitionStatus(logOffsetMetadata, partitionData))
         })
       }
-      val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, false,
+      val fetchMetadata = FetchMetadata(fetchMinBytes, fetchMaxBytes, hardMaxBytesLimit, isFromFollower,
         fetchIsolation, isFromFollower, replicaId, fetchPartitionStatus)
       val delayedFetch = new DelayedFetch(timeout, fetchMetadata, this, quota, clientMetadata, responseCallback)
 
@@ -933,15 +935,15 @@ class ReplicaManager(val config: KafkaConfig,
 
         if (preferredReadReplica.isDefined && !preferredReadReplica.contains(localBrokerId)) {
           // If the a preferred read-replica is set and is not this replica (the leader), skip the read
-          val localReplica: Replica = partition.localReplicaOrException
+          val offsetSnapshot: LogOffsetSnapshot = partition.fetchOffsetSnapshot(fetchInfo.currentLeaderEpoch, false)
           LogReadResult(info = FetchDataInfo(LogOffsetMetadata.UnknownOffsetMetadata, MemoryRecords.EMPTY),
-            highWatermark = localReplica.highWatermark,
-            leaderLogStartOffset = localReplica.logStartOffset,
-            leaderLogEndOffset = localReplica.logEndOffset,
+            highWatermark = offsetSnapshot.highWatermark.messageOffset,
+            leaderLogStartOffset = offsetSnapshot.logStartOffset,
+            leaderLogEndOffset = offsetSnapshot.logEndOffset.messageOffset,
             followerLogStartOffset = followerLogStartOffset,
             fetchTimeMs = -1L,
             readSize = 0,
-            lastStableOffset = Some(localReplica.lastStableOffset),
+            lastStableOffset = Some(offsetSnapshot.lastStableOffset.messageOffset),
             preferredReadReplica = preferredReadReplica,
             exception = None)
         } else {
@@ -1029,13 +1031,6 @@ class ReplicaManager(val config: KafkaConfig,
     result
   }
 
-  case class SomeReplicaView(isLeader: Boolean,
-                             endpoint: Node,
-                             logEndOffset: Long,
-                             lastCaughtUpTimeMs: util.Optional[java.lang.Long]) extends ReplicaView
-
-  case class SomePartitionView(replicas: util.Set[ReplicaView]) extends PartitionView
-
   def findPreferredReadReplica(tp: TopicPartition, clientMetadata: ClientMetadata, replicaId: Int, fetchOffset: Long): Option[Int] = {
     val partition = getPartitionOrException(tp, expectLeader = false)
 
@@ -1043,30 +1038,30 @@ class ReplicaManager(val config: KafkaConfig,
       if (Request.isValidBrokerId(replicaId)) {
         // Don't look up preferred for follower fetches via normal replication
         Option.empty
-      } else if (clientMetadata.equals(ClientMetadata.NO_METADATA)) {
+      } else if (clientMetadata.equals(DefaultClientMetadata.NO_METADATA)) {
         // Return the leader if no metadata given
         partition.leaderReplicaIdOpt
       } else {
         val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
         val replicaInfoSet: Set[ReplicaView] = partition.allReplicas
           .filter(replica => replica.logEndOffset > fetchOffset)
-          .map(replica => SomeReplicaView(
-            isLeader = partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId)),
-            endpoint = replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
-            logEndOffset = replica.logEndOffset,
-            lastCaughtUpTimeMs = if (replica.lastCaughtUpTimeMs == 0) {
+          .map(replica => new DefaultReplicaView(
+            partition.leaderReplicaIdOpt.exists(leaderId => leaderId.equals(replica.brokerId)),
+            replicaEndpoints.getOrElse(replica.brokerId, Node.noNode()),
+            replica.logEndOffset,
+            if (replica.lastCaughtUpTimeMs == 0) {
               util.Optional.empty()
             } else {
               util.Optional.of(long2Long(replica.lastCaughtUpTimeMs))
             }
           ))
-        val partitionInfo = SomePartitionView(replicas = replicaInfoSet.asJava)
-        Option.apply(replicaSelector.select(tp, clientMetadata, partitionInfo).orElse(null))
+        val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava)
+        replicaSelector.select(tp, clientMetadata, partitionInfo).asScala
           .filter(!_.endpoint.isEmpty)
           .map(_.endpoint.id())
       }
     } else {
-      Option.empty
+      None
     }
   }
 

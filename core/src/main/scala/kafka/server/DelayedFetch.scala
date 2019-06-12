@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import kafka.metrics.KafkaMetricsGroup
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.replica.ReplicaSelector.ClientMetadata
+import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 
 import scala.collection.{mutable, _}

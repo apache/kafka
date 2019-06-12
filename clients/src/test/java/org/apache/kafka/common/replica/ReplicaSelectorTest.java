@@ -38,19 +38,19 @@ public class ReplicaSelectorTest {
     public void testLeaderSelector() {
         TopicPartition tp = new TopicPartition("test", 0);
 
-        Set<ReplicaSelector.ReplicaView> replicaViewSet = replicaInfoSet();
-        ReplicaSelector.PartitionView partitionView = partitionInfo(replicaViewSet);
+        Set<ReplicaView> replicaViewSet = replicaInfoSet();
+        PartitionView partitionView = partitionInfo(replicaViewSet);
 
         ReplicaSelector selector = new LeaderReplicaSelector();
-        Optional<ReplicaSelector.ReplicaView> selected;
+        Optional<ReplicaView> selected;
 
-        selected = selector.select(tp, ReplicaSelector.ClientMetadata.NO_METADATA, partitionView);
+        selected = selector.select(tp, DefaultClientMetadata.NO_METADATA, partitionView);
         assertOptional(selected, replicaInfo -> {
             assertTrue(replicaInfo.isLeader());
             assertEquals(replicaInfo.endpoint().id(), 0);
         });
 
-        selected = selector.select(tp, ReplicaSelector.ClientMetadata.NO_METADATA, partitionInfo(Collections.emptySet()));
+        selected = selector.select(tp, DefaultClientMetadata.NO_METADATA, partitionInfo(Collections.emptySet()));
         assertFalse(selected.isPresent());
     }
 
@@ -58,11 +58,11 @@ public class ReplicaSelectorTest {
     public void testSameRackSelector() {
         TopicPartition tp = new TopicPartition("test", 0);
 
-        Set<ReplicaSelector.ReplicaView> replicaViewSet = replicaInfoSet();
-        ReplicaSelector.PartitionView partitionView = partitionInfo(replicaViewSet);
+        Set<ReplicaView> replicaViewSet = replicaInfoSet();
+        PartitionView partitionView = partitionInfo(replicaViewSet);
 
         ReplicaSelector selector = new RackAwareReplicaSelector();
-        Optional<ReplicaSelector.ReplicaView> selected = selector.select(tp, metadata("rack-b"), partitionView);
+        Optional<ReplicaView> selected = selector.select(tp, metadata("rack-b"), partitionView);
         assertOptional(selected, replicaInfo -> {
             assertEquals("Expect replica to be in rack-b", replicaInfo.endpoint().rack(), "rack-b");
             assertEquals("Expected replica 3 since it is more caught-up", replicaInfo.endpoint().id(), 3);
@@ -82,7 +82,7 @@ public class ReplicaSelectorTest {
 
     }
 
-    static Set<ReplicaSelector.ReplicaView> replicaInfoSet() {
+    static Set<ReplicaView> replicaInfoSet() {
         return Stream.of(
                 replicaInfo(new Node(0, "host0", 1234, "rack-a"), true, 4, 10),
                 replicaInfo(new Node(1, "host1", 1234, "rack-a"), false, 2, 5),
@@ -92,8 +92,8 @@ public class ReplicaSelectorTest {
         ).collect(Collectors.toSet());
     }
 
-    static ReplicaSelector.ReplicaView replicaInfo(Node node, boolean isLeader, long logOffset, long lastCaughtUpTimeMs) {
-        return new ReplicaSelector.ReplicaView() {
+    static ReplicaView replicaInfo(Node node, boolean isLeader, long logOffset, long lastCaughtUpTimeMs) {
+        return new ReplicaView() {
 
             @Override
             public boolean isLeader() {
@@ -117,12 +117,12 @@ public class ReplicaSelectorTest {
         };
     }
 
-    static ReplicaSelector.PartitionView partitionInfo(Set<ReplicaSelector.ReplicaView> replicaViewSet) {
+    static PartitionView partitionInfo(Set<ReplicaView> replicaViewSet) {
         return () -> replicaViewSet;
     }
 
-    static ReplicaSelector.ClientMetadata metadata(String rack) {
-        return new ReplicaSelector.ClientMetadata() {
+    static ClientMetadata metadata(String rack) {
+        return new ClientMetadata() {
             @Override
             public String rackId() {
                 return rack;

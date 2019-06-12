@@ -43,6 +43,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -1733,9 +1734,7 @@ public class Fetcher<K, V> implements Closeable {
             String name = partitionLeadMetricName(tp);
             Sensor recordsLead = this.metrics.getSensor(name);
             if (recordsLead == null) {
-                Map<String, String> metricTags = new HashMap<>(2);
-                metricTags.put("topic", tp.topic().replace('.', '_'));
-                metricTags.put("partition", String.valueOf(tp.partition()));
+                Map<String, String> metricTags = topicPartitionTags(tp);
 
                 recordsLead = this.metrics.sensor(name);
 
@@ -1752,10 +1751,7 @@ public class Fetcher<K, V> implements Closeable {
             String name = partitionLagMetricName(tp);
             Sensor recordsLag = this.metrics.getSensor(name);
             if (recordsLag == null) {
-                Map<String, String> metricTags = new HashMap<>(2);
-                metricTags.put("topic", tp.topic().replace('.', '_'));
-                metricTags.put("partition", String.valueOf(tp.partition()));
-
+                Map<String, String> metricTags = topicPartitionTags(tp);
                 recordsLag = this.metrics.sensor(name);
 
                 recordsLag.add(this.metrics.metricInstance(metricsRegistry.partitionRecordsLag, metricTags), new Value());
@@ -1774,10 +1770,15 @@ public class Fetcher<K, V> implements Closeable {
         }
 
         private MetricName partitionPreferredReadReplicaMetricName(TopicPartition tp) {
+            Map<String, String> metricTags = topicPartitionTags(tp);
+            return this.metrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
+        }
+
+        private Map<String, String> topicPartitionTags(TopicPartition tp) {
             Map<String, String> metricTags = new HashMap<>(2);
             metricTags.put("topic", tp.topic().replace('.', '_'));
             metricTags.put("partition", String.valueOf(tp.partition()));
-            return this.metrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
+            return metricTags;
         }
     }
 

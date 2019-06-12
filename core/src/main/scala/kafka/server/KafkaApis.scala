@@ -70,7 +70,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.replica.ReplicaSelector.ClientMetadata
+import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
 import org.apache.kafka.common.requests.DescribeLogDirsResponse.LogDirInfo
@@ -90,11 +90,6 @@ import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.util.{Failure, Success, Try}
 
-case class SomeClientMetadata(rackId: String,
-                              clientId: String,
-                              clientAddress: InetAddress,
-                              principal: KafkaPrincipal,
-                              listenerName: String) extends ClientMetadata
 
 /**
  * Logic to handle the various Kafka requests
@@ -586,12 +581,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       fetchRequest.toForget,
       fetchRequest.isFromFollower)
 
-    val clientMetadata = SomeClientMetadata(
-      fetchRequest.rackId(),
+    val clientMetadata = new DefaultClientMetadata(
+      fetchRequest.rackId,
       clientId,
       request.context.clientAddress,
       request.context.principal,
-      request.context.listenerName.value())
+      request.context.listenerName.value)
 
     def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
       new FetchResponse.PartitionData[T](error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
@@ -689,15 +684,9 @@ class KafkaApis(val requestChannel: RequestChannel,
       responsePartitionData.foreach { case (tp, data) =>
         val abortedTransactions = data.abortedTransactions.map(_.asJava).orNull
         val lastStableOffset = data.lastStableOffset.getOrElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-        if (data.preferredReadReplica.isDefined) {
-          partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
-            data.logStartOffset, data.preferredReadReplica.map(int2Integer).asJava,
-            abortedTransactions, data.records))
-        } else {
-          partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
-            data.logStartOffset, abortedTransactions, data.records))
-        }
-
+        partitions.put(tp, new FetchResponse.PartitionData(data.error, data.highWatermark, lastStableOffset,
+          data.logStartOffset, data.preferredReadReplica.map(int2Integer).asJava,
+          abortedTransactions, data.records))
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
 

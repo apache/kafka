@@ -30,7 +30,7 @@ import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRec
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.easymock.EasyMock
 import EasyMock._
-import org.apache.kafka.common.replica.ReplicaSelector.ClientMetadata
+import org.apache.kafka.common.replica.{ClientMetadata, DefaultClientMetadata}
 import org.junit.Assert._
 import org.junit.{After, Test}
 
@@ -66,7 +66,7 @@ class ReplicaManagerQuotasTest {
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
       quota = quota,
-      clientMetadata = ClientMetadata.NO_METADATA)
+      clientMetadata = DefaultClientMetadata.NO_METADATA)
     assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
       fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
 
@@ -92,7 +92,7 @@ class ReplicaManagerQuotasTest {
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
       quota = quota,
-      clientMetadata = ClientMetadata.NO_METADATA)
+      clientMetadata = DefaultClientMetadata.NO_METADATA)
     assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
       fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
     assertEquals("Given two partitions, with both throttled, we should get no messages", 0,
@@ -117,7 +117,7 @@ class ReplicaManagerQuotasTest {
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
       quota = quota,
-      clientMetadata = ClientMetadata.NO_METADATA)
+      clientMetadata = DefaultClientMetadata.NO_METADATA)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
       fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
     assertEquals("Given two partitions, with both non-throttled, we should get both messages", 1,
@@ -142,7 +142,7 @@ class ReplicaManagerQuotasTest {
       hardMaxBytesLimit = false,
       readPartitionInfo = fetchInfo,
       quota = quota,
-      clientMetadata = ClientMetadata.NO_METADATA)
+      clientMetadata = DefaultClientMetadata.NO_METADATA)
     assertEquals("Given two partitions, with only one throttled, we should get the first", 1,
       fetch.find(_._1 == topicPartition1).get._2.info.records.batches.asScala.size)
 
@@ -186,7 +186,7 @@ class ReplicaManagerQuotasTest {
         replicaId = 1,
         fetchPartitionStatus = List((tp, fetchPartitionStatus)))
       new DelayedFetch(delayMs = 600, fetchMetadata = fetchMetadata, replicaManager = replicaManager,
-        quota = null, clientMetadata = ClientMetadata.NO_METADATA, responseCallback = null) {
+        quota = null, clientMetadata = DefaultClientMetadata.NO_METADATA, responseCallback = null) {
         override def forceComplete(): Boolean = true
       }
     }
