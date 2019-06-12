@@ -126,8 +126,20 @@ public interface KTable<K, V> {
      * @return a {@code KTable} that contains only those records that satisfy the given predicate
      * @see #filterNot(Predicate, Materialized)
      */
+    @Deprecated
     KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
                         final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
+
+
+    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+                        final KeyValueMaterialized<K, V> timeWindowedMaterialized);
+
+    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+                        final TimeWindowedMaterialized<K, V> timeWindowedMaterialized);
+
+
+    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+                        final SessionedMaterialized<K, V> timeWindowedMaterialized);
 
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the

@@ -24,9 +24,12 @@ import org.apache.kafka.streams.kstream.KGroupedTable;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
+import org.apache.kafka.streams.kstream.KeyValueMaterialized;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.SessionedMaterialized;
 import org.apache.kafka.streams.kstream.Suppressed;
+import org.apache.kafka.streams.kstream.TimeWindowedMaterialized;
 import org.apache.kafka.streams.kstream.ValueJoiner;
 import org.apache.kafka.streams.kstream.ValueMapper;
 import org.apache.kafka.streams.kstream.ValueMapperWithKey;
@@ -113,7 +116,7 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     }
 
     private KTable<K, V> doFilter(final Predicate<? super K, ? super V> predicate,
-                                  final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal,
+                                  final KeyValueMaterializedInternal<K, V> materializedInternal,
                                   final boolean filterNot) {
         final Serde<K> keySerde;
         final Serde<V> valueSerde;
@@ -177,6 +180,37 @@ public class KTableImpl<K, S, V> extends AbstractStream<K, V> implements KTable<
     @Override
     public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
                                final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        Objects.requireNonNull(predicate, "predicate can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+
+        return doFilter(predicate, materializedInternal, false);
+    }
+
+    @Override
+    public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+                               final KeyValueMaterialized<K, V> materialized) {
+        Objects.requireNonNull(predicate, "predicate can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+
+        return doFilter(predicate, materializedInternal, false);
+    }
+
+    @Override
+    public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+                               final TimeWindowedMaterialized<K, V> materialized) {
+        Objects.requireNonNull(predicate, "predicate can't be null");
+        Objects.requireNonNull(materialized, "materialized can't be null");
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
+
+        return doFilter(predicate, materializedInternal, false);
+    }
+
+
+    @Override
+    public KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
+                               final SessionedMaterialized<K, V> materialized) {
         Objects.requireNonNull(predicate, "predicate can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);

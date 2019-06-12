@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.kstream.Predicate;
+import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.AbstractProcessor;
 import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -95,6 +96,7 @@ class KTableFilter<K, V> implements KTableProcessorSupplier<K, V, V> {
 
         @Override
         public void process(final K key, final Change<V> change) {
+            final Windowed<?> windowedKey = (Windowed<?>) key;
             final V newValue = computeValue(key, change.newValue);
             final V oldValue = sendOldValues ? computeValue(key, change.oldValue) : null;
 
