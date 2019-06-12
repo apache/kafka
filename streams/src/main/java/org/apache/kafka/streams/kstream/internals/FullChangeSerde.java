@@ -25,22 +25,26 @@ import java.util.Map;
 
 import static java.util.Objects.requireNonNull;
 
-public class FullChangeSerde<T> implements Serde<Change<T>> {
+public final class FullChangeSerde<T> implements Serde<Change<T>> {
     private final Serde<T> inner;
 
     @SuppressWarnings("unchecked")
-    public static <T> FullChangeSerde<T> castOrWrap(final Serde<?> serde) {
+    public static <T> FullChangeSerde<T> castOrWrap(final Serde<T> serde) {
         if (serde == null) {
             return null;
         } else if (serde instanceof FullChangeSerde) {
             return (FullChangeSerde<T>) serde;
         } else {
-            return new FullChangeSerde<T>((Serde<T>) serde);
+            return new FullChangeSerde<>(serde);
         }
     }
 
-    public FullChangeSerde(final Serde<T> inner) {
+    private FullChangeSerde(final Serde<T> inner) {
         this.inner = requireNonNull(inner);
+    }
+
+    public Serde<T> innerSerde() {
+        return inner;
     }
 
     @Override
@@ -110,11 +114,7 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
                 }
                 final ByteBuffer buffer = ByteBuffer.wrap(data);
 
-                final int oldSize = buffer.getInt();
-                final byte[] oldBytes = oldSize == -1 ? null : new byte[oldSize];
-                if (oldBytes != null) {
-                    buffer.get(oldBytes);
-                }
+                final byte[] oldBytes = extractOldValuePart(buffer);
                 final T oldValue = oldBytes == null ? null : innerDeserializer.deserialize(topic, oldBytes);
 
                 final int newSize = buffer.getInt();
@@ -131,5 +131,14 @@ public class FullChangeSerde<T> implements Serde<Change<T>> {
                 innerDeserializer.close();
             }
         };
+    }
+
+    public static byte[] extractOldValuePart(final ByteBuffer buffer) {
+        final int oldSize = buffer.getInt();
+        final byte[] oldBytes = oldSize == -1 ? null : new byte[oldSize];
+        if (oldBytes != null) {
+            buffer.get(oldBytes);
+        }
+        return oldBytes;
     }
 }

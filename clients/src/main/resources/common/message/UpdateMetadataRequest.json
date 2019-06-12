@@ -1,0 +1,106 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 6,
+  "type": "request",
+  "name": "UpdateMetadataRequest",
+  // Version 1 allows specifying multiple endpoints for each broker.
+  //
+  // Version 2 adds the rack.
+  //
+  // Version 3 adds the listener name.
+  //
+  // Version 4 adds the offline replica list.
+  //
+  // Version 5 adds the broker epoch field and normalizes partitions by topic.
+  "validVersions": "0-5",
+  "fields": [
+    { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+      "about": "The controller id." },
+    { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
+      "about": "The controller epoch." },
+    { "name": "BrokerEpoch", "type": "int64", "versions": "5+", "ignorable": true, "default": "-1",
+      "about": "The broker epoch." },
+    { "name": "TopicStates", "type": "[]UpdateMetadataRequestTopicState", "versions": "5+",
+      "about": "Each topic that we would like to update.", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "PartitionStates", "type": "[]UpdateMetadataPartitionState", "versions": "5+",
+        "about": "The partition that we would like to update.", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "5+",
+          "about": "The partition index." },
+        { "name": "ControllerEpoch", "type": "int32", "versions": "5+",
+          "about": "The controller epoch." },
+        { "name": "Leader", "type": "int32", "versions": "5+", "entityType": "brokerId",
+          "about": "The ID of the broker which is the current partition leader." },
+        { "name": "LeaderEpoch", "type": "int32", "versions": "5+",
+          "about": "The leader epoch of this partition." },
+        { "name": "Isr", "type": "[]int32", "versions": "5+", "entityType": "brokerId",
+          "about": "The brokers which are in the ISR for this partition." },
+        { "name": "ZkVersion", "type": "int32", "versions": "5+",
+          "about": "The Zookeeper version." },
+        { "name": "Replicas", "type": "[]int32", "versions": "5+", "entityType": "brokerId",
+          "about": "All the replicas of this partition." },
+        { "name": "OfflineReplicas", "type": "[]int32", "versions": "5+",
+          "about": "The replicas of this partition which are offline." }
+      ]}
+    ]},
+    { "name": "PartitionStatesV0", "type": "[]UpdateMetadataRequestPartitionStateV0", "versions": "0-4",
+      "about": "Each partition that we would like to update.", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0-4", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "PartitionIndex", "type": "int32", "versions": "0-4",
+        "about": "The partition index." },
+      { "name": "ControllerEpoch", "type": "int32", "versions": "0-4",
+        "about": "The controller epoch." },
+      { "name": "Leader", "type": "int32", "versions": "0-4", "entityType": "brokerId",
+        "about": "The ID of the broker which is the current partition leader." },
+      { "name": "LeaderEpoch", "type": "int32", "versions": "0-4",
+        "about": "The leader epoch of this partition." },
+      { "name": "Isr", "type": "[]int32", "versions": "0-4", "entityType": "brokerId",
+        "about": "The brokers which are in the ISR for this partition." },
+      { "name": "ZkVersion", "type": "int32", "versions": "0-4",
+        "about": "The Zookeeper version." },
+      { "name": "Replicas", "type": "[]int32", "versions": "0-4", "entityType": "brokerId",
+        "about": "All the replicas of this partition." },
+      { "name": "OfflineReplicas", "type": "[]int32", "versions": "4", "entityType": "brokerId",
+        "about": "The replicas of this partition which are offline." }
+    ]},
+    { "name": "Brokers", "type": "[]UpdateMetadataRequestBroker", "versions": "0+", "fields": [
+        { "name": "Id", "type": "int32", "versions": "0+", "entityType": "brokerId",
+          "about": "The broker id." },
+        // Version 0 of the protocol only allowed specifying a single host and
+        // port per broker, rather than an array of endpoints.
+        { "name": "V0Host", "type": "string", "versions": "0", "ignorable": true,
+          "about": "The broker hostname." },
+        { "name": "V0Port", "type": "int32", "versions": "0", "ignorable": true,
+          "about": "The broker port." },
+        { "name": "Endpoints", "type": "[]UpdateMetadataRequestEndpoint", "versions": "1+",
+          "about": "The broker endpoints.", "fields": [
+          { "name": "Port", "type": "int32", "versions": "1+",
+            "about": "The port of this endpoint" },
+          { "name": "Host", "type": "string", "versions": "1+",
+            "about": "The hostname of this endpoint" },
+          { "name": "Listener", "type": "string", "versions": "3+",
+            "about": "The listener name." },
+          { "name": "SecurityProtocol", "type": "int16", "versions": "1+",
+            "about": "The security protocol type." }
+        ]},
+        { "name": "Rack", "type": "string", "versions": "2+", "nullableVersions": "0+", "ignorable": true,
+          "about": "The rack which this broker belongs to." }
+    ]}
+  ]
+}

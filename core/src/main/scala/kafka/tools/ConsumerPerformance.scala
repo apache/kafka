@@ -17,22 +17,20 @@
 
 package kafka.tools
 
+import java.text.SimpleDateFormat
+import java.time.Duration
 import java.util
-
-import scala.collection.JavaConverters._
 import java.util.concurrent.atomic.AtomicLong
+import java.util.{Properties, Random}
 
+import com.typesafe.scalalogging.LazyLogging
+import kafka.utils.{CommandLineUtils, ToolsUtils}
 import org.apache.kafka.clients.consumer.{ConsumerRebalanceListener, KafkaConsumer}
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
-import kafka.utils.{CommandLineUtils, ToolsUtils}
-import java.util.{Properties, Random}
-import java.text.SimpleDateFormat
-import java.time.Duration
 
-import com.typesafe.scalalogging.LazyLogging
-
+import scala.collection.JavaConverters._
 import scala.collection.mutable
 
 /**
@@ -252,7 +250,9 @@ object ConsumerPerformance extends LazyLogging {
       .ofType(classOf[Long])
       .defaultsTo(10000)
 
-    val options = parser.parse(args: _*)
+    options = parser.parse(args: _*)
+
+    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps in performance test for the full zookeeper consumer")
 
     CommandLineUtils.checkRequiredArgs(parser, options, topicOpt, numMessagesOpt, bootstrapServersOpt)
 

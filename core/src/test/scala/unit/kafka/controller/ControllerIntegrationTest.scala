@@ -29,12 +29,15 @@ import kafka.zk._
 import org.junit.{After, Before, Test}
 import org.junit.Assert.{assertEquals, assertTrue}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
 import org.apache.log4j.Level
 import kafka.utils.LogCaptureAppender
+import org.apache.kafka.common.metrics.KafkaMetric
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
-import scala.util.Try
+import scala.collection.mutable
+import scala.util.{Failure, Success, Try}
 
 class ControllerIntegrationTest extends ZooKeeperTestHarness {
   var servers = Seq.empty[KafkaServer]
@@ -81,6 +84,31 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     servers.head.startup()
     TestUtils.waitUntilTrue(() => zkClient.getControllerId.isDefined, "failed to elect a controller")
     waitUntilControllerEpoch(firstControllerEpoch + 1, "controller epoch was not incremented after controller move")
+  }
+
+  @Test
+  def testMetadataPropagationOnControlPlane(): Unit = {
+    servers = makeServers(1, listeners = Some("PLAINTEXT://localhost:0,CONTROLLER://localhost:5000"), listenerSecurityProtocolMap = Some("PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT"),
+      controlPlaneListenerName = Some("CONTROLLER"))
+    TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+    val controlPlaneMetricMap = mutable.Map[String, KafkaMetric]()
+    val dataPlaneMetricMap = mutable.Map[String, KafkaMetric]()
+    servers.head.metrics.metrics().values().asScala.foreach { kafkaMetric =>
+      if (kafkaMetric.metricName().tags().values().contains("CONTROLLER")) {
+        controlPlaneMetricMap.put(kafkaMetric.metricName().name(), kafkaMetric)
+      }
+      if (kafkaMetric.metricName().tags().values().contains("PLAINTEXT")) {
+        dataPlaneMetricMap.put(kafkaMetric.metricName().name(), kafkaMetric)
+      }
+    }
+    assertEquals(1e-0, controlPlaneMetricMap.get("response-total").get.metricValue().asInstanceOf[Double], 0)
+    assertEquals(0e-0, dataPlaneMetricMap.get("response-total").get.metricValue().asInstanceOf[Double], 0)
+    assertEquals(1e-0, controlPlaneMetricMap.get("request-total").get.metricValue().asInstanceOf[Double], 0)
+    assertEquals(0e-0, dataPlaneMetricMap.get("request-total").get.metricValue().asInstanceOf[Double], 0)
+    assertTrue(controlPlaneMetricMap.get("incoming-byte-total").get.metricValue().asInstanceOf[Double] > 1.0)
+    assertTrue(dataPlaneMetricMap.get("incoming-byte-total").get.metricValue().asInstanceOf[Double] == 0.0)
+    assertTrue(controlPlaneMetricMap.get("network-io-total").get.metricValue().asInstanceOf[Double] == 2.0)
+    assertTrue(dataPlaneMetricMap.get("network-io-total").get.metricValue().asInstanceOf[Double] == 0.0)
   }
 
   // This test case is used to ensure that there will be no correctness issue after we avoid sending out full
@@ -134,6 +162,58 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
         }
       }
     }, "Inconsistent metadata after broker startup")
+  }
+
+  @Test
+  def testMetadataPropagationForOfflineReplicas(): Unit = {
+    servers = makeServers(3)
+    TestUtils.waitUntilBrokerMetadataIsPropagated(servers)
+    val controllerId = TestUtils.waitUntilControllerElected(zkClient)
+
+    //get brokerId for topic creation with single partition and RF =1
+    val replicaBroker = servers.filter(e => e.config.brokerId != controllerId).head
+
+    val controllerBroker = servers.filter(e => e.config.brokerId == controllerId).head
+    val otherBroker = servers.filter(e => e.config.brokerId != controllerId &&
+      e.config.brokerId != replicaBroker.config.brokerId).head
+
+    val topic = "topic1"
+    val assignment = Map(0 -> Seq(replicaBroker.config.brokerId))
+
+    // Create topic
+    TestUtils.createTopic(zkClient, topic, assignment, servers)
+
+    // Shutdown the other broker
+    otherBroker.shutdown()
+    otherBroker.awaitShutdown()
+
+    // Shutdown the broker with replica
+    replicaBroker.shutdown()
+    replicaBroker.awaitShutdown()
+
+    //Shutdown controller broker
+    controllerBroker.shutdown()
+    controllerBroker.awaitShutdown()
+
+    def verifyMetadata(broker: KafkaServer): Unit = {
+      broker.startup()
+      TestUtils.waitUntilTrue(() => {
+        val partitionInfoOpt = broker.metadataCache.getPartitionInfo(topic, 0)
+        if (partitionInfoOpt.isDefined) {
+          val partitionInfo = partitionInfoOpt.get
+          (!partitionInfo.offlineReplicas.isEmpty && partitionInfo.basePartitionState.leader == -1
+            && !partitionInfo.basePartitionState.replicas.isEmpty && !partitionInfo.basePartitionState.isr.isEmpty)
+        } else {
+          false
+        }
+      }, "Inconsistent metadata after broker startup")
+    }
+
+    //Start controller broker and check metadata
+    verifyMetadata(controllerBroker)
+
+    //Start other broker and check metadata
+    verifyMetadata(otherBroker)
   }
 
   @Test
@@ -358,9 +438,9 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
   @Test
   def testControlledShutdown() {
-    val expectedReplicaAssignment = Map(1  -> List(0, 1, 2))
+    val expectedReplicaAssignment = Map(0  -> List(0, 1, 2))
     val topic = "test"
-    val partition = 1
+    val partition = 0
     // create brokers
     val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false).map(KafkaConfig.fromProps)
     servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
@@ -371,34 +451,53 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     val controller = servers.find(p => p.config.brokerId == controllerId).get.kafkaController
     val resultQueue = new LinkedBlockingQueue[Try[collection.Set[TopicPartition]]]()
     val controlledShutdownCallback = (controlledShutdownResult: Try[collection.Set[TopicPartition]]) => resultQueue.put(controlledShutdownResult)
-    controller.controlledShutdown(2, controlledShutdownCallback)
+    controller.controlledShutdown(2, servers.find(_.config.brokerId == 2).get.kafkaController.brokerEpoch, controlledShutdownCallback)
     var partitionsRemaining = resultQueue.take().get
     var activeServers = servers.filter(s => s.config.brokerId != 2)
     // wait for the update metadata request to trickle to the brokers
     TestUtils.waitUntilTrue(() =>
-      activeServers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.isr.size != 3),
+      activeServers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.isr.size != 3),
       "Topic test not created after timeout")
     assertEquals(0, partitionsRemaining.size)
-    var partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
+    var partitionStateInfo = activeServers.head.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get
     var leaderAfterShutdown = partitionStateInfo.basePartitionState.leader
     assertEquals(0, leaderAfterShutdown)
     assertEquals(2, partitionStateInfo.basePartitionState.isr.size)
     assertEquals(List(0,1), partitionStateInfo.basePartitionState.isr.asScala)
-
-    controller.controlledShutdown(1, controlledShutdownCallback)
-    partitionsRemaining = resultQueue.take().get
+    controller.controlledShutdown(1, servers.find(_.config.brokerId == 1).get.kafkaController.brokerEpoch, controlledShutdownCallback)
+    partitionsRemaining = resultQueue.take() match {
+      case Success(partitions) => partitions
+      case Failure(exception) => fail("Controlled shutdown failed due to error", exception)
+    }
     assertEquals(0, partitionsRemaining.size)
     activeServers = servers.filter(s => s.config.brokerId == 0)
-    partitionStateInfo = activeServers.head.apis.metadataCache.getPartitionInfo(topic,partition).get
+    partitionStateInfo = activeServers.head.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get
     leaderAfterShutdown = partitionStateInfo.basePartitionState.leader
     assertEquals(0, leaderAfterShutdown)
 
-    assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
-    controller.controlledShutdown(0, controlledShutdownCallback)
+    assertTrue(servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
+    controller.controlledShutdown(0, servers.find(_.config.brokerId == 0).get.kafkaController.brokerEpoch, controlledShutdownCallback)
     partitionsRemaining = resultQueue.take().get
     assertEquals(1, partitionsRemaining.size)
     // leader doesn't change since all the replicas are shut down
-    assertTrue(servers.forall(_.apis.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
+    assertTrue(servers.forall(_.dataPlaneRequestProcessor.metadataCache.getPartitionInfo(topic,partition).get.basePartitionState.leader == 0))
+  }
+
+  @Test
+  def testControllerRejectControlledShutdownRequestWithStaleBrokerEpoch(): Unit = {
+    // create brokers
+    val serverConfigs = TestUtils.createBrokerConfigs(2, zkConnect, false).map(KafkaConfig.fromProps)
+    servers = serverConfigs.reverseMap(s => TestUtils.createServer(s))
+
+    val controller = getController().kafkaController
+    val otherBroker = servers.find(e => e.config.brokerId != controller.config.brokerId).get
+    @volatile var staleBrokerEpochDetected = false
+    controller.controlledShutdown(otherBroker.config.brokerId, otherBroker.kafkaController.brokerEpoch - 1, {
+      case scala.util.Failure(exception) if exception.isInstanceOf[StaleBrokerEpochException] => staleBrokerEpochDetected = true
+      case _ =>
+    })
+
+    TestUtils.waitUntilTrue(() => staleBrokerEpochDetected, "Fail to detect stale broker epoch")
   }
 
   @Test
@@ -450,10 +549,52 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
     testControllerMove(() => zkClient.createPartitionReassignment(reassignment))
   }
 
+  @Test
+  def testControllerDetectsBouncedBrokers(): Unit = {
+    servers = makeServers(2, enableControlledShutdown = false)
+    val controller = getController().kafkaController
+    val otherBroker = servers.find(e => e.config.brokerId != controller.config.brokerId).get
+
+    // Create a topic
+    val tp = new TopicPartition("t", 0)
+    val assignment = Map(tp.partition -> Seq(0, 1))
+
+    TestUtils.createTopic(zkClient, tp.topic, partitionReplicaAssignment = assignment, servers = servers)
+    waitForPartitionState(tp, firstControllerEpoch, 0, LeaderAndIsr.initialLeaderEpoch,
+      "failed to get expected partition state upon topic creation")
+
+    // Wait until the event thread is idle
+    TestUtils.waitUntilTrue(() => {
+      controller.eventManager.state == ControllerState.Idle
+    }, "Controller event thread is still busy")
+
+    val latch = new CountDownLatch(1)
+
+    // Let the controller event thread await on a latch until broker bounce finishes.
+    // This is used to simulate fast broker bounce
+
+    controller.eventManager.put(new MockEvent(ControllerState.TopicChange) {
+      override def process(): Unit = latch.await()
+    })
+
+    otherBroker.shutdown()
+    otherBroker.startup()
+
+    assertEquals(0, otherBroker.replicaManager.partitionCount.value())
+
+    // Release the latch so that controller can process broker change event
+    latch.countDown()
+    TestUtils.waitUntilTrue(() => {
+      otherBroker.replicaManager.partitionCount.value() == 1 &&
+      otherBroker.replicaManager.metadataCache.getAllTopics().size == 1 &&
+      otherBroker.replicaManager.metadataCache.getAliveBrokers.size == 2
+    }, "Broker fail to initialize after restart")
+  }
+
   private def testControllerMove(fun: () => Unit): Unit = {
     val controller = getController().kafkaController
     val appender = LogCaptureAppender.createAndRegister()
-    val previousLevel = LogCaptureAppender.setClassLoggerLevel(controller.eventManager.thread.getClass, Level.INFO)
+    val previousLevel = LogCaptureAppender.setClassLoggerLevel(controller.getClass, Level.INFO)
 
     try {
       TestUtils.waitUntilTrue(() => {
@@ -464,7 +605,10 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
 
       // Let the controller event thread await on a latch before the pre-defined logic is triggered.
       // This is used to make sure that when the event thread resumes and starts processing events, the controller has already moved.
-      controller.eventManager.put(KafkaController.AwaitOnLatch(latch))
+      controller.eventManager.put(new MockEvent(ControllerState.TopicChange) {
+        override def process(): Unit = latch.await()
+      })
+
       // Execute pre-defined logic. This can be topic creation/deletion, preferred leader election, etc.
       fun()
 
@@ -477,9 +621,11 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       TestUtils.waitUntilTrue(() => !controller.isActive, "Controller fails to resign")
 
       // Expect to capture the ControllerMovedException in the log of ControllerEventThread
+      println(appender.getMessages.find(e => e.getLevel == Level.INFO
+        && e.getThrowableInformation != null))
       val event = appender.getMessages.find(e => e.getLevel == Level.INFO
         && e.getThrowableInformation != null
-        && e.getThrowableInformation.getThrowable.getClass.getName.equals(new ControllerMovedException("").getClass.getName))
+        && e.getThrowableInformation.getThrowable.getClass.getName.equals(classOf[ControllerMovedException].getName))
       assertTrue(event.isDefined)
 
     } finally {
@@ -527,12 +673,21 @@ class ControllerIntegrationTest extends ZooKeeperTestHarness {
       leaderIsrAndControllerEpoch.leaderAndIsr.leader == leader &&
       leaderIsrAndControllerEpoch.leaderAndIsr.leaderEpoch == leaderEpoch
 
-  private def makeServers(numConfigs: Int, autoLeaderRebalanceEnable: Boolean = false, uncleanLeaderElectionEnable: Boolean = false) = {
-    val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect)
+  private def makeServers(numConfigs: Int,
+                          autoLeaderRebalanceEnable: Boolean = false,
+                          uncleanLeaderElectionEnable: Boolean = false,
+                          enableControlledShutdown: Boolean = true,
+                          listeners : Option[String] = None,
+                          listenerSecurityProtocolMap : Option[String] = None,
+                          controlPlaneListenerName : Option[String] = None) = {
+    val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown)
     configs.foreach { config =>
       config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, autoLeaderRebalanceEnable.toString)
       config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)
       config.setProperty(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp, "1")
+      listeners.foreach(listener => config.setProperty(KafkaConfig.ListenersProp, listener))
+      listenerSecurityProtocolMap.foreach(listenerMap => config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerMap))
+      controlPlaneListenerName.foreach(controlPlaneListener => config.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListener))
     }
     configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
   }

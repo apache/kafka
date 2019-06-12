@@ -68,7 +68,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
 
     protected abstract Struct toStruct(short version);
 
-    public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct) {
+    public static AbstractResponse parseResponse(ApiKeys apiKey, Struct struct, short version) {
         switch (apiKey) {
             case PRODUCE:
                 return new ProduceResponse(struct);
@@ -77,45 +77,45 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case LIST_OFFSETS:
                 return new ListOffsetResponse(struct);
             case METADATA:
-                return new MetadataResponse(struct);
+                return new MetadataResponse(struct, version);
             case OFFSET_COMMIT:
-                return new OffsetCommitResponse(struct);
+                return new OffsetCommitResponse(struct, version);
             case OFFSET_FETCH:
                 return new OffsetFetchResponse(struct);
             case FIND_COORDINATOR:
-                return new FindCoordinatorResponse(struct);
+                return new FindCoordinatorResponse(struct, version);
             case JOIN_GROUP:
-                return new JoinGroupResponse(struct);
+                return new JoinGroupResponse(struct, version);
             case HEARTBEAT:
-                return new HeartbeatResponse(struct);
+                return new HeartbeatResponse(struct, version);
             case LEAVE_GROUP:
-                return new LeaveGroupResponse(struct);
+                return new LeaveGroupResponse(struct, version);
             case SYNC_GROUP:
-                return new SyncGroupResponse(struct);
+                return new SyncGroupResponse(struct, version);
             case STOP_REPLICA:
                 return new StopReplicaResponse(struct);
             case CONTROLLED_SHUTDOWN:
-                return new ControlledShutdownResponse(struct);
+                return new ControlledShutdownResponse(struct, version);
             case UPDATE_METADATA:
                 return new UpdateMetadataResponse(struct);
             case LEADER_AND_ISR:
                 return new LeaderAndIsrResponse(struct);
             case DESCRIBE_GROUPS:
-                return new DescribeGroupsResponse(struct);
+                return new DescribeGroupsResponse(struct, version);
             case LIST_GROUPS:
                 return new ListGroupsResponse(struct);
             case SASL_HANDSHAKE:
-                return new SaslHandshakeResponse(struct);
+                return new SaslHandshakeResponse(struct, version);
             case API_VERSIONS:
                 return new ApiVersionsResponse(struct);
             case CREATE_TOPICS:
-                return new CreateTopicsResponse(struct);
+                return new CreateTopicsResponse(struct, version);
             case DELETE_TOPICS:
-                return new DeleteTopicsResponse(struct);
+                return new DeleteTopicsResponse(struct, version);
             case DELETE_RECORDS:
                 return new DeleteRecordsResponse(struct);
             case INIT_PRODUCER_ID:
-                return new InitProducerIdResponse(struct);
+                return new InitProducerIdResponse(struct, version);
             case OFFSET_FOR_LEADER_EPOCH:
                 return new OffsetsForLeaderEpochResponse(struct);
             case ADD_PARTITIONS_TO_TXN:
@@ -143,7 +143,7 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
             case DESCRIBE_LOG_DIRS:
                 return new DescribeLogDirsResponse(struct);
             case SASL_AUTHENTICATE:
-                return new SaslAuthenticateResponse(struct);
+                return new SaslAuthenticateResponse(struct, version);
             case CREATE_PARTITIONS:
                 return new CreatePartitionsResponse(struct);
             case CREATE_DELEGATION_TOKEN:
@@ -156,6 +156,10 @@ public abstract class AbstractResponse extends AbstractRequestResponse {
                 return new DescribeDelegationTokenResponse(struct);
             case DELETE_GROUPS:
                 return new DeleteGroupsResponse(struct);
+            case ELECT_LEADERS:
+                return new ElectLeadersResponse(struct, version);
+            case INCREMENTAL_ALTER_CONFIGS:
+                return new IncrementalAlterConfigsResponse(struct, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

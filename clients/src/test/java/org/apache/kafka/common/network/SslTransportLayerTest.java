@@ -860,6 +860,11 @@ public class SslTransportLayerTest {
         selector.connect(node, addr, BUFFER_SIZE, BUFFER_SIZE);
 
         NetworkTestUtils.waitForChannelReady(selector, node);
+        // `waitForChannelReady` waits for client-side channel to be ready. This is sufficient for other tests
+        // operating on the client-side channel. But here, we are muting the server-side channel below, so we
+        // need to wait for the server-side channel to be ready as well.
+        TestUtils.waitForCondition(() -> server.selector().channels().stream().allMatch(KafkaChannel::ready),
+                "Channel not ready");
 
         final ByteArrayOutputStream bytesOut = new ByteArrayOutputStream();
         server.outputChannel(Channels.newChannel(bytesOut));
@@ -881,6 +886,46 @@ public class SslTransportLayerTest {
                 return bytesOut.toByteArray().length == totalSendSize;
             }
         }, 5000, "All requests sent were not processed");
+    }
+
+    /**
+     * Verifies that inter-broker listener with validation of truststore against keystore works
+     * with configs including mutual authentication and hostname verification.
+     */
+    @Test
+    public void testInterBrokerSslConfigValidation() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
+        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        sslServerConfigs.put(SslConfigs.SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, "HTTPS");
+        sslServerConfigs.putAll(serverCertStores.keyStoreProps());
+        sslServerConfigs.putAll(serverCertStores.trustStoreProps());
+        sslClientConfigs.putAll(serverCertStores.keyStoreProps());
+        sslClientConfigs.putAll(serverCertStores.trustStoreProps());
+        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        ChannelBuilder serverChannelBuilder = ChannelBuilders.serverChannelBuilder(listenerName,
+                true, securityProtocol, config, null, null, time);
+        server = new NioEchoServer(listenerName, securityProtocol, config,
+                "localhost", serverChannelBuilder, null, time);
+        server.start();
+
+        this.selector = createSelector(sslClientConfigs, null, null, null);
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port());
+        selector.connect("0", addr, BUFFER_SIZE, BUFFER_SIZE);
+        NetworkTestUtils.checkClientConnection(selector, "0", 100, 10);
+    }
+
+    /**
+     * Verifies that inter-broker listener with validation of truststore against keystore
+     * fails if certs from keystore are not trusted.
+     */
+    @Test(expected = KafkaException.class)
+    public void testInterBrokerSslConfigValidationFailure() throws Exception {
+        SecurityProtocol securityProtocol = SecurityProtocol.SSL;
+        sslServerConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "required");
+        TestSecurityConfig config = new TestSecurityConfig(sslServerConfigs);
+        ListenerName listenerName = ListenerName.forSecurityProtocol(securityProtocol);
+        ChannelBuilders.serverChannelBuilder(listenerName, true, securityProtocol, config, null, null, time);
     }
 
     /**

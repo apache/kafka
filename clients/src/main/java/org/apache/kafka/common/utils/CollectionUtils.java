@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Collection;
 import java.util.stream.Collectors;
 
 public final class CollectionUtils {
@@ -61,7 +62,7 @@ public final class CollectionUtils {
      * @param partitions The partitions to collect
      * @return partitions per topic
      */
-    public static Map<String, List<Integer>> groupPartitionsByTopic(List<TopicPartition> partitions) {
+    public static Map<String, List<Integer>> groupPartitionsByTopic(Collection<TopicPartition> partitions) {
         Map<String, List<Integer>> partitionsByTopic = new HashMap<>();
         for (TopicPartition tp : partitions) {
             String topic = tp.topic();

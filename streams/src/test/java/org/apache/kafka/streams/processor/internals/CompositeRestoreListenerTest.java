@@ -26,7 +26,7 @@ import org.apache.kafka.test.MockBatchingStateRestoreListener;
 import org.apache.kafka.test.MockStateRestoreListener;
 import org.junit.Test;
 
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
 import java.util.Collections;
 
@@ -34,7 +34,7 @@ import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_BATCH;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_END;
 import static org.apache.kafka.test.MockStateRestoreListener.RESTORE_START;
 import static org.hamcrest.core.Is.is;
-import static org.junit.Assert.assertThat;
+import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertTrue;
 
 
@@ -46,8 +46,8 @@ public class CompositeRestoreListenerTest {
         noListenBatchingStateRestoreCallback =
         new MockNoListenBatchingStateRestoreCallback();
     private final MockStateRestoreListener reportingStoreListener = new MockStateRestoreListener();
-    private final byte[] key = "key".getBytes(Charset.forName("UTF-8"));
-    private final byte[] value = "value".getBytes(Charset.forName("UTF-8"));
+    private final byte[] key = "key".getBytes(StandardCharsets.UTF_8);
+    private final byte[] value = "value".getBytes(StandardCharsets.UTF_8);
     private final Collection<KeyValue<byte[], byte[]>> records = Collections.singletonList(KeyValue.pair(key, value));
     private final Collection<ConsumerRecord<byte[], byte[]>> consumerRecords = Collections.singletonList(
         new ConsumerRecord<>("", 0, 0L, key, value)

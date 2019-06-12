@@ -16,25 +16,28 @@
  */
 package org.apache.kafka.streams.processor;
 
-import java.time.Duration;
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
-import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.internals.ApiUtils;
 import org.apache.kafka.streams.internals.QuietStreamsConfig;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.ValueTransformer;
 import org.apache.kafka.streams.processor.internals.RecordCollector;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
@@ -122,7 +125,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         private final KeyValue keyValue;
 
         private CapturedForward(final To to, final KeyValue keyValue) {
-            if (keyValue == null) throw new IllegalArgumentException();
+            if (keyValue == null) {
+                throw new IllegalArgumentException();
+            }
 
             this.childName = to.childName;
             this.timestamp = to.timestamp;
@@ -208,7 +213,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         this.taskId = taskId;
         this.config = streamsConfig;
         this.stateDir = stateDir;
-        this.metrics = new StreamsMetricsImpl(new Metrics(), "mock-processor-context-virtual-thread");
+        final MetricConfig metricConfig = new MetricConfig();
+        metricConfig.recordLevel(Sensor.RecordingLevel.DEBUG);
+        final String threadName = "mock-processor-context-virtual-thread";
+        this.metrics = new StreamsMetricsImpl(new Metrics(metricConfig), threadName);
+        ThreadMetrics.skipRecordSensor(metrics);
     }
 
     @Override
@@ -266,7 +275,11 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      * @param timestamp A record timestamp
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public void setRecordMetadata(final String topic, final int partition, final long offset, final Headers headers, final long timestamp) {
+    public void setRecordMetadata(final String topic,
+                                  final int partition,
+                                  final long offset,
+                                  final Headers headers,
+                                  final long timestamp) {
         this.topic = topic;
         this.partition = partition;
         this.offset = offset;
@@ -381,7 +394,9 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
 
     @Override
     @Deprecated
-    public Cancellable schedule(final long intervalMs, final PunctuationType type, final Punctuator callback) {
+    public Cancellable schedule(final long intervalMs,
+                                final PunctuationType type,
+                                final Punctuator callback) {
         final CapturedPunctuator capturedPunctuator = new CapturedPunctuator(intervalMs, type, callback);
 
         punctuators.add(capturedPunctuator);
@@ -389,12 +404,12 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         return capturedPunctuator::cancel;
     }
 
+    @SuppressWarnings("deprecation") // removing #schedule(final long intervalMs,...) will fix this
     @Override
     public Cancellable schedule(final Duration interval,
                                 final PunctuationType type,
                                 final Punctuator callback) throws IllegalArgumentException {
-        ApiUtils.validateMillisecondDuration(interval, "interval");
-        return schedule(interval.toMillis(), type, callback);
+        return schedule(ApiUtils.validateMillisecondDuration(interval, "interval"), type, callback);
     }
 
     /**
@@ -404,9 +419,7 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public List<CapturedPunctuator> scheduledPunctuators() {
-        final LinkedList<CapturedPunctuator> capturedPunctuators = new LinkedList<>();
-        capturedPunctuators.addAll(punctuators);
-        return capturedPunctuators;
+        return new LinkedList<>(punctuators);
     }
 
     @SuppressWarnings("unchecked")
@@ -426,8 +439,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         );
     }
 
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final int childIndex) {
         throw new UnsupportedOperationException(
             "Forwarding to a child by index is deprecated. " +
@@ -435,8 +448,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
         );
     }
 
-    @SuppressWarnings("deprecation")
     @Override
+    @Deprecated
     public <K, V> void forward(final K key, final V value, final String childName) {
         throw new UnsupportedOperationException(
             "Forwarding to a child by name is deprecated. " +
@@ -451,11 +464,8 @@ public class MockProcessorContext implements ProcessorContext, RecordCollector.S
      *
      * @return A list of key/value pairs that were previously passed to the context.
      */
-    @SuppressWarnings({"WeakerAccess", "unused"})
     public List<CapturedForward> forwarded() {
-        final LinkedList<CapturedForward> result = new LinkedList<>();
-        result.addAll(capturedForwards);
-        return result;
+        return new LinkedList<>(capturedForwards);
     }
 
     /**

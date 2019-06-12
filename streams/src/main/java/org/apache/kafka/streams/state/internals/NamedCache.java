@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.NavigableMap;
+import java.util.concurrent.ConcurrentSkipListMap;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -33,13 +35,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.TreeMap;
-import java.util.TreeSet;
 
 class NamedCache {
     private static final Logger log = LoggerFactory.getLogger(NamedCache.class);
     private final String name;
-    private final TreeMap<Bytes, LRUNode> cache = new TreeMap<>();
+    private final NavigableMap<Bytes, LRUNode> cache = new ConcurrentSkipListMap<>();
     private final Set<Bytes> dirtyKeys = new LinkedHashSet<>();
     private ThreadCache.DirtyEntryFlushListener listener;
     private LRUNode tail;
@@ -266,16 +266,12 @@ class NamedCache {
         return cache.size();
     }
 
-    synchronized Iterator<Bytes> keyRange(final Bytes from, final Bytes to) {
-        return keySetIterator(cache.navigableKeySet().subSet(from, true, to, true));
+    synchronized Iterator<Map.Entry<Bytes, LRUNode>> subMapIterator(final Bytes from, final Bytes to) {
+        return cache.subMap(from, true, to, true).entrySet().iterator();
     }
 
-    private Iterator<Bytes> keySetIterator(final Set<Bytes> keySet) {
-        return new TreeSet<>(keySet).iterator();
-    }
-
-    synchronized Iterator<Bytes> allKeys() {
-        return keySetIterator(cache.navigableKeySet());
+    synchronized Iterator<Map.Entry<Bytes, LRUNode>> allIterator() {
+        return cache.entrySet().iterator();
     }
 
     synchronized LRUCacheEntry first() {
@@ -367,8 +363,8 @@ class NamedCache {
 
             // add parent
             final Map<String, String> allMetricTags = metrics.tagMap(
-                "record-cache-id", "all",
-                "task-id", taskName
+                 "task-id", taskName,
+                "record-cache-id", "all"
             );
             final Sensor taskLevelHitRatioSensor = metrics.taskLevelSensor(taskName, "hitRatio", Sensor.RecordingLevel.DEBUG);
             taskLevelHitRatioSensor.add(
@@ -386,8 +382,8 @@ class NamedCache {
 
             // add child
             final Map<String, String> metricTags = metrics.tagMap(
-                "record-cache-id", ThreadCache.underlyingStoreNamefromCacheName(cacheName),
-                "task-id", taskName
+                 "task-id", taskName,
+                "record-cache-id", ThreadCache.underlyingStoreNamefromCacheName(cacheName)
             );
 
             hitRatioSensor = metrics.cacheLevelSensor(

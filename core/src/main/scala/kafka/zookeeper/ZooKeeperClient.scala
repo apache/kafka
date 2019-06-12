@@ -29,7 +29,6 @@ import kafka.utils.{KafkaScheduler, Logging}
 import org.apache.kafka.common.utils.Time
 import org.apache.zookeeper.AsyncCallback._
 import org.apache.zookeeper.KeeperException.Code
-import org.apache.zookeeper.OpResult.{CreateResult, SetDataResult}
 import org.apache.zookeeper.Watcher.Event.{EventType, KeeperState}
 import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.data.{ACL, Stat}
@@ -45,6 +44,7 @@ import scala.collection.mutable.Set
  * @param sessionTimeoutMs session timeout in milliseconds
  * @param connectionTimeoutMs connection timeout in milliseconds
  * @param maxInFlightRequests maximum number of unacknowledged requests the client will send before blocking.
+ * @param name name of the client instance
  */
 class ZooKeeperClient(connectString: String,
                       sessionTimeoutMs: Int,
@@ -52,8 +52,23 @@ class ZooKeeperClient(connectString: String,
                       maxInFlightRequests: Int,
                       time: Time,
                       metricGroup: String,
-                      metricType: String) extends Logging with KafkaMetricsGroup {
-  this.logIdent = "[ZooKeeperClient] "
+                      metricType: String,
+                      name: Option[String]) extends Logging with KafkaMetricsGroup {
+
+  def this(connectString: String,
+           sessionTimeoutMs: Int,
+           connectionTimeoutMs: Int,
+           maxInFlightRequests: Int,
+           time: Time,
+           metricGroup: String,
+           metricType: String) = {
+    this(connectString, sessionTimeoutMs, connectionTimeoutMs, maxInFlightRequests, time, metricGroup, metricType, None)
+  }
+
+  this.logIdent = name match {
+    case Some(n) => s"[ZooKeeperClient $n] "
+    case _ => "[ZooKeeperClient] "
+  }
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()
@@ -158,10 +173,6 @@ class ZooKeeperClient(connectString: String,
       responseQueue.asScala.toBuffer
     }
   }
-  
-  def createTransaction(): Transaction = {
-    zooKeeper.transaction()
-  }
 
   // Visibility to override for testing
   private[zookeeper] def send[Req <: AsyncRequest](request: Req)(processResponse: Req#Response => Unit): Unit = {
@@ -172,79 +183,58 @@ class ZooKeeperClient(connectString: String,
 
     val sendTimeMs = time.hiResClockMs()
     request match {
-      case ExistsRequest(path, ctx, _) =>
+      case ExistsRequest(path, ctx) =>
         zooKeeper.exists(path, shouldWatch(request), new StatCallback {
           override def processResult(rc: Int, path: String, ctx: Any, stat: Stat): Unit =
             callback(ExistsResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs)))
         }, ctx.orNull)
-      case GetDataRequest(path, ctx, _) =>
+      case GetDataRequest(path, ctx) =>
         zooKeeper.getData(path, shouldWatch(request), new DataCallback {
           override def processResult(rc: Int, path: String, ctx: Any, data: Array[Byte], stat: Stat): Unit =
             callback(GetDataResponse(Code.get(rc), path, Option(ctx), data, stat, responseMetadata(sendTimeMs)))
         }, ctx.orNull)
-      case GetChildrenRequest(path, ctx, _) =>
+      case GetChildrenRequest(path, ctx) =>
         zooKeeper.getChildren(path, shouldWatch(request), new Children2Callback {
           override def processResult(rc: Int, path: String, ctx: Any, children: java.util.List[String], stat: Stat): Unit =
             callback(GetChildrenResponse(Code.get(rc), path, Option(ctx),
               Option(children).map(_.asScala).getOrElse(Seq.empty), stat, responseMetadata(sendTimeMs)))
         }, ctx.orNull)
-      case CreateRequest(path, data, acl, createMode, ctx, zkVersionCheck) =>
-        if (zkVersionCheck.isEmpty)
-          zooKeeper.create(path, data, acl.asJava, createMode, new StringCallback {
-            override def processResult(rc: Int, path: String, ctx: Any, name: String): Unit =
-              callback(CreateResponse(Code.get(rc), path, Option(ctx), name, responseMetadata(sendTimeMs)))
-          }, ctx.orNull)
-        else
-          zooKeeper.multi(Seq(zkVersionCheck.get.checkOp, Op.create(path, data, acl.asJava, createMode)).asJava, new MultiCallback {
-            override def processResult(rc: Int, multiOpPath: String, ctx: scala.Any, opResults: util.List[OpResult]): Unit = {
-              val (zkVersionCheckOpResult, requestOpResult) = (opResults.get(0), opResults.get(1))
-              val name = requestOpResult match {
-                case c: CreateResult => c.getPath
-                case _ => null
-              }
-              callback(CreateResponse(Code.get(rc), path, Option(ctx), name, responseMetadata(sendTimeMs), 
-                Some(ZkVersionCheckResult(zkVersionCheck.get, zkVersionCheckOpResult))))
-            }}, ctx.orNull)
-      case SetDataRequest(path, data, version, ctx, zkVersionCheck) =>
-        if (zkVersionCheck.isEmpty)
-          zooKeeper.setData(path, data, version, new StatCallback {
-            override def processResult(rc: Int, path: String, ctx: Any, stat: Stat): Unit =
-              callback(SetDataResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs)))
-          }, ctx.orNull)
-        else
-          zooKeeper.multi(Seq(zkVersionCheck.get.checkOp, Op.setData(path, data, version)).asJava, new MultiCallback {
-            override def processResult(rc: Int, multiOpPath: String, ctx: scala.Any, opResults: util.List[OpResult]): Unit = {
-              val (zkVersionCheckOpResult, requestOpResult) = (opResults.get(0), opResults.get(1))
-              val stat = requestOpResult match {
-                case s: SetDataResult => s.getStat
-                case _ => null
-              }
-              callback(SetDataResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs), 
-                Some(ZkVersionCheckResult(zkVersionCheck.get, zkVersionCheckOpResult))))
-            }}, ctx.orNull)
-      case DeleteRequest(path, version, ctx, zkVersionCheck) =>
-        if (zkVersionCheck.isEmpty)
-          zooKeeper.delete(path, version, new VoidCallback {
-            override def processResult(rc: Int, path: String, ctx: Any): Unit =
-              callback(DeleteResponse(Code.get(rc), path, Option(ctx), responseMetadata(sendTimeMs)))
-          }, ctx.orNull)
-        else
-          zooKeeper.multi(Seq(zkVersionCheck.get.checkOp, Op.delete(path, version)).asJava, new MultiCallback {
-            override def processResult(rc: Int, multiOpPath: String, ctx: scala.Any, opResults: util.List[OpResult]): Unit = {
-              val (zkVersionCheckOpResult, _) = (opResults.get(0), opResults.get(1))
-              callback(DeleteResponse(Code.get(rc), path, Option(ctx), responseMetadata(sendTimeMs), 
-                Some(ZkVersionCheckResult(zkVersionCheck.get, zkVersionCheckOpResult))))
-            }}, ctx.orNull)
-      case GetAclRequest(path, ctx, _) =>
+      case CreateRequest(path, data, acl, createMode, ctx) =>
+        zooKeeper.create(path, data, acl.asJava, createMode, new StringCallback {
+          override def processResult(rc: Int, path: String, ctx: Any, name: String): Unit =
+            callback(CreateResponse(Code.get(rc), path, Option(ctx), name, responseMetadata(sendTimeMs)))
+        }, ctx.orNull)
+      case SetDataRequest(path, data, version, ctx) =>
+        zooKeeper.setData(path, data, version, new StatCallback {
+          override def processResult(rc: Int, path: String, ctx: Any, stat: Stat): Unit =
+            callback(SetDataResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs)))
+        }, ctx.orNull)
+      case DeleteRequest(path, version, ctx) =>
+        zooKeeper.delete(path, version, new VoidCallback {
+          override def processResult(rc: Int, path: String, ctx: Any): Unit =
+            callback(DeleteResponse(Code.get(rc), path, Option(ctx), responseMetadata(sendTimeMs)))
+        }, ctx.orNull)
+      case GetAclRequest(path, ctx) =>
         zooKeeper.getACL(path, null, new ACLCallback {
           override def processResult(rc: Int, path: String, ctx: Any, acl: java.util.List[ACL], stat: Stat): Unit = {
             callback(GetAclResponse(Code.get(rc), path, Option(ctx), Option(acl).map(_.asScala).getOrElse(Seq.empty),
               stat, responseMetadata(sendTimeMs)))
           }}, ctx.orNull)
-      case SetAclRequest(path, acl, version, ctx, _) =>
+      case SetAclRequest(path, acl, version, ctx) =>
         zooKeeper.setACL(path, acl.asJava, version, new StatCallback {
           override def processResult(rc: Int, path: String, ctx: Any, stat: Stat): Unit =
             callback(SetAclResponse(Code.get(rc), path, Option(ctx), stat, responseMetadata(sendTimeMs)))
+        }, ctx.orNull)
+      case MultiRequest(zkOps, ctx) =>
+        zooKeeper.multi(zkOps.map(_.toZookeeperOp).asJava, new MultiCallback {
+          override def processResult(rc: Int, path: String, ctx: Any, opResults: util.List[OpResult]): Unit = {
+            callback(MultiResponse(Code.get(rc), path, Option(ctx),
+              if (opResults == null)
+                null
+              else
+                zkOps.zip(opResults.asScala) map { case (zkOp, result) => ZkOpResult(zkOp, result) },
+              responseMetadata(sendTimeMs)))
+          }
         }, ctx.orNull)
     }
   }
@@ -346,6 +336,12 @@ class ZooKeeperClient(connectString: String,
 
   def close(): Unit = {
     info("Closing.")
+
+    // Shutdown scheduler outside of lock to avoid deadlock if scheduler
+    // is waiting for lock to process session expiry. Close expiry thread
+    // first to ensure that new clients are not created during close().
+    expiryScheduler.shutdown()
+
     inWriteLock(initializationLock) {
       zNodeChangeHandlers.clear()
       zNodeChildChangeHandlers.clear()
@@ -353,9 +349,6 @@ class ZooKeeperClient(connectString: String,
       zooKeeper.close()
       metricNames.foreach(removeMetric(_))
     }
-    // Shutdown scheduler outside of lock to avoid deadlock if scheduler
-    // is waiting for lock to process session expiry
-    expiryScheduler.shutdown()
     info("Closed.")
   }
 
@@ -477,6 +470,29 @@ trait ZNodeChildChangeHandler {
   def handleChildChange(): Unit = {}
 }
 
+// Thin wrapper for zookeeper.Op
+sealed trait ZkOp {
+  def toZookeeperOp: Op
+}
+
+case class CreateOp(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode) extends ZkOp {
+  override def toZookeeperOp: Op = Op.create(path, data, acl.asJava, createMode)
+}
+
+case class DeleteOp(path: String, version: Int) extends ZkOp {
+  override def toZookeeperOp: Op = Op.delete(path, version)
+}
+
+case class SetDataOp(path: String, data: Array[Byte], version: Int) extends ZkOp {
+  override def toZookeeperOp: Op = Op.setData(path, data, version)
+}
+
+case class CheckOp(path: String, version: Int) extends ZkOp {
+  override def toZookeeperOp: Op = Op.check(path, version)
+}
+
+case class ZkOpResult(zkOp: ZkOp, rawOpResult: OpResult)
+
 sealed trait AsyncRequest {
   /**
    * This type member allows us to define methods that take requests and return responses with the correct types.
@@ -485,46 +501,45 @@ sealed trait AsyncRequest {
   type Response <: AsyncResponse
   def path: String
   def ctx: Option[Any]
-  def zkVersionCheck: Option[ZkVersionCheck]
 }
-
-case class ZkVersionCheck(checkPath: String, expectedZkVersion: Int) {
-  def checkOp: Op = Op.check(checkPath, expectedZkVersion)
-}
-
-case class ZkVersionCheckResult(zkVersionCheck: ZkVersionCheck, opResult: OpResult)
 
 case class CreateRequest(path: String, data: Array[Byte], acl: Seq[ACL], createMode: CreateMode,
-                         ctx: Option[Any] = None, zkVersionCheck: Option[ZkVersionCheck] = None) extends AsyncRequest {
+                         ctx: Option[Any] = None) extends AsyncRequest {
   type Response = CreateResponse
 }
 
-case class DeleteRequest(path: String, version: Int, ctx: Option[Any] = None, zkVersionCheck: Option[ZkVersionCheck] = None) extends AsyncRequest {
+case class DeleteRequest(path: String, version: Int, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = DeleteResponse
 }
 
-case class ExistsRequest(path: String, ctx: Option[Any] = None, zkVersionCheck: Option[ZkVersionCheck] = None) extends AsyncRequest {
+case class ExistsRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = ExistsResponse
 }
 
-case class GetDataRequest(path: String, ctx: Option[Any] = None, zkVersionCheck: Option[ZkVersionCheck] = None) extends AsyncRequest {
+case class GetDataRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = GetDataResponse
 }
 
-case class SetDataRequest(path: String, data: Array[Byte], version: Int, ctx: Option[Any] = None, zkVersionCheck: Option[ZkVersionCheck] = None) extends AsyncRequest {
+case class SetDataRequest(path: String, data: Array[Byte], version: Int, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = SetDataResponse
 }
 
-case class GetAclRequest(path: String, ctx: Option[Any] = None, zkVersionCheck: Option[ZkVersionCheck] = None) extends AsyncRequest {
+case class GetAclRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = GetAclResponse
 }
 
-case class SetAclRequest(path: String, acl: Seq[ACL], version: Int, ctx: Option[Any] = None, zkVersionCheck: Option[ZkVersionCheck] = None) extends AsyncRequest {
+case class SetAclRequest(path: String, acl: Seq[ACL], version: Int, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = SetAclResponse
 }
 
-case class GetChildrenRequest(path: String, ctx: Option[Any] = None, zkVersionCheck: Option[ZkVersionCheck] = None) extends AsyncRequest {
+case class GetChildrenRequest(path: String, ctx: Option[Any] = None) extends AsyncRequest {
   type Response = GetChildrenResponse
+}
+
+case class MultiRequest(zkOps: Seq[ZkOp], ctx: Option[Any] = None) extends AsyncRequest {
+  type Response = MultiResponse
+
+  override def path: String = null
 }
 
 
@@ -532,7 +547,6 @@ sealed abstract class AsyncResponse {
   def resultCode: Code
   def path: String
   def ctx: Option[Any]
-  def zkVersionCheckResult: Option[ZkVersionCheckResult]
 
   /** Return None if the result code is OK and KeeperException otherwise. */
   def resultException: Option[KeeperException] =
@@ -554,21 +568,23 @@ case class ResponseMetadata(sendTimeMs: Long, receivedTimeMs: Long) {
 }
 
 case class CreateResponse(resultCode: Code, path: String, ctx: Option[Any], name: String,
-                          metadata: ResponseMetadata, zkVersionCheckResult: Option[ZkVersionCheckResult] = None) extends AsyncResponse
+                          metadata: ResponseMetadata) extends AsyncResponse
 case class DeleteResponse(resultCode: Code, path: String, ctx: Option[Any],
-                          metadata: ResponseMetadata, zkVersionCheckResult: Option[ZkVersionCheckResult] = None) extends AsyncResponse
+                          metadata: ResponseMetadata) extends AsyncResponse
 case class ExistsResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
-                          metadata: ResponseMetadata, zkVersionCheckResult: Option[ZkVersionCheckResult] = None) extends AsyncResponse
+                          metadata: ResponseMetadata) extends AsyncResponse
 case class GetDataResponse(resultCode: Code, path: String, ctx: Option[Any], data: Array[Byte], stat: Stat,
-                           metadata: ResponseMetadata, zkVersionCheckResult: Option[ZkVersionCheckResult] = None) extends AsyncResponse
+                           metadata: ResponseMetadata) extends AsyncResponse
 case class SetDataResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
-                           metadata: ResponseMetadata, zkVersionCheckResult: Option[ZkVersionCheckResult] = None) extends AsyncResponse
+                           metadata: ResponseMetadata) extends AsyncResponse
 case class GetAclResponse(resultCode: Code, path: String, ctx: Option[Any], acl: Seq[ACL], stat: Stat,
-                          metadata: ResponseMetadata, zkVersionCheckResult: Option[ZkVersionCheckResult] = None) extends AsyncResponse
+                          metadata: ResponseMetadata) extends AsyncResponse
 case class SetAclResponse(resultCode: Code, path: String, ctx: Option[Any], stat: Stat,
-                          metadata: ResponseMetadata, zkVersionCheckResult: Option[ZkVersionCheckResult] = None) extends AsyncResponse
+                          metadata: ResponseMetadata) extends AsyncResponse
 case class GetChildrenResponse(resultCode: Code, path: String, ctx: Option[Any], children: Seq[String], stat: Stat,
-                               metadata: ResponseMetadata, zkVersionCheckResult: Option[ZkVersionCheckResult] = None) extends AsyncResponse
+                               metadata: ResponseMetadata) extends AsyncResponse
+case class MultiResponse(resultCode: Code, path: String, ctx: Option[Any], zkOpResults: Seq[ZkOpResult],
+                         metadata: ResponseMetadata) extends AsyncResponse
 
 class ZooKeeperClientException(message: String) extends RuntimeException(message)
 class ZooKeeperClientExpiredException(message: String) extends ZooKeeperClientException(message)

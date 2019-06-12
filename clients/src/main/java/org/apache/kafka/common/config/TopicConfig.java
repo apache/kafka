@@ -18,11 +18,11 @@
 package org.apache.kafka.common.config;
 
 /**
- * Keys that can be used to configure a topic.  These keys are useful when creating or reconfiguring a
+ * <p>Keys that can be used to configure a topic. These keys are useful when creating or reconfiguring a
  * topic using the AdminClient.
  *
- * The intended pattern is for broker configs to include a `log.` prefix. For example, to set the default broker
- * cleanup policy, one would set log.cleanup.policy instead of cleanup.policy. Unfortunately, there are many cases
+ * <p>The intended pattern is for broker configs to include a <code>`log.`</code> prefix. For example, to set the default broker
+ * cleanup policy, one would set <code>log.cleanup.policy</code> instead of <code>cleanup.policy</code>. Unfortunately, there are many cases
  * where this pattern is not followed.
  */
 // This is a public API, so we should not remove or alter keys without a discussion and a deprecation period.
@@ -104,6 +104,10 @@ public class TopicConfig {
     public static final String MIN_COMPACTION_LAG_MS_DOC = "The minimum time a message will remain " +
         "uncompacted in the log. Only applicable for logs that are being compacted.";
 
+    public static final String MAX_COMPACTION_LAG_MS_CONFIG = "max.compaction.lag.ms";
+    public static final String MAX_COMPACTION_LAG_MS_DOC = "The maximum time a message will remain " +
+        "ineligible for compaction in the log. Only applicable for logs that are being compacted.";
+
     public static final String MIN_CLEANABLE_DIRTY_RATIO_CONFIG = "min.cleanable.dirty.ratio";
     public static final String MIN_CLEANABLE_DIRTY_RATIO_DOC = "This configuration controls how frequently " +
         "the log compactor will attempt to clean the log (assuming <a href=\"#compaction\">log " +
@@ -111,13 +115,17 @@ public class TopicConfig {
         "50% of the log has been compacted. This ratio bounds the maximum space wasted in " +
         "the log by duplicates (at 50% at most 50% of the log could be duplicates). A " +
         "higher ratio will mean fewer, more efficient cleanings but will mean more wasted " +
-        "space in the log.";
+        "space in the log. If the " + MAX_COMPACTION_LAG_MS_CONFIG + " or the " + MIN_COMPACTION_LAG_MS_CONFIG +
+        " configurations are also specified, then the log compactor considers the log eligible for compaction " +
+        "as soon as either: (i) the dirty ratio threshold has been met and the log has had dirty (uncompacted) " +
+        "records for at least the " + MIN_COMPACTION_LAG_MS_CONFIG + " duration, or (ii) if the log has had " +
+        "dirty (uncompacted) records for at most the " + MAX_COMPACTION_LAG_MS_CONFIG + " period.";
 
     public static final String CLEANUP_POLICY_CONFIG = "cleanup.policy";
     public static final String CLEANUP_POLICY_COMPACT = "compact";
     public static final String CLEANUP_POLICY_DELETE = "delete";
     public static final String CLEANUP_POLICY_DOC = "A string that is either \"" + CLEANUP_POLICY_DELETE +
-        "\" or \"" + CLEANUP_POLICY_COMPACT + "\". This string designates the retention policy to use on " +
+        "\" or \"" + CLEANUP_POLICY_COMPACT + "\" or both. This string designates the retention policy to use on " +
         "old log segments. The default policy (\"delete\") will discard old segments when their retention " +
         "time or size limit has been reached. The \"compact\" setting will enable <a href=\"#compaction\">log " +
         "compaction</a> on the topic.";

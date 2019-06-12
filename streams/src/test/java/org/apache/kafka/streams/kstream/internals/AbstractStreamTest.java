@@ -107,16 +107,15 @@ public class AbstractStreamTest {
             final String name = builder.newProcessorName("RANDOM-FILTER-");
             final ProcessorGraphNode<K, V> processorNode = new ProcessorGraphNode<>(
                 name,
-                new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name),
-                false);
+                new ProcessorParameters<>(new ExtendedKStreamDummy<>(), name));
             builder.addGraphNode(this.streamsGraphNode, processorNode);
-            return new KStreamImpl<K, V>(name, null, null, sourceNodes, false, processorNode, builder);
+            return new KStreamImpl<>(name, null, null, sourceNodes, false, processorNode, builder);
         }
     }
 
     private class ExtendedKStreamDummy<K, V> implements ProcessorSupplier<K, V> {
 
-        private Random rand;
+        private final Random rand;
 
         ExtendedKStreamDummy() {
             rand = new Random();
@@ -131,8 +130,9 @@ public class AbstractStreamTest {
             @Override
             public void process(final K key, final V value) {
                 // flip a coin and filter
-                if (rand.nextBoolean())
+                if (rand.nextBoolean()) {
                     context().forward(key, value);
+                }
             }
         }
     }

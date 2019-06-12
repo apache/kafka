@@ -24,7 +24,7 @@ import static org.junit.Assert.assertTrue;
 public class KeyValueTest {
 
     @Test
-    public void shouldHaveSaneEqualsAndHashCode() {
+    public void shouldHaveSameEqualsAndHashCode() {
         final KeyValue<String, Long> kv = KeyValue.pair("key1", 1L);
         final KeyValue<String, Long> copyOfKV = KeyValue.pair(kv.key, kv.value);
 

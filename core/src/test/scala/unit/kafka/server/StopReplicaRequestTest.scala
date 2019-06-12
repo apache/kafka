@@ -28,7 +28,7 @@ import collection.JavaConverters._
 
 class StopReplicaRequestTest extends BaseRequestTest {
   override val logDirCount = 2
-  override val numBrokers: Int = 1
+  override val brokerCount: Int = 1
 
   val topic = "topic"
   val partitionNum = 2
@@ -45,8 +45,9 @@ class StopReplicaRequestTest extends BaseRequestTest {
     server.replicaManager.handleLogDirFailure(offlineDir, sendZkNotification = false)
 
     for (i <- 1 to 2) {
-      val request1 = new StopReplicaRequest.Builder(
-        server.config.brokerId, server.replicaManager.controllerEpoch, true, Set(tp0, tp1).asJava).build()
+      val request1 = new StopReplicaRequest.Builder(1,
+        server.config.brokerId, server.replicaManager.controllerEpoch, server.kafkaController.brokerEpoch,
+        true, Set(tp0, tp1).asJava).build()
       val response1 = connectAndSend(request1, ApiKeys.STOP_REPLICA, controllerSocketServer)
       val partitionErrors1 = StopReplicaResponse.parse(response1, request1.version).responses()
       assertEquals(Errors.NONE, partitionErrors1.get(tp0))

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.standalone;
 
+import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.errors.AlreadyExistsException;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.NotFoundException;
@@ -42,7 +43,6 @@ import org.slf4j.LoggerFactory;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.Executors;
@@ -63,12 +63,14 @@ public class StandaloneHerder extends AbstractHerder {
 
     private ClusterConfigState configState;
 
-    public StandaloneHerder(Worker worker, String kafkaClusterId) {
+    public StandaloneHerder(Worker worker, String kafkaClusterId,
+                            ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
         this(worker,
                 worker.workerId(),
                 kafkaClusterId,
                 new MemoryStatusBackingStore(),
-                new MemoryConfigBackingStore(worker.configTransformer()));
+                new MemoryConfigBackingStore(worker.configTransformer()),
+             connectorClientConfigOverridePolicy);
     }
 
     // visible for testing
@@ -76,8 +78,9 @@ public class StandaloneHerder extends AbstractHerder {
                      String workerId,
                      String kafkaClusterId,
                      StatusBackingStore statusBackingStore,
-                     MemoryConfigBackingStore configBackingStore) {
-        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore);
+                     MemoryConfigBackingStore configBackingStore,
+                     ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
         this.configState = ClusterConfigState.EMPTY;
         this.requestExecutorService = Executors.newSingleThreadScheduledExecutor();
         configBackingStore.setUpdateListener(new ConfigUpdateListener());
@@ -104,7 +107,7 @@ public class StandaloneHerder extends AbstractHerder {
         // There's no coordination/hand-off to do here since this is all standalone. Instead, we
         // should just clean up the stuff we normally would, i.e. cleanly checkpoint and shutdown all
         // the tasks.
-        for (String connName : configState.connectors()) {
+        for (String connName : connectors()) {
             removeConnectorTasks(connName);
             worker.stopConnector(connName);
         }
@@ -119,12 +122,12 @@ public class StandaloneHerder extends AbstractHerder {
 
     @Override
     public synchronized void connectors(Callback<Collection<String>> callback) {
-        callback.onCompletion(null, configState.connectors());
+        callback.onCompletion(null, connectors());
     }
-
+    
     @Override
     public synchronized void connectorInfo(String connName, Callback<ConnectorInfo> callback) {
-        ConnectorInfo connectorInfo = createConnectorInfo(connName);
+        ConnectorInfo connectorInfo = connectorInfo(connName);
         if (connectorInfo == null) {
             callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
             return;
@@ -135,7 +138,7 @@ public class StandaloneHerder extends AbstractHerder {
     private ConnectorInfo createConnectorInfo(String connector) {
         if (!configState.contains(connector))
             return null;
-        Map<String, String> config = configState.connectorConfig(connector);
+        Map<String, String> config = configState.rawConnectorConfig(connector);
         return new ConnectorInfo(connector, config, configState.tasks(connector),
             connectorTypeForClass(config.get(ConnectorConfig.CONNECTOR_CLASS_CONFIG)));
     }
@@ -233,7 +236,7 @@ public class StandaloneHerder extends AbstractHerder {
 
         List<TaskInfo> result = new ArrayList<>();
         for (ConnectorTaskId taskId : configState.tasks(connName))
-            result.add(new TaskInfo(taskId, configState.taskConfig(taskId)));
+            result.add(new TaskInfo(taskId, configState.rawTaskConfig(taskId)));
         callback.onCompletion(null, result);
     }
 
@@ -258,13 +261,6 @@ public class StandaloneHerder extends AbstractHerder {
             cb.onCompletion(null, null);
         else
             cb.onCompletion(new ConnectException("Failed to start task: " + taskId), null);
-    }
-
-    @Override
-    public ConfigReloadAction connectorConfigReloadAction(final String connName) {
-        return ConfigReloadAction.valueOf(
-                configState.connectorConfig(connName).get(ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG)
-                        .toUpperCase(Locale.ROOT));
     }
 
     @Override
@@ -326,7 +322,7 @@ public class StandaloneHerder extends AbstractHerder {
 
     private void updateConnectorTasks(String connName) {
         if (!worker.isRunning(connName)) {
-            log.info("Skipping reconfiguration of connector {} since it is not running", connName);
+            log.info("Skipping update of connector {} since it is not running", connName);
             return;
         }
 

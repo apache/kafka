@@ -48,7 +48,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   override protected def interBrokerListenerName: ListenerName = new ListenerName("BROKER")
 
   override protected lazy val trustStoreFile = Some(File.createTempFile("truststore", ".jks"))
-  override val serverCount: Int = 2
+  override val brokerCount: Int = 2
 
   private val kafkaServerSaslMechanisms = Seq("SCRAM-SHA-256")
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
@@ -81,6 +81,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   @After
   override def tearDown(): Unit = {
     adminClients.foreach(_.close())
+    GroupedUserQuotaCallback.tearDown()
     super.tearDown()
   }
 
@@ -102,7 +103,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     // ClientQuotaCallback#quotaLimit is invoked by each quota manager once for each new client
     assertEquals(1, quotaLimitCalls(ClientQuotaType.PRODUCE).get)
     assertEquals(1, quotaLimitCalls(ClientQuotaType.FETCH).get)
-    assertTrue(s"Too many quotaLimit calls $quotaLimitCalls", quotaLimitCalls(ClientQuotaType.REQUEST).get <= serverCount)
+    assertTrue(s"Too many quotaLimit calls $quotaLimitCalls", quotaLimitCalls(ClientQuotaType.REQUEST).get <= 10) // sanity check
     // Large quota updated to small quota, should throttle
     user.configureAndWaitForQuota(9000, 3000)
     user.produceConsume(expectProduceThrottle = true, expectConsumeThrottle = true)
@@ -160,7 +161,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     user.waitForQuotaUpdate(8000, 2500, defaultRequestQuota)
     user.produceConsume(expectProduceThrottle = true, expectConsumeThrottle = true)
 
-    assertEquals(serverCount, callbackInstances.get)
+    assertEquals(brokerCount, callbackInstances.get)
   }
 
   /**
@@ -321,6 +322,12 @@ object GroupedUserQuotaCallback {
     ClientQuotaType.REQUEST -> new AtomicInteger
   )
   val callbackInstances = new AtomicInteger
+
+  def tearDown(): Unit = {
+    callbackInstances.set(0)
+    quotaLimitCalls.values.foreach(_.set(0))
+    UnlimitedQuotaMetricTags.clear()
+  }
 }
 
 /**

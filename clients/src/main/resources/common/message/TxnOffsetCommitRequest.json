@@ -1,0 +1,50 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 28,
+  "type": "request",
+  "name": "TxnOffsetCommitRequest",
+  // Version 1 is the same as version 0.
+  //
+  // Version 2 adds the committed leader epoch.
+  "validVersions": "0-2",
+  "fields": [
+    { "name": "TransactionalId", "type": "string", "versions": "0+",
+      "about": "The ID of the transaction." },
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
+      "about": "The ID of the group." },
+    { "name": "ProducerId", "type": "int64", "versions": "0+", "entityType": "producerId",
+      "about": "The current producer ID in use by the transactional ID." },
+    { "name": "ProducerEpoch", "type": "int16", "versions": "0+",
+      "about": "The current epoch associated with the producer ID." },
+    { "name": "Topics", "type" : "[]TxnOffsetCommitRequestTopic", "versions": "0+",
+      "about": "Each topic that we want to committ offsets for.", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "Partitions", "type": "[]TxnOffsetCommitRequestPartition", "versions": "0+",
+        "about": "The partitions inside the topic that we want to committ offsets for.", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The index of the partition within the topic." },
+        { "name": "CommittedOffset", "type": "int64", "versions": "0+",
+          "about": "The message offset to be committed." },
+        { "name": "CommittedLeaderEpoch", "type": "int32", "versions": "2+", "default": "-1", "ignorable": true,
+          "about": "The leader epoch of the last consumed record." },
+        { "name": "CommittedMetadata", "type": "string", "versions": "0+", "nullableVersions": "0+",
+          "about": "Any associated metadata the client wants to keep." }
+      ]}
+    ]}
+  ]
+}

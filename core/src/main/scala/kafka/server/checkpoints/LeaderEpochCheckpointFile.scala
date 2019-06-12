@@ -29,14 +29,12 @@ trait LeaderEpochCheckpoint {
   def read(): Seq[EpochEntry]
 }
 
-object LeaderEpochFile {
-  private val LeaderEpochCheckpointFilename = "leader-epoch-checkpoint"
-  def newFile(dir: File): File = new File(dir, LeaderEpochCheckpointFilename)
-}
-
 object LeaderEpochCheckpointFile {
+  private val LeaderEpochCheckpointFilename = "leader-epoch-checkpoint"
   private val WhiteSpacesPattern = Pattern.compile("\\s+")
   private val CurrentVersion = 0
+
+  def newFile(dir: File): File = new File(dir, LeaderEpochCheckpointFilename)
 
   object Formatter extends CheckpointFileFormatter[EpochEntry] {
 

@@ -32,7 +32,6 @@ import org.apache.kafka.streams.kstream.internals.graph.StreamSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.StreamsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
 import org.apache.kafka.streams.processor.ProcessorSupplier;
-import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -43,9 +42,11 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.PriorityQueue;
 import java.util.Properties;
@@ -62,11 +63,12 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     private final AtomicInteger buildPriorityIndex = new AtomicInteger(0);
     private final LinkedHashMap<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> keyChangingOperationsToOptimizableRepartitionNodes = new LinkedHashMap<>();
     private final LinkedHashSet<StreamsGraphNode> mergeNodes = new LinkedHashSet<>();
+    private final LinkedHashSet<StreamsGraphNode> tableSourceNodes = new LinkedHashSet<>();
 
     private static final String TOPOLOGY_ROOT = "root";
     private static final Logger LOG = LoggerFactory.getLogger(InternalStreamsBuilder.class);
 
-    protected final StreamsGraphNode root = new StreamsGraphNode(TOPOLOGY_ROOT, false) {
+    protected final StreamsGraphNode root = new StreamsGraphNode(TOPOLOGY_ROOT) {
         @Override
         public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
             // no-op for root node
@@ -79,7 +81,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
     public <K, V> KStream<K, V> stream(final Collection<String> topics,
                                        final ConsumedInternal<K, V> consumed) {
-        final String name = newProcessorName(KStreamImpl.SOURCE_NAME);
+
+        final String name = new NamedInternal(consumed.name()).orElseGenerateWithPrefix(this, KStreamImpl.SOURCE_NAME);
         final StreamSourceNode<K, V> streamSourceNode = new StreamSourceNode<>(name, topics, consumed);
 
         addGraphNode(root, streamSourceNode);
@@ -109,67 +112,64 @@ public class InternalStreamsBuilder implements InternalNameProvider {
                                  this);
     }
 
-    @SuppressWarnings("unchecked")
-    public <K, V, S extends StateStore> KTable<K, V> table(final String topic,
-                                                           final ConsumedInternal<K, V> consumed,
-                                                           final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+    public <K, V> KTable<K, V> table(final String topic,
+                                     final ConsumedInternal<K, V> consumed,
+                                     final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+        final String sourceName = new NamedInternal(consumed.name())
+                .orElseGenerateWithPrefix(this, KStreamImpl.SOURCE_NAME);
+        final String tableSourceName = new NamedInternal(consumed.name())
+                .suffixWithOrElseGet("-table-source", this, KTableImpl.SOURCE_NAME);
+        final KTableSource<K, V> tableSource = new KTableSource<>(materialized.storeName(), materialized.queryableStoreName());
+        final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(tableSource, tableSourceName);
 
-        final StoreBuilder<S> storeBuilder = (StoreBuilder<S>) new KeyValueStoreMaterializer<>(materialized).materialize();
-
-        final String source = newProcessorName(KStreamImpl.SOURCE_NAME);
-        final String name = newProcessorName(KTableImpl.SOURCE_NAME);
-        final ProcessorSupplier<K, V> processorSupplier = new KTableSource<>(storeBuilder.name());
-        final ProcessorParameters processorParameters = new ProcessorParameters<>(processorSupplier, name);
-
-        final TableSourceNode.TableSourceNodeBuilder<K, V, S> tableSourceNodeBuilder = TableSourceNode.tableSourceNodeBuilder();
-
-        final TableSourceNode<K, V, S> tableSourceNode = tableSourceNodeBuilder.withNodeName(name)
-                                                                               .withSourceName(source)
-                                                                               .withStoreBuilder(storeBuilder)
-                                                                               .withConsumedInternal(consumed)
-                                                                               .withProcessorParameters(processorParameters)
-                                                                               .withTopic(topic)
-                                                                               .build();
+        final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder()
+            .withTopic(topic)
+            .withSourceName(sourceName)
+            .withNodeName(tableSourceName)
+            .withConsumedInternal(consumed)
+            .withMaterializedInternal(materialized)
+            .withProcessorParameters(processorParameters)
+            .build();
 
         addGraphNode(root, tableSourceNode);
 
-        return new KTableImpl<>(name,
+        return new KTableImpl<>(tableSourceName,
                                 consumed.keySerde(),
                                 consumed.valueSerde(),
-                                Collections.singleton(source),
-                                storeBuilder.name(),
-                                materialized.isQueryable(),
-                                processorSupplier,
+                                Collections.singleton(sourceName),
+                                materialized.queryableStoreName(),
+                                tableSource,
                                 tableSourceNode,
                                 this);
     }
 
-    @SuppressWarnings("unchecked")
-    public <K, V, S extends StateStore> GlobalKTable<K, V> globalTable(final String topic,
-                                                                       final ConsumedInternal<K, V> consumed,
-                                                                       final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
+    public <K, V> GlobalKTable<K, V> globalTable(final String topic,
+                                                 final ConsumedInternal<K, V> consumed,
+                                                 final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materialized) {
         Objects.requireNonNull(consumed, "consumed can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
         // explicitly disable logging for global stores
         materialized.withLoggingDisabled();
-        final StoreBuilder storeBuilder = new KeyValueStoreMaterializer<>(materialized).materialize();
         final String sourceName = newProcessorName(KTableImpl.SOURCE_NAME);
         final String processorName = newProcessorName(KTableImpl.SOURCE_NAME);
-        final KTableSource<K, V> tableSource = new KTableSource<>(storeBuilder.name());
+        // enforce store name as queryable name to always materialize global table stores
+        final String storeName = materialized.storeName();
+        final KTableSource<K, V> tableSource = new KTableSource<>(storeName, storeName);
 
-        final ProcessorParameters processorParameters = new ProcessorParameters(tableSource, processorName);
+        final ProcessorParameters<K, V> processorParameters = new ProcessorParameters<>(tableSource, processorName);
 
-        final TableSourceNode<K, V, S> tableSourceNode = TableSourceNode.tableSourceNodeBuilder().withStoreBuilder(storeBuilder)
-                                                                                                 .withSourceName(sourceName)
-                                                                                                 .withConsumedInternal(consumed)
-                                                                                                 .withTopic(topic)
-                                                                                                 .withProcessorParameters(processorParameters)
-                                                                                                 .isGlobalKTable(true)
-                                                                                                 .build();
+        final TableSourceNode<K, V> tableSourceNode = TableSourceNode.<K, V>tableSourceNodeBuilder()
+            .withTopic(topic)
+            .isGlobalKTable(true)
+            .withSourceName(sourceName)
+            .withConsumedInternal(consumed)
+            .withMaterializedInternal(materialized)
+            .withProcessorParameters(processorParameters)
+            .build();
 
         addGraphNode(root, tableSourceNode);
 
-        return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<>(storeBuilder.name()), materialized.isQueryable());
+        return new GlobalKTableImpl<>(new KTableSourceValueGetterSupplier<>(storeName), materialized.queryableStoreName());
     }
 
     @Override
@@ -260,6 +260,8 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
         } else if (node.isMergeNode()) {
             mergeNodes.add(node);
+        } else if (node instanceof TableSourceNode) {
+            tableSourceNodes.add(node);
         }
     }
 
@@ -298,15 +300,23 @@ public class InternalStreamsBuilder implements InternalNameProvider {
 
         if (props != null && StreamsConfig.OPTIMIZE.equals(props.getProperty(StreamsConfig.TOPOLOGY_OPTIMIZATION))) {
             LOG.debug("Optimizing the Kafka Streams graph for repartition nodes");
+            optimizeKTableSourceTopics();
             maybeOptimizeRepartitionOperations();
         }
+    }
+
+    private void optimizeKTableSourceTopics() {
+        LOG.debug("Marking KTable source nodes to optimize using source topic for changelogs ");
+        tableSourceNodes.forEach(node -> ((TableSourceNode) node).reuseSourceTopicForChangeLog(true));
     }
 
     @SuppressWarnings("unchecked")
     private void maybeOptimizeRepartitionOperations() {
         maybeUpdateKeyChangingRepartitionNodeMap();
+        final Iterator<Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>>> entryIterator =  keyChangingOperationsToOptimizableRepartitionNodes.entrySet().iterator();
 
-        for (final Map.Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> entry : keyChangingOperationsToOptimizableRepartitionNodes.entrySet()) {
+        while (entryIterator.hasNext()) {
+            final Map.Entry<StreamsGraphNode, LinkedHashSet<OptimizableRepartitionNode>> entry = entryIterator.next();
 
             final StreamsGraphNode keyChangingNode = entry.getKey();
 
@@ -362,7 +372,7 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             }
 
             keyChangingNode.addChild(optimizedSingleRepartition);
-            keyChangingOperationsToOptimizableRepartitionNodes.remove(entry.getKey());
+            entryIterator.remove();
         }
     }
 

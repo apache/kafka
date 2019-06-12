@@ -39,13 +39,13 @@ object ReplicationUtils extends Logging {
     try {
       val (writtenLeaderOpt, writtenStat) = zkClient.getDataAndStat(path)
       val expectedLeaderOpt = TopicPartitionStateZNode.decode(expectedLeaderAndIsrInfo, writtenStat)
-      val succeeded = writtenLeaderOpt.map { writtenData =>
+      val succeeded = writtenLeaderOpt.exists { writtenData =>
         val writtenLeaderOpt = TopicPartitionStateZNode.decode(writtenData, writtenStat)
         (expectedLeaderOpt, writtenLeaderOpt) match {
           case (Some(expectedLeader), Some(writtenLeader)) if expectedLeader == writtenLeader => true
           case _ => false
         }
-      }.getOrElse(false)
+      }
       if (succeeded) (true, writtenStat.getVersion)
       else (false, -1)
     } catch {

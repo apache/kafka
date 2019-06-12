@@ -21,8 +21,8 @@ import java.text.SimpleDateFormat
 import java.util
 import java.util.Base64
 
-import joptsimple.{ArgumentAcceptingOptionSpec, OptionParser}
-import kafka.utils.{CommandLineUtils, Exit, Logging}
+import joptsimple.ArgumentAcceptingOptionSpec
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, Exit, Logging}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.{CreateDelegationTokenOptions, DescribeDelegationTokenOptions, ExpireDelegationTokenOptions, RenewDelegationTokenOptions, AdminClient => JAdminClient}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -40,8 +40,7 @@ object DelegationTokenCommand extends Logging {
   def main(args: Array[String]): Unit = {
     val opts = new DelegationTokenCommandOptions(args)
 
-    if(args.length == 0)
-      CommandLineUtils.printUsageAndDie(opts.parser, "Tool to create, renew, expire, or describe delegation tokens.")
+    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to create, renew, expire, or describe delegation tokens.")
 
     // should have exactly one action
     val actions = Seq(opts.createOpt, opts.renewOpt, opts.expiryOpt, opts.describeOpt).count(opts.options.has _)
@@ -150,12 +149,11 @@ object DelegationTokenCommand extends Logging {
     JAdminClient.create(props)
   }
 
-  class DelegationTokenCommandOptions(args: Array[String]) {
+  class DelegationTokenCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     val BootstrapServerDoc = "REQUIRED: server(s) to use for bootstrapping."
     val CommandConfigDoc = "REQUIRED: A property file containing configs to be passed to Admin Client. Token management" +
       " operations are allowed in secure mode only. This config file is used to pass security related configs."
 
-    val parser = new OptionParser(false)
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
                                    .ofType(classOf[String])
@@ -196,7 +194,7 @@ object DelegationTokenCommand extends Logging {
       .withOptionalArg
       .ofType(classOf[String])
 
-    val options = parser.parse(args : _*)
+    options = parser.parse(args : _*)
 
     def checkArgs() {
       // check required args

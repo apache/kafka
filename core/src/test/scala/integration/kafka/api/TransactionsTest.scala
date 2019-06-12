@@ -18,6 +18,7 @@
 package kafka.api
 
 import java.lang.{Long => JLong}
+import java.time.Duration
 import java.util.{Optional, Properties}
 import java.util.concurrent.TimeUnit
 
@@ -28,9 +29,10 @@ import kafka.utils.TestUtils.consumeRecords
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, OffsetAndMetadata}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
-import org.apache.kafka.common.errors.ProducerFencedException
+import org.apache.kafka.common.errors.{ProducerFencedException, TimeoutException}
 import org.junit.{After, Before, Test}
 import org.junit.Assert._
+import org.scalatest.Assertions.fail
 
 import scala.collection.JavaConverters._
 import scala.collection.mutable.Buffer
@@ -495,7 +497,7 @@ class TransactionsTest extends KafkaServerTestHarness {
 
     try {
       // Now that the transaction has expired, the second send should fail with a ProducerFencedException.
-      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, "2", "2", willBeCommitted = false)).get()
+      producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, "2", "2", willBeCommitted = false)).get()
       fail("should have raised a ProducerFencedException since the transaction has expired")
     } catch {
       case _: ProducerFencedException =>
@@ -504,9 +506,13 @@ class TransactionsTest extends KafkaServerTestHarness {
     }
 
     // Verify that the first message was aborted and the second one was never written at all.
-    val nonTransactionalConsumer = nonTransactionalConsumers(0)
+    val nonTransactionalConsumer = nonTransactionalConsumers.head
     nonTransactionalConsumer.subscribe(List(topic1).asJava)
-    val records = TestUtils.consumeRecordsFor(nonTransactionalConsumer, 1000)
+
+    // Attempt to consume the one written record. We should not see the second. The
+    // assertion does not strictly guarantee that the record wasn't written, but the
+    // data is small enough that had it been written, it would have been in the first fetch.
+    val records = TestUtils.consumeRecords(nonTransactionalConsumer, numRecords = 1)
     assertEquals(1, records.size)
     assertEquals("1", TestUtils.recordValueAsString(records.head))
 
@@ -560,12 +566,25 @@ class TransactionsTest extends KafkaServerTestHarness {
   def testConsecutivelyRunInitTransactions(): Unit = {
     val producer = createTransactionalProducer(transactionalId = "normalProducer")
 
+    producer.initTransactions()
+    producer.initTransactions()
+    fail("Should have raised a KafkaException")
+  }
+
+  @Test(expected = classOf[TimeoutException])
+  def testCommitTransactionTimeout(): Unit = {
+    val producer = createTransactionalProducer("transactionalProducer", maxBlockMs = 1000)
+    producer.initTransactions()
+    producer.beginTransaction()
+    producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic1, "foobar".getBytes))
+
+    for (i <- 0 until servers.size)
+      killBroker(i) // pretend all brokers not available
+
     try {
-      producer.initTransactions()
-      producer.initTransactions()
-      fail("Should have raised a KafkaException")
+      producer.commitTransaction()
     } finally {
-      producer.close()
+      producer.close(Duration.ZERO)
     }
   }
 
@@ -615,9 +634,11 @@ class TransactionsTest extends KafkaServerTestHarness {
   }
 
   private def createTransactionalProducer(transactionalId: String,
-                                          transactionTimeoutMs: Long = 60000): KafkaProducer[Array[Byte], Array[Byte]] = {
+                                          transactionTimeoutMs: Long = 60000,
+                                          maxBlockMs: Long = 60000): KafkaProducer[Array[Byte], Array[Byte]] = {
     val producer = TestUtils.createTransactionalProducer(transactionalId, servers,
-      transactionTimeoutMs = transactionTimeoutMs)
+      transactionTimeoutMs = transactionTimeoutMs,
+      maxBlockMs = maxBlockMs)
     transactionalProducers += producer
     producer
   }

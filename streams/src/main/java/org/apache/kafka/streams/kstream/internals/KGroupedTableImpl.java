@@ -47,13 +47,15 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     private static final String REDUCE_NAME = "KTABLE-REDUCE-";
 
-    private final String userSpecifiedName;
+    private final String userProvidedRepartitionTopicName;
 
     private final Initializer<Long> countInitializer = () -> 0L;
 
     private final Aggregator<K, V, Long> countAdder = (aggKey, value, aggregate) -> aggregate + 1L;
 
     private final Aggregator<K, V, Long> countSubtractor = (aggKey, value, aggregate) -> aggregate - 1L;
+
+    private StreamsGraphNode repartitionGraphNode;
 
     KGroupedTableImpl(final InternalStreamsBuilder builder,
                       final String name,
@@ -62,40 +64,42 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
                       final StreamsGraphNode streamsGraphNode) {
         super(name, groupedInternal.keySerde(), groupedInternal.valueSerde(), sourceNodes, streamsGraphNode, builder);
 
-        this.userSpecifiedName = groupedInternal.name();
+        this.userProvidedRepartitionTopicName = groupedInternal.name();
     }
 
     private <T> KTable<K, T> doAggregate(final ProcessorSupplier<K, Change<V>> aggregateSupplier,
                                          final String functionName,
                                          final MaterializedInternal<K, T, KeyValueStore<Bytes, byte[]>> materialized) {
+
         final String sinkName = builder.newProcessorName(KStreamImpl.SINK_NAME);
         final String sourceName = builder.newProcessorName(KStreamImpl.SOURCE_NAME);
         final String funcName = builder.newProcessorName(functionName);
-        final String repartitionTopic = (userSpecifiedName != null ? userSpecifiedName : materialized.storeName())
+        final String repartitionTopic = (userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : materialized.storeName())
             + KStreamImpl.REPARTITION_TOPIC_SUFFIX;
 
-        final StreamsGraphNode repartitionNode = createRepartitionNode(sinkName, sourceName, repartitionTopic);
+        if (repartitionGraphNode == null || userProvidedRepartitionTopicName == null) {
+            repartitionGraphNode = createRepartitionNode(sinkName, sourceName, repartitionTopic);
+        }
+
 
         // the passed in StreamsGraphNode must be the parent of the repartition node
-        builder.addGraphNode(this.streamsGraphNode, repartitionNode);
+        builder.addGraphNode(this.streamsGraphNode, repartitionGraphNode);
 
         final StatefulProcessorNode statefulProcessorNode = new StatefulProcessorNode<>(
             funcName,
             new ProcessorParameters<>(aggregateSupplier, funcName),
-            new KeyValueStoreMaterializer<>(materialized).materialize(),
-            false
+            new TimestampedKeyValueStoreMaterializer<>(materialized).materialize()
         );
 
         // now the repartition node must be the parent of the StateProcessorNode
-        builder.addGraphNode(repartitionNode, statefulProcessorNode);
+        builder.addGraphNode(repartitionGraphNode, statefulProcessorNode);
 
         // return the KTable representation with the intermediate topic as the sources
         return new KTableImpl<>(funcName,
                                 materialized.keySerde(),
                                 materialized.valueSerde(),
                                 Collections.singleton(sourceName),
-                                materialized.storeName(),
-                                materialized.isQueryable(),
+                                materialized.queryableStoreName(),
                                 aggregateSupplier,
                                 statefulProcessorNode,
                                 builder);
@@ -121,8 +125,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         Objects.requireNonNull(adder, "adder can't be null");
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
-        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, AGGREGATE_NAME);
+        final MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
 
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
@@ -144,8 +148,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
 
     @Override
     public KTable<K, Long> count(final Materialized<K, Long, KeyValueStore<Bytes, byte[]>> materialized) {
-        final MaterializedInternal<K, Long, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, AGGREGATE_NAME);
+        final MaterializedInternal<K, Long, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
 
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);
@@ -177,8 +181,8 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         Objects.requireNonNull(subtractor, "subtractor can't be null");
         Objects.requireNonNull(materialized, "materialized can't be null");
 
-        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal = new MaterializedInternal<>(materialized);
-        materializedInternal.generateStoreNameIfNeeded(builder, AGGREGATE_NAME);
+        final MaterializedInternal<K, VR, KeyValueStore<Bytes, byte[]>> materializedInternal =
+            new MaterializedInternal<>(materialized, builder, AGGREGATE_NAME);
 
         if (materializedInternal.keySerde() == null) {
             materializedInternal.withKeySerde(keySerde);

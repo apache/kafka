@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.CommonFields;
@@ -26,7 +28,6 @@ import org.apache.kafka.common.protocol.types.Struct;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
-import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ResponseHeader;
 import org.apache.kafka.common.utils.LogContext;
@@ -55,41 +56,38 @@ public class NetworkClientTest {
     protected final int defaultRequestTimeoutMs = 1000;
     protected final MockTime time = new MockTime();
     protected final MockSelector selector = new MockSelector(time);
-    protected final Metadata metadata = new Metadata(0, Long.MAX_VALUE, true);
-    protected final MetadataResponse initialMetadataResponse = TestUtils.metadataUpdateWith(1,
-            Collections.singletonMap("test", 1));
-    protected final Node node = initialMetadataResponse.brokers().iterator().next();
+    protected final Node node = TestUtils.singletonCluster().nodes().iterator().next();
     protected final long reconnectBackoffMsTest = 10 * 1000;
     protected final long reconnectBackoffMaxMsTest = 10 * 10000;
 
+    private final TestMetadataUpdater metadataUpdater = new TestMetadataUpdater(Collections.singletonList(node));
     private final NetworkClient client = createNetworkClient(reconnectBackoffMaxMsTest);
     private final NetworkClient clientWithNoExponentialBackoff = createNetworkClient(reconnectBackoffMsTest);
     private final NetworkClient clientWithStaticNodes = createNetworkClientWithStaticNodes();
     private final NetworkClient clientWithNoVersionDiscovery = createNetworkClientWithNoVersionDiscovery();
 
     private NetworkClient createNetworkClient(long reconnectBackoffMaxMs) {
-        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+        return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMs, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithStaticNodes() {
-        return new NetworkClient(selector, new ManualMetadataUpdater(Arrays.asList(node)),
+        return new NetworkClient(selector, metadataUpdater,
                 "mock-static", Integer.MAX_VALUE, 0, 0, 64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 ClientDnsLookup.DEFAULT, time, true, new ApiVersions(), new LogContext());
     }
 
     private NetworkClient createNetworkClientWithNoVersionDiscovery() {
-        return new NetworkClient(selector, metadata, "mock", Integer.MAX_VALUE,
+        return new NetworkClient(selector, metadataUpdater, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest,
-                64 * 1024, 64 * 1024, defaultRequestTimeoutMs, 
+                64 * 1024, 64 * 1024, defaultRequestTimeoutMs,
                 ClientDnsLookup.DEFAULT, time, false, new ApiVersions(), new LogContext());
     }
 
     @Before
     public void setup() {
         selector.reset();
-        metadata.update(initialMetadataResponse, time.milliseconds());
     }
 
     @Test(expected = IllegalStateException.class)
@@ -117,6 +115,12 @@ public class NetworkClientTest {
     }
 
     @Test
+    public void testDnsLookupFailure() {
+        /* Fail cleanly when the node has a bad hostname */
+        assertFalse(client.ready(new Node(1234, "badhost", 1234), time.milliseconds()));
+    }
+
+    @Test
     public void testClose() {
         client.ready(node, time.milliseconds());
         awaitReady(client, node);
@@ -137,6 +141,16 @@ public class NetworkClientTest {
         assertFalse(client.hasInFlightRequests(node.idString()));
         assertFalse(client.hasInFlightRequests());
         assertFalse("Connection should not be ready after close", client.isReady(node, 0));
+    }
+
+    @Test
+    public void testUnsupportedVersionDuringInternalMetadataRequest() {
+        List<String> topics = Arrays.asList("topic_1");
+
+        // disabling auto topic creation for versions less than 4 is not supported
+        MetadataRequest.Builder builder = new MetadataRequest.Builder(topics, false, (short) 3);
+        client.sendInternalMetadataRequest(builder, node.idString(), time.milliseconds());
+        assertEquals(UnsupportedVersionException.class, metadataUpdater.getAndClearFailure().getClass());
     }
 
     private void checkSimpleRequestResponse(NetworkClient networkClient) {
@@ -258,12 +272,11 @@ public class NetworkClientTest {
 
     // Creates expected ApiVersionsResponse from the specified node, where the max protocol version for the specified
     // key is set to the specified version.
-    private ApiVersionsResponse createExpectedApiVersionsResponse(Node node, ApiKeys key,
-        short apiVersionsMaxProtocolVersion) {
+    private ApiVersionsResponse createExpectedApiVersionsResponse(ApiKeys key, short maxVersion) {
         List<ApiVersionsResponse.ApiVersion> versionList = new ArrayList<>();
         for (ApiKeys apiKey : ApiKeys.values()) {
             if (apiKey == key) {
-                versionList.add(new ApiVersionsResponse.ApiVersion(apiKey.id, (short) 0, apiVersionsMaxProtocolVersion));
+                versionList.add(new ApiVersionsResponse.ApiVersion(apiKey, (short) 0, maxVersion));
             } else {
                 versionList.add(new ApiVersionsResponse.ApiVersion(apiKey));
             }
@@ -275,29 +288,15 @@ public class NetworkClientTest {
     public void testThrottlingNotEnabledForConnectionToOlderBroker() {
         // Instrument the test so that the max protocol version for PRODUCE returned from the node is 5 and thus
         // client-side throttling is not enabled. Also, return a response with a 100ms throttle delay.
-        setExpectedApiVersionsResponse(createExpectedApiVersionsResponse(node, ApiKeys.PRODUCE, (short) 5));
+        setExpectedApiVersionsResponse(createExpectedApiVersionsResponse(ApiKeys.PRODUCE, (short) 5));
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
         selector.clear();
 
-        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
-            Collections.emptyMap());
-        TestCallbackHandler handler = new TestCallbackHandler();
-        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
-                defaultRequestTimeoutMs, handler);
-        client.send(request, time.milliseconds());
+        int correlationId = sendEmptyProduceRequest();
         client.poll(1, time.milliseconds());
-        ResponseHeader respHeader = new ResponseHeader(request.correlationId());
-        Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
-        resp.set("responses", new Object[0]);
-        resp.set(CommonFields.THROTTLE_TIME_MS, 100);
-        Struct responseHeaderStruct = respHeader.toStruct();
-        int size = responseHeaderStruct.sizeOf() + resp.sizeOf();
-        ByteBuffer buffer = ByteBuffer.allocate(size);
-        responseHeaderStruct.writeTo(buffer);
-        resp.writeTo(buffer);
-        buffer.flip();
-        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+
+        sendThrottledProduceResponse(correlationId, 100);
         client.poll(1, time.milliseconds());
 
         // Since client-side throttling is disabled, the connection is ready even though the response indicated a
@@ -306,9 +305,41 @@ public class NetworkClientTest {
         assertEquals(0, client.throttleDelayMs(node, time.milliseconds()));
     }
 
+    private int sendEmptyProduceRequest() {
+        ProduceRequest.Builder builder = ProduceRequest.Builder.forCurrentMagic((short) 1, 1000,
+                Collections.emptyMap());
+        TestCallbackHandler handler = new TestCallbackHandler();
+        ClientRequest request = client.newClientRequest(node.idString(), builder, time.milliseconds(), true,
+                defaultRequestTimeoutMs, handler);
+        client.send(request, time.milliseconds());
+        return request.correlationId();
+    }
+
+
+    private void sendResponse(int correlationId, Struct response) {
+        ResponseHeader respHeader = new ResponseHeader(correlationId);
+        Struct responseHeaderStruct = respHeader.toStruct();
+        int size = responseHeaderStruct.sizeOf() + response.sizeOf();
+        ByteBuffer buffer = ByteBuffer.allocate(size);
+        responseHeaderStruct.writeTo(buffer);
+        response.writeTo(buffer);
+        buffer.flip();
+        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+    }
+
+    private void sendThrottledProduceResponse(int correlationId, int throttleMs) {
+        Struct resp = new Struct(ApiKeys.PRODUCE.responseSchema(ApiKeys.PRODUCE.latestVersion()));
+        resp.set("responses", new Object[0]);
+        resp.set(CommonFields.THROTTLE_TIME_MS, throttleMs);
+        sendResponse(correlationId, resp);
+    }
+
     @Test
     public void testLeastLoadedNode() {
         client.ready(node, time.milliseconds());
+        assertFalse(client.isReady(node, time.milliseconds()));
+        assertEquals(node, client.leastLoadedNode(time.milliseconds()));
+
         awaitReady(client, node);
         client.poll(1, time.milliseconds());
         assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
@@ -327,6 +358,23 @@ public class NetworkClientTest {
         assertFalse("After we forced the disconnection the client is no longer ready.", client.ready(node, time.milliseconds()));
         leastNode = client.leastLoadedNode(time.milliseconds());
         assertNull("There should be NO leastloadednode", leastNode);
+    }
+
+    @Test
+    public void testLeastLoadedNodeConsidersThrottledConnections() {
+        client.ready(node, time.milliseconds());
+        awaitReady(client, node);
+        client.poll(1, time.milliseconds());
+        assertTrue("The client should be ready", client.isReady(node, time.milliseconds()));
+
+        int correlationId = sendEmptyProduceRequest();
+        client.poll(1, time.milliseconds());
+
+        sendThrottledProduceResponse(correlationId, 100);
+        client.poll(1, time.milliseconds());
+
+        // leastloadednode should return null since the node is throttled
+        assertNull(client.leastLoadedNode(time.milliseconds()));
     }
 
     @Test
@@ -548,6 +596,27 @@ public class NetworkClientTest {
         public void onComplete(ClientResponse response) {
             this.executed = true;
             this.response = response;
+        }
+    }
+
+    // ManualMetadataUpdater with ability to keep track of failures
+    private static class TestMetadataUpdater extends ManualMetadataUpdater {
+        KafkaException failure;
+
+        public TestMetadataUpdater(List<Node> nodes) {
+            super(nodes);
+        }
+
+        @Override
+        public void handleFatalException(KafkaException exception) {
+            failure = exception;
+            super.handleFatalException(exception);
+        }
+
+        public KafkaException getAndClearFailure() {
+            KafkaException failure = this.failure;
+            this.failure = null;
+            return failure;
         }
     }
 }

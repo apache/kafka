@@ -124,6 +124,18 @@ public interface Herder {
     void putTaskConfigs(String connName, List<Map<String, String>> configs, Callback<Void> callback);
 
     /**
+     * Get a list of connectors currently running in this cluster.
+     * @returns A list of connector names
+     */
+    Collection<String> connectors();
+
+    /**
+     * Get the definition and status of a connector.
+     * @param connName name of the connector
+     */
+    ConnectorInfo connectorInfo(String connName);
+
+    /**
      * Lookup the current status of a connector.
      * @param connName name of the connector
      */
@@ -147,12 +159,6 @@ public interface Herder {
      * @param cb callback to invoke upon completion
      */
     void restartTask(ConnectorTaskId id, Callback<Void> cb);
-
-    /**
-     * Get the configuration reload action.
-     * @param connName name of the connector
-     */
-    ConfigReloadAction connectorConfigReloadAction(final String connName);
 
     /**
      * Restart the connector.

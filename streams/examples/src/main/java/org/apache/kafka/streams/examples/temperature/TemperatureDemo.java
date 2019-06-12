@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.examples.temperature;
 
-import java.time.Duration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
@@ -29,6 +28,7 @@ import org.apache.kafka.streams.kstream.TimeWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 
+import java.time.Duration;
 import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
@@ -43,11 +43,11 @@ import java.util.concurrent.CountDownLatch;
  *
  * Before running this example you must create the input topic for temperature values in the following way :
  *
- * bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic iot-temperature
+ * bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic iot-temperature
  *
  * and at same time the output topic for filtered values :
  *
- * bin/kafka-topics.sh --create --zookeeper localhost:2181 --replication-factor 1 --partitions 1 --topic iot-temperature-max
+ * bin/kafka-topics.sh --create --bootstrap-server localhost:9092 --replication-factor 1 --partitions 1 --topic iot-temperature-max
  *
  * After that, a console consumer can be started in order to read filtered values from the "iot-temperature-max" topic :
  *
@@ -90,10 +90,11 @@ public class TemperatureDemo {
             .groupByKey()
             .windowedBy(TimeWindows.of(Duration.ofSeconds(TEMPERATURE_WINDOW_SIZE)))
             .reduce((value1, value2) -> {
-                if (Integer.parseInt(value1) > Integer.parseInt(value2))
+                if (Integer.parseInt(value1) > Integer.parseInt(value2)) {
                     return value1;
-                else
+                } else {
                     return value2;
+                }
             })
             .toStream()
             .filter((key, value) -> Integer.parseInt(value) > TEMPERATURE_THRESHOLD);

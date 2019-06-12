@@ -98,7 +98,7 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
 
     val time = Time.SYSTEM
     zkClient = KafkaZkClient(zkUrl, kafkaConfig.zkEnableSecureAcls, zkSessionTimeOutMs, zkConnectionTimeoutMs,
-      zkMaxInFlightRequests, time, "kafka.security", "SimpleAclAuthorizer")
+      zkMaxInFlightRequests, time, "kafka.security", "SimpleAclAuthorizer", name=Some("Simple ACL authorizer"))
     zkClient.createAclPaths()
 
     extendedAclSupport = kafkaConfig.interBrokerProtocolVersion >= KAFKA_2_0_IV1
@@ -239,10 +239,9 @@ class SimpleAclAuthorizer extends Authorizer with Logging {
         .map(_.acls)
         .getOrElse(Set.empty[Acl])
 
-      val prefixed = aclCache.range(
-        Resource(resourceType, resourceName, PatternType.PREFIXED),
-        Resource(resourceType, resourceName.take(1), PatternType.PREFIXED)
-      )
+      val prefixed = aclCache
+        .from(Resource(resourceType, resourceName, PatternType.PREFIXED))
+        .to(Resource(resourceType, resourceName.take(1), PatternType.PREFIXED))
         .filterKeys(resource => resourceName.startsWith(resource.name))
         .flatMap { case (resource, versionedAcls) => versionedAcls.acls }
         .toSet

@@ -16,12 +16,14 @@
 import os.path
 import signal
 import streams_property
+import consumer_property
 from ducktape.services.service import Service
 from ducktape.utils.util import wait_until
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.kafka import KafkaConfig
 from kafkatest.services.monitor.jmx import JmxMixin
-from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1, LATEST_2_0
+from kafkatest.version import LATEST_0_10_0, LATEST_0_10_1, LATEST_0_10_2, LATEST_0_11_0, LATEST_1_0, LATEST_1_1,\
+    LATEST_2_0, LATEST_2_1, LATEST_2_2
 
 STATE_DIR = "state.dir"
 
@@ -353,6 +355,10 @@ class StreamsSmokeTestJobRunnerService(StreamsSmokeTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsSmokeTestJobRunnerService, self).__init__(test_context, kafka, "process")
 
+class StreamsSmokeTestEOSJobRunnerService(StreamsSmokeTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsSmokeTestEOSJobRunnerService, self).__init__(test_context, kafka, "process-eos")
+
 
 class StreamsEosTestDriverService(StreamsEosTestBaseService):
     def __init__(self, test_context, kafka):
@@ -424,6 +430,32 @@ class StreamsStandbyTaskService(StreamsTestBaseService):
                                                         configs)
 
 
+class StreamsOptimizedUpgradeTestService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsOptimizedUpgradeTestService, self).__init__(test_context,
+                                                                 kafka,
+                                                                 "org.apache.kafka.streams.tests.StreamsOptimizedTest",
+                                                                 "")
+        self.OPTIMIZED_CONFIG = 'none'
+        self.INPUT_TOPIC = None
+        self.AGGREGATION_TOPIC = None
+        self.REDUCE_TOPIC = None
+        self.JOIN_TOPIC = None
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+
+        properties['topology.optimization'] = self.OPTIMIZED_CONFIG
+        properties['input.topic'] = self.INPUT_TOPIC
+        properties['aggregation.topic'] = self.AGGREGATION_TOPIC
+        properties['reduce.topic'] = self.REDUCE_TOPIC
+        properties['join.topic'] = self.JOIN_TOPIC
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
+
+
 class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
     def __init__(self, test_context, kafka):
         super(StreamsUpgradeTestJobRunnerService, self).__init__(test_context,
@@ -456,7 +488,8 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
     def start_cmd(self, node):
         args = self.args.copy()
         if self.KAFKA_STREAMS_VERSION in [str(LATEST_0_10_0), str(LATEST_0_10_1), str(LATEST_0_10_2),
-                                          str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1), str(LATEST_2_0)]:
+                                          str(LATEST_0_11_0), str(LATEST_1_0), str(LATEST_1_1),
+                                          str(LATEST_2_0), str(LATEST_2_1), str(LATEST_2_2)]:
             args['kafka'] = self.kafka.bootstrap_servers()
         else:
             args['kafka'] = ""
@@ -480,3 +513,46 @@ class StreamsUpgradeTestJobRunnerService(StreamsTestBaseService):
         self.logger.info("Executing: " + cmd)
 
         return cmd
+
+
+class StreamsNamedRepartitionTopicService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka):
+        super(StreamsNamedRepartitionTopicService, self).__init__(test_context,
+                                                                  kafka,
+                                                                  "org.apache.kafka.streams.tests.StreamsNamedRepartitionTest",
+                                                                  "")
+        self.ADD_ADDITIONAL_OPS = 'false'
+        self.INPUT_TOPIC = None
+        self.AGGREGATION_TOPIC = None
+
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers()}
+
+        properties['input.topic'] = self.INPUT_TOPIC
+        properties['aggregation.topic'] = self.AGGREGATION_TOPIC
+        properties['add.operations'] = self.ADD_ADDITIONAL_OPS
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()
+
+class StaticMemberTestService(StreamsTestBaseService):
+    def __init__(self, test_context, kafka, group_instance_id, num_threads):
+        super(StaticMemberTestService, self).__init__(test_context,
+                                                      kafka,
+                                                      "org.apache.kafka.streams.tests.StaticMemberTestClient",
+                                                      "")
+        self.INPUT_TOPIC = None
+        self.GROUP_INSTANCE_ID = group_instance_id
+        self.NUM_THREADS = num_threads
+    def prop_file(self):
+        properties = {streams_property.STATE_DIR: self.PERSISTENT_ROOT,
+                      streams_property.KAFKA_SERVERS: self.kafka.bootstrap_servers(),
+                      streams_property.NUM_THREADS: self.NUM_THREADS,
+                      consumer_property.GROUP_INSTANCE_ID: self.GROUP_INSTANCE_ID,
+                      consumer_property.SESSION_TIMEOUT_MS: 60000}
+
+        properties['input.topic'] = self.INPUT_TOPIC
+
+        cfg = KafkaConfig(**properties)
+        return cfg.render()

@@ -18,7 +18,7 @@
 package kafka.log
 
 import java.io._
-import java.util.Properties
+import java.util.{Collections, Properties}
 
 import kafka.server.FetchDataInfo
 import kafka.server.checkpoints.OffsetCheckpointFile
@@ -126,6 +126,11 @@ class LogManagerTest {
     time.sleep(maxLogAgeMs + 1)
     assertEquals("Now there should only be only one segment in the index.", 1, log.numberOfSegments)
     time.sleep(log.config.fileDeleteDelayMs + 1)
+
+    log.logSegments.foreach(s => {
+      s.lazyOffsetIndex.get
+      s.lazyTimeIndex.get
+    })
 
     // there should be a log file, two indexes, one producer snapshot, and the leader epoch checkpoint
     assertEquals("Files should have been deleted", log.numberOfSegments * 4 + 1, log.dir.list.length)
@@ -351,12 +356,12 @@ class LogManagerTest {
 
     val removedLog = logManager.asyncDelete(new TopicPartition(name, 0))
     val removedSegment = removedLog.activeSegment
-    val indexFilesAfterDelete = Seq(removedSegment.offsetIndex.file, removedSegment.timeIndex.file,
+    val indexFilesAfterDelete = Seq(removedSegment.lazyOffsetIndex.file, removedSegment.lazyTimeIndex.file,
       removedSegment.txnIndex.file)
 
     assertEquals(new File(removedLog.dir, logName), removedSegment.log.file)
-    assertEquals(new File(removedLog.dir, indexName), removedSegment.offsetIndex.file)
-    assertEquals(new File(removedLog.dir, timeIndexName), removedSegment.timeIndex.file)
+    assertEquals(new File(removedLog.dir, indexName), removedSegment.lazyOffsetIndex.file)
+    assertEquals(new File(removedLog.dir, timeIndexName), removedSegment.lazyTimeIndex.file)
     assertEquals(new File(removedLog.dir, txnIndexName), removedSegment.txnIndex.file)
 
     // Try to detect the case where a new index type was added and we forgot to update the pointer
@@ -373,6 +378,13 @@ class LogManagerTest {
     assertTrue("Logs deleted too early", logManager.hasLogsToBeDeleted)
     time.sleep(logManager.currentDefaultConfig.fileDeleteDelayMs - logManager.InitialTaskDelayMs)
     assertFalse("Logs not deleted", logManager.hasLogsToBeDeleted)
+  }
+
+  @Test
+  def testCreateAndDeleteOverlyLongTopic(): Unit = {
+    val invalidTopicName = String.join("", Collections.nCopies(253, "x"))
+    logManager.getOrCreateLog(new TopicPartition(invalidTopicName, 0), logConfig)
+    logManager.asyncDelete(new TopicPartition(invalidTopicName, 0))
   }
 
   @Test

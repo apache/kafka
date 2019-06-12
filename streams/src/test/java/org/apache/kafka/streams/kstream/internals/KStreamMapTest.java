@@ -34,14 +34,14 @@ import java.util.Properties;
 import static org.junit.Assert.assertEquals;
 
 public class KStreamMapTest {
-
-    private String topicName = "topic";
-    private final ConsumerRecordFactory<Integer, String> recordFactory = new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer());
+    private final ConsumerRecordFactory<Integer, String> recordFactory =
+        new ConsumerRecordFactory<>(new IntegerSerializer(), new StringSerializer(), 0L);
     private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.Integer(), Serdes.String());
 
     @Test
     public void testMap() {
         final StreamsBuilder builder = new StreamsBuilder();
+        final String topicName = "topic";
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
@@ -50,14 +50,12 @@ public class KStreamMapTest {
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
             for (final int expectedKey : expectedKeys) {
-                driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey));
+                driver.pipeInput(recordFactory.create(topicName, expectedKey, "V" + expectedKey, 10L - expectedKey));
             }
         }
 
+        final String[] expected = new String[]{"V0:0 (ts: 10)", "V1:1 (ts: 9)", "V2:2 (ts: 8)", "V3:3 (ts: 7)"};
         assertEquals(4, supplier.theCapturedProcessor().processed.size());
-
-        final String[] expected = new String[]{"V0:0", "V1:1", "V2:2", "V3:3"};
-
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
         }

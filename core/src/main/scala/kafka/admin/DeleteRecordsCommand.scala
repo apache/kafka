@@ -21,14 +21,12 @@ import java.io.PrintStream
 import java.util.Properties
 
 import kafka.common.AdminCommandFailedException
-import kafka.utils.{CommandLineUtils, CoreUtils, Json}
+import kafka.utils.json.JsonValue
+import kafka.utils.{CommandDefaultOptions, CommandLineUtils, CoreUtils, Json}
+import org.apache.kafka.clients.admin.RecordsToDelete
+import org.apache.kafka.clients.{CommonClientConfigs, admin}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.clients.admin
-import org.apache.kafka.clients.admin.RecordsToDelete
-import org.apache.kafka.clients.CommonClientConfigs
-import joptsimple._
-import kafka.utils.json.JsonValue
 
 import scala.collection.JavaConverters._
 
@@ -110,13 +108,12 @@ object DeleteRecordsCommand {
     admin.AdminClient.create(props)
   }
 
-  class DeleteRecordsCommandOptions(args: Array[String]) {
+  class DeleteRecordsCommandOptions(args: Array[String]) extends CommandDefaultOptions(args) {
     val BootstrapServerDoc = "REQUIRED: The server to connect to."
     val offsetJsonFileDoc = "REQUIRED: The JSON file with offset per partition. The format to use is:\n" +
                                  "{\"partitions\":\n  [{\"topic\": \"foo\", \"partition\": 1, \"offset\": 1}],\n \"version\":1\n}"
     val CommandConfigDoc = "A property file containing configs to be passed to Admin Client."
 
-    val parser = new OptionParser(false)
     val bootstrapServerOpt = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
                                    .describedAs("server(s) to use for bootstrapping")
@@ -130,7 +127,10 @@ object DeleteRecordsCommand {
                                    .describedAs("command config property file path")
                                    .ofType(classOf[String])
 
-    val options = parser.parse(args : _*)
+    options = parser.parse(args : _*)
+
+    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to delete records of the given partitions down to the specified offset.")
+
     CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, offsetJsonFileOpt)
   }
 }

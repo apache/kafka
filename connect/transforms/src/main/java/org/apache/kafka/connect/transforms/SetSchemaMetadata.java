@@ -24,12 +24,15 @@ import org.apache.kafka.connect.data.Field;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 
 import static org.apache.kafka.connect.transforms.util.Requirements.requireSchema;
 
 public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements Transformation<R> {
+    private static final Logger log = LoggerFactory.getLogger(SetSchemaMetadata.class);
 
     public static final String OVERVIEW_DOC =
             "Set the schema name, version or both on the record's key (<code>" + Key.class.getName() + "</code>)"
@@ -76,6 +79,8 @@ public abstract class SetSchemaMetadata<R extends ConnectRecord<R>> implements T
                 isMap ? schema.keySchema() : null,
                 isMap || isArray ? schema.valueSchema() : null
         );
+        log.trace("Applying SetSchemaMetadata SMT. Original schema: {}, updated schema: {}",
+            schema, updatedSchema);
         return newRecord(record, updatedSchema);
     }
 

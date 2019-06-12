@@ -28,12 +28,12 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
-import java.nio.channels.FileChannel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NoSuchElementException;
+import java.util.Objects;
 
 import static org.apache.kafka.common.record.Records.LOG_OVERHEAD;
 
@@ -387,7 +387,7 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
             return false;
 
         DefaultRecordBatch that = (DefaultRecordBatch) o;
-        return buffer != null ? buffer.equals(that.buffer) : that.buffer == null;
+        return Objects.equals(buffer, that.buffer);
     }
 
     @Override
@@ -523,10 +523,16 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
         return RECORD_BATCH_OVERHEAD + DefaultRecord.recordSizeUpperBound(key, value, headers);
     }
 
-    static int incrementSequence(int baseSequence, int increment) {
+    public static int incrementSequence(int baseSequence, int increment) {
         if (baseSequence > Integer.MAX_VALUE - increment)
             return increment - (Integer.MAX_VALUE - baseSequence) - 1;
         return baseSequence + increment;
+    }
+
+    public static int decrementSequence(int baseSequence, int decrement) {
+        if (baseSequence < decrement)
+            return Integer.MAX_VALUE - (decrement - baseSequence) + 1;
+        return baseSequence - decrement;
     }
 
     private abstract class RecordIterator implements CloseableIterator<Record> {
@@ -586,10 +592,10 @@ public class DefaultRecordBatch extends AbstractRecordBatch implements MutableRe
 
         DefaultFileChannelRecordBatch(long offset,
                                       byte magic,
-                                      FileChannel channel,
+                                      FileRecords fileRecords,
                                       int position,
                                       int batchSize) {
-            super(offset, magic, channel, position, batchSize);
+            super(offset, magic, fileRecords, position, batchSize);
         }
 
         @Override

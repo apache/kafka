@@ -24,10 +24,12 @@ import org.junit.Assert._
 import org.junit.{After, Test}
 import java.util.Properties
 
+import kafka.admin.TopicCommand.ZookeeperTopicService
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaDeletionSuccessful}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
+import org.scalatest.Assertions.fail
 
 class DeleteTopicTest extends ZooKeeperTestHarness {
 
@@ -68,7 +70,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
         .forall(_.getLogManager().getLog(topicPartition).isEmpty), "Replicas 0,1 have not deleted log.")
     // ensure topic deletion is halted
     TestUtils.waitUntilTrue(() => zkClient.isTopicMarkedForDeletion(topic),
-      "Admin path /admin/delete_topic/test path deleted even when a follower replica is down")
+      "Admin path /admin/delete_topics/test path deleted even when a follower replica is down")
     // restart follower replica
     follower.startup()
     TestUtils.verifyTopicDeletion(zkClient, topic, 1, servers)
@@ -92,7 +94,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
 
     // ensure topic deletion is halted
     TestUtils.waitUntilTrue(() => zkClient.isTopicMarkedForDeletion(topic),
-      "Admin path /admin/delete_topic/test path deleted even when a replica is down")
+      "Admin path /admin/delete_topics/test path deleted even when a replica is down")
 
     controller.startup()
     follower.startup()
@@ -137,8 +139,11 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     }, "Partition reassignment shouldn't complete.")
     val controllerId = zkClient.getControllerId.getOrElse(fail("Controller doesn't exist"))
     val controller = servers.filter(s => s.config.brokerId == controllerId).head
-    assertFalse("Partition reassignment should fail",
-      controller.kafkaController.controllerContext.partitionsBeingReassigned.contains(topicPartition))
+
+    // partitionsBeingReassigned is updated after re-assignment znode is removed, so wait again
+    TestUtils.waitUntilTrue(() => {
+      !controller.kafkaController.controllerContext.partitionsBeingReassigned.contains(topicPartition)
+    }, "Partition should be removed from partitionsBeingReassigned.")
     val assignedReplicas = zkClient.getReplicasForPartition(new TopicPartition(topic, 0))
     assertEquals("Partition should not be reassigned to 0, 1, 2", oldAssignedReplicas, assignedReplicas)
     follower.startup()
@@ -197,14 +202,14 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     val (controller, controllerId) = getController()
     val allReplicasForTopic = getAllReplicasFromAssignment(topic, expectedReplicaAssignment)
     TestUtils.waitUntilTrue(() => {
-      val replicasInDeletionSuccessful = controller.kafkaController.replicaStateMachine.replicasInState(topic, ReplicaDeletionSuccessful)
-      val offlineReplicas = controller.kafkaController.replicaStateMachine.replicasInState(topic, OfflineReplica)
+      val replicasInDeletionSuccessful = controller.kafkaController.controllerContext.replicasInState(topic, ReplicaDeletionSuccessful)
+      val offlineReplicas = controller.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
       allReplicasForTopic == (replicasInDeletionSuccessful union offlineReplicas)
     }, s"Not all replicas for topic $topic are in states of either ReplicaDeletionSuccessful or OfflineReplica")
 
     // increase the partition count for topic
     val topicCommandOptions = new TopicCommand.TopicCommandOptions(Array("--zookeeper", zkConnect, "--alter", "--topic", topic, "--partitions", "2"))
-    TopicCommand.alterTopic(zkClient, topicCommandOptions)
+    new ZookeeperTopicService(zkClient).alterTopic(topicCommandOptions)
 
     // trigger a controller switch now
     val previousControllerId = controllerId
@@ -396,7 +401,7 @@ class DeleteTopicTest extends ZooKeeperTestHarness {
     // mark the topic for deletion
     adminZkClient.deleteTopic("test")
     TestUtils.waitUntilTrue(() => !zkClient.isTopicMarkedForDeletion(topic),
-      "Admin path /admin/delete_topic/%s path not deleted even if deleteTopic is disabled".format(topic))
+      "Admin path /admin/delete_topics/%s path not deleted even if deleteTopic is disabled".format(topic))
     // verify that topic test is untouched
     assertTrue(servers.forall(_.getLogManager().getLog(topicPartition).isDefined))
     // test the topic path exists

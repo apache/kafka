@@ -1,0 +1,38 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 9,
+  "type": "request",
+  "name": "OffsetFetchRequest",
+  // Starting in version 1, the broker supports fetching offsets from the internal __consumer_offsets topic.
+  //
+  // Starting in version 2, the request can contain a null topics array to indicate that offsets
+  // for all topics should be fetched.
+  //
+  // Version 3, 4, and 5 are the same as version 2.
+  "validVersions": "0-5",
+  "fields": [
+    { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
+      "about": "The group to fetch offsets for." },
+    { "name": "Topics", "type": "[]OffsetFetchRequestTopic", "versions": "0+", "nullableVersions": "2+",
+      "about": "Each topic we would like to fetch offsets for, or null to fetch offsets for all topics.", "fields": [
+      { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
+        "about": "The topic name."},
+      { "name": "PartitionIndexes", "type": "[]int32", "versions": "0+",
+        "about": "The partition indexes we would like to fetch offsets for." }
+    ]}
+  ]
+}

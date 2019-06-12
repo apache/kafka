@@ -1,0 +1,86 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 4,
+  "type": "request",
+  "name": "LeaderAndIsrRequest",
+  // Version 1 adds IsNew.
+  //
+  // Version 2 adds broker epoch and reorganizes the partitions by topic.
+  "validVersions": "0-2",
+  "fields": [
+    { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+      "about": "The current controller ID." },
+    { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
+      "about": "The current controller epoch." },
+    { "name": "BrokerEpoch", "type": "int64", "versions": "2+", "ignorable": true, "default": "-1",
+      "about": "The current broker epoch." },
+    { "name": "TopicStates", "type": "[]LeaderAndIsrRequestTopicState", "versions": "2+",
+      "about": "Each topic.", "fields": [
+      { "name": "Name", "type": "string", "versions": "2+", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "PartitionStates", "type": "[]LeaderAndIsrRequestPartitionState", "versions": "0+",
+        "about": "The state of each partition", "fields": [
+        { "name": "PartitionIndex", "type": "int32", "versions": "0+",
+          "about": "The partition index." },
+        { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
+          "about": "The controller epoch." },
+        { "name": "LeaderKey", "type": "int32", "versions": "0+", "entityType": "brokerId",
+          "about": "The broker ID of the leader." },
+        { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
+          "about": "The leader epoch." },
+        { "name": "IsrReplicas", "type": "[]int32", "versions": "0+",
+          "about": "The in-sync replica IDs." },
+        { "name": "ZkVersion", "type": "int32", "versions": "0+",
+          "about": "The ZooKeeper version." },
+        { "name": "Replicas", "type": "[]int32", "versions": "0+",
+          "about": "The replica IDs." },
+        { "name": "IsNew", "type": "bool", "versions": "1+", "default": "false", "ignorable": true, 
+          "about": "Whether the replica should have existed on the broker or not." }
+      ]}
+    ]},
+    { "name": "PartitionStatesV0", "type": "[]LeaderAndIsrRequestPartitionStateV0", "versions": "0-1",
+      "about": "The state of each partition", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0-1", "entityType": "topicName",
+        "about": "The topic name." },
+      { "name": "PartitionIndex", "type": "int32", "versions": "0-1",
+        "about": "The partition index." },
+      { "name": "ControllerEpoch", "type": "int32", "versions": "0-1",
+        "about": "The controller epoch." },
+      { "name": "LeaderKey", "type": "int32", "versions": "0-1", "entityType": "brokerId",
+        "about": "The broker ID of the leader." },
+      { "name": "LeaderEpoch", "type": "int32", "versions": "0-1",
+        "about": "The leader epoch." },
+      { "name": "IsrReplicas", "type": "[]int32", "versions": "0-1",
+        "about": "The in-sync replica IDs." },
+      { "name": "ZkVersion", "type": "int32", "versions": "0-1",
+        "about": "The ZooKeeper version." },
+      { "name": "Replicas", "type": "[]int32", "versions": "0-1",
+        "about": "The replica IDs." },
+      { "name": "IsNew", "type": "bool", "versions": "1", "default": "false", "ignorable": true, 
+        "about": "Whether the replica should have existed on the broker or not." }
+    ]},
+    { "name": "LiveLeaders", "type": "[]LeaderAndIsrLiveLeader", "versions": "0+",
+      "about": "The current live leaders.", "fields": [
+      { "name": "BrokerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
+        "about": "The leader's broker ID." },
+      { "name": "HostName", "type": "string", "versions": "0+",
+        "about": "The leader's hostname." },
+      { "name": "Port", "type": "int32", "versions": "0+",
+        "about": "The leader's port." }
+    ]}
+  ]
+}

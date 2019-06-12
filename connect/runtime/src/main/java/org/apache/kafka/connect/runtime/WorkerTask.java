@@ -31,6 +31,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.util.ConnectorTaskId;
+import org.apache.kafka.connect.util.LoggingContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,6 +52,7 @@ import java.util.concurrent.TimeUnit;
  */
 abstract class WorkerTask implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(WorkerTask.class);
+    private static final String THREAD_NAME_PREFIX = "task-thread-";
 
     protected final ConnectorTaskId id;
     private final TaskStatus.Listener statusListener;
@@ -214,24 +216,32 @@ abstract class WorkerTask implements Runnable {
 
     @Override
     public void run() {
-        ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
-        try {
-            doRun();
-            onShutdown();
-        } catch (Throwable t) {
-            onFailure(t);
+        // Clear all MDC parameters, in case this thread is being reused
+        LoggingContext.clear();
 
-            if (t instanceof Error)
-                throw (Error) t;
-        } finally {
+        try (LoggingContext loggingContext = LoggingContext.forTask(id())) {
+            ClassLoader savedLoader = Plugins.compareAndSwapLoaders(loader);
+            String savedName = Thread.currentThread().getName();
             try {
-                Plugins.compareAndSwapLoaders(savedLoader);
-                shutdownLatch.countDown();
+                Thread.currentThread().setName(THREAD_NAME_PREFIX + id);
+                doRun();
+                onShutdown();
+            } catch (Throwable t) {
+                onFailure(t);
+
+                if (t instanceof Error)
+                    throw (Error) t;
             } finally {
                 try {
-                    releaseResources();
+                    Thread.currentThread().setName(savedName);
+                    Plugins.compareAndSwapLoaders(savedLoader);
+                    shutdownLatch.countDown();
                 } finally {
-                    taskMetricsGroup.close();
+                    try {
+                        releaseResources();
+                    } finally {
+                        taskMetricsGroup.close();
+                    }
                 }
             }
         }

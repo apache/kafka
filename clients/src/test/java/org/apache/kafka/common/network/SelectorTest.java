@@ -51,6 +51,7 @@ import java.util.Map;
 import java.util.Random;
 import java.util.Set;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
@@ -58,6 +59,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
+import static org.junit.Assert.assertThrows;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -380,16 +382,7 @@ public class SelectorTest {
     @Test
     public void testImmediatelyConnectedCleaned() throws Exception {
         Metrics metrics = new Metrics(); // new metrics object to avoid metric registration conflicts
-        Selector selector = new Selector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
-            @Override
-            protected boolean doConnect(SocketChannel channel, InetSocketAddress address) throws IOException {
-                // Use a blocking connect to trigger the immediately connected path
-                channel.configureBlocking(true);
-                boolean connected = super.doConnect(channel, address);
-                channel.configureBlocking(false);
-                return connected;
-            }
-        };
+        Selector selector = new ImmediatelyConnectingSelector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext());
 
         try {
             testImmediatelyConnectedCleaned(selector, true);
@@ -397,6 +390,26 @@ public class SelectorTest {
         } finally {
             selector.close();
             metrics.close();
+        }
+    }
+
+    private static class ImmediatelyConnectingSelector extends Selector {
+        public ImmediatelyConnectingSelector(long connectionMaxIdleMS,
+                                             Metrics metrics,
+                                             Time time,
+                                             String metricGrpPrefix,
+                                             ChannelBuilder channelBuilder,
+                                             LogContext logContext) {
+            super(connectionMaxIdleMS, metrics, time, metricGrpPrefix, channelBuilder, logContext);
+        }
+
+        @Override
+        protected boolean doConnect(SocketChannel channel, InetSocketAddress address) throws IOException {
+            // Use a blocking connect to trigger the immediately connected path
+            channel.configureBlocking(true);
+            boolean connected = super.doConnect(channel, address);
+            channel.configureBlocking(false);
+            return connected;
         }
     }
 
@@ -410,6 +423,46 @@ public class SelectorTest {
         }
         selector.close(id);
         verifySelectorEmpty(selector);
+    }
+
+    /**
+     * Verify that if Selector#connect fails and throws an Exception, all related objects
+     * are cleared immediately before the exception is propagated.
+     */
+    @Test
+    public void testConnectException() throws Exception {
+        Metrics metrics = new Metrics();
+        AtomicBoolean throwIOException = new AtomicBoolean();
+        Selector selector = new ImmediatelyConnectingSelector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
+            @Override
+            protected SelectionKey registerChannel(String id, SocketChannel socketChannel, int interestedOps) throws IOException {
+                SelectionKey key = super.registerChannel(id, socketChannel, interestedOps);
+                key.cancel();
+                if (throwIOException.get())
+                    throw new IOException("Test exception");
+                return key;
+            }
+        };
+
+        try {
+            verifyImmediatelyConnectedException(selector, "0");
+            throwIOException.set(true);
+            verifyImmediatelyConnectedException(selector, "1");
+        } finally {
+            selector.close();
+            metrics.close();
+        }
+    }
+
+    private void verifyImmediatelyConnectedException(Selector selector, String id) throws Exception {
+        try {
+            selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+            fail("Expected exception not thrown");
+        } catch (Exception e) {
+            verifyEmptyImmediatelyConnectedKeys(selector);
+            assertNull("Channel not removed", selector.channel(id));
+            ensureEmptySelectorFields(selector);
+        }
     }
 
     @Test
@@ -441,8 +494,10 @@ public class SelectorTest {
             do {
                 selector.poll(1000);
             } while (selector.completedReceives().isEmpty());
-        } while (selector.numStagedReceives(channel) == 0 && --retries > 0);
+        } while ((selector.numStagedReceives(channel) == 0 || channel.hasBytesBuffered()) && --retries > 0);
         assertTrue("No staged receives after 100 attempts", selector.numStagedReceives(channel) > 0);
+        // We want to return without any bytes buffered to ensure that channel will be closed after idle time
+        assertFalse("Channel has bytes buffered", channel.hasBytesBuffered());
 
         return channel;
     }
@@ -634,6 +689,56 @@ public class SelectorTest {
         assertEquals((double) conns, getMetric("connection-count").metricValue());
     }
 
+    @SuppressWarnings("unchecked")
+    @Test
+    public void testLowestPriorityChannel() throws Exception {
+        int conns = 5;
+        InetSocketAddress addr = new InetSocketAddress("localhost", server.port);
+        for (int i = 0; i < conns; i++) {
+            connect(String.valueOf(i), addr);
+        }
+        assertNotNull(selector.lowestPriorityChannel());
+        for (int i = conns - 1; i >= 0; i--) {
+            if (i != 2)
+              assertEquals("", blockingRequest(String.valueOf(i), ""));
+            time.sleep(10);
+        }
+        assertEquals("2", selector.lowestPriorityChannel().id());
+
+        Field field = Selector.class.getDeclaredField("closingChannels");
+        field.setAccessible(true);
+        Map<String, KafkaChannel> closingChannels = (Map<String, KafkaChannel>) field.get(selector);
+        closingChannels.put("3", selector.channel("3"));
+        assertEquals("3", selector.lowestPriorityChannel().id());
+        closingChannels.remove("3");
+
+        for (int i = 0; i < conns; i++) {
+            selector.close(String.valueOf(i));
+        }
+        assertNull(selector.lowestPriorityChannel());
+    }
+
+    @Test
+    public void testMetricsCleanupOnSelectorClose() throws Exception {
+        Metrics metrics = new Metrics();
+        Selector selector = new ImmediatelyConnectingSelector(5000, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
+            @Override
+            public void close(String id) {
+                throw new RuntimeException();
+            }
+        };
+        assertTrue(metrics.metrics().size() > 1);
+        String id = "0";
+        selector.connect(id, new InetSocketAddress("localhost", server.port), BUFFER_SIZE, BUFFER_SIZE);
+
+        // Close the selector and ensure a RuntimeException has been throw
+        assertThrows(RuntimeException.class, selector::close);
+
+        // We should only have one remaining metric for kafka-metrics-count, which is a global metric
+        assertEquals(1, metrics.metrics().size());
+    }
+
+
     private String blockingRequest(String node, String s) throws IOException {
         selector.send(createSend(node, s));
         selector.poll(1000L);
@@ -708,13 +813,17 @@ public class SelectorTest {
         verifySelectorEmpty(this.selector);
     }
 
-    private void verifySelectorEmpty(Selector selector) throws Exception {
+    public void verifySelectorEmpty(Selector selector) throws Exception {
         for (KafkaChannel channel : selector.channels()) {
             selector.close(channel.id());
             assertNull(channel.selectionKey().attachment());
         }
         selector.poll(0);
         selector.poll(0); // Poll a second time to clear everything
+        ensureEmptySelectorFields(selector);
+    }
+
+    private void ensureEmptySelectorFields(Selector selector) throws Exception {
         for (Field field : Selector.class.getDeclaredFields()) {
             ensureEmptySelectorField(selector, field);
         }

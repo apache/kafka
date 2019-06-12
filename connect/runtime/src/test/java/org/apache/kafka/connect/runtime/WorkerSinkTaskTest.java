@@ -162,12 +162,11 @@ public class WorkerSinkTaskTest {
     }
 
     private void createTask(TargetState initialState) {
-        workerTask = PowerMock.createPartialMock(
-                WorkerSinkTask.class, new String[]{"createConsumer"},
-                taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
-                keyConverter, valueConverter, headerConverter,
-                transformationChain, pluginLoader, time,
-                RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+        workerTask = new WorkerSinkTask(
+            taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
+            keyConverter, valueConverter, headerConverter,
+            transformationChain, consumer, pluginLoader, time,
+            RetryWithToleranceOperatorTest.NOOP_OPERATOR);
     }
 
     @After
@@ -577,6 +576,10 @@ public class WorkerSinkTaskTest {
         assertTaskMetricValue("offset-commit-failure-percentage", 0.0);
         assertTaskMetricValue("offset-commit-success-percentage", 0.0);
 
+        // Grab the commit time prior to requesting a commit.
+        // This time should advance slightly after committing.
+        // KAFKA-8229
+        final long previousCommitValue = workerTask.getNextCommit();
         sinkTaskContext.getValue().requestCommit();
         assertTrue(sinkTaskContext.getValue().isCommitRequested());
         assertNotEquals(offsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
@@ -586,6 +589,14 @@ public class WorkerSinkTaskTest {
         assertFalse(sinkTaskContext.getValue().isCommitRequested()); // should have been cleared
         assertEquals(offsets, Whitebox.<Map<TopicPartition, OffsetAndMetadata>>getInternalState(workerTask, "lastCommittedOffsets"));
         assertEquals(0, workerTask.commitFailures());
+        // Assert the next commit time advances slightly, the amount it advances
+        // is the normal commit time less the two sleeps since it started each
+        // of those sleeps were 10 seconds.
+        // KAFKA-8229
+        assertEquals("Should have only advanced by 40 seconds",
+                     previousCommitValue  +
+                     (WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_DEFAULT - 10000L * 2),
+                     workerTask.getNextCommit());
 
         assertSinkMetricValue("partition-count", 2);
         assertSinkMetricValue("sink-record-read-total", 1.0);
@@ -1167,7 +1178,6 @@ public class WorkerSinkTaskTest {
 
         createTask(TargetState.PAUSED);
 
-        PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
         consumer.subscribe(EasyMock.capture(topicsRegex), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 
@@ -1255,7 +1265,6 @@ public class WorkerSinkTaskTest {
     }
 
     private void expectInitializeTask() throws Exception {
-        PowerMock.expectPrivate(workerTask, "createConsumer").andReturn(consumer);
         consumer.subscribe(EasyMock.eq(asList(TOPIC)), EasyMock.capture(rebalanceListener));
         PowerMock.expectLastCall();
 

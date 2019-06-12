@@ -21,17 +21,12 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 public class GlobalKTableImpl<K, V> implements GlobalKTable<K, V> {
 
     private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
-    private final boolean queryable;
+    private final String queryableStoreName;
 
-    public GlobalKTableImpl(final KTableValueGetterSupplier<K, V> valueGetterSupplier) {
+    GlobalKTableImpl(final KTableValueGetterSupplier<K, V> valueGetterSupplier,
+                     final String queryableStoreName) {
         this.valueGetterSupplier = valueGetterSupplier;
-        this.queryable = true;
-    }
-    
-    public GlobalKTableImpl(final KTableValueGetterSupplier<K, V> valueGetterSupplier, 
-                            final boolean queryable) {
-        this.valueGetterSupplier = valueGetterSupplier;
-        this.queryable = queryable;
+        this.queryableStoreName = queryableStoreName;
     }
 
     KTableValueGetterSupplier<K, V> valueGetterSupplier() {
@@ -40,10 +35,7 @@ public class GlobalKTableImpl<K, V> implements GlobalKTable<K, V> {
 
     @Override
     public String queryableStoreName() {
-        if (!queryable) {
-            return null;
-        }
-        return valueGetterSupplier.storeNames()[0];
+        return queryableStoreName;
     }
 
 }

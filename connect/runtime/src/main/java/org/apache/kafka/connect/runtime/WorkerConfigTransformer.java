@@ -16,10 +16,15 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigTransformerResult;
+import org.apache.kafka.connect.runtime.Herder.ConfigReloadAction;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
@@ -29,6 +34,8 @@ import java.util.concurrent.ConcurrentMap;
  * retrieved TTL values.
  */
 public class WorkerConfigTransformer {
+    private static final Logger log = LoggerFactory.getLogger(WorkerConfigTransformer.class);
+
     private final Worker worker;
     private final ConfigTransformer configTransformer;
     private final ConcurrentMap<String, Map<String, HerderRequest>> requests = new ConcurrentHashMap<>();
@@ -46,7 +53,16 @@ public class WorkerConfigTransformer {
         if (configs == null) return null;
         ConfigTransformerResult result = configTransformer.transform(configs);
         if (connectorName != null) {
-            scheduleReload(connectorName, result.ttls());
+            String key = ConnectorConfig.CONFIG_RELOAD_ACTION_CONFIG;
+            String action = (String) ConfigDef.parseType(key, configs.get(key), ConfigDef.Type.STRING);
+            if (action == null) {
+                // The default action is "restart".
+                action = ConnectorConfig.CONFIG_RELOAD_ACTION_RESTART;
+            }
+            ConfigReloadAction reloadAction = ConfigReloadAction.valueOf(action.toUpperCase(Locale.ROOT));
+            if (reloadAction == ConfigReloadAction.RESTART) {
+                scheduleReload(connectorName, result.ttls());
+            }
         }
         return result.data();
     }
@@ -58,21 +74,19 @@ public class WorkerConfigTransformer {
     }
 
     private void scheduleReload(String connectorName, String path, long ttl) {
-        Herder herder = worker.herder();
-        if (herder.connectorConfigReloadAction(connectorName) == Herder.ConfigReloadAction.RESTART) {
-            Map<String, HerderRequest> connectorRequests = requests.get(connectorName);
-            if (connectorRequests == null) {
-                connectorRequests = new ConcurrentHashMap<>();
-                requests.put(connectorName, connectorRequests);
-            } else {
-                HerderRequest previousRequest = connectorRequests.get(path);
-                if (previousRequest != null) {
-                    // Delete previous request for ttl which is now stale
-                    previousRequest.cancel();
-                }
+        Map<String, HerderRequest> connectorRequests = requests.get(connectorName);
+        if (connectorRequests == null) {
+            connectorRequests = new ConcurrentHashMap<>();
+            requests.put(connectorName, connectorRequests);
+        } else {
+            HerderRequest previousRequest = connectorRequests.get(path);
+            if (previousRequest != null) {
+                // Delete previous request for ttl which is now stale
+                previousRequest.cancel();
             }
-            HerderRequest request = herder.restartConnector(ttl, connectorName, null);
-            connectorRequests.put(path, request);
         }
+        log.info("Scheduling a restart of connector {} in {} ms", connectorName, ttl);
+        HerderRequest request = worker.herder().restartConnector(ttl, connectorName, null);
+        connectorRequests.put(path, request);
     }
 }

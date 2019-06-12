@@ -32,6 +32,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.internals.RecordConverter;
 import org.slf4j.Logger;
 
 import java.io.File;
@@ -44,6 +45,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -139,7 +141,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
 
     @Override
     public StateStore getGlobalStore(final String name) {
-        return globalStores.get(name);
+        return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
 
     @Override
@@ -195,8 +197,14 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
             }
         }
         try {
-            restoreState(stateRestoreCallback, topicPartitions, highWatermarks, store.name());
-            globalStores.put(store.name(), store);
+            restoreState(
+                stateRestoreCallback,
+                topicPartitions,
+                highWatermarks,
+                store.name(),
+                converterForStore(store)
+            );
+            globalStores.put(store.name(), Optional.of(store));
         } finally {
             globalConsumer.unsubscribe();
         }
@@ -249,7 +257,8 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     private void restoreState(final StateRestoreCallback stateRestoreCallback,
                               final List<TopicPartition> topicPartitions,
                               final Map<TopicPartition, Long> highWatermarks,
-                              final String storeName) {
+                              final String storeName,
+                              final RecordConverter recordConverter) {
         for (final TopicPartition topicPartition : topicPartitions) {
             globalConsumer.assign(Collections.singletonList(topicPartition));
             final Long checkpoint = checkpointableOffsets.get(topicPartition);
@@ -273,7 +282,7 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
                     final List<ConsumerRecord<byte[], byte[]>> restoreRecords = new ArrayList<>();
                     for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
                         if (record.key() != null) {
-                            restoreRecords.add(record);
+                            restoreRecords.add(recordConverter.convert(record));
                         }
                     }
                     offset = globalConsumer.position(topicPartition);
@@ -298,42 +307,53 @@ public class GlobalStateManagerImpl extends AbstractStateManager implements Glob
     @Override
     public void flush() {
         log.debug("Flushing all global globalStores registered in the state manager");
-        for (final StateStore store : this.globalStores.values()) {
-            try {
-                log.trace("Flushing global store={}", store.name());
-                store.flush();
-            } catch (final Exception e) {
-                throw new ProcessorStateException(String.format("Failed to flush global state store %s", store.name()), e);
+        for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
+            if (entry.getValue().isPresent()) {
+                final StateStore store = entry.getValue().get();
+                try {
+                    log.trace("Flushing global store={}", store.name());
+                    store.flush();
+                } catch (final Exception e) {
+                    throw new ProcessorStateException(
+                        String.format("Failed to flush global state store %s", store.name()),
+                        e
+                    );
+                }
+            } else {
+                throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
             }
         }
     }
 
 
     @Override
-    public void close(final Map<TopicPartition, Long> offsets) throws IOException {
+    public void close(final boolean clean) throws IOException {
         try {
             if (globalStores.isEmpty()) {
                 return;
             }
             final StringBuilder closeFailed = new StringBuilder();
-            for (final Map.Entry<String, StateStore> entry : globalStores.entrySet()) {
-                log.debug("Closing global storage engine {}", entry.getKey());
-                try {
-                    entry.getValue().close();
-                } catch (final Exception e) {
-                    log.error("Failed to close global state store {}", entry.getKey(), e);
-                    closeFailed.append("Failed to close global state store:")
-                            .append(entry.getKey())
-                            .append(". Reason: ")
-                            .append(e.toString())
-                            .append("\n");
+            for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
+                if (entry.getValue().isPresent()) {
+                    log.debug("Closing global storage engine {}", entry.getKey());
+                    try {
+                        entry.getValue().get().close();
+                    } catch (final Exception e) {
+                        log.error("Failed to close global state store {}", entry.getKey(), e);
+                        closeFailed.append("Failed to close global state store:")
+                                   .append(entry.getKey())
+                                   .append(". Reason: ")
+                                   .append(e.toString())
+                                   .append("\n");
+                    }
+                    globalStores.put(entry.getKey(), Optional.empty());
+                } else {
+                    log.info("Skipping to close non-initialized store {}", entry.getKey());
                 }
             }
-            globalStores.clear();
             if (closeFailed.length() > 0) {
                 throw new ProcessorStateException("Exceptions caught during close of 1 or more global state globalStores\n" + closeFailed);
             }
-            checkpoint(offsets);
         } finally {
             stateDirectory.unlockGlobalState();
         }
