@@ -123,13 +123,23 @@ public class UpdateMetadataRequest extends AbstractControlRequest {
         @Override
         public String toString() {
             StringBuilder bld = new StringBuilder();
+            // HOTFIX: LIKAFKA-24478
+            // large cluster with large metadata can create really large string
+            // potentially causing OOM
             bld.append("(type: UpdateMetadataRequest=").
                 append(", controllerId=").append(controllerId).
                 append(", controllerEpoch=").append(controllerEpoch).
                 append(", brokerEpoch=").append(brokerEpoch).
-                append(", partitionStates=").append(partitionStates).
                 append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
                 append(")");
+
+            // bld.append("(type: UpdateMetadataRequest=").
+            //   append(", controllerId=").append(controllerId).
+            //   append(", controllerEpoch=").append(controllerEpoch).
+            //   append(", brokerEpoch=").append(brokerEpoch).
+            //   append(", partitionStates=").append(partitionStates).
+            //   append(", liveBrokers=").append(Utils.join(liveBrokers, ", ")).
+            //   append(")");
             return bld.toString();
         }
     }
