@@ -19,6 +19,7 @@ package kafka.coordinator.group
 
 import kafka.common.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
 import org.junit.Assert._
 import org.junit.{Before, Test}
@@ -30,16 +31,20 @@ class GroupMetadataTest {
   private val protocolType = "consumer"
   private val groupId = "groupId"
   private val groupInstanceId = Some("groupInstanceId")
+  private val memberId = "memberId"
   private val clientId = "clientId"
   private val clientHost = "clientHost"
   private val rebalanceTimeoutMs = 60000
   private val sessionTimeoutMs = 10000
 
   private var group: GroupMetadata = null
+  private var member: MemberMetadata = null
 
   @Before
   def setUp() {
     group = new GroupMetadata("groupId", Empty, Time.SYSTEM)
+    member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
+      protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
   }
 
   @Test
@@ -240,10 +245,6 @@ class GroupMetadataTest {
     // by default, the group supports everything
     assertTrue(group.supportsProtocols(protocolType, Set("roundrobin", "range")))
 
-    val memberId = "memberId"
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs,
-      sessionTimeoutMs, protocolType, List(("range", Array.empty[Byte]), ("roundrobin", Array.empty[Byte])))
-
     group.add(member)
     group.transitionTo(PreparingRebalance)
     assertTrue(group.supportsProtocols(protocolType, Set("roundrobin", "foo")))
@@ -263,9 +264,7 @@ class GroupMetadataTest {
 
   @Test
   def testInitNextGeneration() {
-    val memberId = "memberId"
-    val member = new MemberMetadata(memberId, groupId, groupInstanceId, clientId, clientHost, rebalanceTimeoutMs, sessionTimeoutMs,
-      protocolType, List(("roundrobin", Array.empty[Byte])))
+    member.supportedProtocols = List(("roundrobin", Array.empty[Byte]))
 
     group.transitionTo(PreparingRebalance)
     group.add(member, _ => ())
@@ -463,6 +462,88 @@ class GroupMetadataTest {
     group.completePendingTxnOffsetCommit(producerId, isCommit = true)
     assertFalse(group.hasOffsets)
     assertFalse(group.hasPendingOffsetCommitsFromProducer(producerId))
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testReplaceGroupInstanceWithEmptyGroupInstanceId(): Unit = {
+    group.add(member)
+    group.addStaticMember(groupInstanceId, memberId)
+    assertTrue(group.isLeader(memberId))
+    assertEquals(memberId, group.getStaticMemberId(groupInstanceId))
+
+    val newMemberId = "newMemberId"
+    group.replaceGroupInstance(memberId, newMemberId, Option.empty)
+  }
+
+  @Test(expected = classOf[IllegalArgumentException])
+  def testReplaceGroupInstanceWithNonExistingMember(): Unit = {
+    val newMemberId = "newMemberId"
+    group.replaceGroupInstance(memberId, newMemberId, groupInstanceId)
+  }
+
+  @Test
+  def testReplaceGroupInstance(): Unit = {
+    var joinAwaitingMemberFenced = false
+    group.add(member, joinGroupResult => {
+      joinAwaitingMemberFenced = joinGroupResult.error == Errors.FENCED_INSTANCE_ID
+    })
+    var syncAwaitingMemberFenced = false
+    member.awaitingSyncCallback = syncGroupResult => {
+      syncAwaitingMemberFenced = syncGroupResult.error == Errors.FENCED_INSTANCE_ID
+    }
+    group.addStaticMember(groupInstanceId, memberId)
+    assertTrue(group.isLeader(memberId))
+    assertEquals(memberId, group.getStaticMemberId(groupInstanceId))
+
+    val newMemberId = "newMemberId"
+    group.replaceGroupInstance(memberId, newMemberId, groupInstanceId)
+    assertTrue(group.isLeader(newMemberId))
+    assertEquals(newMemberId, group.getStaticMemberId(groupInstanceId))
+    assertTrue(joinAwaitingMemberFenced)
+    assertTrue(syncAwaitingMemberFenced)
+    assertFalse(member.isAwaitingJoin)
+    assertFalse(member.isAwaitingSync)
+  }
+
+  @Test
+  def testInvokeJoinCallback(): Unit = {
+    var invoked = false
+    group.add(member, _ => {
+      invoked = true
+    })
+
+    assertTrue(group.hasAllMembersJoined)
+    group.maybeInvokeJoinCallback(member, GroupCoordinator.joinError(member.memberId, Errors.NONE))
+    assertTrue(invoked)
+    assertFalse(member.isAwaitingJoin)
+  }
+
+  @Test
+  def testNotInvokeJoinCallback(): Unit = {
+    group.add(member)
+
+    assertFalse(member.isAwaitingJoin)
+    group.maybeInvokeJoinCallback(member, GroupCoordinator.joinError(member.memberId, Errors.NONE))
+    assertFalse(member.isAwaitingJoin)
+  }
+
+  @Test
+  def testInvokeSyncCallback(): Unit = {
+    group.add(member)
+    member.awaitingSyncCallback = _ => {}
+
+    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Array.empty, Errors.NONE))
+    assertTrue(invoked)
+    assertFalse(member.isAwaitingSync)
+  }
+
+  @Test
+  def testNotInvokeSyncCallback(): Unit = {
+    group.add(member)
+
+    val invoked = group.maybeInvokeSyncCallback(member, SyncGroupResult(Array.empty, Errors.NONE))
+    assertFalse(invoked)
+    assertFalse(member.isAwaitingSync)
   }
 
   private def assertState(group: GroupMetadata, targetState: GroupState) {
