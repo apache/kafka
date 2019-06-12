@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package integration.kafka.api
+package kafka.api
 
 import java.lang.{Boolean => JBoolean}
 import java.time.Duration
