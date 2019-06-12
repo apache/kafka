@@ -129,6 +129,8 @@ public interface KTable<K, V> {
     KTable<K, V> filter(final Predicate<? super K, ? super V> predicate,
                         final Materialized<K, V, KeyValueStore<Bytes, byte[]>> materialized);
 
+    KTable<K, V> filter(final Predicate<? super K, ? super V> predicate, final MaterializedKV<K, V> materialized);
+
     /**
      * Create a new {@code KTable} that consists all records of this {@code KTable} which do <em>not</em> satisfy the
      * given predicate, with default serializers, deserializers, and state store.
