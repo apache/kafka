@@ -36,7 +36,9 @@ import org.I0Itec.zkclient.ZkClient
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.replica.{ClientMetadata, DefaultClientMetadata, LeaderReplicaSelector}
+import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
+import org.apache.kafka.common.replica.ClientMetadata
+import org.apache.kafka.common.replica.LeaderReplicaSelector
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.FetchResponse.AbortedTransaction
@@ -506,7 +508,7 @@ class ReplicaManagerTest {
         fetchInfos = Seq(tp -> validFetchPartitionData),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
-        clientMetadata = DefaultClientMetadata.NO_METADATA
+        clientMetadata = ClientMetadata.NO_METADATA
       )
 
       assertTrue(successfulFetch.isDefined)
@@ -528,7 +530,7 @@ class ReplicaManagerTest {
         fetchInfos = Seq(tp -> invalidFetchPartitionData),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
-        clientMetadata = DefaultClientMetadata.NO_METADATA
+        clientMetadata = ClientMetadata.NO_METADATA
       )
 
       assertTrue(successfulFetch.isDefined)
@@ -608,7 +610,7 @@ class ReplicaManagerTest {
           tp1 -> new PartitionData(1, 0, 100000, Optional.empty())),
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        clientMetadata = DefaultClientMetadata.NO_METADATA
+        clientMetadata = ClientMetadata.NO_METADATA
       )
       val tp0Replica = replicaManager.localReplica(tp0)
       assertTrue(tp0Replica.isDefined)
@@ -700,7 +702,7 @@ class ReplicaManagerTest {
 
     val tp0 = new TopicPartition(topic, 0)
 
-    val metadata: ClientMetadata = SomeClientMetadata("rack-a", "client-id",
+    val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
       InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
     val preferredReadReplica: Option[Int] = replicaManager.findPreferredReadReplica(tp0, metadata, Request.OrdinaryConsumerId, 1L)
@@ -738,7 +740,7 @@ class ReplicaManagerTest {
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
-    val metadata: ClientMetadata = SomeClientMetadata("rack-a", "client-id",
+    val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
       InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
     val consumerResult = fetchAsConsumer(replicaManager, tp0,
@@ -782,7 +784,7 @@ class ReplicaManagerTest {
       Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
     replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
-    val metadata: ClientMetadata = SomeClientMetadata("rack-a", "client-id",
+    val metadata: ClientMetadata = new DefaultClientMetadata("rack-a", "client-id",
       InetAddress.getByName("localhost"), KafkaPrincipal.ANONYMOUS, "default")
 
     val consumerResult = fetchAsConsumer(replicaManager, tp0,
@@ -1016,7 +1018,7 @@ class ReplicaManagerTest {
                               partitionData: PartitionData,
                               minBytes: Int = 0,
                               isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED,
-                              clientMetadata: ClientMetadata = DefaultClientMetadata.NO_METADATA): CallbackResult[FetchPartitionData] = {
+                              clientMetadata: ClientMetadata = ClientMetadata.NO_METADATA): CallbackResult[FetchPartitionData] = {
     fetchMessages(replicaManager, replicaId = -1, partition, partitionData, minBytes, isolationLevel, clientMetadata)
   }
 
@@ -1025,7 +1027,7 @@ class ReplicaManagerTest {
                               partitionData: PartitionData,
                               minBytes: Int = 0,
                               isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED,
-                              clientMetadata: ClientMetadata = DefaultClientMetadata.NO_METADATA): CallbackResult[FetchPartitionData] = {
+                              clientMetadata: ClientMetadata = ClientMetadata.NO_METADATA): CallbackResult[FetchPartitionData] = {
     fetchMessages(replicaManager, replicaId = 1, partition, partitionData, minBytes, isolationLevel, clientMetadata)
   }
 

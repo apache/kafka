@@ -44,13 +44,13 @@ public class ReplicaSelectorTest {
         ReplicaSelector selector = new LeaderReplicaSelector();
         Optional<ReplicaView> selected;
 
-        selected = selector.select(tp, DefaultClientMetadata.NO_METADATA, partitionView);
+        selected = selector.select(tp, ClientMetadata.NO_METADATA, partitionView);
         assertOptional(selected, replicaInfo -> {
             assertTrue(replicaInfo.isLeader());
             assertEquals(replicaInfo.endpoint().id(), 0);
         });
 
-        selected = selector.select(tp, DefaultClientMetadata.NO_METADATA, partitionInfo(Collections.emptySet()));
+        selected = selector.select(tp, ClientMetadata.NO_METADATA, partitionInfo(Collections.emptySet()));
         assertFalse(selected.isPresent());
     }
 

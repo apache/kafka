@@ -1038,7 +1038,7 @@ class ReplicaManager(val config: KafkaConfig,
       if (Request.isValidBrokerId(replicaId)) {
         // Don't look up preferred for follower fetches via normal replication
         Option.empty
-      } else if (clientMetadata.equals(DefaultClientMetadata.NO_METADATA)) {
+      } else if (clientMetadata.equals(ClientMetadata.NO_METADATA)) {
         // Return the leader if no metadata given
         partition.leaderReplicaIdOpt
       } else {
