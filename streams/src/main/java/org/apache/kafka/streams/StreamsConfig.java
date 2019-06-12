@@ -1012,7 +1012,7 @@ public class StreamsConfig extends AbstractConfig {
             final int segmentSize = Integer.parseInt(topicProps.get(topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG)).toString());
             final int batchSize = Integer.parseInt(producerProps.get(ProducerConfig.BATCH_SIZE_CONFIG).toString());
             
-            if(segmentSize < 1048576) {
+            if (segmentSize < 1048576) {
             	throw new ConfigException("segment.bytes", segmentSize, null);
             }
             else if (segmentSize < batchSize) {
