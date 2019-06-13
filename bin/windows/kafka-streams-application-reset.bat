@@ -14,8 +14,10 @@ rem WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 rem See the License for the specific language governing permissions and
 rem limitations under the License.
 
+SetLocal
 IF ["%KAFKA_HEAP_OPTS%"] EQU [""] (
         set KAFKA_HEAP_OPTS=-Xmx512M
 )
 
 "%~dp0kafka-run-class.bat" kafka.tools.StreamsResetter %*
+EndLocal
