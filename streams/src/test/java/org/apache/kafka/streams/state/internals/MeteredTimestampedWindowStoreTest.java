@@ -24,7 +24,9 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.test.InternalMockProcessorContext;
 import org.apache.kafka.test.NoOpRecordCollector;
@@ -35,8 +37,9 @@ import org.junit.Before;
 import org.junit.Test;
 
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.fail;
 
-public class MeteredTimestampWindowStoreTest {
+public class MeteredTimestampedWindowStoreTest {
     private InternalMockProcessorContext context;
     @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = EasyMock.createNiceMock(WindowStore.class);
@@ -89,4 +92,51 @@ public class MeteredTimestampWindowStoreTest {
         assertNull(store.fetch("a", 0));
     }
 
+    @Test
+    public void shouldNotThrowExceptionIfSerdesCorrectlySetFromProcessorContext() {
+        EasyMock.expect(innerStoreMock.name()).andStubReturn("mocked-store");
+        EasyMock.replay(innerStoreMock);
+        final MeteredTimestampedWindowStore<String, Long> store = new MeteredTimestampedWindowStore<>(
+            innerStoreMock,
+            10L, // any size
+            "scope",
+            new MockTime(),
+            null,
+            null
+        );
+        store.init(context, innerStoreMock);
+
+        try {
+            store.put("key", ValueAndTimestamp.make(42L, 60000));
+        } catch (final StreamsException exception) {
+            if (exception.getCause() instanceof ClassCastException) {
+                fail("Serdes are not correctly set from processor context.");
+            }
+            throw exception;
+        }
+    }
+
+    @Test
+    public void shouldNotThrowExceptionIfSerdesCorrectlySetFromConstructorParameters() {
+        EasyMock.expect(innerStoreMock.name()).andStubReturn("mocked-store");
+        EasyMock.replay(innerStoreMock);
+        final MeteredTimestampedWindowStore<String, Long> store = new MeteredTimestampedWindowStore<>(
+            innerStoreMock,
+            10L, // any size
+            "scope",
+            new MockTime(),
+            Serdes.String(),
+            new ValueAndTimestampSerde<>(Serdes.Long())
+        );
+        store.init(context, innerStoreMock);
+
+        try {
+            store.put("key", ValueAndTimestamp.make(42L, 60000));
+        } catch (final StreamsException exception) {
+            if (exception.getCause() instanceof ClassCastException) {
+                fail("Serdes are not correctly set from constructor parameters.");
+            }
+            throw exception;
+        }
+    }
 }

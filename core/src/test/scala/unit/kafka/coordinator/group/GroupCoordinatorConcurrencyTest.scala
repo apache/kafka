@@ -173,8 +173,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
 
   class SyncGroupOperation extends GroupOperation[SyncGroupCallbackParams, SyncGroupCallback] {
     override def responseCallback(responsePromise: Promise[SyncGroupCallbackParams]): SyncGroupCallback = {
-      val callback: SyncGroupCallback = (assignment, error) =>
-        responsePromise.success((assignment, error))
+      val callback: SyncGroupCallback = syncGroupResult =>
+        responsePromise.success(syncGroupResult.memberAssignment, syncGroupResult.error)
       callback
     }
     override def runWithCallback(member: GroupMember, responseCallback: SyncGroupCallback): Unit = {
@@ -280,7 +280,7 @@ object GroupCoordinatorConcurrencyTest {
 
   type JoinGroupCallback = JoinGroupResult => Unit
   type SyncGroupCallbackParams = (Array[Byte], Errors)
-  type SyncGroupCallback = (Array[Byte], Errors) => Unit
+  type SyncGroupCallback = SyncGroupResult => Unit
   type HeartbeatCallbackParams = Errors
   type HeartbeatCallback = Errors => Unit
   type CommitOffsetCallbackParams = Map[TopicPartition, Errors]
