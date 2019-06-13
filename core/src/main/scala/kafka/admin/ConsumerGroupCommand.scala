@@ -116,11 +116,11 @@ object ConsumerGroupCommand extends Logging {
 
   private[admin] case class PartitionAssignmentState(group: String, coordinator: Option[Node], topic: Option[String],
                                                 partition: Option[Int], offset: Option[Long], lag: Option[Long],
-                                                consumerId: Option[String], host: Option[String],
+                                                consumerId: Option[String], groupInstanceId: Option[String], host: Option[String],
                                                 clientId: Option[String], logEndOffset: Option[Long])
 
-  private[admin] case class MemberAssignmentState(group: String, consumerId: String, host: String, clientId: String,
-                                             numPartitions: Int, assignment: List[TopicPartition])
+  private[admin] case class MemberAssignmentState(group: String, consumerId: String, groupInstanceId: Option[String],
+                                                  host: String, clientId: String, numPartitions: Int, assignment: List[TopicPartition])
 
   private[admin] case class GroupState(group: String, coordinator: Node, assignmentStrategy: String, state: String, numMembers: Int)
 
@@ -325,15 +325,18 @@ object ConsumerGroupCommand extends Logging {
                                           topicPartitions: Seq[TopicPartition],
                                           getPartitionOffset: TopicPartition => Option[Long],
                                           consumerIdOpt: Option[String],
+                                          groupInstanceId: Option[String],
                                           hostOpt: Option[String],
                                           clientIdOpt: Option[String]): Array[PartitionAssignmentState] = {
       if (topicPartitions.isEmpty) {
         Array[PartitionAssignmentState](
-          PartitionAssignmentState(group, coordinator, None, None, None, getLag(None, None), consumerIdOpt, hostOpt, clientIdOpt, None)
+          PartitionAssignmentState(group, coordinator, None, None, None, getLag(None, None),
+            consumerIdOpt, groupInstanceId, hostOpt, clientIdOpt, None)
         )
       }
       else
-        describePartitions(group, coordinator, topicPartitions.sortBy(_.partition), getPartitionOffset, consumerIdOpt, hostOpt, clientIdOpt)
+        describePartitions(group, coordinator, topicPartitions.sortBy(_.partition), getPartitionOffset,
+          consumerIdOpt, groupInstanceId, hostOpt, clientIdOpt)
     }
 
     private def getLag(offset: Option[Long], logEndOffset: Option[Long]): Option[Long] =
@@ -344,13 +347,14 @@ object ConsumerGroupCommand extends Logging {
                                    topicPartitions: Seq[TopicPartition],
                                    getPartitionOffset: TopicPartition => Option[Long],
                                    consumerIdOpt: Option[String],
+                                   groupInstanceId: Option[String],
                                    hostOpt: Option[String],
                                    clientIdOpt: Option[String]): Array[PartitionAssignmentState] = {
 
       def getDescribePartitionResult(topicPartition: TopicPartition, logEndOffsetOpt: Option[Long]): PartitionAssignmentState = {
         val offset = getPartitionOffset(topicPartition)
         PartitionAssignmentState(group, coordinator, Option(topicPartition.topic), Option(topicPartition.partition), offset,
-          getLag(offset, logEndOffsetOpt), consumerIdOpt, hostOpt, clientIdOpt, logEndOffsetOpt)
+          getLag(offset, logEndOffsetOpt), consumerIdOpt, groupInstanceId, hostOpt, clientIdOpt, logEndOffsetOpt)
       }
 
       getLogEndOffsets(group, topicPartitions).map {
@@ -428,8 +432,13 @@ object ConsumerGroupCommand extends Logging {
             .map { topicPartition =>
               topicPartition -> committedOffsets.get(topicPartition).map(_.offset)
             }.toMap
-          collectConsumerAssignment(groupId, Option(consumerGroup.coordinator), topicPartitions.toList,
-            partitionOffsets, Some(s"${consumerSummary.consumerId}"), Some(s"${consumerSummary.host}"),
+          collectConsumerAssignment(groupId,
+            Option(consumerGroup.coordinator),
+            topicPartitions.toList,
+            partitionOffsets,
+            Some(s"${consumerSummary.consumerId}"),
+            Option(consumerSummary.groupInstanceId.orElse(null)),
+            Some(s"${consumerSummary.host}"),
             Some(s"${consumerSummary.clientId}"))
         }
         val rowsWithoutConsumer = committedOffsets.filterKeys(!assignedTopicPartitions.contains(_)).flatMap {
@@ -439,6 +448,7 @@ object ConsumerGroupCommand extends Logging {
               Option(consumerGroup.coordinator),
               Seq(topicPartition),
               Map(topicPartition -> Some(offset.offset)),
+              Some(MISSING_COLUMN_VALUE),
               Some(MISSING_COLUMN_VALUE),
               Some(MISSING_COLUMN_VALUE),
               Some(MISSING_COLUMN_VALUE))
@@ -461,6 +471,7 @@ object ConsumerGroupCommand extends Logging {
           MemberAssignmentState(
             groupId,
             consumer.consumerId,
+            Option(consumer.groupInstanceId.orElse(null)),
             consumer.host,
             consumer.clientId,
             consumer.assignment.topicPartitions.size(),

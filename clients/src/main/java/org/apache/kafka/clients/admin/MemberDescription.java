@@ -21,23 +21,39 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * A detailed description of a single group instance in the cluster.
  */
 public class MemberDescription {
     private final String memberId;
+    private final Optional<String> groupInstanceId;
     private final String clientId;
     private final String host;
     private final MemberAssignment assignment;
 
-    public MemberDescription(String memberId, String clientId, String host, MemberAssignment assignment) {
+    @Deprecated
+    public MemberDescription(String memberId,
+                             String clientId,
+                             String host,
+                             MemberAssignment assignment) {
+        this(memberId, Optional.empty(), clientId, host, assignment);
+    }
+
+    public MemberDescription(String memberId,
+                             Optional<String> groupInstanceId,
+                             String clientId,
+                             String host,
+                             MemberAssignment assignment) {
         this.memberId = memberId == null ? "" : memberId;
+        this.groupInstanceId = groupInstanceId;
         this.clientId = clientId == null ? "" : clientId;
         this.host = host == null ? "" : host;
         this.assignment = assignment == null ?
             new MemberAssignment(Collections.<TopicPartition>emptySet()) : assignment;
     }
+
 
     @Override
     public boolean equals(Object o) {
@@ -60,6 +76,13 @@ public class MemberDescription {
      */
     public String consumerId() {
         return memberId;
+    }
+
+    /**
+     * The instance id of the group member.
+     */
+    public Optional<String> groupInstanceId() {
+        return groupInstanceId;
     }
 
     /**

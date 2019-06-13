@@ -1160,10 +1160,12 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
       }
       val testGroupId = "test_group_id"
       val testClientId = "test_client_id"
+      val testGroupInstanceId = "test_group_instance_id"
       val fakeGroupId = "fake_group_id"
       val newConsumerConfig = new Properties(consumerConfig)
       newConsumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, testGroupId)
       newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
+      newConsumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, testGroupInstanceId)
       val consumer = createConsumer(configOverrides = newConsumerConfig)
       val latch = new CountDownLatch(1)
       try {
@@ -1206,6 +1208,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
           assertEquals(1, testGroupDescription.members().size())
           val member = testGroupDescription.members().iterator().next()
           assertEquals(testClientId, member.clientId())
+          assertTrue(member.groupInstanceId().isPresent)
+          assertEquals(testGroupInstanceId, member.groupInstanceId().get())
           val topicPartitions = member.assignment().topicPartitions()
           assertEquals(testNumPartitions, topicPartitions.size())
           assertEquals(testNumPartitions, topicPartitions.asScala.

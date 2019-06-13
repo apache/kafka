@@ -2716,8 +2716,9 @@ public class KafkaAdminClient extends AdminClient {
                                 deserializeAssignment(ByteBuffer.wrap(groupMember.memberAssignment()));
                             partitions = new HashSet<>(assignment.partitions());
                         }
-                        final MemberDescription memberDescription =
-                            new MemberDescription(groupMember.memberId(),
+                        final MemberDescription memberDescription = new MemberDescription(
+                                groupMember.memberId(),
+                                Optional.ofNullable(groupMember.groupInstanceId()),
                                 groupMember.clientId(),
                                 groupMember.clientHost(),
                                 new MemberAssignment(partitions));
