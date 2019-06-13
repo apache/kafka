@@ -20,7 +20,7 @@ import java.io.File
 import java.util.{Optional, Properties}
 import java.util.concurrent.atomic.AtomicBoolean
 
-import kafka.cluster.{LocalReplica, Partition, Replica}
+import kafka.cluster.{Partition, Replica}
 import kafka.log.{Log, LogManager, LogOffsetSnapshot}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
@@ -233,25 +233,25 @@ class ReplicaManagerQuotasTest {
     expect(logManager.liveLogDirs).andReturn(Array.empty[File]).anyTimes()
     replay(logManager)
 
+    val leaderBrokerId = configs.head.brokerId
     replicaManager = new ReplicaManager(configs.head, metrics, time, zkClient, scheduler, logManager,
       new AtomicBoolean(false), QuotaFactory.instantiate(configs.head, metrics, time, ""),
-      new BrokerTopicStats, new MetadataCache(configs.head.brokerId), new LogDirFailureChannel(configs.head.logDirs.size))
+      new BrokerTopicStats, new MetadataCache(leaderBrokerId), new LogDirFailureChannel(configs.head.logDirs.size))
 
     //create the two replicas
     for ((p, _) <- fetchInfo) {
       val partition = replicaManager.createPartition(p)
-      val leaderReplica = new LocalReplica(configs.head.brokerId, p, log)
-      leaderReplica.log.highWatermark = 5
-      partition.leaderReplicaIdOpt = Some(leaderReplica.brokerId)
-      val followerReplica = new LocalReplica(configs.last.brokerId, p, log)
-      val allReplicas : Set[Replica] = Set(leaderReplica, followerReplica)
-      allReplicas.foreach(partition.addReplicaIfNotExists)
+      log.highWatermark = 5
+      partition.leaderReplicaIdOpt = Some(leaderBrokerId)
+      partition.setLog(log, isFutureLog = false)
+
+      val followerReplica = new Replica(configs.last.brokerId, p)
+      val allReplicas : Set[Int] = Set(leaderBrokerId, followerReplica.brokerId)
+      partition.addReplicaIfNotExists(followerReplica)
       if (bothReplicasInSync) {
         partition.inSyncReplicas = allReplicas
-        followerReplica.log.highWatermark = 5
       } else {
-        partition.inSyncReplicas = Set(leaderReplica)
-        followerReplica.log.highWatermark = 0
+        partition.inSyncReplicas = Set(leaderBrokerId)
       }
     }
   }

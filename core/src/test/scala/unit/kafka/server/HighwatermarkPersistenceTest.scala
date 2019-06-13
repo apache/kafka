@@ -24,7 +24,7 @@ import org.apache.kafka.common.utils.Utils
 import org.easymock.EasyMock
 import org.junit._
 import org.junit.Assert._
-import kafka.cluster.{LocalReplica, RemoteReplica}
+import kafka.cluster.Replica
 import kafka.utils.{KafkaScheduler, MockTime, TestUtils}
 import kafka.zk.KafkaZkClient
 import java.util.concurrent.atomic.AtomicBoolean
@@ -75,9 +75,8 @@ class HighwatermarkPersistenceTest {
       val partition0 = replicaManager.createPartition(tp0)
       // create leader and follower replicas
       val log0 = logManagers.head.getOrCreateLog(new TopicPartition(topic, 0), LogConfig())
-      val leaderReplicaPartition0 = new LocalReplica(configs.head.brokerId, tp0, log0)
-      partition0.addReplicaIfNotExists(leaderReplicaPartition0)
-      val followerReplicaPartition0 = new RemoteReplica(configs.last.brokerId, tp0)
+      partition0.setLog(log0, isFutureLog = false)
+      val followerReplicaPartition0 = new Replica(configs.last.brokerId, tp0)
       partition0.addReplicaIfNotExists(followerReplicaPartition0)
       replicaManager.checkpointHighWatermarks()
       fooPartition0Hw = hwmFor(replicaManager, topic, 0)
@@ -121,8 +120,7 @@ class HighwatermarkPersistenceTest {
       // create leader log
       val topic1Log0 = logManagers.head.getOrCreateLog(t1p0, LogConfig())
       // create a local replica for topic1
-      val leaderReplicaTopic1Partition0 = new LocalReplica(configs.head.brokerId, t1p0, topic1Log0)
-      topic1Partition0.addReplicaIfNotExists(leaderReplicaTopic1Partition0)
+      topic1Partition0.setLog(topic1Log0, isFutureLog = false)
       replicaManager.checkpointHighWatermarks()
       topic1Partition0Hw = hwmFor(replicaManager, topic1, 0)
       assertEquals(topic1Log0.highWatermark, topic1Partition0Hw)
@@ -138,8 +136,7 @@ class HighwatermarkPersistenceTest {
       // create leader log
       val topic2Log0 = logManagers.head.getOrCreateLog(t2p0, LogConfig())
       // create a local replica for topic2
-      val leaderReplicaTopic2Partition0 =  new LocalReplica(configs.head.brokerId, t2p0, topic2Log0)
-      topic2Partition0.addReplicaIfNotExists(leaderReplicaTopic2Partition0)
+      topic2Partition0.setLog(topic2Log0, isFutureLog = false)
       replicaManager.checkpointHighWatermarks()
       var topic2Partition0Hw = hwmFor(replicaManager, topic2, 0)
       assertEquals(topic2Log0.highWatermark, topic2Partition0Hw)

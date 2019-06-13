@@ -19,73 +19,11 @@ package kafka.cluster
 
 import kafka.log.{Log}
 import kafka.utils.Logging
-import kafka.server.{LogOffsetMetadata, LogReadResult}
-import org.apache.kafka.common.{KafkaException, TopicPartition}
+import kafka.server.{LogOffsetMetadata}
+import org.apache.kafka.common.{TopicPartition}
 
-abstract class Replica(val brokerId: Int,
+class Replica(val brokerId: Int,
                        val topicPartition: TopicPartition) extends Logging {
-
-  // lastCaughtUpTimeMs is the largest time t such that the offset of most recent FetchRequest from this follower >=
-  // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
-  @volatile private[this] var _lastCaughtUpTimeMs = 0L
-
-  def logStartOffset: Long
-  def logEndOffsetMetadata: LogOffsetMetadata
-
-  def logEndOffset: Long = logEndOffsetMetadata.messageOffset
-
-  def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
-
-  def lastCaughtUpTimeMs_=(lastCaughtUpTimeMs: Long) {
-    _lastCaughtUpTimeMs = lastCaughtUpTimeMs
-    trace(s"Setting log caught offset time for replica $brokerId, partition $topicPartition to $lastCaughtUpTimeMs")
-  }
-
-  def resetLastCaughtUpTime(curLeaderLogEndOffset: Long, curTimeMs: Long, lastCaughtUpTimeMs: Long): Unit = {
-    throw new KafkaException(
-      s"Method not implemented for partition $topicPartition and broker id $brokerId")
-  }
-
-  def updateFetchState(followerFetchOffsetMetadata: LogOffsetMetadata,
-                       followerStartOffset: Long,
-                       followerFetchTimeMs: Long,
-                       leaderEndOffset: Long): Unit = {
-    throw new KafkaException(
-      s"Method not implemented for partition $topicPartition and broker id $brokerId")
-  }
-
-  override def equals(that: Any): Boolean = that match {
-    case other: Replica => brokerId == other.brokerId && topicPartition == other.topicPartition
-    case _ => false
-  }
-
-  override def hashCode: Int = 31 + topicPartition.hashCode + 17 * brokerId
-}
-
-class LocalReplica(brokerId: Int,
-                   topicPartition: TopicPartition,
-                   @volatile var log: Log) extends Replica(brokerId, topicPartition) {
-  def logStartOffset: Long =
-    log.logStartOffset
-
-  def logEndOffsetMetadata: LogOffsetMetadata =
-    log.logEndOffsetMetadata
-
-  override def toString: String = {
-    val replicaString = new StringBuilder
-    replicaString.append(s"LocalReplica(replicaId=$brokerId")
-    replicaString.append(s", topic=${topicPartition.topic}")
-    replicaString.append(s", partition=${topicPartition.partition}")
-    replicaString.append(s", isLocal=true")
-    replicaString.append(s", highWatermark=${log.highWatermarkMetadata}")
-    replicaString.append(s", lastStableOffset=${log.lastStableOffsetMetadata}")
-    replicaString.append(")")
-    replicaString.toString
-  }
-}
-
-class RemoteReplica(brokerId: Int,
-                    topicPartition: TopicPartition) extends Replica(brokerId, topicPartition) {
   // the log end offset value, kept in all replicas;
   // for local replica it is the log's end offset, for remote replicas its value is only updated by follower fetch
   @volatile private[this] var _logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
@@ -101,6 +39,10 @@ class RemoteReplica(brokerId: Int,
   // This is used to determine the lastCaughtUpTimeMs of the follower
   @volatile private[this] var lastFetchTimeMs = 0L
 
+  // lastCaughtUpTimeMs is the largest time t such that the offset of most recent FetchRequest from this follower >=
+  // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
+  @volatile private[this] var _lastCaughtUpTimeMs = 0L
+
   def logStartOffset: Long =
     _logStartOffset
 
@@ -111,6 +53,15 @@ class RemoteReplica(brokerId: Int,
 
   def logEndOffsetMetadata: LogOffsetMetadata =
     _logEndOffsetMetadata
+
+  def logEndOffset: Long = logEndOffsetMetadata.messageOffset
+
+  def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
+
+  def lastCaughtUpTimeMs_=(lastCaughtUpTimeMs: Long) {
+    _lastCaughtUpTimeMs = lastCaughtUpTimeMs
+    trace(s"Setting log caught offset time for replica $brokerId, partition $topicPartition to $lastCaughtUpTimeMs")
+  }
 
   /*
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
@@ -124,7 +75,7 @@ class RemoteReplica(brokerId: Int,
    * fetch request is always smaller than the leader's LEO, which can happen if small produce requests are received at
    * high frequency.
    */
-  override def updateFetchState(followerFetchOffsetMetadata: LogOffsetMetadata,
+  def updateFetchState(followerFetchOffsetMetadata: LogOffsetMetadata,
                                 followerStartOffset: Long,
                                 followerFetchTimeMs: Long,
                                 leaderEndOffset: Long): Unit = {
@@ -139,7 +90,7 @@ class RemoteReplica(brokerId: Int,
     lastFetchTimeMs = followerFetchTimeMs
   }
 
-  override def resetLastCaughtUpTime(curLeaderLogEndOffset: Long, curTimeMs: Long, lastCaughtUpTimeMs: Long): Unit = {
+  def resetLastCaughtUpTime(curLeaderLogEndOffset: Long, curTimeMs: Long, lastCaughtUpTimeMs: Long): Unit = {
     lastFetchLeaderLogEndOffset = curLeaderLogEndOffset
     lastFetchTimeMs = curTimeMs
     this.lastCaughtUpTimeMs = lastCaughtUpTimeMs
@@ -152,7 +103,7 @@ class RemoteReplica(brokerId: Int,
 
   override def toString: String = {
     val replicaString = new StringBuilder
-    replicaString.append("RemoteReplica(replicaId=" + brokerId)
+    replicaString.append("Replica(replicaId=" + brokerId)
     replicaString.append(s", topic=${topicPartition.topic}")
     replicaString.append(s", partition=${topicPartition.partition}")
     replicaString.append(s", isLocal=false")
@@ -160,4 +111,11 @@ class RemoteReplica(brokerId: Int,
     replicaString.append(")")
     replicaString.toString
   }
+
+  override def equals(that: Any): Boolean = that match {
+    case other: Replica => brokerId == other.brokerId && topicPartition == other.topicPartition
+    case _ => false
+  }
+
+  override def hashCode: Int = 31 + topicPartition.hashCode + 17 * brokerId
 }

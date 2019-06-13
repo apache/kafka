@@ -1005,9 +1005,7 @@ class ReplicaManager(val config: KafkaConfig,
    *  the quota is exceeded and the replica is not in sync.
    */
   def shouldLeaderThrottle(quota: ReplicaQuota, topicPartition: TopicPartition, replicaId: Int): Boolean = {
-    val isReplicaInSync = nonOfflinePartition(topicPartition).exists { partition =>
-      partition.getReplica(replicaId).exists(partition.inSyncReplicas.contains)
-    }
+    val isReplicaInSync = nonOfflinePartition(topicPartition).exists(_.inSyncReplicas.contains(replicaId))
     !isReplicaInSync && quota.isThrottled(topicPartition) && quota.isQuotaExceeded
   }
 
@@ -1144,7 +1142,8 @@ class ReplicaManager(val config: KafkaConfig,
               val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
 
               // Add future replica to partition's map
-              partition.getOrCreateReplica(Request.FutureLocalReplicaId, isNew = false, highWatermarkCheckpoints)
+              partition.createLogIfNotExist(Request.FutureLocalReplicaId, isNew = false, isFutureReplica = true,
+                highWatermarkCheckpoints)
 
               // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
               // replica from source dir to destination dir
@@ -1300,7 +1299,8 @@ class ReplicaManager(val config: KafkaConfig,
                 s"but cannot become follower since the new leader $newLeaderBrokerId is unavailable.")
               // Create the local replica even if the leader is unavailable. This is required to ensure that we include
               // the partition's high watermark in the checkpoint file (see KAFKA-1647)
-              partition.getOrCreateReplica(localBrokerId, isNew = partitionStateInfo.isNew, highWatermarkCheckpoints)
+              partition.createLogIfNotExist(localBrokerId, isNew = partitionStateInfo.isNew, isFutureReplica = false,
+                highWatermarkCheckpoints)
           }
         } catch {
           case e: KafkaStorageException =>

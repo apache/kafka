@@ -20,7 +20,7 @@ import java.io.File
 
 import kafka.api._
 import kafka.utils._
-import kafka.cluster.{LocalReplica, RemoteReplica}
+import kafka.cluster.Replica
 import kafka.log.{Log, LogManager}
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.zk.KafkaZkClient
@@ -122,22 +122,22 @@ class SimpleFetchTest {
     val partition = replicaManager.createPartition(new TopicPartition(topic, partitionId))
 
     // create the leader replica with the local log
-    val leaderReplica = new LocalReplica(configs.head.brokerId, partition.topicPartition, log)
     log.highWatermark = partitionHW
-    partition.leaderReplicaIdOpt = Some(leaderReplica.brokerId)
+    partition.leaderReplicaIdOpt = Some(configs.head.brokerId)
+    partition.setLog(log, false)
 
     // create the follower replica with defined log end offset
-    val followerReplica= new RemoteReplica(configs(1).brokerId, partition.topicPartition)
+    val followerReplica= new Replica(configs(1).brokerId, partition.topicPartition)
     val leo = LogOffsetMetadata(followerLEO, 0L, followerLEO.toInt)
     followerReplica.updateFetchState(
       followerFetchOffsetMetadata = leo,
       followerStartOffset = 0L,
       followerFetchTimeMs= time.milliseconds,
       leaderEndOffset = leo.messageOffset)
+    partition.addReplicaIfNotExists(followerReplica)
 
     // add both of them to ISR
-    val allReplicas = List(leaderReplica, followerReplica)
-    allReplicas.foreach(partition.addReplicaIfNotExists)
+    val allReplicas = List(configs.head.brokerId, followerReplica.brokerId)
     partition.inSyncReplicas = allReplicas.toSet
   }
 
