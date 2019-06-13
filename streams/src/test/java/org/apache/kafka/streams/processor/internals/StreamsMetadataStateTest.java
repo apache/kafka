@@ -207,7 +207,7 @@ public class StreamsMetadataStateTest {
                 Collections.singleton(topic3P0));
 
         final StreamsMetadata actual = metadataState.getMetadataWithKey("table-three",
-                                                                    "the-key",
+                                                               "the-key",
                                                                     Serdes.String().serializer());
 
         assertEquals(expected, actual);

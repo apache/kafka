@@ -65,7 +65,6 @@ class StreamToTableJoinScalaIntegrationTestBase extends StreamToTableJoinTestDat
     streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1000")
     streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, testFolder.getRoot.getPath)
-
     streamsConfiguration
   }
 

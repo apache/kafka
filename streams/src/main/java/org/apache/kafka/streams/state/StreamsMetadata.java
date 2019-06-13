@@ -36,9 +36,10 @@ public class StreamsMetadata {
      * Sentinel to indicate that the StreamsMetadata is currently unavailable. This can occur during rebalance
      * operations.
      */
-    public final static StreamsMetadata NOT_AVAILABLE = new StreamsMetadata(new HostInfo("unavailable", -1),
-                                                                            Collections.emptySet(),
-                                                                            Collections.emptySet());
+    public final static StreamsMetadata NOT_AVAILABLE = new StreamsMetadata(
+        new HostInfo("unavailable", -1),
+        Collections.emptySet(),
+        Collections.emptySet());
 
     private final HostInfo hostInfo;
     private final Set<String> stateStoreNames;

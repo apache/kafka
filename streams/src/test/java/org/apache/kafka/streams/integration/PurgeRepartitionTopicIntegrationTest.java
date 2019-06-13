@@ -59,7 +59,6 @@ public class PurgeRepartitionTopicIntegrationTest {
     private static final String INPUT_TOPIC = "input-stream";
     private static final String APPLICATION_ID = "restore-test";
     private static final String REPARTITION_TOPIC = APPLICATION_ID + "-KSTREAM-AGGREGATE-STATE-STORE-0000000002-repartition";
-
     private static AdminClient adminClient;
     private static KafkaStreams kafkaStreams;
     private static final Integer PURGE_INTERVAL_MS = 10;

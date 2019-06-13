@@ -170,14 +170,15 @@ public class StreamsUpgradeTest {
             final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
             // version 2 fields
             final Map<TopicPartition, PartitionInfo> topicToPartitionInfo = new HashMap<>();
+            final Map<HostInfo, Set<TaskId>> tasksByHost;
             final Map<HostInfo, Set<TopicPartition>> partitionsByHost;
 
             processLatestVersionAssignment(info, partitions, activeTasks, topicToPartitionInfo);
-            partitionsByHost = info.partitionsByHost();
+            tasksByHost = info.tasksByHost();
 
             final TaskManager taskManager = taskManger();
             taskManager.setClusterMetadata(Cluster.empty().withPartitions(topicToPartitionInfo));
-            taskManager.setPartitionsByHostState(partitionsByHost);
+          //  taskManager.setTasksByHostState(tasksByHost, 4);
             taskManager.setAssignmentMetadata(activeTasks, info.standbyTasks());
             taskManager.updateSubscriptionsFromAssignment(partitions);
         }
@@ -270,7 +271,7 @@ public class StreamsUpgradeTest {
         private ByteBuffer encodeFutureVersion() {
             final byte[] endPointBytes = prepareUserEndPoint();
 
-            final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourByteLength(endPointBytes));
+            final ByteBuffer buf = ByteBuffer.allocate(getVersionThreeAndFourAndFiveByteLength(endPointBytes));
 
             buf.putInt(LATEST_SUPPORTED_VERSION + 1); // used version
             buf.putInt(LATEST_SUPPORTED_VERSION + 1); // supported version

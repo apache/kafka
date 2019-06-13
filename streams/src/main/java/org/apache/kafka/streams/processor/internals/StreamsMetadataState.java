@@ -213,15 +213,6 @@ public class StreamsMetadataState {
         rebuildMetadata(currentState);
     }
 
-    private boolean hasPartitionsForAnyTopics(final List<String> topicNames, final Set<TopicPartition> partitionForHost) {
-        for (final TopicPartition topicPartition : partitionForHost) {
-            if (topicNames.contains(topicPartition.topic())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private void rebuildMetadata(final Map<HostInfo, Set<TopicPartition>> currentState) {
         allMetadata.clear();
         if (currentState.isEmpty()) {
@@ -245,6 +236,24 @@ public class StreamsMetadataState {
                 myMetadata = metadata;
             }
         }
+    }
+
+    private boolean hasPartitionsForAnyTopicPartition(final List<String> topicNames, final Set<String> partitionForHost) {
+        for (final String topicName : topicNames) {
+            if (partitionForHost.contains(topicName)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean hasPartitionsForAnyTopics(final List<String> topicNames, final Set<TopicPartition> partitionForHost) {
+        for (final TopicPartition topicPartition : partitionForHost) {
+            if (topicNames.contains(topicPartition.topic())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private <K> StreamsMetadata getStreamsMetadataForKey(final String storeName,

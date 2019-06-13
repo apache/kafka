@@ -160,6 +160,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 1);
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.METADATA_MAX_AGE_CONFIG), "1000");
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG), "earliest");
+        properties.put(IntegrationTestUtils.INTERNAL_LEAVE_GROUP_ON_CLOSE, true);
 
         for (int i = 0; i < numberOfRestarts; ++i) {
             final Properties config = StreamsTestUtils.getStreamsConfig(
@@ -496,8 +497,8 @@ public class EosIntegrationTest {
             TestUtils.waitForCondition(
                 () -> streams1.allMetadata().size() == 1
                     && streams2.allMetadata().size() == 1
-                    && (streams1.allMetadata().iterator().next().topicPartitions().size() == 2
-                        || streams2.allMetadata().iterator().next().topicPartitions().size() == 2),
+                    || (streams1.allMetadata().iterator().next().topicPartitions().size() == 2
+                    || streams2.allMetadata().iterator().next().topicPartitions().size() == 2),
                 MAX_WAIT_TIME_MS, "Should have rebalanced.");
 
             final List<KeyValue<Long, Long>> committedRecordsAfterRebalance = readResult(
@@ -511,9 +512,10 @@ public class EosIntegrationTest {
             checkResultPerKey(committedRecordsAfterRebalance, expectedCommittedRecordsAfterRebalance);
 
             doGC = false;
+
             TestUtils.waitForCondition(
-                () -> streams1.allMetadata().size() == 1
-                    && streams2.allMetadata().size() == 1
+                () -> streams1.allMetadata().size() == 2
+                    && streams2.allMetadata().size() == 2
                     && streams1.allMetadata().iterator().next().topicPartitions().size() == 1
                     && streams2.allMetadata().iterator().next().topicPartitions().size() == 1,
                 MAX_WAIT_TIME_MS,
@@ -646,15 +648,13 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.consumerPrefix(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG), MAX_POLL_INTERVAL_MS);
         properties.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getPath() + File.separator + appDir);
-        properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "dummy:2142");
-
+        properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + String.valueOf(Math.round(Math.random() * 4460)));
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,
             CLUSTER.bootstrapServers(),
             Serdes.LongSerde.class.getName(),
             Serdes.LongSerde.class.getName(),
             properties);
-
         final KafkaStreams streams = new KafkaStreams(builder.build(), config);
 
         streams.setUncaughtExceptionHandler((t, e) -> {
