@@ -274,7 +274,8 @@ public class MetricsIntegrationTest {
 
     private void checkThreadLevelMetrics() {
         final List<Metric> listMetricThread = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-            .filter(m -> m.metricName().group().equals(STREAM_THREAD_NODE_METRICS)).collect(Collectors.toList());
+            .filter(m -> m.metricName().group().equals(STREAM_THREAD_NODE_METRICS))
+            .collect(Collectors.toList());
         checkMetricByName(listMetricThread, COMMIT_LATENCY_AVG, 1);
         checkMetricByName(listMetricThread, COMMIT_LATENCY_MAX, 1);
         checkMetricByName(listMetricThread, POLL_LATENCY_AVG, 1);
@@ -301,7 +302,8 @@ public class MetricsIntegrationTest {
 
     private void checkTaskLevelMetrics() {
         final List<Metric> listMetricTask = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-            .filter(m -> m.metricName().group().equals(STREAM_TASK_NODE_METRICS)).collect(Collectors.toList());
+            .filter(m -> m.metricName().group().equals(STREAM_TASK_NODE_METRICS))
+            .collect(Collectors.toList());
         checkMetricByName(listMetricTask, COMMIT_LATENCY_AVG, 5);
         checkMetricByName(listMetricTask, COMMIT_LATENCY_MAX, 5);
         checkMetricByName(listMetricTask, COMMIT_RATE, 5);
@@ -312,7 +314,8 @@ public class MetricsIntegrationTest {
 
     private void checkProcessorLevelMetrics() {
         final List<Metric> listMetricProcessor = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-            .filter(m -> m.metricName().group().equals(STREAM_PROCESSOR_NODE_METRICS)).collect(Collectors.toList());
+            .filter(m -> m.metricName().group().equals(STREAM_PROCESSOR_NODE_METRICS))
+            .collect(Collectors.toList());
         checkMetricByName(listMetricProcessor, PROCESS_LATENCY_AVG, 18);
         checkMetricByName(listMetricProcessor, PROCESS_LATENCY_MAX, 18);
         checkMetricByName(listMetricProcessor, PUNCTUATE_LATENCY_AVG, 18);
@@ -375,7 +378,8 @@ public class MetricsIntegrationTest {
 
     private void checkMetricsDeregistration() {
         final List<Metric> listMetricAfterClosingApp = new ArrayList<Metric>(kafkaStreams.metrics().values()).stream()
-            .filter(m -> m.metricName().group().contains(STREAM_STRING)).collect(Collectors.toList());
+            .filter(m -> m.metricName().group().contains(STREAM_STRING))
+            .collect(Collectors.toList());
         assertThat(listMetricAfterClosingApp.size(), is(0));
     }
 
