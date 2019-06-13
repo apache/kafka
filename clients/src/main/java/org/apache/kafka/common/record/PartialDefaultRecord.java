@@ -31,9 +31,8 @@ public class PartialDefaultRecord extends DefaultRecord {
                          long timestamp,
                          int sequence,
                          int keySize,
-                         int valueSize,
-                         Header[] headers) {
-        super(sizeInBytes, attributes, offset, timestamp, sequence, null, null, headers);
+                         int valueSize) {
+        super(sizeInBytes, attributes, offset, timestamp, sequence, null, null, null);
 
         this.keySize = keySize;
         this.valueSize = valueSize;
@@ -91,5 +90,10 @@ public class PartialDefaultRecord extends DefaultRecord {
     @Override
     public ByteBuffer value() {
         throw new UnsupportedOperationException("value is skipped in PartialDefaultRecord");
+    }
+
+    @Override
+    public Header[] headers() {
+        throw new UnsupportedOperationException("headers is skipped in PartialDefaultRecord");
     }
 }
