@@ -241,9 +241,9 @@ public class MetricsIntegrationTest {
             .groupByKey()
             .windowedBy(TimeWindows.of(Duration.ofMillis(50)))
             .aggregate(() -> 0L,
-                       (aggKey, newValue, aggValue) -> aggValue,
-                       Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as(TIME_WINDOWED_AGGREGATED_STREAM_STORE)
-                           .withValueSerde(Serdes.Long()));
+                (aggKey, newValue, aggValue) -> aggValue,
+                Materialized.<Integer, Long, WindowStore<Bytes, byte[]>>as(TIME_WINDOWED_AGGREGATED_STREAM_STORE)
+                    .withValueSerde(Serdes.Long()));
         startApplication();
 
         checkWindowStoreMetrics();
@@ -259,10 +259,10 @@ public class MetricsIntegrationTest {
             .groupByKey()
             .windowedBy(SessionWindows.with(Duration.ofMillis(50)))
             .aggregate(() -> 0L,
-                       (aggKey, newValue, aggValue) -> aggValue,
-                       (aggKey, leftAggValue, rightAggValue) -> leftAggValue,
-                       Materialized.<Integer, Long, SessionStore<Bytes, byte[]>>as(SESSION_AGGREGATED_STREAM_STORE)
-                           .withValueSerde(Serdes.Long()));
+                (aggKey, newValue, aggValue) -> aggValue,
+                (aggKey, leftAggValue, rightAggValue) -> leftAggValue,
+                Materialized.<Integer, Long, SessionStore<Bytes, byte[]>>as(SESSION_AGGREGATED_STREAM_STORE)
+                    .withValueSerde(Serdes.Long()));
         startApplication();
 
         checkSessionStoreMetrics();
