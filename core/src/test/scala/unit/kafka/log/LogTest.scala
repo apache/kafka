@@ -4026,4 +4026,19 @@ object LogTest {
     assertFalse(LogTest.hasOffsetOverflow(recoveredLog))
     recoveredLog
   }
+  
+  @Test
+  def shouldDeleteSizeBasedSegmentsWhenJustAboveRetentionSize() {
+    def createRecords = TestUtils.singletonRecords("test".getBytes)
+    val logConfig = LogTest.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 49)
+    val log = createLog(logDir, logConfig)
+
+    // append some messages to create some segments
+    for (_ <- 0 until 10)
+      log.appendAsLeader(createRecords, leaderEpoch = 0)
+
+    log.onHighWatermarkIncremented(log.logEndOffset)
+    log.deleteOldSegments()
+    assertEquals("should have 9 segments", 9,log.numberOfSegments)
+  }
 }
