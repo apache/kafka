@@ -60,7 +60,7 @@ class DelayedFetch(delayMs: Long,
                    fetchMetadata: FetchMetadata,
                    replicaManager: ReplicaManager,
                    quota: ReplicaQuota,
-                   clientMetadata: ClientMetadata,
+                   clientMetadata: Option[ClientMetadata],
                    responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
                    followerHighwatermarks: TopicPartition => Option[Long] = _ => None)
   extends DelayedOperation(delayMs) {

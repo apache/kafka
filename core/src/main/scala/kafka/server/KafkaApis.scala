@@ -70,6 +70,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ListenerName, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
+import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.CreateAclsResponse.AclCreationResponse
 import org.apache.kafka.common.requests.DeleteAclsResponse.{AclDeletionResult, AclFilterResponse}
@@ -581,12 +582,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       fetchRequest.toForget,
       fetchRequest.isFromFollower)
 
-    val clientMetadata = new DefaultClientMetadata(
-      fetchRequest.rackId,
-      clientId,
-      request.context.clientAddress,
-      request.context.principal,
-      request.context.listenerName.value)
+    val clientMetadata: Option[ClientMetadata] = if (versionId >= 11) {
+      // Fetch API version 11 added preferred replica logic
+      Some(new DefaultClientMetadata(
+        fetchRequest.rackId,
+        clientId,
+        request.context.clientAddress,
+        request.context.principal,
+        request.context.listenerName.value))
+    } else {
+      None
+    }
 
     def errorResponse[T >: MemoryRecords <: BaseRecords](error: Errors): FetchResponse.PartitionData[T] = {
       new FetchResponse.PartitionData[T](error, FetchResponse.INVALID_HIGHWATERMARK, FetchResponse.INVALID_LAST_STABLE_OFFSET,
@@ -784,7 +790,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         replicationQuota(fetchRequest),
         processResponseCallback,
         fetchRequest.isolationLevel,
-        clientMetadata)
+        clientMetadata,
+        fetchContext.getFollowerHighWatermark)
     }
   }
 

@@ -400,6 +400,7 @@ class ReplicaAlterLogDirsThreadTest {
       EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
       EasyMock.anyObject(),
+      EasyMock.anyObject(),
       EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {
         override def answer(): Unit = {
@@ -636,6 +637,7 @@ class ReplicaAlterLogDirsThreadTest {
       EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.capture(responseCallback),
+      EasyMock.anyObject(),
       EasyMock.anyObject(),
       EasyMock.anyObject()))
       .andAnswer(new IAnswer[Unit] {

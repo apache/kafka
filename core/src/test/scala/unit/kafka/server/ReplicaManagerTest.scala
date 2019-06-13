@@ -508,7 +508,7 @@ class ReplicaManagerTest {
         fetchInfos = Seq(tp -> validFetchPartitionData),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
-        clientMetadata = ClientMetadata.NO_METADATA
+        clientMetadata = None
       )
 
       assertTrue(successfulFetch.isDefined)
@@ -530,7 +530,7 @@ class ReplicaManagerTest {
         fetchInfos = Seq(tp -> invalidFetchPartitionData),
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
         responseCallback = callback,
-        clientMetadata = ClientMetadata.NO_METADATA
+        clientMetadata = None
       )
 
       assertTrue(successfulFetch.isDefined)
@@ -610,7 +610,7 @@ class ReplicaManagerTest {
           tp1 -> new PartitionData(1, 0, 100000, Optional.empty())),
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED,
-        clientMetadata = ClientMetadata.NO_METADATA
+        clientMetadata = None
       )
       val tp0Replica = replicaManager.localReplica(tp0)
       assertTrue(tp0Replica.isDefined)
@@ -745,7 +745,7 @@ class ReplicaManagerTest {
 
     val consumerResult = fetchAsConsumer(replicaManager, tp0,
       new PartitionData(0, 0, 100000, Optional.empty()),
-      clientMetadata = metadata)
+      clientMetadata = Some(metadata))
 
     // Fetch from follower succeeds
     assertTrue(consumerResult.isFired)
@@ -789,7 +789,7 @@ class ReplicaManagerTest {
 
     val consumerResult = fetchAsConsumer(replicaManager, tp0,
       new PartitionData(0, 0, 100000, Optional.empty()),
-      clientMetadata = metadata)
+      clientMetadata = Some(metadata))
 
     // Fetch from follower succeeds
     assertTrue(consumerResult.isFired)
@@ -1018,7 +1018,7 @@ class ReplicaManagerTest {
                               partitionData: PartitionData,
                               minBytes: Int = 0,
                               isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED,
-                              clientMetadata: ClientMetadata = ClientMetadata.NO_METADATA): CallbackResult[FetchPartitionData] = {
+                              clientMetadata: Option[ClientMetadata] = None): CallbackResult[FetchPartitionData] = {
     fetchMessages(replicaManager, replicaId = -1, partition, partitionData, minBytes, isolationLevel, clientMetadata)
   }
 
@@ -1027,7 +1027,7 @@ class ReplicaManagerTest {
                               partitionData: PartitionData,
                               minBytes: Int = 0,
                               isolationLevel: IsolationLevel = IsolationLevel.READ_UNCOMMITTED,
-                              clientMetadata: ClientMetadata = ClientMetadata.NO_METADATA): CallbackResult[FetchPartitionData] = {
+                              clientMetadata: Option[ClientMetadata] = None): CallbackResult[FetchPartitionData] = {
     fetchMessages(replicaManager, replicaId = 1, partition, partitionData, minBytes, isolationLevel, clientMetadata)
   }
 
@@ -1037,7 +1037,7 @@ class ReplicaManagerTest {
                             partitionData: PartitionData,
                             minBytes: Int,
                             isolationLevel: IsolationLevel,
-                            clientMetadata: ClientMetadata): CallbackResult[FetchPartitionData] = {
+                            clientMetadata: Option[ClientMetadata]): CallbackResult[FetchPartitionData] = {
     val result = new CallbackResult[FetchPartitionData]()
     def fetchCallback(responseStatus: Seq[(TopicPartition, FetchPartitionData)]) = {
       assertEquals(1, responseStatus.size)

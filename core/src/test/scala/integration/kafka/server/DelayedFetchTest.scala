@@ -23,7 +23,6 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.FencedLeaderEpochException
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.replica.ClientMetadata
 import org.apache.kafka.common.requests.FetchRequest
 import org.easymock.{EasyMock, EasyMockSupport}
 import org.junit.Test
@@ -57,7 +56,7 @@ class DelayedFetchTest extends EasyMockSupport {
       fetchMetadata = fetchMetadata,
       replicaManager = replicaManager,
       quota = replicaQuota,
-      clientMetadata = ClientMetadata.NO_METADATA,
+      clientMetadata = None,
       responseCallback = callback)
 
     val partition: Partition = mock(classOf[Partition])
@@ -103,7 +102,7 @@ class DelayedFetchTest extends EasyMockSupport {
       fetchMaxBytes = maxBytes,
       hardMaxBytesLimit = false,
       readPartitionInfo = Seq((topicPartition, fetchPartitionData)),
-      clientMetadata = ClientMetadata.NO_METADATA,
+      clientMetadata = None,
       quota = replicaQuota))
       .andReturn(Seq((topicPartition, buildReadResultWithError(error))))
   }

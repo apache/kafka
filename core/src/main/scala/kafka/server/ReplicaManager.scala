@@ -830,8 +830,8 @@ class ReplicaManager(val config: KafkaConfig,
                     quota: ReplicaQuota = UnboundedQuota,
                     responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
                     isolationLevel: IsolationLevel,
-                    clientMetadata: ClientMetadata,
-                    followerHighWatermarks: TopicPartition => Option[Long]) {
+                    clientMetadata: Option[ClientMetadata],
+                    followerHighWatermarks: TopicPartition => Option[Long] = _ => None) {
     val isFromFollower = Request.isValidBrokerId(replicaId)
 
     val fetchIsolation = if (isFromFollower || replicaId == Request.FutureLocalReplicaId)
@@ -913,7 +913,7 @@ class ReplicaManager(val config: KafkaConfig,
                        hardMaxBytesLimit: Boolean,
                        readPartitionInfo: Seq[(TopicPartition, PartitionData)],
                        quota: ReplicaQuota,
-                       clientMetadata: ClientMetadata): Seq[(TopicPartition, LogReadResult)] = {
+                       clientMetadata: Option[ClientMetadata]): Seq[(TopicPartition, LogReadResult)] = {
 
     def read(tp: TopicPartition, fetchInfo: PartitionData, limitBytes: Int, minOneMessage: Boolean): LogReadResult = {
       val offset = fetchInfo.fetchOffset
@@ -933,7 +933,10 @@ class ReplicaManager(val config: KafkaConfig,
         val fetchTimeMs = time.milliseconds
 
         // If we are the leader, determine the preferred read-replica
-        val preferredReadReplica = findPreferredReadReplica(tp, clientMetadata, replicaId, fetchInfo.fetchOffset)
+        val preferredReadReplica = clientMetadata match {
+          case Some(metadata) => findPreferredReadReplica(tp, metadata, replicaId, fetchInfo.fetchOffset)
+          case None => None
+        }
 
         if (preferredReadReplica.isDefined && !preferredReadReplica.contains(localBrokerId)) {
           // If the a preferred read-replica is set and is not this replica (the leader), skip the read
@@ -1040,9 +1043,6 @@ class ReplicaManager(val config: KafkaConfig,
       if (Request.isValidBrokerId(replicaId)) {
         // Don't look up preferred for follower fetches via normal replication
         Option.empty
-      } else if (clientMetadata.equals(ClientMetadata.NO_METADATA)) {
-        // Return the leader if no metadata given
-        partition.leaderReplicaIdOpt
       } else {
         val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(tp.topic(), tp.partition(), new ListenerName(clientMetadata.listenerName))
         val replicaInfoSet: Set[ReplicaView] = partition.allReplicas

@@ -91,7 +91,7 @@ class ReplicaAlterLogDirsThread(name: String,
       UnboundedQuota,
       processResponseCallback,
       request.isolationLevel,
-      ClientMetadata.NO_METADATA)
+      None)
 
     if (partitionData == null)
       throw new IllegalStateException(s"Failed to fetch data for partitions ${request.fetchData.keySet().toArray.mkString(",")}")
