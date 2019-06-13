@@ -69,7 +69,12 @@ public class DefaultRecord implements Record {
 
     private static final int NULL_VARINT_SIZE_BYTES = ByteUtils.sizeOfVarint(-1);
 
-    private static final int MAX_SKIP_BUFFER_SIZE = 2048; // as in InputStream.MAX_SKIP_BUFFER_SIZE
+    // as in InputStream.MAX_SKIP_BUFFER_SIZE
+    private static final int MAX_SKIP_BUFFER_SIZE = 2048;
+
+    private enum ParseState {
+        READ_METADATA, READ_KEY_SIZE, SKIP_KEY_BYTES, READ_VALUE_SIZE, SKIP_VALUE_BYTES, READ_NUM_HEADERS, READ_HEADER
+    }
 
     private final int sizeInBytes;
     private final byte attributes;
@@ -372,24 +377,16 @@ public class DefaultRecord implements Record {
         }
     }
 
-    public static DefaultRecord readPartiallyFrom(DataInput input,
-                                                  long baseOffset,
-                                                  long baseTimestamp,
-                                                  int baseSequence,
-                                                  Long logAppendTime) throws IOException {
+    public static PartialDefaultRecord readPartiallyFrom(DataInput input,
+                                                         long baseOffset,
+                                                         long baseTimestamp,
+                                                         int baseSequence,
+                                                         Long logAppendTime) throws IOException {
         int sizeOfBodyInBytes = ByteUtils.readVarint(input);
         int totalSizeInBytes = ByteUtils.sizeOfVarint(sizeOfBodyInBytes) + sizeOfBodyInBytes;
 
-        // only use skipBytes when the size is large enough to be beneficial
-        if (sizeOfBodyInBytes > MAX_SKIP_BUFFER_SIZE * 3) {
-            return readPartiallyFrom(input, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
-                baseSequence, logAppendTime);
-        } else {
-            ByteBuffer recordBuffer = ByteBuffer.allocate(sizeOfBodyInBytes);
-            input.readFully(recordBuffer.array(), 0, sizeOfBodyInBytes);
-            return readFrom(recordBuffer, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
-                baseSequence, logAppendTime);
-        }
+        return readPartiallyFrom(input, totalSizeInBytes, sizeOfBodyInBytes, baseOffset, baseTimestamp,
+            baseSequence, logAppendTime);
     }
 
     private static PartialDefaultRecord readPartiallyFrom(DataInput input,
@@ -399,64 +396,168 @@ public class DefaultRecord implements Record {
                                                           long baseTimestamp,
                                                           int baseSequence,
                                                           Long logAppendTime) throws IOException {
+        int size = Math.min(MAX_SKIP_BUFFER_SIZE, sizeOfBodyInBytes);
+        int remaining = sizeOfBodyInBytes;
+        byte[] array = new byte[size];
+        ByteBuffer buffer = ByteBuffer.wrap(array);
+        // set its limit to 0 to indicate no bytes readable yet
+        buffer.limit(0);
+
+        ParseState state = ParseState.READ_METADATA;
+        boolean notDone = true;
+        boolean needMore = true;
+        int read = 0;
+
         try {
-            byte attributes = input.readByte();
-            int bytesRead = 1;
-            long timestampDelta = ByteUtils.readVarlong(input);
-            long timestamp = baseTimestamp + timestampDelta;
-            if (logAppendTime != null)
-                timestamp = logAppendTime;
-            bytesRead += ByteUtils.sizeOfVarlong(timestampDelta);
+            byte attributes = 0;
+            long timestamp = 0L;
+            long offset = 0L;
+            int sequence = 0;
+            int keySize = -1;
+            int valueSize = -1;
+            int numHeaders = -1;
+            Header[] headers = EMPTY_HEADERS;
 
-            int offsetDelta = ByteUtils.readVarint(input);
-            bytesRead += ByteUtils.sizeOfVarint(offsetDelta);
-            long offset = baseOffset + offsetDelta;
-            int sequence = baseSequence >= 0 ?
-                    DefaultRecordBatch.incrementSequence(baseSequence, offsetDelta) :
-                    RecordBatch.NO_SEQUENCE;
+            int remainingKeyBytesToSkip = -1;
+            int remainingValueBytesToSkip = -1;
 
-            int keySize = ByteUtils.readVarint(input);
-            bytesRead += ByteUtils.sizeOfVarint(keySize);
-            if (keySize >= 0) {
-                int skippedBytes = input.skipBytes(keySize);
-                if (skippedBytes != keySize)
-                    throw new InvalidRecordException("Found invalid record structure, skipped key size expected is " + keySize + ", actually is " + skippedBytes);
-                bytesRead += keySize;
-            }
+            while (notDone) {
+                if (needMore) {
+                    if (remaining > 0) {
+                        // first copy the remaining bytes to the beginning of the array
+                        // do not use System.arrayCopy since it will allocate a new array for same src/dest
+                        int stepsToLeftShift = buffer.position();
+                        int bytesToLeftShift = buffer.remaining();
+                        for (int i = 0; i < bytesToLeftShift; i++) {
+                            array[i] = array[i + stepsToLeftShift];
+                        }
 
-            int valueSize = ByteUtils.readVarint(input);
-            bytesRead += ByteUtils.sizeOfVarint(valueSize);
-            if (valueSize >= 0) {
-                int skippedBytes = input.skipBytes(valueSize);
-                if (skippedBytes != valueSize)
-                    throw new InvalidRecordException("Found invalid record structure, skipped value size expected is " + valueSize + ", actually is " + skippedBytes);
-                bytesRead += valueSize;
-            }
+                        // then try to read more bytes to the remaining of the array
+                        int bytesToRead = Math.min(remaining, size - bytesToLeftShift);
+                        input.readFully(array, bytesToLeftShift, bytesToRead);
+                        remaining = remaining - bytesToRead;
 
-            int numHeaders = ByteUtils.readVarint(input);
-            if (numHeaders < 0)
-                throw new InvalidRecordException("Found invalid number of record headers " + numHeaders);
-            bytesRead += ByteUtils.sizeOfVarint(numHeaders);
+                        buffer = ByteBuffer.wrap(array);
+                        // only those many bytes are readable
+                        buffer.limit(bytesToLeftShift + bytesToRead);
 
-            final Header[] headers;
-            if (numHeaders == 0) {
-                headers = Record.EMPTY_HEADERS;
+                        needMore = false;
+                    } else {
+                        throw new InvalidRecordException("Invalid record size: expected to read more bytes in record payload");
+                    }
+                }
 
-                // validate whether we have read all bytes in the current record
-                if (bytesRead != sizeOfBodyInBytes)
-                    throw new InvalidRecordException("Invalid record size: expected to read " + sizeOfBodyInBytes +
-                        " bytes in record payload, but instead read " + bytesRead);
-            } else {
-                final int sizeOfHeaderInBytes = sizeOfBodyInBytes - bytesRead;
-                ByteBuffer headerBuffer = ByteBuffer.allocate(sizeOfHeaderInBytes);
-                input.readFully(headerBuffer.array(), 0, sizeOfHeaderInBytes);
-                int headerStart = headerBuffer.position();
-                headers = readHeaders(headerBuffer, numHeaders);
+                switch (state) {
+                    case READ_METADATA:
+                        // read attributes (1byte), timestamp (varlong, max 8bytes) and offset (varint, max 4bytes) => 13 bytes
+                        if (buffer.remaining() < 13 && remaining > 0) {
+                            needMore = true;
+                        } else {
+                            attributes = buffer.get();
+                            long timestampDelta = ByteUtils.readVarlong(buffer);
+                            timestamp = baseTimestamp + timestampDelta;
+                            if (logAppendTime != null)
+                                timestamp = logAppendTime;
+                            int offsetDelta = ByteUtils.readVarint(buffer);
+                            offset = baseOffset + offsetDelta;
+                            sequence = baseSequence >= 0 ?
+                                DefaultRecordBatch.incrementSequence(baseSequence, offsetDelta) :
+                                RecordBatch.NO_SEQUENCE;
 
-                // validate whether we have read all bytes in the current record
-                if (headerBuffer.position() - headerStart != sizeOfBodyInBytes - bytesRead)
-                    throw new InvalidRecordException("Invalid record size: expected to read " + sizeOfBodyInBytes +
-                        " bytes in record payload, but instead read " + (headerBuffer.position() - headerStart) + bytesRead);
+                            read += 1 + ByteUtils.sizeOfVarlong(timestampDelta) + ByteUtils.sizeOfVarint(offsetDelta);
+                            state = ParseState.READ_KEY_SIZE;
+                        }
+                        break;
+
+                    case READ_KEY_SIZE:
+                        // read key size (varint, max 4bytes)
+                        if (buffer.remaining() < 4 && remaining > 0) {
+                            needMore = true;
+                        } else {
+                            keySize = ByteUtils.readVarint(buffer);
+                            read += ByteUtils.sizeOfVarint(keySize);
+                            if (keySize > 0) {
+                                state = ParseState.SKIP_KEY_BYTES;
+                                remainingKeyBytesToSkip = keySize;
+                            } else {
+                                state = ParseState.READ_VALUE_SIZE;
+                            }
+                        }
+                        break;
+
+                    case SKIP_KEY_BYTES:
+                        // skip until key is consumed
+                        if (remainingKeyBytesToSkip > buffer.remaining()) {
+                            remainingKeyBytesToSkip -= buffer.remaining();
+                            buffer.position(buffer.limit());
+                            needMore = true;
+                        } else {
+                            buffer.position(buffer.position() + remainingKeyBytesToSkip);
+                            read += keySize;
+                            state = ParseState.READ_VALUE_SIZE;
+                        }
+                        break;
+
+                    case READ_VALUE_SIZE:
+                        // read value size (varint, max 4bytes)
+                        if (buffer.remaining() < 4 && remaining > 0) {
+                            needMore = true;
+                        } else {
+                            valueSize = ByteUtils.readVarint(buffer);
+                            read += ByteUtils.sizeOfVarint(valueSize);
+                            if (valueSize > 0) {
+                                state = ParseState.SKIP_VALUE_BYTES;
+                                remainingValueBytesToSkip = valueSize;
+                            } else {
+                                state = ParseState.READ_NUM_HEADERS;
+                            }
+                        }
+                        break;
+
+                    case SKIP_VALUE_BYTES:
+                        // skip bytes until value is consumed
+                        if (remainingValueBytesToSkip > buffer.remaining()) {
+                            remainingValueBytesToSkip -= buffer.remaining();
+                            buffer.position(buffer.limit());
+                            needMore = true;
+                        } else {
+                            buffer.position(buffer.position() + remainingValueBytesToSkip);
+                            read += valueSize;
+                            state = ParseState.READ_NUM_HEADERS;
+                        }
+                        break;
+
+                    case READ_NUM_HEADERS:
+                        // read num headers (varint, max 4bytes)
+                        if (buffer.remaining() < 4 && remaining > 0) {
+                            needMore = true;
+                        } else {
+                            numHeaders = ByteUtils.readVarint(buffer);
+                            read += ByteUtils.sizeOfVarint(numHeaders);
+                            if (numHeaders > 0) {
+                                if (remaining > 0) {
+                                    // jump out of the normal pattern, just re-allocate a new byte array for the headers
+                                    int bytesToCopy = buffer.remaining();
+                                    int offsetsToShift = buffer.position();
+                                    byte[] headerArray = new byte[sizeOfBodyInBytes - read + bytesToCopy];
+                                    System.arraycopy(array, offsetsToShift, headerArray, 0, bytesToCopy);
+                                    input.readFully(headerArray, bytesToCopy, sizeOfBodyInBytes - read);
+                                    remaining = 0;
+
+                                    buffer = ByteBuffer.wrap(array);
+                                }
+                                state = ParseState.READ_HEADER;
+                            } else {
+                                notDone = false;
+                            }
+                        }
+                        break;
+
+                    case READ_HEADER:
+                        // read headers
+                        headers = readHeaders(buffer, numHeaders);
+                        notDone = false;
+                }
             }
 
             return new PartialDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, keySize, valueSize, headers);
