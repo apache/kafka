@@ -22,8 +22,7 @@ import kafka.utils.Logging
 import kafka.server.{LogOffsetMetadata}
 import org.apache.kafka.common.{TopicPartition}
 
-class Replica(val brokerId: Int,
-                       val topicPartition: TopicPartition) extends Logging {
+class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Logging {
   // the log end offset value, kept in all replicas;
   // for local replica it is the log's end offset, for remote replicas its value is only updated by follower fetch
   @volatile private[this] var _logEndOffsetMetadata = LogOffsetMetadata.UnknownOffsetMetadata
@@ -43,25 +42,13 @@ class Replica(val brokerId: Int,
   // the LEO of leader at time t. This is used to determine the lag of this follower and ISR of this partition.
   @volatile private[this] var _lastCaughtUpTimeMs = 0L
 
-  def logStartOffset: Long =
-    _logStartOffset
+  def logStartOffset: Long = _logStartOffset
 
-  private def logStartOffset_=(newLogStartOffset: Long) {
-    _logStartOffset = newLogStartOffset
-    trace(s"Setting log start offset for remote replica $brokerId for partition $topicPartition to [$newLogStartOffset]")
-  }
-
-  def logEndOffsetMetadata: LogOffsetMetadata =
-    _logEndOffsetMetadata
+  def logEndOffsetMetadata: LogOffsetMetadata = _logEndOffsetMetadata
 
   def logEndOffset: Long = logEndOffsetMetadata.messageOffset
 
   def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
-
-  def lastCaughtUpTimeMs_=(lastCaughtUpTimeMs: Long) {
-    _lastCaughtUpTimeMs = lastCaughtUpTimeMs
-    trace(s"Setting log caught offset time for replica $brokerId, partition $topicPartition to $lastCaughtUpTimeMs")
-  }
 
   /*
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
@@ -76,29 +63,26 @@ class Replica(val brokerId: Int,
    * high frequency.
    */
   def updateFetchState(followerFetchOffsetMetadata: LogOffsetMetadata,
-                                followerStartOffset: Long,
-                                followerFetchTimeMs: Long,
-                                leaderEndOffset: Long): Unit = {
+                       followerStartOffset: Long,
+                       followerFetchTimeMs: Long,
+                       leaderEndOffset: Long): Unit = {
     if (followerFetchOffsetMetadata.messageOffset >= leaderEndOffset)
-      lastCaughtUpTimeMs = math.max(lastCaughtUpTimeMs, followerFetchTimeMs)
+      _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, followerFetchTimeMs)
     else if (followerFetchOffsetMetadata.messageOffset >= lastFetchLeaderLogEndOffset)
-      lastCaughtUpTimeMs = math.max(lastCaughtUpTimeMs, lastFetchTimeMs)
+      _lastCaughtUpTimeMs = math.max(_lastCaughtUpTimeMs, lastFetchTimeMs)
 
-    logStartOffset = followerStartOffset
-    logEndOffsetMetadata = followerFetchOffsetMetadata
+    _logStartOffset = followerStartOffset
+    _logEndOffsetMetadata = followerFetchOffsetMetadata
     lastFetchLeaderLogEndOffset = leaderEndOffset
     lastFetchTimeMs = followerFetchTimeMs
+    trace(s"Updated state of replica to $this")
   }
 
   def resetLastCaughtUpTime(curLeaderLogEndOffset: Long, curTimeMs: Long, lastCaughtUpTimeMs: Long): Unit = {
     lastFetchLeaderLogEndOffset = curLeaderLogEndOffset
     lastFetchTimeMs = curTimeMs
-    this.lastCaughtUpTimeMs = lastCaughtUpTimeMs
-  }
-
-  private def logEndOffsetMetadata_=(newLogEndOffset: LogOffsetMetadata) {
-    _logEndOffsetMetadata = newLogEndOffset
-    trace(s"Setting log end offset for replica $brokerId for partition $topicPartition to [${_logEndOffsetMetadata}]")
+    _lastCaughtUpTimeMs = lastCaughtUpTimeMs
+    trace(s"Reset state of replica to $this")
   }
 
   override def toString: String = {
@@ -106,8 +90,12 @@ class Replica(val brokerId: Int,
     replicaString.append("Replica(replicaId=" + brokerId)
     replicaString.append(s", topic=${topicPartition.topic}")
     replicaString.append(s", partition=${topicPartition.partition}")
-    replicaString.append(s", isLocal=false")
     replicaString.append(s", lastCaughtUpTimeMs=$lastCaughtUpTimeMs")
+    replicaString.append(s", logStartOffset=$logStartOffset")
+    replicaString.append(s", logEndOffset=$logEndOffset")
+    replicaString.append(s", logEndOffsetMetadata=$logEndOffsetMetadata")
+    replicaString.append(s", lastFetchLeaderLogEndOffset=$lastFetchLeaderLogEndOffset")
+    replicaString.append(s", lastFetchTimeMs=$lastFetchTimeMs")
     replicaString.append(")")
     replicaString.toString
   }

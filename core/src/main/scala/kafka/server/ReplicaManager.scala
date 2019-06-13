@@ -1142,7 +1142,7 @@ class ReplicaManager(val config: KafkaConfig,
               val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
 
               // Add future replica to partition's map
-              partition.createLogIfNotExist(Request.FutureLocalReplicaId, isNew = false, isFutureReplica = true,
+              partition.createLogIfNotExists(Request.FutureLocalReplicaId, isNew = false, isFutureReplica = true,
                 highWatermarkCheckpoints)
 
               // pause cleaning for partitions that are being moved and start ReplicaAlterDirThread to move
@@ -1299,7 +1299,7 @@ class ReplicaManager(val config: KafkaConfig,
                 s"but cannot become follower since the new leader $newLeaderBrokerId is unavailable.")
               // Create the local replica even if the leader is unavailable. This is required to ensure that we include
               // the partition's high watermark in the checkpoint file (see KAFKA-1647)
-              partition.createLogIfNotExist(localBrokerId, isNew = partitionStateInfo.isNew, isFutureReplica = false,
+              partition.createLogIfNotExists(localBrokerId, isNew = partitionStateInfo.isNew, isFutureReplica = false,
                 highWatermarkCheckpoints)
           }
         } catch {
@@ -1411,7 +1411,7 @@ class ReplicaManager(val config: KafkaConfig,
             } else {
               warn(s"Leader $localBrokerId failed to record follower $followerId's position " +
                 s"${readResult.info.fetchOffsetMetadata.messageOffset} since the replica is not recognized to be " +
-                s"one of the assigned replicas ${partition.assignedReplicas.map(_.brokerId).mkString(",")} " +
+                s"one of the assigned replicas ${partition.remoteReplicas.map(_.brokerId).mkString(",")} " +
                 s"for partition $topicPartition. Empty records will be returned for this partition.")
               readResult.withEmptyFetchInfo
             }

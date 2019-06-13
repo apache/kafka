@@ -168,7 +168,7 @@ class PartitionTest {
     val latch = new CountDownLatch(1)
 
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir1.getAbsolutePath)
-    partition.createLogIfNotExist(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir2.getAbsolutePath)
     partition.maybeCreateFutureReplica(logDir2.getAbsolutePath, offsetCheckpoints)
 
@@ -200,7 +200,7 @@ class PartitionTest {
   // active segment
   def testMaybeReplaceCurrentWithFutureReplicaDifferentBaseOffsets(): Unit = {
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir1.getAbsolutePath)
-    partition.createLogIfNotExist(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(brokerId, isNew = true, isFutureReplica = false, offsetCheckpoints)
     logManager.maybeUpdatePreferredLogDir(topicPartition, logDir2.getAbsolutePath)
     partition.maybeCreateFutureReplica(logDir2.getAbsolutePath, offsetCheckpoints)
 
@@ -616,7 +616,7 @@ class PartitionTest {
   private def setupPartitionWithMocks(leaderEpoch: Int,
                                       isLeader: Boolean,
                                       log: Log = logManager.getOrCreateLog(topicPartition, logConfig)): Partition = {
-    partition.createLogIfNotExist(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
 
     val controllerId = 0
     val controllerEpoch = 0
@@ -641,7 +641,7 @@ class PartitionTest {
 
   @Test
   def testAppendRecordsAsFollowerBelowLogStartOffset(): Unit = {
-    partition.createLogIfNotExist(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
     val log = partition.localLogOrException
 
     val initialLogStartOffset = 5L
@@ -699,7 +699,7 @@ class PartitionTest {
 
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
-    partition.createLogIfNotExist(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
 
     assertTrue("Expected become leader transition to succeed",
       partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
@@ -753,8 +753,13 @@ class PartitionTest {
       partition.localLogOrException
     }
 
-    val replica = partition.getOrCreateReplica(brokerId)
-    assertEquals(replica.brokerId, brokerId)
+    assertThrows[IllegalArgumentException] {
+      val replica = partition.getOrCreateReplica(brokerId)
+    }
+
+    val remoteReplicaId = brokerId + 1;
+    val replica = partition.getOrCreateReplica(remoteReplicaId)
+    assertEquals(replica.brokerId, remoteReplicaId)
     assertEquals(replica.topicPartition, partition.topicPartition)
   }
 
@@ -1004,7 +1009,7 @@ class PartitionTest {
 
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
-    partition.createLogIfNotExist(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
 
     val initializeTimeMs = time.milliseconds()
     assertTrue("Expected become leader transition to succeed",
@@ -1055,7 +1060,7 @@ class PartitionTest {
 
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
-    partition.createLogIfNotExist(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue("Expected become leader transition to succeed",
       partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
         leaderEpoch, isr, 1, replicas, true), 0, offsetCheckpoints))
@@ -1108,7 +1113,7 @@ class PartitionTest {
 
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
-    partition.createLogIfNotExist(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue("Expected become leader transition to succeed",
       partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
         leaderEpoch, isr, 1, replicas, true), 0, offsetCheckpoints))
@@ -1153,7 +1158,7 @@ class PartitionTest {
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
     val initializeTimeMs = time.milliseconds()
-    partition.createLogIfNotExist(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue("Expected become leader transition to succeed",
       partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
         leaderEpoch, isr, 1, replicas, true), 0, offsetCheckpoints))
@@ -1198,7 +1203,7 @@ class PartitionTest {
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
     val initializeTimeMs = time.milliseconds()
-    partition.createLogIfNotExist(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue("Expected become leader transition to succeed",
       partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
         leaderEpoch, isr, 1, replicas, true), 0, offsetCheckpoints))
@@ -1258,7 +1263,7 @@ class PartitionTest {
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
     val initializeTimeMs = time.milliseconds()
-    partition.createLogIfNotExist(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue("Expected become leader transition to succeed",
       partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
         leaderEpoch, isr, 1, replicas, true), 0, offsetCheckpoints))
@@ -1304,7 +1309,7 @@ class PartitionTest {
     doNothing().when(delayedOperations).checkAndCompleteFetch()
 
     val initializeTimeMs = time.milliseconds()
-    partition.createLogIfNotExist(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
+    partition.createLogIfNotExists(brokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
     assertTrue("Expected become leader transition to succeed",
       partition.makeLeader(controllerId, new LeaderAndIsrRequest.PartitionState(controllerEpoch, brokerId,
         leaderEpoch, isr, 1, replicas, true), 0, offsetCheckpoints))

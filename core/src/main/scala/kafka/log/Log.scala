@@ -266,7 +266,7 @@ class Log(@volatile var dir: File,
    * equals the log end offset (which may never happen for a partition under consistent load). This is needed to
    * prevent the log start offset (which is exposed in fetch responses) from getting ahead of the high watermark.
    */
-  @volatile private[this] var _highWatermarkMetadata : LogOffsetMetadata = LogOffsetMetadata(0)
+  @volatile private[this] var _highWatermarkMetadata: LogOffsetMetadata = LogOffsetMetadata(0)
 
   /* the actual segments of the log */
   private val segments: ConcurrentNavigableMap[java.lang.Long, LogSegment] = new ConcurrentSkipListMap[java.lang.Long, LogSegment]
@@ -316,8 +316,11 @@ class Log(@volatile var dir: File,
     if (newHighWatermark.messageOffset < 0)
       throw new IllegalArgumentException("High watermark offset should be non-negative")
 
-    _highWatermarkMetadata = newHighWatermark
-    onHighWatermarkIncremented(newHighWatermark.messageOffset)
+    lock synchronized {
+      _highWatermarkMetadata = newHighWatermark
+      producerStateManager.onHighWatermarkUpdated(newHighWatermark.messageOffset)
+      updateFirstUnstableOffset()
+    }
     trace(s"Setting high watermark [$newHighWatermark]")
   }
 
@@ -1081,13 +1084,6 @@ class Log(@volatile var dir: File,
         None
       else
         Some(OffsetAndEpoch(foundOffset, foundEpoch))
-    }
-  }
-
-  private def onHighWatermarkIncremented(highWatermark: Long): Unit = {
-    lock synchronized {
-      producerStateManager.onHighWatermarkUpdated(highWatermark)
-      updateFirstUnstableOffset()
     }
   }
 
@@ -1981,6 +1977,8 @@ class Log(@volatile var dir: File,
     logString.append(s", partition=${topicPartition.partition}")
     logString.append(s", highWatermark=$highWatermarkMetadata")
     logString.append(s", lastStableOffset=$lastStableOffsetMetadata")
+    logString.append(s", logStartOffset=$logStartOffset")
+    logString.append(s", logEndOffset=$logEndOffset")
     logString.append(")")
     logString.toString
   }
