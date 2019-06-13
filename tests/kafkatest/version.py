@@ -122,4 +122,3 @@ LATEST_2_1 = V_2_1_1
 # 2.2.x versions
 V_2_2_0 = KafkaVersion("2.2.0")
 LATEST_2_2 = V_2_2_0
->>>>>>> 55bfea137...  KAFKA-8155: Add 2.1.1 release to system tests (#6596)
