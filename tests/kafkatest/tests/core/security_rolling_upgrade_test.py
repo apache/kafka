@@ -12,15 +12,14 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
-
+from kafkatest.services.security.security_config import SecurityConfig
 from kafkatest.services.zookeeper import ZookeeperService
 from kafkatest.services.kafka import KafkaService
 from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.services.console_consumer import ConsoleConsumer
 from kafkatest.utils import is_int
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
-from ducktape.mark import parametrize, matrix
+from ducktape.mark import matrix
 from ducktape.mark.resource import cluster
 from kafkatest.services.security.kafka_acls import ACLs
 import time
@@ -65,14 +64,14 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
             self.kafka.start_node(node)
             time.sleep(10)
 
-    def roll_in_secured_settings(self, client_protocol, broker_protocol):
+    def roll_in_secured_settings(self, client_protocol, broker_protocol, separate_interbroker_listener=False):
 
         # Roll cluster to include inter broker security protocol.
-        self.kafka.interbroker_security_protocol = broker_protocol
+        self.kafka.setup_interbroker_listener(broker_protocol, use_separate_listener=separate_interbroker_listener)
         self.bounce()
 
         # Roll cluster to disable PLAINTEXT port
-        self.kafka.close_port('PLAINTEXT')
+        self.kafka.close_port(SecurityConfig.PLAINTEXT)
         self.set_authorizer_and_bounce(client_protocol, broker_protocol)
 
     def set_authorizer_and_bounce(self, client_protocol, broker_protocol):
@@ -85,6 +84,10 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.kafka.security_protocol = client_protocol
         self.kafka.open_port(client_protocol)
         self.kafka.start_minikdc()
+        self.bounce()
+
+    def setup_interbroker_listener(self, broker_protocol, use_separate_listener=False):
+        self.kafka.setup_interbroker_listener(broker_protocol, use_separate_listener)
         self.bounce()
 
     def add_sasl_mechanism(self, new_client_sasl_mechanism):
@@ -100,17 +103,58 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         # Bounce again with ACLs for new mechanism
         self.set_authorizer_and_bounce(security_protocol, security_protocol)
 
-    @cluster(num_nodes=8)
-    @matrix(client_protocol=["SSL"])
     @cluster(num_nodes=9)
-    @matrix(client_protocol=["SASL_PLAINTEXT", "SASL_SSL"])
+    @matrix(broker_protocol=[SecurityConfig.SSL, SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL],
+            client_protocol=[SecurityConfig.SSL, SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL])
+    def test_enable_separate_interbroker_listener(self, client_protocol, broker_protocol):
+        """
+        Start with a cluster that has a single {{client_protocol}} listener.
+        Start producer and consumer on the {{client_protocol}} listener.
+        Open a SECURED dedicated interbroker port via rolling upgrade.
+        Ensure we can produce and consume via {{client_protocol}} port throughout.
+        """
+        self.kafka.security_protocol = client_protocol
+        self.kafka.setup_interbroker_listener(client_protocol, use_separate_listener=False)
+        self.kafka.start()
+
+        # create plaintext producer and consumer
+        self.create_producer_and_consumer()
+
+        # run produce/consume/validate loop while enabling a separate interbroker listener via rolling restart
+        self.run_produce_consume_validate(self.setup_interbroker_listener, broker_protocol, True)
+
+    @cluster(num_nodes=9)
+    @matrix(broker_protocol=[SecurityConfig.SSL, SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL],
+            client_protocol=[SecurityConfig.SSL, SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL])
+    def test_disable_separate_interbroker_listener(self, client_protocol, broker_protocol):
+        """
+        Start with a cluster that has two listeners, one on {{client_protocol}}, another on {{broker_protocol}}.
+        Even if protocols are the same, its still two listeners, interbroker listener is a dedicated one.
+        Start producer and consumer on {{client_protocol}} listener.
+        Close dedicated {{broker_protocol}} listener via rolling restart.
+        Ensure we can produce and consume via {{client_protocol}} listener throughout.
+        """
+        self.kafka.setup_interbroker_listener(broker_protocol, use_separate_listener=True)
+        self.kafka.security_protocol = client_protocol
+        self.kafka.start()
+
+        # create producer and consumer via client security protocol
+        self.create_producer_and_consumer()
+
+        # run produce/consume/validate loop while disabling a separate interbroker listener via rolling restart
+        self.run_produce_consume_validate(self.setup_interbroker_listener, client_protocol, False)
+
+    @cluster(num_nodes=8)
+    @matrix(client_protocol=[SecurityConfig.SSL])
+    @cluster(num_nodes=9)
+    @matrix(client_protocol=[SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL])
     def test_rolling_upgrade_phase_one(self, client_protocol):
         """
         Start with a PLAINTEXT cluster, open a SECURED port, via a rolling upgrade, ensuring we could produce
         and consume throughout over PLAINTEXT. Finally check we can produce and consume the new secured port.
         """
-        self.kafka.interbroker_security_protocol = "PLAINTEXT"
-        self.kafka.security_protocol = "PLAINTEXT"
+        self.kafka.setup_interbroker_listener(SecurityConfig.PLAINTEXT)
+        self.kafka.security_protocol = SecurityConfig.PLAINTEXT
         self.kafka.start()
 
         # Create PLAINTEXT producer and consumer
@@ -125,7 +169,8 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.run_produce_consume_validate(lambda: time.sleep(1))
 
     @cluster(num_nodes=8)
-    @matrix(client_protocol=["SASL_SSL", "SSL", "SASL_PLAINTEXT"], broker_protocol=["SASL_SSL", "SSL", "SASL_PLAINTEXT"])
+    @matrix(client_protocol=[SecurityConfig.SASL_SSL, SecurityConfig.SSL, SecurityConfig.SASL_PLAINTEXT],
+            broker_protocol=[SecurityConfig.SASL_SSL, SecurityConfig.SSL, SecurityConfig.SASL_PLAINTEXT])
     def test_rolling_upgrade_phase_two(self, client_protocol, broker_protocol):
         """
         Start with a PLAINTEXT cluster with a second Secured port open (i.e. result of phase one).
@@ -137,7 +182,7 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         """
         #Given we have a broker that has both secure and PLAINTEXT ports open
         self.kafka.security_protocol = client_protocol
-        self.kafka.interbroker_security_protocol = "PLAINTEXT"
+        self.kafka.setup_interbroker_listener(SecurityConfig.PLAINTEXT, use_separate_listener=False)
         self.kafka.open_port(broker_protocol)
         self.kafka.start()
 
@@ -147,17 +192,41 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         #Roll in the security protocol. Disable Plaintext. Ensure we can produce and Consume throughout
         self.run_produce_consume_validate(self.roll_in_secured_settings, client_protocol, broker_protocol)
 
+    @cluster(num_nodes=8)
+    @matrix(protocol=[SecurityConfig.SSL, SecurityConfig.SASL_SSL, SecurityConfig.SASL_PLAINTEXT])
+    def test_rolling_upgrade_phase_two_separate_interbroker_listener(self, protocol):
+        """
+        Similar to test_rolling_upgrade_phase_two() above, but use the same security protocol for client and broker.
+        Start with two listeners, client one on {{protocol}} and broker-to-broker on PLAINTEXT
+        Start producer and consumer on client listener - using {{protocol}}
+        Incrementally upgrade to add a separate interbroker listener using the same {{protocol}}
+        Incrementally upgrade again to add ACLs as well as disable PLAINTEXT port
+        Ensure the producer and consumer run throughout
+
+        """
+        # Given we have a broker that has both secure and PLAINTEXT ports open
+        self.kafka.security_protocol = protocol
+        self.kafka.setup_interbroker_listener(SecurityConfig.PLAINTEXT, use_separate_listener=False)
+        self.kafka.start()
+
+        # Create secured producer and consumer on client listener
+        self.create_producer_and_consumer()
+
+        # Roll in separate interbroker listener using the same {{protocol}}. Add ACLs. Disable PLAINTEXT.
+        # Ensure we can produce and consume throughout
+        self.run_produce_consume_validate(self.roll_in_secured_settings, protocol, protocol, True)
+
     @cluster(num_nodes=9)
-    @parametrize(new_client_sasl_mechanism='PLAIN')
-    def test_rolling_upgrade_sasl_mechanism_phase_one(self, new_client_sasl_mechanism):
+    @matrix(new_client_sasl_mechanism=[SecurityConfig.SASL_MECHANISM_PLAIN], separate_interbroker_listener=[False, True])
+    def test_rolling_upgrade_sasl_mechanism_phase_one(self, new_client_sasl_mechanism, separate_interbroker_listener):
         """
         Start with a SASL/GSSAPI cluster, add new SASL mechanism, via a rolling upgrade, ensuring we could produce
         and consume throughout over SASL/GSSAPI. Finally check we can produce and consume using new mechanism.
         """
-        self.kafka.interbroker_security_protocol = "SASL_SSL"
-        self.kafka.security_protocol = "SASL_SSL"
-        self.kafka.client_sasl_mechanism = "GSSAPI"
-        self.kafka.interbroker_sasl_mechanism = "GSSAPI"
+        self.kafka.setup_interbroker_listener(SecurityConfig.SASL_SSL, use_separate_listener=separate_interbroker_listener)
+        self.kafka.security_protocol = SecurityConfig.SASL_SSL
+        self.kafka.client_sasl_mechanism = SecurityConfig.SASL_MECHANISM_GSSAPI
+        self.kafka.interbroker_sasl_mechanism = SecurityConfig.SASL_MECHANISM_GSSAPI
         self.kafka.start()
 
         # Create SASL/GSSAPI producer and consumer
@@ -172,8 +241,8 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.run_produce_consume_validate(lambda: time.sleep(1))
 
     @cluster(num_nodes=8)
-    @parametrize(new_sasl_mechanism='PLAIN')
-    def test_rolling_upgrade_sasl_mechanism_phase_two(self, new_sasl_mechanism):
+    @matrix(new_sasl_mechanism=[SecurityConfig.SASL_MECHANISM_PLAIN], separate_interbroker_listener=[False, True])
+    def test_rolling_upgrade_sasl_mechanism_phase_two(self, new_sasl_mechanism, separate_interbroker_listener):
         """
         Start with a SASL cluster with GSSAPI for inter-broker and a second mechanism for clients (i.e. result of phase one).
         Start Producer and Consumer using the second mechanism
@@ -182,10 +251,10 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         Ensure the producer and consumer run throughout
         """
         #Start with a broker that has GSSAPI for inter-broker and a second mechanism for clients
-        self.kafka.security_protocol = "SASL_SSL"
-        self.kafka.interbroker_security_protocol = "SASL_SSL"
+        self.kafka.security_protocol = SecurityConfig.SASL_SSL
+        self.kafka.setup_interbroker_listener(SecurityConfig.SASL_SSL, use_separate_listener=separate_interbroker_listener)
         self.kafka.client_sasl_mechanism = new_sasl_mechanism
-        self.kafka.interbroker_sasl_mechanism = "GSSAPI"
+        self.kafka.interbroker_sasl_mechanism = SecurityConfig.SASL_MECHANISM_GSSAPI
         self.kafka.start()
 
         #Create Producer and Consumer using second mechanism
