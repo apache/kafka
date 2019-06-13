@@ -86,13 +86,6 @@ public final class FieldSpec {
         }
     }
 
-    public StructSpec toStruct() {
-        if ((!this.type.isArray()) && (this.type.isStruct())) {
-            throw new RuntimeException("Field " + name + " cannot be treated as a structure.");
-        }
-        return new StructSpec(name, versions.toString(), fields);
-    }
-
     @JsonProperty("name")
     public String name() {
         return name;
