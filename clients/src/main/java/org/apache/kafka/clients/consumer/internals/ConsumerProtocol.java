@@ -29,6 +29,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.protocol.CommonFields.ERROR_CODE;
 
@@ -142,6 +143,7 @@ public class ConsumerProtocol {
         return buffer;
     }
 
+<<<<<<< HEAD
     public static ByteBuffer serializeSubscriptionV1(PartitionAssignor.Subscription subscription) {
         Struct struct = new Struct(SUBSCRIPTION_V1);
         struct.set(USER_DATA_KEY_NAME, subscription.userData());
@@ -177,14 +179,14 @@ public class ConsumerProtocol {
         }
     }
 
-    public static PartitionAssignor.Subscription deserializeSubscriptionV0(ByteBuffer buffer) {
+    public static PartitionAssignor.Subscription deserializeSubscriptionV0(ByteBuffer buffer,
+                                                                           Optional<String> groupInstanceId) {
         Struct struct = SUBSCRIPTION_V0.read(buffer);
         ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
         List<String> topics = new ArrayList<>();
         for (Object topicObj : struct.getArray(TOPICS_KEY_NAME))
             topics.add((String) topicObj);
-
-        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V0, topics, userData);
+        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V0, topics, userData, groupInstanceId);
     }
 
     public static PartitionAssignor.Subscription deserializeSubscriptionV1(ByteBuffer buffer) {
