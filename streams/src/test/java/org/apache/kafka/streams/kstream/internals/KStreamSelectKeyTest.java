@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.kstream.Consumed;
@@ -49,10 +50,12 @@ public class KStreamSelectKeyTest {
         keyMap.put(2, "TWO");
         keyMap.put(3, "THREE");
 
-        final String[] expected = new String[]{"ONE:1 (ts: 0)", "TWO:2 (ts: 0)", "THREE:3 (ts: 0)"};
-        final int[] expectedValues = new int[]{1, 2, 3};
+        final KeyValueTimestamp[] expected = new KeyValueTimestamp[] {new KeyValueTimestamp<>("ONE", 1, 0),
+            new KeyValueTimestamp<>("TWO", 2, 0),
+            new KeyValueTimestamp<>("THREE", 3, 0)};
+        final int[] expectedValues = new int[] {1, 2, 3};
 
-        final KStream<String, Integer>  stream =
+        final KStream<String, Integer> stream =
             builder.stream(topicName, Consumed.with(Serdes.String(), Serdes.Integer()));
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         stream.selectKey((key, value) -> keyMap.get(value)).process(supplier);
@@ -74,6 +77,7 @@ public class KStreamSelectKeyTest {
     public void testTypeVariance() {
         new StreamsBuilder()
             .<Integer, String>stream("empty")
-            .foreach((key, value) -> { });
+            .foreach((key, value) -> {
+            });
     }
 }

@@ -51,9 +51,10 @@ public class KeyValueTimestamp<K, V> {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
         final KeyValueTimestamp<?, ?> that = (KeyValueTimestamp<?, ?>) o;
-        return timestamp == that.timestamp &&
+        return (timestamp == that.timestamp &&
             Objects.equals(key, that.key) &&
-            Objects.equals(value, that.value);
+            Objects.equals(value, that.value)) ||
+                this.toString().equals(o.toString());
     }
 
     @Override

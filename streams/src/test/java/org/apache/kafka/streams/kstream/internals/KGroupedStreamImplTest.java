@@ -22,6 +22,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -42,7 +43,6 @@ import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
 import org.apache.kafka.test.MockAggregator;
 import org.apache.kafka.test.MockInitializer;
-import org.apache.kafka.test.MockProcessor;
 import org.apache.kafka.test.MockProcessorSupplier;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.StreamsTestUtils;
@@ -576,20 +576,22 @@ public class KGroupedStreamImplTest {
             driver.pipeInput(recordFactory.create(TOPIC, "3", "B", 100L));
         }
         assertThat(supplier.theCapturedProcessor().processed, equalTo(Arrays.asList(
-            MockProcessor.makeRecord(new Windowed<>("1", new TimeWindow(0L, 500L)), 1L, 0L),
-            MockProcessor.makeRecord(new Windowed<>("1", new TimeWindow(0L, 500L)), 2L, 499L),
-            MockProcessor.makeRecord(new Windowed<>("1", new TimeWindow(0L, 500L)), 3L, 499L),
-            MockProcessor.makeRecord(new Windowed<>("2", new TimeWindow(0L, 500L)), 1L, 0L),
-            MockProcessor.makeRecord(new Windowed<>("2", new TimeWindow(0L, 500L)), 2L, 100L),
-            MockProcessor.makeRecord(new Windowed<>("2", new TimeWindow(0L, 500L)), 3L, 200L),
-            MockProcessor.makeRecord(new Windowed<>("3", new TimeWindow(0L, 500L)), 1L, 1L),
-            MockProcessor.makeRecord(new Windowed<>("1", new TimeWindow(500L, 1000L)), 1L, 500L),
-            MockProcessor.makeRecord(new Windowed<>("1", new TimeWindow(500L, 1000L)), 2L, 500L),
-            MockProcessor.makeRecord(new Windowed<>("2", new TimeWindow(500L, 1000L)), 1L, 500L),
-            MockProcessor.makeRecord(new Windowed<>("2", new TimeWindow(500L, 1000L)), 2L, 500L),
-            MockProcessor.makeRecord(new Windowed<>("3", new TimeWindow(0L, 500L)), 2L, 100L)
+                new KeyValueTimestamp<>("[1@0/500]", "1", 0),
+                new KeyValueTimestamp<>("[1@0/500]", "2", 499),
+                new KeyValueTimestamp<>("[1@0/500]", "3", 499),
+                new KeyValueTimestamp<>("[2@0/500]", "1", 0),
+                new KeyValueTimestamp<>("[2@0/500]", "2", 100),
+                new KeyValueTimestamp<>("[2@0/500]", "3", 200),
+                new KeyValueTimestamp<>("[3@0/500]", "1", 1),
+                new KeyValueTimestamp<>("[1@500/1000]", "1", 500),
+                new KeyValueTimestamp<>("[1@500/1000]", "2", 500),
+                new KeyValueTimestamp<>("[2@500/1000]", "1", 500),
+                new KeyValueTimestamp<>("[2@500/1000]", "2", 500),
+                new KeyValueTimestamp<>("[3@0/500]", "2", 100)
         )));
     }
+
+
 
     @Test
     public void shouldCountWindowed() {

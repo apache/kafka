@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.streams.KeyValueTimestamp;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -42,7 +43,7 @@ public class KStreamMapTest {
     public void testMap() {
         final StreamsBuilder builder = new StreamsBuilder();
         final String topicName = "topic";
-        final int[] expectedKeys = new int[]{0, 1, 2, 3};
+        final int[] expectedKeys = new int[] {0, 1, 2, 3};
 
         final MockProcessorSupplier<String, Integer> supplier = new MockProcessorSupplier<>();
         final KStream<Integer, String> stream = builder.stream(topicName, Consumed.with(Serdes.Integer(), Serdes.String()));
@@ -54,7 +55,10 @@ public class KStreamMapTest {
             }
         }
 
-        final String[] expected = new String[]{"V0:0 (ts: 10)", "V1:1 (ts: 9)", "V2:2 (ts: 8)", "V3:3 (ts: 7)"};
+        final KeyValueTimestamp[] expected = new KeyValueTimestamp[] {new KeyValueTimestamp<>("V0", 0, 10),
+            new KeyValueTimestamp<>("V1", 1, 9),
+            new KeyValueTimestamp<>("V2", 2, 8),
+            new KeyValueTimestamp<>("V3", 3, 7)};
         assertEquals(4, supplier.theCapturedProcessor().processed.size());
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], supplier.theCapturedProcessor().processed.get(i));
