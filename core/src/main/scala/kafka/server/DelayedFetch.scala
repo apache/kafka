@@ -61,7 +61,8 @@ class DelayedFetch(delayMs: Long,
                    replicaManager: ReplicaManager,
                    quota: ReplicaQuota,
                    clientMetadata: ClientMetadata,
-                   responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit)
+                   responseCallback: Seq[(TopicPartition, FetchPartitionData)] => Unit,
+                   followerHighwatermarks: TopicPartition => Option[Long] = _ => None)
   extends DelayedOperation(delayMs) {
 
   /**
@@ -78,8 +79,8 @@ class DelayedFetch(delayMs: Long,
    * Case D: The accumulated bytes from all the fetching partitions exceeds the minimum bytes
    * Case E: The partition is in an offline log directory on this broker
    * Case F: This broker is the leader, but the requested epoch is now fenced
-   * Case G: The high watermark on this broker has changed, need to propagate that to followers (KIP-392)
-   *
+   * Case G: The high watermark on this broker has changed within a FetchSession, need to propagate to follower (KIP-392)
+   * Case H: The high watermark on this broker has changed during this request, need to propagate to followers (KIP-392)
    * Upon completion, should return whatever data is available for each valid partition
    */
   override def tryComplete(): Boolean = {
@@ -123,7 +124,11 @@ class DelayedFetch(delayMs: Long,
               }
             }
 
-            // Case G check if HW has changed
+            // Case G check HW from follower against latest from leader
+            val followerHW = followerHighwatermarks.apply(topicPartition)
+            followerHW.foreach(hw => if (offsetSnapshot.highWatermark.messageOffset > hw) return forceComplete())
+
+            // Case H check HW during this DelayedFetch against latest from leader
             seenHighWatermarks.get(topicPartition) match {
               case Some(offset) => if (fetchMetadata.isFromFollower && offset != offsetSnapshot.highWatermark.messageOffset) {
                 debug(s"Satisfying fetch $fetchMetadata immediately since the high watermark changed.")
