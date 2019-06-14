@@ -180,6 +180,9 @@ class Partition(val topicPartition: TopicPartition,
   @volatile private var leaderEpochStartOffsetOpt: Option[Long] = None
   @volatile var leaderReplicaIdOpt: Option[Int] = None
   @volatile var inSyncReplicas: Set[Int] = Set.empty[Int]
+  // Includes all valid broker ids (@see Request::isValidBrokerId) that contain logs. Doesn't contain
+  // future log replica id
+  @volatile var allReplicaIds: scala.collection.mutable.Set[Int] = scala.collection.mutable.Set(localBrokerId)
 
   // Logs belonging to this partition. Majority of time it will be only one log, but if log directory
   // is getting changed (as a result of ReplicaAlterLogDirs command), we may have two logs until copy
@@ -201,7 +204,7 @@ class Partition(val topicPartition: TopicPartition,
 
   newGauge("UnderReplicated",
     new Gauge[Int] {
-      def value = {
+      def value: Int = {
         if (isUnderReplicated) 1 else 0
       }
     },
@@ -210,7 +213,7 @@ class Partition(val topicPartition: TopicPartition,
 
   newGauge("InSyncReplicasCount",
     new Gauge[Int] {
-      def value = {
+      def value: Int = {
         if (isLeader) inSyncReplicas.size else 0
       }
     },
@@ -219,7 +222,7 @@ class Partition(val topicPartition: TopicPartition,
 
   newGauge("UnderMinIsr",
     new Gauge[Int] {
-      def value = {
+      def value: Int = {
         if (isUnderMinIsr) 1 else 0
       }
     },
@@ -228,7 +231,7 @@ class Partition(val topicPartition: TopicPartition,
 
   newGauge("AtMinIsr",
     new Gauge[Int] {
-      def value = {
+      def value: Int = {
         if (isAtMinIsr) 1 else 0
       }
     },
@@ -237,8 +240,8 @@ class Partition(val topicPartition: TopicPartition,
 
   newGauge("ReplicasCount",
     new Gauge[Int] {
-      def value = {
-        if (isLeader) remoteReplicasMap.size + 1 else 1 // 1 is for local replica
+      def value: Int = {
+        if (isLeader) allReplicaIds.size else 0
       }
     },
     tags
@@ -246,7 +249,7 @@ class Partition(val topicPartition: TopicPartition,
 
   newGauge("LastStableOffsetLag",
     new Gauge[Long] {
-      def value = {
+      def value: Long = {
         log.map(_.lastStableOffsetLag).getOrElse(0)
       }
     },
@@ -254,7 +257,7 @@ class Partition(val topicPartition: TopicPartition,
   )
 
   def isUnderReplicated: Boolean =
-    isLeader && inSyncReplicas.size < (remoteReplicasMap.size + 1) // Add 1 for local replica
+    isLeader && inSyncReplicas.size < allReplicaIds.size
 
   def isUnderMinIsr: Boolean = {
     leaderLogIfLocal.exists { inSyncReplicas.size < _.config.minInSyncReplicas }
@@ -304,7 +307,11 @@ class Partition(val topicPartition: TopicPartition,
    */
   def getOrCreateReplica(replicaId: Int): Replica = {
     require(replicaId != localBrokerId, s"Cannot create replica for local broker: $replicaId")
-    remoteReplicasMap.getAndMaybePut(replicaId, new Replica(replicaId, topicPartition))
+    val newReplica = remoteReplicasMap.getAndMaybePut(replicaId, new Replica(replicaId, topicPartition))
+    allReplicaIds.add(replicaId)
+    require(remoteReplicasMap.size + 1 == allReplicaIds.size,
+      s"Invalid state. All Replica Ids: $allReplicaIds, remote replica ids: ${remoteReplicasMap.keys}")
+    newReplica
   }
 
   def createLogIfNotExists(replicaId: Int, isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints): Unit = {
@@ -409,6 +416,7 @@ class Partition(val topicPartition: TopicPartition,
 
   // Visible for testing -- Only used in tests to add replica to existing partition
   def addReplicaIfNotExists(replica: Replica): Replica = {
+    allReplicaIds.add(replica.brokerId)
     remoteReplicasMap.getAndMaybePut(replica.brokerId, replica)
   }
 
@@ -424,6 +432,8 @@ class Partition(val topicPartition: TopicPartition,
     remoteReplicasMap.values.toSet
 
   private def removeReplica(replicaId: Int) {
+    require(replicaId != localBrokerId, s"Cannot remove replica for local broker: $replicaId")
+    allReplicaIds.remove(replicaId)
     remoteReplicasMap.remove(replicaId)
   }
 
@@ -474,6 +484,7 @@ class Partition(val topicPartition: TopicPartition,
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     inWriteLock(leaderIsrUpdateLock) {
       remoteReplicasMap.clear()
+      allReplicaIds = scala.collection.mutable.Set(localBrokerId)
       log = None
       futureLog = None
       inSyncReplicas = Set.empty[Int]
@@ -764,9 +775,14 @@ class Partition(val topicPartition: TopicPartition,
       debug(s"High watermark updated to $newHighWatermark")
       true
     } else {
-      def logEndOffsetString(r: Replica) = s"replica ${r.brokerId}: ${r.logEndOffsetMetadata}"
+      def logEndOffsetString: ((Int, LogOffsetMetadata)) => String = {
+        case (brokerId, logEndOffsetMetadata) => s"replica $brokerId: $logEndOffsetMetadata"
+      }
+
+      val replicaInfo = remoteReplicas.map(replica => (replica.brokerId, replica.logEndOffsetMetadata))
+      val localLogInfo = (localBrokerId, localLogOrException.logEndOffsetMetadata)
       trace(s"Skipping update high watermark since new hw $newHighWatermark is not larger than old hw $oldHighWatermark. " +
-        s"All current LEOs are ${remoteReplicas.map(logEndOffsetString)}")
+        s"All current LEOs are ${(replicaInfo + localLogInfo).map(logEndOffsetString)}")
       false
     }
   }
@@ -1137,8 +1153,8 @@ class Partition(val topicPartition: TopicPartition,
     inReadLock(leaderIsrUpdateLock) {
       val localLogOrError = getLocalLog(currentLeaderEpoch, fetchOnlyFromLeader)
       localLogOrError match {
-        case Left(log) =>
-          log.endOffsetForEpoch(leaderEpoch) match {
+        case Left(localLog) =>
+          localLog.endOffsetForEpoch(leaderEpoch) match {
             case Some(epochAndOffset) => new EpochEndOffset(NONE, epochAndOffset.leaderEpoch, epochAndOffset.offset)
             case None => new EpochEndOffset(NONE, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET)
           }
