@@ -20,7 +20,7 @@ package kafka.server
 import java.util.{Collections, Optional}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 
-import scala.collection.{JavaConverters, Seq, Set, mutable}
+import scala.collection.{Seq, Set, mutable}
 import scala.collection.JavaConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
@@ -33,7 +33,6 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{MetadataResponse, UpdateMetadataRequest}
 
-import scala.collection.JavaConverters.asScalaBufferConverter
 
 /**
  *  A cache for the state (e.g., current leader) of each partition. This cache is updated through

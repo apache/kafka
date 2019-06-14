@@ -25,9 +25,6 @@ import java.net.InetAddress;
  */
 public interface ClientMetadata {
 
-    ClientMetadata NO_METADATA =
-            new DefaultClientMetadata("", "", null, null, "");
-
     /**
      * Rack ID sent by the client
      */

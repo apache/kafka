@@ -19,7 +19,6 @@ package kafka.server
 
 import java.lang.{Byte => JByte}
 import java.lang.{Long => JLong}
-import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util
 import java.util.Optional
