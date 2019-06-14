@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 
+import java.util.Locale;
 import java.util.Optional;
 
 /**
@@ -27,17 +28,12 @@ import java.util.Optional;
 public class GroupRebalanceConfig {
 
     public enum ProtocolType {
-        Consumer("consumer"),
-        Connect("connect");
+        CONSUMER,
+        CONNECT;
 
-        private String type;
-
-        ProtocolType(String type) {
-            this.type = type;
-        }
-
-        public String get() {
-            return type;
+        @Override
+        public String toString() {
+            return super.toString().toLowerCase(Locale.ROOT);
         }
     }
 
@@ -53,7 +49,7 @@ public class GroupRebalanceConfig {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
 
         // Consumer and Connect use different config names for defining rebalance timeout
-        if (protocolType == ProtocolType.Consumer) {
+        if (protocolType == ProtocolType.CONSUMER) {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         } else {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG);
@@ -63,7 +59,7 @@ public class GroupRebalanceConfig {
         this.groupId = config.getString(CommonClientConfigs.GROUP_ID_CONFIG);
 
         // Static membership is only introduced in consumer API.
-        if (protocolType == ProtocolType.Consumer) {
+        if (protocolType == ProtocolType.CONSUMER) {
             String groupInstanceId = config.getString(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
             if (groupInstanceId != null) {
                 JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
@@ -78,7 +74,7 @@ public class GroupRebalanceConfig {
         this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
 
         // Internal leave group config is only defined in Consumer.
-        if (protocolType == ProtocolType.Consumer) {
+        if (protocolType == ProtocolType.CONSUMER) {
             this.leaveGroupOnClose = config.getBoolean("internal.leave.group.on.close");
         } else {
             this.leaveGroupOnClose = true;

@@ -123,7 +123,7 @@ public class WorkerGroupMember {
                     config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG),
                     Integer.MAX_VALUE);
             this.coordinator = new WorkerCoordinator(
-                    new GroupRebalanceConfig(config, GroupRebalanceConfig.ProtocolType.Connect),
+                    new GroupRebalanceConfig(config, GroupRebalanceConfig.ProtocolType.CONNECT),
                     logContext,
                     this.client,
                     metrics,
