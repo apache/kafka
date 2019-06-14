@@ -515,6 +515,8 @@ public class DefaultRecord implements Record {
                 array[i] = array[i + stepsToLeftShift];
             }
 
+            System.arraycopy();
+
             // then try to read more bytes to the remaining of the array
             int bytesRead = Math.min(bytesRemaining[0], array.length - bytesToLeftShift);
             input.readFully(array, bytesToLeftShift, bytesRead);
