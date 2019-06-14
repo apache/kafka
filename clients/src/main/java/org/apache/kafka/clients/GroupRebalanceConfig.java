@@ -51,11 +51,14 @@ public class GroupRebalanceConfig {
 
     public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
+
+        // Consumer and Connect use different config names for defining rebalance timeout
         if (protocolType == ProtocolType.Consumer) {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         } else {
             this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG);
         }
+
         this.heartbeatIntervalMs = config.getInt(CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG);
         this.groupId = config.getString(CommonClientConfigs.GROUP_ID_CONFIG);
 
@@ -73,6 +76,8 @@ public class GroupRebalanceConfig {
         }
 
         this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
+
+        // Internal leave group config is only defined in Consumer.
         if (protocolType == ProtocolType.Consumer) {
             this.leaveGroupOnClose = config.getBoolean("internal.leave.group.on.close");
         } else {
