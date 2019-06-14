@@ -74,7 +74,8 @@ public class DefaultRecord implements Record {
 
     private enum ReadState {
         // we always directly read metadata without allocation, hence omitting this state
-        READ_KEY_SIZE, SKIP_KEY, READ_VALUE_SIZE, SKIP_VALUE, READ_NUM_HEADERS
+        READ_RECORD_KEY_SIZE, SKIP_RECORD_KEY, READ_RECORD_VALUE_SIZE, SKIP_RECORD_VALUE, READ_NUM_HEADERS,
+        READ_HEADER_KEY_SIZE, SKIP_HEADER_KEY, READ_HEADER_VALUE_SIZE, SKIP_HEADER_VALUE
     }
 
     private final int sizeInBytes;
@@ -416,160 +417,204 @@ public class DefaultRecord implements Record {
                 RecordBatch.NO_SEQUENCE;
 
             // now follow a while loop state-machine to read / skip the rest of fields
-            ReadState state = ReadState.READ_KEY_SIZE;
-            int bytesRemaining = sizeOfBodyInBytes - bytesRead;
+            ReadState state = ReadState.READ_RECORD_KEY_SIZE;
 
-            int size = Math.min(MAX_SKIP_BUFFER_SIZE, bytesRemaining);
-            byte[] array = new byte[size];
+            int[] remaining = new int[2];
+            remaining[0] = sizeOfBodyInBytes - bytesRead; // bytesRemainingToRead
+            remaining[1] = -1; // bytesRemainingToSkip
+
+            boolean[] control = new boolean[2];
+            control[0] = true; // notDone;
+            control[1] = true; // needMore;
+
+            int[] values = new int[3];
+            values[0] = -1; // keySize;
+            values[1] = -1; // valueSize;
+            values[2] = -1; // numHeaders;
+
+
+            // this array keeps the meta info that are going to be modified across function calls
+            int arraySize = Math.min(MAX_SKIP_BUFFER_SIZE, remaining[0]);
+            byte[] array = new byte[arraySize];
             ByteBuffer buffer = ByteBuffer.wrap(array);
             // set its limit to 0 to indicate no bytes readable yet
             buffer.limit(0);
 
-            boolean notDone = true;
-            boolean needMore = true;
-            int keySize = -1;
-            int valueSize = -1;
-            int remainingKeyBytesToSkip = -1;
-            int remainingValueBytesToSkip = -1;
-            int remainingHeadersToSkip = -1;
+            buffer = skipKeyValue(state, buffer, input, remaining, control, values);
 
-            int recordKeySize = -1;
-            int recordValueSize = -1;
-
-            while (notDone) {
-                if (needMore) {
-                    if (bytesRemaining > 0) {
-                        // first copy the remaining bytes to the beginning of the array
-                        // do not use System.arrayCopy since it will allocate a new array for same src/dest
-                        int stepsToLeftShift = buffer.position();
-                        int bytesToLeftShift = buffer.remaining();
-                        for (int i = 0; i < bytesToLeftShift; i++) {
-                            array[i] = array[i + stepsToLeftShift];
-                        }
-
-                        // then try to read more bytes to the remaining of the array
-                        int bytesToRead = Math.min(bytesRemaining, size - bytesToLeftShift);
-                        input.readFully(array, bytesToLeftShift, bytesToRead);
-                        bytesRemaining = bytesRemaining - bytesToRead;
-
-                        buffer = ByteBuffer.wrap(array);
-                        // only those many bytes are readable
-                        buffer.limit(bytesToLeftShift + bytesToRead);
-
-                        needMore = false;
-                    } else {
-                        throw new InvalidRecordException("Invalid record size: expected to read more bytes in record payload");
-                    }
-                }
-
-                switch (state) {
-                    case READ_KEY_SIZE:
-                        // read key size (varint, max 4bytes)
-                        if (buffer.remaining() < 4 && bytesRemaining > 0) {
-                            needMore = true;
-                        } else {
-                            keySize = ByteUtils.readVarint(buffer);
-                            bytesRead += ByteUtils.sizeOfVarint(keySize);
-                            if (keySize > 0) {
-                                if (remainingHeadersToSkip < 0) {
-                                    recordKeySize = keySize;
-                                }
-                                state = ReadState.SKIP_KEY;
-                                remainingKeyBytesToSkip = keySize;
-                            } else {
-                                state = ReadState.READ_VALUE_SIZE;
-                            }
-                        }
-                        break;
-
-                    case SKIP_KEY:
-                        // skip until key is consumed
-                        if (remainingKeyBytesToSkip > buffer.remaining()) {
-                            remainingKeyBytesToSkip -= buffer.remaining();
-                            buffer.position(buffer.limit());
-                            needMore = true;
-                        } else {
-                            buffer.position(buffer.position() + remainingKeyBytesToSkip);
-                            bytesRead += keySize;
-                            state = ReadState.READ_VALUE_SIZE;
-                        }
-                        break;
-
-                    case READ_VALUE_SIZE:
-                        // read value size (varint, max 4bytes)
-                        if (buffer.remaining() < 4 && bytesRemaining > 0) {
-                            needMore = true;
-                        } else {
-                            valueSize = ByteUtils.readVarint(buffer);
-                            bytesRead += ByteUtils.sizeOfVarint(valueSize);
-                            if (valueSize > 0) {
-                                if (remainingHeadersToSkip < 0) {
-                                    recordValueSize = valueSize;
-                                }
-                                state = ReadState.SKIP_VALUE;
-                                remainingValueBytesToSkip = valueSize;
-                            } else {
-                                if (remainingHeadersToSkip > 0) {
-                                    remainingHeadersToSkip -= 1;
-                                    if (remainingHeadersToSkip == 0)
-                                        notDone = false;
-                                    else
-                                        state = ReadState.READ_KEY_SIZE;
-                                } else {
-                                    state = ReadState.READ_NUM_HEADERS;
-                                }
-                            }
-                        }
-                        break;
-
-                    case SKIP_VALUE:
-                        // skip bytes until value is consumed
-                        if (remainingValueBytesToSkip > buffer.remaining()) {
-                            remainingValueBytesToSkip -= buffer.remaining();
-                            buffer.position(buffer.limit());
-                            needMore = true;
-                        } else {
-                            buffer.position(buffer.position() + remainingValueBytesToSkip);
-                            bytesRead += valueSize;
-
-                            if (remainingHeadersToSkip > 0) {
-                                remainingHeadersToSkip -= 1;
-                                if (remainingHeadersToSkip == 0)
-                                    notDone = false;
-                                else
-                                    state = ReadState.READ_KEY_SIZE;
-                            } else {
-                                state = ReadState.READ_NUM_HEADERS;
-                            }
-                        }
-                        break;
-
-                    case READ_NUM_HEADERS:
-                        // read num headers (varint, max 4bytes)
-                        if (buffer.remaining() < 4 && bytesRemaining > 0) {
-                            needMore = true;
-                        } else {
-                            int numHeaders = ByteUtils.readVarint(buffer);
-                            bytesRead += ByteUtils.sizeOfVarint(numHeaders);
-                            if (numHeaders > 0) {
-                                state = ReadState.READ_KEY_SIZE;
-                                remainingHeadersToSkip = numHeaders;
-                            } else {
-                                notDone = false;
-                            }
-                        }
-                        break;
-                }
+            if (values[2] > 0) {
+                control[0] = true;
+                state = ReadState.READ_HEADER_KEY_SIZE;
+                buffer = skipHeaders(state, buffer, input, remaining, control, values[2]);
             }
 
-            if (bytesRemaining > 0)
+            int bytesRemainingToRead = remaining[0];
+            if (bytesRemainingToRead > 0 || buffer.remaining() > 0)
                 throw new InvalidRecordException("Invalid record size: expected to read " + sizeOfBodyInBytes +
-                    " bytes in record payload, but after " + bytesRead + " bytes read, there are still " + bytesRemaining + " bytes remaining");
+                    " bytes in record payload, but after " + bytesRead + " bytes read, there are still " + bytesRemainingToRead + " bytes remaining");
 
-            return new PartialDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, recordKeySize, recordValueSize);
+            return new PartialDefaultRecord(sizeInBytes, attributes, offset, timestamp, sequence, values[0], values[1]);
         } catch (BufferUnderflowException | IllegalArgumentException e) {
             throw new InvalidRecordException("Found invalid record structure", e);
         }
+    }
+
+    private static boolean parseSize(ByteBuffer buffer, int[] remaining, boolean[] control) {
+        // read size (varint, max 5bytes)
+        if (buffer.remaining() < 5 && remaining[0] > 0) {
+            control[1] = true;
+            return false;
+        } else {
+            int size = ByteUtils.readVarint(buffer);
+            remaining[1] = size;
+            return true;
+        }
+    }
+
+    private static boolean skipBytes(ByteBuffer buffer, int[] remaining, boolean[] control) {
+        if (remaining[1] > buffer.remaining()) {
+            remaining[1] -= buffer.remaining();
+            buffer.position(buffer.limit());
+            control[1] = true;
+            return false;
+        } else {
+            buffer.position(buffer.position() + remaining[1]);
+            remaining[1] = 0;
+            return true;
+        }
+    }
+
+    private static ByteBuffer maybeReadMore(ByteBuffer buffer, DataInput input, int[] remaining, boolean[] control) throws IOException {
+        if (control[1]) {
+            if (remaining[0] > 0) {
+                byte[] array = buffer.array();
+                int bytesLeft = buffer.remaining();
+                int shiftLeft = buffer.position();
+
+                int bytesToRead = Math.min(remaining[0], array.length - buffer.remaining());
+
+                // first copy the remaining bytes to the beginning of the array
+                // do not use System.arrayCopy since it will allocate a new array for same src/dest
+                for (int i = 0; i < bytesLeft; i++) {
+                    array[i] = array[i + shiftLeft];
+                }
+
+                // then try to read more bytes to the remaining of the array
+                input.readFully(array, bytesLeft, bytesToRead);
+
+                buffer = ByteBuffer.wrap(array);
+                // only those many bytes are readable
+                buffer.limit(bytesLeft + bytesToRead);
+
+                remaining[0] -= bytesToRead;
+                control[1] = false;
+            } else {
+                throw new InvalidRecordException("Invalid record size: expected to read more bytes in record payload");
+            }
+        }
+
+        return buffer;
+    }
+
+    private static ByteBuffer skipKeyValue(ReadState state, ByteBuffer buffer, DataInput input, int[] remaining, boolean[] control, int[] values) throws IOException {
+        while (control[0]) {
+            buffer = maybeReadMore(buffer, input, remaining, control);
+
+            switch (state) {
+                case READ_RECORD_KEY_SIZE:
+                    if (parseSize(buffer, remaining, control)) {
+                        values[0] = remaining[1];
+                        state = values[0] > 0 ? ReadState.SKIP_RECORD_KEY : ReadState.READ_RECORD_VALUE_SIZE;
+                    }
+                    break;
+
+                case SKIP_RECORD_KEY:
+                    if (skipBytes(buffer, remaining, control)) {
+                        state  = ReadState.READ_RECORD_VALUE_SIZE;
+                    }
+                    break;
+
+                case READ_RECORD_VALUE_SIZE:
+                    if (parseSize(buffer, remaining, control)) {
+                        values[1] = remaining[1];
+                        state = values[1] > 0 ? ReadState.SKIP_RECORD_VALUE : ReadState.READ_NUM_HEADERS;
+                    }
+                    break;
+
+                case SKIP_RECORD_VALUE:
+                    if (skipBytes(buffer, remaining, control)) {
+                        state = ReadState.READ_NUM_HEADERS;
+                    }
+                    break;
+
+                case READ_NUM_HEADERS:
+                    if (parseSize(buffer, remaining, control)) {
+                        if (remaining[1] > 0) {
+                            values[2] = remaining[1];
+                        }
+                        control[0] = false;
+                    }
+                    break;
+
+                default:
+                    throw new IllegalStateException("Illegal state " + state);
+            }
+        }
+
+        return buffer;
+    }
+
+    private static ByteBuffer skipHeaders(ReadState state, ByteBuffer buffer, DataInput input, int[] remaining, boolean[] control, int remainingHeaders) throws IOException {
+        while (control[0]) {
+            buffer = maybeReadMore(buffer, input, remaining, control);
+
+            switch (state) {
+                case READ_HEADER_KEY_SIZE:
+                    if (parseSize(buffer, remaining, control)) {
+                        if (remaining[1] > 0) {
+                            state = ReadState.SKIP_HEADER_KEY;
+                        } else {
+                            state = ReadState.READ_HEADER_VALUE_SIZE;
+                        }
+                    }
+                    break;
+
+                case SKIP_HEADER_KEY:
+                    if (skipBytes(buffer, remaining, control)) {
+                        state  = ReadState.READ_HEADER_VALUE_SIZE;
+                    }
+                    break;
+
+                case READ_HEADER_VALUE_SIZE:
+                    if (parseSize(buffer, remaining, control)) {
+                        if (remaining[1] > 0) {
+                            state = ReadState.SKIP_HEADER_VALUE;
+                        } else {
+                            remainingHeaders -= 1;
+                            if (remainingHeaders == 0)
+                                control[0] = false;
+                            else
+                                state = ReadState.READ_HEADER_KEY_SIZE;
+                        }
+                    }
+                    break;
+
+                case SKIP_HEADER_VALUE:
+                    if (skipBytes(buffer, remaining, control)) {
+                        remainingHeaders -= 1;
+                        if (remainingHeaders == 0)
+                            control[0] = false;
+                        else
+                            state = ReadState.READ_HEADER_KEY_SIZE;
+                    }
+                    break;
+
+                default:
+                    throw new IllegalStateException("Illegal state " + state);
+            }
+        }
+
+        return buffer;
     }
 
     private static Header[] readHeaders(ByteBuffer buffer, int numHeaders) {
