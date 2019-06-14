@@ -196,8 +196,10 @@ public class FetchSessionHandler {
 
         public FetchRequestData build() {
             if (nextMetadata.isFull()) {
-                log.debug("Built full fetch {} for node {} with {}.",
-                    nextMetadata, node, partitionsToLogString(next.keySet()));
+                if (log.isDebugEnabled()) {
+                    log.debug("Built full fetch {} for node {} with {}.",
+                              nextMetadata, node, partitionsToLogString(next.keySet()));
+                }
                 sessionPartitions = next;
                 next = null;
                 Map<TopicPartition, PartitionData> toSend =
@@ -247,10 +249,12 @@ public class FetchSessionHandler {
                 sessionPartitions.put(topicPartition, nextData);
                 added.add(topicPartition);
             }
-            log.debug("Built incremental fetch {} for node {}. Added {}, altered {}, removed {} " +
-                    "out of {}", nextMetadata, node, partitionsToLogString(added),
-                    partitionsToLogString(altered), partitionsToLogString(removed),
-                    partitionsToLogString(sessionPartitions.keySet()));
+            if (log.isDebugEnabled()) {
+                log.debug("Built incremental fetch {} for node {}. Added {}, altered {}, removed {} " +
+                          "out of {}", nextMetadata, node, partitionsToLogString(added),
+                          partitionsToLogString(altered), partitionsToLogString(removed),
+                          partitionsToLogString(sessionPartitions.keySet()));
+            }
             Map<TopicPartition, PartitionData> toSend =
                 Collections.unmodifiableMap(new LinkedHashMap<>(next));
             Map<TopicPartition, PartitionData> curSessionPartitions =
