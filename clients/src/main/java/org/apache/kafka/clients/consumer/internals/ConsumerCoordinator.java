@@ -959,6 +959,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 return;
             }
 
+            Set<String> unauthorizedTopics = null;
             Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(response.responseData().size());
             for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : response.responseData().entrySet()) {
                 TopicPartition tp = entry.getKey();
@@ -969,11 +970,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                     if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                         future.raise(new KafkaException("Topic or Partition " + tp + " does not exist"));
+                        return;
+                    } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
+                        if (unauthorizedTopics == null) {
+                            unauthorizedTopics = new HashSet<>();
+                        }
+                        unauthorizedTopics.add(tp.topic());
                     } else {
                         future.raise(new KafkaException("Unexpected error in fetch offset response for partition " +
                             tp + ": " + error.message()));
+                        return;
                     }
-                    return;
                 } else if (data.offset >= 0) {
                     // record the position with the offset (-1 indicates no committed offset to fetch)
                     offsets.put(tp, new OffsetAndMetadata(data.offset, data.leaderEpoch, data.metadata));
@@ -982,7 +989,11 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
             }
 
-            future.complete(offsets);
+            if (unauthorizedTopics != null) {
+                future.raise(new TopicAuthorizationException(unauthorizedTopics));
+            } else {
+                future.complete(offsets);
+            }
         }
     }
 
