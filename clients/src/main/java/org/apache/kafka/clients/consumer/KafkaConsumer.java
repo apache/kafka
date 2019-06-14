@@ -672,7 +672,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
             this.clientId = clientId;
             this.groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG);
 
-            GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config);
+            GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
+                                                                                 GroupRebalanceConfig.ProtocolType.Consumer);
             LogContext logContext;
             // If group.instance.id is set, we will append it to the log context.
             if (groupRebalanceConfig.groupInstanceId.isPresent()) {

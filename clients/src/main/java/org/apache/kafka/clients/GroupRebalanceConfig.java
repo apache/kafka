@@ -26,6 +26,21 @@ import java.util.Optional;
  */
 public class GroupRebalanceConfig {
 
+    public enum ProtocolType {
+        Consumer("consumer"),
+        Connect("connect");
+
+        private String type;
+
+        ProtocolType(String type) {
+            this.type = type;
+        }
+
+        public String get() {
+            return type;
+        }
+    }
+
     public final int sessionTimeoutMs;
     public final int rebalanceTimeoutMs;
     public final int heartbeatIntervalMs;
@@ -34,20 +49,35 @@ public class GroupRebalanceConfig {
     public final long retryBackoffMs;
     public final boolean leaveGroupOnClose;
 
-    public GroupRebalanceConfig(AbstractConfig config) {
+    public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
-        this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
+        if (protocolType == ProtocolType.Consumer) {
+            this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
+        } else {
+            this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.REBALANCE_TIMEOUT_MS_CONFIG);
+        }
         this.heartbeatIntervalMs = config.getInt(CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG);
         this.groupId = config.getString(CommonClientConfigs.GROUP_ID_CONFIG);
-        String groupInstanceId = config.getString(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
-        if (groupInstanceId != null) {
-            JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
-            this.groupInstanceId = Optional.of(groupInstanceId);
+
+        // Static membership is only introduced in consumer API.
+        if (protocolType == ProtocolType.Consumer) {
+            String groupInstanceId = config.getString(CommonClientConfigs.GROUP_INSTANCE_ID_CONFIG);
+            if (groupInstanceId != null) {
+                JoinGroupRequest.validateGroupInstanceId(groupInstanceId);
+                this.groupInstanceId = Optional.of(groupInstanceId);
+            } else {
+                this.groupInstanceId = Optional.empty();
+            }
         } else {
             this.groupInstanceId = Optional.empty();
         }
+
         this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
-        this.leaveGroupOnClose = config.getBoolean("internal.leave.group.on.close");
+        if (protocolType == ProtocolType.Consumer) {
+            this.leaveGroupOnClose = config.getBoolean("internal.leave.group.on.close");
+        } else {
+            this.leaveGroupOnClose = true;
+        }
     }
 
     // For testing purpose.
