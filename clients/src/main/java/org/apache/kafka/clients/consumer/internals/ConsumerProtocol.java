@@ -27,6 +27,7 @@ import org.apache.kafka.common.utils.CollectionUtils;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -143,7 +144,6 @@ public class ConsumerProtocol {
         return buffer;
     }
 
-<<<<<<< HEAD
     public static ByteBuffer serializeSubscriptionV1(PartitionAssignor.Subscription subscription) {
         Struct struct = new Struct(SUBSCRIPTION_V1);
         struct.set(USER_DATA_KEY_NAME, subscription.userData());
@@ -186,10 +186,15 @@ public class ConsumerProtocol {
         List<String> topics = new ArrayList<>();
         for (Object topicObj : struct.getArray(TOPICS_KEY_NAME))
             topics.add((String) topicObj);
-        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V0, topics, userData, groupInstanceId);
+        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V0,
+                                                  topics,
+                                                  userData,
+                                                  Collections.emptyList(),
+                                                  groupInstanceId);
     }
 
-    public static PartitionAssignor.Subscription deserializeSubscriptionV1(ByteBuffer buffer) {
+    public static PartitionAssignor.Subscription deserializeSubscriptionV1(ByteBuffer buffer,
+                                                                           Optional<String> groupInstanceId) {
         Struct struct = SUBSCRIPTION_V1.read(buffer);
         ByteBuffer userData = struct.getBytes(USER_DATA_KEY_NAME);
         List<String> topics = new ArrayList<>();
@@ -205,10 +210,15 @@ public class ConsumerProtocol {
             }
         }
 
-        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V1, topics, userData, ownedPartitions);
+        return new PartitionAssignor.Subscription(CONSUMER_PROTOCOL_V1,
+                                                  topics,
+                                                  userData,
+                                                  ownedPartitions,
+                                                  groupInstanceId);
     }
 
-    public static PartitionAssignor.Subscription deserializeSubscription(ByteBuffer buffer) {
+    public static PartitionAssignor.Subscription deserializeSubscription(ByteBuffer buffer,
+                                                                         Optional<String> groupInstanceId) {
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         Short version = header.getShort(VERSION_KEY_NAME);
 
@@ -217,14 +227,14 @@ public class ConsumerProtocol {
 
         switch (version) {
             case CONSUMER_PROTOCOL_V0:
-                return deserializeSubscriptionV0(buffer);
+                return deserializeSubscriptionV0(buffer, groupInstanceId);
 
             case CONSUMER_PROTOCOL_V1:
-                return deserializeSubscriptionV1(buffer);
+                return deserializeSubscriptionV1(buffer, groupInstanceId);
 
             // assume all higher versions can be parsed as V1
             default:
-                return deserializeSubscriptionV1(buffer);
+                return deserializeSubscriptionV1(buffer, groupInstanceId);
         }
     }
 

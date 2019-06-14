@@ -53,6 +53,7 @@ public class ConsumerProtocolTest {
 
     private final TopicPartition tp1 = new TopicPartition("foo", 1);
     private final TopicPartition tp2 = new TopicPartition("bar", 2);
+    private final Optional<String> groupInstanceId = Optional.of("instance.id");
 
     @Test
     public void serializeDeserializeMetadata() {
@@ -68,7 +69,7 @@ public class ConsumerProtocolTest {
     public void serializeDeserializeMetadataAndGroupInstanceId() {
         Subscription subscription = new Subscription(Arrays.asList("foo", "bar"));
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
-        Optional<String> groupInstanceId = Optional.of("instance.id");
+
         Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer, groupInstanceId);
         assertEquals(subscription.topics(), parsedSubscription.topics());
         assertEquals(groupInstanceId, parsedSubscription.groupInstanceId());
@@ -88,23 +89,28 @@ public class ConsumerProtocolTest {
     public void deserializeOldSubscriptionVersion() {
         Subscription subscription = new Subscription((short) 0, Arrays.asList("foo", "bar"), null);
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
-        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer);
+        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer, groupInstanceId);
         assertEquals(parsedSubscription.topics(), parsedSubscription.topics());
         assertNull(parsedSubscription.userData());
         assertTrue(parsedSubscription.ownedPartitions().isEmpty());
+        assertEquals(groupInstanceId, parsedSubscription.groupInstanceId());
     }
 
     @Test
     public void deserializeNewSubscriptionWithOldVersion() {
-        Subscription subscription = new Subscription((short) 1, Arrays.asList("foo", "bar"), null, Collections.singletonList(tp2));
+        Subscription subscription = new Subscription((short) 1,
+                                                     Arrays.asList("foo", "bar"),
+                                                     null, Collections.singletonList(tp2),
+                                                     Optional.empty());
         ByteBuffer buffer = ConsumerProtocol.serializeSubscription(subscription);
         // ignore the version assuming it is the old byte code, as it will blindly deserialize as V0
         Struct header = CONSUMER_PROTOCOL_HEADER_SCHEMA.read(buffer);
         header.getShort(VERSION_KEY_NAME);
-        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscriptionV0(buffer);
+        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscriptionV0(buffer, Optional.empty());
         assertEquals(subscription.topics(), parsedSubscription.topics());
         assertNull(parsedSubscription.userData());
         assertTrue(parsedSubscription.ownedPartitions().isEmpty());
+        assertFalse(parsedSubscription.groupInstanceId().isPresent());
     }
 
     @Test
@@ -135,12 +141,10 @@ public class ConsumerProtocolTest {
 
         buffer.flip();
 
-        Subscription subscription = ConsumerProtocol.deserializeSubscription(buffer);
-        assertEquals(Collections.singletonList("topic"), subscription.topics());
-        assertEquals(Collections.singletonList(tp2), subscription.ownedPartitions());
-        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer, Optional.empty());
+        Subscription parsedSubscription = ConsumerProtocol.deserializeSubscription(buffer, groupInstanceId);
         assertEquals(Collections.singletonList("topic"), parsedSubscription.topics());
-        assertFalse(parsedSubscription.groupInstanceId().isPresent());
+        assertEquals(Collections.singletonList(tp2), parsedSubscription.ownedPartitions());
+        assertEquals(groupInstanceId, parsedSubscription.groupInstanceId());
     }
 
     @Test
@@ -216,7 +220,6 @@ public class ConsumerProtocolTest {
         PartitionAssignor.Assignment assignment = ConsumerProtocol.deserializeAssignment(buffer);
         assertEquals(toSet(Collections.singletonList(tp1)), toSet(assignment.partitions()));
         assertEquals(Errors.NEED_REJOIN, assignment.error());
-        assertEquals(toSet(Collections.singletonList(new TopicPartition("foo", 1))), toSet(assignment.partitions()));
     }
 
     private static <T> Set<T> toSet(Collection<T> collection) {

@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.protocol.types.SchemaException;
 
 import java.nio.ByteBuffer;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -168,7 +167,7 @@ public interface PartitionAssignor {
         }
 
         public Subscription(List<String> topics) {
-            this(topics, ByteBuffer.wrap(new byte[0]), Collections.emptyList(), Optional.empty());
+            this(topics, ByteBuffer.wrap(new byte[0]));
         }
 
         Short version() {
