@@ -152,7 +152,7 @@ public class ConsumerCoordinatorTest {
         this.rebalanceListener = new MockRebalanceListener();
         this.mockOffsetCommitCallback = new MockCommitCallback();
         this.partitionAssignor.clear();
-        this.rebalanceConfig = buildRebalanceConfig(groupInstanceId);
+        this.rebalanceConfig = buildRebalanceConfig(Optional.empty());
         this.coordinator = buildCoordinator(rebalanceConfig,
                                             metrics,
                                             assignors,
@@ -732,11 +732,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testUpdateLastHeartbeatPollWhenCoordinatorUnknown() throws Exception {
-        GroupRebalanceConfig rebalanceConfig = buildRebalanceConfig(Optional.empty());
-        ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
-                                                           new Metrics(),
-                                                           assignors,
-                                                           false);
         // If we are part of an active group and we cannot find the coordinator, we should nevertheless
         // continue to update the last poll time so that we do not expire the consumer
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
@@ -803,11 +798,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testLeaveGroupOnClose() {
-        GroupRebalanceConfig rebalanceConfig = buildRebalanceConfig(Optional.empty());
-        ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
-                                                           new Metrics(),
-                                                           assignors,
-                                                           false);
         final String consumerId = "consumer";
 
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
@@ -829,11 +819,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testMaybeLeaveGroup() {
-        GroupRebalanceConfig rebalanceConfig = buildRebalanceConfig(Optional.empty());
-        ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
-                                                           new Metrics(),
-                                                           assignors,
-                                                           false);
         final String consumerId = "consumer";
 
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
@@ -865,11 +850,6 @@ public class ConsumerCoordinatorTest {
      */
     @Test
     public void testPendingMemberShouldLeaveGroup() {
-        GroupRebalanceConfig rebalanceConfig = buildRebalanceConfig(Optional.empty());
-        ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
-                                                           new Metrics(),
-                                                           assignors,
-                                                           false);
         final String consumerId = "consumer-id";
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
@@ -1076,12 +1056,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testWakeupFromAssignmentCallback() {
-        GroupRebalanceConfig rebalanceConfig = buildRebalanceConfig(Optional.empty());
-        ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
-                                                           new Metrics(),
-                                                           assignors,
-                                                           false);
-
         final String topic = "topic1";
         TopicPartition partition = new TopicPartition(topic, 0);
         final String consumerId = "follower";
@@ -1525,11 +1499,6 @@ public class ConsumerCoordinatorTest {
 
     @Test
     public void testCommitAfterLeaveGroup() {
-        GroupRebalanceConfig rebalanceConfig = buildRebalanceConfig(Optional.empty());
-        ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
-                                                           new Metrics(),
-                                                           assignors,
-                                                           false);
         // enable auto-assignment
         subscriptions.subscribe(singleton(topic1), rebalanceListener);
 
@@ -2168,9 +2137,7 @@ public class ConsumerCoordinatorTest {
                                                                final boolean autoCommit,
                                                                final Optional<String> groupInstanceId) {
         final String consumerId = "consumer";
-        if (!groupInstanceId.isPresent()) {
-            rebalanceConfig = buildRebalanceConfig(Optional.empty());
-        }
+        rebalanceConfig = buildRebalanceConfig(groupInstanceId);
         ConsumerCoordinator coordinator = buildCoordinator(rebalanceConfig,
                                                            new Metrics(),
                                                            assignors,

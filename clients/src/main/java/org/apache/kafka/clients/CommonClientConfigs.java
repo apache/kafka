@@ -26,7 +26,7 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Configurations shared by Kafka client applications: producer, consumer and connect, etc.
+ * Configurations shared by Kafka client applications: producer, consumer, connect, etc.
  */
 public class CommonClientConfigs {
     private static final Logger log = LoggerFactory.getLogger(CommonClientConfigs.class);
