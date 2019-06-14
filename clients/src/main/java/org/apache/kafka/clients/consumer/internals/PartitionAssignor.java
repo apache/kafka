@@ -18,11 +18,16 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.protocol.types.SchemaException;
 
 import java.nio.ByteBuffer;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+
+import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSUMER_PROTOCOL_V0;
+import static org.apache.kafka.clients.consumer.internals.ConsumerProtocol.CONSUMER_PROTOCOL_V1;
 
 /**
  * This interface is used to define custom partition assignment for use in
@@ -73,6 +78,21 @@ public interface PartitionAssignor {
         onAssignment(assignment);
     }
 
+    /**
+     * Indicate which rebalance protocol this assignor can would work with;
+     * By default it should always work with {@link RebalanceProtocol#EAGER}.
+     */
+    default List<RebalanceProtocol> supportedProtocols() {
+        return Collections.singletonList(RebalanceProtocol.EAGER);
+    }
+
+    /**
+     * Return the version of the assignor which indicate how the user metadata encodings
+     * and the assignment algorithm gets evolved.
+     */
+    default short version() {
+        return (short) 0;
+    }
 
     /**
      * Unique name for this assignor (e.g. "range" or "roundrobin" or "sticky")
@@ -80,21 +100,76 @@ public interface PartitionAssignor {
      */
     String name();
 
+    enum RebalanceProtocol {
+        EAGER((byte) 0), COOPERATIVE((byte) 1);
+
+        private final byte id;
+
+        RebalanceProtocol(byte id) {
+            this.id = id;
+        }
+
+        public byte id() {
+            return id;
+        }
+
+        public static RebalanceProtocol forId(byte id) {
+            switch (id) {
+                case 0:
+                    return EAGER;
+                case 1:
+                    return COOPERATIVE;
+                default:
+                    throw new IllegalArgumentException("Unknown rebalance protocol id: " + id);
+            }
+        }
+    }
+
     class Subscription {
+        private final Short version;
         private final List<String> topics;
         private final ByteBuffer userData;
+        private final List<TopicPartition> ownedPartitions;
 
-        public Subscription(List<String> topics, ByteBuffer userData) {
+        Subscription(Short version, List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+            this.version = version;
             this.topics = topics;
             this.userData = userData;
+            this.ownedPartitions = ownedPartitions;
+
+            if (version < CONSUMER_PROTOCOL_V0)
+                throw new SchemaException("Unsupported subscription version: " + version);
+
+            if (version < CONSUMER_PROTOCOL_V1 && !ownedPartitions.isEmpty())
+                throw new IllegalArgumentException("Subscription version smaller than 1 should not have owned partitions");
+        }
+
+        Subscription(Short version, List<String> topics, ByteBuffer userData) {
+            this(version, topics, userData, Collections.emptyList());
+        }
+
+        public Subscription(List<String> topics, ByteBuffer userData, List<TopicPartition> ownedPartitions) {
+            this(CONSUMER_PROTOCOL_V1, topics, userData, ownedPartitions);
+        }
+
+        public Subscription(List<String> topics, ByteBuffer userData) {
+            this(CONSUMER_PROTOCOL_V1, topics, userData);
         }
 
         public Subscription(List<String> topics) {
             this(topics, ByteBuffer.wrap(new byte[0]));
         }
 
+        Short version() {
+            return version;
+        }
+
         public List<String> topics() {
             return topics;
+        }
+
+        public List<TopicPartition> ownedPartitions() {
+            return ownedPartitions;
         }
 
         public ByteBuffer userData() {
@@ -104,26 +179,58 @@ public interface PartitionAssignor {
         @Override
         public String toString() {
             return "Subscription(" +
-                    "topics=" + topics +
+                    "version=" + version +
+                    ", topics=" + topics +
+                    ", ownedPartitions=" + ownedPartitions +
                     ')';
         }
     }
 
     class Assignment {
+        private final Short version;
         private final List<TopicPartition> partitions;
         private final ByteBuffer userData;
+        private final ConsumerProtocol.Errors error;
 
-        public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
+        Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.Errors error) {
+            this.version = version;
             this.partitions = partitions;
             this.userData = userData;
+            this.error = error;
+
+            if (version < CONSUMER_PROTOCOL_V0)
+                throw new SchemaException("Unsupported subscription version: " + version);
+
+            if (version < CONSUMER_PROTOCOL_V1 && error != ConsumerProtocol.Errors.NONE)
+                throw new IllegalArgumentException("Assignment version smaller than 1 should not have error code.");
+        }
+
+        Assignment(Short version, List<TopicPartition> partitions, ByteBuffer userData) {
+            this(version, partitions, userData, ConsumerProtocol.Errors.NONE);
+        }
+
+        public Assignment(List<TopicPartition> partitions, ByteBuffer userData, ConsumerProtocol.Errors error) {
+            this(CONSUMER_PROTOCOL_V1, partitions, userData, error);
+        }
+
+        public Assignment(List<TopicPartition> partitions, ByteBuffer userData) {
+            this(CONSUMER_PROTOCOL_V1, partitions, userData);
         }
 
         public Assignment(List<TopicPartition> partitions) {
             this(partitions, ByteBuffer.wrap(new byte[0]));
         }
 
+        Short version() {
+            return version;
+        }
+
         public List<TopicPartition> partitions() {
             return partitions;
+        }
+
+        public ConsumerProtocol.Errors error() {
+            return error;
         }
 
         public ByteBuffer userData() {
@@ -133,7 +240,9 @@ public interface PartitionAssignor {
         @Override
         public String toString() {
             return "Assignment(" +
-                    "partitions=" + partitions +
+                    "version=" + version +
+                    ", partitions=" + partitions +
+                    ", error=" + error +
                     ')';
         }
     }
