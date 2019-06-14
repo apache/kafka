@@ -45,13 +45,14 @@ import static org.apache.kafka.common.protocol.CommonFields.TOPIC_NAME;
  * Possible error codes:
  *
  * - Partition errors:
- *   - UNKNOWN_TOPIC_OR_PARTITION (3)
+ *   - {@link Errors#UNKNOWN_TOPIC_OR_PARTITION}
+ *   - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
  *
  * - Group or coordinator errors:
- *   - COORDINATOR_LOAD_IN_PROGRESS (14)
- *   - COORDINATOR_NOT_AVAILABLE (15)
- *   - NOT_COORDINATOR (16)
- *   - GROUP_AUTHORIZATION_FAILED (30)
+ *   - {@link Errors#COORDINATOR_LOAD_IN_PROGRESS}
+ *   - {@link Errors#COORDINATOR_NOT_AVAILABLE}
+ *   - {@link Errors#NOT_COORDINATOR}
+ *   - {@link Errors#GROUP_AUTHORIZATION_FAILED}
  */
 public class OffsetFetchResponse extends AbstractResponse {
     private static final Field.ComplexArray TOPICS = new Field.ComplexArray("responses",
