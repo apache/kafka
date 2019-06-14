@@ -507,15 +507,13 @@ public class DefaultRecord implements Record {
         if (bytesRemaining[0] > 0) {
             byte[] array = buffer.array();
 
-            // first copy the remaining bytes to the beginning of the array
-            // do not use System.arrayCopy since it will allocate a new array for same src/dest
+            // first copy the remaining bytes to the beginning of the array;
+            // at most 4 bytes would be shifted here
             int stepsToLeftShift = buffer.position();
             int bytesToLeftShift = buffer.remaining();
             for (int i = 0; i < bytesToLeftShift; i++) {
                 array[i] = array[i + stepsToLeftShift];
             }
-
-            System.arraycopy();
 
             // then try to read more bytes to the remaining of the array
             int bytesRead = Math.min(bytesRemaining[0], array.length - bytesToLeftShift);
