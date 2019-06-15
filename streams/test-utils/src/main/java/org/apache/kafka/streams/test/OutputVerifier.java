@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.test;
 
-import org.apache.kafka.clients.ClientRecord;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.streams.TopologyTestDriver;
 
@@ -30,17 +30,17 @@ import java.util.Objects;
 public class OutputVerifier {
 
     /**
-     * Compares a {@link ClientRecord} with the provided value and throws an {@link AssertionError} if the
-     * {@code ClientRecord}'s value is not equal to the expected value.
+     * Compares a {@link ProducerRecord} with the provided value and throws an {@link AssertionError} if the
+     * {@code ProducerRecord}'s value is not equal to the expected value.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedValue the expected value of the {@code ClientRecord}
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedValue the expected value of the {@code ProducerRecord}
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s value is not equal to {@code expectedValue}
+     * @throws AssertionError if {@code ProducerRecord}'s value is not equal to {@code expectedValue}
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareValue(final ClientRecord<K, V> record,
+    public static <K, V> void compareValue(final ProducerRecord<K, V> record,
                                            final V expectedValue) throws AssertionError {
         Objects.requireNonNull(record);
 
@@ -57,35 +57,35 @@ public class OutputVerifier {
     }
 
     /**
-     * Compares the values of two {@link ClientRecord}'s and throws an {@link AssertionError} if they are not equal to
+     * Compares the values of two {@link ProducerRecord}'s and throws an {@link AssertionError} if they are not equal to
      * each other.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedRecord a {@code ClientRecord} for verification
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedRecord a {@code ProducerRecord} for verification
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s value is not equal to {@code expectedRecord}'s value
+     * @throws AssertionError if {@code ProducerRecord}'s value is not equal to {@code expectedRecord}'s value
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareValue(final ClientRecord<K, V> record,
-                                           final ClientRecord<K, V> expectedRecord) throws AssertionError {
+    public static <K, V> void compareValue(final ProducerRecord<K, V> record,
+                                           final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
         compareValue(record, expectedRecord.value());
     }
 
     /**
-     * Compares a {@link ClientRecord} with the provided key and value and throws an {@link AssertionError} if the
-     * {@code ClientRecord}'s key or value is not equal to the expected key or value.
+     * Compares a {@link ProducerRecord} with the provided key and value and throws an {@link AssertionError} if the
+     * {@code ProducerRecord}'s key or value is not equal to the expected key or value.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedKey the expected key of the {@code ClientRecord}
-     * @param expectedValue the expected value of the {@code ClientRecord}
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedKey the expected key of the {@code ProducerRecord}
+     * @param expectedValue the expected value of the {@code ProducerRecord}
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s key or value is not equal to {@code expectedKey} or {@code expectedValue}
+     * @throws AssertionError if {@code ProducerRecord}'s key or value is not equal to {@code expectedKey} or {@code expectedValue}
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareKeyValue(final ClientRecord<K, V> record,
+    public static <K, V> void compareKeyValue(final ProducerRecord<K, V> record,
                                               final K expectedKey,
                                               final V expectedValue) throws AssertionError {
         Objects.requireNonNull(record);
@@ -113,35 +113,35 @@ public class OutputVerifier {
     }
 
     /**
-     * Compares the keys and values of two {@link ClientRecord}'s and throws an {@link AssertionError} if the keys or
+     * Compares the keys and values of two {@link ProducerRecord}'s and throws an {@link AssertionError} if the keys or
      * values are not equal to each other.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedRecord a {@code ClientRecord} for verification
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedRecord a {@code ProducerRecord} for verification
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s key or value is not equal to {@code expectedRecord}'s key or value
+     * @throws AssertionError if {@code ProducerRecord}'s key or value is not equal to {@code expectedRecord}'s key or value
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareKeyValue(final ClientRecord<K, V> record,
-                                              final ClientRecord<K, V> expectedRecord) throws AssertionError {
+    public static <K, V> void compareKeyValue(final ProducerRecord<K, V> record,
+                                              final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
         compareKeyValue(record, expectedRecord.key(), expectedRecord.value());
     }
 
     /**
-     * Compares a {@link ClientRecord} with the provided value and timestamp and throws an {@link AssertionError} if
-     * the {@code ClientRecord}'s value or timestamp is not equal to the expected value or timestamp.
+     * Compares a {@link ProducerRecord} with the provided value and timestamp and throws an {@link AssertionError} if
+     * the {@code ProducerRecord}'s value or timestamp is not equal to the expected value or timestamp.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedValue the expected value of the {@code ClientRecord}
-     * @param expectedTimestamp the expected timestamps of the {@code ClientRecord}
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedValue the expected value of the {@code ProducerRecord}
+     * @param expectedTimestamp the expected timestamps of the {@code ProducerRecord}
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s value or timestamp is not equal to {@code expectedValue} or {@code expectedTimestamp}
+     * @throws AssertionError if {@code ProducerRecord}'s value or timestamp is not equal to {@code expectedValue} or {@code expectedTimestamp}
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareValueTimestamp(final ClientRecord<K, V> record,
+    public static <K, V> void compareValueTimestamp(final ProducerRecord<K, V> record,
                                                     final V expectedValue,
                                                     final long expectedTimestamp) throws AssertionError {
         Objects.requireNonNull(record);
@@ -165,38 +165,38 @@ public class OutputVerifier {
     }
 
     /**
-     * Compares the values and timestamps of two {@link ClientRecord}'s and throws an {@link AssertionError} if the
+     * Compares the values and timestamps of two {@link ProducerRecord}'s and throws an {@link AssertionError} if the
      * values or timestamps are not equal to each other.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedRecord a {@code ClientRecord} for verification
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedRecord a {@code ProducerRecord} for verification
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s value or timestamp is not equal to {@code expectedRecord}'s value or timestamp
+     * @throws AssertionError if {@code ProducerRecord}'s value or timestamp is not equal to {@code expectedRecord}'s value or timestamp
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareValueTimestamp(final ClientRecord<K, V> record,
-                                                    final ClientRecord<K, V> expectedRecord) throws AssertionError {
+    public static <K, V> void compareValueTimestamp(final ProducerRecord<K, V> record,
+                                                    final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
         compareValueTimestamp(record, expectedRecord.value(), expectedRecord.timestamp());
     }
 
     /**
-     * Compares a {@link ClientRecord} with the provided key, value, and timestamp and throws an
-     * {@link AssertionError} if the {@code ClientRecord}'s key, value, or timestamp is not equal to the expected key,
+     * Compares a {@link ProducerRecord} with the provided key, value, and timestamp and throws an
+     * {@link AssertionError} if the {@code ProducerRecord}'s key, value, or timestamp is not equal to the expected key,
      * value, or timestamp.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedKey the expected key of the {@code ClientRecord}
-     * @param expectedValue the expected value of the {@code ClientRecord}
-     * @param expectedTimestamp the expected timestamp of the {@code ClientRecord}
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedKey the expected key of the {@code ProducerRecord}
+     * @param expectedValue the expected value of the {@code ProducerRecord}
+     * @param expectedTimestamp the expected timestamp of the {@code ProducerRecord}
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s key, value, timestamp is not equal to {@code expectedKey},
+     * @throws AssertionError if {@code ProducerRecord}'s key, value, timestamp is not equal to {@code expectedKey},
      * {@code expectedValue}, or {@code expectedTimestamps}
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareKeyValueTimestamp(final ClientRecord<K, V> record,
+    public static <K, V> void compareKeyValueTimestamp(final ProducerRecord<K, V> record,
                                                        final K expectedKey,
                                                        final V expectedValue,
                                                        final long expectedTimestamp) throws AssertionError {
@@ -230,36 +230,36 @@ public class OutputVerifier {
     }
 
     /**
-     * Compares the keys, values, and timestamps of two {@link ClientRecord}'s and throws an {@link AssertionError} if
+     * Compares the keys, values, and timestamps of two {@link ProducerRecord}'s and throws an {@link AssertionError} if
      * the keys, values, or timestamps are not equal to each other.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedRecord a {@code ClientRecord} for verification
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedRecord a {@code ProducerRecord} for verification
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s key, value, or timestamp is not equal to
+     * @throws AssertionError if {@code ProducerRecord}'s key, value, or timestamp is not equal to
      * {@code expectedRecord}'s key, value, or timestamp
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareKeyValueTimestamp(final ClientRecord<K, V> record,
-                                                       final ClientRecord<K, V> expectedRecord) throws AssertionError {
+    public static <K, V> void compareKeyValueTimestamp(final ProducerRecord<K, V> record,
+                                                       final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
         compareKeyValueTimestamp(record, expectedRecord.key(), expectedRecord.value(), expectedRecord.timestamp());
     }
 
     /**
-     * Compares a {@link ClientRecord} with the provided value and headers and throws an {@link AssertionError} if
-     * the {@code ClientRecord}'s value or headers is not equal to the expected value or headers.
+     * Compares a {@link ProducerRecord} with the provided value and headers and throws an {@link AssertionError} if
+     * the {@code ProducerRecord}'s value or headers is not equal to the expected value or headers.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedValue the expected value of the {@code ClientRecord}
-     * @param expectedHeaders the expected headers of the {@code ClientRecord}
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedValue the expected value of the {@code ProducerRecord}
+     * @param expectedHeaders the expected headers of the {@code ProducerRecord}
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s value or headers is not equal to {@code expectedValue} or {@code expectedHeaders}
+     * @throws AssertionError if {@code ProducerRecord}'s value or headers is not equal to {@code expectedValue} or {@code expectedHeaders}
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareValueHeaders(final ClientRecord<K, V> record,
+    public static <K, V> void compareValueHeaders(final ProducerRecord<K, V> record,
                                                   final V expectedValue,
                                                   final Headers expectedHeaders) throws AssertionError {
         Objects.requireNonNull(record);
@@ -287,38 +287,38 @@ public class OutputVerifier {
     }
 
     /**
-     * Compares the values and headers of two {@link ClientRecord}'s and throws an {@link AssertionError} if the
+     * Compares the values and headers of two {@link ProducerRecord}'s and throws an {@link AssertionError} if the
      * values or headers are not equal to each other.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedRecord a {@code ClientRecord} for verification
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedRecord a {@code ProducerRecord} for verification
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s value or headers is not equal to {@code expectedRecord}'s value or headers
+     * @throws AssertionError if {@code ProducerRecord}'s value or headers is not equal to {@code expectedRecord}'s value or headers
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareValueHeaders(final ClientRecord<K, V> record,
-                                                  final ClientRecord<K, V> expectedRecord) throws AssertionError {
+    public static <K, V> void compareValueHeaders(final ProducerRecord<K, V> record,
+                                                  final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
         compareValueHeaders(record, expectedRecord.value(), expectedRecord.headers());
     }
 
     /**
-     * Compares a {@link ClientRecord} with the provided key, value, and headers and throws an
-     * {@link AssertionError} if the {@code ClientRecord}'s key, value, or headers is not equal to the expected key,
+     * Compares a {@link ProducerRecord} with the provided key, value, and headers and throws an
+     * {@link AssertionError} if the {@code ProducerRecord}'s key, value, or headers is not equal to the expected key,
      * value, or headers.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedKey the expected key of the {@code ClientRecord}
-     * @param expectedValue the expected value of the {@code ClientRecord}
-     * @param expectedHeaders the expected headers of the {@code ClientRecord}
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedKey the expected key of the {@code ProducerRecord}
+     * @param expectedValue the expected value of the {@code ProducerRecord}
+     * @param expectedHeaders the expected headers of the {@code ProducerRecord}
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s key, value, headers is not equal to {@code expectedKey},
+     * @throws AssertionError if {@code ProducerRecord}'s key, value, headers is not equal to {@code expectedKey},
      *                        {@code expectedValue}, or {@code expectedHeaders}
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareKeyValueHeaders(final ClientRecord<K, V> record,
+    public static <K, V> void compareKeyValueHeaders(final ProducerRecord<K, V> record,
                                                      final K expectedKey,
                                                      final V expectedValue,
                                                      final Headers expectedHeaders) throws AssertionError {
@@ -356,40 +356,40 @@ public class OutputVerifier {
     }
 
     /**
-     * Compares the keys, values, and headers of two {@link ClientRecord}'s and throws an {@link AssertionError} if
+     * Compares the keys, values, and headers of two {@link ProducerRecord}'s and throws an {@link AssertionError} if
      * the keys, values, or headers are not equal to each other.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedRecord a {@code ClientRecord} for verification
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedRecord a {@code ProducerRecord} for verification
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s key, value, or headers is not equal to
+     * @throws AssertionError if {@code ProducerRecord}'s key, value, or headers is not equal to
      *                        {@code expectedRecord}'s key, value, or headers
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareKeyValueHeaders(final ClientRecord<K, V> record,
-                                                     final ClientRecord<K, V> expectedRecord) throws AssertionError {
+    public static <K, V> void compareKeyValueHeaders(final ProducerRecord<K, V> record,
+                                                     final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
         compareKeyValueHeaders(record, expectedRecord.key(), expectedRecord.value(), expectedRecord.headers());
     }
 
     /**
-     * Compares a {@link ClientRecord} with the provided key, value, headers, and timestamp and throws an
-     * {@link AssertionError} if the {@code ClientRecord}'s key, value, headers, or timestamp is not equal to the expected key,
+     * Compares a {@link ProducerRecord} with the provided key, value, headers, and timestamp and throws an
+     * {@link AssertionError} if the {@code ProducerRecord}'s key, value, headers, or timestamp is not equal to the expected key,
      * value, headers, or timestamp.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedKey the expected key of the {@code ClientRecord}
-     * @param expectedValue the expected value of the {@code ClientRecord}
-     * @param expectedHeaders the expected headers of the {@code ClientRecord}
-     * @param expectedTimestamp the expected timestamp of the {@code ClientRecord}
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedKey the expected key of the {@code ProducerRecord}
+     * @param expectedValue the expected value of the {@code ProducerRecord}
+     * @param expectedHeaders the expected headers of the {@code ProducerRecord}
+     * @param expectedTimestamp the expected timestamp of the {@code ProducerRecord}
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s key, value, headers is not equal to {@code expectedKey},
+     * @throws AssertionError if {@code ProducerRecord}'s key, value, headers is not equal to {@code expectedKey},
      *                        {@code expectedValue}, or {@code expectedHeaders}
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareKeyValueHeadersTimestamp(final ClientRecord<K, V> record,
+    public static <K, V> void compareKeyValueHeadersTimestamp(final ProducerRecord<K, V> record,
                                                               final K expectedKey,
                                                               final V expectedValue,
                                                               final Headers expectedHeaders,
@@ -435,19 +435,19 @@ public class OutputVerifier {
     }
 
     /**
-     * Compares the keys, values, headers, and timestamp of two {@link ClientRecord}'s and throws an {@link AssertionError} if
+     * Compares the keys, values, headers, and timestamp of two {@link ProducerRecord}'s and throws an {@link AssertionError} if
      * the keys, values, headers, or timestamps are not equal to each other.
      *
-     * @param record a output {@code ClientRecord} for verification
-     * @param expectedRecord a {@code ClientRecord} for verification
+     * @param record a output {@code ProducerRecord} for verification
+     * @param expectedRecord a {@code ProducerRecord} for verification
      * @param <K> the key type
      * @param <V> the value type
-     * @throws AssertionError if {@code ClientRecord}'s key, value, headers, or timestamp is not equal to
+     * @throws AssertionError if {@code ProducerRecord}'s key, value, headers, or timestamp is not equal to
      *                        {@code expectedRecord}'s key, value, headers, or timestamp
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public static <K, V> void compareKeyValueHeadersTimestamp(final ClientRecord<K, V> record,
-                                                              final ClientRecord<K, V> expectedRecord) throws AssertionError {
+    public static <K, V> void compareKeyValueHeadersTimestamp(final ProducerRecord<K, V> record,
+                                                              final ProducerRecord<K, V> expectedRecord) throws AssertionError {
         Objects.requireNonNull(expectedRecord);
         compareKeyValueHeadersTimestamp(record, expectedRecord.key(), expectedRecord.value(), expectedRecord.headers(), expectedRecord.timestamp());
     }
