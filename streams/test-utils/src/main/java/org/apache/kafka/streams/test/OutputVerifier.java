@@ -27,6 +27,7 @@ import java.util.Objects;
  *
  * @see TopologyTestDriver
  */
+@Deprecated
 public class OutputVerifier {
 
     /**
