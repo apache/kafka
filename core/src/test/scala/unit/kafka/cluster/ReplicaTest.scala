@@ -19,7 +19,7 @@ package kafka.cluster
 import java.util.Properties
 
 import kafka.log.{Log, LogConfig, LogManager}
-import kafka.server.{BrokerTopicStats, LogDirFailureChannel, LogOffsetMetadata}
+import kafka.server.{BrokerTopicStats, LogDirFailureChannel}
 import kafka.utils.{MockTime, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
