@@ -65,7 +65,7 @@ public interface ConnectClusterState {
      * Get details about the setup of the Connect cluster.
      * @return a {@link ConnectClusterDetails} object containing information about the cluster
      * @throws java.lang.UnsupportedOperationException if the default implementation has not been overridden
-     **/
+     */
     default ConnectClusterDetails clusterDetails() {
         throw new UnsupportedOperationException();
     }

@@ -870,7 +870,7 @@ class Partition(val topicPartition: TopicPartition,
      * the last time when the replica was fully caught up. If either of the above conditions
      * is violated, that replica is considered to be out of sync
      *
-     **/
+     */
     val candidateReplicas = inSyncReplicas - localBrokerId
     val currentTimeMs = time.milliseconds()
     val leaderEndOffset = localLogOrException.logEndOffset
