@@ -51,6 +51,6 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
 
 
 object FetcherIdManager {
-  val tpFetcherIdMap = new mutable.HashMap[TopicPartition, Int]
+  val tpFetcherIdMap =  new mutable.HashMap[TopicPartition, Int]
   val brokerAndLastComputedFetcherIdMap = new mutable.HashMap[BrokerEndPoint, Int]
 }
