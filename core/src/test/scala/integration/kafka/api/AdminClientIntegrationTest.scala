@@ -1827,9 +1827,9 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     val brokerLoggerConfig = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, servers.head.config.brokerId.toString)
     val loggerConfig = client.describeConfigs(Collections.singletonList(brokerLoggerConfig)).values.get(brokerLoggerConfig).get()
-    val logCleanerLogLevelConfig = loggerConfig.get("kafka.log.LogCleaner")
+    val logCleanerLogLevelConfig = loggerConfig.get("kafka.cluster.Replica")
     assertEquals("null", logCleanerLogLevelConfig.value())
-    assertEquals("kafka.log.LogCleaner", logCleanerLogLevelConfig.name())
+    assertEquals("kafka.cluster.Replica", logCleanerLogLevelConfig.name())
     assertEquals(ConfigEntry.ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG, logCleanerLogLevelConfig.source())
     assertEquals(false, logCleanerLogLevelConfig.isReadOnly)
     assertEquals(false, logCleanerLogLevelConfig.isSensitive)
@@ -1878,7 +1878,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
     client = AdminClient.create(createConfig())
     val brokerLoggerConfig = new ConfigResource(ConfigResource.Type.BROKER_LOGGER, servers.head.config.brokerId.toString)
-    val validLoggerName = "kafka.controller.KafkaController"
+    val validLoggerName = "kafka.server.KafkaRequestHandler"
     val expectedValidLoggerLogLevel = client.describeConfigs(Collections.singletonList(brokerLoggerConfig)).values.get(brokerLoggerConfig).get().get(validLoggerName)
     def assertLogLevelDidNotChange(): Unit = {
       assertEquals(
@@ -1888,31 +1888,31 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     }
 
     val appendLogLevelEntries = Seq(
-      new AlterConfigOp(new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.ALL_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
-      new AlterConfigOp(new ConfigEntry("kafka.log.LogCleaner", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.APPEND) // append is not supported
+      new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.ALL_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
+      new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.APPEND) // append is not supported
     ).asJavaCollection
     val appendAlterResult = client.incrementalAlterConfigs(Map(brokerLoggerConfig -> appendLogLevelEntries).asJava)
     assertTrue(intercept[ExecutionException](appendAlterResult.values.get(brokerLoggerConfig).get).getCause.isInstanceOf[InvalidRequestException])
     assertLogLevelDidNotChange()
 
     val subtractLogLevelEntries = Seq(
-      new AlterConfigOp(new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.ALL_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
-      new AlterConfigOp(new ConfigEntry("kafka.log.LogCleaner", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SUBTRACT) // subtract is not supported
+      new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.ALL_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
+      new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SUBTRACT) // subtract is not supported
     ).asJavaCollection
     val subtractAlterResult = client.incrementalAlterConfigs(Map(brokerLoggerConfig -> subtractLogLevelEntries).asJava)
     assertTrue(intercept[ExecutionException](subtractAlterResult.values.get(brokerLoggerConfig).get).getCause.isInstanceOf[InvalidRequestException])
     assertLogLevelDidNotChange()
 
     val invalidLogLevelLogLevelEntries = Seq(
-      new AlterConfigOp(new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.ALL_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
-      new AlterConfigOp(new ConfigEntry("kafka.log.LogCleaner", "OFF"), AlterConfigOp.OpType.SET) // OFF is not a valid log level
+      new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.ALL_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
+      new AlterConfigOp(new ConfigEntry("kafka.network.SocketServer", "OFF"), AlterConfigOp.OpType.SET) // OFF is not a valid log level
     ).asJavaCollection
     val invalidLogLevelAlterResult = client.incrementalAlterConfigs(Map(brokerLoggerConfig -> invalidLogLevelLogLevelEntries).asJava)
     assertTrue(intercept[ExecutionException](invalidLogLevelAlterResult.values.get(brokerLoggerConfig).get).getCause.isInstanceOf[InvalidRequestException])
     assertLogLevelDidNotChange()
 
     val invalidLoggerNameLogLevelEntries = Seq(
-      new AlterConfigOp(new ConfigEntry("kafka.controller.KafkaController", LogLevelConfig.ALL_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
+      new AlterConfigOp(new ConfigEntry("kafka.server.KafkaRequestHandler", LogLevelConfig.ALL_LOG_LEVEL), AlterConfigOp.OpType.SET), // valid
       new AlterConfigOp(new ConfigEntry("Some Other LogCleaner", LogLevelConfig.ERROR_LOG_LEVEL), AlterConfigOp.OpType.SET) // invalid logger name is not supported
     ).asJavaCollection
     val invalidLoggerNameAlterResult = client.incrementalAlterConfigs(Map(brokerLoggerConfig -> invalidLoggerNameLogLevelEntries).asJava)
