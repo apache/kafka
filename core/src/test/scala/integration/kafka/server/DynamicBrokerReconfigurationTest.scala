@@ -276,7 +276,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       try {
         producer3.partitionsFor(topic).size() == numPartitions
       } catch {
-        case _: Exception => false
+        case _: Exception  => false
       }
     }, "Keystore not updated")
 
@@ -389,7 +389,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
 
     // Stop a couple of threads and verify they are recreated if any config is updated
     def cleanerThreads = Thread.getAllStackTraces.keySet.asScala.filter(_.getName.startsWith("kafka-log-cleaner-thread-"))
-
     cleanerThreads.take(2).foreach(_.interrupt())
     TestUtils.waitUntilTrue(() => cleanerThreads.size == (2 * numServers) - 2, "Threads did not exit")
     props.put(KafkaConfig.LogCleanerBackoffMsProp, "8000")
@@ -675,7 +674,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       (1 to 2).foreach { i =>
         val replicaFetcherManager = servers(i).replicaManager.replicaFetcherManager
         val truncationOffset = tp.partition
-        replicaFetcherManager.markPartitionsForTruncation(leaderId, servers(i).config.hostName, servers(i).config.port, tp, truncationOffset)
+        replicaFetcherManager.markPartitionsForTruncation(leaderId,servers(i).config.hostName, servers(i).config.port, tp, truncationOffset)
         val fetcherThreads = replicaFetcherManager.fetcherThreadMap.filter(_._2.fetchState(tp).isDefined)
         assertEquals(1, fetcherThreads.size)
         assertEquals(replicaFetcherManager.getFetcherId(new BrokerEndPoint(servers(i).config.brokerId, servers(i).config.hostName, servers(i).config.port), tp.topic(), tp.partition()), fetcherThreads.head._1.fetcherId)
@@ -869,8 +868,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       TestUtils.retry(10000) {
         val newProps = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
         passwordConfigs.foreach { case (name, value) =>
-          assertEquals(passwordDecoder.decode(value), passwordDecoder.decode(newProps.getProperty(name)))
-        }
+          assertEquals(passwordDecoder.decode(value), passwordDecoder.decode(newProps.getProperty(name))) }
       }
     }
 
@@ -1097,7 +1095,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       producer.partitionsFor(topic)
       fail("Producer connection did not fail with invalid keystore")
     } catch {
-      case _: AuthenticationException => // expected exception
+      case _:AuthenticationException => // expected exception
     }
   }
 
@@ -1146,7 +1144,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
         in.close()
       }
     }
-
     val cert1 = load(trustStore1Props).getCertificate("kafka")
     val cert2 = load(trustStore2Props).getCertificate("kafka")
     val certs = Map("kafka1" -> cert1, "kafka2" -> cert2)
@@ -1161,7 +1158,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     newStoreProps
   }
 
-  private def alterSslKeystore(adminClient: AdminClient, props: Properties, listener: String, expectFailure: Boolean = false): Unit = {
+  private def alterSslKeystore(adminClient: AdminClient, props: Properties, listener: String, expectFailure: Boolean  = false): Unit = {
     val configPrefix = listenerPrefix(listener)
     val newProps = securityProps(props, KEYSTORE_PROPS, configPrefix)
     reconfigureServers(newProps, perBrokerConfig = true,
@@ -1306,7 +1303,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   }
 
   private def configureMetricsReporters(reporters: Seq[Class[_]], props: Properties,
-                                        perBrokerConfig: Boolean = false): Unit = {
+                                       perBrokerConfig: Boolean = false): Unit = {
     val reporterStr = reporters.map(_.getName).mkString(",")
     props.put(KafkaConfig.MetricReporterClassesProp, reporterStr)
     reconfigureServers(props, perBrokerConfig, (KafkaConfig.MetricReporterClassesProp, reporterStr))
@@ -1332,7 +1329,7 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
   private def verifyThreads(threadPrefix: String, countPerBroker: Int, leftOverThreads: Int = 0): Unit = {
     val expectedCount = countPerBroker * servers.size
     val (threads, resized) = TestUtils.computeUntilTrue(matchingThreads(threadPrefix)) { matching =>
-      matching.size >= expectedCount && matching.size <= expectedCount + leftOverThreads
+      matching.size >= expectedCount &&  matching.size <= expectedCount + leftOverThreads
     }
     assertTrue(s"Invalid threads: expected $expectedCount, got ${threads.size}: $threads", resized)
   }
@@ -1427,33 +1424,13 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     protected var _clientId = "test-client"
     protected val _propsOverride: Properties = new Properties
 
-    def bootstrapServers(bootstrap: String): this.type = {
-      _bootstrapServers = Some(bootstrap); this
-    }
-
-    def listenerName(listener: String): this.type = {
-      _listenerName = listener; this
-    }
-
-    def securityProtocol(protocol: SecurityProtocol): this.type = {
-      _securityProtocol = protocol; this
-    }
-
-    def saslMechanism(mechanism: String): this.type = {
-      _saslMechanism = mechanism; this
-    }
-
-    def clientId(id: String): this.type = {
-      _clientId = id; this
-    }
-
-    def keyStoreProps(props: Properties): this.type = {
-      _propsOverride ++= securityProps(props, KEYSTORE_PROPS); this
-    }
-
-    def trustStoreProps(props: Properties): this.type = {
-      _propsOverride ++= securityProps(props, TRUSTSTORE_PROPS); this
-    }
+    def bootstrapServers(bootstrap: String): this.type = { _bootstrapServers = Some(bootstrap); this }
+    def listenerName(listener: String): this.type = { _listenerName = listener; this }
+    def securityProtocol(protocol: SecurityProtocol): this.type = { _securityProtocol = protocol; this }
+    def saslMechanism(mechanism: String): this.type = { _saslMechanism = mechanism; this }
+    def clientId(id: String): this.type = { _clientId = id; this }
+    def keyStoreProps(props: Properties): this.type = { _propsOverride ++= securityProps(props, KEYSTORE_PROPS); this }
+    def trustStoreProps(props: Properties): this.type = { _propsOverride ++= securityProps(props, TRUSTSTORE_PROPS); this }
 
     def bootstrapServers: String =
       _bootstrapServers.getOrElse(TestUtils.bootstrapServers(servers, new ListenerName(_listenerName)))
@@ -1474,21 +1451,10 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     private var _requestTimeoutMs = 30000
     private var _deliveryTimeoutMs = 30000
 
-    def maxRetries(retries: Int): ProducerBuilder = {
-      _retries = retries; this
-    }
-
-    def acks(acks: Int): ProducerBuilder = {
-      _acks = acks; this
-    }
-
-    def requestTimeoutMs(timeoutMs: Int): ProducerBuilder = {
-      _requestTimeoutMs = timeoutMs; this
-    }
-
-    def deliveryTimeoutMs(timeoutMs: Int): ProducerBuilder = {
-      _deliveryTimeoutMs = timeoutMs; this
-    }
+    def maxRetries(retries: Int): ProducerBuilder = { _retries = retries; this }
+    def acks(acks: Int): ProducerBuilder = { _acks = acks; this }
+    def requestTimeoutMs(timeoutMs: Int): ProducerBuilder = { _requestTimeoutMs = timeoutMs; this }
+    def deliveryTimeoutMs(timeoutMs: Int): ProducerBuilder = { _deliveryTimeoutMs= timeoutMs; this }
 
     override def build(): KafkaProducer[String, String] = {
       val producerProps = propsOverride
@@ -1509,17 +1475,9 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     private var _enableAutoCommit = false
     private var _topic = DynamicBrokerReconfigurationTest.this.topic
 
-    def autoOffsetReset(reset: String): ConsumerBuilder = {
-      _autoOffsetReset = reset; this
-    }
-
-    def enableAutoCommit(enable: Boolean): ConsumerBuilder = {
-      _enableAutoCommit = enable; this
-    }
-
-    def topic(topic: String): ConsumerBuilder = {
-      _topic = topic; this
-    }
+    def autoOffsetReset(reset: String): ConsumerBuilder = { _autoOffsetReset = reset; this }
+    def enableAutoCommit(enable: Boolean): ConsumerBuilder = { _enableAutoCommit = enable; this }
+    def topic(topic: String): ConsumerBuilder = { _topic = topic; this }
 
     override def build(): KafkaConsumer[String, String] = {
       val consumerProps = propsOverride
@@ -1544,7 +1502,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     private val producer = ProducerBuilder().maxRetries(retries).clientId(clientId).build()
     val lastSent = new ConcurrentHashMap[Int, Int]()
     @volatile var sent = 0
-
     override def doWork(): Unit = {
       try {
         while (isRunning) {
@@ -1570,7 +1527,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
     @volatile var lastBatch: ConsumerRecords[String, String] = _
     @volatile private var endTimeMs = Long.MaxValue
     @volatile var received = 0
-
     override def doWork(): Unit = {
       try {
         while (isRunning || (lastReceived != producerThread.lastSent && System.currentTimeMillis < endTimeMs)) {
@@ -1617,7 +1573,6 @@ class DynamicBrokerReconfigurationTest extends ZooKeeperTestHarness with SaslSet
       }, "Received records did not match")
     }
   }
-
 }
 
 object TestMetricsReporter {
@@ -1635,9 +1590,7 @@ object TestMetricsReporter {
 }
 
 class TestMetricsReporter extends MetricsReporter with Reconfigurable with Closeable with ClusterResourceListener {
-
   import TestMetricsReporter._
-
   val kafkaMetrics = ArrayBuffer[KafkaMetric]()
   @volatile var initializeCount = 0
   @volatile var configureCount = 0
