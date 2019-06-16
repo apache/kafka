@@ -329,7 +329,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics
   }
 
-   /**
+  /**
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */

@@ -62,13 +62,13 @@ public interface Consumer<K, V> extends Closeable {
     void assign(Collection<TopicPartition> partitions);
 
     /**
-    * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
-    */
+     * @see KafkaConsumer#subscribe(Pattern, ConsumerRebalanceListener)
+     */
     void subscribe(Pattern pattern, ConsumerRebalanceListener callback);
 
     /**
-    * @see KafkaConsumer#subscribe(Pattern)
-    */
+     * @see KafkaConsumer#subscribe(Pattern)
+     */
     void subscribe(Pattern pattern);
 
     /**

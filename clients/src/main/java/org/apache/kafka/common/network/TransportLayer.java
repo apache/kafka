@@ -72,7 +72,7 @@ public interface TransportLayer extends ScatteringByteChannel, GatheringByteChan
      * {@link org.apache.kafka.common.config.SslConfigs#SSL_CLIENT_AUTH_CONFIG}.
      * @throws AuthenticationException if handshake fails due to an {@link javax.net.ssl.SSLException}.
      * @throws IOException if read or write fails with an I/O error.
-    */
+     */
     void handshake() throws AuthenticationException, IOException;
 
     /**

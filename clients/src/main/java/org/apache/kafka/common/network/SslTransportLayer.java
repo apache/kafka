@@ -152,8 +152,8 @@ public class SslTransportLayer implements TransportLayer {
 
 
     /**
-    * Sends a SSL close message and closes socketChannel.
-    */
+     * Sends a SSL close message and closes socketChannel.
+     */
     @Override
     public void close() throws IOException {
         State prevState = state;
@@ -206,12 +206,12 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     /**
-    * Flushes the buffer to the network, non blocking.
-    * Visible for testing.
-    * @param buf ByteBuffer
-    * @return boolean true if the buffer has been emptied out, false otherwise
-    * @throws IOException
-    */
+     * Flushes the buffer to the network, non blocking.
+     * Visible for testing.
+     * @param buf ByteBuffer
+     * @return boolean true if the buffer has been emptied out, false otherwise
+     * @throws IOException
+     */
     protected boolean flush(ByteBuffer buf) throws IOException {
         int remaining = buf.remaining();
         if (remaining > 0) {
@@ -222,28 +222,28 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     /**
-    * Performs SSL handshake, non blocking.
-    * Before application data (kafka protocols) can be sent client & kafka broker must
-    * perform ssl handshake.
-    * During the handshake SSLEngine generates encrypted data that will be transported over socketChannel.
-    * Each SSLEngine operation generates SSLEngineResult , of which SSLEngineResult.handshakeStatus field is used to
-    * determine what operation needs to occur to move handshake along.
-    * A typical handshake might look like this.
-    * +-------------+----------------------------------+-------------+
-    * |  client     |  SSL/TLS message                 | HSStatus    |
-    * +-------------+----------------------------------+-------------+
-    * | wrap()      | ClientHello                      | NEED_UNWRAP |
-    * | unwrap()    | ServerHello/Cert/ServerHelloDone | NEED_WRAP   |
-    * | wrap()      | ClientKeyExchange                | NEED_WRAP   |
-    * | wrap()      | ChangeCipherSpec                 | NEED_WRAP   |
-    * | wrap()      | Finished                         | NEED_UNWRAP |
-    * | unwrap()    | ChangeCipherSpec                 | NEED_UNWRAP |
-    * | unwrap()    | Finished                         | FINISHED    |
-    * +-------------+----------------------------------+-------------+
-    *
-    * @throws IOException if read/write fails
-    * @throws SslAuthenticationException if handshake fails with an {@link SSLException}
-    */
+     * Performs SSL handshake, non blocking.
+     * Before application data (kafka protocols) can be sent client & kafka broker must
+     * perform ssl handshake.
+     * During the handshake SSLEngine generates encrypted data that will be transported over socketChannel.
+     * Each SSLEngine operation generates SSLEngineResult , of which SSLEngineResult.handshakeStatus field is used to
+     * determine what operation needs to occur to move handshake along.
+     * A typical handshake might look like this.
+     * +-------------+----------------------------------+-------------+
+     * |  client     |  SSL/TLS message                 | HSStatus    |
+     * +-------------+----------------------------------+-------------+
+     * | wrap()      | ClientHello                      | NEED_UNWRAP |
+     * | unwrap()    | ServerHello/Cert/ServerHelloDone | NEED_WRAP   |
+     * | wrap()      | ClientKeyExchange                | NEED_WRAP   |
+     * | wrap()      | ChangeCipherSpec                 | NEED_WRAP   |
+     * | wrap()      | Finished                         | NEED_UNWRAP |
+     * | unwrap()    | ChangeCipherSpec                 | NEED_UNWRAP |
+     * | unwrap()    | Finished                         | FINISHED    |
+     * +-------------+----------------------------------+-------------+
+     *
+     * @throws IOException if read/write fails
+     * @throws SslAuthenticationException if handshake fails with an {@link SSLException}
+     */
     @Override
     public void handshake() throws IOException {
         if (state == State.NOT_INITALIZED)
@@ -433,11 +433,11 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     /**
-    * Performs the WRAP function
-    * @param doWrite boolean
-    * @return SSLEngineResult
-    * @throws IOException
-    */
+     * Performs the WRAP function
+     * @param doWrite boolean
+     * @return SSLEngineResult
+     * @throws IOException
+     */
     private SSLEngineResult handshakeWrap(boolean doWrite) throws IOException {
         log.trace("SSLHandshake handshakeWrap {}", channelId);
         if (netWriteBuffer.hasRemaining())
@@ -499,14 +499,14 @@ public class SslTransportLayer implements TransportLayer {
 
 
     /**
-    * Reads a sequence of bytes from this channel into the given buffer. Reads as much as possible
-    * until either the dst buffer is full or there is no more data in the socket.
-    *
-    * @param dst The buffer into which bytes are to be transferred
-    * @return The number of bytes read, possible zero or -1 if the channel has reached end-of-stream
-    *         and no more data is available
-    * @throws IOException if some other I/O error occurs
-    */
+     * Reads a sequence of bytes from this channel into the given buffer. Reads as much as possible
+     * until either the dst buffer is full or there is no more data in the socket.
+     *
+     * @param dst The buffer into which bytes are to be transferred
+     * @return The number of bytes read, possible zero or -1 if the channel has reached end-of-stream
+     *         and no more data is available
+     * @throws IOException if some other I/O error occurs
+     */
     @Override
     public int read(ByteBuffer dst) throws IOException {
         if (state == State.CLOSING) return -1;
@@ -634,12 +634,12 @@ public class SslTransportLayer implements TransportLayer {
 
 
     /**
-    * Writes a sequence of bytes to this channel from the given buffer.
-    *
-    * @param src The buffer from which bytes are to be retrieved
-    * @return The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
-    * @throws IOException If some other I/O error occurs
-    */
+     * Writes a sequence of bytes to this channel from the given buffer.
+     *
+     * @param src The buffer from which bytes are to be retrieved
+     * @return The number of bytes read, possibly zero, or -1 if the channel has reached end-of-stream
+     * @throws IOException If some other I/O error occurs
+     */
     @Override
     public int write(ByteBuffer src) throws IOException {
         int written = 0;
@@ -678,14 +678,14 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     /**
-    * Writes a sequence of bytes to this channel from the subsequence of the given buffers.
-    *
-    * @param srcs The buffers from which bytes are to be retrieved
-    * @param offset The offset within the buffer array of the first buffer from which bytes are to be retrieved; must be non-negative and no larger than srcs.length.
-    * @param length - The maximum number of buffers to be accessed; must be non-negative and no larger than srcs.length - offset.
-    * @return returns no.of bytes written , possibly zero.
-    * @throws IOException If some other I/O error occurs
-    */
+     * Writes a sequence of bytes to this channel from the subsequence of the given buffers.
+     *
+     * @param srcs The buffers from which bytes are to be retrieved
+     * @param offset The offset within the buffer array of the first buffer from which bytes are to be retrieved; must be non-negative and no larger than srcs.length.
+     * @param length - The maximum number of buffers to be accessed; must be non-negative and no larger than srcs.length - offset.
+     * @return returns no.of bytes written , possibly zero.
+     * @throws IOException If some other I/O error occurs
+     */
     @Override
     public long write(ByteBuffer[] srcs, int offset, int length) throws IOException {
         if ((offset < 0) || (length < 0) || (offset > srcs.length - length))
@@ -711,12 +711,12 @@ public class SslTransportLayer implements TransportLayer {
     }
 
     /**
-    * Writes a sequence of bytes to this channel from the given buffers.
-    *
-    * @param srcs The buffers from which bytes are to be retrieved
-    * @return returns no.of bytes consumed by SSLEngine.wrap , possibly zero.
-    * @throws IOException If some other I/O error occurs
-    */
+     * Writes a sequence of bytes to this channel from the given buffers.
+     *
+     * @param srcs The buffers from which bytes are to be retrieved
+     * @return returns no.of bytes consumed by SSLEngine.wrap , possibly zero.
+     * @throws IOException If some other I/O error occurs
+     */
     @Override
     public long write(ByteBuffer[] srcs) throws IOException {
         return write(srcs, 0, srcs.length);

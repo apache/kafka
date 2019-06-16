@@ -175,7 +175,7 @@ public class TopicAdmin implements AutoCloseable {
         this.adminConfig = adminConfig != null ? adminConfig : Collections.<String, Object>emptyMap();
     }
 
-   /**
+    /**
      * Attempt to create the topic described by the given definition, returning true if the topic was created or false
      * if the topic already existed.
      *

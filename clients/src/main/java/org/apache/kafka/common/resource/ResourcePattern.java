@@ -38,7 +38,7 @@ public class ResourcePattern {
     private final String name;
     private final PatternType patternType;
 
-   /**
+    /**
      * Create a pattern using the supplied parameters.
      *
      * @param resourceType non-null, specific, resource type

@@ -149,11 +149,11 @@ public interface ReadOnlyWindowStore<K, V> {
         throws IllegalArgumentException;
 
     /**
-    * Gets all the key-value pairs in the existing windows.
-    *
-    * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
-    * @throws InvalidStateStoreException if the store is not initialized
-    */
+     * Gets all the key-value pairs in the existing windows.
+     *
+     * @return an iterator over windowed key-value pairs {@code <Windowed<K>, value>}
+     * @throws InvalidStateStoreException if the store is not initialized
+     */
     KeyValueIterator<Windowed<K>, V> all();
     
     /**

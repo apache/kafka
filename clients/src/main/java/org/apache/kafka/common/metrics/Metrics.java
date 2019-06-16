@@ -102,7 +102,7 @@ public class Metrics implements Closeable {
     }
 
 
-  /**
+    /**
      * Create a metrics repository with no reporters and the given default config. This config will be used for any
      * metric that doesn't override its own config. Expiration of Sensors is disabled.
      * @param defaultConfig The default config to use for all metrics that don't override their config

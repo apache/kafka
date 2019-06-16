@@ -781,9 +781,9 @@ public final class Utils {
         return other == null ? Collections.emptyList() : other;
     }
 
-   /**
-    * Get the ClassLoader which loaded Kafka.
-    */
+    /**
+     * Get the ClassLoader which loaded Kafka.
+     */
     public static ClassLoader getKafkaClassLoader() {
         return Utils.class.getClassLoader();
     }

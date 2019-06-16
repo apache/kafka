@@ -59,12 +59,12 @@ public enum AclPermissionType {
     }
 
     /**
-    * Parse the given string as an ACL permission.
-    *
-    * @param str    The string to parse.
-    *
-    * @return       The AclPermissionType, or UNKNOWN if the string could not be matched.
-    */
+     * Parse the given string as an ACL permission.
+     *
+     * @param str    The string to parse.
+     *
+     * @return       The AclPermissionType, or UNKNOWN if the string could not be matched.
+     */
     public static AclPermissionType fromString(String str) {
         try {
             return AclPermissionType.valueOf(str.toUpperCase(Locale.ROOT));

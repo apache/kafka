@@ -48,7 +48,7 @@ import java.util.Map;
  *     the new assignment will be opened using {@link #open(Collection)}.</li>
  *     <li><b>Shutdown:</b> When the task needs to be shutdown, Connect will close active partitions (if there
  *     are any) and stop the task using {@link #stop()}</li>
-  * </ol>
+ * </ol>
  *
  */
 public abstract class SinkTask implements Task {

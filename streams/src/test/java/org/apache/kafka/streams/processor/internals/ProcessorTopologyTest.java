@@ -726,7 +726,7 @@ public class ProcessorTopologyTest {
     /**
      * A custom timestamp extractor that extracts the timestamp from the record's value if the value is in ".*@[0-9]+"
      * format. Otherwise, it returns the record's timestamp or the default timestamp if the record's timestamp is negative.
-    */
+     */
     public static class CustomTimestampExtractor implements TimestampExtractor {
         private static final long DEFAULT_TIMESTAMP = 1000L;
 
