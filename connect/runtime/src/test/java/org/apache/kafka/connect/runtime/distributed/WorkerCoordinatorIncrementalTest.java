@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime.distributed;
 
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
@@ -45,6 +46,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
@@ -93,6 +95,7 @@ public class WorkerCoordinatorIncrementalTest {
     private MockRebalanceListener rebalanceListener;
     @Mock
     private KafkaConfigBackingStore configStorage;
+    private GroupRebalanceConfig rebalanceConfig;
     private WorkerCoordinator coordinator;
     private int rebalanceDelay = DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_DEFAULT;
 
@@ -150,22 +153,24 @@ public class WorkerCoordinatorIncrementalTest {
 
         this.configStorageCalls = 0;
 
-        this.coordinator = new WorkerCoordinator(
-                loggerFactory,
-                consumerClient,
-                groupId,
-                rebalanceTimeoutMs,
-                sessionTimeoutMs,
-                heartbeatIntervalMs,
-                metrics,
-                "worker" + groupId,
-                time,
-                retryBackoffMs,
-                expectedUrl(leaderId),
-                configStorage,
-                rebalanceListener,
-                compatibility,
-                rebalanceDelay);
+        this.rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
+                                                        rebalanceTimeoutMs,
+                                                        heartbeatIntervalMs,
+                                                        groupId,
+                                                        Optional.empty(),
+                                                        retryBackoffMs,
+                                                        true);
+        this.coordinator = new WorkerCoordinator(rebalanceConfig,
+                                                 loggerFactory,
+                                                 consumerClient,
+                                                 metrics,
+                                                 "worker" + groupId,
+                                                 time,
+                                                 expectedUrl(leaderId),
+                                                 configStorage,
+                                                 rebalanceListener,
+                                                 compatibility,
+                                                 rebalanceDelay);
 
         configState1 = clusterConfigState(offset, 2, 4);
     }
