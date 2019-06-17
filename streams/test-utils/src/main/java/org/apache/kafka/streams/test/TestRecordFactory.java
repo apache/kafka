@@ -35,6 +35,7 @@ import java.util.Objects;
  * @see org.apache.kafka.streams.TopologyTestDriver
  */
 @InterfaceStability.Evolving
+@Deprecated
 public class TestRecordFactory<K, V> {
     private final String topicName;
     private long timeMs;
@@ -150,7 +151,6 @@ public class TestRecordFactory<K, V> {
                                    final long timestampMs) {
         Objects.requireNonNull(headers, "headers cannot be null.");
         return new TestRecord<>(
-                topicName,
                 timestampMs,
                 key,
                 value,

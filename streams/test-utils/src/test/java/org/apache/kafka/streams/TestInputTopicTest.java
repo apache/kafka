@@ -146,17 +146,17 @@ public class TestInputTopicTest {
         inputTopic.pipeInput("Hello", baseTime);
         //TestRecord <> actual = outputTopic.readRecord();
         //assertThat(actual.headers(), is(equalTo(baseTime)));
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, null,"Hello"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, null,"Hello"))));
 
         inputTopic.pipeInput(2L, "Kafka", ++baseTime);
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, 2L,"Kafka"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, 2L,"Kafka"))));
 
         final List<String> inputList = Arrays.asList("Advancing", "time");
         //Feed list of words to inputTopic and no kafka key, timestamp advancing from basetime
         baseTime = 10;
         inputTopic.pipeValueList(inputList, baseTime, advance);
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, null,"Advancing"))));
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime + advance, null,"time"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, null,"Advancing"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime + advance, null,"time"))));
     }
 
     @Test
@@ -176,7 +176,7 @@ public class TestInputTopicTest {
                 hasProperty("value", equalTo("Hello")),
                 hasProperty("headers", equalTo(headers))));
         inputTopic.pipeInput(2L, "Kafka", headers, ++baseTime);
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, 2L, "Kafka", headers))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, 2L, "Kafka", headers))));
     }
 
     @Test
@@ -187,12 +187,12 @@ public class TestInputTopicTest {
         inputTopic.configureTiming(baseTime);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, 1L,"Hello"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, 1L,"Hello"))));
         inputTopic.pipeInput(2L, "World");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, 2L,"World"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, 2L,"World"))));
         inputTopic.advanceTimeMs(advance);
         inputTopic.pipeInput(3L, "Kafka");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime+advance, 3L,"Kafka"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime+advance, 3L,"Kafka"))));
     }
 
 
@@ -204,9 +204,9 @@ public class TestInputTopicTest {
         inputTopic.configureTiming(baseTime, advance);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput("Hello");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, null,"Hello"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime, null,"Hello"))));
         inputTopic.pipeInput(2L, "Kafka");
-        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime + advance, 2L,"Kafka"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(baseTime + advance, 2L,"Kafka"))));
     }
 
 

@@ -396,18 +396,14 @@ public class TopologyTestDriver implements Closeable {
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
-        pipeRecord(consumerRecord.topic(), consumerRecord.key(), consumerRecord.value(), consumerRecord.timestamp(), consumerRecord.headers());
+        pipeRecord(consumerRecord.topic(), consumerRecord.timestamp(), consumerRecord.key(), consumerRecord.value(), consumerRecord.headers());
     }
 
     private void pipeRecord(final ProducerRecord<byte[], byte[]> record) {
-        pipeRecord(record.topic(), record.key(), record.value(), record.timestamp(), record.headers());
+        pipeRecord(record.topic(), record.timestamp(), record.key(), record.value(), record.headers());
     }
 
-    private void pipeRecord(final TestRecord<byte[], byte[]> record) {
-        pipeRecord(record.topic(), record.key(), record.value(), record.timestamp(), record.headers());
-    }
-
-    private void pipeRecord(final String topic, final byte[] key, final byte[] value, final Long timestamp, final Headers headers) {
+    private void pipeRecord(final String topic, final Long timestamp, final byte[] key, final byte[] value, final Headers headers) {
         final String topicName = topic;
 
         if (!internalTopologyBuilder.getSourceTopicNames().isEmpty()) {
@@ -631,7 +627,7 @@ public class TopologyTestDriver implements Closeable {
         }
         final K key = keyDeserializer.deserialize(record.topic(), record.key());
         final V value = valueDeserializer.deserialize(record.topic(), record.value());
-        return new TestRecord<>(record.topic(), record.timestamp(), key, value, record.headers());
+        return new TestRecord<>(record.timestamp(), key, value, record.headers());
     }
 
     /**
@@ -643,12 +639,13 @@ public class TopologyTestDriver implements Closeable {
      * @param valueSerializer the value serializer
      */
     @SuppressWarnings("WeakerAccess")
-    <K, V> void pipeRecord(               final TestRecord<K, V> record,
+    <K, V> void pipeRecord(final String topic,
+                    final TestRecord<K, V> record,
                                           final Serializer<K> keySerializer,
                                           final Serializer<V> valueSerializer) {
-        final byte[] serializedKey = keySerializer.serialize(record.topic(), record.headers(), record.key());
-        final byte[] serializedValue = valueSerializer.serialize(record.topic(), record.headers(), record.value());
-        pipeRecord(new TestRecord<>(record.topic(), record.timestamp(), serializedKey, serializedValue, record.headers()));
+        final byte[] serializedKey = keySerializer.serialize(topic, record.headers(), record.key());
+        final byte[] serializedValue = valueSerializer.serialize(topic, record.headers(), record.value());
+        pipeRecord(topic, record.timestamp(), serializedKey, serializedValue, record.headers());
     }
 
     final long getQueueSize(final String topic) {

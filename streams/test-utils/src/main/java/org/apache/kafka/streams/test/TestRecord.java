@@ -23,6 +23,8 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 
 /**
+ * TODO
+ *
  * A key/value pair to be sent to Kafka. This consists of a topic name to which the record is being sent, an optional
  * partition number, and an optional key and value.
  * <p>
@@ -48,7 +50,6 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
  */
 public class TestRecord<K, V> {
 
-    private final String topic;
     private final Headers headers;
     private final K key;
     private final V value;
@@ -57,20 +58,16 @@ public class TestRecord<K, V> {
     /**
      * Creates a record with a specified timestamp to be sent to a specified topic and partition
      * 
-     * @param topic The topic the record will be appended to
-     * @param timestamp The timestamp of the record, in milliseconds since epoch. If null, the producer will assign
-     *                  the timestamp using System.currentTimeMillis().
+     * @param timestamp The timestamp of the record, in milliseconds since epoch. If null,
+     *                  the timestamp is assigned using System.currentTimeMillis() or internally tracked time.
      * @param key The key that will be included in the record
      * @param value The record contents
      * @param headers the headers that will be included in the record
      */
-    public TestRecord(String topic, Long timestamp, K key, V value, Headers headers) {
-        if (topic == null)
-            throw new IllegalArgumentException("Topic cannot be null.");
+    public TestRecord(Long timestamp, K key, V value, Headers headers) {
         if (timestamp != null && timestamp < 0)
             throw new IllegalArgumentException(
                     String.format("Invalid timestamp: %d. Timestamp should always be non-negative or null.", timestamp));
-        this.topic = topic;
         this.key = key;
         this.value = value;
         this.timestamp = timestamp;
@@ -80,50 +77,43 @@ public class TestRecord<K, V> {
     /**
      * Creates a record with a specified timestamp to be sent to a specified topic and partition
      *
-     * @param topic The topic the record will be appended to
-
-     * @param timestamp The timestamp of the record, in milliseconds since epoch. If null, the producer will assign the
-     *                  timestamp using System.currentTimeMillis().
+     * @param timestamp The timestamp of the record, in milliseconds since epoch. If null,
+     *                  the timestamp is assigned using System.currentTimeMillis() or internally tracked time.
      * @param key The key that will be included in the record
      * @param value The record contents
      */
-    public TestRecord(String topic, Long timestamp, K key, V value) {
-        this(topic,  timestamp, key, value, null);
+    public TestRecord(Long timestamp, K key, V value) {
+        this(timestamp, key, value, null);
     }
 
     /**
      * Creates a record to be sent to a specified topic and partition
      *
-     * @param topic The topic the record will be appended to
-
      * @param key The key that will be included in the record
      * @param value The record contents
      * @param headers The headers that will be included in the record
      */
-    public TestRecord(String topic, K key, V value, Headers headers) {
-        this(topic,  null, key, value, headers);
+    public TestRecord(K key, V value, Headers headers) {
+        this(null, key, value, headers);
     }
     
     /**
      * Creates a record to be sent to a specified topic and partition
      *
-     * @param topic The topic the record will be appended to
-
      * @param key The key that will be included in the record
      * @param value The record contents
      */
-    public TestRecord(String topic, K key, V value) {
-        this(topic,  null, key, value, null);
+    public TestRecord(K key, V value) {
+        this(null, key, value, null);
     }
 
     /**
      * Create a record with no key
-     * 
-     * @param topic The topic this record should be sent to
+     *
      * @param value The record contents
      */
-    public TestRecord(String topic, V value) {
-        this(topic, null, null, value, null);
+    public TestRecord(V value) {
+        this(null, null, value, null);
     }
 
     /**
@@ -132,7 +122,7 @@ public class TestRecord<K, V> {
      * @param record The record contents
      */
     public TestRecord(ConsumerRecord<K, V> record) {
-        this(record.topic(), record.timestamp(), record.key(), record.value(), record.headers());
+        this(record.timestamp(), record.key(), record.value(), record.headers());
     }
 
     /**
@@ -141,15 +131,7 @@ public class TestRecord<K, V> {
      * @param record The record contents
      */
     public TestRecord(ProducerRecord<K, V> record) {
-        this(record.topic(), record.timestamp(), record.key(), record.value(), record.headers());
-    }
-
-
-    /**
-     * @return The topic this record is being sent to
-     */
-    public String topic() {
-        return topic;
+        this(record.timestamp(), record.key(), record.value(), record.headers());
     }
 
     /**
@@ -203,7 +185,7 @@ public class TestRecord<K, V> {
         String key = this.key == null ? "null" : this.key.toString();
         String value = this.value == null ? "null" : this.value.toString();
         String timestamp = this.timestamp == null ? "null" : this.timestamp.toString();
-        return "TestRecord(topic=" + topic + ", headers=" + headers + ", key=" + key + ", value=" + value +
+        return "TestRecord(headers=" + headers + ", key=" + key + ", value=" + value +
             ", timestamp=" + timestamp + ")";
     }
 
@@ -218,8 +200,6 @@ public class TestRecord<K, V> {
 
         if (key != null ? !key.equals(that.key) : that.key != null) 
             return false;
-        else if (topic != null ? !topic.equals(that.topic) : that.topic != null) 
-            return false;
         else if (headers != null ? !headers.equals(that.headers) : that.headers != null)
             return false;
         else if (value != null ? !value.equals(that.value) : that.value != null) 
@@ -232,8 +212,7 @@ public class TestRecord<K, V> {
 
     @Override
     public int hashCode() {
-        int result = topic != null ? topic.hashCode() : 0;
-        result = 31 * result + (headers != null ? headers.hashCode() : 0);
+        int result = headers != null ? headers.hashCode() : 0;
         result = 31 * result + (key != null ? key.hashCode() : 0);
         result = 31 * result + (value != null ? value.hashCode() : 0);
         result = 31 * result + (timestamp != null ? timestamp.hashCode() : 0);

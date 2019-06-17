@@ -124,7 +124,7 @@ public class TestInputTopic<K, V> {
     }
 
     public void pipeInput(final TestRecord<K, V> record) {
-        driver.pipeRecord(record, keySerializer, valueSerializer);
+        driver.pipeRecord(topic, record, keySerializer, valueSerializer);
     }
 
     /**

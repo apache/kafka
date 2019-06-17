@@ -39,6 +39,7 @@ import java.util.Objects;
  * @see TopologyTestDriver
  */
 @InterfaceStability.Evolving
+@Deprecated
 public class ConsumerRecordFactory<K, V> {
     private final String topicName;
     private final Serializer<K> keySerializer;
