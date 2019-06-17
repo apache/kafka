@@ -22,15 +22,11 @@ import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.StreamsBuilder;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Produced;
-import org.apache.kafka.streams.test.OutputVerifier;
-
+import org.apache.kafka.streams.test.TestRecord;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -46,8 +42,9 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItems;
 import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.allOf;
+import static org.hamcrest.Matchers.hasProperty;
 import static org.junit.Assert.assertThrows;
 
 public class TestInputTopicTest {
@@ -147,21 +144,24 @@ public class TestInputTopicTest {
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput("Hello", baseTime);
-        OutputVerifier.compareValueTimestamp(outputTopic.readRecord(), "Hello", baseTime);
+        //TestRecord <> actual = outputTopic.readRecord();
+        //assertThat(actual.headers(), is(equalTo(baseTime)));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, null,"Hello"))));
+
         inputTopic.pipeInput(2L, "Kafka", ++baseTime);
-        OutputVerifier.compareKeyValueTimestamp(outputTopic.readRecord(), 2L, "Kafka", baseTime);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, 2L,"Kafka"))));
 
         final List<String> inputList = Arrays.asList("Advancing", "time");
         //Feed list of words to inputTopic and no kafka key, timestamp advancing from basetime
         baseTime = 10;
         inputTopic.pipeValueList(inputList, baseTime, advance);
-        OutputVerifier.compareValueTimestamp(outputTopic.readRecord(), "Advancing", baseTime);
-        OutputVerifier.compareValueTimestamp(outputTopic.readRecord(), "time", baseTime + advance);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, null,"Advancing"))));
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime + advance, null,"time"))));
     }
 
     @Test
     public void testWithHeaders() {
-        final long baseTime = 3;
+        long baseTime = 3;
         final Headers headers = new RecordHeaders(
                 new Header[]{
                     new RecordHeader("foo", "value".getBytes()),
@@ -171,9 +171,12 @@ public class TestInputTopicTest {
         final TestInputTopic<Long, String> inputTopic = testDriver.createInputTopic( INPUT_TOPIC, longSerde, stringSerde);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello", headers);
-        OutputVerifier.compareKeyValueHeaders(outputTopic.readRecord(), 1L, "Hello", headers);
-        inputTopic.pipeInput(2L, "Kafka", headers, baseTime);
-        OutputVerifier.compareKeyValueHeadersTimestamp(outputTopic.readRecord(), 2L, "Kafka", headers, baseTime);
+        assertThat(outputTopic.readRecord(), allOf(
+                hasProperty("key", equalTo(1L)),
+                hasProperty("value", equalTo("Hello")),
+                hasProperty("headers", equalTo(headers))));
+        inputTopic.pipeInput(2L, "Kafka", headers, ++baseTime);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, 2L, "Kafka", headers))));
     }
 
     @Test
@@ -184,12 +187,12 @@ public class TestInputTopicTest {
         inputTopic.configureTiming(baseTime);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput(1L, "Hello");
-        OutputVerifier.compareKeyValueTimestamp(outputTopic.readRecord(), 1L, "Hello", baseTime);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, 1L,"Hello"))));
         inputTopic.pipeInput(2L, "World");
-        OutputVerifier.compareKeyValueTimestamp(outputTopic.readRecord(), 2L, "World", baseTime);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, 2L,"World"))));
         inputTopic.advanceTimeMs(advance);
         inputTopic.pipeInput(3L, "Kafka");
-        OutputVerifier.compareKeyValueTimestamp(outputTopic.readRecord(), 3L, "Kafka", baseTime+advance);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime+advance, 3L,"Kafka"))));
     }
 
 
@@ -201,9 +204,9 @@ public class TestInputTopicTest {
         inputTopic.configureTiming(baseTime, advance);
         final TestOutputTopic<Long, String> outputTopic = testDriver.createOutputTopic(OUTPUT_TOPIC, longSerde, stringSerde);
         inputTopic.pipeInput("Hello");
-        OutputVerifier.compareValueTimestamp(outputTopic.readRecord(), "Hello", baseTime);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime, null,"Hello"))));
         inputTopic.pipeInput(2L, "Kafka");
-        OutputVerifier.compareKeyValueTimestamp(outputTopic.readRecord(), 2L, "Kafka", baseTime + advance);
+        assertThat(outputTopic.readRecord(), is(equalTo(new TestRecord<Long, String>(OUTPUT_TOPIC, baseTime + advance, 2L,"Kafka"))));
     }
 
 
