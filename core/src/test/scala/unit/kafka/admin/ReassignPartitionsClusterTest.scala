@@ -99,14 +99,14 @@ class ReassignPartitionsClusterTest extends ZooKeeperTestHarness with Logging {
     val newLeaderServer = servers.find(_.config.brokerId == 101).get
 
     TestUtils.waitUntilTrue (
-      () => newLeaderServer.replicaManager.nonOfflinePartition(topicPartition).flatMap(_.leaderReplicaIfLocal).isDefined,
+      () => newLeaderServer.replicaManager.nonOfflinePartition(topicPartition).flatMap(_.leaderLogIfLocal).isDefined,
       "broker 101 should be the new leader", pause = 1L
     )
 
-    assertEquals(100, newLeaderServer.replicaManager.localReplicaOrException(topicPartition)
+    assertEquals(100, newLeaderServer.replicaManager.localLogOrException(topicPartition)
       .highWatermark)
     val newFollowerServer = servers.find(_.config.brokerId == 102).get
-    TestUtils.waitUntilTrue(() => newFollowerServer.replicaManager.localReplicaOrException(topicPartition)
+    TestUtils.waitUntilTrue(() => newFollowerServer.replicaManager.localLogOrException(topicPartition)
       .highWatermark == 100,
       "partition follower's highWatermark should be 100")
   }

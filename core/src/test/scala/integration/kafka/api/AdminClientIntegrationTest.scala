@@ -849,7 +849,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     assertEquals(3L, lowWatermark)
 
     for (i <- 0 until brokerCount)
-      assertEquals(3, servers(i).replicaManager.localReplica(topicPartition).get.logStartOffset)
+      assertEquals(3, servers(i).replicaManager.localLog(topicPartition).get.logStartOffset)
   }
 
   @Test
@@ -858,16 +858,16 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     val followerIndex = if (leaders(0) != servers(0).config.brokerId) 0 else 1
 
     def waitForFollowerLog(expectedStartOffset: Long, expectedEndOffset: Long): Unit = {
-      TestUtils.waitUntilTrue(() => servers(followerIndex).replicaManager.localReplica(topicPartition) != None,
+      TestUtils.waitUntilTrue(() => servers(followerIndex).replicaManager.localLog(topicPartition) != None,
                               "Expected follower to create replica for partition")
 
       // wait until the follower discovers that log start offset moved beyond its HW
       TestUtils.waitUntilTrue(() => {
-        servers(followerIndex).replicaManager.localReplica(topicPartition).get.logStartOffset == expectedStartOffset
+        servers(followerIndex).replicaManager.localLog(topicPartition).get.logStartOffset == expectedStartOffset
       }, s"Expected follower to discover new log start offset $expectedStartOffset")
 
       TestUtils.waitUntilTrue(() => {
-        servers(followerIndex).replicaManager.localReplica(topicPartition).get.logEndOffset == expectedEndOffset
+        servers(followerIndex).replicaManager.localLog(topicPartition).get.logEndOffset == expectedEndOffset
       }, s"Expected follower to catch up to log end offset $expectedEndOffset")
     }
 
@@ -888,7 +888,7 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
 
     // after the new replica caught up, all replicas should have same log start offset
     for (i <- 0 until brokerCount)
-      assertEquals(3, servers(i).replicaManager.localReplica(topicPartition).get.logStartOffset)
+      assertEquals(3, servers(i).replicaManager.localLog(topicPartition).get.logStartOffset)
 
     // kill the same follower again, produce more records, and delete records beyond follower's LOE
     killBroker(followerIndex)
@@ -912,8 +912,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     result.all().get()
     // make sure we are in the expected state after delete records
     for (i <- 0 until brokerCount) {
-      assertEquals(3, servers(i).replicaManager.localReplica(topicPartition).get.logStartOffset)
-      assertEquals(expectedLEO, servers(i).replicaManager.localReplica(topicPartition).get.logEndOffset)
+      assertEquals(3, servers(i).replicaManager.localLog(topicPartition).get.logStartOffset)
+      assertEquals(expectedLEO, servers(i).replicaManager.localLog(topicPartition).get.logEndOffset)
     }
 
     // we will create another dir just for one server
@@ -927,8 +927,8 @@ class AdminClientIntegrationTest extends IntegrationTestHarness with Logging {
     }, "timed out waiting for replica movement")
 
     // once replica moved, its LSO and LEO should match other replicas
-    assertEquals(3, servers(0).replicaManager.localReplica(topicPartition).get.logStartOffset)
-    assertEquals(expectedLEO, servers(0).replicaManager.localReplica(topicPartition).get.logEndOffset)
+    assertEquals(3, servers.head.replicaManager.localLog(topicPartition).get.logStartOffset)
+    assertEquals(expectedLEO, servers.head.replicaManager.localLog(topicPartition).get.logEndOffset)
   }
 
   @Test

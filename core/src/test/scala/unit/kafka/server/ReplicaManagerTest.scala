@@ -87,7 +87,8 @@ class ReplicaManagerTest {
       new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size))
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
-      partition.getOrCreateReplica(1, isNew = false, new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints))
+      partition.createLogIfNotExists(1, isNew = false, isFutureReplica = false,
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints))
       rm.checkpointHighWatermarks()
     } finally {
       // shutdown the replica manager upon test completion
@@ -106,7 +107,8 @@ class ReplicaManagerTest {
       new MetadataCache(config.brokerId), new LogDirFailureChannel(config.logDirs.size))
     try {
       val partition = rm.createPartition(new TopicPartition(topic, 1))
-      partition.getOrCreateReplica(1, isNew = false, new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints))
+      partition.createLogIfNotExists(1, isNew = false, isFutureReplica = false,
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints))
       rm.checkpointHighWatermarks()
     } finally {
       // shutdown the replica manager upon test completion
@@ -160,7 +162,8 @@ class ReplicaManagerTest {
       val brokerList = Seq[Integer](0, 1).asJava
 
       val partition = rm.createPartition(new TopicPartition(topic, 0))
-      partition.getOrCreateReplica(0, isNew = false, new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints))
+      partition.createLogIfNotExists(0, isNew = false, isFutureReplica = false,
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints))
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
         collection.immutable.Map(new TopicPartition(topic, 0) ->
@@ -168,7 +171,7 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       rm.getPartitionOrException(new TopicPartition(topic, 0), expectLeader = true)
-          .localReplicaOrException
+          .localLogOrException
 
       val records = MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("first message".getBytes()))
       val appendResult = appendRecords(rm, new TopicPartition(topic, 0), records).onFire { response =>
@@ -204,7 +207,8 @@ class ReplicaManagerTest {
       val brokerList = Seq[Integer](0, 1).asJava
 
       val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
-      partition.getOrCreateReplica(0, isNew = false, new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
+      partition.createLogIfNotExists(0, isNew = false, isFutureReplica = false,
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
 
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -213,7 +217,7 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0), expectLeader = true)
-        .localReplicaOrException
+        .localLogOrException
 
       val producerId = 234L
       val epoch = 5.toShort
@@ -255,7 +259,8 @@ class ReplicaManagerTest {
       val brokerList = Seq[Integer](0, 1).asJava
 
       val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
-      partition.getOrCreateReplica(0, isNew = false, new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
+      partition.createLogIfNotExists(0, isNew = false, isFutureReplica = false,
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
 
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -264,7 +269,7 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0), expectLeader = true)
-        .localReplicaOrException
+        .localLogOrException
 
       val producerId = 234L
       val epoch = 5.toShort
@@ -351,7 +356,8 @@ class ReplicaManagerTest {
     try {
       val brokerList = Seq[Integer](0, 1).asJava
       val partition = replicaManager.createPartition(new TopicPartition(topic, 0))
-      partition.getOrCreateReplica(0, isNew = false, new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
+      partition.createLogIfNotExists(0, isNew = false, isFutureReplica = false,
+        new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints))
 
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -360,7 +366,7 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0), expectLeader = true)
-        .localReplicaOrException
+        .localLogOrException
 
       val producerId = 234L
       val epoch = 5.toShort
@@ -417,7 +423,8 @@ class ReplicaManagerTest {
       val brokerList = Seq[Integer](0, 1, 2).asJava
 
       val partition = rm.createPartition(new TopicPartition(topic, 0))
-      partition.getOrCreateReplica(0, isNew = false, new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints))
+      partition.createLogIfNotExists(0, isNew = false, isFutureReplica = false,
+        new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints))
 
       // Make this replica the leader.
       val leaderAndIsrRequest1 = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -426,7 +433,7 @@ class ReplicaManagerTest {
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1), new Node(2, "host2", 2)).asJava).build()
       rm.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       rm.getPartitionOrException(new TopicPartition(topic, 0), expectLeader = true)
-        .localReplicaOrException
+        .localLogOrException
 
       // Append a couple of messages.
       for(i <- 1 to 2) {
@@ -479,7 +486,6 @@ class ReplicaManagerTest {
 
       assertTrue(partition.getReplica(1).isDefined)
       val followerReplica = partition.getReplica(1).get
-      assertEquals(None, followerReplica.log)
       assertEquals(-1L, followerReplica.logStartOffset)
       assertEquals(-1L, followerReplica.logEndOffset)
 
@@ -553,8 +559,8 @@ class ReplicaManagerTest {
       val tp0 = new TopicPartition(topic, 0)
       val tp1 = new TopicPartition(topic, 1)
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
-      replicaManager.createPartition(tp0).getOrCreateReplica(0, isNew = false, offsetCheckpoints)
-      replicaManager.createPartition(tp1).getOrCreateReplica(0, isNew = false, offsetCheckpoints)
+      replicaManager.createPartition(tp0).createLogIfNotExists(0, isNew = false, isFutureReplica = false, offsetCheckpoints)
+      replicaManager.createPartition(tp1).createLogIfNotExists(0, isNew = false, isFutureReplica = false, offsetCheckpoints)
       val partition0Replicas = Seq[Integer](0, 1).asJava
       val partition1Replicas = Seq[Integer](0, 2).asJava
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
@@ -609,12 +615,12 @@ class ReplicaManagerTest {
         responseCallback = fetchCallback,
         isolationLevel = IsolationLevel.READ_UNCOMMITTED
       )
-      val tp0Replica = replicaManager.localReplica(tp0)
-      assertTrue(tp0Replica.isDefined)
-      assertEquals("hw should be incremented", 1, tp0Replica.get.highWatermark)
+      val tp0Log = replicaManager.localLog(tp0)
+      assertTrue(tp0Log.isDefined)
+      assertEquals("hw should be incremented", 1, tp0Log.get.highWatermark)
 
-      replicaManager.localReplica(tp1)
-      val tp1Replica = replicaManager.localReplica(tp1)
+      replicaManager.localLog(tp1)
+      val tp1Replica = replicaManager.localLog(tp1)
       assertTrue(tp1Replica.isDefined)
       assertEquals("hw should not be incremented", 0, tp1Replica.get.highWatermark)
 
@@ -646,7 +652,7 @@ class ReplicaManagerTest {
     // Initialize partition state to follower, with leader = 1, leaderEpoch = 1
     val partition = replicaManager.createPartition(new TopicPartition(topic, topicPartition))
     val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
-    partition.getOrCreateReplica(followerBrokerId, isNew = false, offsetCheckpoints)
+    partition.createLogIfNotExists(followerBrokerId, isNew = false, isFutureReplica = false, offsetCheckpoints)
     partition.makeFollower(controllerId,
       leaderAndIsrPartitionState(leaderEpoch, leaderBrokerId, aliveBrokerIds),
       correlationId, offsetCheckpoints)
@@ -713,6 +719,8 @@ class ReplicaManagerTest {
       override def latestEpoch: Option[Int] = Some(leaderEpochFromLeader)
 
       override def logEndOffsetMetadata = LogOffsetMetadata(localLogOffset)
+
+      override def logEndOffset: Long = localLogOffset
     }
 
     // Expect to call LogManager.truncateTo exactly once

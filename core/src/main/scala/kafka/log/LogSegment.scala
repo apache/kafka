@@ -301,7 +301,7 @@ class LogSegment private[log] (val log: FileRecords,
       return null
 
     val startPosition = startOffsetAndSize.position
-    val offsetMetadata = new LogOffsetMetadata(startOffset, this.baseOffset, startPosition)
+    val offsetMetadata = LogOffsetMetadata(startOffset, this.baseOffset, startPosition)
 
     val adjustedMaxSize =
       if (minOneMessage) math.max(maxSize, startOffsetAndSize.size)
