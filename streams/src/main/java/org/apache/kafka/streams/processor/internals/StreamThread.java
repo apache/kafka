@@ -57,6 +57,7 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -1036,7 +1037,8 @@ public class StreamThread extends Thread {
                 commitSensor.record(intervalCommitLatency / (double) committed, now);
 
                 // try to purge the committed records for repartition topics if possible
-                taskManager.maybePurgeCommitedRecords();
+                if ((new Random()).nextFloat() < 0.1)
+                    taskManager.maybePurgeCommitedRecords();
 
                 if (log.isDebugEnabled()) {
                     log.debug("Committed all active tasks {} and standby tasks {} in {}ms",
