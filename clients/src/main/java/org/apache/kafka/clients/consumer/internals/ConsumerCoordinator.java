@@ -388,9 +388,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Set<String> allSubscribedTopics = new HashSet<>();
         Map<String, Subscription> subscriptions = new HashMap<>();
-        for (JoinGroupResponseData.JoinGroupResponseMember memberSubScription : allSubscriptions) {
-            Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberSubScription.metadata()));
-            subscriptions.put(memberSubScription.memberId(), subscription);
+        for (JoinGroupResponseData.JoinGroupResponseMember memberSubscription : allSubscriptions) {
+            Subscription subscription = ConsumerProtocol.deserializeSubscription(ByteBuffer.wrap(memberSubscription.metadata()),
+                                                                                 Optional.ofNullable(memberSubscription.groupInstanceId()));
+            subscriptions.put(memberSubscription.memberId(), subscription);
             allSubscribedTopics.addAll(subscription.topics());
         }
 
