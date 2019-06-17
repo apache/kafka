@@ -86,10 +86,6 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
         self.kafka.start_minikdc()
         self.bounce()
 
-    def setup_interbroker_listener(self, broker_protocol, use_separate_listener=False):
-        self.kafka.setup_interbroker_listener(broker_protocol, use_separate_listener)
-        self.bounce()
-
     def add_sasl_mechanism(self, new_client_sasl_mechanism):
         self.kafka.client_sasl_mechanism = new_client_sasl_mechanism
         self.kafka.start_minikdc()
@@ -102,47 +98,6 @@ class TestSecurityRollingUpgrade(ProduceConsumeValidateTest):
 
         # Bounce again with ACLs for new mechanism
         self.set_authorizer_and_bounce(security_protocol, security_protocol)
-
-    @cluster(num_nodes=9)
-    @matrix(broker_protocol=[SecurityConfig.SSL, SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL],
-            client_protocol=[SecurityConfig.SSL, SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL])
-    def test_enable_separate_interbroker_listener(self, client_protocol, broker_protocol):
-        """
-        Start with a cluster that has a single {{client_protocol}} listener.
-        Start producer and consumer on the {{client_protocol}} listener.
-        Open a SECURED dedicated interbroker port via rolling upgrade.
-        Ensure we can produce and consume via {{client_protocol}} port throughout.
-        """
-        self.kafka.security_protocol = client_protocol
-        self.kafka.setup_interbroker_listener(client_protocol, use_separate_listener=False)
-        self.kafka.start()
-
-        # create plaintext producer and consumer
-        self.create_producer_and_consumer()
-
-        # run produce/consume/validate loop while enabling a separate interbroker listener via rolling restart
-        self.run_produce_consume_validate(self.setup_interbroker_listener, broker_protocol, True)
-
-    @cluster(num_nodes=9)
-    @matrix(broker_protocol=[SecurityConfig.SSL, SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL],
-            client_protocol=[SecurityConfig.SSL, SecurityConfig.SASL_PLAINTEXT, SecurityConfig.SASL_SSL])
-    def test_disable_separate_interbroker_listener(self, client_protocol, broker_protocol):
-        """
-        Start with a cluster that has two listeners, one on {{client_protocol}}, another on {{broker_protocol}}.
-        Even if protocols are the same, its still two listeners, interbroker listener is a dedicated one.
-        Start producer and consumer on {{client_protocol}} listener.
-        Close dedicated {{broker_protocol}} listener via rolling restart.
-        Ensure we can produce and consume via {{client_protocol}} listener throughout.
-        """
-        self.kafka.setup_interbroker_listener(broker_protocol, use_separate_listener=True)
-        self.kafka.security_protocol = client_protocol
-        self.kafka.start()
-
-        # create producer and consumer via client security protocol
-        self.create_producer_and_consumer()
-
-        # run produce/consume/validate loop while disabling a separate interbroker listener via rolling restart
-        self.run_produce_consume_validate(self.setup_interbroker_listener, client_protocol, False)
 
     @cluster(num_nodes=8)
     @matrix(client_protocol=[SecurityConfig.SSL])
