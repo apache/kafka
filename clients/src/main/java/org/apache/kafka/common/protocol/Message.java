@@ -39,7 +39,7 @@ public interface Message {
      *
      * @param version       The version to use.
      *
-     * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException
      *                      If the specified version is too new to be supported
      *                      by this software.
      */
@@ -51,7 +51,7 @@ public interface Message {
      * @param writable      The destination writable.
      * @param version       The version to use.
      *
-     * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException
      *                      If the specified version is too new to be supported
      *                      by this software.
      */
@@ -64,7 +64,7 @@ public interface Message {
      * @param readable      The source readable.
      * @param version       The version to use.
      *
-     * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException
      *                      If the specified version is too new to be supported
      *                      by this software.
      */
@@ -84,7 +84,7 @@ public interface Message {
      *
      * @param version       The version to use.
      *
-     * @throws {@see org.apache.kafka.common.errors.UnsupportedVersionException}
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException
      *                      If the specified version is too new to be supported
      *                      by this software.
      */
