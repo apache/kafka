@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.ClientRecord;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
@@ -29,6 +28,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -396,14 +396,22 @@ public class TopologyTestDriver implements Closeable {
     @SuppressWarnings("WeakerAccess")
     @Deprecated
     public void pipeInput(final ConsumerRecord<byte[], byte[]> consumerRecord) {
-        pipeRecord(new TestRecord<>(consumerRecord));
+        pipeRecord(consumerRecord.topic(), consumerRecord.key(), consumerRecord.value(), consumerRecord.timestamp(), consumerRecord.headers());
     }
 
-    protected void pipeRecord(final ClientRecord<byte[], byte[]> record) {
-        final String topicName = record.topic();
+    private void pipeRecord(final ProducerRecord<byte[], byte[]> record) {
+        pipeRecord(record.topic(), record.key(), record.value(), record.timestamp(), record.headers());
+    }
+
+    private void pipeRecord(final TestRecord<byte[], byte[]> record) {
+        pipeRecord(record.topic(), record.key(), record.value(), record.timestamp(), record.headers());
+    }
+
+    private void pipeRecord(final String topic, final byte[] key, final byte[] value, final Long timestamp, final Headers headers) {
+        final String topicName = topic;
 
         if (!internalTopologyBuilder.getSourceTopicNames().isEmpty()) {
-            validateSourceTopicNameRegexPattern(record.topic());
+            validateSourceTopicNameRegexPattern(topic);
         }
         final TopicPartition topicPartition = getTopicPartition(topicName);
         if (topicPartition != null) {
@@ -412,14 +420,14 @@ public class TopologyTestDriver implements Closeable {
                     topicName,
                     topicPartition.partition(),
                     offset,
-                    record.timestamp(),
+                    timestamp,
                     TimestampType.CREATE_TIME,
                     (long) ConsumerRecord.NULL_CHECKSUM,
-                    record.key() == null ? 0 : record.key().length,
-                    record.value() == null ? 0 : record.value().length,
-                    record.key(),
-                    record.value(),
-                    record.headers())));
+                    key == null ? 0 : key.length,
+                    value == null ? 0 : value.length,
+                    key,
+                    value,
+                    headers)));
 
             // Process the record ...
             task.process();
@@ -433,20 +441,21 @@ public class TopologyTestDriver implements Closeable {
             }
             final long offset = offsetsByTopicPartition.get(globalTopicPartition).incrementAndGet() - 1;
             globalStateTask.update(new ConsumerRecord<>(
-                globalTopicPartition.topic(),
-                globalTopicPartition.partition(),
-                offset,
-                record.timestamp(),
-                TimestampType.CREATE_TIME,
-                (long) ConsumerRecord.NULL_CHECKSUM,
-                record.key() == null ? 0 : record.key().length,
-                record.value() == null ? 0 : record.value().length,
-                record.key(),
-                record.value(),
-                record.headers()));
+                    globalTopicPartition.topic(),
+                    globalTopicPartition.partition(),
+                    offset,
+                    timestamp,
+                    TimestampType.CREATE_TIME,
+                    (long) ConsumerRecord.NULL_CHECKSUM,
+                    key == null ? 0 : key.length,
+                    value == null ? 0 : value.length,
+                    key,
+                    value,
+                    headers));
             globalStateTask.flushState();
         }
     }
+
 
     private void validateSourceTopicNameRegexPattern(final String inputRecordTopic) {
         for (final String sourceTopicName : internalTopologyBuilder.getSourceTopicNames()) {
@@ -591,8 +600,8 @@ public class TopologyTestDriver implements Closeable {
      * @return the next record on that topic, or {@code null} if there is no record available
      */
     @SuppressWarnings("WeakerAccess")
-    ClientRecord<byte[], byte[]> readRecord(final String topic) {
-        final Queue<? extends ClientRecord<byte[], byte[]>> outputRecords = getRecordsQueue(topic);
+    ProducerRecord<byte[], byte[]> readRecord(final String topic) {
+        final Queue<? extends ProducerRecord<byte[], byte[]>> outputRecords = getRecordsQueue(topic);
         if (outputRecords == null) {
             return null;
         }
@@ -609,14 +618,14 @@ public class TopologyTestDriver implements Closeable {
      * @return the next record on that topic, or {@code null} if there is no record available
      */
     @SuppressWarnings("WeakerAccess")
-    <K, V> ClientRecord<K, V> readRecord(final String topic,
+    <K, V> TestRecord<K, V> readRecord(final String topic,
                                          final Deserializer<K> keyDeserializer,
                                          final Deserializer<V> valueDeserializer) {
-        final Queue<? extends ClientRecord<byte[], byte[]>> outputRecords = getRecordsQueue(topic);
+        final Queue<? extends ProducerRecord<byte[], byte[]>> outputRecords = getRecordsQueue(topic);
         if (outputRecords == null) {
             throw new NoSuchElementException("Uninitialized topic: " + topic);
         }
-        final ClientRecord<byte[], byte[]> record = outputRecords.poll();
+        final ProducerRecord<byte[], byte[]> record = outputRecords.poll();
         if (record == null) {
             throw new NoSuchElementException("Empty topic: " + topic);
         }
@@ -629,12 +638,12 @@ public class TopologyTestDriver implements Closeable {
      * Serialize an input recond and send on the specified topic to the topology and then
      * commit the messages.
      *
-     * @param record             ClientRecord to be send
+     * @param record             TestRecord to be send
      * @param keySerializer the key serializer
      * @param valueSerializer the value serializer
      */
     @SuppressWarnings("WeakerAccess")
-    <K, V> void pipeRecord(               final ClientRecord<K, V> record,
+    <K, V> void pipeRecord(               final TestRecord<K, V> record,
                                           final Serializer<K> keySerializer,
                                           final Serializer<V> valueSerializer) {
         final byte[] serializedKey = keySerializer.serialize(record.topic(), record.headers(), record.key());

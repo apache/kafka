@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.ClientRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
@@ -24,6 +23,7 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.TopologyTestDriver;
 import org.apache.kafka.streams.test.ConsumerRecordFactory;
+import org.apache.kafka.streams.test.TestRecord;
 import org.apache.kafka.streams.test.TestRecordFactory;
 
 import java.util.List;
@@ -123,7 +123,7 @@ public class TestInputTopic<K, V> {
         factory.advanceTimeMs(advanceMs);
     }
 
-    public void pipeInput(final ClientRecord<K, V> record) {
+    public void pipeInput(final TestRecord<K, V> record) {
         driver.pipeRecord(record, keySerializer, valueSerializer);
     }
 
@@ -213,11 +213,11 @@ public class TestInputTopic<K, V> {
      * Send input messages with the given KeyValue  list on the topic  then commit each message individually.
      * The timestamp will be generated based on the constructor provided start time and time will auto advance.
      *
-     * @param records the list of ClientRecord records
+     * @param records the list of TestRecord records
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public void pipeRecordList(final List<? extends ClientRecord<K, V>> records) {
-        for (final ClientRecord<K, V> record : records) {
+    public void pipeRecordList(final List<? extends TestRecord<K, V>> records) {
+        for (final TestRecord<K, V> record : records) {
             pipeInput(record);
         }
     }

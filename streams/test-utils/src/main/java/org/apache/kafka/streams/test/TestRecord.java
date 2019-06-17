@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.test;
 
-import org.apache.kafka.clients.ClientRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -46,7 +46,7 @@ import org.apache.kafka.common.header.internals.RecordHeaders;
  * In either of the cases above, the timestamp that has actually been used will be returned to user in
  * {@link RecordMetadata}
  */
-public class TestRecord<K, V> implements org.apache.kafka.clients.ClientRecord<K, V> {
+public class TestRecord<K, V> {
 
     private final String topic;
     private final Headers headers;
@@ -136,11 +136,11 @@ public class TestRecord<K, V> implements org.apache.kafka.clients.ClientRecord<K
     }
 
     /**
-     * Create a TestRecord from ClientRecord
+     * Create a TestRecord from ProducerRecord
      *
      * @param record The record contents
      */
-    public TestRecord(ClientRecord<K, V> record) {
+    public TestRecord(ProducerRecord<K, V> record) {
         this(record.topic(), record.timestamp(), record.key(), record.value(), record.headers());
     }
 
@@ -148,7 +148,6 @@ public class TestRecord<K, V> implements org.apache.kafka.clients.ClientRecord<K
     /**
      * @return The topic this record is being sent to
      */
-    @Override
     public String topic() {
         return topic;
     }
@@ -156,7 +155,6 @@ public class TestRecord<K, V> implements org.apache.kafka.clients.ClientRecord<K
     /**
      * @return The headers
      */
-    @Override
     public Headers headers() {
         return headers;
     }
@@ -164,15 +162,14 @@ public class TestRecord<K, V> implements org.apache.kafka.clients.ClientRecord<K
     /**
      * @return The key (or null if no key is specified)
      */
-    @Override
     public K key() {
         return key;
     }
 
+
     /**
      * @return The value
      */
-    @Override
     public V value() {
         return value;
     }
@@ -180,11 +177,25 @@ public class TestRecord<K, V> implements org.apache.kafka.clients.ClientRecord<K
     /**
      * @return The timestamp, which is in milliseconds since epoch.
      */
-    @Override
     public Long timestamp() {
         return timestamp;
     }
 
+    public Headers getHeaders() {
+        return headers;
+    }
+
+    public K getKey() {
+        return key;
+    }
+
+    public V getValue() {
+        return value;
+    }
+
+    public Long getTimestamp() {
+        return timestamp;
+    }
 
     @Override
     public String toString() {
@@ -192,7 +203,7 @@ public class TestRecord<K, V> implements org.apache.kafka.clients.ClientRecord<K
         String key = this.key == null ? "null" : this.key.toString();
         String value = this.value == null ? "null" : this.value.toString();
         String timestamp = this.timestamp == null ? "null" : this.timestamp.toString();
-        return "ProducerRecord(topic=" + topic + ", headers=" + headers + ", key=" + key + ", value=" + value +
+        return "TestRecord(topic=" + topic + ", headers=" + headers + ", key=" + key + ", value=" + value +
             ", timestamp=" + timestamp + ")";
     }
 

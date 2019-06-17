@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.streams;
 
-import org.apache.kafka.clients.ClientRecord;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.TopologyTestDriver;
+import org.apache.kafka.streams.test.TestRecord;
 
 import java.util.HashMap;
 import java.util.LinkedList;
@@ -106,7 +106,7 @@ public class TestOutputTopic<K, V> {
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public V readValue() {
-        final ClientRecord<K, V> record = readRecord();
+        final TestRecord<K, V> record = readRecord();
         return record.value();
     }
 
@@ -117,7 +117,7 @@ public class TestOutputTopic<K, V> {
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
     public KeyValue<K, V> readKeyValue() {
-        final ClientRecord<K, V> record = readRecord();
+        final TestRecord<K, V> record = readRecord();
         return new KeyValue<>(record.key(), record.value());
     }
 
@@ -127,7 +127,7 @@ public class TestOutputTopic<K, V> {
      * @return Next output as ProducerRecord
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public ClientRecord<K, V> readRecord() {
+    public TestRecord<K, V> readRecord() {
         return driver.readRecord(topic, keyDeserializer, valueDeserializer);
     }
 
@@ -138,9 +138,9 @@ public class TestOutputTopic<K, V> {
      * @return Map of output by key
      */
     @SuppressWarnings({"WeakerAccess", "unused"})
-    public List<ClientRecord<K, V>> readRecordsToList() {
-        List<ClientRecord<K, V>> output = new LinkedList<>();
-        ClientRecord<K, V> outputRow;
+    public List<TestRecord<K, V>> readRecordsToList() {
+        List<TestRecord<K, V>> output = new LinkedList<>();
+        TestRecord<K, V> outputRow;
         while (!isEmpty()) {
             output.add(readRecord());
         }
@@ -157,7 +157,7 @@ public class TestOutputTopic<K, V> {
     @SuppressWarnings({"WeakerAccess", "unused"})
     public Map<K, V> readKeyValuesToMap() {
         final Map<K, V> output = new HashMap<>();
-        ClientRecord<K, V> outputRow;
+        TestRecord<K, V> outputRow;
         while (!isEmpty()) {
             outputRow = readRecord();
             output.put(outputRow.key(), outputRow.value());
