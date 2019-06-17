@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-/**
- * Transport layer for PLAINTEXT communication
- */
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
@@ -30,6 +26,9 @@ import java.security.Principal;
 
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
+/**
+ * Transport layer for PLAINTEXT communication
+ */
 public class PlaintextTransportLayer implements TransportLayer {
     private final SelectionKey key;
     private final SocketChannel socketChannel;

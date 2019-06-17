@@ -16,13 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-/**
- * Transport layer for underlying communication.
- * At very basic level it is wrapper around SocketChannel and can be used as substitute for SocketChannel
- * and other network Channel implementations.
- * As NetworkClient replaces BlockingChannel and other implementations we will be using KafkaChannel as
- * a network I/O channel.
- */
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.SelectionKey;
@@ -34,6 +27,13 @@ import java.security.Principal;
 
 import org.apache.kafka.common.errors.AuthenticationException;
 
+/**
+ * Transport layer for underlying communication.
+ * At very basic level it is wrapper around SocketChannel and can be used as substitute for SocketChannel
+ * and other network Channel implementations.
+ * As NetworkClient replaces BlockingChannel and other implementations we will be using KafkaChannel as
+ * a network I/O channel.
+ */
 public interface TransportLayer extends ScatteringByteChannel, GatheringByteChannel {
 
     /**
