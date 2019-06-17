@@ -17,7 +17,7 @@
 package kafka.utils
 
 import scala.collection.mutable.PriorityQueue
-import java.util.concurrent.{Delayed, CompletableFuture, TimeUnit}
+import java.util.concurrent.{Delayed, ScheduledFuture, TimeUnit}
 
 import org.apache.kafka.common.utils.Time
 
@@ -71,7 +71,7 @@ class MockScheduler(val time: Time) extends Scheduler {
     }
   }
   
-  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): CompletableFuture[Unit] = {
+  def schedule(name: String, fun: () => Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS): ScheduledFuture[Unit] = {
     var task : MockTask = null
     this synchronized {
       task = MockTask(name, fun, time.milliseconds + delay, period = period, time=time)
@@ -86,9 +86,10 @@ class MockScheduler(val time: Time) extends Scheduler {
       tasks.clear()
     }
   }
+  
 }
 
-case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long, time: Time) extends CompletableFuture[Unit] {
+case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, period: Long, time: Time) extends ScheduledFuture[Unit] {
   def periodic = period >= 0
   def compare(t: MockTask): Int = {
     if(t.nextExecution == nextExecution)
@@ -97,6 +98,27 @@ case class MockTask(name: String, fun: () => Unit, var nextExecution: Long, peri
       -1
     else
       1
+  }
+
+  /**
+    * Not used, so not not fully implemented
+    */
+  def cancel(mayInterruptIfRunning: Boolean) : Boolean = {
+    false
+  }
+
+  def get() {
+  }
+
+  def get(timeout: Long, unit: TimeUnit){
+  }
+
+  def isCancelled: Boolean = {
+    false
+  }
+
+  def isDone: Boolean = {
+    false
   }
 
   def getDelay(unit: TimeUnit): Long = {

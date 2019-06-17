@@ -53,7 +53,7 @@ trait Scheduler {
    * @param unit The unit for the preceding times.
    * @return A Future object to manage the task scheduled.
    */
-  def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : Future[_]
+  def schedule(name: String, fun: ()=>Unit, delay: Long = 0, period: Long = -1, unit: TimeUnit = TimeUnit.MILLISECONDS) : ScheduledFuture[_]
 }
 
 /**
@@ -130,7 +130,7 @@ class KafkaScheduler(val threads: Int,
   /**
    * Package private for testing.
    */
-  private[utils] def taskRunning(task: Future[_]): Boolean = {
+  private[utils] def taskRunning(task: ScheduledFuture[_]): Boolean = {
     executor.getQueue().contains(task)
   }
 
