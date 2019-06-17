@@ -23,7 +23,7 @@ import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
 
 import kafka.utils.Logging
 
-/*
+/**
  * LogDirFailureChannel allows an external thread to block waiting for new offline log dirs.
  *
  * There should be a single instance of LogDirFailureChannel accessible by any class that does disk-IO operation.
@@ -39,7 +39,7 @@ class LogDirFailureChannel(logDirNum: Int) extends Logging {
   private val offlineLogDirs = new ConcurrentHashMap[String, String]
   private val offlineLogDirQueue = new ArrayBlockingQueue[String](logDirNum)
 
-  /*
+  /**
    * If the given logDir is not already offline, add it to the
    * set of offline log dirs and enqueue it to the logDirFailureEvent queue
    */
@@ -49,7 +49,7 @@ class LogDirFailureChannel(logDirNum: Int) extends Logging {
       offlineLogDirQueue.add(logDir)
   }
 
-  /*
+  /**
    * Get the next offline log dir from logDirFailureEvent queue.
    * The method will wait if necessary until a new offline log directory becomes available
    */

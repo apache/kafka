@@ -538,7 +538,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     }
   }
 
-  /*
+  /**
    * even if the topic doesn't exist, request APIs should not leak the topic name
    */
   @Test

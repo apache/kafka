@@ -855,7 +855,7 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
-  /*
+  /**
    * Check if the offset metadata length is valid
    */
   private def validateOffsetMetadataLength(metadata: String) : Boolean = {

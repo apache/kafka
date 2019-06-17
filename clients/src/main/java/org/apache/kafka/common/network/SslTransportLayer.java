@@ -42,7 +42,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-/*
+/**
  * Transport layer for SSL communication
  */
 public class SslTransportLayer implements TransportLayer {

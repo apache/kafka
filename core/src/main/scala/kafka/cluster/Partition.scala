@@ -696,7 +696,7 @@ class Partition(val topicPartition: TopicPartition,
     followerEndOffset >= highWatermark && leaderEpochStartOffsetOpt.exists(followerEndOffset >= _)
   }
 
-  /*
+  /**
    * Returns a tuple where the first element is a boolean indicating whether enough replicas reached `requiredOffset`
    * and the second element is an error (which would be `Errors.NONE` for no error).
    *

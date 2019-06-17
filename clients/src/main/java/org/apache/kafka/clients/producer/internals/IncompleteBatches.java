@@ -20,7 +20,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.Set;
 
-/*
+/**
  * A thread-safe helper class to hold batches that haven't been acknowledged yet (including those
  * which have and have not been sent).
  */

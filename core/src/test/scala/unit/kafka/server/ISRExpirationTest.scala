@@ -67,7 +67,7 @@ class IsrExpirationTest {
     metrics.close()
   }
 
-  /*
+  /**
    * Test the case where a follower is caught up but stops making requests to the leader. Once beyond the configured time limit, it should fall out of ISR
    */
   @Test
@@ -97,7 +97,7 @@ class IsrExpirationTest {
     EasyMock.verify(log)
   }
 
-  /*
+  /**
    * Test the case where a follower never makes a fetch request. It should fall out of ISR because it will be declared stuck
    */
   @Test
@@ -116,7 +116,7 @@ class IsrExpirationTest {
     EasyMock.verify(log)
   }
 
-  /*
+  /**
    * Test the case where a follower continually makes fetch requests but is unable to catch up. It should fall out of the ISR
    * However, any time it makes a request to the LogEndOffset it should be back in the ISR
    */
@@ -172,7 +172,7 @@ class IsrExpirationTest {
     EasyMock.verify(log)
   }
 
-  /*
+  /**
    * Test the case where a follower has already caught up with same log end offset with the leader. This follower should not be considered as out-of-sync
    */
   @Test

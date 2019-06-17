@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
-/*
+/**
  * Transport layer for underlying communication.
  * At very basic level it is wrapper around SocketChannel and can be used as substitute for SocketChannel
  * and other network Channel implementations.

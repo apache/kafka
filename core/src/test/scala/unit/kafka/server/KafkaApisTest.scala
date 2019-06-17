@@ -438,7 +438,7 @@ class KafkaApisTest {
     assertEquals(Set(0, 1), response.brokers.asScala.map(_.id).toSet)
   }
 
-  /*
+  /**
    * Verifies that the metadata response is correct if the broker listeners are inconsistent (i.e. one broker has
    * more listeners than another) and the request is sent on the listener that exists in one broker.
    */

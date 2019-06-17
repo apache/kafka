@@ -79,7 +79,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   @Ignore // To be re-enabled once we can make it less flaky (KAFKA-4801)
   def testConsumptionWithBrokerFailures() = consumeWithBrokerFailures(10)
 
-  /*
+  /**
    * 1. Produce a bunch of messages
    * 2. Then consume the messages while killing and restarting brokers at random
    */

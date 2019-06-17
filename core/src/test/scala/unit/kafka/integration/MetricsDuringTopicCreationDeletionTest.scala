@@ -64,7 +64,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
     super.setUp
   }
 
-  /*
+  /**
    * checking all metrics we care in a single test is faster though it would be more elegant to have 3 @Test methods
    */
   @Test

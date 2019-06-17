@@ -51,7 +51,7 @@ import org.apache.kafka.common.utils.Time
 import scala.collection.JavaConverters._
 import scala.collection._
 
-/*
+/**
  * Result metadata of a log append operation on the log
  */
 case class LogAppendResult(info: LogAppendInfo, exception: Option[Throwable] = None) {
@@ -68,7 +68,7 @@ case class LogDeleteRecordsResult(requestedOffset: Long, lowWatermark: Long, exc
   }
 }
 
-/*
+/**
  * Result metadata of a log read operation on the log
  * @param info @FetchDataInfo returned by the @Log read
  * @param hw high watermark of the local replica
@@ -629,7 +629,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  /*
+  /**
    * Get the LogDirInfo for the specified list of partitions.
    *
    * Each LogDirInfo specifies the following information for a given log directory:
@@ -1164,7 +1164,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
-  /*
+  /**
    * Make the current broker to become leader for a given set of partitions by:
    *
    * 1. Stop fetchers for these partitions
@@ -1240,7 +1240,7 @@ class ReplicaManager(val config: KafkaConfig,
     partitionsToMakeLeaders
   }
 
-  /*
+  /**
    * Make the current broker to become follower for a given set of partitions by:
    *
    * 1. Remove these partitions from the leader partitions set.

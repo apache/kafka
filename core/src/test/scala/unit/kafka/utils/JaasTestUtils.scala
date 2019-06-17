@@ -256,7 +256,7 @@ object JaasTestUtils {
     }
   }
 
-  /*
+  /**
    * Used for the static JAAS configuration and it uses the credentials for client#2
    */
   def kafkaClientSection(mechanism: Option[String], keytabLocation: Option[File]): JaasSection = {

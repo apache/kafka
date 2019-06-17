@@ -755,7 +755,7 @@ class SocketServerTest {
     }
   }
 
-  /*
+  /**
    * Test that we update request metrics if the channel has been removed from the selector when the broker calls
    * `selector.send` (selector closes old connections, for example).
    */

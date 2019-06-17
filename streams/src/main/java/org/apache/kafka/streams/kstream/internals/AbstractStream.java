@@ -32,7 +32,7 @@ import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
 
-/*
+/**
  * Any classes (KTable, KStream, etc) extending this class should follow the serde specification precedence ordering as:
  *
  * 1) Overridden values via control objects (e.g. Materialized, Serialized, Consumed, etc)

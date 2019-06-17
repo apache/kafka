@@ -52,7 +52,7 @@ abstract class DelayedOperation(override val delayMs: Long,
   // Visible for testing
   private[server] val lock: Lock = lockOpt.getOrElse(new ReentrantLock)
 
-  /*
+  /**
    * Force completing the delayed operation, if not already completed.
    * This function can be triggered when
    *
@@ -137,7 +137,7 @@ abstract class DelayedOperation(override val delayMs: Long,
     done
   }
 
-  /*
+  /**
    * run() method defines a task that is executed on timeout
    */
   override def run(): Unit = {
@@ -177,7 +177,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
 
     val watchersLock = new ReentrantLock()
 
-    /*
+    /**
      * Return all the current watcher lists,
      * note that the returned watchers may be removed from the list by other threads
      */
@@ -325,7 +325,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     }
   }
 
-  /*
+  /**
    * Return the watch list of the given key, note that we need to
    * grab the removeWatchersLock to avoid the operation being added to a removed watcher list
    */
@@ -337,7 +337,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
     }
   }
 
-  /*
+  /**
    * Remove the key from watcher lists if its list is empty
    */
   private def removeKeyIfEmpty(key: Any, watchers: Watchers) {

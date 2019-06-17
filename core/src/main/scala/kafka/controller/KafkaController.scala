@@ -337,7 +337,7 @@ class KafkaController(val config: KafkaConfig,
     info("Resigned")
   }
 
-  /*
+  /**
    * This callback is invoked by the controller's LogDirEventNotificationListener with the list of broker ids who
    * have experienced new log directory failures. In response the controller should send LeaderAndIsrRequest
    * to all these brokers to query the state of their replicas. Replicas with an offline log directory respond with
@@ -416,7 +416,7 @@ class KafkaController(val config: KafkaConfig,
     }
   }
 
-  /*
+  /**
    * This callback is invoked by the replica state machine's broker change listener with the list of failed brokers
    * as input. It will call onReplicaBecomeOffline(...) with the list of replicas on those failed brokers as input.
    */

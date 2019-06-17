@@ -21,7 +21,7 @@ import kafka.utils.nonthreadsafe
 import java.util.concurrent.DelayQueue
 import java.util.concurrent.atomic.AtomicInteger
 
-/*
+/**
  * Hierarchical Timing Wheels
  *
  * A simple timing wheel is a circular list of buckets of timer tasks. Let u be the time unit.

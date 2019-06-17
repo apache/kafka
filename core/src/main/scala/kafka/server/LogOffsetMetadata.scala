@@ -32,7 +32,7 @@ object LogOffsetMetadata {
 
 }
 
-/*
+/**
  * A log offset structure, including:
  *  1. the message offset
  *  2. the base message offset of the located segment

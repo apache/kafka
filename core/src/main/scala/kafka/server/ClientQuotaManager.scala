@@ -313,7 +313,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     Option(quotaCallback.quotaLimit(clientQuotaType, metricTags)).map(_.toDouble)getOrElse(Long.MaxValue)
   }
 
-  /*
+  /**
    * This calculates the amount of time needed to bring the metric within quota
    * assuming that no new metrics are recorded.
    *
@@ -339,7 +339,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     }
   }
 
-  /*
+  /**
    * This function either returns the sensors for a given client id or creates them if they don't exist
    * First sensor of the tuple is the quota enforcement sensor. Second one is the throttle time sensor
    */

@@ -50,7 +50,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition) extends Log
 
   def lastCaughtUpTimeMs: Long = _lastCaughtUpTimeMs
 
-  /*
+  /**
    * If the FetchRequest reads up to the log end offset of the leader when the current fetch request is received,
    * set `lastCaughtUpTimeMs` to the time when the current fetch request was received.
    *

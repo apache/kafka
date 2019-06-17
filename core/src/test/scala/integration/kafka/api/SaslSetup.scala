@@ -32,7 +32,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 
-/*
+/**
  * Implements an enumeration for the modes enabled here:
  * zk only, kafka only, both, custom KafkaServer.
  */
@@ -41,7 +41,7 @@ case object ZkSasl extends SaslSetupMode
 case object KafkaSasl extends SaslSetupMode
 case object Both extends SaslSetupMode
 
-/*
+/**
  * Trait used in SaslTestHarness and EndToEndAuthorizationTest to setup keytab and jaas files.
  */
 trait SaslSetup {

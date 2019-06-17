@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.network;
 
-/*
+/**
  * Transport layer for PLAINTEXT communication
  */
 

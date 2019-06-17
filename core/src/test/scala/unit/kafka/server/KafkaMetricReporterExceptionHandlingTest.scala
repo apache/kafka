@@ -30,7 +30,7 @@ import org.junit.{Before, Test}
 import org.junit.After
 import java.util.concurrent.atomic.AtomicInteger
 
-/*
+/**
  * this test checks that a reporter that throws an exception will not affect other reporters
  * and will not affect the broker's message handling
  */
